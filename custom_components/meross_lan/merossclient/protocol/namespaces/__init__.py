@@ -5,11 +5,11 @@ This file contains the knowledge about how namespaces work (their syntax and beh
 
 import enum
 from functools import cached_property
-import typing
+from typing import TYPE_CHECKING
 
 from .. import const as mc
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from typing import Final, Mapping, NotRequired, TypedDict, Unpack
 
     from ..types import MerossRequestType
@@ -67,15 +67,32 @@ class _HubNamespacesMap(dict):
 HUB_NAMESPACES = _HubNamespacesMap()
 
 
+class imdict(dict):
+    def __hash__(self):
+        return id(self)
+
+    def _immutable(self, *args, **kws):
+        raise TypeError(f"object of type <{type(self)}> is immutable")
+
+    __setitem__ = _immutable
+    __delitem__ = _immutable
+    __ior__ = _immutable
+    clear = _immutable
+    update = _immutable
+    setdefault = _immutable # type: ignore
+    pop = _immutable
+    popitem = _immutable
+
+
 class PayloadType(enum.Enum):
     """Depicts the payload structure in GET queries (defaults to DICT in case)."""
 
-    NONE = {}
+    NONE = imdict({})
     """No GET query supported."""
-    DICT = {}
+    DICT = imdict({})
     """Command GET with an empty dict (should) return all the (channels) state.
     This is used as default unless some heuristic (in __init__) states something different."""
-    DICT_C = {mc.KEY_CHANNEL: 0}
+    DICT_C = imdict({mc.KEY_CHANNEL: 0})
     """Command GET with channel index in dict returns the state requested."""
     LIST = []
     """Command GET with an empty list returns all the (channels) state."""
@@ -99,14 +116,16 @@ class Namespace:
     of namespace behaviors and syntax.
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
 
-        class FactoryArgs(TypedDict):
-            """FactoryArgs are often mututally exclusive and allow for a cascading of heuristics.
+        class Args(TypedDict):
+            """Args are often mututally exclusive and allow for a cascading of heuristics.
             For example, setting is_hub_id=True will automatically apply 'map' 'payload'
             'is_hub_namespace' 'key_channel'. The code in __init__ might seem a bit complex
             but tries to be as tidy (and efficient) as possible in order to be 'guided' by
-            the type and value of parameters applied."""
+            the parameters applied.
+            We'll use a set of simple dicts working as small chunks and allowing to build
+            concise yet complex definitions (See GET, NO_GET, etc definitions)."""
 
             map: NotRequired[NamespacesMapType]
             grammar: NotRequired[Grammar]
@@ -115,10 +134,6 @@ class Namespace:
             is_hub_subid: NotRequired[bool]
             is_sensor: NotRequired[bool]
             is_thermostat: NotRequired[bool]
-
-        class Args(FactoryArgs):
-            """These Args are typically 'customized' in factory functions so to declare
-            our well known namespaces in a possibly compact way."""
 
             has_get: NotRequired[bool | None]
             has_set: NotRequired[bool | None]
@@ -148,6 +163,7 @@ class Namespace:
         is_hub_id: Final[bool]  # type: ignore
         is_hub_subid: Final[bool]  # type: ignore
         is_sensor: Final[bool]  # type: ignore
+        """This flag could also appear in Hub(s): for that case it is likely mapped to is_hub_subid."""
         is_thermostat: Final[bool]  # type: ignore
 
     DEFAULT_PUSH_PAYLOAD = PayloadType.DICT.value
@@ -201,26 +217,22 @@ class Namespace:
 
         if self.is_hub_id:
             self.key_channel = mc.KEY_ID
-            payload = PayloadType.LIST
+            payload = payload or PayloadType.LIST
         elif self.is_hub_subid:
             self.key_channel = mc.KEY_SUBID
-            payload = PayloadType.LIST_C
+            payload = payload or PayloadType.LIST_C
         elif self.is_thermostat:
             self.key_channel = mc.KEY_CHANNEL
             payload = PayloadType.LIST_C
         elif self.is_sensor:
-            # we want to better investigate the behavior of this class of ns
-            self.grammar = Grammar.EXPERIMENTAL
-            if map is HUB_NAMESPACES:
-                self.is_hub_subid = True
-                self.key_channel = mc.KEY_SUBID
-                payload = PayloadType.LIST_C
-            else:
-                # This is tricky since we still don't really know.
-                # It seems *.History and Latest namespaces were queried by LIST_C
-                # while *.HistoryX and LatestX don't work actually.
-                self.key_channel = mc.KEY_CHANNEL
-                payload = payload or PayloadType.DICT_C
+            # In a Hub this conditional should not be reached since
+            # sensor namespaces in hubs are being mapped to 'is_hub_subid'
+            assert not self.is_hub_subid
+            # This is tricky since we still don't really know.
+            # It seems *.History and Latest namespaces were queried by LIST_C
+            # while *.HistoryX and LatestX don't work actually.
+            self.key_channel = mc.KEY_CHANNEL
+            payload = payload or PayloadType.DICT_C
         elif not payload:
             # Don't pass any payload arg if we want to automatically
             # apply heuristics to incoming new namespaces.
@@ -320,7 +332,7 @@ class Namespace:
 
 
 def ns_build_from_message(
-    namespace: str, method: str, payload: dict, map: "NamespacesMapType", /
+    namespace: str, method: str, payload: "Mapping", map: "NamespacesMapType", /
 ):
     # we hope the first key in the payload is the 'namespace key'
     for ns_key in payload.keys():
@@ -390,7 +402,7 @@ ARGS_PUSHQ = ARGS_PUSH | PUSHQ
 # Moreover, for some namespaces, the euristics about 'namespace key' and payload structure are not
 # good so we must fix those beforehand.
 Appliance_Config_DeviceCfg = ns(
-    "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, ARGS_GETPUSH | P_LIST_C
+    "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, ARGS_GETSETPUSH | P_LIST_C
 )  # mts300
 Appliance_Config_Info = ns("Appliance.Config.Info", mc.KEY_INFO, ARGS_GET | ARGS_PUSHQ)
 Appliance_Config_Key = ns("Appliance.Config.Key", mc.KEY_KEY, ARGS_SET)
@@ -414,7 +426,7 @@ Appliance_Control_AlertReport = ns(
     "Appliance.Control.AlertReport", mc.KEY_REPORT, ARGS_GETSET | P_LIST_C
 )
 Appliance_Control_Bind = ns("Appliance.Control.Bind", mc.KEY_BIND, ARGS_NO_Q)
-Appliance_Control_ChangeWifi = ns("Appliance.Control.ChangeWifi", None, ARGS_NO_Q)
+Appliance_Control_ChangeWifi = ns("Appliance.Control.ChangeWiFi", None, ARGS_NO_Q)
 Appliance_Control_ConsumptionConfig = ns(
     "Appliance.Control.ConsumptionConfig", mc.KEY_CONFIG, ARGS_GET
 )
@@ -450,6 +462,7 @@ Appliance_Control_Light_Effect = ns(
     "Appliance.Control.Light.Effect", mc.KEY_EFFECT, ARGS_GETSET | P_LIST
 )
 Appliance_Control_Mp3 = ns("Appliance.Control.Mp3", mc.KEY_MP3, ARGS_GETSETPUSH)
+Appliance_Control_McuUpgrade = ns("Appliance.Control.McuUpgrade", None, ARGS_NO_Q)
 Appliance_Control_Multiple = ns("Appliance.Control.Multiple", mc.KEY_MULTIPLE, ARGS_SET)
 Appliance_Control_OverTemp = ns(
     "Appliance.Control.OverTemp", mc.KEY_OVERTEMP, ARGS_GET | P_LIST
@@ -466,11 +479,17 @@ Appliance_Control_Presence_Study = ns(
 Appliance_Control_Screen_Brightness = ns(
     "Appliance.Control.Screen.Brightness", mc.KEY_BRIGHTNESS, ARGS_GETSETPUSH | P_LIST_C
 )
+# Appliance.Control.Sensor.* appear on both regular devices (ms600) and hub/subdevices (ms130)
+# To distinguish the grammar between regular devices and hubs we save different definitions
+# in NAMESPACES (for regular devices) and in HUB_NAMESPACES (for hubs).
+# For regular devices, even if traces show presence of values at channel 0,
+# the 'LIST_C' query format doesn't always work
+# We so try introduce a new payload type 'DICT_C'. PUSH query too seems to not work.
 Appliance_Control_Sensor_Association = ns(
     "Appliance.Control.Sensor.Association",
     mc.KEY_CONTROL,
     ARGS_GET | P_LIST | IS_SENSOR,
-)  # history of sensor values
+)  # mts300 works
 Appliance_Control_Sensor_History = ns(
     "Appliance.Control.Sensor.History", mc.KEY_HISTORY, ARGS_GET | P_LIST_C | IS_SENSOR
 )  # history of sensor values
@@ -479,20 +498,15 @@ Appliance_Control_Sensor_Latest = ns(
     mc.KEY_LATEST,
     ARGS_GETPUSH | P_LIST_C | IS_SENSOR,
 )  # carrying miscellaneous sensor values (temp/humi)
-# Appliance.Control.Sensor.* appear on both regular devices (ms600) and hub/subdevices (ms130)
-# To distinguish the grammar between regular devices and hubs we save different definitions
-# in NAMESPACES (for regular devices) and in HUB_NAMESPACES (for hubs).
-# For regular devices, even if traces show presence of values at channel 0,
-# the 'LIST_C' query format doesn't work
-# We so try introduce a new payload type 'DICT_C'. PUSH query too seems to not work.
-# See _ns_get_sensor to get some clues.
 Appliance_Control_Sensor_HistoryX = ns(
-    "Appliance.Control.Sensor.HistoryX", mc.KEY_HISTORY, ARGS_GET | P_DICT_C | IS_SENSOR
-)
+    "Appliance.Control.Sensor.HistoryX",
+    mc.KEY_HISTORY,
+    ARGS_GET | P_DICT_C | IS_SENSOR | G_EXPERIMENTAL,
+)  # cannot get query to work...
 Appliance_Control_Sensor_LatestX = ns(
     "Appliance.Control.Sensor.LatestX",
     mc.KEY_LATEST,
-    ARGS_GETPUSH | P_DICT_C | IS_SENSOR,
+    ARGS_GETPUSH | P_DICT_C | IS_SENSOR | G_EXPERIMENTAL,
 )
 Appliance_Control_Spray = ns("Appliance.Control.Spray", mc.KEY_SPRAY, ARGS_GETSETPUSH)
 Appliance_Control_TempUnit = ns(

@@ -6,6 +6,7 @@ from . import (
     ARGS_GETPUSH,
     ARGS_GETSET,
     ARGS_GETSETPUSH,
+    ARGS_GETSETPUSHQ,
     ns,
 )
 from .. import const as mc
@@ -83,7 +84,7 @@ Appliance_Control_Thermostat_SummerMode = ns(
     ARGS_GETSETPUSH | IS_THERMOSTAT,
 )
 Appliance_Control_Thermostat_System = ns(
-    "Appliance.Control.Thermostat.System", mc.KEY_CONTROL, ARGS_GETPUSH | IS_THERMOSTAT
+    "Appliance.Control.Thermostat.System", mc.KEY_CONTROL, ARGS_GETSETPUSHQ | IS_THERMOSTAT
 )
 Appliance_Control_Thermostat_Timer = ns(
     "Appliance.Control.Thermostat.Timer", mc.KEY_TIMER, ARGS_GETSETPUSH | IS_THERMOSTAT

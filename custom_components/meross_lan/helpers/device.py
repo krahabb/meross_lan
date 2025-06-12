@@ -59,6 +59,7 @@ if TYPE_CHECKING:
         Final,
         Iterable,
         Iterator,
+        Mapping,
         NotRequired,
         Unpack,
     )
@@ -89,54 +90,6 @@ if TYPE_CHECKING:
     ]
 
 
-# when tracing we enumerate appliance abilities to get insights on payload structures
-# this list will be excluded from enumeration since it's redundant/exposing sensitive info
-# or simply crashes/hangs the device
-TRACE_ABILITY_EXCLUDE = (
-    mn.Appliance_System_Ability.name,
-    mn.Appliance_System_All.name,
-    mn.Appliance_System_Clock.name,
-    mn.Appliance_System_DNDMode.name,
-    mn.Appliance_System_Firmware.name,
-    mn.Appliance_System_Hardware.name,
-    mn.Appliance_System_Online.name,
-    mn.Appliance_System_Position.name,
-    # mn.Appliance_System_Report.name,
-    mn.Appliance_System_Time.name,
-    # mn.Appliance_Config_Key.name,
-    # mn.Appliance_Config_Trace.name,
-    # mn.Appliance_Config_Wifi.name,
-    # mn.Appliance_Config_WifiList.name,
-    # mn.Appliance_Config_WifiX.name,
-    # mn.Appliance_Control_Bind.name,
-    # mn.Appliance_Control_Multiple.name,
-    # mn.Appliance_Control_TimerX.name,
-    mn.Appliance_Control_TriggerX.name,
-    mn.Appliance_Control_Unbind.name,
-    # mn.Appliance_Control_Upgrade.name,  # disconnects
-    # mn.Appliance_Digest_TimerX.name,
-    # mn.Appliance_Digest_TriggerX.name,
-    "Appliance.Hub.Exception",  # disconnects
-    "Appliance.Hub.Report",  # disconnects
-    "Appliance.Hub.SubdeviceList",  # disconnects
-    "Appliance.Hub.PairSubDev",  # disconnects
-    "Appliance.Hub.SubDevice.Beep",  # protocol replies with error code: 5000
-    "Appliance.Hub.SubDevice.MotorAdjust",  # protocol replies with error code: 5000
-    mn.Appliance_Mcu_Firmware.name,  # disconnects
-    mn.Appliance_Mcu_Upgrade.name,  # disconnects
-    mn.Appliance_Mcu_Hp110_Preview.name,  # disconnects
-    *(
-        name
-        for name, ns in mn.NAMESPACES.items()
-        if (ns.has_get is False) and (ns.has_push_query is False)
-    ),
-    *(
-        name
-        for name, ns in mn.HUB_NAMESPACES.items()
-        if (ns.has_get is False) and (ns.has_push_query is False)
-    ),
-)
-
 TIMEZONES_SET = None
 
 
@@ -147,7 +100,6 @@ class BaseDevice(EntityManager):
     """
 
     if TYPE_CHECKING:
-        NAMESPACES: ClassVar[mn.NamespacesMapType]
         # override some nullable since we're pretty sure they're none
         config_entry: Final[ConfigEntry]  # type: ignore
         deviceentry_id: Final[EntityManager.DeviceEntryIdType]  # type: ignore
@@ -164,7 +116,6 @@ class BaseDevice(EntityManager):
             connections: NotRequired[set[tuple[str, str]]]
             via_device: NotRequired[tuple[str, str]]
 
-    NAMESPACES = mn.NAMESPACES
 
     __slots__ = (
         "online",
@@ -267,8 +218,39 @@ class Device(BaseDevice, ConfigEntryManager):
     """
 
     if TYPE_CHECKING:
+        NAMESPACES: ClassVar[mn.NamespacesMapType]
+        """ Accesses the namespaces definitions for this Device. This could be overriden
+        when needed to extend with other namespaces (this is actually true for Hub). This
+        way, when we're working only with standard devices we don't need to import the namespaces
+        only relevant to hubs."""
         DIGEST_INIT: Final[dict[str, Any]]
+        """ Static dict of 'digest initialization function(s)'.
+        This is built on demand during Device init whenever a new digest key
+        is encountered. This static dict in turn is used to setup the Device instance
+        'digest_handlers' dict which contains a lookup to the digest parsing function when
+        an NS_ALL message is received/parsed.
+        The 'digest initialization function' will (at device init time) parse the digest to
+        setup the dedicated entities for the particular digest key.
+        The definition of this init function is looked up at runtime by an algorithm that:
+        - looks-up if the digest key is in DIGEST_INITIALIZERS where it'll find either the
+        function or the (str) module coordinates of the init function for the digest key.
+        - if not configured, the algorithm will try load the module in meross_lan/devices
+        with the same name as the digest key.
+        - if any is not found we'll set a 'digest_init_empty' function in order to not
+        repeat the lookup process. That function will just pass so that the key
+        init/parsing will not harm."""
         NAMESPACE_INIT: Final[dict[str, Any]]
+        """ Static dict of namespace initialization functions. This will be looked up
+        and matched against the current device abilities (at device init time) and
+        usually setups a dedicated namespace handler and/or a dedicated entity.
+        As far as the initialization functions are looked up in related modules,
+        they'll be cached in the dict.
+        Namespace handlers will be initialized in the order as they appear in the dict
+        and this could have consequences in the order of polls."""
+        TRACE_ABILITY_EXCLUDE: ClassVar[tuple[str, ...]]
+        """ When tracing we enumerate appliance abilities to get insights on payload structures
+        this list will be excluded from enumeration since it's redundant/exposing sensitive info
+        or simply crashes/hangs the device."""
 
         # these are set from ConfigEntry
         config: mlc.DeviceConfigType
@@ -294,7 +276,7 @@ class Device(BaseDevice, ConfigEntryManager):
         _http_lastrequest: float
         _http_lastresponse: float
         namespace_handlers: dict[str, NamespaceHandler]
-        namespace_pushes: dict[str, dict]
+        namespace_pushes: dict[str, Mapping]
         digest_handlers: dict[str, DigestParseFunc]
         digest_pollers: set[NamespaceHandler]
         _lazypoll_requests: list[NamespaceHandler]
@@ -329,6 +311,8 @@ class Device(BaseDevice, ConfigEntryManager):
     def namespace_init_empty(device: "Device"):
         pass
 
+    NAMESPACES = mn.NAMESPACES
+
     DIGEST_INIT = {
         mc.KEY_FAN: ".fan",
         mc.KEY_LIGHT: ".light",
@@ -339,23 +323,6 @@ class Device(BaseDevice, ConfigEntryManager):
         mc.KEY_TRIGGER: digest_init_empty,
         mc.KEY_TRIGGERX: digest_init_empty,
     }
-    """
-    Static dict of 'digest initialization function(s)'.
-    This is built on demand during Device init whenever a new digest key
-    is encountered. This static dict in turn is used to setup the Device instance
-    'digest_handlers' dict which contains a lookup to the digest parsing function when
-    an NS_ALL message is received/parsed.
-    The 'digest initialization function' will (at device init time) parse the digest to
-    setup the dedicated entities for the particular digest key.
-    The definition of this init function is looked up at runtime by an algorithm that:
-    - looks-up if the digest key is in DIGEST_INITIALIZERS where it'll find either the
-    function or the (str) module coordinates of the init function for the digest key.
-    - if not configured, the algorithm will try load the module in meross_lan/devices
-    with the same name as the digest key.
-    - if any is not found we'll set a 'digest_init_empty' function in order to not
-    repeat the lookup process. That function will just pass so that the key
-    init/parsing will not harm.
-    """
 
     NAMESPACE_INIT = {
         mn.Appliance_Config_OverTemp.name: (".devices.mss", "OverTempEnableSwitch"),
@@ -407,15 +374,28 @@ class Device(BaseDevice, ConfigEntryManager):
         mn.Appliance_System_DNDMode.name: (".light", "MLDNDLightEntity"),
         mn.Appliance_System_Runtime.name: (".sensor", "MLSignalStrengthSensor"),
     }
-    """
-    Static dict of namespace initialization functions. This will be looked up
-    and matched against the current device abilities (at device init time) and
-    usually setups a dedicated namespace handler and/or a dedicated entity.
-    As far as the initialization functions are looked up in related modules,
-    they'll be cached in the dict.
-    Namespace handlers will be initialized in the order as they appear in the dict
-    and this could have consequences in the order of polls
-    """
+
+    TRACE_ABILITY_EXCLUDE = (
+        mn.Appliance_System_Ability.name,
+        mn.Appliance_System_All.name,
+        mn.Appliance_System_Clock.name,
+        mn.Appliance_System_DNDMode.name,
+        mn.Appliance_System_Firmware.name,
+        mn.Appliance_System_Hardware.name,
+        mn.Appliance_System_Online.name,
+        mn.Appliance_System_Position.name,
+        mn.Appliance_System_Time.name,
+        mn.Appliance_Control_TriggerX.name,
+        mn.Appliance_Control_Unbind.name,
+        mn.Appliance_Mcu_Firmware.name,  # disconnects
+        mn.Appliance_Mcu_Upgrade.name,  # disconnects
+        mn.Appliance_Mcu_Hp110_Preview.name,  # disconnects
+        *(
+            name
+            for name, ns in mn.NAMESPACES.items()
+            if (ns.has_get is False) and (ns.has_push_query is False)
+        )
+    )
 
     DEFAULT_PLATFORMS = ConfigEntryManager.DEFAULT_PLATFORMS | {
         MLUpdate.PLATFORM: None,
@@ -1581,7 +1561,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 abilities = iter(self.descriptor.ability)
                 while self.online and not self._polling_callback_shutdown:
                     ability = next(abilities)
-                    if (ability in TRACE_ABILITY_EXCLUDE) or (
+                    if (ability in self.TRACE_ABILITY_EXCLUDE) or (
                         (handler := self.namespace_handlers.get(ability))
                         and (
                             handler.polling_strategy
@@ -2511,7 +2491,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 abilities = iter(descr.ability)
                 while self.online and self.is_tracing:
                     ability = next(abilities)
-                    if ability not in TRACE_ABILITY_EXCLUDE:
+                    if ability not in self.TRACE_ABILITY_EXCLUDE:
                         await self.get_handler_by_name(ability).async_trace(
                             self.async_http_request
                         )
@@ -2537,8 +2517,8 @@ class Device(BaseDevice, ConfigEntryManager):
             # in device init, this check will prevent iterating
             # at least until the device fully initialize through
             # self.start()
-            if self._polling_callback_unsub and self.online:
-                while (ability := next(abilities_iterator)) in TRACE_ABILITY_EXCLUDE:
+            if self.online and not self._polling_epoch:
+                while (ability := next(abilities_iterator)) in self.TRACE_ABILITY_EXCLUDE:
                     continue
                 self.log(self.DEBUG, "Tracing %s ability", ability)
                 await self.get_handler_by_name(ability).async_trace(self.async_request)

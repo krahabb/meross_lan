@@ -240,6 +240,17 @@ class HubMixin(Device if TYPE_CHECKING else object):
         MtsTrackedSensor.PLATFORM: None,
     }
 
+    TRACE_ABILITY_EXCLUDE = Device.TRACE_ABILITY_EXCLUDE + (
+        "Appliance.Hub.Exception",  # disconnects
+        "Appliance.Hub.Report",  # disconnects
+        "Appliance.Hub.SubdeviceList",  # disconnects
+        *(
+            name
+            for name, ns in mn_h.HUB_NAMESPACES.items()
+            if (ns.has_get is False) and (ns.has_push_query is False)
+        )
+    )
+
     # interface: EntityManager
     def managed_entities(self, platform):
         entities = super().managed_entities(platform)
@@ -428,8 +439,6 @@ class SubDevice(NamespaceParser, BaseDevice):
     flexibility is now necessary to allow for some new 'exotic' design (see
     ms130-Appliance.Control.Sensor.LatestX)
     """
-
-    NAMESPACES = mn_h.HUB_NAMESPACES
 
     __slots__ = (
         "async_request",

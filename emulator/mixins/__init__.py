@@ -4,6 +4,7 @@ from json import JSONDecodeError
 import threading
 from time import time
 import typing
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -34,9 +35,9 @@ from custom_components.meross_lan.merossclient.protocol.message import (
     get_replykey,
 )
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from io import TextIOWrapper
-    from typing import ClassVar
+    from typing import ClassVar, Mapping
 
     import paho.mqtt.client as mqtt
 
@@ -400,7 +401,7 @@ class MerossEmulator:
 
         return None
 
-    def _handler_default(self, method: str, namespace: str, payload: dict):
+    def _handler_default(self, method: str, namespace: str, payload: "Mapping"):
         """
         This is an euristhic to try parse a namespace carrying state stored in all->digest
         If the state is not stored in all->digest we'll search our namespace(s) list for
@@ -449,7 +450,7 @@ class MerossEmulator:
 
             case mc.METHOD_PUSH:
                 if ns.has_push_query:
-                    return mc.METHOD_PUSH, self.descriptor.namespaces[namespace]
+                    return mc.METHOD_PUSH, {key_namespace: p_state}
 
         raise Exception(f"{method} not supported in emulator for {namespace}")
 

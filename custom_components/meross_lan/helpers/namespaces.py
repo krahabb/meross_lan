@@ -630,6 +630,11 @@ class NamespaceHandler:
             if (ns.has_get is False) and (ns.has_push_query is False):
                 # corresponding to _ns_no_query definitions in merossclient.namespaces
                 return
+            if (ns.request_payload_type is mn.PayloadType.LIST_C) and (not self.polling_request_channels):
+                # when a 'LIST_C' namespace has no registered parsers, self.polling_request will fail
+                # so we use the mocked default request
+                await async_request_func(*ns.request_default)
+                return
             await async_request_func(*self.polling_request)
             return
 

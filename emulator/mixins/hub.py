@@ -16,14 +16,14 @@ from custom_components.meross_lan.merossclient.protocol import (
 from custom_components.meross_lan.merossclient.protocol.namespaces import hub as mn_h
 
 if TYPE_CHECKING:
-    from typing import Any
+    from typing import Any, Mapping
 
     from .. import MerossEmulator, MerossEmulatorDescriptor
 
 
 class HubMixin(MerossEmulator if TYPE_CHECKING else object):
 
-    NAMESPACES = mn.HUB_NAMESPACES
+    NAMESPACES = mn_h.HUB_NAMESPACES
 
     MAXIMUM_RESPONSE_SIZE = 4000
 
@@ -237,7 +237,7 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
             # so we'll try to get the sensor all
             return self._get_sensor_all(subdevice_id, force_create=False)
 
-    def _handler_default(self, method: str, namespace: str, payload: dict):
+    def _handler_default(self, method: str, namespace: str, payload: "Mapping"):
         if method == mc.METHOD_GET:
             ns = self.NAMESPACES[namespace]
             if ns.is_hub_namespace:
