@@ -41,6 +41,8 @@ class MLSelect(me.MLEntity, select.SelectEntity):
         current_option: str | None
         options: list[str]
 
+    entity_category = me.MLEntity.EntityCategory.CONFIG
+
     __slots__ = (
         "current_option",
         "options",
@@ -118,7 +120,6 @@ class MtsTrackedSensor(me.MEAlwaysAvailableMixin, MLSelect):
 
     # HA core entity attributes:
     current_option: str
-    entity_category = MLSelect.EntityCategory.CONFIG
     entity_registry_enabled_default = False
 
     __slots__ = (

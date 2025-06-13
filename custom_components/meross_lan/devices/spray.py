@@ -35,6 +35,8 @@ class MLSpray(MEDictChannelMixin, MLConfigSelect):
 
     manager: "Device"
 
+    entity_category = None
+
     def __init__(self, manager: "Device", channel: object):
         super().__init__(manager, channel, mc.KEY_SPRAY)
         manager.register_parser_entity(self)
