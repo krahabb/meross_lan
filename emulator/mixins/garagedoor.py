@@ -39,14 +39,14 @@ class GarageDoorMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 )
 
     def _SET_Appliance_GarageDoor_Config(self, header, payload):
-        p_config = self.descriptor.namespaces[mn.Appliance_GarageDoor_Config.name][
+        p_config = self.namespaces[mn.Appliance_GarageDoor_Config.name][
             mc.KEY_CONFIG
         ]
         update_dict_strict(p_config, payload[mc.KEY_CONFIG])
         return mc.METHOD_SETACK, {}
 
     def _SET_Appliance_GarageDoor_MultipleConfig(self, header, payload):
-        p_config: list = self.descriptor.namespaces[
+        p_config: list = self.namespaces[
             mn.Appliance_GarageDoor_MultipleConfig.name
         ][mc.KEY_CONFIG]
         p_state: list = self.descriptor.digest[mc.KEY_GARAGEDOOR]

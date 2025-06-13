@@ -1,7 +1,7 @@
 """"""
 
 from random import randint
-import typing
+from typing import TYPE_CHECKING
 
 from custom_components.meross_lan.helpers import clamp
 from custom_components.meross_lan.merossclient import (
@@ -9,18 +9,26 @@ from custom_components.meross_lan.merossclient import (
     update_dict_strict,
     update_dict_strict_by_key,
 )
-from custom_components.meross_lan.merossclient.protocol import const as mc, namespaces as mn
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 from custom_components.meross_lan.merossclient.protocol.namespaces import (
     thermostat as mn_t,
 )
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from custom_components.meross_lan.merossclient.protocol.types import thermostat
 
     from .. import MerossEmulator, MerossEmulatorDescriptor
 
 
-class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
+
+    NAMESPACES_DEFAULT: "MerossEmulator.NamespacesDefault" = {
+        mn.Appliance_Control_TempUnit.name: (mc.KEY_CHANNEL, 0, {"tempUnit": 1})
+    }
+
     MAP_DEVICE_SCALE = {
         "mts200": 10,
         "mts200b": 10,
@@ -59,6 +67,13 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         super().__init__(descriptor, key)
         self.device_scale = self.MAP_DEVICE_SCALE[descriptor.type]
 
+    def _SET_Appliance_Control_TempUnit(self, header, payload):
+        ns = mn.Appliance_Control_TempUnit
+        p_channel_state_list = self.namespaces[ns.name][ns.key]
+        for p_channel in payload[ns.key]:
+            p_channel_state = update_dict_strict_by_key(p_channel_state_list, p_channel)
+        return mc.METHOD_SETACK, {ns.key: p_channel_state_list}
+
     def _SET_Appliance_Control_Thermostat_Mode(self, header, payload):
         p_digest_thermostat = self.descriptor.digest[mc.KEY_THERMOSTAT]
         p_digest_mode_list = p_digest_thermostat[mc.KEY_MODE]
@@ -95,16 +110,6 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
 
         return mc.METHOD_SETACK, {}
 
-    def _SET_Appliance_Control_TempUnit(self, header, payload):
-        ns = mn.Appliance_Control_TempUnit
-        p_channel_state_list = self.descriptor.namespaces[ns.name][ns.key]
-        for p_channel in payload[ns.key]:
-            p_channel_state = update_dict_strict_by_key(
-                p_channel_state_list, p_channel
-            )
-        return mc.METHOD_SETACK, {ns.key: p_channel_state_list}
-
-
     def _SET_Appliance_Control_Thermostat_ModeB(self, header, payload):
         p_digest_modeb_list = self.descriptor.digest[mc.KEY_THERMOSTAT][mc.KEY_MODEB]
         for p_modeb in payload[mc.KEY_MODEB]:
@@ -138,7 +143,7 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
 
     def _SET_Appliance_Control_Thermostat_ModeC(self, header, payload):
         ns = mn_t.Appliance_Control_Thermostat_ModeC
-        p_digest_modec_list = self.descriptor.namespaces[ns.name][ns.key]
+        p_digest_modec_list = self.namespaces[ns.name][ns.key]
         for p_modec in payload[ns.key]:
             p_digest_modec: "thermostat.ModeC" = update_dict_strict_by_key(
                 p_digest_modec_list, p_modec
@@ -157,25 +162,39 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                     p_more["cStatus"] = 0
                     p_more["fStatus"] = 0
                 case mc.MTS300_MODE_HEAT:
-                    delta_t = round((p_targettemp["heat"] - currenttemp) / self.device_scale)
-                    p_more["hStatus"] = 0 if delta_t <= 0 else 3 if delta_t >= 3 else delta_t
+                    delta_t = round(
+                        (p_targettemp["heat"] - currenttemp) / self.device_scale
+                    )
+                    p_more["hStatus"] = (
+                        0 if delta_t <= 0 else 3 if delta_t >= 3 else delta_t
+                    )
                     p_more["cStatus"] = 0
                     p_more["fStatus"] = fan_speed or p_more["hStatus"]
                 case mc.MTS300_MODE_COOL:
                     p_more["hStatus"] = 0
-                    delta_t = round((currenttemp - p_targettemp["cold"]) / self.device_scale)
-                    p_more["cStatus"] = 0 if delta_t <= 0 else 2 if delta_t >= 2 else delta_t
+                    delta_t = round(
+                        (currenttemp - p_targettemp["cold"]) / self.device_scale
+                    )
+                    p_more["cStatus"] = (
+                        0 if delta_t <= 0 else 2 if delta_t >= 2 else delta_t
+                    )
                     p_more["fStatus"] = fan_speed or p_more["cStatus"]
                 case mc.MTS300_MODE_AUTO:
-                    delta_t = round((p_targettemp["heat"] - currenttemp) / self.device_scale)
+                    delta_t = round(
+                        (p_targettemp["heat"] - currenttemp) / self.device_scale
+                    )
                     if delta_t > 0:
                         p_more["hStatus"] = 3 if delta_t >= 3 else delta_t
                         p_more["cStatus"] = 0
                         p_more["fStatus"] = fan_speed or p_more["hStatus"]
                     else:
-                        delta_t = round((currenttemp - p_targettemp["cold"]) / self.device_scale)
+                        delta_t = round(
+                            (currenttemp - p_targettemp["cold"]) / self.device_scale
+                        )
                         p_more["hStatus"] = 0
-                        p_more["cStatus"] = 0 if delta_t <= 0 else 2 if delta_t >= 2 else delta_t
+                        p_more["cStatus"] = (
+                            0 if delta_t <= 0 else 2 if delta_t >= 2 else delta_t
+                        )
                         p_more["fStatus"] = fan_speed or p_more["cStatus"]
 
         # WARNING: returning only the last element of the loop (usually just 1 item per device tho)
@@ -196,9 +215,7 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         namespace_key = self.NAMESPACES[namespace].key
         method = header[mc.KEY_METHOD]
 
-        digest: list[dict[str, object]] = self.descriptor.namespaces[namespace][
-            namespace_key
-        ]
+        digest: list[dict[str, object]] = self.namespaces[namespace][namespace_key]
         response_list = []
         for p_request_channel in payload[namespace_key]:
             channel = p_request_channel[mc.KEY_CHANNEL]

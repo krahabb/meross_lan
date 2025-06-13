@@ -79,7 +79,7 @@ class imdict(dict):
     __ior__ = _immutable
     clear = _immutable
     update = _immutable
-    setdefault = _immutable # type: ignore
+    setdefault = _immutable  # type: ignore
     pop = _immutable
     popitem = _immutable
 
@@ -455,7 +455,7 @@ Appliance_Control_ElectricityX = ns(
 )
 Appliance_Control_Fan = ns("Appliance.Control.Fan", mc.KEY_FAN, ARGS_GETSET)
 Appliance_Control_FilterMaintenance = ns(
-    "Appliance.Control.FilterMaintenance", mc.KEY_FILTER, ARGS_PUSHQ
+    "Appliance.Control.FilterMaintenance", mc.KEY_FILTER, ARGS_PUSHQ | P_LIST
 )
 Appliance_Control_Light = ns("Appliance.Control.Light", mc.KEY_LIGHT, ARGS_GETSETPUSH)
 Appliance_Control_Light_Effect = ns(
@@ -468,13 +468,13 @@ Appliance_Control_OverTemp = ns(
     "Appliance.Control.OverTemp", mc.KEY_OVERTEMP, ARGS_GET | P_LIST
 )
 Appliance_Control_PhysicalLock = ns(
-    "Appliance.Control.PhysicalLock", mc.KEY_LOCK, ARGS_SETPUSHQ
+    "Appliance.Control.PhysicalLock", mc.KEY_LOCK, ARGS_SETPUSHQ | P_LIST_C
 )
 Appliance_Control_Presence_Config = ns(
     "Appliance.Control.Presence.Config", mc.KEY_CONFIG, ARGS_GET | P_LIST_C
 )
 Appliance_Control_Presence_Study = ns(
-    "Appliance.Control.Presence.Study", mc.KEY_CONFIG, ARGS_PUSHQ
+    "Appliance.Control.Presence.Study", mc.KEY_CONFIG, ARGS_PUSHQ | P_LIST
 )
 Appliance_Control_Screen_Brightness = ns(
     "Appliance.Control.Screen.Brightness", mc.KEY_BRIGHTNESS, ARGS_GETSETPUSH | P_LIST_C
@@ -559,7 +559,7 @@ Appliance_Mcu_Hp110_Preview = ns("Appliance.Mcu.Hp110.Preview")
 Appliance_Mcu_Hp110_Lock = ns("Appliance.Mcu.Hp110.Lock")
 
 Appliance_RollerShutter_Adjust = ns(
-    "Appliance.RollerShutter.Adjust", mc.KEY_ADJUST, ARGS_PUSHQ
+    "Appliance.RollerShutter.Adjust", mc.KEY_ADJUST, ARGS_PUSHQ | P_LIST
 )  # maybe SET supported too
 Appliance_RollerShutter_Config = ns(
     "Appliance.RollerShutter.Config", mc.KEY_CONFIG, ARGS_GETSET | P_LIST

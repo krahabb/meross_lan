@@ -37,7 +37,7 @@ from custom_components.meross_lan.merossclient.protocol.message import (
 
 if TYPE_CHECKING:
     from io import TextIOWrapper
-    from typing import ClassVar, Mapping
+    from typing import Any, ClassVar, Mapping
 
     import paho.mqtt.client as mqtt
 
@@ -95,7 +95,7 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         for line in f:
             row = line.split("\t")
             if len(row) == 5:
-                row.insert(1, "") # patch earlier versions missing 'txrx'
+                row.insert(1, "")  # patch earlier versions missing 'txrx'
             if row[3] != "LOG":
                 row[-1] = json_loads(row[-1])
                 self._import_tracerow(*row)  # type:ignore
@@ -183,9 +183,22 @@ class MerossEmulator:
         NAMESPACES: ClassVar
         MAXIMUM_RESPONSE_SIZE: ClassVar
 
+        type UpdateNamespaceArgs = tuple[str, Any, Mapping]
+        type NamespacesDefault = dict[str, UpdateNamespaceArgs]
+        NAMESPACES_DEFAULT: ClassVar[NamespacesDefault]
+        """Contains default data for namespaces initialization.
+        Some traces could miss some important namespaces because of the way they're collected
+        so we'll add the 'well-known minimum working configuration' for those namespaces which
+        should (always) work in emulator (to the best of our knowledge).
+        This container must be defined in every custom mixin with defaults
+        relevant for the features they're implementing. The complete class defaults
+        will be 'explored' in MerossEmulator.__init__."""
+
     NAMESPACES = mn.NAMESPACES
 
     MAXIMUM_RESPONSE_SIZE = 3000
+
+    NAMESPACES_DEFAULT = {}
 
     __slots__ = (
         "epoch",
@@ -193,6 +206,7 @@ class MerossEmulator:
         "loop",
         "key",
         "descriptor",
+        "namespaces",
         "p_dndmode",
         "topic_response",
         "mqtt_client",
@@ -203,11 +217,43 @@ class MerossEmulator:
         "__dict__",
     )
 
-    def __init__(self, descriptor: MerossEmulatorDescriptor, key: str):
+
+    def __init__(self, descriptor: MerossEmulatorDescriptor, key: str, /):
         self.lock = threading.Lock()
         self.loop: asyncio.AbstractEventLoop = None  # type: ignore
         self.key = key
         self.descriptor = descriptor
+        self.namespaces = namespaces = descriptor.namespaces
+        namespaces_default: "MerossEmulator.NamespacesDefault" = {}
+        for cls in self.__class__.mro():
+            if cls is object:
+                continue
+            try:
+                namespaces_default |= cls.NAMESPACES_DEFAULT
+            except AttributeError:
+                pass
+
+        for ability in descriptor.ability:
+            ns = self.NAMESPACES.get(ability)
+            if ns and ns.grammar is not mn.Grammar.UNKNOWN:
+                if ability in namespaces_default:
+                    _key_channel, _channel, _payload = namespaces_default[ability]
+                    self.update_namespace_state(
+                        ability, _channel, _payload, _key_channel
+                    )
+                else:
+                    # no default state set in NAMESPACES_DEFAULT
+                    if ability not in namespaces:
+                        # we cannot use copy because request_payload_type.value is immutable class
+                        _ns_default_payload = ns.request_payload_type.value
+                        if isinstance(_ns_default_payload, dict):
+                            _ns_default_payload = dict(_ns_default_payload)
+                        else:
+                            _ns_default_payload = list(_ns_default_payload)
+                        # set a plain (empty) default state
+                        namespaces[ability] = { ns.key: _ns_default_payload}
+
+
         if mn.Appliance_System_DNDMode.name in descriptor.ability:
             self.p_dndmode = {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}}
         self.topic_response = mc.TOPIC_RESPONSE.format(descriptor.uuid)
@@ -248,7 +294,7 @@ class MerossEmulator:
         if self.mqtt_client:
             self._mqtt_shutdown()
 
-    def set_timezone(self, timezone: str):
+    def set_timezone(self, timezone: str, /):
         # beware when using TZ names: here we expect a IANA zoneinfo key
         # as "US/Pacific" or so. Using tzname(s) like "PDT" or "PST"
         # such as those recovered from tzinfo.tzname() might be wrong
@@ -278,7 +324,7 @@ class MerossEmulator:
         """
         self.descriptor.time[mc.KEY_TIMESTAMP] = self.epoch = int(time())
 
-    def handle(self, request: MerossMessage | str) -> str | None:
+    def handle(self, request: MerossMessage | str, /) -> str | None:
         """
         main message handler entry point: this is called either from web.Request
         for request routed from the web.Application or from the mqtt.Client.
@@ -355,7 +401,7 @@ class MerossEmulator:
 
         return None
 
-    def _handle_message(self, header: "MerossHeaderType", payload: "MerossPayloadType"):
+    def _handle_message(self, header: "MerossHeaderType", payload: "MerossPayloadType", /):
         namespace = header[mc.KEY_NAMESPACE]
         method = header[mc.KEY_METHOD]
         try:
@@ -386,7 +432,12 @@ class MerossEmulator:
         except Exception as e:
             self._log_message(e.__class__.__name__, str(e))
             response_method = mc.METHOD_ERROR
-            response_payload = {mc.KEY_ERROR: {mc.KEY_CODE: -1, "message": f"{e.__class__.__name__}({e})"}}
+            response_payload = {
+                mc.KEY_ERROR: {
+                    mc.KEY_CODE: -1,
+                    "message": f"{e.__class__.__name__}({e})",
+                }
+            }
 
         if response_method:
             response = build_message(
@@ -401,7 +452,7 @@ class MerossEmulator:
 
         return None
 
-    def _handler_default(self, method: str, namespace: str, payload: "Mapping"):
+    def _handler_default(self, method: str, namespace: str, payload: "Mapping", /):
         """
         This is an euristhic to try parse a namespace carrying state stored in all->digest
         If the state is not stored in all->digest we'll search our namespace(s) list for
@@ -412,8 +463,8 @@ class MerossEmulator:
         except Exception as exception:
             # when the 'looking for state' euristic fails
             # we might fallback to a static reply should it fit...
-            if (method == mc.METHOD_GET) and (namespace in self.descriptor.namespaces):
-                return mc.METHOD_GETACK, self.descriptor.namespaces[namespace]
+            if (method == mc.METHOD_GET) and (namespace in self.namespaces):
+                return mc.METHOD_GETACK, self.namespaces[namespace]
             raise Exception(
                 f"{namespace} not supported in emulator ({exception})"
             ) from exception
@@ -454,7 +505,7 @@ class MerossEmulator:
 
         raise Exception(f"{method} not supported in emulator for {namespace}")
 
-    def _SET_Appliance_Config_Key(self, header, payload):
+    def _SET_Appliance_Config_Key(self, header, payload, /):
         """
         When connecting to a Meross cloud broker we're receiving this 'on the fly'
         so we should try to accomplish the new config
@@ -511,7 +562,7 @@ class MerossEmulator:
 
         return mc.METHOD_SETACK, {}
 
-    def _SETACK_Appliance_Control_Bind(self, header, payload):
+    def _SETACK_Appliance_Control_Bind(self, header, payload, /):
         self.mqtt_publish_push(
             mn.Appliance_System_Report.name,
             {
@@ -526,12 +577,12 @@ class MerossEmulator:
         )
         return None, None
 
-    def _GET_Appliance_Control_Toggle(self, header, payload):
+    def _GET_Appliance_Control_Toggle(self, header, payload, /):
         # only actual example of this usage comes from legacy firmwares
         # carrying state in all->control
         return mc.METHOD_GETACK, {mc.KEY_TOGGLE: self._get_control_key(mc.KEY_TOGGLE)}
 
-    def _SET_Appliance_Control_Toggle(self, header, payload):
+    def _SET_Appliance_Control_Toggle(self, header, payload, /):
         # only acual example of this usage comes from legacy firmwares
         # carrying state in all->control
         self._get_control_key(mc.KEY_TOGGLE)[mc.KEY_ONOFF] = payload[mc.KEY_TOGGLE][
@@ -539,7 +590,7 @@ class MerossEmulator:
         ]
         return mc.METHOD_SETACK, {}
 
-    def _GET_Appliance_System_Debug(self, header, payload):
+    def _GET_Appliance_System_Debug(self, header, payload, /):
         firmware = self.descriptor.firmware
         return mc.METHOD_GETACK, {
             mc.KEY_DEBUG: {
@@ -576,28 +627,28 @@ class MerossEmulator:
             }
         }
 
-    def _GET_Appliance_System_DNDMode(self, header, payload):
+    def _GET_Appliance_System_DNDMode(self, header, payload, /):
         return mc.METHOD_GETACK, self.p_dndmode
 
-    def _SET_Appliance_System_DNDMode(self, header, payload):
+    def _SET_Appliance_System_DNDMode(self, header, payload, /):
         update_dict_strict(self.p_dndmode, payload)
         return mc.METHOD_SETACK, {}
 
-    def _GET_Appliance_System_Firmware(self, header, payload):
+    def _GET_Appliance_System_Firmware(self, header, payload, /):
         return mc.METHOD_GETACK, {mc.KEY_FIRMWARE: self.descriptor.firmware}
 
-    def _GET_Appliance_System_Hardware(self, header, payload):
+    def _GET_Appliance_System_Hardware(self, header, payload, /):
         return mc.METHOD_GETACK, {mc.KEY_HARDWARE: self.descriptor.hardware}
 
-    def _GET_Appliance_System_Online(self, header, payload):
+    def _GET_Appliance_System_Online(self, header, payload, /):
         return mc.METHOD_GETACK, {mc.KEY_ONLINE: self.descriptor.all[mc.KEY_ONLINE]}
 
-    def _SET_Appliance_System_Time(self, header, payload):
+    def _SET_Appliance_System_Time(self, header, payload, /):
         self.descriptor.update_time(payload[mc.KEY_TIME])
         self.update_epoch()
         return mc.METHOD_SETACK, {}
 
-    def _get_key_state(self, namespace: str) -> tuple[str, dict | list]:
+    def _get_key_state(self, namespace: str, /) -> tuple[str, dict | list]:
         """
         general device state is usually carried in NS_ALL into the "digest" key
         and is also almost regularly keyed by using the camelCase of the last verb
@@ -609,9 +660,9 @@ class MerossEmulator:
 
         match namespace.split("."):
             case (_, "RollerShutter", _):
-                return key, self.descriptor.namespaces[namespace][key]
+                return key, self.namespaces[namespace][key]
             case (_, "Config", _):
-                return key, self.descriptor.namespaces[namespace][key]
+                return key, self.namespaces[namespace][key]
             case (_, "Control", _):
                 p_digest = self.descriptor.digest
             case (_, "Control", ns_2, _):
@@ -625,9 +676,9 @@ class MerossEmulator:
         if key in p_digest:
             return key, p_digest[key]
 
-        return key, self.descriptor.namespaces[namespace][key]
+        return key, self.namespaces[namespace][key]
 
-    def _get_control_key(self, key):
+    def _get_control_key(self, key, /):
         """Extracts the legacy 'control' key from NS_ALL (previous to 'digest' introduction)."""
         p_control = self.descriptor.all.get(mc.KEY_CONTROL)
         if p_control is None:
@@ -636,7 +687,7 @@ class MerossEmulator:
             raise Exception(f"'{key}' not present in 'control' key")
         return p_control[key]
 
-    def _log_message(self, tag: str, message: str):
+    def _log_message(self, tag: str, message: str, /):
         print(f"Emulator({self.uuid}) {tag}: {message}")
 
     def _scheduler(self):
@@ -650,21 +701,26 @@ class MerossEmulator:
         self.update_epoch()
 
     def get_namespace_state(
-        self, namespace: str, channel, key_channel: str = mc.KEY_CHANNEL
+        self, namespace: str, channel, key_channel: str = mc.KEY_CHANNEL, /
     ) -> dict:
-        p_namespace_state = self.descriptor.namespaces[namespace][
+        p_namespace_state = self.namespaces[namespace][
             self.NAMESPACES[namespace].key
         ]
         return get_element_by_key(p_namespace_state, key_channel, channel)
 
     def update_namespace_state(
-        self, namespace: str, channel, payload: dict, key_channel: str = mc.KEY_CHANNEL
+        self,
+        namespace: str,
+        channel,
+        payload: "Mapping",
+        key_channel: str = mc.KEY_CHANNEL,
+        /,
     ):
         """updates the current state (stored in namespace key) eventually creating a default.
         Useful when sanitizing mixin state during init should the trace miss some well-known namespaces info
         """
         try:
-            p_namespace_state: list = self.descriptor.namespaces[namespace][
+            p_namespace_state: list = self.namespaces[namespace][
                 self.NAMESPACES[namespace].key
             ]
             try:
@@ -677,7 +733,7 @@ class MerossEmulator:
         except KeyError:
             p_channel_state = {key_channel: channel}
             p_namespace_state = [p_channel_state]
-            self.descriptor.namespaces[namespace] = {
+            self.namespaces[namespace] = {
                 self.NAMESPACES[namespace].key: p_namespace_state
             }
 

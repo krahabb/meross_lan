@@ -10,10 +10,10 @@ from custom_components.meross_lan.devices.hub.mts100 import Mts100Climate
 from custom_components.meross_lan.devices.thermostat.mts200 import Mts200Climate
 from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
     MLScreenBrightnessNumber,
+    MtsCommonTemperatureExtNumber,
     MtsDeadZoneNumber,
     MtsFrostNumber,
     MtsOverheatNumber,
-    MtsCommonTemperatureExtNumber,
     mn_t,
 )
 from custom_components.meross_lan.merossclient.protocol import (

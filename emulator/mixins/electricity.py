@@ -3,18 +3,18 @@
 from datetime import datetime, timezone
 from random import randint
 from time import gmtime
-import typing
+from typing import TYPE_CHECKING
 
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
 )
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from .. import MerossEmulator, MerossEmulatorDescriptor
 
 
-class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+class ElectricityMixin(MerossEmulator if TYPE_CHECKING else object):
     # used to 'fix' and control the power level in tests
     # if None (default) it will generate random values
     _power_set: int | None = None
@@ -69,7 +69,7 @@ class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         return mc.METHOD_GETACK, self.payload_electricity
 
 
-class ElectricityXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+class ElectricityXMixin(MerossEmulator if TYPE_CHECKING else object):
 
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
@@ -134,7 +134,7 @@ class ElectricityXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         return mc.METHOD_GETACK, self.payload_electricityx
 
 
-class ConsumptionXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+class ConsumptionXMixin(MerossEmulator if TYPE_CHECKING else object):
     # this is a static default but we're likely using
     # the current 'power' state managed by the ElectricityMixin
     power = 0.0  # in mW
@@ -147,7 +147,7 @@ class ConsumptionXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             mn.Appliance_Control_ConsumptionX.name
         ]
         p_consumptionx: list = self.payload_consumptionx[mc.KEY_CONSUMPTIONX]
-        if (len(p_consumptionx)) == 0:
+        if not p_consumptionx:
             p_consumptionx.append(
                 {
                     mc.KEY_DATE: "1970-01-01",

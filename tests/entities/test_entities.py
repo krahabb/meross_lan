@@ -105,6 +105,10 @@ async def test_entities(
         for emulator in generate_emulators(
             tc.EMULATOR_TRACES_PATH, key=tc.MOCK_KEY, uuid=tc.MOCK_DEVICE_UUID
         ):
+            """
+            if emulator.uuid not in ("01234567890123456789012345678914", "01234567890123456789012345678915",):
+                continue
+            """
             descriptor = emulator.descriptor
             EntityComponentTest.ability = ability = descriptor.ability
             EntityComponentTest.digest = digest = descriptor.digest

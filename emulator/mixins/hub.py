@@ -67,25 +67,26 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
         digest_subdevices = descriptor.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE]
         namespaces = descriptor.namespaces
         ability = descriptor.ability
-        ns_state: dict[mn.Namespace, list[dict]] = {}
 
-        for ns in (
-            mn_h.Appliance_Hub_Mts100_Adjust,
-            mn_h.Appliance_Hub_Mts100_All,
-            mn_h.Appliance_Hub_Mts100_Mode,
-            mn_h.Appliance_Hub_Mts100_ScheduleB,
-            mn_h.Appliance_Hub_Mts100_Temperature,
-            mn_h.Appliance_Hub_Sensor_Adjust,
-            mn_h.Appliance_Hub_Sensor_All,
-            mn_h.Appliance_Hub_Sensor_Smoke,
-            mn_h.Appliance_Hub_Sensor_DoorWindow,
-            mn_h.Appliance_Hub_Online,
-            mn_h.Appliance_Hub_ToggleX,
-            mn_h.Hub_Control_Sensor_HistoryX,
-            mn_h.Hub_Control_Sensor_LatestX,
-        ):
-            if ns.name in ability:
-                ns_state[ns] = namespaces.setdefault(ns.name, {ns.key: []})[ns.key]
+        ns_state: dict[mn.Namespace, list[dict]] = {
+            ns: namespaces[ns.name][ns.key]  # type: ignore
+            for ns in (
+                mn_h.Appliance_Hub_Mts100_Adjust,
+                mn_h.Appliance_Hub_Mts100_All,
+                mn_h.Appliance_Hub_Mts100_Mode,
+                mn_h.Appliance_Hub_Mts100_ScheduleB,
+                mn_h.Appliance_Hub_Mts100_Temperature,
+                mn_h.Appliance_Hub_Sensor_Adjust,
+                mn_h.Appliance_Hub_Sensor_All,
+                mn_h.Appliance_Hub_Sensor_Smoke,
+                mn_h.Appliance_Hub_Sensor_DoorWindow,
+                mn_h.Appliance_Hub_Online,
+                mn_h.Appliance_Hub_ToggleX,
+                mn_h.Hub_Control_Sensor_HistoryX,
+                mn_h.Hub_Control_Sensor_LatestX,
+            )
+            if ns.name in ability
+        }
 
         # these maps help in generalizing the rules for
         # digest <-> ns_all payloads structure relationship
@@ -196,7 +197,7 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
         """returns the subdevice namespace dict. It will create a default entry if not present
         and the device abilities supports the namespace."""
         try:
-            subdevices_namespace: list = self.descriptor.namespaces[ns.name][ns.key]
+            subdevices_namespace: list = self.namespaces[ns.name][ns.key]
             try:
                 return get_element_by_key(
                     subdevices_namespace,
@@ -215,7 +216,7 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
                 ns.name in self.descriptor.ability
             ), f"{ns.name} not available in Hub abilities"
             p_subdevice = {ns.key_channel: subdevice_id}
-            self.descriptor.namespaces[ns.name] = {ns.key: [p_subdevice]}
+            self.namespaces[ns.name] = {ns.key: [p_subdevice]}
         return p_subdevice
 
     def _get_mts100_all(self, subdevice_id: str, *, force_create: bool = True):
@@ -243,7 +244,7 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
             if ns.is_hub_namespace:
                 ns_key = ns.key
                 ns_key_channel = ns.key_channel
-                response_payload = self.descriptor.namespaces[namespace]
+                response_payload = self.namespaces[namespace]
                 request_subdevices = payload[ns_key]
                 if request_subdevices:
                     # client asked for defined set of ids

@@ -1,6 +1,6 @@
 """"""
 
-import typing
+from typing import TYPE_CHECKING
 
 from custom_components.meross_lan.merossclient import (
     get_element_by_key,
@@ -12,11 +12,11 @@ from custom_components.meross_lan.merossclient.protocol import (
     namespaces as mn,
 )
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from .. import MerossEmulator, MerossEmulatorDescriptor
 
 
-class LightMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+class LightMixin(MerossEmulator if TYPE_CHECKING else object):
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
 
@@ -32,11 +32,6 @@ class LightMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         else:
             self._togglex_switch = False
             self._togglex_mode = False
-
-        if mn.Appliance_Control_Light_Effect.name in descriptor.ability:
-            descriptor.namespaces.setdefault(
-                mn.Appliance_Control_Light_Effect.name, {mc.KEY_EFFECT: []}
-            )
 
     def _SET_Appliance_Control_Light(self, header, payload):
         # need to override basic handler since lights turning on/off is tricky between
@@ -82,12 +77,12 @@ class LightMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     def _GET_Appliance_Control_Light_Effect(self, header, payload):
         return (
             mc.METHOD_GETACK,
-            self.descriptor.namespaces[mn.Appliance_Control_Light_Effect.name],
+            self.namespaces[mn.Appliance_Control_Light_Effect.name],
         )
 
     def _SET_Appliance_Control_Light_Effect(self, header, payload):
 
-        p_state_effect_list: list[dict] = self.descriptor.namespaces[
+        p_state_effect_list: list[dict] = self.namespaces[
             mn.Appliance_Control_Light_Effect.name
         ][mc.KEY_EFFECT]
         effect_id_enabled = None
