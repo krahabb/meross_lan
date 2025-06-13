@@ -90,7 +90,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
     HVACAction = climate.HVACAction
     HVACMode = climate.HVACMode
 
-    device_scale = mc.MTS_TEMP_SCALE
+    device_scale = 1
 
     SetPointNumber = None
 
@@ -267,7 +267,7 @@ class MtsTemperatureNumber(MLConfigNumber):
     # HA core entity attributes:
     _attr_suggested_display_precision = 1
 
-    __slots__ = ("climate",)
+    __slots__ = ()
 
     def __init__(
         self,
@@ -275,7 +275,6 @@ class MtsTemperatureNumber(MLConfigNumber):
         entitykey: str,
         **kwargs: "Unpack[MLConfigNumber.Args]",
     ):
-        self.climate = climate
         kwargs["device_scale"] = climate.device_scale
         super().__init__(
             climate.manager,
@@ -295,17 +294,22 @@ class MtsSetPointNumber(MtsTemperatureNumber):
     # HA core entity attributes:
     icon: str
 
-    __slots__ = ("icon",)
+    __slots__ = (
+        "climate",
+        "icon",
+        "key_value",
+    )
 
     def __init__(
         self,
         climate: "MtsClimate",
         preset_mode: "MtsClimate.Preset",
     ):
+        self.climate = climate
+        self.icon = climate.PRESET_TO_ICON_MAP[preset_mode]
         self.key_value = climate.MTS_MODE_TO_TEMPERATUREKEY_MAP[
             reverse_lookup(climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
         ]
-        self.icon = climate.PRESET_TO_ICON_MAP[preset_mode]
         super().__init__(
             climate,
             f"config_temperature_{self.key_value}",

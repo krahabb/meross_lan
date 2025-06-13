@@ -13,7 +13,7 @@ from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
     MtsDeadZoneNumber,
     MtsFrostNumber,
     MtsOverheatNumber,
-    MtsRichTemperatureNumber,
+    MtsCommonTemperatureExtNumber,
     mn_t,
 )
 from custom_components.meross_lan.merossclient.protocol import (
@@ -31,7 +31,11 @@ class EntityTest(EntityComponentTest):
 
     DIGEST_ENTITIES = {
         mc.KEY_THERMOSTAT: {
-            mc.KEY_MODE: [Mts200Climate.SetPointNumber, Mts200Climate.SetPointNumber, Mts200Climate.SetPointNumber],
+            mc.KEY_MODE: [
+                Mts200Climate.SetPointNumber,
+                Mts200Climate.SetPointNumber,
+                Mts200Climate.SetPointNumber,
+            ],
         },
     }
     NAMESPACES_ENTITIES = {
@@ -57,7 +61,7 @@ class EntityTest(EntityComponentTest):
     }
 
     async def async_test_each_callback(self, entity: MLNumber):
-        if isinstance(entity, MtsRichTemperatureNumber):
+        if isinstance(entity, MtsCommonTemperatureExtNumber):
             # rich temperatures are set to 'unavailable' when
             # the corresponding function is 'off'
             if switch := entity.switch:

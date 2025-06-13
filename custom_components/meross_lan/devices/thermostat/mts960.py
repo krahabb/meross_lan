@@ -11,7 +11,6 @@ from .mtsthermostat import MtsThermostatClimate, mc, mn_t
 if TYPE_CHECKING:
     from typing import Final
 
-    from ...climate import MtsTemperatureNumber
     from ...helpers.device import Device
 
 
@@ -397,19 +396,6 @@ class Mts960Climate(MtsThermostatClimate):
             return True
 
     # message handlers
-    def _parse_ctlRange(self, payload: dict):
-        """
-        {
-            "channel": 0,
-            "max": 11000,
-            "min": -3000,
-            "ctlMax": 3600,
-            "ctlMin": 300,
-        }
-        """
-        self.max_temp = payload[mc.KEY_CTLMAX] / self.device_scale
-        self.min_temp = payload[mc.KEY_CTLMIN] / self.device_scale
-
     def _parse_modeB(self, payload: dict):
         """
         {

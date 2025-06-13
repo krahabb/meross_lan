@@ -5,7 +5,6 @@ from ...climate import MtsSetPointNumber
 from .mtsthermostat import MtsThermostatClimate, mc, mn_t
 
 if TYPE_CHECKING:
-    from ...climate import MtsTemperatureNumber
     from ...helpers.device import Device
 
 
@@ -15,11 +14,9 @@ class Mts200Climate(MtsThermostatClimate):
     ns = mn_t.Appliance_Control_Thermostat_Mode
 
     # MtsClimate class attributes
-    class SetPointNumber(MtsSetPointNumber):
-        """
-        customize MtsSetPointNumber to interact with Mts200 family valves
-        """
+    device_scale = mc.MTS200_TEMP_SCALE
 
+    class SetPointNumber(MtsSetPointNumber):
         ns = mn_t.Appliance_Control_Thermostat_Mode
 
     class Schedule(MtsSchedule):
@@ -138,11 +135,6 @@ class Mts200Climate(MtsThermostatClimate):
     def is_mts_scheduled(self):
         return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
 
-    def get_ns_adjust(self):
-        return self.manager.namespace_handlers[
-            mn_t.Appliance_Control_Thermostat_Calibration.name
-        ]
-
     # interface: self
     async def async_request_summermode(self, summermode: int, /):
         ns = mn_t.Appliance_Control_Thermostat_SummerMode
@@ -217,14 +209,6 @@ class Mts200Climate(MtsThermostatClimate):
                 number_preset_temperature.update_device_value(payload[key_temp])
 
         self.flush_state()
-
-    def _parse_holdAction(self, payload: dict, /):
-        """{"channel": 0, "mode": 0, "expire": 1697010767}"""
-        # TODO: it looks like this message is related to #369.
-        # The trace shows the log about the missing handler in 4.5.2
-        # and it looks like when we receive this, it is a notification
-        # the mts is not really changing its setpoint (as per the issue).
-        # We need more info about how to process this.
 
     def _parse_summerMode(self, payload: dict, /):
         """{ "channel": 0, "mode": 0 }"""

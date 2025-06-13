@@ -305,9 +305,9 @@ ROLLERSHUTTER_POSITION_STOP = -1
 ROLLERSHUTTER_POSITION_OPENED = 100
 ROLLERSHUTTER_POSITION_CLOSED = 0
 
-MTS_TEMP_SCALE = 10  # native mts temperatures expressed in tenths of °C
 
 # mts100 (and the likes..) valves mode
+MTS100_TEMP_SCALE = 10  # native mts temperatures expressed in tenths of °C
 MTS100_MODE_CUSTOM = 0
 MTS100_MODE_HEAT = 1  # preset heat/comfort
 MTS100_MODE_COOL = 2  # preset cool/night
@@ -323,6 +323,7 @@ MTS100_MODE_TO_CURRENTSET_MAP = {
 
 
 # I don't have an MTS200 to test so these are inferred from a user trace
+MTS200_TEMP_SCALE = 10  # native mts temperatures expressed in tenths of °C
 MTS200_MODE_HEAT = 0  # preset heat/comfort
 MTS200_MODE_COOL = 1  # preset cool/night
 MTS200_MODE_ECO = 2  # preset away/eco

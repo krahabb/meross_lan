@@ -9,7 +9,7 @@ from custom_components.meross_lan.merossclient import (
     update_dict_strict,
     update_dict_strict_by_key,
 )
-from custom_components.meross_lan.merossclient.protocol import const as mc
+from custom_components.meross_lan.merossclient.protocol import const as mc, namespaces as mn
 from custom_components.meross_lan.merossclient.protocol.namespaces import (
     thermostat as mn_t,
 )
@@ -94,6 +94,16 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                     break
 
         return mc.METHOD_SETACK, {}
+
+    def _SET_Appliance_Control_TempUnit(self, header, payload):
+        ns = mn.Appliance_Control_TempUnit
+        p_channel_state_list = self.descriptor.namespaces[ns.name][ns.key]
+        for p_channel in payload[ns.key]:
+            p_channel_state = update_dict_strict_by_key(
+                p_channel_state_list, p_channel
+            )
+        return mc.METHOD_SETACK, {ns.key: p_channel_state_list}
+
 
     def _SET_Appliance_Control_Thermostat_ModeB(self, header, payload):
         p_digest_modeb_list = self.descriptor.digest[mc.KEY_THERMOSTAT][mc.KEY_MODEB]

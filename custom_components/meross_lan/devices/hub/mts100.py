@@ -17,6 +17,8 @@ class Mts100Climate(MtsClimate):
     ns = mn_h.Appliance_Hub_Mts100_Temperature
 
     # MtsClimate class attributes
+    device_scale = mc.MTS100_TEMP_SCALE
+
     class AdjustNumber(MtsTemperatureNumber):
 
         ns = mn_h.Appliance_Hub_Mts100_Adjust

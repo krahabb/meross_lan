@@ -11,10 +11,11 @@ from ...sensor import MLEnumSensor, MLTemperatureSensor
 from ...switch import MLSwitch
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, ClassVar, Unpack
+    from typing import Any, Callable, ClassVar, Final, Unpack
 
     from ...calendar import MtsSchedule
     from ...helpers.device import Device
+    from ...merossclient.protocol.types import thermostat as mt_t
 
 
 class MtsWarningSensor(MLEnumSensor):
@@ -23,7 +24,7 @@ class MtsWarningSensor(MLEnumSensor):
 
     def __init__(
         self,
-        number_temperature: "MtsRichTemperatureNumber",
+        number_temperature: "MtsCommonTemperatureExtNumber",
         native_value: str | int | float | None,
     ):
         entitykey = f"{number_temperature.entitykey}_warning"
@@ -38,6 +39,8 @@ class MtsWarningSensor(MLEnumSensor):
 
 class MtsConfigSwitch(MEListChannelMixin, MLSwitch):
 
+    number_temperature: "MtsCommonTemperatureExtNumber"
+
     # HA core entity attributes:
     entity_category = MLSwitch.EntityCategory.CONFIG
 
@@ -45,7 +48,7 @@ class MtsConfigSwitch(MEListChannelMixin, MLSwitch):
 
     def __init__(
         self,
-        number_temperature: "MtsRichTemperatureNumber",
+        number_temperature: "MtsCommonTemperatureExtNumber",
         device_value,
     ):
         self.number_temperature = number_temperature
@@ -61,36 +64,38 @@ class MtsConfigSwitch(MEListChannelMixin, MLSwitch):
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.number_temperature: "MtsRichTemperatureNumber" = None  # type: ignore
+        self.number_temperature = None  # type: ignore
 
-    def update_onoff(self, onoff):
+    def update_onoff(self, onoff: bool):
         if self.is_on != onoff:
             self.is_on = onoff
             self.flush_state()
-            self.number_temperature.available = onoff
-            self.number_temperature.flush_state()
+            number_temperature = self.number_temperature
+            if number_temperature.available != onoff:
+                number_temperature.available = onoff
+                number_temperature.flush_state()
 
 
-class MtsRichTemperatureNumber(MtsTemperatureNumber):
+class MtsCommonTemperatureNumber(MtsTemperatureNumber):
     """
     Slightly enriched MtsTemperatureNumber to generalize  a lot of Thermostat namespaces
     which usually carry a temperature value together with some added entities (typically a switch
     to enable the feature and a 'warning sensor')
     typical examples are :
     "calibration": {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
-    "deadZone":
+    "deadZone": {"channel":0,"value":300,"min":50,"max":2000}
     "frost": {"channel": 0, "onoff": 1, "value": 500, "min": 500, "max": 1500, "warning": 0}
     "overheat": {"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
         "lmTime": 1674121910, "currentTemp": 355, "channel": 0}
     """
 
-    manager: "Device"
-    entitykey: str
+    if TYPE_CHECKING:
+        manager: Device
+        entitykey: str
+
     key_value = mc.KEY_VALUE
 
     __slots__ = (
-        "sensor_warning",
-        "switch",
         "native_max_value",
         "native_min_value",
         "native_step",
@@ -99,52 +104,77 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
     def __init__(
         self,
         climate: "MtsThermostatClimate",
-        **kwargs: "Unpack[MtsTemperatureNumber.Args]",
+        **kwargs: "Unpack[MtsCommonTemperatureNumber.Args]",
     ):
-        super().__init__(climate, self.__class__.ns.key, **kwargs)
+        super().__init__(climate, self.__class__.ns.slug, **kwargs)
+        self.manager.register_parser_entity(self)
+
+    def _parse(self, payload: "mt_t.CommonTemperature"):
+        """
+        {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
+        """
+        if mc.KEY_MAX in payload:
+            self.native_max_value = payload[mc.KEY_MAX] / self.device_scale
+        if mc.KEY_MIN in payload:
+            self.native_min_value = payload[mc.KEY_MIN] / self.device_scale
+        self.update_device_value(payload[self.key_value])
+
+
+class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
+    """
+    Slightly enriched MtsCommonTemperatureNumber with some added entities (typically a switch
+    to enable the feature and a 'warning sensor')
+    typical examples are :
+    "frost": {"channel": 0, "onoff": 1, "value": 500, "min": 500, "max": 1500, "warning": 0}
+    "overheat": {"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
+        "lmTime": 1674121910, "currentTemp": 355, "channel": 0}
+    """
+    if TYPE_CHECKING:
+        sensor_warning: MtsWarningSensor
+        switch: MtsConfigSwitch
+
+    __slots__ = (
+        "sensor_warning",
+        "switch",
+    )
+
+    def __init__(
+        self,
+        climate: "MtsThermostatClimate",
+        **kwargs: "Unpack[MtsCommonTemperatureExtNumber.Args]",
+    ):
+        super().__init__(climate, **kwargs)
         manager = self.manager
         # preset entity platforms since these might be instantiated later
         manager.platforms.setdefault(MtsConfigSwitch.PLATFORM)
         manager.platforms.setdefault(MLEnumSensor.PLATFORM)
-        self.sensor_warning: "MtsWarningSensor" = None  # type: ignore
-        self.switch: "MtsConfigSwitch" = None  # type: ignore
-        manager.register_parser_entity(self)
+        self.sensor_warning = None  # type: ignore
+        self.switch = None  # type: ignore
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.switch: "MtsConfigSwitch" = None  # type: ignore
-        self.sensor_warning: "MtsWarningSensor" = None  # type: ignore
+        self.switch = None  # type: ignore
+        self.sensor_warning = None  # type: ignore
 
-    def _parse(self, payload: dict):
+    def _parse(self, payload: "mt_t.CommonTemperatureExt"):
         """
-        {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
+        {"channel": 0, "onoff": 1, "value": 500, "min": 500, "max": 1500, "warning": 0}
         """
-        if mc.KEY_MIN in payload:
-            self.native_min_value = payload[mc.KEY_MIN] / self.device_scale
-        if mc.KEY_MAX in payload:
-            self.native_max_value = payload[mc.KEY_MAX] / self.device_scale
-        if mc.KEY_ONOFF in payload:
-            onoff = payload[mc.KEY_ONOFF]
-            try:
-                # we don't use 'update_onoff' since it would (double) flush
-                # our availability
-                switch = self.switch
-                if switch.is_on != onoff:
-                    switch.is_on = onoff
-                    switch.flush_state()
-            except AttributeError:
-                self.switch = MtsConfigSwitch(self, device_value=onoff)
-            self.available = onoff
-        self.update_device_value(payload[self.key_value])
-
         if mc.KEY_WARNING in payload:
             try:
                 self.sensor_warning.update_native_value(payload[mc.KEY_WARNING])
             except AttributeError:
                 self.sensor_warning = MtsWarningSensor(self, payload[mc.KEY_WARNING])
+        if mc.KEY_ONOFF in payload:
+            self.available = onoff = bool(payload[mc.KEY_ONOFF])
+            try:
+                self.switch.update_onoff(onoff)
+            except AttributeError:
+                self.switch = MtsConfigSwitch(self, device_value=onoff)
+        super()._parse(payload)
 
 
-class MtsDeadZoneNumber(MtsRichTemperatureNumber):
+class MtsDeadZoneNumber(MtsCommonTemperatureNumber):
     """
     adjust "dead zone" i.e. the threshold for the temperature control
     for mts200 and mts960 or whatever carries the Appliance.Control.Thermostat.DeadZone
@@ -161,7 +191,7 @@ class MtsDeadZoneNumber(MtsRichTemperatureNumber):
         super().__init__(climate)
 
 
-class MtsFrostNumber(MtsRichTemperatureNumber):
+class MtsFrostNumber(MtsCommonTemperatureExtNumber):
     """
     Manages Appliance.Control.Thermostat.Frost:
     {"channel": 0, "onoff": 1, "value": 500, "min": 500, "max": 1500, "warning": 0}
@@ -176,7 +206,7 @@ class MtsFrostNumber(MtsRichTemperatureNumber):
         super().__init__(climate)
 
 
-class MtsOverheatNumber(MtsRichTemperatureNumber):
+class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
     """
     Configure overheat protection.
     Manages Appliance.Control.Thermostat.Overheat:
@@ -201,14 +231,14 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
         self.sensor_external_temperature: MLTemperatureSensor = None  # type: ignore
         return await super().async_shutdown()
 
-    def _parse(self, payload: dict):
+    def _parse(self, payload: "mt_t.Overheat"):
         """{"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
         "lmTime": 1674121910, "currentTemp": 355, "channel": 0}"""
-        super()._parse(payload)
         if mc.KEY_CURRENTTEMP in payload:
             self.sensor_external_temperature.update_native_value(
                 payload[mc.KEY_CURRENTTEMP] / self.device_scale
             )
+        super()._parse(payload)
 
 
 class MtsWindowOpened(MLBinarySensor):
@@ -259,7 +289,7 @@ class MtsTempUnit(MEListChannelMixin, MLConfigSelect):
     manager: "Device"
 
     def __init__(self, climate: "MtsThermostatClimate"):
-        super().__init__(climate.manager, climate.channel, self.key_value)
+        super().__init__(climate.manager, climate.channel, "display_temperature_unit")
         climate.manager.register_parser_entity(self)
 
 
@@ -292,15 +322,16 @@ class MLScreenBrightnessNumber(MLConfigNumber):
 
 
 OPTIONAL_NAMESPACES_INITIALIZERS: set["mn.Namespace"] = {
-    mn_t.Appliance_Control_Thermostat_CtlRange,
+    mn_t.Appliance_Control_Thermostat_CtlRange,  # mts960
     mn_t.Appliance_Control_Thermostat_HoldAction,
-    mn_t.Appliance_Control_Thermostat_SummerMode,
-    mn_t.Appliance_Control_Thermostat_Timer,
+    mn_t.Appliance_Control_Thermostat_SummerMode,  # mts200
+    mn_t.Appliance_Control_Thermostat_System,  # mts300
+    mn_t.Appliance_Control_Thermostat_Timer,  # mts960
 }
 """These namespaces handlers will forward message parsing to the climate entity"""
 
 OPTIONAL_ENTITIES_INITIALIZERS: dict[str, "Callable[[MtsThermostatClimate], Any]"] = {
-    # mn.Appliance_Control_TempUnit.name: MtsTempUnit,
+    mn.Appliance_Control_TempUnit.name: MtsTempUnit,
     mn_t.Appliance_Control_Thermostat_DeadZone.name: MtsDeadZoneNumber,
     mn_t.Appliance_Control_Thermostat_Frost.name: MtsFrostNumber,
     mn_t.Appliance_Control_Thermostat_Overheat.name: MtsOverheatNumber,
@@ -318,13 +349,15 @@ class MtsThermostatClimate(MtsClimate):
     """
 
     if TYPE_CHECKING:
-        manager: "Device"
+        manager: Final[Device]  # type: ignore
+        channel: Final[int]  # type: ignore
 
-    class AdjustNumber(MtsRichTemperatureNumber):
+    class AdjustNumber(MtsCommonTemperatureNumber):
         """
         Adjust temperature readings for mts200 and mts960.
         Manages Appliance.Control.Thermostat.Calibration:
-        {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
+        {"channel":0,"value":0 "min":-80,"max":80,"lmTime":1697010767} - mts200
+        {"channel":0,"value":-270,"min":-2000,"max":2000} - mts960
         """
 
         ns = mn_t.Appliance_Control_Thermostat_Calibration
@@ -333,7 +366,7 @@ class MtsThermostatClimate(MtsClimate):
             self.native_max_value = 8
             self.native_min_value = -8
             self.native_step = 0.1
-            super().__init__(climate, name="Calibration")
+            super().__init__(climate)
 
     def __init__(self, manager: "Device", channel):
         super().__init__(manager, channel)
@@ -352,6 +385,39 @@ class MtsThermostatClimate(MtsClimate):
         return self.manager.namespace_handlers[
             mn_t.Appliance_Control_Thermostat_Calibration.name
         ]
+
+    def _parse_ctlRange(self, payload: dict):
+        """
+        {
+            "channel": 0,
+            "max": 11000,
+            "min": -3000,
+            "ctlMax": 3600,
+            "ctlMin": 300,
+        }
+        """
+        self.max_temp = payload[mc.KEY_CTLMAX] / self.device_scale
+        self.min_temp = payload[mc.KEY_CTLMIN] / self.device_scale
+
+    def _parse_holdAction(self, payload: dict, /):
+        """{"channel": 0, "mode": 0, "expire": 1697010767}"""
+        # TODO: it looks like this message is related to #369.
+        # The trace shows the log about the missing handler in 4.5.2
+        # and it looks like when we receive this, it is a notification
+        # the mts is not really changing its setpoint (as per the issue).
+        # We need more info about how to process this.
+
+    def _parse_summerMode(self, payload: dict, /):
+        # needed to silently support registering OPTIONAL_NAMESPACES_INITIALIZERS
+        pass
+
+    def _parse_system(self, payload: dict, /):
+        # needed to silently support registering OPTIONAL_NAMESPACES_INITIALIZERS
+        pass
+
+    def _parse_timer(self, payload: dict, /):
+        # needed to silently support registering OPTIONAL_NAMESPACES_INITIALIZERS
+        pass
 
 
 POLLING_STRATEGY_CONF |= {

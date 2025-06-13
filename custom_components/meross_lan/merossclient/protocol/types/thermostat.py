@@ -3,9 +3,40 @@ A collection of typing definitions for payloads
 in Appliance.Control.Thermostat
 """
 
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 from . import ChannelPayload
+
+
+class CommonTemperature(ChannelPayload):
+    """Common dict carried in various *.Thermostat.* namespaces."""
+
+    value: int  # usually a temperature
+    max: int  # min/max for value
+    min: int
+
+
+class CommonTemperatureExt(CommonTemperature):
+    """Common dict carried in various *.Thermostat.* namespaces."""
+
+    onoff: int  # to enable/disable the feature
+    warning: int
+
+
+class Calibration(CommonTemperature):
+    humiValue: NotRequired[int]  # only mts300
+
+
+class DeadZone(CommonTemperature):
+    pass
+
+
+class Overheat(CommonTemperatureExt):
+    currentTemp: int  # external sensor temp
+
+
+class Frost(CommonTemperatureExt):
+    pass
 
 
 class ModeC_fan(TypedDict):
@@ -22,9 +53,10 @@ class ModeC_more(TypedDict):
     fStatus: int  # 0
     aStatus: int  # 0
 
+
 class ModeC_targetTemp(TypedDict):
-    heat: int # 2100
-    cold: int # 2400
+    heat: int  # 2100
+    cold: int  # 2400
 
 
 class ModeC(ChannelPayload):
@@ -54,9 +86,9 @@ class ModeC(ChannelPayload):
     }"""
 
     fan: ModeC_fan
-    sensorTemp: int # 2200
-    currentTemp: int # 2200
+    sensorTemp: int  # 2200
+    currentTemp: int  # 2200
     more: ModeC_more
-    mode: int # 3
-    work: int # 2
+    mode: int  # 3
+    work: int  # 2
     targetTemp: ModeC_targetTemp

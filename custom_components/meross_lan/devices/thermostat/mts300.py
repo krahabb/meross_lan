@@ -9,7 +9,7 @@ from ...number import MLConfigNumber
 from ...sensor import MLEnumSensor
 from ...switch import MLEmulatedSwitch
 from .mtsthermostat import (
-    MtsTempUnit,
+    MtsCommonTemperatureNumber,
     MtsThermostatClimate,
     mc,
     mn_t,
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from typing import ClassVar, Final
 
     from ...helpers.device import Device
-    from ...merossclient.protocol.types import thermostat
+    from ...merossclient.protocol.types import thermostat as mt_t
 
     """
     "Appliance.System.Ability",
@@ -28,15 +28,9 @@ if TYPE_CHECKING:
         "Appliance.Config.Sensor.Association": {},
         "Appliance.Control.AlertConfig": {},
         "Appliance.Control.AlertReport": {},
-        "Appliance.Control.FilterMaintenance": {},
-        "Appliance.Control.PhysicalLock": {},
-        "Appliance.Control.Screen.Brightness": {},
         "Appliance.Control.Sensor.Association": {},
         "Appliance.Control.Sensor.HistoryX": {},
-        "Appliance.Control.TempUnit": {},
-        "Appliance.Control.Thermostat.Calibration": {},
         "Appliance.Control.Thermostat.HoldAction": {},
-        "Appliance.Control.Thermostat.ModeC": {},
         "Appliance.Control.Thermostat.ScheduleB": {},
         "Appliance.Control.Thermostat.System": {},
     }
@@ -61,9 +55,7 @@ class Mts300Climate(MtsThermostatClimate):
 
     if TYPE_CHECKING:
         # overrides
-        manager: Final[Device]  # type: ignore
-        channel: Final[int]  # type: ignore
-        _mts_payload: thermostat.ModeC
+        _mts_payload: mt_t.ModeC
 
         HVAC_MODE_TO_MODE_MAP: ClassVar
         _mts_work: int | None
@@ -82,6 +74,41 @@ class Mts300Climate(MtsThermostatClimate):
     # MtsClimate class attributes
     ns = mn_t.Appliance_Control_Thermostat_ModeC
     device_scale = mc.MTS300_TEMP_SCALE
+
+    class AdjustNumber(MtsCommonTemperatureNumber):
+
+        if TYPE_CHECKING:
+            """{"channel":0,"value":150,"min":-450,"max":450,"humiValue":-60}"""
+            number_calibration_humi: MLConfigNumber
+
+        ns = mn_t.Appliance_Control_Thermostat_Calibration
+
+        __slots__ = "number_calibration_humi"
+
+        def __init__(self, climate: "MtsThermostatClimate"):
+            self.native_max_value = 4.5
+            self.native_min_value = -4.5
+            self.native_step = 0.1
+            super().__init__(climate)
+
+    def _parse(self, payload: "mt_t.Calibration"):
+        if "humiValue" in payload:
+            try:
+                self.number_calibration_humi.update_device_value(payload["humiValue"])
+            except AttributeError:
+                self.number_calibration_humi = MLConfigNumber(
+                    self.manager,
+                    self.channel,
+                    "humidity_calibration",
+                    device_class=MLConfigNumber.DeviceClass.HUMIDITY,
+                    device_scale=10,
+                    device_value=payload["humiValue"],
+                )
+                self.number_calibration_humi.native_max_value = 5
+                self.number_calibration_humi.native_min_value = -5
+                self.number_calibration_humi.native_step = 0.1
+
+        super()._parse(payload)
 
     class Schedule(MtsSchedule):
         ns = mn_t.Appliance_Control_Thermostat_ScheduleB
@@ -197,14 +224,6 @@ class Mts300Climate(MtsThermostatClimate):
         self.switch_fan_hold.async_turn_on = self._async_turn_on_switch_fan_hold
         self.switch_fan_hold.async_turn_off = self._async_turn_off_switch_fan_hold
 
-        manager.register_parser_entity(self)
-        manager.register_parser_entity(self.schedule)
-
-        """
-        if mn.Appliance_Control_TempUnit.name in manager.descriptor.ability:
-            MtsTempUnit(self)
-        """
-
     async def async_shutdown(self):
         await super().async_shutdown()
         self.switch_fan_hold = None  # type:ignore
@@ -244,7 +263,7 @@ class Mts300Climate(MtsThermostatClimate):
                     }
                 )
             else:
-                raise ValueError(f"set_temperature unsupported in this mode ({mode})")
+                raise ValueError(f"set_temperature unsupported in this mode ({self.hvac_mode})")
 
         except KeyError:
             # missing ATTR_TEMPERATURE in service call
@@ -296,12 +315,6 @@ class Mts300Climate(MtsThermostatClimate):
     def is_mts_scheduled(self):
         return self._mts_onoff and self._mts_work == mc.MTS300_WORK_SCHEDULE
 
-    @override
-    def get_ns_adjust(self):
-        return self.manager.namespace_handlers[
-            mn_t.Appliance_Control_Thermostat_Calibration.name
-        ]
-
     # interface: self
     async def _async_request_modeC(self, payload: dict):
         ns = self.ns
@@ -316,11 +329,10 @@ class Mts300Climate(MtsThermostatClimate):
             except (KeyError, IndexError):
                 # optimistic update
                 payload = self._mts_payload | payload
-                pass
             self._parse_modeC(payload)  # type: ignore
 
     # message handlers
-    def _parse_modeC(self, payload: "thermostat.ModeC"):
+    def _parse_modeC(self, payload: "mt_t.ModeC"):
         """
         {
             "fan": {
@@ -436,14 +448,6 @@ class Mts300Climate(MtsThermostatClimate):
             self.flush_state()
         except Exception as e:
             self.log_exception(self.WARNING, e, "parsing thermostat ModeC", timeout=300)
-
-    def _parse_holdAction(self, payload: dict):
-        """{"channel": 0, "mode": 0, "expire": 1697010767}"""
-        # TODO: it looks like this message is related to #369.
-        # The trace shows the log about the missing handler in 4.5.2
-        # and it looks like when we receive this, it is a notification
-        # the mts is not really changing its setpoint (as per the issue).
-        # We need more info about how to process this.
 
     async def _async_request_value_number_fan_hold(self, device_value):
         # this method (ovverriding MLConfig.Number.async_request_value) should
