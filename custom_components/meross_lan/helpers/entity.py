@@ -23,7 +23,7 @@ from . import Loggable
 from .namespaces import NamespaceParser, mc, mn
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, ClassVar, Final, NotRequired, TypedDict, Unpack
+    from typing import Any, Callable, ClassVar, Final, Mapping, NotRequired, TypedDict, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -328,7 +328,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         return self.manager.generate_unique_id(self)
 
     # interface: NamespaceParser
-    def _parse(self, payload: dict):
+    def _parse(self, payload: "Mapping[str, Any]"):
         """Default parsing for entities. Set the proper
         key_value in class/instance definition to make it work."""
         self.update_device_value(payload[self.key_value])

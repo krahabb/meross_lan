@@ -30,8 +30,8 @@ class MLNumber(me.MLNumericEntity, number.NumberEntity):
     """
 
     if TYPE_CHECKING:
+        manager: "BaseDevice"
         # HA core entity attributes:
-        entity_category: me.entity.EntityCategory
         mode: number.NumberMode
         native_max_value: float
         native_min_value: float
@@ -49,8 +49,6 @@ class MLNumber(me.MLNumericEntity, number.NumberEntity):
         DeviceClass.HUMIDITY: me.MLEntity.hac.PERCENTAGE,
         DeviceClass.TEMPERATURE: me.MLEntity.hac.UnitOfTemperature.CELSIUS,
     }
-
-    manager: "BaseDevice"
 
     # HA core entity attributes:
     entity_category = me.MLNumericEntity.EntityCategory.CONFIG
