@@ -75,7 +75,7 @@ class Mts300Climate(MtsThermostatClimate):
     ns = mn_t.Appliance_Control_Thermostat_ModeC
     device_scale = mc.MTS300_TEMP_SCALE
 
-    class AdjustNumber(MtsCommonTemperatureNumber):
+    class AdjustNumber(MtsThermostatClimate.AdjustNumber):
 
         if TYPE_CHECKING:
             """{"channel":0,"value":150,"min":-450,"max":450,"humiValue":-60}"""
@@ -83,32 +83,34 @@ class Mts300Climate(MtsThermostatClimate):
 
         ns = mn_t.Appliance_Control_Thermostat_Calibration
 
-        __slots__ = "number_calibration_humi"
+        __slots__ = ("number_calibration_humi",)
 
         def __init__(self, climate: "MtsThermostatClimate"):
+            super().__init__(climate)
             self.native_max_value = 4.5
             self.native_min_value = -4.5
             self.native_step = 0.1
-            super().__init__(climate)
 
-    def _parse(self, payload: "mt_t.Calibration"):
-        if "humiValue" in payload:
-            try:
-                self.number_calibration_humi.update_device_value(payload["humiValue"])
-            except AttributeError:
-                self.number_calibration_humi = MLConfigNumber(
-                    self.manager,
-                    self.channel,
-                    "humidity_calibration",
-                    device_class=MLConfigNumber.DeviceClass.HUMIDITY,
-                    device_scale=10,
-                    device_value=payload["humiValue"],
-                )
-                self.number_calibration_humi.native_max_value = 5
-                self.number_calibration_humi.native_min_value = -5
-                self.number_calibration_humi.native_step = 0.1
+        def _parse(self, payload: "mt_t.Calibration"):
+            if "humiValue" in payload:
+                try:
+                    self.number_calibration_humi.update_device_value(
+                        payload["humiValue"]
+                    )
+                except AttributeError:
+                    self.number_calibration_humi = MLConfigNumber(
+                        self.manager,
+                        self.channel,
+                        "humidity_calibration",
+                        device_class=MLConfigNumber.DeviceClass.HUMIDITY,
+                        device_scale=10,
+                        device_value=payload["humiValue"],
+                    )
+                    self.number_calibration_humi.native_max_value = 5
+                    self.number_calibration_humi.native_min_value = -5
+                    self.number_calibration_humi.native_step = 0.1
 
-        super()._parse(payload)
+            super()._parse(payload)
 
     class Schedule(MtsSchedule):
         ns = mn_t.Appliance_Control_Thermostat_ScheduleB
@@ -263,7 +265,9 @@ class Mts300Climate(MtsThermostatClimate):
                     }
                 )
             else:
-                raise ValueError(f"set_temperature unsupported in this mode ({self.hvac_mode})")
+                raise ValueError(
+                    f"set_temperature unsupported in this mode ({self.hvac_mode})"
+                )
 
         except KeyError:
             # missing ATTR_TEMPERATURE in service call

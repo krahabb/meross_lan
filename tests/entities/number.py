@@ -8,12 +8,15 @@ from custom_components.meross_lan.devices.garageDoor import (
 from custom_components.meross_lan.devices.hub import MLHubSensorAdjustNumber
 from custom_components.meross_lan.devices.hub.mts100 import Mts100Climate
 from custom_components.meross_lan.devices.thermostat.mts200 import Mts200Climate
+from custom_components.meross_lan.devices.thermostat.mts300 import Mts300Climate
+from custom_components.meross_lan.devices.thermostat.mts960 import Mts960Climate
 from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
     MLScreenBrightnessNumber,
     MtsCommonTemperatureExtNumber,
     MtsDeadZoneNumber,
     MtsFrostNumber,
     MtsOverheatNumber,
+    MtsThermostatClimate,
     mn_t,
 )
 from custom_components.meross_lan.merossclient.protocol import (
@@ -32,9 +35,13 @@ class EntityTest(EntityComponentTest):
     DIGEST_ENTITIES = {
         mc.KEY_THERMOSTAT: {
             mc.KEY_MODE: [
+                Mts200Climate.AdjustNumber,
                 Mts200Climate.SetPointNumber,
                 Mts200Climate.SetPointNumber,
                 Mts200Climate.SetPointNumber,
+            ],
+            mc.KEY_MODEB: [
+                Mts960Climate.AdjustNumber,
             ],
         },
     }
@@ -49,6 +56,9 @@ class EntityTest(EntityComponentTest):
             MLScreenBrightnessNumber,
             MLScreenBrightnessNumber,
         ],
+        mn_t.Appliance_Control_Thermostat_Calibration.name: [
+            MtsThermostatClimate.AdjustNumber
+        ],
         mn_t.Appliance_Control_Thermostat_DeadZone.name: [MtsDeadZoneNumber],
         mn_t.Appliance_Control_Thermostat_Frost.name: [MtsFrostNumber],
         mn_t.Appliance_Control_Thermostat_Overheat.name: [MtsOverheatNumber],
@@ -61,6 +71,15 @@ class EntityTest(EntityComponentTest):
     }
 
     async def async_test_each_callback(self, entity: MLNumber):
+        if isinstance(entity, MtsThermostatClimate.AdjustNumber):
+            # This is to handle and intercept mts300 which instantiate its Calibration entity
+            # by namespace but the entity type is inherited from MtsThermostatClimate.AdjustNumber
+            # We also need to remove this for mts200 and mts960 since it's a duplicate of
+            # the digest match
+            EntityComponentTest.expected_entity_types.remove(
+                MtsThermostatClimate.AdjustNumber
+            )
+
         if isinstance(entity, MtsCommonTemperatureExtNumber):
             # rich temperatures are set to 'unavailable' when
             # the corresponding function is 'off'
