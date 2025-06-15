@@ -80,7 +80,10 @@ if typing.TYPE_CHECKING:
     from custom_components.meross_lan.helpers.component_api import ComponentApi
     from custom_components.meross_lan.helpers.device import Device
     from custom_components.meross_lan.helpers.manager import ConfigEntryManager
-    from custom_components.meross_lan.merossclient import MerossMessage, MerossResponse
+    from custom_components.meross_lan.merossclient.protocol.message import (
+        MerossMessage,
+        MerossResponse,
+    )
 
 LOGGER = logging.getLogger("meross_lan.tests")
 

@@ -1,33 +1,32 @@
 from random import randint
-import typing
+from typing import TYPE_CHECKING
 
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
 )
 
-if typing.TYPE_CHECKING:
-    from .. import MerossEmulator
+from . import MerossEmulator
 
 
-class FanMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+class FanMixin(MerossEmulator if TYPE_CHECKING else object):
 
-    NAMESPACES_DEFAULT: "MerossEmulator.NamespacesDefault" = {
-        mn.Appliance_Control_Fan.name: (
-            mc.KEY_CHANNEL,
-            0,
+    NAMESPACES_DEFAULT: "MerossEmulator.NSDefault" = {
+        mn.Appliance_Control_Fan: (
+            MerossEmulator.NSDefaultMode.MixOut,
             {
                 mc.KEY_SPEED: 0,
                 mc.KEY_MAXSPEED: 4,
             },
-        ),
-        mn.Appliance_Control_FilterMaintenance.name: (
-            mc.KEY_CHANNEL,
             0,
+        ),
+        mn.Appliance_Control_FilterMaintenance: (
+            MerossEmulator.NSDefaultMode.MixOut,
             {
                 mc.KEY_LIFE: 100,
                 mc.KEY_LMTIME: 0,
             },
+            0,
         ),
     }
 

@@ -30,6 +30,8 @@ class EntityTest(EntityComponentTest):
         mc.KEY_DIFFUSER: {mc.KEY_LIGHT: [MLDiffuserLight]},
     }
     NAMESPACES_ENTITIES = {
+        mn.Appliance_Control_Light_Effect.name: [MLLightEffect],
+        mn.Appliance_Control_Mp3.name: [MLLightMp3],
         mn.Appliance_System_DNDMode.name: [MLDNDLightEntity],
     }
 
@@ -73,11 +75,11 @@ class EntityTest(EntityComponentTest):
                     assert LightEntityFeature.EFFECT in supported_features
                     assert entity.effect_list, "effect_list"
                 if mn.Appliance_Control_Light_Effect.name in ability:
-                    assert isinstance(entity, MLLightEffect)
+                    assert type(entity) is MLLightEffect
                     assert LightEntityFeature.EFFECT in supported_features
                     assert entity.effect_list, "effect_list"
                 if mn.Appliance_Control_Mp3.name in ability:
-                    assert isinstance(entity, MLLightMp3)
+                    assert type(entity) is MLLightMp3
                     assert LightEntityFeature.EFFECT in supported_features
                     assert (
                         entity.effect_list == mc.HP110A_LIGHT_EFFECT_LIST

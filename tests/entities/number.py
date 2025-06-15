@@ -27,6 +27,12 @@ from custom_components.meross_lan.number import MLConfigNumber, MLNumber
 
 from tests.entities import EntityComponentTest
 
+_MTS100_ENTITES = [
+    Mts100Climate.AdjustNumber,
+    Mts100Climate.SetPointNumber,
+    Mts100Climate.SetPointNumber,
+    Mts100Climate.SetPointNumber,
+]
 
 class EntityTest(EntityComponentTest):
 
@@ -61,21 +67,21 @@ class EntityTest(EntityComponentTest):
         ],
         mn_t.Appliance_Control_Thermostat_DeadZone.name: [MtsDeadZoneNumber],
         mn_t.Appliance_Control_Thermostat_Frost.name: [MtsFrostNumber],
+        mn_t.Appliance_Control_Thermostat_ModeC.name: [Mts300Climate.AdjustNumber],
         mn_t.Appliance_Control_Thermostat_Overheat.name: [MtsOverheatNumber],
     }
     HUB_SUBDEVICES_ENTITIES = {
         mc.TYPE_MS100: [MLHubSensorAdjustNumber, MLHubSensorAdjustNumber],
-        mc.TYPE_MTS100: [Mts100Climate.AdjustNumber],
-        mc.TYPE_MTS100V3: [Mts100Climate.AdjustNumber],
-        mc.TYPE_MTS150: [Mts100Climate.AdjustNumber],
+        mc.TYPE_MTS100: _MTS100_ENTITES,
+        mc.TYPE_MTS100V3: _MTS100_ENTITES,
+        mc.TYPE_MTS150:_MTS100_ENTITES,
     }
 
     async def async_test_each_callback(self, entity: MLNumber):
         if isinstance(entity, MtsThermostatClimate.AdjustNumber):
-            # This is to handle and intercept mts300 which instantiate its Calibration entity
-            # by namespace but the entity type is inherited from MtsThermostatClimate.AdjustNumber
-            # We also need to remove this for mts200 and mts960 since it's a duplicate of
-            # the digest match
+            # This is intercept thermostat Calibration namespace requirement where
+            # every MtsThermostatClimate descendant should instantiate
+            # MtsThermostatClimate.AdjustNumber or a descendant
             EntityComponentTest.expected_entity_types.remove(
                 MtsThermostatClimate.AdjustNumber
             )

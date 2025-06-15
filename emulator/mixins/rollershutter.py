@@ -10,11 +10,14 @@ from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
 )
-from emulator.mixins import MerossEmulatorDescriptor
+
+from . import MerossEmulator
 
 if TYPE_CHECKING:
     from typing import Final
-    from .. import MerossEmulator
+
+    from . import MerossEmulatorDescriptor
+
 
 _SIGNAL_SCALE = 1000
 _DURATION_SCALE = _SIGNAL_SCALE * (
@@ -42,10 +45,10 @@ class _Transition:
         self.position_begin: "Final" = p_position[mc.KEY_POSITION]
         self.position_end: "Final" = position_end
         self.p_state: "Final" = emulator.get_namespace_state(
-            mn.Appliance_RollerShutter_State.name, channel
+            mn.Appliance_RollerShutter_State, channel
         )
         p_config = emulator.get_namespace_state(
-            mn.Appliance_RollerShutter_Config.name, channel
+            mn.Appliance_RollerShutter_Config, channel
         )
         if self.has_native_position:
             if position_end > self.position_begin:
@@ -113,35 +116,35 @@ class RollerShutterMixin(MerossEmulator if TYPE_CHECKING else object):
     # the internal sampling of the 'Transition'
     SIGNAL_TRANSITION_PERIOD = 1  # sec
 
-    NAMESPACES_DEFAULT: "MerossEmulator.NamespacesDefault" = {
-        mn.Appliance_RollerShutter_Adjust.name: (
-            mc.KEY_CHANNEL,
-            0,
+    NAMESPACES_DEFAULT: "MerossEmulator.NSDefault" = {
+        mn.Appliance_RollerShutter_Adjust: (
+            MerossEmulator.NSDefaultMode.MixOut,
             {
                 mc.KEY_STATUS: 0,
             },
-        ),
-        mn.Appliance_RollerShutter_Config.name: (
-            mc.KEY_CHANNEL,
             0,
+        ),
+        mn.Appliance_RollerShutter_Config: (
+            MerossEmulator.NSDefaultMode.MixIn,
             {
                 mc.KEY_SIGNALCLOSE: SIGNALCLOSE,
                 mc.KEY_SIGNALOPEN: SIGNALOPEN,
             },
-        ),
-        mn.Appliance_RollerShutter_Position.name: (
-            mc.KEY_CHANNEL,
             0,
+        ),
+        mn.Appliance_RollerShutter_Position: (
+            MerossEmulator.NSDefaultMode.MixIn,
             {
                 mc.KEY_POSITION: mc.ROLLERSHUTTER_POSITION_CLOSED,
             },
-        ),
-        mn.Appliance_RollerShutter_State.name: (
-            mc.KEY_CHANNEL,
             0,
+        ),
+        mn.Appliance_RollerShutter_State: (
+            MerossEmulator.NSDefaultMode.MixIn,
             {
                 mc.KEY_STATE: mc.ROLLERSHUTTER_STATE_IDLE,
             },
+            0,
         ),
     }
 
@@ -152,7 +155,7 @@ class RollerShutterMixin(MerossEmulator if TYPE_CHECKING else object):
     # the internal sampling of the 'Transition'
     SIGNAL_TRANSITION_PERIOD = 1  # sec
 
-    def __init__(self, descriptor: MerossEmulatorDescriptor, key: str):
+    def __init__(self, descriptor: "MerossEmulatorDescriptor", key: str):
         super().__init__(descriptor, key)
         self._transitions: dict[int, _Transition] = {}
         self.has_native_position = versiontuple(
@@ -184,7 +187,7 @@ class RollerShutterMixin(MerossEmulator if TYPE_CHECKING else object):
                 continue
 
             p_position = self.get_namespace_state(
-                mn.Appliance_RollerShutter_Position.name, channel
+                mn.Appliance_RollerShutter_Position, channel
             )
             if self.has_native_position:
                 # accepts intermediate positioning

@@ -8,18 +8,17 @@ from custom_components.meross_lan.merossclient.protocol import (
     namespaces as mn,
 )
 
-if TYPE_CHECKING:
-    from .. import MerossEmulator
+from . import MerossEmulator
 
 
 class PhysicalLockMixin(MerossEmulator if TYPE_CHECKING else object):
-    NAMESPACES_DEFAULT: "MerossEmulator.NamespacesDefault" = {
-        mn.Appliance_Control_PhysicalLock.name: (
-            mc.KEY_CHANNEL,
-            0,
+    NAMESPACES_DEFAULT: "MerossEmulator.NSDefault" = {
+        mn.Appliance_Control_PhysicalLock: (
+            MerossEmulator.NSDefaultMode.MixOut,
             {
                 mc.KEY_ONOFF: 0,
             },
+            0,
         ),
     }
 

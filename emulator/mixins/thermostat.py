@@ -17,16 +17,27 @@ from custom_components.meross_lan.merossclient.protocol.namespaces import (
     thermostat as mn_t,
 )
 
+from . import MerossEmulator
+
 if TYPE_CHECKING:
     from custom_components.meross_lan.merossclient.protocol.types import thermostat
 
-    from .. import MerossEmulator, MerossEmulatorDescriptor
+    from . import MerossEmulatorDescriptor
 
 
 class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
 
-    NAMESPACES_DEFAULT: "MerossEmulator.NamespacesDefault" = {
-        mn.Appliance_Control_TempUnit.name: (mc.KEY_CHANNEL, 0, {"tempUnit": 1})
+    NAMESPACES_DEFAULT: "MerossEmulator.NSDefault" = {
+        mn.Appliance_Control_TempUnit: (
+            MerossEmulator.NSDefaultMode.MixOut,
+            {"tempUnit": 1},
+            0,
+        ),
+        mn_t.Appliance_Control_Thermostat_DeadZone: (
+            MerossEmulator.NSDefaultMode.MixOut,
+            {"tempUnit": 1},
+            0,
+        ),
     }
 
     MAP_DEVICE_SCALE = {
@@ -35,37 +46,81 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
         "mts300": 100,
         "mts960": 100,
     }
-    MAP_ENTITY_NS_DEFAULT = {
-        mc.KEY_CALIBRATION: {
-            mc.KEY_VALUE: 0,
-            mc.KEY_MIN: -5,
-            mc.KEY_MAX: 5,
-        },
-        mc.KEY_DEADZONE: {
-            mc.KEY_VALUE: 0.5,
-            mc.KEY_MIN: 0.5,
-            mc.KEY_MAX: 3.5,
-        },
-        mc.KEY_FROST: {
-            mc.KEY_VALUE: 5,
-            mc.KEY_MIN: 5,
-            mc.KEY_MAX: 15,
-            mc.KEY_ONOFF: 0,
-            mc.KEY_WARNING: 0,
-        },
-        mc.KEY_OVERHEAT: {
-            mc.KEY_VALUE: 32,
-            mc.KEY_MIN: 20,
-            mc.KEY_MAX: 70,
-            mc.KEY_ONOFF: 0,
-            mc.KEY_WARNING: 0,
-            mc.KEY_CURRENTTEMP: 32,
-        },
-    }
 
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
         self.device_scale = self.MAP_DEVICE_SCALE[descriptor.type]
+        # sanityze
+        ns = mn_t.Appliance_Control_Thermostat_Calibration
+        if ns.name in descriptor.ability:
+            self.update_namespace_state(
+                ns,
+                MerossEmulator.NSDefaultMode.MixOut,
+                (
+                    {
+                        "value": 0,
+                        "max": 450,
+                        "min": -450,
+                        "humiValue": 0,
+                    }
+                    if descriptor.type.startswith("mts300")
+                    else (
+                        {
+                            "value": 0,
+                            "max": 2000,
+                            "min": -2000,
+                        }
+                        if descriptor.type.startswith("mts960")
+                        else {
+                            "value": 0,
+                            "max": 8 * self.device_scale,
+                            "min": -8 * self.device_scale,
+                        }
+                    )
+                ),
+                0,
+            )
+        ns = mn_t.Appliance_Control_Thermostat_DeadZone
+        if ns.name in descriptor.ability:
+            self.update_namespace_state(
+                ns,
+                MerossEmulator.NSDefaultMode.MixOut,
+                {
+                    "value": 0.5 * self.device_scale,
+                    "max": 3.5 * self.device_scale,
+                    "min": 0.5 * self.device_scale,
+                },
+                0,
+            )
+        ns = mn_t.Appliance_Control_Thermostat_Frost
+        if ns.name in descriptor.ability:
+            self.update_namespace_state(
+                ns,
+                MerossEmulator.NSDefaultMode.MixOut,
+                {
+                    "value": 0.5 * self.device_scale,
+                    "max": 3.5 * self.device_scale,
+                    "min": 0.5 * self.device_scale,
+                    "onoff": 0,
+                    "warning": 0,
+                },
+                0,
+            )
+        ns = mn_t.Appliance_Control_Thermostat_Overheat
+        if ns.name in descriptor.ability:
+            self.update_namespace_state(
+                ns,
+                MerossEmulator.NSDefaultMode.MixOut,
+                {
+                    "value": 32 * self.device_scale,
+                    "max": 70 * self.device_scale,
+                    "min": 20 * self.device_scale,
+                    "onoff": 0,
+                    "warning": 0,
+                    "currentTemp": 32 * self.device_scale,
+                },
+                0,
+            )
 
     def _SET_Appliance_Control_TempUnit(self, header, payload):
         ns = mn.Appliance_Control_TempUnit
@@ -212,53 +267,39 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
         }
         """
         namespace = header[mc.KEY_NAMESPACE]
-        namespace_key = self.NAMESPACES[namespace].key
         method = header[mc.KEY_METHOD]
 
-        digest: list[dict[str, object]] = self.namespaces[namespace][namespace_key]
+        ns = self.NAMESPACES[namespace]
+        ns_key = ns.key
+
+        p_state: list[dict[str, object]] = self.namespaces[namespace][ns_key]
         response_list = []
-        for p_request_channel in payload[namespace_key]:
+        for p_request_channel in payload[ns_key]:
             channel = p_request_channel[mc.KEY_CHANNEL]
-            try:
-                p_digest_channel = get_element_by_key(digest, mc.KEY_CHANNEL, channel)
-            except Exception:
-                p_digest_channel = dict(self.MAP_ENTITY_NS_DEFAULT[namespace_key])
-                p_digest_channel[mc.KEY_CHANNEL] = channel
-                p_digest_channel[mc.KEY_VALUE] = (
-                    p_digest_channel[mc.KEY_VALUE] * self.device_scale
-                )
-                p_digest_channel[mc.KEY_MIN] = (
-                    p_digest_channel[mc.KEY_MIN] * self.device_scale
-                )
-                p_digest_channel[mc.KEY_MAX] = (
-                    p_digest_channel[mc.KEY_MAX] * self.device_scale
-                )
-                digest.append(p_digest_channel)
-
-            p_digest_channel[mc.KEY_LMTIME] = self.epoch
-
+            p_channel_state = get_element_by_key(p_state, ns.key_channel, channel)
+            p_channel_state[mc.KEY_LMTIME] = self.epoch
             if method == mc.METHOD_GET:
                 # randomize some input in case
                 """
                 generally speaking the KEY_VALUE hosts a config and not a reading
                 some entity ns have additional values like 'Overheat' that carries 'currentTemp'
                 """
-                if mc.KEY_WARNING in p_digest_channel:
-                    p_digest_channel[mc.KEY_WARNING] = randint(0, 2)
-                if mc.KEY_CURRENTTEMP in p_digest_channel and randint(0, 5):
-                    current_temp = p_digest_channel[mc.KEY_CURRENTTEMP]
+                if mc.KEY_WARNING in p_channel_state:
+                    p_channel_state[mc.KEY_WARNING] = randint(0, 2)
+                if mc.KEY_CURRENTTEMP in p_channel_state and randint(0, 5):
+                    current_temp = p_channel_state[mc.KEY_CURRENTTEMP]
                     current_temp += randint(-1, 1) * self.device_scale
-                    p_digest_channel[mc.KEY_CURRENTTEMP] = clamp(
+                    p_channel_state[mc.KEY_CURRENTTEMP] = clamp(
                         current_temp,
-                        p_digest_channel[mc.KEY_MIN],
-                        p_digest_channel[mc.KEY_MAX],
+                        p_channel_state[mc.KEY_MIN],
+                        p_channel_state[mc.KEY_MAX],
                     )
-                response_list.append(p_digest_channel)
+                response_list.append(p_channel_state)
             elif method == mc.METHOD_SET:
-                update_dict_strict(p_digest_channel, p_request_channel)
+                update_dict_strict(p_channel_state, p_request_channel)
 
         if method == mc.METHOD_GET:
-            return mc.METHOD_GETACK, {namespace_key: response_list}
+            return mc.METHOD_GETACK, {ns_key: response_list}
         elif method == mc.METHOD_SET:
             return mc.METHOD_SETACK, {}
         else:

@@ -7,7 +7,6 @@ from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
     mn,
     mn_t,
 )
-
 from custom_components.meross_lan.merossclient.protocol import const as mc
 from custom_components.meross_lan.select import MLSelect, MtsTrackedSensor
 
@@ -28,6 +27,7 @@ class EntityTest(EntityComponentTest):
     }
     NAMESPACES_ENTITIES = {
         mn.Appliance_Control_TempUnit.name: [MtsTempUnit],
+        mn_t.Appliance_Control_Thermostat_ModeC.name: [MtsTrackedSensor],
     }
     HUB_SUBDEVICES_ENTITIES = {
         mc.TYPE_MTS100: [MtsTrackedSensor],

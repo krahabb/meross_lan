@@ -1,4 +1,4 @@
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.core import HomeAssistant, StateMachine
 from homeassistant.helpers import entity
@@ -8,7 +8,7 @@ from custom_components.meross_lan.switch import MLToggleX
 
 from tests.helpers import DeviceContext
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from typing import Any, ClassVar
 
     from custom_components.meross_lan.helpers.entity import MLEntity
@@ -26,7 +26,7 @@ class EntityComponentTest:
     proper testing on the different test types.
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
         # static test context
         hass: ClassVar[HomeAssistant]
         hass_service_call: ClassVar

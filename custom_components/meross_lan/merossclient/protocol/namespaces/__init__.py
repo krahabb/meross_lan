@@ -326,9 +326,7 @@ class Namespace:
         return hash(self.name)
 
     def __eq__(self, value):
-        if isinstance(value, self.__class__):
-            return (self is value) or self.name == value.name
-        return False
+        return self is value
 
 
 def ns_build_from_message(
@@ -441,7 +439,7 @@ Appliance_Control_Diffuser_Light = ns(
 )
 Appliance_Control_Diffuser_Sensor = ns(
     "Appliance.Control.Diffuser.Sensor", mc.KEY_SENSOR, ARGS_GETPUSH
-)
+) # this ns has no ns_key in payload response
 Appliance_Control_Diffuser_Spray = ns(
     "Appliance.Control.Diffuser.Spray", mc.KEY_SPRAY, ARGS_GETSETPUSH
 )
@@ -453,7 +451,9 @@ Appliance_Control_ElectricityX = ns(
     mc.KEY_ELECTRICITY,
     ARGS_GETPUSH | P_LIST_C | G_EXPERIMENTAL,
 )
-Appliance_Control_Fan = ns("Appliance.Control.Fan", mc.KEY_FAN, ARGS_GETSET)
+Appliance_Control_Fan = ns("Appliance.Control.Fan", mc.KEY_FAN, ARGS_GETSET | P_LIST_C)
+Appliance_Control_Fan_BtnConfig = ns("Appliance.Control.Fan.BtnConfig", mc.KEY_FAN, ARGS_GETSETPUSHQ | P_LIST_C)
+Appliance_Control_Fan_Config = ns("Appliance.Control.Fan.Config", mc.KEY_FAN, ARGS_GETSET | P_LIST_C)
 Appliance_Control_FilterMaintenance = ns(
     "Appliance.Control.FilterMaintenance", mc.KEY_FILTER, ARGS_PUSHQ | P_LIST
 )

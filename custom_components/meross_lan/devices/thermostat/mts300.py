@@ -106,6 +106,8 @@ class Mts300Climate(MtsThermostatClimate):
                         device_scale=10,
                         device_value=payload["humiValue"],
                     )
+                    self.number_calibration_humi.ns = self.ns
+                    self.number_calibration_humi.key_value = "humiValue"
                     self.number_calibration_humi.native_max_value = 5
                     self.number_calibration_humi.native_min_value = -5
                     self.number_calibration_humi.native_step = 0.1

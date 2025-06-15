@@ -1,6 +1,6 @@
 from importlib import import_module
 import re
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.helpers.entity import STATE_UNAVAILABLE
 
@@ -14,7 +14,7 @@ from emulator import generate_emulators
 from tests import const as tc, helpers
 from tests.entities import EntityComponentTest
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from custom_components.meross_lan.helpers.device import BaseDevice
@@ -114,16 +114,16 @@ async def test_entities(
             EntityComponentTest.digest = digest = descriptor.digest
             ishub = mc.KEY_HUB in digest
 
-            EntityComponentTest.expected_entity_types = expected_entity_types = (
+            EntityComponentTest.expected_entity_types = expected_entities = (
                 DEVICE_ENTITIES.copy()
             )
-            _add_func = expected_entity_types.extend
+            _add_func = expected_entities.extend
             for digest_key, entity_types in DIGEST_ENTITIES.items():
                 if digest_key in digest:
                     sub_digest = digest[digest_key]
                     if isinstance(entity_types, list):
                         if isinstance(sub_digest, list):
-                            for channel_digest in sub_digest:
+                            for _ in sub_digest:
                                 _add_func(entity_types)
                         else:
                             # this is somewhat specific for "light" digest key
@@ -164,19 +164,31 @@ async def test_entities(
                     with device_context.capsys.disabled():  # type: ignore
                         print(f"Testing {device_context.config_entry.title}")
                         print(
-                            f"Expected entities: {[entity_type.__name__ for entity_type in expected_entity_types]}"
+                            f"Expected entities: {[entity_type.__name__ for entity_type in expected_entities]}"
                         )
+                    unexpected_entities: "MerossEntityTypesList" = []
                     device = await device_context.perform_coldstart()
-                    await _async_test_entities(device)
+                    await _async_test_entities(
+                        device, expected_entities, unexpected_entities
+                    )
                     if ishub:
                         assert isinstance(device, HubMixin)
                         for subdevice in device.subdevices.values():
-                            await _async_test_entities(subdevice)
+                            await _async_test_entities(
+                                subdevice, expected_entities, unexpected_entities
+                            )
+
+                    if unexpected_entities:
+                        with device_context.capsys.disabled():  # type: ignore
+                            print(
+                                f"Unexpected entities: {[entity_type.__name__ for entity_type in unexpected_entities]}"
+                            )
 
                     assert (
-                        not expected_entity_types
-                    ), f"device({descriptor.type}-{descriptor.uuid}) does not generate {expected_entity_types}"
+                        not expected_entities
+                    ), f"device({descriptor.type}-{descriptor.uuid}) does not generate {expected_entities}"
 
+                    # This could be safely removed once we finish off immutability for PayloadType
                     assert (
                         not mn.PayloadType.LIST.value
                         and not mn.PayloadType.DICT.value
@@ -195,23 +207,32 @@ async def test_entities(
         EntityComponentTest.hass_service_call = None  # type: ignore
 
 
-async def _async_test_entities(manager: "BaseDevice"):
+async def _async_test_entities(
+    manager: "BaseDevice",
+    expected_entities: "MerossEntityTypesList",
+    unexpected_entities: "MerossEntityTypesList",
+):
     for entity in manager.entities.values():
+
+        entity_type = type(entity)
 
         if entity.PLATFORM not in COMPONENTS_TESTS:
             # TODO: add missing platform tests
             helpers.LOGGER.warning("Missing testing for platform %s", entity.PLATFORM)
+            unexpected_entities.append(entity_type)
             continue
 
         EntityComponentTest.entity_id = entity_id = entity.entity_id
-        entity_type = type(entity)
-        if entity_type in EntityComponentTest.expected_entity_types:
-            EntityComponentTest.expected_entity_types.remove(entity_type)
 
         entity_component_test = COMPONENTS_TESTS[entity.PLATFORM]
         assert isinstance(entity, entity_component_test.ENTITY_TYPE)
 
         await entity_component_test.async_test_each_callback(entity)
+
+        if entity_type in expected_entities:
+            expected_entities.remove(entity_type)
+        else:
+            unexpected_entities.append(entity_type)
 
         state = EntityComponentTest.hass_states.get(entity_id)
         if state:
