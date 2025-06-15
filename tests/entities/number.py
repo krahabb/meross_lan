@@ -24,6 +24,7 @@ from custom_components.meross_lan.merossclient.protocol import (
     namespaces as mn,
 )
 from custom_components.meross_lan.number import MLConfigNumber, MLNumber
+from custom_components.meross_lan.switch import MLEmulatedSwitch
 
 from tests.entities import EntityComponentTest
 
@@ -33,6 +34,7 @@ _MTS100_ENTITES = [
     Mts100Climate.SetPointNumber,
     Mts100Climate.SetPointNumber,
 ]
+
 
 class EntityTest(EntityComponentTest):
 
@@ -67,31 +69,48 @@ class EntityTest(EntityComponentTest):
         ],
         mn_t.Appliance_Control_Thermostat_DeadZone.name: [MtsDeadZoneNumber],
         mn_t.Appliance_Control_Thermostat_Frost.name: [MtsFrostNumber],
-        mn_t.Appliance_Control_Thermostat_ModeC.name: [Mts300Climate.AdjustNumber],
+        mn_t.Appliance_Control_Thermostat_ModeC.name: [
+            Mts300Climate.AdjustNumber,
+            MLConfigNumber,  # humidity_calibration
+            MLConfigNumber,  # fan_hold_time
+        ],
         mn_t.Appliance_Control_Thermostat_Overheat.name: [MtsOverheatNumber],
     }
     HUB_SUBDEVICES_ENTITIES = {
         mc.TYPE_MS100: [MLHubSensorAdjustNumber, MLHubSensorAdjustNumber],
         mc.TYPE_MTS100: _MTS100_ENTITES,
         mc.TYPE_MTS100V3: _MTS100_ENTITES,
-        mc.TYPE_MTS150:_MTS100_ENTITES,
+        mc.TYPE_MTS150: _MTS100_ENTITES,
     }
 
     async def async_test_each_callback(self, entity: MLNumber):
         if isinstance(entity, MtsThermostatClimate.AdjustNumber):
-            # This is intercept thermostat Calibration namespace requirement where
+            # This is to intercept thermostat Calibration namespace requirement where
             # every MtsThermostatClimate descendant should instantiate
             # MtsThermostatClimate.AdjustNumber or a descendant
             EntityComponentTest.expected_entity_types.remove(
                 MtsThermostatClimate.AdjustNumber
             )
-
-        if isinstance(entity, MtsCommonTemperatureExtNumber):
+        elif isinstance(entity, MtsCommonTemperatureExtNumber):
             # rich temperatures are set to 'unavailable' when
-            # the corresponding function is 'off'
-            if switch := entity.switch:
-                if not switch.is_on:
-                    return
+            # the corresponding function is 'off'. We'll so use
+            # the associated switch to turn it on in case.
+            switch = entity.switch
+            ison = switch.is_on
+            assert ison is entity.available  # either both True or False
+            if not ison:
+                await switch.async_turn_on()
+        elif entity.entitykey == "fan_hold_time":
+            # This entity too (mts300) might be unavailable if
+            # the device is configured to disable 'fan hold'.
+            # Again we can control this function through a dedicated switch.
+            device = self.device_context.device
+            switch = device.entities[f"{entity.channel}_fan_hold_enable"]
+            assert type(switch) is MLEmulatedSwitch
+            # Here we cannot check for availability consistence
+            # since at start it is a bit messed up.
+            if not switch.is_on:
+                await switch.async_turn_on()
         await super().async_test_each_callback(entity)
 
     async def async_test_enabled_callback(self, entity: MLNumber):

@@ -766,7 +766,7 @@ class DeviceContext(ConfigEntryMocker):
             request,
             hass,
             emulator.uuid,
-            f"Device({descriptor.productname}-{descriptor.productmodel})",
+            f"{descriptor.productname}-{descriptor.productmodel}",
             **kwargs,
         )
         self.emulator = emulator

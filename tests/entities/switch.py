@@ -2,7 +2,10 @@ from homeassistant.components import switch as haec
 from homeassistant.helpers.entity import STATE_OFF, STATE_ON
 
 from custom_components.meross_lan.devices.mss import OverTempEnableSwitch
-from custom_components.meross_lan.devices.thermostat import MtsExternalSensorSwitch
+from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
+    MtsConfigSwitch,
+    MtsExternalSensorSwitch,
+)
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
@@ -10,7 +13,12 @@ from custom_components.meross_lan.merossclient.protocol import (
 from custom_components.meross_lan.merossclient.protocol.namespaces import (
     thermostat as mn_t,
 )
-from custom_components.meross_lan.switch import MLToggle, MLToggleX, PhysicalLockSwitch
+from custom_components.meross_lan.switch import (
+    MLEmulatedSwitch,
+    MLToggle,
+    MLToggleX,
+    PhysicalLockSwitch,
+)
 
 from tests.entities import EntityComponentTest
 
@@ -28,7 +36,12 @@ class EntityTest(EntityComponentTest):
     NAMESPACES_ENTITIES = {
         mn.Appliance_Config_OverTemp.name: [OverTempEnableSwitch],
         mn.Appliance_Control_PhysicalLock.name: [PhysicalLockSwitch],
+        mn_t.Appliance_Control_Thermostat_ModeC.name: [
+            MLEmulatedSwitch,  # fan_hold_enable
+        ],
+        mn_t.Appliance_Control_Thermostat_Frost.name: [MtsConfigSwitch],
         mn_t.Appliance_Control_Thermostat_Sensor.name: [MtsExternalSensorSwitch],
+        mn_t.Appliance_Control_Thermostat_Overheat.name: [MtsConfigSwitch],
         mn.Appliance_Control_Toggle.name: [MLToggle],
     }
 

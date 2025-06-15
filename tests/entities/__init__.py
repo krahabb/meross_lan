@@ -88,8 +88,8 @@ class EntityComponentTest:
         return state
 
     async def async_test_each_callback(self, entity: "MLEntity"):
-        if entity.manager.online:
-            assert entity.available, f"entity {entity.entity_id} not available"
+        # manager should be online so this should always be true
+        assert entity.available, f"entity {entity.entity_id} not available"
 
     async def async_test_enabled_callback(self, entity: "MLEntity"):
         pass
