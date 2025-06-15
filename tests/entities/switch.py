@@ -32,7 +32,6 @@ class EntityTest(EntityComponentTest):
     DIGEST_ENTITIES = {
         mc.KEY_TOGGLEX: [MLToggleX],
     }
-
     NAMESPACES_ENTITIES = {
         mn.Appliance_Config_OverTemp.name: [OverTempEnableSwitch],
         mn.Appliance_Control_PhysicalLock.name: [PhysicalLockSwitch],
@@ -43,6 +42,11 @@ class EntityTest(EntityComponentTest):
         mn_t.Appliance_Control_Thermostat_Sensor.name: [MtsExternalSensorSwitch],
         mn_t.Appliance_Control_Thermostat_Overheat.name: [MtsConfigSwitch],
         mn.Appliance_Control_Toggle.name: [MLToggle],
+    }
+    HUB_SUBDEVICES_ENTITIES = {
+        mc.TYPE_MTS100: [MLEmulatedSwitch],  # patch hvacaction
+        mc.TYPE_MTS100V3: [MLEmulatedSwitch],  # patch hvacaction
+        mc.TYPE_MTS150: [MLEmulatedSwitch],  # patch hvacaction
     }
 
     async def async_test_enabled_callback(self, entity: haec.SwitchEntity):

@@ -14,36 +14,6 @@ if TYPE_CHECKING:
     from ...helpers.device import Device
 
 
-class MLTimerConfigNumber(MLEmulatedNumber):
-    """
-    Helper entity to configure countdown/cycle timer durations.
-    """
-
-    # HA core entity attributes:
-    native_max_value = 1440  # 1 day max duration (no real info just guessing)
-    native_min_value = 1
-    native_step = 1
-
-    def __init__(self, climate: "Mts960Climate", entitykey: str):
-        super().__init__(
-            climate.manager,
-            climate.channel,
-            entitykey,
-            MLEmulatedNumber.DEVICE_CLASS_DURATION,
-            native_unit_of_measurement=MLEmulatedNumber.hac.UnitOfTime.MINUTES,
-        )
-
-
-class Mts960PlugState(MLBinarySensor):
-
-    # HA core entity attributes:
-    entity_registry_enabled_default = False
-
-    @property
-    def icon(self):
-        return "mdi:power-plug" if self.is_on else "mdi:power-plug-off"
-
-
 class Mts960Climate(MtsThermostatClimate):
     """Climate entity for MTS960 devices"""
 
@@ -61,6 +31,34 @@ class Mts960Climate(MtsThermostatClimate):
 
     class Schedule(MtsSchedule):
         ns = mn_t.Appliance_Control_Thermostat_ScheduleB
+
+    class PlugState(MLBinarySensor):
+
+        # HA core entity attributes:
+        entity_registry_enabled_default = False
+
+        @property
+        def icon(self):
+            return "mdi:power-plug" if self.is_on else "mdi:power-plug-off"
+
+    class TimerConfigNumber(MLEmulatedNumber):
+        """
+        Helper entity to configure countdown/cycle timer durations.
+        """
+
+        # HA core entity attributes:
+        native_max_value = 1440  # 1 day max duration (no real info just guessing)
+        native_min_value = 1
+        native_step = 1
+
+        def __init__(self, climate: "Mts960Climate", entitykey: str):
+            super().__init__(
+                climate.manager,
+                climate.channel,
+                entitykey,
+                MLEmulatedNumber.DEVICE_CLASS_DURATION,
+                native_unit_of_measurement=MLEmulatedNumber.hac.UnitOfTime.MINUTES,
+            )
 
     MTS_MODE_TO_PRESET_MAP = {}
 
@@ -106,14 +104,14 @@ class Mts960Climate(MtsThermostatClimate):
         self._mts_timer_payload = None
         self._mts_timer_mode = None
         super().__init__(manager, channel)
-        self.binary_sensor_plug_state = Mts960PlugState(manager, channel, "plug_state")
-        self.number_timer_down_duration = MLTimerConfigNumber(
+        self.binary_sensor_plug_state = Mts960Climate.PlugState(manager, channel, "plug_state")
+        self.number_timer_down_duration = Mts960Climate.TimerConfigNumber(
             self, "timer_down_duration"
         )
-        self.number_timer_cycle_off_duration = MLTimerConfigNumber(
+        self.number_timer_cycle_off_duration = Mts960Climate.TimerConfigNumber(
             self, "timer_cycle_off_duration"
         )
-        self.number_timer_cycle_on_duration = MLTimerConfigNumber(
+        self.number_timer_cycle_on_duration = Mts960Climate.TimerConfigNumber(
             self, "timer_cycle_on_duration"
         )
 

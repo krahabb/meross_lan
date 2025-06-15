@@ -15,9 +15,15 @@ if TYPE_CHECKING:
 
     EntityType = type[entity.Entity]
     MerossEntityTypesList = list[type[MLEntity]]
-    MerossEntityTypesDigestContainer = (
+    type MerossEntityTypesDigestContainer = (
         MerossEntityTypesList | dict[str, MerossEntityTypesList]
     )
+    DeviceEntitiesType = MerossEntityTypesList
+    DigestEntitiesType = dict[str, MerossEntityTypesDigestContainer]
+    NamespaceEntitiesType = dict[str, MerossEntityTypesList]
+    HubSubDeviceEntitiesType = dict[str | None, MerossEntityTypesList]
+    """Container mapping the expected entities for any specific subdevice type.
+    None (in the map) means the entities list is expected for any device type (i.e. battery)."""
 
 
 class EntityComponentTest:
@@ -40,13 +46,13 @@ class EntityComponentTest:
         # class members: configure the entity component testing
         DOMAIN: str
         ENTITY_TYPE: ClassVar[EntityType]
-        DEVICE_ENTITIES: ClassVar[MerossEntityTypesList]
+        DEVICE_ENTITIES: ClassVar[DeviceEntitiesType]
         """Types of entities which are instanced on every device."""
-        DIGEST_ENTITIES: ClassVar[dict[str, MerossEntityTypesDigestContainer]]
+        DIGEST_ENTITIES: ClassVar[DigestEntitiesType]
         """Types of entities which are instanced based off the digest structure."""
-        NAMESPACES_ENTITIES: ClassVar[dict[str, MerossEntityTypesList]]
+        NAMESPACES_ENTITIES: ClassVar[NamespaceEntitiesType]
         """Types of entities which are instanced based off namespace ability presence."""
-        HUB_SUBDEVICES_ENTITIES: ClassVar[dict[str, MerossEntityTypesList]]
+        HUB_SUBDEVICES_ENTITIES: ClassVar[HubSubDeviceEntitiesType]
         """Types of entities which are instanced based off subdevice definition in Hub digest."""
 
     DEVICE_ENTITIES = []

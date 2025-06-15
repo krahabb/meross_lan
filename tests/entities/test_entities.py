@@ -20,19 +20,25 @@ if TYPE_CHECKING:
 
     from custom_components.meross_lan.helpers.device import BaseDevice
 
-    from tests.entities import MerossEntityTypesDigestContainer, MerossEntityTypesList
+    from tests.entities import (
+        DeviceEntitiesType,
+        DigestEntitiesType,
+        HubSubDeviceEntitiesType,
+        MerossEntityTypesList,
+        NamespaceEntitiesType,
+    )
 
     COMPONENTS_TESTS: dict[str, EntityComponentTest]
-    DEVICE_ENTITIES: MerossEntityTypesList
-    DIGEST_ENTITIES: dict[str, MerossEntityTypesDigestContainer]
-    NAMESPACES_ENTITIES: dict[str, MerossEntityTypesList]
-    HUB_SUBDEVICES_ENTITIES: dict[str, MerossEntityTypesList]
+    DEVICE_ENTITIES: DeviceEntitiesType
+    DIGEST_ENTITIES: DigestEntitiesType
+    NAMESPACES_ENTITIES: NamespaceEntitiesType
+    HUB_SUBDEVICES_ENTITIES: HubSubDeviceEntitiesType
 
 COMPONENTS_TESTS = {}
 DEVICE_ENTITIES = []
 DIGEST_ENTITIES = {}
 NAMESPACES_ENTITIES = {}
-HUB_SUBDEVICES_ENTITIES = {}
+HUB_SUBDEVICES_ENTITIES = {None: []}
 
 # list of exclusions from the general rule which states that
 # every entity must be 'available' once the device is loaded
@@ -41,6 +47,7 @@ HUB_SUBDEVICES_ENTITIES = {}
 UNAVAILABLE_ENTITIES = {}
 
 for entity_domain in (
+    "binary_sensor",
     "button",
     "calendar",
     "climate",
@@ -63,7 +70,7 @@ for entity_domain in (
     for digest_key, entity_types in entity_test.DIGEST_ENTITIES.items():
         # digest entity type description might be hiearchical
         # since digest iteslf might be a dict hierarchy (2 levels though)
-        if digest_key in DIGEST_ENTITIES:
+        try:
             container = DIGEST_ENTITIES[digest_key]
             assert type(container) is type(entity_types)
             if isinstance(entity_types, dict):
@@ -74,16 +81,20 @@ for entity_domain in (
             else:
                 assert isinstance(container, list)
                 container.extend(entity_types)
-        else:
+        except KeyError:
             DIGEST_ENTITIES[digest_key] = entity_types.copy()
 
     for namespace, entity_types in entity_test.NAMESPACES_ENTITIES.items():
-        container = NAMESPACES_ENTITIES.setdefault(namespace, [])
-        container.extend(entity_types)
+        try:
+            NAMESPACES_ENTITIES[namespace].extend(entity_types)
+        except KeyError:
+            NAMESPACES_ENTITIES[namespace] = list(entity_types)
 
     for subdevice_type, entity_types in entity_test.HUB_SUBDEVICES_ENTITIES.items():
-        container = HUB_SUBDEVICES_ENTITIES.setdefault(subdevice_type, [])
-        container.extend(entity_types)
+        try:
+            HUB_SUBDEVICES_ENTITIES[subdevice_type].extend(entity_types)
+        except KeyError:
+            HUB_SUBDEVICES_ENTITIES[subdevice_type] = list(entity_types)
 
 
 async def test_entities(
@@ -154,6 +165,9 @@ async def test_entities(
                         # discarded in Hub too
                         # (see trace msh300hk-01234567890123456789012345678916)
                         continue
+                    # Add the expected entities common to any device type
+                    _add_func(HUB_SUBDEVICES_ENTITIES[None])
+                    # Record the id to check for duplicates
                     subdevice_ids.add(subdevice_id)
                     for p_key, p_value in p_subdevice.items():
                         if isinstance(p_value, dict):

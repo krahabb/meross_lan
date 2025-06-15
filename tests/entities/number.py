@@ -50,6 +50,9 @@ class EntityTest(EntityComponentTest):
             ],
             mc.KEY_MODEB: [
                 Mts960Climate.AdjustNumber,
+                Mts960Climate.TimerConfigNumber,
+                Mts960Climate.TimerConfigNumber,
+                Mts960Climate.TimerConfigNumber,
             ],
         },
     }
