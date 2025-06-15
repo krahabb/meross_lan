@@ -129,6 +129,7 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
     "overheat": {"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
         "lmTime": 1674121910, "currentTemp": 355, "channel": 0}
     """
+
     if TYPE_CHECKING:
         sensor_warning: MtsWarningSensor
         switch: MtsConfigSwitch
@@ -160,17 +161,19 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
         """
         {"channel": 0, "onoff": 1, "value": 500, "min": 500, "max": 1500, "warning": 0}
         """
-        if mc.KEY_WARNING in payload:
-            try:
-                self.sensor_warning.update_native_value(payload[mc.KEY_WARNING])
-            except AttributeError:
-                self.sensor_warning = MtsWarningSensor(self, payload[mc.KEY_WARNING])
-        if mc.KEY_ONOFF in payload:
+        try:
+            self.sensor_warning.update_native_value(payload[mc.KEY_WARNING])
+        except AttributeError:
+            self.sensor_warning = MtsWarningSensor(self, payload[mc.KEY_WARNING])
+        except KeyError as e:
+            self.log_exception(self.WARNING, e, "_parse", timeout=14400)
+        try:
             self.available = onoff = bool(payload[mc.KEY_ONOFF])
-            try:
-                self.switch.update_onoff(onoff)
-            except AttributeError:
-                self.switch = MtsConfigSwitch(self, device_value=onoff)
+            self.switch.update_onoff(onoff)
+        except AttributeError:
+            self.switch = MtsConfigSwitch(self, device_value=onoff)
+        except KeyError as e:
+            self.log_exception(self.WARNING, e, "_parse", timeout=14400)
         super()._parse(payload)
 
 
@@ -421,6 +424,13 @@ class MtsThermostatClimate(MtsClimate):
 
 
 POLLING_STRATEGY_CONF |= {
+    mn.Appliance_Control_TempUnit: (
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        30,
+        NamespaceHandler.async_poll_lazy,
+    ),
     mn_t.Appliance_Control_Thermostat_Calibration: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,

@@ -128,38 +128,3 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
                     p_channel[mc.KEY_STANDBY]
                 )
                 break
-
-
-class TempUnitNamespaceHandler(NamespaceHandler):
-    """
-    This ns only appears with thermostats so far.. so we put it here but it could
-    nevertheless live in its own module (or in 'misc' maybe)
-    """
-
-    __slots__ = ()
-
-    def __init__(self, device: "Device"):
-        NamespaceHandler.__init__(
-            self,
-            device,
-            mn.Appliance_Control_TempUnit,
-            handler=self._handle_Appliance_Control_Screen_Brightness,
-        )
-        self.polling_request_add_channel(0)
-        self.number_brightness_operation = MLScreenBrightnessNumber(
-            device, mc.KEY_OPERATION
-        )
-        self.number_brightness_standby = MLScreenBrightnessNumber(
-            device, mc.KEY_STANDBY
-        )
-
-    def _handle_Appliance_Control_Screen_Brightness(self, header: dict, payload: dict):
-        for p_channel in payload[mc.KEY_BRIGHTNESS]:
-            if p_channel[mc.KEY_CHANNEL] == 0:
-                self.number_brightness_operation.update_device_value(
-                    p_channel[mc.KEY_OPERATION]
-                )
-                self.number_brightness_standby.update_device_value(
-                    p_channel[mc.KEY_STANDBY]
-                )
-                break
