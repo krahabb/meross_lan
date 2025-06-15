@@ -154,17 +154,25 @@ class Mts300Climate(MtsThermostatClimate):
     """Status flags in "more" dict mapped as: (bool(hStatus), bool(cStatus), bool(fStatus))."""
     STATUS_SENSOR_DEF_MAP = {
         "hdStatus": MLEnumSensor.SensorDef(
-            "(de)humidifier_status", translation_key="mts300_hdstatus"
+            "(de)humidifier_status",
+            translation_key="mts300_hdstatus",
+            entity_category=MLEnumSensor.EntityCategory.DIAGNOSTIC,
         ),
         "hStatus": MLEnumSensor.SensorDef(
-            "heating_status", translation_key="mts300_status"
+            "heating_status",
+            translation_key="mts300_status",
+            entity_category=MLEnumSensor.EntityCategory.DIAGNOSTIC,
         ),
         "cStatus": MLEnumSensor.SensorDef(
-            "cooling_status", translation_key="mts300_status"
+            "cooling_status",
+            translation_key="mts300_status",
+            entity_category=MLEnumSensor.EntityCategory.DIAGNOSTIC,
         ),
         "fStatus": MLEnumSensor.SensorDef("fan_speed", translation_key="mts300_status"),
         "aStatus": MLEnumSensor.SensorDef(
-            "auxiliary_status", translation_key="mts300_status"
+            "auxiliary_status",
+            translation_key="mts300_status",
+            entity_category=MLEnumSensor.EntityCategory.DIAGNOSTIC,
         ),
     }
 
