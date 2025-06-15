@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING
 
 from ... import const as mlc
 from ...binary_sensor import MLBinarySensor
+from ...button import MLButton
 from ...calendar import MtsSchedule
 from ...climate import MtsClimate
 from ...helpers import entity as me
@@ -232,6 +233,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
 
     DEFAULT_PLATFORMS = Device.DEFAULT_PLATFORMS | {
         MLBinarySensor.PLATFORM: None,
+        MLButton.PLATFORM: None,
         MtsSchedule.PLATFORM: None,
         MLConfigNumber.PLATFORM: None,
         MLNumericSensor.PLATFORM: None,
@@ -858,14 +860,17 @@ class MTS150PSubDevice(MTS100SubDevice):
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS150P] = MTS150PSubDevice
 
 
-class GS559MuteToggle(me.MEListChannelMixin, MLSwitch):
-    ns = mn_h.Appliance_Hub_Sensor_Smoke
-    key_value: str = mc.KEY_INTERCONN
-
-    # HA core entity attributes:
-
-
 class GS559SubDevice(SubDevice):
+
+    if TYPE_CHECKING:
+        binary_sensor_alarm: MLBinarySensor
+        binary_sensor_error: MLBinarySensor
+        binary_sensor_muted: MLBinarySensor
+        button_mute: MLButton
+        sensor_status: MLEnumSensor
+        sensor_interConn: MLEnumSensor
+        _smokealarm_status: int | None
+
     STATUS_MAP = {
         17: "error_temperature",
         18: "error_smoke",
@@ -880,7 +885,7 @@ class GS559SubDevice(SubDevice):
         27: "alarm_smoke",
         170: "ok",
     }
-
+    MUTE_MAP = {17: 20, 18: 21, 19: 22, 24: 26, 25: 27, None: 170}
     STATUS_ALARM = {23, 24, 25, 26, 27}
     STATUS_ERROR = {17, 18, 19, 20, 21, 22}
     STATUS_MUTED = {20, 21, 22, 26, 27}
@@ -889,20 +894,14 @@ class GS559SubDevice(SubDevice):
         "binary_sensor_alarm",
         "binary_sensor_error",
         "binary_sensor_muted",
+        "button_mute",
         "sensor_status",
-        # "sensor_interConn",
-        "switch_interConn",
+        "sensor_interConn",
+        "_smokealarm_status",
     )
 
     def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_GS559)
-        self.sensor_status = MLEnumSensor(
-            self, self.id, mc.KEY_STATUS, translation_key="smoke_alarm_status"
-        )
-        # self.sensor_interConn = MLEnumSensor(self, self.id, mc.KEY_INTERCONN)
-        self.switch_interConn = GS559MuteToggle(
-            self, self.id, mc.KEY_INTERCONN, MLSwitch.DeviceClass.SWITCH
-        )
         self.binary_sensor_alarm = MLBinarySensor(
             self, self.id, "alarm", MLBinarySensor.DeviceClass.SAFETY
         )
@@ -910,19 +909,27 @@ class GS559SubDevice(SubDevice):
             self, self.id, "error", MLBinarySensor.DeviceClass.PROBLEM
         )
         self.binary_sensor_muted = MLBinarySensor(self, self.id, "muted")
+        self.button_mute = MLButton(
+            self, self.id, "button_mute", self._async_button_mute_press, name="Mute"
+        )
+        self.sensor_status = MLEnumSensor(
+            self, self.id, mc.KEY_STATUS, translation_key="smoke_alarm_status"
+        )
+        self.sensor_interConn = MLEnumSensor(self, self.id, mc.KEY_INTERCONN)
+        self._smokealarm_status = None
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.binary_sensor_muted: MLBinarySensor = None  # type: ignore
-        self.binary_sensor_error: MLBinarySensor = None  # type: ignore
-        self.binary_sensor_alarm: MLBinarySensor = None  # type: ignore
-        self.sensor_status: MLEnumSensor = None  # type: ignore
-        self.switch_interConn: GS559MuteToggle = None  # type: ignore
-        # self.sensor_interConn: MLEnumSensor = None  # type: ignore
+        self.binary_sensor_muted = None  # type: ignore
+        self.binary_sensor_error = None  # type: ignore
+        self.binary_sensor_alarm = None  # type: ignore
+        self.button_mute = None  # type: ignore
+        self.sensor_status = None  # type: ignore
+        self.sensor_interConn = None  # type: ignore
 
     def _parse_smokeAlarm(self, p_smokealarm: dict):
         if mc.KEY_STATUS in p_smokealarm:
-            value = p_smokealarm[mc.KEY_STATUS]
+            self._smokealarm_status = value = p_smokealarm[mc.KEY_STATUS]
             self.binary_sensor_alarm.update_onoff(value in GS559SubDevice.STATUS_ALARM)
             self.binary_sensor_error.update_onoff(value in GS559SubDevice.STATUS_ERROR)
             self.binary_sensor_muted.update_onoff(value in GS559SubDevice.STATUS_MUTED)
@@ -930,8 +937,19 @@ class GS559SubDevice(SubDevice):
                 GS559SubDevice.STATUS_MAP.get(value, value)
             )
         if mc.KEY_INTERCONN in p_smokealarm:
-            # self.sensor_interConn.update_native_value(p_smokealarm[mc.KEY_INTERCONN])
-            self.switch_interConn.update_onoff(p_smokealarm[mc.KEY_INTERCONN])
+            self.sensor_interConn.update_native_value(p_smokealarm[mc.KEY_INTERCONN])
+
+    async def _async_button_mute_press(self):
+        ns = mn_h.Appliance_Hub_Sensor_Smoke
+        try:
+            await self.async_request_ack(
+                ns.name,
+                mc.METHOD_SET,
+                {ns.key: [{ns.key_channel: self.id, mc.KEY_STATUS: GS559SubDevice.MUTE_MAP[self._smokealarm_status]}]},
+            )
+        except KeyError as e:
+            # in case the state is not present in the MUTE_MAP (i.e. not mutable)
+            self.log_exception(self.DEBUG, e, "trying to send mute command")
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_GS559] = GS559SubDevice
