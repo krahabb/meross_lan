@@ -18,7 +18,7 @@ class EntityTest(EntityComponentTest):
     NAMESPACES_ENTITIES = {}
 
     HUB_SUBDEVICES_ENTITIES = {
-        mc.KEY_SMOKEALARM: [MLButton],  #  mute button
+        mc.KEY_SMOKEALARM: [MLButton, MLButton],  # mute, test
     }
 
     async def async_test_enabled_callback(self, entity: MLButton):

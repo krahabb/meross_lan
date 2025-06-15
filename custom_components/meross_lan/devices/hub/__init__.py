@@ -867,6 +867,7 @@ class GS559SubDevice(SubDevice):
         binary_sensor_error: MLBinarySensor
         binary_sensor_muted: MLBinarySensor
         button_mute: MLButton
+        button_test: MLButton
         sensor_status: MLEnumSensor
         sensor_interConn: MLEnumSensor
         _smokealarm_status: int | None
@@ -895,6 +896,7 @@ class GS559SubDevice(SubDevice):
         "binary_sensor_error",
         "binary_sensor_muted",
         "button_mute",
+        "button_test",
         "sensor_status",
         "sensor_interConn",
         "_smokealarm_status",
@@ -912,6 +914,9 @@ class GS559SubDevice(SubDevice):
         self.button_mute = MLButton(
             self, self.id, "button_mute", self._async_button_mute_press, name="Mute"
         )
+        self.button_test = MLButton(
+            self, self.id, "button_test", self._async_button_test_press, name="Test"
+        )
         self.sensor_status = MLEnumSensor(
             self, self.id, mc.KEY_STATUS, translation_key="smoke_alarm_status"
         )
@@ -924,6 +929,7 @@ class GS559SubDevice(SubDevice):
         self.binary_sensor_error = None  # type: ignore
         self.binary_sensor_alarm = None  # type: ignore
         self.button_mute = None  # type: ignore
+        self.button_test = None  # type: ignore
         self.sensor_status = None  # type: ignore
         self.sensor_interConn = None  # type: ignore
 
@@ -951,6 +957,13 @@ class GS559SubDevice(SubDevice):
             # in case the state is not present in the MUTE_MAP (i.e. not mutable)
             self.log_exception(self.DEBUG, e, "trying to send mute command")
 
+    async def _async_button_test_press(self):
+        ns = mn_h.Appliance_Hub_Sensor_Smoke
+        await self.async_request_ack(
+            ns.name,
+            mc.METHOD_SET,
+            {ns.key: [{ns.key_channel: self.id, mc.KEY_STATUS: 23}]},
+        )
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_GS559] = GS559SubDevice
 # smokeAlarm devices (mc.TYPE_GS559) are presented as
