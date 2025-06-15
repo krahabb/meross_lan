@@ -240,11 +240,11 @@ class MtsTrackedSensor(me.MEAlwaysAvailableMixin, MLSelect):
             )
             if not tracked_temperature_unit:
                 raise ValueError("tracked entity has no unit of measure")
-            if tracked_temperature_unit != climate.TEMP_CELSIUS:
+            if tracked_temperature_unit != climate.temperature_unit:
                 tracked_temperature = TemperatureConverter.convert(
                     tracked_temperature,
                     tracked_temperature_unit,
-                    climate.TEMP_CELSIUS,
+                    climate.temperature_unit,
                 )
             error_temperature: float = tracked_temperature - current_temperature
             native_error_temperature = round(error_temperature * climate.device_scale)
@@ -277,7 +277,7 @@ class MtsTrackedSensor(me.MEAlwaysAvailableMixin, MLSelect):
                 self.DEBUG,
                 "Applying correction of %s %s to %s",
                 adjust_temperature,
-                climate.TEMP_CELSIUS,
+                climate.temperature_unit,
                 climate.entity_id,
             )
 
