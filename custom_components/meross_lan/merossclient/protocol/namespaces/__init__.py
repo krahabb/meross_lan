@@ -194,7 +194,8 @@ class Namespace:
         kwargs: "Args" = {},
     ) -> None:
         self.name = name
-        slug = name.split(".")[-1]
+        name_split = name.split(".")
+        slug = name_split[-1]
         # When namespace 'key' is not provided we'll infer it
         # by camelCasing the last split of the namespace
         # with special care for also the last char which looks
@@ -238,7 +239,7 @@ class Namespace:
             # apply heuristics to incoming new namespaces.
             # Forwarding a payload arg to the constructor is just an 'hint'
             # used by our factory functions ('_ns_xxx') to skip unneded name parsing
-            match name.split("."):
+            match name_split:
                 case (_, "Hub", *_):
                     # This is not always true: some 'hub' namespaces don't get indexed by 'id' (nor by 'subId')
                     # Examples are ExtraInfo or SubdeviceList. In our definitions we'll solve the problem
@@ -468,7 +469,7 @@ Appliance_Control_OverTemp = ns(
     "Appliance.Control.OverTemp", mc.KEY_OVERTEMP, ARGS_GET | P_LIST
 )
 Appliance_Control_PhysicalLock = ns(
-    "Appliance.Control.PhysicalLock", mc.KEY_LOCK, ARGS_SETPUSHQ | P_LIST_C
+    "Appliance.Control.PhysicalLock", mc.KEY_LOCK, ARGS_SETPUSHQ | P_LIST
 )
 Appliance_Control_Presence_Config = ns(
     "Appliance.Control.Presence.Config", mc.KEY_CONFIG, ARGS_GET | P_LIST_C
