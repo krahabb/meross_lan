@@ -1,7 +1,7 @@
 import abc
 import asyncio
 from time import time
-import typing
+from typing import TYPE_CHECKING, final
 
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
@@ -31,9 +31,9 @@ from ..sensor import MLDiagnosticSensor
 from .manager import ConfigEntryManager
 from .obfuscate import obfuscated_dict
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     import asyncio
-    from typing import Callable, ClassVar, Final, Mapping, Unpack
+    from typing import Awaitable, Callable, ClassVar, Final, Mapping, TypedDict, Unpack
 
     from homeassistant.components import mqtt as ha_mqtt
     from homeassistant.config_entries import ConfigEntry
@@ -50,25 +50,41 @@ if typing.TYPE_CHECKING:
 
 
 class ConnectionSensor(me.MEAlwaysAvailableMixin, MLDiagnosticSensor):
-    STATE_DISCONNECTED: typing.Final = "disconnected"
-    STATE_CONNECTED: typing.Final = "connected"
-    STATE_DROPPING: typing.Final = "dropping"
 
-    class AttrDictType(typing.TypedDict):
-        devices: dict[str, str]
-        received: int
-        published: int
-        dropped: int
+    if TYPE_CHECKING:
+        STATE_DISCONNECTED: Final
+        STATE_CONNECTED: Final
+        STATE_DROPPING: Final
+        ATTR_DEVICES: Final
+        ATTR_RECEIVED: Final
+        ATTR_PUBLISHED: Final
+        ATTR_DROPPED: Final
 
-    ATTR_DEVICES: typing.Final = "devices"
-    ATTR_RECEIVED: typing.Final = "received"
-    ATTR_PUBLISHED: typing.Final = "published"
-    ATTR_DROPPED: typing.Final = "dropped"
+        manager: "MQTTProfile"
 
-    manager: "MQTTProfile"
+
+        # HA core entity attributes:
+        class AttrDictType(TypedDict):
+            devices: dict[str, str]
+            received: int
+            published: int
+            dropped: int
+
+        extra_state_attributes: AttrDictType
+        native_value: str
+        options: list[str]
+
+    STATE_DISCONNECTED = "disconnected"
+    STATE_CONNECTED = "connected"
+    STATE_DROPPING = "dropping"
+
+
+    ATTR_DEVICES = "devices"
+    ATTR_RECEIVED = "received"
+    ATTR_PUBLISHED = "published"
+    ATTR_DROPPED = "dropped"
 
     # HA core entity attributes:
-    extra_state_attributes: AttrDictType
     _unrecorded_attributes = frozenset(
         {
             ATTR_DEVICES,
@@ -78,8 +94,8 @@ class ConnectionSensor(me.MEAlwaysAvailableMixin, MLDiagnosticSensor):
             *MLDiagnosticSensor._unrecorded_attributes,
         }
     )
-    native_value: str
-    options: list[str] = [
+
+    options = [
         STATE_DISCONNECTED,
         STATE_CONNECTED,
         STATE_DROPPING,
@@ -198,7 +214,7 @@ class MQTTConnection(Loggable):
     merosss cloud mqtt)
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
         _MQTT_DROP: Final
         _MQTT_PUBLISH: Final
         _MQTT_RECV: Final
@@ -207,11 +223,12 @@ class MQTTConnection(Loggable):
             str,
             Callable[
                 ["MQTTConnection", str, MerossHeaderType, MerossPayloadType],
-                typing.Awaitable[bool],
+                Awaitable[bool],
             ],
         ]
 
         SESSION_HANDLERS: ClassVar[SessionHandlersType]
+        is_cloud_connection: bool
         profile: Final["MQTTProfile"]
         broker: Final[HostAddress]
         topic_response: Final[str]
@@ -219,7 +236,7 @@ class MQTTConnection(Loggable):
         mqttdiscovering: Final[set[str]]
         namespace_handlers: SessionHandlersType
         sensor_connection: ConnectionSensor | None
-        is_cloud_connection: bool
+
         _mqtt_transactions: Final[dict[str, _MQTTTransaction]]
         _mqtt_is_connected: bool
 
@@ -326,7 +343,7 @@ class MQTTConnection(Loggable):
         if sensor_connection := self.sensor_connection:
             sensor_connection.update_devices()
 
-    @typing.final
+    @final
     def mqtt_publish(
         self,
         device_id: str,
@@ -336,7 +353,7 @@ class MQTTConnection(Loggable):
             self.async_mqtt_publish(device_id, request), f".mqtt_publish({device_id})"
         )
 
-    @typing.final
+    @final
     async def async_mqtt_publish(
         self,
         device_id: str,
@@ -396,7 +413,7 @@ class MQTTConnection(Loggable):
             transaction.cancel()
         return None
 
-    @typing.final
+    @final
     async def async_mqtt_message(
         self,
         mqtt_msg: "ha_mqtt.ReceiveMessage | paho_mqtt.MQTTMessage | MqttServiceInfo",
@@ -688,7 +705,8 @@ class MQTTProfile(ConfigEntryManager):
     sharing of globals and defining some common interfaces.
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
+        is_cloud_profile: bool
         linkeddevices: dict[str, Device]
         mqttconnections: dict[str, MQTTConnection]
 
@@ -696,7 +714,11 @@ class MQTTProfile(ConfigEntryManager):
         SENSOR_DOMAIN: None,
     }
 
-    __slots__ = ("linkeddevices", "mqttconnections")
+    __slots__ = (
+        "is_cloud_profile",
+        "linkeddevices",
+        "mqttconnections",
+    )
 
     def __init__(self, id: str, **kwargs: "Unpack[ConfigEntryManager.Args]"):
         super().__init__(id, **kwargs)

@@ -864,7 +864,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
     """
 
     if typing.TYPE_CHECKING:
-        config_entry: Final[ce.ConfigEntry]
+        config_entry: Final[ce.ConfigEntry[ConfigEntryManager]]
         config_entry_id: Final[str]
         repair_issue_id: Final[str | None]
 
@@ -916,7 +916,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                 self._device_id = device_id
                 assert device_id == self.device_config[mlc.CONF_DEVICE_ID]
                 try:
-                    device: Device = self.config_entry.runtime_data
+                    device: Device = self.config_entry.runtime_data  # type: ignore
                     self.device_descriptor = device.descriptor
                 except AttributeError:
                     # if config not loaded the device is None
@@ -1136,7 +1136,11 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                 state = self.api.managers_transient_state.setdefault(
                     self.config_entry_id, {}
                 )
-                state[mlc.CONF_TRACE] = user_input[mlc.CONF_TRACE]
+                # we're saving the 'diagnostic state' before reloading so that when tracing starts
+                # it'll be dumped at the start of the trace together with config and other info (maybe)
+                state[mlc.CONF_TRACE] = (
+                    self.config_entry.runtime_data.loggable_diagnostic_state()
+                )
                 return self.finish_options_flow(config, True)
             return self.finish_options_flow(config)
 

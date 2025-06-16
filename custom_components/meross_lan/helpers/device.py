@@ -1,5 +1,4 @@
 import abc
-import asyncio
 import bisect
 from datetime import UTC, tzinfo
 from json import JSONDecodeError
@@ -30,6 +29,7 @@ from ..const import (
     PARAM_HEARTBEAT_PERIOD,
     PARAM_TIMESTAMP_TOLERANCE,
 )
+from ..helpers.obfuscate import obfuscated_dict
 from ..merossclient import (
     HostAddress,
     get_active_broker,
@@ -50,6 +50,7 @@ from .manager import ConfigEntryManager, EntityManager
 from .namespaces import NamespaceHandler, mc, mn
 
 if TYPE_CHECKING:
+    from asyncio import Future, TimerHandle
     from types import CoroutineType
     from typing import (
         Any,
@@ -280,12 +281,12 @@ class Device(BaseDevice, ConfigEntryManager):
         digest_pollers: set[NamespaceHandler]
         _lazypoll_requests: list[NamespaceHandler]
         _polling_epoch: float
-        _polling_callback_unsub: asyncio.TimerHandle | None
-        _polling_callback_shutdown: asyncio.Future | None
+        _polling_callback_unsub: TimerHandle | None
+        _polling_callback_shutdown: Future | None
         _queued_cloudpoll_requests: int
         multiple_max: int
         _timezone_next_check: float
-        _trace_ability_callback_unsub: asyncio.TimerHandle | None
+        _trace_ability_callback_unsub: TimerHandle | None
         _diagnostics_build: bool
 
         # entities
@@ -693,16 +694,11 @@ class Device(BaseDevice, ConfigEntryManager):
         return f"{self.descriptor.type}_{self.loggable_device_id(self.id)}"
 
     def _trace_opened(self, epoch: float):
-        descr = self.descriptor
-        # set the scheduled callback first so it gets (eventually) cleaned
-        # should the following self.trace close the file due to an error
         self._trace_ability_callback_unsub = self.schedule_async_callback(
             mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
             self._async_trace_ability,
-            iter(descr.ability),
+            iter(self.descriptor.ability),
         )
-        self.trace(epoch, descr.all, mn.Appliance_System_All.name)
-        self.trace(epoch, descr.ability, mn.Appliance_System_Ability.name)
 
     def trace_close(
         self, exception: Exception | None = None, error_context: str | None = None
@@ -711,6 +707,188 @@ class Device(BaseDevice, ConfigEntryManager):
             self._trace_ability_callback_unsub.cancel()
             self._trace_ability_callback_unsub = None
         super().trace_close(exception, error_context)
+
+    async def _async_trace_ability(self, abilities_iterator: "Iterator[str]"):
+        try:
+            # avoid interleave tracing ability with polling loop
+            # also, since we could trigger this at early stages
+            # in device init, this check will prevent iterating
+            # at least until the device fully initialize through
+            # self.start()
+            if self.online and not self._polling_epoch:
+                while (
+                    ability := next(abilities_iterator)
+                ) in self.TRACE_ABILITY_EXCLUDE:
+                    continue
+                self.log(self.DEBUG, "Tracing %s ability", ability)
+                await self.get_handler_by_name(ability).async_trace(self.async_request)
+
+        except StopIteration:
+            self._trace_ability_callback_unsub = None
+            self.log(self.DEBUG, "Tracing abilities end")
+            return
+        except Exception as exception:
+            self.log_exception(self.WARNING, exception, "_async_trace_ability")
+
+        self._trace_ability_callback_unsub = None
+        if not self.is_tracing:
+            return
+
+        if (self.curr_protocol is CONF_PROTOCOL_MQTT) and self._mqtt_publish:
+            timeout = (
+                mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT
+                + self._mqtt_publish.get_rl_safe_delay(self.id)
+            )
+        else:
+            timeout = mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT
+        self._trace_ability_callback_unsub = self.schedule_async_callback(
+            timeout,
+            self._async_trace_ability,
+            abilities_iterator,
+        )
+
+    def _trace_or_log(
+        self,
+        epoch: float,
+        message: "MerossMessage",
+        protocol: str,
+        rxtx: str,
+    ):
+        if self.is_tracing:
+            header = message[mc.KEY_HEADER]
+            self.trace(
+                epoch,
+                message[mc.KEY_PAYLOAD],
+                header[mc.KEY_NAMESPACE],
+                header[mc.KEY_METHOD],
+                protocol,
+                rxtx,
+            )
+        # here we avoid using self.log since it would
+        # log to the trace file too but we've already 'traced' the
+        # message if that's the case
+        logger = self.logger
+        if logger.isEnabledFor(self.VERBOSE):
+            header = message[mc.KEY_HEADER]
+            logger._log(
+                self.VERBOSE,
+                "%s(%s) %s %s (messageId:%s) %s",
+                (
+                    rxtx,
+                    protocol,
+                    header[mc.KEY_METHOD],
+                    header[mc.KEY_NAMESPACE],
+                    header[mc.KEY_MESSAGEID],
+                    json_dumps(self.loggable_dict(message)),
+                ),
+            )
+        elif logger.isEnabledFor(self.DEBUG):
+            header = message[mc.KEY_HEADER]
+            logger._log(
+                self.DEBUG,
+                "%s(%s) %s %s (messageId:%s)",
+                (
+                    rxtx,
+                    protocol,
+                    header[mc.KEY_METHOD],
+                    header[mc.KEY_NAMESPACE],
+                    header[mc.KEY_MESSAGEID],
+                ),
+            )
+
+    async def _async_get_diagnostics_trace(self) -> list[list]:
+        """
+        invoked by the diagnostics callback:
+        here we set the device to start tracing the classical way (in file)
+        but we also fill in a dict which will set back as the result of the
+        Future we're returning to diagnostics.
+        """
+        if self._trace_future:
+            # avoid re-entry..keep going the running trace
+            return await self._trace_future
+        if self.is_tracing:
+            self.trace_close()
+
+        if self._http_active and self.conf_protocol is not CONF_PROTOCOL_MQTT:
+            # shortcut with fast HTTP querying
+            self._trace_data = trace_data = [mlc.CONF_TRACE_COLUMNS]
+            await self._async_poll()
+            try:
+                abilities = iter(self.descriptor.ability)
+                while self.online and self.is_tracing:
+                    ability = next(abilities)
+                    if ability not in self.TRACE_ABILITY_EXCLUDE:
+                        await self.get_handler_by_name(ability).async_trace(
+                            self.async_http_request
+                        )
+                self._trace_data = None
+                return trace_data  # might be truncated because offlining or async shutting trace
+            except StopIteration:
+                self._trace_data = None
+                return trace_data
+            except Exception as exception:
+                self.log_exception(self.DEBUG, exception, "async_get_diagnostics_trace")
+                # in case of error we're going to try the legacy approach
+
+        # reset and restart with a debug tracing to build the diagnostics
+        self._trace_data = [mlc.CONF_TRACE_COLUMNS]
+        self._trace_future = future = self.hass.loop.create_future()
+        await self.async_trace_open()
+        return await future
+
+    def loggable_diagnostic_state(self):
+        """Return a 'loggable' version of the entry state (for diagnostic/logging purposes)"""
+        return {
+            "class": type(self).__name__,
+            "conf_protocol": self.conf_protocol,
+            "pref_protocol": self.pref_protocol,
+            "curr_protocol": self.curr_protocol,
+            "polling_period": self.polling_period,
+            "device_response_size_min": self.device_response_size_min,
+            "device_response_size_max": self.device_response_size_max,
+            "MQTT": {
+                "cloud_profile": (
+                    self._profile.is_cloud_profile if self._profile else None
+                ),
+                "locally_active": bool(self.mqtt_locallyactive),
+                "mqtt_connection": bool(self._mqtt_connection),
+                "mqtt_connected": bool(self._mqtt_connected),
+                "mqtt_publish": bool(self._mqtt_publish),
+                "mqtt_active": bool(self._mqtt_active),
+            },
+            "HTTP": {
+                "http": bool(self._http),
+                "http_active": bool(self._http_active),
+            },
+            "namespace_handlers": {
+                handler.ns.name: {
+                    "lastrequest": handler.lastrequest,
+                    "lastresponse": handler.lastresponse,
+                    "polling_epoch_next": handler.polling_epoch_next,
+                    "polling_strategy": (
+                        handler.polling_strategy.__name__
+                        if handler.polling_strategy
+                        else None
+                    ),
+                }
+                for handler in self.namespace_handlers.values()
+            },
+            "namespace_pushes": (
+                obfuscated_dict(self.namespace_pushes)
+                if self.obfuscate
+                else self.namespace_pushes
+            ),
+            "device_info": (
+                obfuscated_dict(self.device_info)
+                if self.obfuscate and self.device_info
+                else self.device_info
+            ),
+        }
+
+    async def async_get_diagnostics(self):
+        data = await super().async_get_diagnostics()
+        data["trace"] = await self._async_get_diagnostics_trace()
+        return data
 
     # interface: BaseDevice
     async def async_shutdown(self):
@@ -1707,9 +1885,7 @@ class Device(BaseDevice, ConfigEntryManager):
             self._polling_callback_unsub = None
         elif self._polling_epoch:
             if not self._polling_callback_shutdown:
-                self._polling_callback_shutdown = (
-                    asyncio.get_running_loop().create_future()
-                )
+                self._polling_callback_shutdown = self.hass.loop.create_future()
             await self._polling_callback_shutdown
 
     async def _async_poll(self):
@@ -2459,143 +2635,6 @@ class Device(BaseDevice, ConfigEntryManager):
             update_firmware.flush_state()
         else:
             self.update_firmware = MLUpdate(self, latest_version)
-
-    async def async_get_diagnostics_trace(self) -> list:
-        """
-        invoked by the diagnostics callback:
-        here we set the device to start tracing the classical way (in file)
-        but we also fill in a dict which will set back as the result of the
-        Future we're returning to diagnostics.
-        """
-        if self._trace_future:
-            # avoid re-entry..keep going the running trace
-            return await self._trace_future
-        if self.is_tracing:
-            self.trace_close()
-
-        if self._http_active and self.conf_protocol is not CONF_PROTOCOL_MQTT:
-            # shortcut with fast HTTP querying
-            epoch = time()
-            descr = self.descriptor
-            # setting _trace_data will already activate tracing (kind of)
-            self._trace_data = trace_data = [
-                ["time", "rxtx", "protocol", "method", "namespace", "data"]
-            ]
-            # TODO: remove these from diagnostic since they're present in header data
-            # before that we need to update the emulator code to extract those
-            self.trace(epoch, descr.all, mn.Appliance_System_All.name)
-            self.trace(epoch, descr.ability, mn.Appliance_System_Ability.name)
-            await self._async_poll()
-            try:
-                abilities = iter(descr.ability)
-                while self.online and self.is_tracing:
-                    ability = next(abilities)
-                    if ability not in self.TRACE_ABILITY_EXCLUDE:
-                        await self.get_handler_by_name(ability).async_trace(
-                            self.async_http_request
-                        )
-
-                return trace_data  # might be truncated because offlining or async shutting trace
-            except StopIteration:
-                return trace_data
-            except Exception as exception:
-                self.log_exception(self.DEBUG, exception, "async_get_diagnostics_trace")
-                # in case of error we're going to try the legacy approach
-            finally:
-                self._trace_data = None
-
-        self._trace_data = [["time", "rxtx", "protocol", "method", "namespace", "data"]]
-        self._trace_future = future = asyncio.get_running_loop().create_future()
-        await self.async_trace_open()
-        return await future
-
-    async def _async_trace_ability(self, abilities_iterator: "Iterator[str]"):
-        try:
-            # avoid interleave tracing ability with polling loop
-            # also, since we could trigger this at early stages
-            # in device init, this check will prevent iterating
-            # at least until the device fully initialize through
-            # self.start()
-            if self.online and not self._polling_epoch:
-                while (
-                    ability := next(abilities_iterator)
-                ) in self.TRACE_ABILITY_EXCLUDE:
-                    continue
-                self.log(self.DEBUG, "Tracing %s ability", ability)
-                await self.get_handler_by_name(ability).async_trace(self.async_request)
-
-        except StopIteration:
-            self._trace_ability_callback_unsub = None
-            self.log(self.DEBUG, "Tracing abilities end")
-            return
-        except Exception as exception:
-            self.log_exception(self.WARNING, exception, "_async_trace_ability")
-
-        self._trace_ability_callback_unsub = None
-        if not self.is_tracing:
-            return
-
-        if (self.curr_protocol is CONF_PROTOCOL_MQTT) and self._mqtt_publish:
-            timeout = (
-                mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT
-                + self._mqtt_publish.get_rl_safe_delay(self.id)
-            )
-        else:
-            timeout = mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT
-        self._trace_ability_callback_unsub = self.schedule_async_callback(
-            timeout,
-            self._async_trace_ability,
-            abilities_iterator,
-        )
-
-    def _trace_or_log(
-        self,
-        epoch: float,
-        message: "MerossMessage",
-        protocol: str,
-        rxtx: str,
-    ):
-        if self.is_tracing:
-            header = message[mc.KEY_HEADER]
-            self.trace(
-                epoch,
-                message[mc.KEY_PAYLOAD],
-                header[mc.KEY_NAMESPACE],
-                header[mc.KEY_METHOD],
-                protocol,
-                rxtx,
-            )
-        # here we avoid using self.log since it would
-        # log to the trace file too but we've already 'traced' the
-        # message if that's the case
-        logger = self.logger
-        if logger.isEnabledFor(self.VERBOSE):
-            header = message[mc.KEY_HEADER]
-            logger._log(
-                self.VERBOSE,
-                "%s(%s) %s %s (messageId:%s) %s",
-                (
-                    rxtx,
-                    protocol,
-                    header[mc.KEY_METHOD],
-                    header[mc.KEY_NAMESPACE],
-                    header[mc.KEY_MESSAGEID],
-                    json_dumps(self.loggable_dict(message)),
-                ),
-            )
-        elif logger.isEnabledFor(self.DEBUG):
-            header = message[mc.KEY_HEADER]
-            logger._log(
-                self.DEBUG,
-                "%s(%s) %s %s (messageId:%s)",
-                (
-                    rxtx,
-                    protocol,
-                    header[mc.KEY_METHOD],
-                    header[mc.KEY_NAMESPACE],
-                    header[mc.KEY_MESSAGEID],
-                ),
-            )
 
     async def _async_button_refresh_press(self):
         """Forces a full poll."""

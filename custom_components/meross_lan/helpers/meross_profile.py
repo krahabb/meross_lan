@@ -6,6 +6,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from time import time
 import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.core import callback
 from homeassistant.helpers import storage
@@ -22,6 +23,7 @@ from ..const import (
     CONF_PASSWORD,
     DOMAIN,
 )
+from ..helpers.obfuscate import OBFUSCATE_DEVICE_ID_MAP, obfuscated_dict
 from ..merossclient import MEROSSDEBUG, HostAddress, get_active_broker
 from ..merossclient.cloudapi import APISTATUS_TOKEN_ERRORS, CloudApiError
 from ..merossclient.mqttclient import MerossMQTTAppClient, generate_app_id
@@ -29,8 +31,8 @@ from ..merossclient.protocol import const as mc, namespaces as mn
 from .manager import CloudApiClient
 from .mqtt_profile import ConnectionSensor, MQTTConnection, MQTTProfile
 
-if typing.TYPE_CHECKING:
-    from typing import Unpack
+if TYPE_CHECKING:
+    from typing import Final, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -55,6 +57,9 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
     # here we're acrobatically slottizing MerossMQTTAppClient
     # since it cannot be slotted itself leading to multiple inheritance
     # "forbidden" slots
+
+    if TYPE_CHECKING:
+        is_cloud_connection: Final[bool]
 
     __slots__ = (
         "_asyncio_loop",
@@ -182,18 +187,28 @@ class MerossProfile(MQTTProfile):
     and/or to manage cloud mqtt connection(s)
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
+        is_cloud_profile: Final[bool]
         config: ProfileConfigType
+
+        KEY_APP_ID: Final
+        KEY_DEVICE_INFO: Final
+        KEY_DEVICE_INFO_TIME: Final
+        KEY_SUBDEVICE_INFO: Final
+        KEY_LATEST_VERSION: Final
+        KEY_LATEST_VERSION_TIME: Final
+        KEY_TOKEN_REQUEST_TIME: Final
+
         _data: MerossProfileStoreType
         _unsub_polling_query_device_info: asyncio.TimerHandle | None
 
-    KEY_APP_ID: typing.Final = "appId"
-    KEY_DEVICE_INFO: typing.Final = "deviceInfo"
-    KEY_DEVICE_INFO_TIME: typing.Final = "deviceInfoTime"
-    KEY_SUBDEVICE_INFO: typing.Final = "__subDeviceInfo"
-    KEY_LATEST_VERSION: typing.Final = "latestVersion"
-    KEY_LATEST_VERSION_TIME: typing.Final = "latestVersionTime"
-    KEY_TOKEN_REQUEST_TIME: typing.Final = "tokenRequestTime"
+    KEY_APP_ID = "appId"
+    KEY_DEVICE_INFO = "deviceInfo"
+    KEY_DEVICE_INFO_TIME = "deviceInfoTime"
+    KEY_SUBDEVICE_INFO = "__subDeviceInfo"
+    KEY_LATEST_VERSION = "latestVersion"
+    KEY_LATEST_VERSION_TIME = "latestVersionTime"
+    KEY_TOKEN_REQUEST_TIME = "tokenRequestTime"
 
     __slots__ = (
         "apiclient",
@@ -206,6 +221,7 @@ class MerossProfile(MQTTProfile):
     def __init__(
         self, profile_id: str, api: "ComponentApi", config_entry: "ConfigEntry"
     ):
+        self.is_cloud_profile = True
         MQTTProfile.__init__(
             self, profile_id, api=api, hass=api.hass, config_entry=config_entry
         )
@@ -319,6 +335,23 @@ class MerossProfile(MQTTProfile):
 
     def get_logger_name(self) -> str:
         return f"profile_{self.loggable_profile_id(self.id)}"
+
+    def loggable_diagnostic_state(self):
+        if self.obfuscate:
+            store_data = obfuscated_dict(self._data)
+            # the profile contains uuid as keys and obfuscation
+            # is not smart enough (but OBFUSCATE_DEVICE_ID_MAP is already
+            # filled with uuid(s) from the profile device_info(s) and
+            # the device_info(s) were already obfuscated in data)
+            store_data[MerossProfile.KEY_DEVICE_INFO] = {
+                OBFUSCATE_DEVICE_ID_MAP[device_id]: device_info
+                for device_id, device_info in store_data[
+                    MerossProfile.KEY_DEVICE_INFO
+                ].items()
+            }
+            return {"store": store_data}
+        else:
+            return {"store": self._data}
 
     # interface: ApiProfile
     def attach_mqtt(self, device: "Device"):

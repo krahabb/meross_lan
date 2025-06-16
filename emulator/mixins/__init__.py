@@ -94,43 +94,100 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         """
         parse a legacy tab separated values meross_lan trace
         """
+        row = next(f).split("\t")
+
+        def _import_legacy_config(_row):
+            ns = mn.Appliance_System_All
+            self.namespaces[ns.name] = {ns.key: json_loads(_row[-1])}
+            _row = next(f).split("\t")
+            ns = mn.Appliance_System_Ability
+            self.namespaces[ns.name] = {ns.key: json_loads(_row[-1])}
+
+        # detect version: lot of heuristic since the structure was not so smart
+        if len(row) == 5:
+            # earlier versions missing 'txrx' - no column headers though
+            # 2 'auto' rows carrying ns.All and ns.Ability from config
+            version = 0
+            _import_legacy_config(row)
+        else:
+            match row[2]:  # 'protocol' column
+                case "auto":
+                    # Version 1: no column headers - trace starting with
+                    # 2 'auto' rows carrying ns.All and ns.Ability from config
+                    version = 1
+                    _import_legacy_config(row)
+                case "protocol":
+                    # Version 2 (and on): we have column headers
+                    columns = row
+                    row = next(f).split("\t")
+                    # first data row contains an 'HEADER' i.e. 'diagnostic like' dict
+                    _header: "mlc.TracingHeaderType" = json_loads(row[-1])
+                    version = _header["version"]
+                    config_payload = _header["config"]["payload"]
+                    ns = mn.Appliance_System_All
+                    self.namespaces[ns.name] = {ns.key: config_payload[ns.key]}
+                    ns = mn.Appliance_System_Ability
+                    self.namespaces[ns.name] = {ns.key: config_payload[ns.key]}
+                    for namespace, payload in _header["state"][
+                        "namespace_pushes"
+                    ].items():
+                        self.namespaces[namespace] = payload
+
         for line in f:
             row = line.split("\t")
-            if len(row) == 5:
+            if not version:
                 row.insert(1, "")  # patch earlier versions missing 'txrx'
-            if row[3] != "LOG":
-                row[-1] = json_loads(row[-1])
-                self._import_tracerow(*row)  # type:ignore
+            if row[2] == "auto":
+                continue
+            row[-1] = json_loads(row[-1])
+            self._import_tracerow(*row)  # type:ignore
 
     def _import_json(self, f: "TextIOWrapper"):
         """
         parse a 'diagnostics' HA trace
         """
         try:
-            _json = json_loads(f.read())
-            _data: dict = _json["data"]
-            columns = None
-            for row in _data["trace"]:
-                if columns is None:
-                    columns = row
-                    # we could parse and setup a 'column search'
-                    # algorithm here should the trace layout change
-                    # right now it's the same as for csv files...
-                else:
-                    if row[3] != "LOG":
-                        self._import_tracerow(*row)
+            _data: dict = json_loads(f.read())["data"]
 
-            _device: dict = _data["device"]
             try:
-                # also add the pushed numespaces if not already traced
-                for namespace, payload in _device["namespace_pushes"].items():
-                    if namespace not in self.namespaces:
-                        self.namespaces[namespace] = payload
-            except:
-                pass
+                version = _data["version"]
+            except KeyError:
+                version = 1
+
+            match version:
+                case 2:
+                    config_payload = _data["config"]["payload"]
+                    pushes = _data["state"]["namespace_pushes"]
+                    rows = iter(_data["trace"])
+                    columns = next(rows)
+                case 1:
+                    config_payload = _data["payload"]
+                    try:
+                        pushes = _data["device"]["namespace_pushes"]
+                    except KeyError:
+                        # earlier versions missing pushes
+                        pushes = {}
+                    rows = iter(_data["trace"])
+                    columns = next(rows)
+                    # mandatory All and Ability stored in the first 2 rows
+                    # now loaded from _config before parsing trace rows
+                    next(rows)
+                    next(rows)
+
+            ns = mn.Appliance_System_All
+            self.namespaces[ns.name] = {ns.key: config_payload[ns.key]}
+            ns = mn.Appliance_System_Ability
+            self.namespaces[ns.name] = {ns.key: config_payload[ns.key]}
+            for namespace, payload in pushes.items():
+                self.namespaces[namespace] = payload
+
+            for row in rows:
+                if row[2] == "auto":
+                    continue
+                self._import_tracerow(*row)
 
         except:
-            pass
+            raise
 
         return
 
@@ -146,19 +203,10 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
 
         match method:
             case mc.METHOD_PUSH:
-                if rxtx == "RX":
-                    if namespace not in self.namespaces:
-                        self.namespaces[namespace] = (
-                            {mn.NAMESPACES[namespace].key: data}
-                            if protocol == mlc.CONF_PROTOCOL_AUTO
-                            else data
-                        )
+                if rxtx == "RX" and (namespace not in self.namespaces):
+                    self.namespaces[namespace] = data
             case mc.METHOD_GETACK:
-                self.namespaces[namespace] = (
-                    {mn.NAMESPACES[namespace].key: data}
-                    if protocol == mlc.CONF_PROTOCOL_AUTO
-                    else data
-                )
+                self.namespaces[namespace] = data
             case mc.METHOD_SETACK:
                 if namespace == mn.Appliance_Control_Multiple.name:
                     for message in data[mc.KEY_MULTIPLE]:

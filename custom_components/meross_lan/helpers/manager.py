@@ -278,7 +278,6 @@ class ConfigEntryManager(EntityManager):
 
         try:
             config_entry = kwargs["config_entry"]  # type: ignore
-            config_entry.runtime_data = self
             self.config = config = config_entry.data
             self.key = config.get(CONF_KEY) or ""
             self.obfuscate = config.get(CONF_OBFUSCATE, True)
@@ -355,12 +354,18 @@ class ConfigEntryManager(EntityManager):
         self, hass: "HomeAssistant", config_entry: "ConfigEntry"
     ):
         assert self.config_entry == config_entry
+        config_entry.runtime_data = self
         api = self.api
-        # open the trace before adding the entities
-        # so we could catch logs in this phase too
-        state = api.managers_transient_state.setdefault(config_entry.entry_id, {})
-        if state.pop(mlc.CONF_TRACE, None):
-            await self.async_trace_open()
+        # open the (eventual) trace before adding the entities
+        # so we could catch logs in this phase too. See
+        # OptionsFlow.async_step_diagnostics for the mechanic.
+        try:
+            await self.async_trace_open(
+                api.managers_transient_state[config_entry.entry_id].pop(mlc.CONF_TRACE)
+            )
+        except KeyError:
+            # no CONF_TRACE key and/or no config_entry.entry_id...no tracing configured
+            pass
 
         if self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES):
             await self.async_create_diagnostic_entities()
@@ -443,6 +448,14 @@ class ConfigEntryManager(EntityManager):
         """Conditionally obfuscate the dict values (based off OBFUSCATE_KEYS) to send to logging/tracing"""
         return obfuscated_dict(value) if self.obfuscate else value
 
+    def loggable_config(self):
+        """Return a 'loggable' version of the entry config (for diagnostic/logging purposes)"""
+        return obfuscated_dict(self.config) if self.obfuscate else dict(self.config)
+
+    def loggable_diagnostic_state(self):
+        """Return a 'loggable' version of the entry state (for diagnostic/logging purposes)"""
+        return {}
+
     def loggable_broker(self, broker: "HostAddress | str"):
         """Conditionally obfuscate the connection_id (which is a broker address host:port) to send to logging/tracing"""
         return (
@@ -469,7 +482,14 @@ class ConfigEntryManager(EntityManager):
     def is_tracing(self):
         return self._trace_file or self._trace_data
 
-    async def async_trace_open(self):
+    async def async_trace_open(self, p_trace_data: dict | None = None, /):
+        """
+        This method could be called either when activating 'tracing' in OptionsFlow so
+        that it opens the (tab separated) file or when 'download diagnostic' is unable
+        to produce an output 'in sync' (async_get_diagnostics). A Device object could
+        fail to produce an immediate result and so fallback to a kind of hybrid tracing
+        with both a file and a json struct (_trace_data) being built in memory.
+        """
         try:
             self.log(self.DEBUG, "Tracing start")
             epoch = time()
@@ -489,7 +509,7 @@ class ConfigEntryManager(EntityManager):
                     encoding="utf8",
                 )
 
-            self._trace_file = await hass.async_add_executor_job(_trace_open)
+            self._trace_file = _t = await hass.async_add_executor_job(_trace_open)
 
             @callback
             def _trace_close_callback():
@@ -501,10 +521,28 @@ class ConfigEntryManager(EntityManager):
                 or mlc.CONF_TRACE_TIMEOUT_DEFAULT,
                 _trace_close_callback,
             )
+
+            if p_trace_data is not None:
+                # p_trace_data is a fragile indication we're being called to
+                # output a 'debug trace' and not a 'diagnostic'. We'll
+                # then add here the same data that are usually output
+                # to the diagnostics platform.
+                _t.write("\t".join(mlc.CONF_TRACE_COLUMNS) + "\r\n")
+                self.trace(
+                    epoch,
+                    {
+                        "version": mlc.CONF_TRACE_VERSION,
+                        "config": self.loggable_config(),
+                        "state": p_trace_data,
+                    },
+                    "",
+                    "HEADER",
+                )
+
             self._trace_opened(epoch)
             pn.async_create(
                 self.hass,
-                f"Device: {self.name}\nFile: {self._trace_file.name}",  # type: ignore
+                f"Device: {self.name}\nFile: {_t.name}",  # type: ignore
                 "meross_lan tracing started",
                 f"{DOMAIN}.{self.id}.tracing",
             )
@@ -561,10 +599,16 @@ class ConfigEntryManager(EntityManager):
         epoch: float,
         payload: "MerossPayloadType",
         namespace: str,
-        method: str = mc.METHOD_GETACK,
+        method: str = "",
         protocol: str = CONF_PROTOCOL_AUTO,
         rxtx: str = "",
+        /,
     ):
+        """
+        A trace typically contains protocol transactions characterized by 'protocol' and 'rxtx'.
+        When (protocol == CONF_PROTOCOL_AUTO) it means the row contains 'extra' informations
+        like logs (see trace_log) or config, diagnostics, state, etc.
+        """
         try:
             data = self.loggable_dict(payload)
             columns = [
@@ -595,12 +639,12 @@ class ConfigEntryManager(EntityManager):
         try:
             columns = [
                 strftime("%Y/%m/%d - %H:%M:%S", localtime(time())),
-                "",
-                CONF_PROTOCOL_AUTO,
-                "LOG",
+                "",  # rxtx
+                CONF_PROTOCOL_AUTO,  # protocol
+                "LOG",  # method
                 mlc.CONF_LOGGING_LEVEL_OPTIONS.get(level)
-                or logging.getLevelName(level),
-                msg,
+                or logging.getLevelName(level),  # namespace
+                msg,  # data
             ]
             if self._trace_data:
                 self._trace_data.append(columns)
@@ -611,6 +655,14 @@ class ConfigEntryManager(EntityManager):
 
         except Exception as exception:
             self.trace_close(exception, "appending log")
+
+    async def async_get_diagnostics(self) -> "mlc.TracingHeaderType":
+        # used to return diagnostic data for this manager ConfigEntry (see diagnostics.py)
+        return {
+            "version": mlc.CONF_TRACE_VERSION,
+            "config": self.loggable_config(),
+            "state": self.loggable_diagnostic_state(),
+        }
 
     def _cleanup_subscriptions(self):
         if self._unsub_entry_update_listener:

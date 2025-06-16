@@ -2,19 +2,25 @@
 
 import enum
 import logging
-from typing import Final, NotRequired, TypedDict
+from typing import Final, NotRequired, TypedDict, TYPE_CHECKING
 
 from homeassistant import const as hac
 
 from .merossclient import cloudapi
 from .merossclient.protocol import const as mc
 
+if TYPE_CHECKING:
+    from typing import Any, Mapping
+
+
 DOMAIN: Final = "meross_lan"
+
 
 class DeviceType(enum.Enum):
     DEVICE = 1
     HUB = 2
     SUBDEVICE = 3
+
 
 #########################
 # common ConfigEntry keys
@@ -45,6 +51,16 @@ CONF_TRACE_TIMEOUT_DEFAULT: Final = 600
 CONF_TRACE_MAXSIZE: Final = 262144  # or when MAXSIZE exceeded
 # folder where to store traces
 CONF_TRACE_DIRECTORY: Final = "traces"
+# versioning
+CONF_TRACE_VERSION: Final = 2
+CONF_TRACE_COLUMNS: Final = ["time", "rxtx", "protocol", "method", "namespace", "data"]
+if TYPE_CHECKING:
+
+    class TracingHeaderType(TypedDict):
+        version: int
+        config: Mapping[str, Any]
+        state: Mapping[str, Any]
+        trace: NotRequired[list[list]]
 
 
 class ManagerConfigType(TypedDict):

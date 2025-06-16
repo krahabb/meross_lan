@@ -58,6 +58,8 @@ MIXIN_DIGEST_INIT = {
 class HAMQTTConnection(MQTTConnection):
 
     if typing.TYPE_CHECKING:
+        is_cloud_connection: Final[bool]
+
         _unsub_mqtt_subscribe: Callable | None
         _unsub_mqtt_disconnected: Callable | None
         _unsub_mqtt_connected: Callable | None
@@ -85,6 +87,7 @@ class HAMQTTConnection(MQTTConnection):
         self._unsub_mqtt_connected = None
         self._mqtt_subscribe_future = None
         if MEROSSDEBUG:
+
             async def _async_random_disconnect():
                 self._unsub_random_disconnect = api.schedule_async_callback(
                     60, _async_random_disconnect
@@ -316,6 +319,8 @@ class ComponentApi(MQTTProfile):
     """
 
     if typing.TYPE_CHECKING:
+        is_cloud_profile: Final[bool]
+
         devices: Final[dict[str, Device | None]]
         """
         dict of configured devices. Every device config_entry in the system is mapped here and
@@ -394,6 +399,7 @@ class ComponentApi(MQTTProfile):
         return None
 
     def __init__(self, hass: "HomeAssistant"):
+        self.is_cloud_profile = False
         MQTTProfile.__init__(self, mlc.CONF_PROFILE_ID_LOCAL, api=self, hass=hass)
         self.devices = {}
         self.profiles = {}
