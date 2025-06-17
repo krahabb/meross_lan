@@ -707,11 +707,6 @@ class NamespaceHandler:
                     await async_request_func(
                         ns_name, mc.METHOD_GET, {ns_key: channel_payload}
                     )
-                # and maybe this...more exotic but who knows...
-                # payload like: {"ns_key": { "channel": [0, 1, 2, 3]}}
-                await async_request_func(
-                    ns_name, mc.METHOD_GET, {ns_key: {ns_key_channel: list(channels)}}
-                )
                 # Also check if hub namespaces indexed by "subId" maybe also need a "channel"
                 if ns_key_channel == mc.KEY_SUBID:
                     await async_request_func(

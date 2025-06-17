@@ -514,7 +514,7 @@ Appliance_Control_TempUnit = ns(
     "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, ARGS_GETSET | P_LIST_C
 )
 Appliance_Control_Timer = ns(
-    "Appliance.Control.Timer", mc.KEY_TIMER, ARGS_GET | P_LIST | G_EXPERIMENTAL
+    "Appliance.Control.Timer", mc.KEY_TIMER, ARGS_GET | P_LIST
 )
 Appliance_Control_TimerX = ns("Appliance.Control.TimerX", mc.KEY_TIMERX, ARGS_NO_Q)
 Appliance_Control_Toggle = ns(

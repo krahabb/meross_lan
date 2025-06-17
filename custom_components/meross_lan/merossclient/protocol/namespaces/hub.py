@@ -51,7 +51,9 @@ Appliance_Hub_Battery = mn.ns(
 Appliance_Hub_Exception = mn.ns(
     "Appliance.Hub.Exception", mc.KEY_EXCEPTION, mn.ARGS_PUSH | IS_HUB_ID | mn.P_LIST_C
 )
-Appliance_Hub_ExtraInfo = mn.ns("Appliance.Hub.ExtraInfo", "extraInfo", mn.ARGS_GET | MAP_HUB)
+Appliance_Hub_ExtraInfo = mn.ns(
+    "Appliance.Hub.ExtraInfo", "extraInfo", mn.ARGS_GET | MAP_HUB
+)
 Appliance_Hub_Online = mn.ns(
     "Appliance.Hub.Online", mc.KEY_ONLINE, mn.ARGS_GETPUSH | IS_HUB_ID
 )
@@ -77,7 +79,7 @@ Appliance_Hub_Mts100_All = mn.ns(
 Appliance_Hub_Mts100_Config = mn.ns(
     "Appliance.Hub.Mts100.Config",
     mc.KEY_CONFIG,
-    mn.ARGS_GETSET | IS_HUB_ID | mn.G_EXPERIMENTAL,  # maybe push too
+    mn.ARGS_GETSET | IS_HUB_ID,
 )
 Appliance_Hub_Mts100_Mode = mn.ns(
     "Appliance.Hub.Mts100.Mode", mc.KEY_MODE, mn.ARGS_GETSETPUSH | IS_HUB_ID
