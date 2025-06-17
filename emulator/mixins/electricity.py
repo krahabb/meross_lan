@@ -29,7 +29,6 @@ class ElectricityMixin(MerossEmulator if TYPE_CHECKING else object):
         self.electricity = self.payload_electricity[mc.KEY_ELECTRICITY]
         self.voltage_average: int = self.electricity[mc.KEY_VOLTAGE] or 2280
         self.power = self.electricity[mc.KEY_POWER]
-        self._power_set = None
 
     def set_power(self, power: int | None):
         self._power_set = power
@@ -49,14 +48,15 @@ class ElectricityMixin(MerossEmulator if TYPE_CHECKING else object):
         }
         """
         if self._power_set is None:
-            if randint(0, 5) == 0:
+            noise = randint(-10, 10) * 1000
+            if randint(0, 3) == 0:
                 # make a big power step
-                power = self.power + randint(-1000000, 1000000)
+                power = self.power + randint(-20, 20) * noise
             else:
                 # make some noise
-                power = self.power + randint(-1000, 1000)
+                power = self.power + noise
             if power > 3600000:
-                power = 3600000
+                power = 2400000
             elif power < 0:
                 power = 0
         else:
