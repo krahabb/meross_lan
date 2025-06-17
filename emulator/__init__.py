@@ -15,6 +15,7 @@ set of emulators from all the traces stored in a path.
 """
 
 import os
+from typing import TYPE_CHECKING
 
 from aiohttp import web
 
@@ -58,6 +59,10 @@ from custom_components.meross_lan.merossclient.protocol.namespaces import (
 )
 
 from .mixins import MerossEmulator, MerossEmulatorDescriptor
+
+
+if TYPE_CHECKING:
+    from typing import Iterable
 
 
 def build_emulator(
@@ -142,13 +147,14 @@ def build_emulator(
     return emulator
 
 
-def generate_emulators(
+def build_emulators(
     tracespath: str,
     *,
     key: str,
     uuid: str,
     broker: str | None = None,
     userId: int | None = None,
+    included_uuid: "Iterable[str] | None" = None,
 ):
     """
     This function is a generator.
@@ -183,10 +189,14 @@ def generate_emulators(
                 _broker = _f[1:].strip()
             elif _f.startswith("A"):
                 _userId = int(_f[1:].strip())
-        if _uuid is None:
+        if _uuid:
+            if included_uuid and (_uuid not in included_uuid):
+                continue
+        else:
             uuidsub = uuidsub + 1
             _uuidsub = str(uuidsub)
             _uuid = uuid[: -len(_uuidsub)] + _uuidsub
+
         yield build_emulator(
             fullpath, key=_key, uuid=_uuid, broker=_broker, userId=_userId
         )
@@ -234,7 +244,7 @@ def run(argv):
     if os.path.isdir(tracefilepath):
         emulators = {
             emulator.uuid: emulator
-            for emulator in generate_emulators(
+            for emulator in build_emulators(
                 tracefilepath, key=key, uuid=uuid, broker=broker, userId=userId
             )
         }

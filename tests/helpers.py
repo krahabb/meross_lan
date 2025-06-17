@@ -8,7 +8,7 @@ import hashlib
 import logging
 import re
 import time
-import typing
+from typing import TYPE_CHECKING
 from unittest.mock import ANY, MagicMock, patch
 
 import aiohttp
@@ -22,7 +22,6 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed_exact,
 )
 from pytest_homeassistant_custom_component.test_util.aiohttp import (
-    AiohttpClientMocker,
     AiohttpClientMockResponse,
 )
 
@@ -39,11 +38,11 @@ from custom_components.meross_lan.merossclient import (
     json_loads,
 )
 from custom_components.meross_lan.merossclient.protocol import const as mc
-from emulator import MerossEmulator, build_emulator as emulator_build_emulator
+import emulator
 
 from . import const as tc
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from typing import (
         Any,
         Callable,
@@ -76,6 +75,9 @@ if typing.TYPE_CHECKING:
     MqttMockHAClientGenerator = Callable[..., Coroutine[Any, Any, MqttMockHAClient]]
 
     from pytest import CaptureFixture, FixtureRequest, LogCaptureFixture
+    from pytest_homeassistant_custom_component.test_util.aiohttp import (
+        AiohttpClientMocker,
+    )
 
     from custom_components.meross_lan.helpers.component_api import ComponentApi
     from custom_components.meross_lan.helpers.device import Device
@@ -84,6 +86,8 @@ if typing.TYPE_CHECKING:
         MerossMessage,
         MerossResponse,
     )
+
+    from emulator import MerossEmulator
 
 LOGGER = logging.getLogger("meross_lan.tests")
 
@@ -342,7 +346,7 @@ class LogManager:
 
     MEROSS_LAN_LOGGER: "Final" = r"custom_components\.meross_lan.*"
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
 
         class Args(TypedDict):
             pass
@@ -453,7 +457,7 @@ class LogManager:
 
 class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
 
         class Args(TypedDict):
             data: NotRequired[Mapping[str, Any]]
@@ -545,7 +549,7 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
 
 class MQTTHubEntryMocker(ConfigEntryMocker):
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
 
         class Args(ConfigEntryMocker.Args):
             pass
@@ -560,7 +564,7 @@ class MQTTHubEntryMocker(ConfigEntryMocker):
 
 class ProfileEntryMocker(ConfigEntryMocker):
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
 
         class Args(ConfigEntryMocker.Args):
             pass
@@ -588,10 +592,10 @@ def build_emulator(
     uuid: str = tc.MOCK_DEVICE_UUID,
     broker: str | None = None,
     userId: int | None = None,
-) -> MerossEmulator:
+) -> "MerossEmulator":
     # Watchout: this call will not use the uuid and key set
     # in the filename, just DEFAULT_UUID and DEFAULT_KEY
-    return emulator_build_emulator(
+    return emulator.build_emulator(
         tc.EMULATOR_TRACES_PATH + tc.EMULATOR_TRACES_MAP[model],
         key=key,
         uuid=uuid,
@@ -605,7 +609,7 @@ def build_emulator_for_profile(
     *,
     model: str | None = None,
     device_id=tc.MOCK_DEVICE_UUID,
-) -> MerossEmulator:
+) -> "MerossEmulator":
     """
     This call will setup the emulator patching its configuration
     in order to be 'binded' to the provided cloud profile data.
@@ -647,7 +651,7 @@ def build_emulator_for_profile(
 
 
 def build_emulator_config_entry(
-    emulator: MerossEmulator, config_data: "Mapping | None" = None
+    emulator: "MerossEmulator", config_data: "Mapping | None" = None
 ):
     """
     Builds a consistent config_entry for an emulated device with HTTP communication.
@@ -677,11 +681,26 @@ def build_emulator_config_entry(
     return data
 
 
+def build_emulators():
+    return emulator.build_emulators(
+        tc.EMULATOR_TRACES_PATH,
+        key=tc.MOCK_KEY,
+        uuid=tc.MOCK_DEVICE_UUID,
+    )
+    """
+    included_uuid=(
+            "01234567890123456789012345678925",
+            "01234567890123456789012345678926",
+            "01234567890123456789012345678927",
+    )
+    """
+
+
 class EmulatorContext(contextlib.AbstractContextManager):
     def __init__(
         self,
-        emulator: MerossEmulator | str,
-        aioclient_mock: AiohttpClientMocker,
+        emulator: "MerossEmulator | str",
+        aioclient_mock: "AiohttpClientMocker",
         *,
         frozen_time: "_TimeFactory | None" = None,
         host: str | None = None,
@@ -724,7 +743,7 @@ class DeviceContext(ConfigEntryMocker):
     It also provides timefreezing
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
 
         class Args(ConfigEntryMocker.Args):
             time: NotRequired[TimeMocker | datetime | None]
@@ -750,8 +769,8 @@ class DeviceContext(ConfigEntryMocker):
         self,
         request: "FixtureRequest",
         hass: "HomeAssistant",
-        emulator: MerossEmulator | str,
-        aioclient_mock: AiohttpClientMocker,
+        emulator: "MerossEmulator | str",
+        aioclient_mock: "AiohttpClientMocker",
         **kwargs: "Unpack[Args]",
     ):
         if isinstance(emulator, str):
@@ -876,7 +895,7 @@ class CloudApiMocker(contextlib.AbstractContextManager):
     Emulates the Meross server side api by leveraging aioclient_mock
     """
 
-    def __init__(self, aioclient_mock: AiohttpClientMocker, online: bool = True):
+    def __init__(self, aioclient_mock: "AiohttpClientMocker", online: bool = True):
         self.aioclient_mock = aioclient_mock
         self.online = online
         self.api_calls: dict[str, int] = {}

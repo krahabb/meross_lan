@@ -1,11 +1,10 @@
 """Test meross_lan config entry setup"""
 
 import asyncio
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant import const as hac
 from homeassistant.config_entries import ConfigEntryState
-from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.helpers.component_api import ComponentApi
@@ -14,12 +13,15 @@ from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
 )
-from emulator import generate_emulators
 
 from tests import const as tc, helpers
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+
+    from pytest_homeassistant_custom_component.test_util.aiohttp import (
+        AiohttpClientMocker,
+    )
 
 
 # We can pass fixtures as defined in conftest.py to tell pytest to use the fixture
@@ -62,7 +64,7 @@ async def test_mqtthub_entry_notready(request, hass: "HomeAssistant"):
 
 
 async def test_device_entry(
-    request, hass: "HomeAssistant", aioclient_mock: AiohttpClientMocker
+    request, hass: "HomeAssistant", aioclient_mock: "AiohttpClientMocker"
 ):
     """
     Generic device setup testing:
@@ -73,9 +75,7 @@ async def test_device_entry(
     by communicating to MerossEmulator through the aioclient_mock
     i.e. we're testing something close to http connected devices
     """
-    for emulator in generate_emulators(
-        tc.EMULATOR_TRACES_PATH, key=tc.MOCK_KEY, uuid=tc.MOCK_DEVICE_UUID
-    ):
+    for emulator in helpers.build_emulators():
         async with helpers.DeviceContext(
             request, hass, emulator, aioclient_mock
         ) as context:

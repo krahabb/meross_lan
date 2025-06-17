@@ -3,19 +3,23 @@ Tests the HA diagnostics and device tracing feature
 """
 
 import asyncio
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.diagnostics import async_get_device_diagnostics
 from custom_components.meross_lan.merossclient.protocol import const as mc
-from emulator import generate_emulators
 
 from tests import const as tc, helpers
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+
+    from pytest_homeassistant_custom_component.test_util.aiohttp import (
+        AiohttpClientMocker,
+    )
+
 
 async def _async_configure_options_tracing(entry_mock: helpers.ConfigEntryMocker):
     hass = entry_mock.hass
@@ -99,13 +103,11 @@ async def test_profile_tracing(
 async def test_device_diagnostics(
     request,
     hass: "HomeAssistant",
-    aioclient_mock: helpers.AiohttpClientMocker,
-    time_mock: helpers.TimeMocker,
+    aioclient_mock: "AiohttpClientMocker",
+    time_mock: "helpers.TimeMocker",
 ):
 
-    for emulator in generate_emulators(
-        tc.EMULATOR_TRACES_PATH, key=tc.MOCK_KEY, uuid=tc.MOCK_DEVICE_UUID
-    ):
+    for emulator in helpers.build_emulators():
         async with helpers.DeviceContext(
             request, hass, emulator, aioclient_mock, time=time_mock
         ) as context:
@@ -121,13 +123,13 @@ async def test_device_diagnostics(
 
 
 async def test_device_tracing(
-    request, hass: "HomeAssistant", aioclient_mock: helpers.AiohttpClientMocker
+    request, hass: "HomeAssistant", aioclient_mock: "AiohttpClientMocker"
 ):
 
-    for emulator in generate_emulators(
-        tc.EMULATOR_TRACES_PATH, key=tc.MOCK_KEY, uuid=tc.MOCK_DEVICE_UUID
-    ):
-        async with helpers.DeviceContext(request, hass, emulator, aioclient_mock) as context:
+    for emulator in helpers.build_emulators():
+        async with helpers.DeviceContext(
+            request, hass, emulator, aioclient_mock
+        ) as context:
             await context.perform_coldstart()
             await _async_configure_options_tracing(context)
             # We now need to 'coldstart' again the device

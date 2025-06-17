@@ -1,7 +1,6 @@
 """Test meross_lan config flow"""
 
-import typing
-from typing import Final
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from homeassistant import config_entries
@@ -15,7 +14,6 @@ except ImportError:
     from homeassistant.components.dhcp import DhcpServiceInfo  # type: ignore
 
 from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
-from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.merossclient import (
@@ -37,8 +35,12 @@ except ImportError:
     discovery_flow = None
 
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+
+    from pytest_homeassistant_custom_component.test_util.aiohttp import (
+        AiohttpClientMocker,
+    )
 
 
 async def _cleanup_config_entry(hass: "HomeAssistant", result: ConfigFlowResult):
@@ -161,7 +163,7 @@ async def test_profile_config_flow(
 
 async def test_device_config_flow_with_profile(
     hass: "HomeAssistant",
-    aioclient_mock: AiohttpClientMocker,
+    aioclient_mock: "AiohttpClientMocker",
     cloudapi_mock: helpers.CloudApiMocker,
     merossmqtt_mock: helpers.MerossMQTTMocker,
 ):
@@ -245,7 +247,7 @@ async def test_mqtt_discovery_config_flow(hass: "HomeAssistant", hamqtt_mock):
     async_fire_mqtt_message(hass, topic, json_dumps(payload))
     await hass.async_block_till_done()
 
-    flow: Final = hass.config_entries.flow
+    flow = hass.config_entries.flow
     # we should have 2 flows now: one for the MQTT hub and the other for the
     # incoming device but this second one needs the time to progress in order to show up
     # so we're not checking now (#TODO: warp the test time so discovery will complete)
@@ -382,8 +384,8 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
     When an entry is already configured, check what happens when dhcp sends
     us a new ip
     """
-    device_type: Final = mc.TYPE_MTS200
-    flow: Final = hass.config_entries.flow
+    device_type = mc.TYPE_MTS200
+    flow = hass.config_entries.flow
 
     async with helpers.DeviceContext(
         request, hass, device_type, aioclient_mock
@@ -394,7 +396,7 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
         # better be sure our context is consistent with expectations!
         assert device.host == str(id(emulator))
         assert device.id == device.descriptor.uuid
-        device_macaddress: Final = device.descriptor.macAddress
+        device_macaddress = device.descriptor.macAddress
         # since we check the DHCP renewal comes form a legit device we need to setup
         # a mock responding at the solicited ip with the same device info (descriptor)
         # since dhcp config flow will check by mac address
@@ -410,7 +412,7 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
             emulator_dhcp.descriptor.uuid == device.descriptor.uuid
         ), "wrong emulator clone"
         # now we mock the device emulator at new address
-        DHCP_GOOD_HOST: Final = "88.88.88.88"
+        DHCP_GOOD_HOST = "88.88.88.88"
         with helpers.EmulatorContext(
             emulator_dhcp, aioclient_mock, host=DHCP_GOOD_HOST
         ):
@@ -427,7 +429,7 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
             assert device.host == DHCP_GOOD_HOST, "device host was not updated"
 
         # here we build a different (device uuid) device instance
-        BOGUS_DEVICE_ID: Final = uuid4().hex
+        BOGUS_DEVICE_ID = uuid4().hex
         emulator_dhcp = helpers.build_emulator(
             device_type, key=device.key, uuid=BOGUS_DEVICE_ID
         )
@@ -438,7 +440,7 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
             emulator_dhcp.descriptor.uuid != device.descriptor.uuid
         ), "wrong emulator clone"
         # now we mock the device emulator at new address
-        DHCP_BOGUS_HOST: Final = "99.99.99.99"
+        DHCP_BOGUS_HOST = "99.99.99.99"
         with helpers.EmulatorContext(
             emulator_dhcp, aioclient_mock, host=DHCP_BOGUS_HOST
         ):
