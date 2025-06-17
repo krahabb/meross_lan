@@ -195,7 +195,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         self.sensor_current_temperature = MLTemperatureSensor(manager, channel)
         self.sensor_current_temperature.entity_registry_enabled_default = False
 
-        self._core_config_update_unsub = manager.hass.bus.async_listen_once(
+        self._core_config_update_unsub = manager.hass.bus.async_listen(
             self.hac.EVENT_CORE_CONFIG_UPDATE, self._async_core_config_update
         )
 
