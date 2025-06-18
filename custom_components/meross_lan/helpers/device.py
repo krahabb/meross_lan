@@ -11,7 +11,7 @@ import aiohttp
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
-from homeassistant.util import dt as dt_util
+from homeassistant.util import dt as dt_util, slugify
 import voluptuous as vol
 
 from . import datetime_from_epoch
@@ -82,11 +82,11 @@ if TYPE_CHECKING:
     from .mqtt_profile import MQTTConnection, MQTTProfile
     from .namespaces import NamespaceParser
 
-    DigestParseFunc = Callable[[dict], None] | Callable[[list], None]
-    DigestInitReturnType = tuple[DigestParseFunc, Iterable[NamespaceHandler]]
-    DigestInitFunc = Callable[["Device", Any], DigestInitReturnType]
-    NamespaceInitFunc = Callable[["Device"], None]
-    AsyncRequestFunc = Callable[
+    type DigestParseFunc = Callable[[dict], None] | Callable[[list], None]
+    type DigestInitReturnType = tuple[DigestParseFunc, Iterable[NamespaceHandler]]
+    type DigestInitFunc = Callable[["Device", Any], DigestInitReturnType]
+    type NamespaceInitFunc = Callable[["Device"], None]
+    type AsyncRequestFunc = Callable[
         [str, str, MerossPayloadType], CoroutineType[Any, Any, MerossResponse | None]
     ]
 
@@ -316,6 +316,7 @@ class Device(BaseDevice, ConfigEntryManager):
     DIGEST_INIT = {
         mc.KEY_FAN: ".fan",
         mc.KEY_LIGHT: ".light",
+        "light.effect": ".light",
         mc.KEY_TIMER: digest_init_empty,
         mc.KEY_TIMERX: digest_init_empty,
         mc.KEY_TOGGLE: ".switch",
@@ -612,12 +613,13 @@ class Device(BaseDevice, ConfigEntryManager):
                     # KeyError: key is unknown to our code (fallback to lookup ".devices.{key_digest}")
                     # TypeError: key is a string containing the module path
                     try:
+                        key_slug = slugify(key_digest)
                         _module_path = Device.DIGEST_INIT.get(
-                            key_digest, f".devices.{key_digest}"
+                            key_digest, f".devices.{key_slug}"
                         )
                         digest_init_func: "DigestInitFunc" = getattr(
                             await api.async_import_module(_module_path),
-                            f"digest_init_{key_digest}",
+                            f"digest_init_{key_slug}",
                         )
                     except Exception as exception:
                         self.log_exception(
@@ -1341,7 +1343,7 @@ class Device(BaseDevice, ConfigEntryManager):
                     if (
                         handler.polling_response_size + multiple_response_size
                     ) < self.device_response_size_max:
-                        handler.lastrequest = time()
+                        handler.lastrequest = self._polling_epoch
                         handler.polling_epoch_next = (
                             handler.lastrequest + handler.polling_period
                         )

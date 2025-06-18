@@ -401,7 +401,9 @@ class NamespaceHandler:
                     key = f"{ns.slug}_{key}"
                     for payload in payload:
                         # not having a "channel" in the list payloads is unexpected so far
-                        self._parse_undefined_dict(key, payload, payload[ns.key_channel])
+                        self._parse_undefined_dict(
+                            key, payload, payload[ns.key_channel]
+                        )
 
     def parse_list(self, digest: list, /):
         """twin method for _handle (same job - different context).
@@ -421,10 +423,10 @@ class NamespaceHandler:
         """twin method for _handle (same job - different context).
         Used when parsing digest(s) in NS_ALL"""
         try:
-            key_channel = self.ns.key_channel
             if type(digest) is dict:
-                self.parsers[digest.get(key_channel)](digest)
+                self.parsers[digest.get(self.ns.key_channel)](digest)
             else:
+                key_channel = self.ns.key_channel
                 for p_channel in digest:
                     try:
                         _parse = self.parsers[p_channel[key_channel]]
@@ -630,7 +632,9 @@ class NamespaceHandler:
             if (ns.has_get is False) and (ns.has_push_query is False):
                 # corresponding to _ns_no_query definitions in merossclient.namespaces
                 return
-            if (ns.request_payload_type is mn.PayloadType.LIST_C) and (not self.polling_request_channels):
+            if (ns.request_payload_type is mn.PayloadType.LIST_C) and (
+                not self.polling_request_channels
+            ):
                 # when a 'LIST_C' namespace has no registered parsers, self.polling_request will fail
                 # so we use the mocked default request
                 await async_request_func(*ns.request_default)

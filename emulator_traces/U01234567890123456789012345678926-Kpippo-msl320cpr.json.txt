@@ -1,0 +1,2239 @@
+{
+  "home_assistant": {
+    "installation_type": "Home Assistant OS",
+    "version": "2025.6.1",
+    "dev": false,
+    "hassio": true,
+    "virtualenv": false,
+    "python_version": "3.13.3",
+    "docker": true,
+    "arch": "aarch64",
+    "timezone": "Europe/Rome",
+    "os_name": "Linux",
+    "os_version": "6.6.74-haos-raspi",
+    "supervisor": "2025.05.5",
+    "host_os": "Home Assistant OS 15.2",
+    "docker_version": "28.0.4",
+    "chassis": "embedded",
+    "run_as_root": true
+  },
+  "custom_components": {
+    "sonoff": {
+      "documentation": "https://github.com/AlexxIT/SonoffLAN",
+      "version": "3.8.2",
+      "requirements": [
+        "pycryptodome>=3.6.6"
+      ]
+    },
+    "hacs": {
+      "documentation": "https://hacs.xyz/docs/use/",
+      "version": "2.0.5",
+      "requirements": [
+        "aiogithubapi>=22.10.1"
+      ]
+    },
+    "hekr": {
+      "documentation": "https://github.com/Telectroboy/hass-hekr-component",
+      "version": "v0.2.18",
+      "requirements": [
+        "hekrapi==0.3.1"
+      ]
+    },
+    "localtuya": {
+      "documentation": "https://github.com/xZetsubou/hass-localtuya/",
+      "version": "2025.5.1",
+      "requirements": []
+    },
+    "meross_lan": {
+      "documentation": "https://github.com/krahabb/meross_lan",
+      "version": "5.5.0",
+      "requirements": []
+    },
+    "smartthinq_sensors": {
+      "documentation": "https://github.com/ollo69/ha-smartthinq-sensors",
+      "version": "0.41.1",
+      "requirements": [
+        "pycountry>=23.12.11",
+        "xmltodict>=0.13.0",
+        "charset_normalizer>=3.2.0"
+      ]
+    },
+    "rpi_gpio": {
+      "documentation": "https://github.com/thecode/ha-rpi_gpio",
+      "version": "2025.2.1",
+      "requirements": [
+        "gpiod>=2.2.1"
+      ]
+    },
+    "home_connect_alt": {
+      "documentation": "https://github.com/ekutner/home-connect-hass",
+      "version": "1.2.1",
+      "requirements": [
+        "home-connect-async==0.8.2"
+      ]
+    },
+    "zcsazzurro": {
+      "documentation": "https://github.com/aturri/ha-zcsazzurro",
+      "version": "0.1.0",
+      "requirements": [
+        "flatdict==4.0.1"
+      ]
+    },
+    "scheduler": {
+      "documentation": "https://github.com/nielsfaber/scheduler-component",
+      "version": "v0.0.0",
+      "requirements": []
+    }
+  },
+  "integration_manifest": {
+    "domain": "meross_lan",
+    "name": "Meross LAN",
+    "after_dependencies": [
+      "mqtt",
+      "dhcp",
+      "recorder",
+      "persistent_notification"
+    ],
+    "codeowners": [
+      "krahabb"
+    ],
+    "config_flow": true,
+    "dhcp": [
+      {
+        "hostname": "*",
+        "macaddress": "48E1E9*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "C4E7AE*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "34298F1*"
+      },
+      {
+        "registered_devices": true
+      }
+    ],
+    "documentation": "https://github.com/krahabb/meross_lan",
+    "integration_type": "hub",
+    "iot_class": "local_polling",
+    "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
+    "loggers": [
+      "custom_components.meross_lan"
+    ],
+    "mqtt": [
+      "/appliance/+/publish"
+    ],
+    "requirements": [],
+    "version": "5.5.0",
+    "is_built_in": false,
+    "overwrites_built_in": false
+  },
+  "setup_times": {
+    "null": {
+      "setup": 5.613001121673733e-05
+    },
+    "68c08b5131ad7fbb2ced7b4501ffecdc": {
+      "wait_import_platforms": -8.986999455373734e-05,
+      "config_entry_setup": 0.0070633069990435615
+    },
+    "f7809e4848eebb57507bde5d07376fcd": {
+      "wait_import_platforms": -0.00019290699856355786,
+      "wait_base_component": -9.860406034000334,
+      "config_entry_setup": 10.133068929004367
+    },
+    "8d25b3ae2a337e0396c091d18aae9a23": {
+      "wait_import_platforms": -0.00026768499810714275,
+      "wait_base_component": -9.856916812001145,
+      "config_entry_setup": 10.16394328000024
+    },
+    "e5921b75c3f0fbac797fad8c6b39e801": {
+      "wait_base_component": -9.843154511996545,
+      "config_entry_setup": 10.160804633007501
+    },
+    "cc9e4c5f3719f1a9eab3fdaed153acf5": {
+      "wait_base_component": -9.818106595004792,
+      "config_entry_setup": 10.161322828003904
+    },
+    "29f357a70ca3282127620d45ae3eccf1": {
+      "wait_base_component": -9.809936808000202,
+      "config_entry_setup": 10.145137619998422
+    },
+    "6f5504e59f7d9514ce77d6a54c079b35": {
+      "wait_base_component": -9.7966279329994,
+      "config_entry_setup": 10.144723395991605
+    }
+  },
+  "data": {
+    "cloud_key": "###############################0",
+    "device_id": "###############################2",
+    "host": "###########0",
+    "key": "###############################0",
+    "payload": {
+      "ability": {
+        "Appliance.Config.Info": {},
+        "Appliance.Config.Key": {},
+        "Appliance.Config.NtpSite": {},
+        "Appliance.Config.Trace": {},
+        "Appliance.Config.Wifi": {},
+        "Appliance.Config.WifiList": {},
+        "Appliance.Config.WifiX": {},
+        "Appliance.Control.Bind": {},
+        "Appliance.Control.ChangeWiFi": {},
+        "Appliance.Control.Light": {
+          "capacity": 15
+        },
+        "Appliance.Control.Light.Effect": {},
+        "Appliance.Control.Multiple": {
+          "maxCmdNum": 3
+        },
+        "Appliance.Control.TimerX": {
+          "sunOffsetSupport": 1
+        },
+        "Appliance.Control.ToggleX": {},
+        "Appliance.Control.TriggerX": {},
+        "Appliance.Control.Unbind": {},
+        "Appliance.Control.Upgrade": {},
+        "Appliance.Digest.TimerX": {},
+        "Appliance.Digest.TriggerX": {},
+        "Appliance.System.Ability": {},
+        "Appliance.System.All": {},
+        "Appliance.System.Clock": {},
+        "Appliance.System.Debug": {},
+        "Appliance.System.Firmware": {},
+        "Appliance.System.Hardware": {},
+        "Appliance.System.Online": {},
+        "Appliance.System.Position": {},
+        "Appliance.System.Report": {},
+        "Appliance.System.Runtime": {},
+        "Appliance.System.Time": {}
+      },
+      "all": {
+        "system": {
+          "hardware": {
+            "type": "msl320cpr",
+            "subType": "un",
+            "version": "4.0.0",
+            "chipType": "rtl8710cm",
+            "uuid": "###############################2",
+            "macAddress": "################0"
+          },
+          "firmware": {
+            "version": "4.3.8",
+            "homekitVersion": "6.3",
+            "compileTime": "2025/03/04-09:24:52",
+            "encrypt": 1,
+            "wifiMac": "################0",
+            "innerIp": "###########0",
+            "server": "###################0",
+            "port": "@0",
+            "userId": "@0"
+          },
+          "time": {
+            "timestamp": 1750170498,
+            "timezone": "Europe/Rome",
+            "timeRule": [
+              [
+                1679792400,
+                7200,
+                1
+              ],
+              [
+                1698541200,
+                3600,
+                0
+              ],
+              [
+                1711846800,
+                7200,
+                1
+              ],
+              [
+                1729990800,
+                3600,
+                0
+              ],
+              [
+                1743296400,
+                7200,
+                1
+              ],
+              [
+                1761440400,
+                3600,
+                0
+              ],
+              [
+                1774746000,
+                7200,
+                1
+              ],
+              [
+                1792890000,
+                3600,
+                0
+              ],
+              [
+                1806195600,
+                7200,
+                1
+              ],
+              [
+                1824944400,
+                3600,
+                0
+              ],
+              [
+                1837645200,
+                7200,
+                1
+              ],
+              [
+                1856394000,
+                3600,
+                0
+              ],
+              [
+                1869094800,
+                7200,
+                1
+              ],
+              [
+                1887843600,
+                3600,
+                0
+              ],
+              [
+                1901149200,
+                7200,
+                1
+              ],
+              [
+                1919293200,
+                3600,
+                0
+              ],
+              [
+                1932598800,
+                7200,
+                1
+              ],
+              [
+                1950742800,
+                3600,
+                0
+              ],
+              [
+                1964048400,
+                7200,
+                1
+              ],
+              [
+                1982797200,
+                3600,
+                0
+              ]
+            ]
+          },
+          "online": {
+            "status": 1,
+            "bindId": "ThdP2FfXIsmzQNqb",
+            "who": 1
+          }
+        },
+        "digest": {
+          "togglex": [
+            {
+              "channel": 0,
+              "onoff": 0,
+              "lmTime": 1750164275
+            }
+          ],
+          "triggerx": [],
+          "timerx": [],
+          "light": {
+            "capacity": 6,
+            "channel": 0,
+            "rgb": 65280,
+            "temperature": 22,
+            "luminance": 100,
+            "transform": 0
+          },
+          "light.effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "iyyvbxdlygkpindn",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "digzeptdgiwjijbf",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 0,
+              "speed": 1,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 30
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "payloadVersion": 1
+    },
+    "polling_period": 10,
+    "protocol": null,
+    "timestamp": 1749333905.1874664,
+    "trace_timeout": 600,
+    "create_diagnostic_entities": false,
+    "logging_level": 10,
+    "obfuscate": true,
+    "device": {
+      "class": "Device",
+      "conf_protocol": "auto",
+      "pref_protocol": "http",
+      "curr_protocol": "http",
+      "polling_period": 10,
+      "device_response_size_min": 2921,
+      "device_response_size_max": 2921,
+      "MQTT": {
+        "cloud_profile": true,
+        "locally_active": false,
+        "mqtt_connection": true,
+        "mqtt_connected": true,
+        "mqtt_publish": false,
+        "mqtt_active": true
+      },
+      "HTTP": {
+        "http": true,
+        "http_active": true
+      },
+      "namespace_handlers": {
+        "Appliance.System.All": {
+          "lastrequest": 1750170499.5644295,
+          "lastresponse": 1750170499.905501,
+          "polling_epoch_next": 1750170794.905501,
+          "polling_strategy": "async_poll_all"
+        },
+        "Appliance.System.Runtime": {
+          "lastrequest": 1750170580.2072027,
+          "lastresponse": 1750170580.3167117,
+          "polling_epoch_next": 1750170880.3167117,
+          "polling_strategy": "async_poll_lazy"
+        },
+        "Appliance.Control.ToggleX": {
+          "lastrequest": 0.0,
+          "lastresponse": 1750170500.7941995,
+          "polling_epoch_next": 1750170800.7941995,
+          "polling_strategy": null
+        },
+        "Appliance.Control.Light": {
+          "lastrequest": 0.0,
+          "lastresponse": 1750170570.3077817,
+          "polling_epoch_next": 1750170870.3077817,
+          "polling_strategy": null
+        },
+        "Appliance.Control.Light.Effect": {
+          "lastrequest": 1750170580.2068458,
+          "lastresponse": 1750170580.3167117,
+          "polling_epoch_next": 3897654227.3167114,
+          "polling_strategy": "async_poll_lazy"
+        },
+        "Appliance.System.Debug": {
+          "lastrequest": 0.0,
+          "lastresponse": 1750170500.9100924,
+          "polling_epoch_next": 1750170500.9100924,
+          "polling_strategy": null
+        },
+        "Appliance.Config.Info": {
+          "lastrequest": 0.0,
+          "lastresponse": 1750170500.2119765,
+          "polling_epoch_next": 1750170800.2119765,
+          "polling_strategy": null
+        },
+        "Appliance.Config.NtpSite": {
+          "lastrequest": 0.0,
+          "lastresponse": 1750170500.2877502,
+          "polling_epoch_next": 1750170800.2877502,
+          "polling_strategy": null
+        },
+        "Appliance.Control.ChangeWiFi": {
+          "lastrequest": 0.0,
+          "lastresponse": 0.0,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        }
+      },
+      "namespace_pushes": {
+        "Appliance.Config.Info": {
+          "info": {
+            "homekit": {
+              "model": "MSL320",
+              "sn": "##############0",
+              "category": 5,
+              "setupId": "###0",
+              "setupCode": "#########0",
+              "uuid": "###################################6",
+              "token": "###############################################################################################################################################################################################################################################################################################################################################################################################################################################################################0"
+            }
+          }
+        },
+        "Appliance.Control.Light": {
+          "light": {
+            "channel": 0,
+            "rgb": 23295,
+            "temperature": 22,
+            "luminance": 99,
+            "transform": 0,
+            "capacity": 5,
+            "_": null
+          }
+        },
+        "Appliance.Control.Light.Effect": {
+          "effect": [
+            {
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ],
+              "Id": "0000000000000000",
+              "effectName": "Night"
+            },
+            {
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ],
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read"
+            },
+            {
+              "enable": 1,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ],
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work"
+            },
+            {
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "luminance": 100,
+                  "rgb": 255
+                },
+                {
+                  "luminance": 100,
+                  "rgb": 16757760
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ],
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0
+            },
+            {
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "luminance": 100,
+                  "rgb": 16757760
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "luminance": 100,
+                  "rgb": 16711786
+                }
+              ],
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1
+            },
+            {
+              "enable": 0,
+              "mode": 1,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                }
+              ],
+              "Id": "iyyvbxdlygkpindn",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party"
+            },
+            {
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 0,
+              "speed": 1,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 30
+                }
+              ],
+              "Id": "digzeptdgiwjijbf",
+              "effectName": "Colorful"
+            }
+          ]
+        }
+      },
+      "device_info": {
+        "uuid": "###############################2",
+        "onlineStatus": 1,
+        "devName": "Led Cameretta",
+        "devIconId": "device021_un",
+        "bindTime": 1698692804,
+        "deviceType": "msl320cpr",
+        "subType": "un",
+        "channels": [
+          {}
+        ],
+        "region": "eu",
+        "fmwareVersion": "4.3.8",
+        "hdwareVersion": "4.0.0",
+        "userDevIcon": "",
+        "iconType": 0,
+        "domain": "###################0",
+        "reservedDomain": "###################0",
+        "hardwareCapabilities": []
+      }
+    },
+    "trace": [
+      [
+        "time",
+        "rxtx",
+        "protocol",
+        "method",
+        "namespace",
+        "data"
+      ],
+      [
+        "2025/06/17 - 16:30:00",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "system": {
+            "hardware": {
+              "type": "msl320cpr",
+              "subType": "un",
+              "version": "4.0.0",
+              "chipType": "rtl8710cm",
+              "uuid": "###############################2",
+              "macAddress": "################0"
+            },
+            "firmware": {
+              "version": "4.3.8",
+              "homekitVersion": "6.3",
+              "compileTime": "2025/03/04-09:24:52",
+              "encrypt": 1,
+              "wifiMac": "################0",
+              "innerIp": "###########0",
+              "server": "###################0",
+              "port": "@0",
+              "userId": "@0"
+            },
+            "time": {
+              "timestamp": 1750170498,
+              "timezone": "Europe/Rome",
+              "timeRule": [
+                [
+                  1679792400,
+                  7200,
+                  1
+                ],
+                [
+                  1698541200,
+                  3600,
+                  0
+                ],
+                [
+                  1711846800,
+                  7200,
+                  1
+                ],
+                [
+                  1729990800,
+                  3600,
+                  0
+                ],
+                [
+                  1743296400,
+                  7200,
+                  1
+                ],
+                [
+                  1761440400,
+                  3600,
+                  0
+                ],
+                [
+                  1774746000,
+                  7200,
+                  1
+                ],
+                [
+                  1792890000,
+                  3600,
+                  0
+                ],
+                [
+                  1806195600,
+                  7200,
+                  1
+                ],
+                [
+                  1824944400,
+                  3600,
+                  0
+                ],
+                [
+                  1837645200,
+                  7200,
+                  1
+                ],
+                [
+                  1856394000,
+                  3600,
+                  0
+                ],
+                [
+                  1869094800,
+                  7200,
+                  1
+                ],
+                [
+                  1887843600,
+                  3600,
+                  0
+                ],
+                [
+                  1901149200,
+                  7200,
+                  1
+                ],
+                [
+                  1919293200,
+                  3600,
+                  0
+                ],
+                [
+                  1932598800,
+                  7200,
+                  1
+                ],
+                [
+                  1950742800,
+                  3600,
+                  0
+                ],
+                [
+                  1964048400,
+                  7200,
+                  1
+                ],
+                [
+                  1982797200,
+                  3600,
+                  0
+                ]
+              ]
+            },
+            "online": {
+              "status": 1,
+              "bindId": "ThdP2FfXIsmzQNqb",
+              "who": 1
+            }
+          },
+          "digest": {
+            "togglex": [
+              {
+                "channel": 0,
+                "onoff": 0,
+                "lmTime": 1750164275
+              }
+            ],
+            "triggerx": [],
+            "timerx": [],
+            "light": {
+              "capacity": 6,
+              "channel": 0,
+              "rgb": 65280,
+              "temperature": 22,
+              "luminance": 100,
+              "transform": 0
+            },
+            "light.effect": [
+              {
+                "Id": "0000000000000000",
+                "effectName": "Night",
+                "iconName": "light_effect_icon_night",
+                "enable": 0,
+                "mode": 0,
+                "speed": 10,
+                "member": [
+                  {
+                    "rgb": 16744192,
+                    "luminance": 30
+                  }
+                ]
+              },
+              {
+                "Id": "0000000000000001",
+                "effectName": "Reading",
+                "iconName": "light_effect_icon_read",
+                "enable": 0,
+                "mode": 0,
+                "speed": 10,
+                "member": [
+                  {
+                    "rgb": 16752706,
+                    "luminance": 100
+                  }
+                ]
+              },
+              {
+                "Id": "0000000000000002",
+                "effectName": "Working",
+                "iconName": "light_effect_icon_work",
+                "enable": 0,
+                "mode": 0,
+                "speed": 10,
+                "member": [
+                  {
+                    "rgb": 16756220,
+                    "luminance": 100
+                  }
+                ]
+              },
+              {
+                "Id": "0000000000000003",
+                "effectName": "Relaxing",
+                "iconName": "light_effect_icon_relax",
+                "enable": 0,
+                "mode": 2,
+                "speed": 50,
+                "member": [
+                  {
+                    "rgb": 16711680,
+                    "luminance": 100
+                  },
+                  {
+                    "rgb": 65280,
+                    "luminance": 100
+                  },
+                  {
+                    "rgb": 255,
+                    "luminance": 100
+                  },
+                  {
+                    "rgb": 16757760,
+                    "luminance": 100
+                  },
+                  {
+                    "rgb": 65450,
+                    "luminance": 100
+                  },
+                  {
+                    "rgb": 16711786,
+                    "luminance": 100
+                  }
+                ]
+              },
+              {
+                "Id": "0000000000000004",
+                "effectName": "Party",
+                "iconName": "light_effect_icon_party",
+                "enable": 0,
+                "mode": 1,
+                "speed": 90,
+                "member": [
+                  {
+                    "rgb": 16711680,
+                    "luminance": 100
+                  },
+                  {
+                    "rgb": 65280,
+                    "luminance": 100
+                  },
+                  {
+                    "rgb": 255,
+                    "luminance": 100
+                  },
+                  {
+                    "rgb": 16757760,
+                    "luminance": 100
+                  },
+                  {
+                    "rgb": 65450,
+                    "luminance": 100
+                  },
+                  {
+                    "rgb": 16711786,
+                    "luminance": 100
+                  }
+                ]
+              },
+              {
+                "Id": "iyyvbxdlygkpindn",
+                "effectName": "Party",
+                "iconName": "light_effect_icon_party",
+                "enable": 0,
+                "mode": 1,
+                "speed": 100,
+                "member": [
+                  {
+                    "rgb": 16711680,
+                    "luminance": 100
+                  },
+                  {
+                    "rgb": 16711680,
+                    "luminance": 100
+                  }
+                ]
+              },
+              {
+                "Id": "digzeptdgiwjijbf",
+                "effectName": "Colorful",
+                "iconName": "light_effect_icon_colorful",
+                "enable": 0,
+                "mode": 0,
+                "speed": 1,
+                "member": [
+                  {
+                    "rgb": 16711680,
+                    "luminance": 30
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:00",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.Ability",
+        {
+          "Appliance.Config.Info": {},
+          "Appliance.Config.Key": {},
+          "Appliance.Config.NtpSite": {},
+          "Appliance.Config.Trace": {},
+          "Appliance.Config.Wifi": {},
+          "Appliance.Config.WifiList": {},
+          "Appliance.Config.WifiX": {},
+          "Appliance.Control.Bind": {},
+          "Appliance.Control.ChangeWiFi": {},
+          "Appliance.Control.Light": {
+            "capacity": 15
+          },
+          "Appliance.Control.Light.Effect": {},
+          "Appliance.Control.Multiple": {
+            "maxCmdNum": 3
+          },
+          "Appliance.Control.TimerX": {
+            "sunOffsetSupport": 1
+          },
+          "Appliance.Control.ToggleX": {},
+          "Appliance.Control.TriggerX": {},
+          "Appliance.Control.Unbind": {},
+          "Appliance.Control.Upgrade": {},
+          "Appliance.Digest.TimerX": {},
+          "Appliance.Digest.TriggerX": {},
+          "Appliance.System.Ability": {},
+          "Appliance.System.All": {},
+          "Appliance.System.Clock": {},
+          "Appliance.System.Debug": {},
+          "Appliance.System.Firmware": {},
+          "Appliance.System.Hardware": {},
+          "Appliance.System.Online": {},
+          "Appliance.System.Position": {},
+          "Appliance.System.Report": {},
+          "Appliance.System.Runtime": {},
+          "Appliance.System.Time": {}
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:00",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Polling begin"
+      ],
+      [
+        "2025/06/17 - 16:30:00",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "###############################2",
+                "macAddress": "################0"
+              },
+              "firmware": {
+                "version": "4.3.8",
+                "homekitVersion": "6.3",
+                "compileTime": "2025/03/04-09:24:52",
+                "encrypt": 1,
+                "wifiMac": "################0",
+                "innerIp": "###########0",
+                "server": "###################0",
+                "port": "@0",
+                "userId": "@0"
+              },
+              "time": {
+                "timestamp": 1750170600,
+                "timezone": "Europe/Rome",
+                "timeRule": [
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1982797200,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "ThdP2FfXIsmzQNqb",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 0,
+                  "lmTime": 1750170569
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 5,
+                "channel": 0,
+                "rgb": 23295,
+                "temperature": 22,
+                "luminance": 99,
+                "transform": 0
+              },
+              "light.effect": [
+                {
+                  "Id": "0000000000000000",
+                  "effectName": "Night",
+                  "iconName": "light_effect_icon_night",
+                  "enable": 0,
+                  "mode": 0,
+                  "speed": 10,
+                  "member": [
+                    {
+                      "rgb": 16744192,
+                      "luminance": 30
+                    }
+                  ]
+                },
+                {
+                  "Id": "0000000000000001",
+                  "effectName": "Reading",
+                  "iconName": "light_effect_icon_read",
+                  "enable": 0,
+                  "mode": 0,
+                  "speed": 10,
+                  "member": [
+                    {
+                      "rgb": 16752706,
+                      "luminance": 100
+                    }
+                  ]
+                },
+                {
+                  "Id": "0000000000000002",
+                  "effectName": "Working",
+                  "iconName": "light_effect_icon_work",
+                  "enable": 0,
+                  "mode": 0,
+                  "speed": 10,
+                  "member": [
+                    {
+                      "rgb": 16756220,
+                      "luminance": 100
+                    }
+                  ]
+                },
+                {
+                  "Id": "0000000000000003",
+                  "effectName": "Relaxing",
+                  "iconName": "light_effect_icon_relax",
+                  "enable": 0,
+                  "mode": 2,
+                  "speed": 50,
+                  "member": [
+                    {
+                      "rgb": 16711680,
+                      "luminance": 100
+                    },
+                    {
+                      "rgb": 65280,
+                      "luminance": 100
+                    },
+                    {
+                      "rgb": 255,
+                      "luminance": 100
+                    },
+                    {
+                      "rgb": 16757760,
+                      "luminance": 100
+                    },
+                    {
+                      "rgb": 65450,
+                      "luminance": 100
+                    },
+                    {
+                      "rgb": 16711786,
+                      "luminance": 100
+                    }
+                  ]
+                },
+                {
+                  "Id": "0000000000000004",
+                  "effectName": "Party",
+                  "iconName": "light_effect_icon_party",
+                  "enable": 0,
+                  "mode": 1,
+                  "speed": 90,
+                  "member": [
+                    {
+                      "rgb": 16711680,
+                      "luminance": 100
+                    },
+                    {
+                      "rgb": 65280,
+                      "luminance": 100
+                    },
+                    {
+                      "rgb": 255,
+                      "luminance": 100
+                    },
+                    {
+                      "rgb": 16757760,
+                      "luminance": 100
+                    },
+                    {
+                      "rgb": 65450,
+                      "luminance": 100
+                    },
+                    {
+                      "rgb": 16711786,
+                      "luminance": 100
+                    }
+                  ]
+                },
+                {
+                  "Id": "iyyvbxdlygkpindn",
+                  "effectName": "Party",
+                  "iconName": "light_effect_icon_party",
+                  "enable": 0,
+                  "mode": 1,
+                  "speed": 100,
+                  "member": [
+                    {
+                      "rgb": 16711680,
+                      "luminance": 100
+                    },
+                    {
+                      "rgb": 16711680,
+                      "luminance": 100
+                    }
+                  ]
+                },
+                {
+                  "Id": "digzeptdgiwjijbf",
+                  "effectName": "Colorful",
+                  "iconName": "light_effect_icon_colorful",
+                  "enable": 0,
+                  "mode": 0,
+                  "speed": 1,
+                  "member": [
+                    {
+                      "rgb": 16711680,
+                      "luminance": 30
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "TX",
+        "http",
+        "SET",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "337812c17be54da5b176961c56abff2b",
+                "method": "GET",
+                "namespace": "Appliance.System.Runtime"
+              },
+              "payload": {
+                "runtime": {}
+              }
+            },
+            {
+              "header": {
+                "messageId": "75abb314badd46a2b20ec049c128d595",
+                "method": "GET",
+                "namespace": "Appliance.Control.Light.Effect"
+              },
+              "payload": {
+                "effect": []
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "RX",
+        "http",
+        "SETACK",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "337812c17be54da5b176961c56abff2b",
+                "namespace": "Appliance.System.Runtime",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################2/publish",
+                "uuid": "###############################2",
+                "timestamp": 1750170600,
+                "timestampMs": 478,
+                "sign": "8aea9b5d3c3fd41447642ff3cf0ca5ed"
+              },
+              "payload": {
+                "runtime": {
+                  "signal": 55,
+                  "ssid": "########0"
+                }
+              }
+            },
+            {
+              "header": {
+                "messageId": "75abb314badd46a2b20ec049c128d595",
+                "namespace": "Appliance.Control.Light.Effect",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################2/publish",
+                "uuid": "###############################2",
+                "timestamp": 1750170600,
+                "timestampMs": 487,
+                "sign": "80ef9ce2759fdcb6046cd0a412d1f98e"
+              },
+              "payload": {
+                "effect": [
+                  {
+                    "Id": "0000000000000000",
+                    "effectName": "Night",
+                    "iconName": "light_effect_icon_night",
+                    "enable": 0,
+                    "mode": 0,
+                    "speed": 10,
+                    "member": [
+                      {
+                        "rgb": 16744192,
+                        "luminance": 30
+                      }
+                    ]
+                  },
+                  {
+                    "Id": "0000000000000001",
+                    "effectName": "Reading",
+                    "iconName": "light_effect_icon_read",
+                    "enable": 0,
+                    "mode": 0,
+                    "speed": 10,
+                    "member": [
+                      {
+                        "rgb": 16752706,
+                        "luminance": 100
+                      }
+                    ]
+                  },
+                  {
+                    "Id": "0000000000000002",
+                    "effectName": "Working",
+                    "iconName": "light_effect_icon_work",
+                    "enable": 0,
+                    "mode": 0,
+                    "speed": 10,
+                    "member": [
+                      {
+                        "rgb": 16756220,
+                        "luminance": 100
+                      }
+                    ]
+                  },
+                  {
+                    "Id": "0000000000000003",
+                    "effectName": "Relaxing",
+                    "iconName": "light_effect_icon_relax",
+                    "enable": 0,
+                    "mode": 2,
+                    "speed": 50,
+                    "member": [
+                      {
+                        "rgb": 16711680,
+                        "luminance": 100
+                      },
+                      {
+                        "rgb": 65280,
+                        "luminance": 100
+                      },
+                      {
+                        "rgb": 255,
+                        "luminance": 100
+                      },
+                      {
+                        "rgb": 16757760,
+                        "luminance": 100
+                      },
+                      {
+                        "rgb": 65450,
+                        "luminance": 100
+                      },
+                      {
+                        "rgb": 16711786,
+                        "luminance": 100
+                      }
+                    ]
+                  },
+                  {
+                    "Id": "0000000000000004",
+                    "effectName": "Party",
+                    "iconName": "light_effect_icon_party",
+                    "enable": 0,
+                    "mode": 1,
+                    "speed": 90,
+                    "member": [
+                      {
+                        "rgb": 16711680,
+                        "luminance": 100
+                      },
+                      {
+                        "rgb": 65280,
+                        "luminance": 100
+                      },
+                      {
+                        "rgb": 255,
+                        "luminance": 100
+                      },
+                      {
+                        "rgb": 16757760,
+                        "luminance": 100
+                      },
+                      {
+                        "rgb": 65450,
+                        "luminance": 100
+                      },
+                      {
+                        "rgb": 16711786,
+                        "luminance": 100
+                      }
+                    ]
+                  },
+                  {
+                    "Id": "iyyvbxdlygkpindn",
+                    "effectName": "Party",
+                    "iconName": "light_effect_icon_party",
+                    "enable": 0,
+                    "mode": 1,
+                    "speed": 100,
+                    "member": [
+                      {
+                        "rgb": 16711680,
+                        "luminance": 100
+                      },
+                      {
+                        "rgb": 16711680,
+                        "luminance": 100
+                      }
+                    ]
+                  },
+                  {
+                    "Id": "digzeptdgiwjijbf",
+                    "effectName": "Colorful",
+                    "iconName": "light_effect_icon_colorful",
+                    "enable": 0,
+                    "mode": 0,
+                    "speed": 1,
+                    "member": [
+                      {
+                        "rgb": 16711680,
+                        "luminance": 30
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Appliance.Control.Multiple requests=2 (responses=2) expected size=2480 (actual=2539)"
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Polling end"
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Config.Info",
+        {}
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Config.Info",
+        {
+          "info": {
+            "homekit": {
+              "model": "MSL320",
+              "sn": "##############0",
+              "category": 5,
+              "setupId": "###0",
+              "setupCode": "#########0",
+              "uuid": "###################################6",
+              "token": "###############################################################################################################################################################################################################################################################################################################################################################################################################################################################################0"
+            }
+          }
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Info",
+        {
+          "info": []
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.Info",
+        {
+          "info": {
+            "homekit": {
+              "model": "MSL320",
+              "sn": "##############0",
+              "category": 5,
+              "setupId": "###0",
+              "setupCode": "#########0",
+              "uuid": "###################################6",
+              "token": "###############################################################################################################################################################################################################################################################################################################################################################################################################################################################################0"
+            }
+          }
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Config.NtpSite",
+        {}
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "RX",
+        "http",
+        "SET",
+        "Appliance.Config.NtpSite",
+        {}
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:SET namespace:Appliance.Config.NtpSite payload:{}"
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.NtpSite",
+        {
+          "ntpSite": []
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Config.NtpSite (messageId:4802e1eb62cc47a7a46468904dded605 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.ChangeWiFi",
+        {}
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.Control.ChangeWiFi (messageId:78460e3b4c5b4e56b13e5e59913ea241 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.ChangeWiFi",
+        {
+          "changeWiFi": []
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.ChangeWiFi (messageId:b230da199bac4762915185b2fab9fa0b ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light",
+        {
+          "light": {}
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light",
+        {
+          "light": {
+            "capacity": 5,
+            "channel": 0,
+            "rgb": 23295,
+            "temperature": 22,
+            "luminance": 99,
+            "transform": 0
+          }
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:01",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:02",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "iyyvbxdlygkpindn",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "digzeptdgiwjijbf",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 0,
+              "speed": 1,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 30
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:02",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.ToggleX",
+        {
+          "togglex": []
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:02",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.ToggleX",
+        {
+          "channel": 4294967295,
+          "togglex": [
+            {
+              "channel": 0,
+              "onoff": 0,
+              "lmTime": 1750170569
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:02",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Debug",
+        {
+          "debug": {}
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:02",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Debug",
+        {
+          "debug": {
+            "system": {
+              "version": "4.3.8",
+              "homekitVersion": "6.3",
+              "sysUpTime": "1059h3m57s",
+              "UTC": 1750170601,
+              "localTimeOffset": 7200,
+              "localTime": "Tue Jun 17 16:30:01 2025",
+              "suncalc": "5:33;21:14",
+              "memTotal": 3602688,
+              "memFree": 3292824,
+              "memMini": 3266552
+            },
+            "network": {
+              "linkStatus": "connected",
+              "snr": 28,
+              "channel": 6,
+              "signal": 52,
+              "rssi": -69,
+              "ssid": "########0",
+              "gatewayMac": "################0",
+              "innerIp": "###########0",
+              "wifiDisconnectCount": 16,
+              "wifiDisconnectDetail": {
+                "totalCount": 16,
+                "detials": [
+                  {
+                    "sysUptime": 16294,
+                    "timestamp": 1746374245
+                  },
+                  {
+                    "sysUptime": 18670,
+                    "timestamp": 1746376621
+                  },
+                  {
+                    "sysUptime": 643914,
+                    "timestamp": 1747001867
+                  },
+                  {
+                    "sysUptime": 663063,
+                    "timestamp": 1747021017
+                  },
+                  {
+                    "sysUptime": 1033822,
+                    "timestamp": 1747391777
+                  },
+                  {
+                    "sysUptime": 1034528,
+                    "timestamp": 1747392484
+                  },
+                  {
+                    "sysUptime": 1067694,
+                    "timestamp": 1747425650
+                  },
+                  {
+                    "sysUptime": 1242715,
+                    "timestamp": 1747600671
+                  },
+                  {
+                    "sysUptime": 1242791,
+                    "timestamp": 1747600746
+                  },
+                  {
+                    "sysUptime": 1242904,
+                    "timestamp": 1747600860
+                  },
+                  {
+                    "sysUptime": 1324143,
+                    "timestamp": 1747682099
+                  },
+                  {
+                    "sysUptime": 1325025,
+                    "timestamp": 1747682981
+                  },
+                  {
+                    "sysUptime": 2194063,
+                    "timestamp": 1748552022
+                  },
+                  {
+                    "sysUptime": 2268207,
+                    "timestamp": 1748626166
+                  },
+                  {
+                    "sysUptime": 2340555,
+                    "timestamp": 1748698515
+                  },
+                  {
+                    "sysUptime": 2928231,
+                    "timestamp": 1749286193
+                  }
+                ]
+              }
+            },
+            "cloud": {
+              "linkStatus": "connected",
+              "activeServer": "###################0",
+              "mainServer": "###################0",
+              "mainPort": "@0",
+              "secondServer": "###################0",
+              "secondPort": "@0",
+              "userId": "@0",
+              "sysConnectTime": "Tue Jun 10 00:08:50 2025",
+              "sysOnlineTime": "182h21m11s",
+              "sysDisconnectCount": 38,
+              "iotDisconnectDetail": {
+                "totalCount": 38,
+                "detials": [
+                  {
+                    "sysUptime": 2928231,
+                    "timestamp": 1749286194
+                  },
+                  {
+                    "sysUptime": 3155866,
+                    "timestamp": 1749513830
+                  },
+                  {
+                    "sysUptime": 3156166,
+                    "timestamp": 1749514130
+                  },
+                  {
+                    "sysUptime": 2471604,
+                    "timestamp": 1748829564
+                  },
+                  {
+                    "sysUptime": 2923768,
+                    "timestamp": 1749281730
+                  }
+                ]
+              }
+            },
+            "homeKit": {
+              "homekitAliveCnt": 0,
+              "homekitAliveTime": 3812637,
+              "homekitThreadStatus": 1,
+              "homekitRestartCnt": 0,
+              "homekitRestartTime": 0,
+              "homekitTimeoutPeriod": 2147483647
+            }
+          }
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:02",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2025/06/17 - 16:30:02",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 52,
+            "ssid": "########0"
+          }
+        }
+      ]
+    ]
+  }
+}

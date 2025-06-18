@@ -95,7 +95,7 @@ def disable_entity_registry_update():
     in our tests to cover this scenario so we totally disable calling into
     the entity registry."""
 
-    from custom_components.meross_lan.devices.garageDoor import (
+    from custom_components.meross_lan.devices.garagedoor import (
         MLGarageDoorEnableSwitch,
         MLGarageMultipleConfigSwitch,
     )

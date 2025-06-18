@@ -1,7 +1,7 @@
 from homeassistant.components import number as haec
 
 from custom_components.meross_lan.cover import MLRollerShutterConfigNumber
-from custom_components.meross_lan.devices.garageDoor import (
+from custom_components.meross_lan.devices.garagedoor import (
     MLGarageConfigNumber,
     MLGarageMultipleConfigNumber,
 )

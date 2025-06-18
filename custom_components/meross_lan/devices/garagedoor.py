@@ -740,7 +740,7 @@ class GarageDoorStateNamespaceHandler(NamespaceHandler):
         NamespaceHandler.polling_request_configure(self, request_payload_type)
 
 
-def digest_init_garageDoor(device: "Device", digest: list) -> "DigestInitReturnType":
+def digest_init_garagedoor(device: "Device", digest: list) -> "DigestInitReturnType":
     device.platforms.setdefault(MLConfigNumber.PLATFORM, None)
     device.platforms.setdefault(MLSwitch.PLATFORM, None)
 
