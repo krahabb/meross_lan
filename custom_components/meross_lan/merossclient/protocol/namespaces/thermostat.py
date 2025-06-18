@@ -47,7 +47,7 @@ Appliance_Control_Thermostat_Frost = ns(
 Appliance_Control_Thermostat_HoldAction = ns(
     "Appliance.Control.Thermostat.HoldAction",
     mc.KEY_HOLDACTION,
-    ARGS_GETPUSH | IS_THERMOSTAT,
+    ARGS_GETSETPUSH | IS_THERMOSTAT,
 )
 Appliance_Control_Thermostat_Mode = ns(
     "Appliance.Control.Thermostat.Mode", mc.KEY_MODE, ARGS_GETSETPUSH | IS_THERMOSTAT

@@ -347,45 +347,6 @@ class Mts300Climate(MtsThermostatClimate):
 
     # message handlers
     def _parse_modeC(self, payload: "mt_t.ModeC_C"):
-        """
-        {
-            "fan": {
-                "fMode": 0,
-                "speed": 0,
-                "hTime": 99999
-            },
-            "sensorTemp": 2200,
-            "currentTemp": 2200,
-            "more": {
-                "hdStatus": 0,
-                "humi": 495,
-                "cStatus": 0,
-                "hStatus": 0,
-                "fStatus": 0,
-                "aStatus": 0
-            },
-            "channel": 0,
-            "mode": 3,
-            "work": 2,
-            "targetTemp": {
-                "heat": 2100,
-                "cold": 2400
-            }
-        }
-        "sensorTemp" is the temperature of the built-in sensor of the device.
-        "currentTemp" is the actual temperature used by the device for cooling and heating (the device supports the external sensor mode).
-        "mode" is the current working mode; 0: off ; 1: heat ; 2: cool ; 3: auto. For example, if the device operates in auto mode and the target temperature is set to 2100-2400, then the device will not work when 21℃<currentTemp<24℃, heat up when the temperature is below 21℃, and cool down when the temperature is above 24℃.
-        "cStatus" is the refrigeration working status; 0: Idle; Level 1 Colding; 2: Level 2 Colding;
-        "humi" is the current humidity
-        "cStatus" is the working status of heating. 0:Idle; 1: First-level Heating; 2: Grade 2 Heating; 3: Third-level Heating
-        "fStatus" is the status of the fan; 0: Idle; 1: Low/ON; 2: Middle; 3: High
-        "aStatus" is the auxiliary heating working state; 0:Idle; 1: First-level AUX 2: Secondary AUX; 3: Three-stage AUX
-        "hdStatus" is the dehumidification/humidification working status, 0:Idle; 1: Dehumidification in progress; 2: Humidifying
-        "work" is in the state where schedule is enabled; 1: manual  2: schedule
-        "fMode" is the fan mode; 0: Auto; 1: ON (Hold);
-        "speed" is wind speed; 0: Auto; 1: ON; 2: Middle; 3: High
-        "hTime" is hold time, with the unit being minutes. 99999 indicates permanently
-        """
         if self._mts_payload == payload:
             return
         self._mts_payload = payload

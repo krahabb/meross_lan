@@ -33,6 +33,11 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
             {"tempUnit": 1},
             0,
         ),
+        mn_t.Appliance_Control_Thermostat_HoldAction: (
+            MerossEmulator.NSDefaultMode.MixOut,
+            {"mode": 0, "time": 0},
+            0,
+        ),
     }
 
     MAP_DEVICE_SCALE = {

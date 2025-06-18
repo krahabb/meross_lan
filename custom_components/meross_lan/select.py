@@ -92,9 +92,9 @@ class MLConfigSelect(MLSelect):
         super().__init__(manager, channel, entitykey, None, **kwargs)
 
     def update_device_value(self, device_value):
-        if device_value in self.options_map:
+        try:
             self.update_option(self.options_map[device_value])
-        else:
+        except KeyError:
             self.options_map[device_value] = option = str(device_value)
             self.options.append(option)
             self.update_option(option)

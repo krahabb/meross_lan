@@ -322,6 +322,10 @@ MTS100_MODE_TO_CURRENTSET_MAP = {
 }
 
 
+MTS_HOLDACTION_PERMANENT = 0
+MTS_HOLDACTION_NEXT_SCHEDULE = 1
+MTS_HOLDACTION_TIMER = 2
+
 # I don't have an MTS200 to test so these are inferred from a user trace
 MTS200_TEMP_SCALE = 10  # native mts temperatures expressed in tenths of °C
 MTS200_MODE_HEAT = 0  # preset heat/comfort

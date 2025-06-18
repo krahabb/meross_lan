@@ -1,7 +1,8 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from ...binary_sensor import MLBinarySensor
 from ...climate import MtsClimate, MtsTemperatureNumber
+from ...helpers import reverse_lookup
 from ...helpers.entity import MEListChannelMixin
 from ...helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
 from ...merossclient.protocol.namespaces import thermostat as mn_t
@@ -9,6 +10,7 @@ from ...number import MLConfigNumber
 from ...select import MLConfigSelect
 from ...sensor import MLEnumSensor, MLTemperatureSensor
 from ...switch import MLSwitch
+
 
 if TYPE_CHECKING:
     from typing import Any, Callable, ClassVar, Final, Unpack
@@ -77,17 +79,6 @@ class MtsConfigSwitch(MEListChannelMixin, MLSwitch):
 
 
 class MtsCommonTemperatureNumber(MtsTemperatureNumber):
-    """
-    Slightly enriched MtsTemperatureNumber to generalize  a lot of Thermostat namespaces
-    which usually carry a temperature value together with some added entities (typically a switch
-    to enable the feature and a 'warning sensor')
-    typical examples are :
-    "calibration": {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
-    "deadZone": {"channel":0,"value":300,"min":50,"max":2000}
-    "frost": {"channel": 0, "onoff": 1, "value": 500, "min": 500, "max": 1500, "warning": 0}
-    "overheat": {"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
-        "lmTime": 1674121910, "currentTemp": 355, "channel": 0}
-    """
 
     if TYPE_CHECKING:
         manager: Device
@@ -110,9 +101,6 @@ class MtsCommonTemperatureNumber(MtsTemperatureNumber):
         self.manager.register_parser_entity(self)
 
     def _parse(self, payload: "mt_t.CommonTemperature_C"):
-        """
-        {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
-        """
         if mc.KEY_MAX in payload:
             self.native_max_value = payload[mc.KEY_MAX] / self.device_scale
         if mc.KEY_MIN in payload:
@@ -121,14 +109,6 @@ class MtsCommonTemperatureNumber(MtsTemperatureNumber):
 
 
 class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
-    """
-    Slightly enriched MtsCommonTemperatureNumber with some added entities (typically a switch
-    to enable the feature and a 'warning sensor')
-    typical examples are :
-    "frost": {"channel": 0, "onoff": 1, "value": 500, "min": 500, "max": 1500, "warning": 0}
-    "overheat": {"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
-        "lmTime": 1674121910, "currentTemp": 355, "channel": 0}
-    """
 
     if TYPE_CHECKING:
         sensor_warning: MtsWarningSensor
@@ -158,9 +138,6 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
         self.sensor_warning = None  # type: ignore
 
     def _parse(self, payload: "mt_t.CommonTemperatureExt_C"):
-        """
-        {"channel": 0, "onoff": 1, "value": 500, "min": 500, "max": 1500, "warning": 0}
-        """
         try:
             self.sensor_warning.update_native_value(payload[mc.KEY_WARNING])
         except AttributeError:
@@ -195,10 +172,6 @@ class MtsDeadZoneNumber(MtsCommonTemperatureNumber):
 
 
 class MtsFrostNumber(MtsCommonTemperatureExtNumber):
-    """
-    Manages Appliance.Control.Thermostat.Frost:
-    {"channel": 0, "onoff": 1, "value": 500, "min": 500, "max": 1500, "warning": 0}
-    """
 
     ns = mn_t.Appliance_Control_Thermostat_Frost
 
@@ -210,12 +183,6 @@ class MtsFrostNumber(MtsCommonTemperatureExtNumber):
 
 
 class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
-    """
-    Configure overheat protection.
-    Manages Appliance.Control.Thermostat.Overheat:
-    {"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
-        "lmTime": 1674121910, "currentTemp": 355, "channel": 0}
-    """
 
     ns = mn_t.Appliance_Control_Thermostat_Overheat
 
@@ -235,8 +202,6 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
         return await super().async_shutdown()
 
     def _parse(self, payload: "mt_t.Overheat_C"):
-        """{"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
-        "lmTime": 1674121910, "currentTemp": 355, "channel": 0}"""
         if mc.KEY_CURRENTTEMP in payload:
             self.sensor_external_temperature.update_native_value(
                 payload[mc.KEY_CURRENTTEMP] / self.device_scale
@@ -245,7 +210,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
 
 
 class MtsWindowOpened(MLBinarySensor):
-    """specialized binary sensor for Thermostat.WindowOpened entity used in Mts200-Mts960(maybe)."""
+    # Specialized binary sensor for Thermostat.WindowOpened entity used in Mts200-Mts960(maybe).
 
     ns = mn_t.Appliance_Control_Thermostat_WindowOpened
     key_value = mc.KEY_STATUS
@@ -261,7 +226,7 @@ class MtsWindowOpened(MLBinarySensor):
 
 
 class MtsExternalSensorSwitch(MEListChannelMixin, MLSwitch):
-    """sensor mode: use internal(0) vs external(1) sensor as temperature loopback."""
+    # External sensor mode: use internal(0) vs external(1) sensor as temperature loopback.
 
     ns = mn_t.Appliance_Control_Thermostat_Sensor
     key_value = mc.KEY_MODE
@@ -277,6 +242,79 @@ class MtsExternalSensorSwitch(MEListChannelMixin, MLSwitch):
             MLSwitch.DeviceClass.SWITCH,
         )
         climate.manager.register_parser_entity(self)
+
+
+class MtsHoldAction(MLConfigSelect):
+
+    if TYPE_CHECKING:
+        manager: "Device"
+        number_time: MLConfigNumber
+
+    ns = mn_t.Appliance_Control_Thermostat_HoldAction
+    key_value = mc.KEY_MODE
+
+    OPTIONS_MAP = {
+        mc.MTS_HOLDACTION_PERMANENT: "permanent",
+        mc.MTS_HOLDACTION_NEXT_SCHEDULE: "next_schedule",
+        mc.MTS_HOLDACTION_TIMER: "timer",
+    }
+
+    __slots__ = ("number_time",)
+
+    def __init__(self, climate: "MtsThermostatClimate", /):
+        super().__init__(climate.manager, climate.channel, "hold_action")
+        climate.manager.register_parser_entity(self)
+        self.number_time = MLConfigNumber(
+            climate.manager,
+            climate.channel,
+            "hold_action_time",
+            MLConfigNumber.DEVICE_CLASS_DURATION,
+            device_scale=1,
+            native_unit_of_measurement=MLConfigNumber.hac.UnitOfTime.MINUTES,
+        )
+        self.number_time.async_request_value = self._async_request_value_number_time
+
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self.number_time = None  # type: ignore
+
+    @override
+    async def async_request_value(self, device_value, /):
+        return await self._async_request_holdAction(
+            device_value, self.number_time.device_value or 0
+        )
+
+    # interface: self
+    def _parse_holdAction(self, payload: "mt_t.HoldAction_C", /):
+        self.update_device_value(payload[mc.KEY_MODE])
+        try:
+            _time = payload[mc.KEY_TIME]  # type: ignore
+            self.number_time.update_device_value(_time)
+        except KeyError:
+            pass
+
+    async def _async_request_holdAction(self, mode, time, /):
+        ns = self.ns
+        return await self.manager.async_request_ack(
+            ns.name,
+            mc.METHOD_SET,
+            {
+                ns.key: [
+                    {
+                        ns.key_channel: self.channel,
+                        mc.KEY_MODE: mode,
+                        mc.KEY_TIME: time,
+                    }
+                ]
+            },
+        )
+
+    async def _async_request_value_number_time(self, device_value, /):
+        if response := await self._async_request_holdAction(
+            mc.MTS_HOLDACTION_TIMER, device_value
+        ):
+            self.update_device_value(mc.MTS_HOLDACTION_TIMER)
+        return response
 
 
 class MtsTempUnit(MEListChannelMixin, MLConfigSelect):
@@ -326,7 +364,6 @@ class MLScreenBrightnessNumber(MLConfigNumber):
 
 OPTIONAL_NAMESPACES_INITIALIZERS: set["mn.Namespace"] = {
     mn_t.Appliance_Control_Thermostat_CtlRange,  # mts960
-    mn_t.Appliance_Control_Thermostat_HoldAction,
     mn_t.Appliance_Control_Thermostat_SummerMode,  # mts200
     mn_t.Appliance_Control_Thermostat_System,  # mts300
     mn_t.Appliance_Control_Thermostat_Timer,  # mts960
@@ -337,6 +374,7 @@ OPTIONAL_ENTITIES_INITIALIZERS: dict[str, "Callable[[MtsThermostatClimate], Any]
     mn.Appliance_Control_TempUnit.name: MtsTempUnit,
     mn_t.Appliance_Control_Thermostat_DeadZone.name: MtsDeadZoneNumber,
     mn_t.Appliance_Control_Thermostat_Frost.name: MtsFrostNumber,
+    mn_t.Appliance_Control_Thermostat_HoldAction.name: MtsHoldAction,
     mn_t.Appliance_Control_Thermostat_Overheat.name: MtsOverheatNumber,
     mn_t.Appliance_Control_Thermostat_Sensor.name: MtsExternalSensorSwitch,
     mn_t.Appliance_Control_Thermostat_WindowOpened.name: MtsWindowOpened,
@@ -402,14 +440,6 @@ class MtsThermostatClimate(MtsClimate):
         self.max_temp = payload[mc.KEY_CTLMAX] / self.device_scale
         self.min_temp = payload[mc.KEY_CTLMIN] / self.device_scale
 
-    def _parse_holdAction(self, payload: dict, /):
-        """{"channel": 0, "mode": 0, "expire": 1697010767}"""
-        # TODO: it looks like this message is related to #369.
-        # The trace shows the log about the missing handler in 4.5.2
-        # and it looks like when we receive this, it is a notification
-        # the mts is not really changing its setpoint (as per the issue).
-        # We need more info about how to process this.
-
     def _parse_summerMode(self, payload: dict, /):
         # needed to silently support registering OPTIONAL_NAMESPACES_INITIALIZERS
         pass
@@ -457,6 +487,13 @@ POLLING_STRATEGY_CONF |= {
         mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         80,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn_t.Appliance_Control_Thermostat_HoldAction: (
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        30,
         NamespaceHandler.async_poll_lazy,
     ),
     mn_t.Appliance_Control_Thermostat_ModeC: (
