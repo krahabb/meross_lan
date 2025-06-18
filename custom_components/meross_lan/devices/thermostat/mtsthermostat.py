@@ -109,7 +109,7 @@ class MtsCommonTemperatureNumber(MtsTemperatureNumber):
         super().__init__(climate, self.__class__.ns.slug, **kwargs)
         self.manager.register_parser_entity(self)
 
-    def _parse(self, payload: "mt_t.CommonTemperature"):
+    def _parse(self, payload: "mt_t.CommonTemperature_C"):
         """
         {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
         """
@@ -157,7 +157,7 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
         self.switch = None  # type: ignore
         self.sensor_warning = None  # type: ignore
 
-    def _parse(self, payload: "mt_t.CommonTemperatureExt"):
+    def _parse(self, payload: "mt_t.CommonTemperatureExt_C"):
         """
         {"channel": 0, "onoff": 1, "value": 500, "min": 500, "max": 1500, "warning": 0}
         """
@@ -234,7 +234,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
         self.sensor_external_temperature: MLTemperatureSensor = None  # type: ignore
         return await super().async_shutdown()
 
-    def _parse(self, payload: "mt_t.Overheat"):
+    def _parse(self, payload: "mt_t.Overheat_C"):
         """{"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
         "lmTime": 1674121910, "currentTemp": 355, "channel": 0}"""
         if mc.KEY_CURRENTTEMP in payload:

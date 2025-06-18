@@ -55,7 +55,7 @@ class Mts300Climate(MtsThermostatClimate):
 
     if TYPE_CHECKING:
         # overrides
-        _mts_payload: mt_t.ModeC
+        _mts_payload: mt_t.ModeC_C
 
         HVAC_MODE_TO_MODE_MAP: ClassVar
         _mts_work: int | None
@@ -91,7 +91,7 @@ class Mts300Climate(MtsThermostatClimate):
             self.native_min_value = -4.5
             self.native_step = 0.1
 
-        def _parse(self, payload: "mt_t.Calibration"):
+        def _parse(self, payload: "mt_t.Calibration_C"):
             if "humiValue" in payload:
                 try:
                     self.number_calibration_humi.update_device_value(
@@ -346,7 +346,7 @@ class Mts300Climate(MtsThermostatClimate):
             self._parse_modeC(payload)  # type: ignore
 
     # message handlers
-    def _parse_modeC(self, payload: "mt_t.ModeC"):
+    def _parse_modeC(self, payload: "mt_t.ModeC_C"):
         """
         {
             "fan": {

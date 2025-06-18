@@ -20,7 +20,8 @@ from .ms600 import MLPresenceSensor
 
 if TYPE_CHECKING:
     from ..helpers.device import Device
-
+    from ..merossclient.protocol import types as mt
+    from ..merossclient.protocol.types import sensor as mt_s
 
 class SensorLatestNamespaceHandler(NamespaceHandler):
     """
@@ -52,7 +53,7 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
         )
         self.polling_request_add_channel(0)
 
-    def _handle_Appliance_Control_Sensor_Latest(self, header: dict, payload: dict):
+    def _handle_Appliance_Control_Sensor_Latest(self, header, payload):
         """
         {
             "latest": [
@@ -126,61 +127,49 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
             handler=self._handle_Appliance_Control_Sensor_LatestX,
         )
         if device.descriptor.type.startswith(mc.TYPE_MS600):
-            MLPresenceSensor(device, 0, f"sensor_{mc.KEY_PRESENCE}")
-            MLLightSensor(device, 0, f"sensor_{mc.KEY_LIGHT}")
-        self.polling_request_add_channel(0)
+            MLPresenceSensor(device, 0, "sensor_presence")
+            MLLightSensor(device, 0, "sensor_light")
+            self.polling_request_add_channel(0, {"data": ["presence", "light"]})
+        else:
+            self.polling_request_add_channel(0, {"data": []})
 
-    def _handle_Appliance_Control_Sensor_LatestX(self, header: dict, payload: dict):
-        """
-        {
-            "latest": [
-                {
-                    "channel": 0,
-                    "data": {
-                        "presence": [
-                            {
-                                "times": 0,
-                                "distance": 760,
-                                "value": 2,
-                                "timestamp": 1725907895,
-                            }
-                        ],
-                        "light": [
-                            {
-                                "timestamp": 1725907912,
-                                "value": 24,
-                            }
-                        ],
-                    },
-                }
-            ]
-        }
-        Example taken from ms600
-        """
+    def _handle_Appliance_Control_Sensor_LatestX(self, header, payload, /):
+        ns = self.ns
+        key_channel = ns.key_channel
         entities = self.device.entities
-        for p_channel in payload[mc.KEY_LATEST]:
-            channel = p_channel[mc.KEY_CHANNEL]
-            for key_data, value_data in p_channel[mc.KEY_DATA].items():
-                if type(value_data) is not list:
-                    continue
+        p_channel: "mt_s.LatestXResponse_C"
+        for p_channel in payload[ns.key]:
+            channel: int = p_channel[key_channel]
+            for data_key, data_value in p_channel[mc.KEY_DATA].items():
                 try:
-                    entity: MLNumericSensor = entities[f"{channel}_sensor_{key_data}"]  # type: ignore
+                    entity: MLNumericSensor = entities[f"{channel}_sensor_{data_key}"]  # type: ignore
                 except KeyError:
+                    # new channel or data_key
                     entity_def = (
                         SensorLatestXNamespaceHandler.VALUE_KEY_ENTITY_DEF_MAP.get(
-                            key_data,
+                            data_key,
                             SensorLatestXNamespaceHandler.VALUE_KEY_ENTITY_DEF_DEFAULT,
                         )
                     )
                     entity = entity_def.type(
                         self.device,
                         channel,
-                        f"sensor_{key_data}",
+                        f"sensor_{data_key}",
                         **entity_def.kwargs,
                     )
-                    # this is needed if we detect a new channel through a PUSH msg parsing
-                    self.polling_request_add_channel(channel)
-                entity._parse(value_data[0])
+
+                    polling_request_channels = self.polling_request_channels
+                    for channel_payload in polling_request_channels:
+                        if channel_payload[key_channel] == channel:
+                            channel_payload[mc.KEY_DATA].append(data_key)
+                            break
+                    else:
+                        polling_request_channels.append({key_channel: channel, "data": [data_key]})
+                        self.polling_response_size = (
+                            self.polling_response_base_size
+                            + len(polling_request_channels) * self.polling_response_item_size
+                        )
+                entity._parse(data_value[0])
 
 
 def namespace_init_sensor_latestx(device: "Device"):

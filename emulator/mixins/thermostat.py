@@ -195,7 +195,7 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
         ns = mn_t.Appliance_Control_Thermostat_ModeC
         p_digest_modec_list = self.namespaces[ns.name][ns.key]
         for p_modec in payload[ns.key]:
-            p_digest_modec: "thermostat.ModeC" = update_dict_strict_by_key(
+            p_digest_modec: "thermostat.ModeC_C" = update_dict_strict_by_key(
                 p_digest_modec_list, p_modec
             )
             p_fan = p_digest_modec["fan"]

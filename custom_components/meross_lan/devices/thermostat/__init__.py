@@ -17,6 +17,7 @@ if typing.TYPE_CHECKING:
     from typing import Any, Callable, Unpack
 
     from ...helpers.device import Device, DigestInitReturnType, DigestParseFunc
+    from ...merossclient.protocol import types as mt
     from ...merossclient.protocol.namespaces import Namespace
     from .mtsthermostat import MtsThermostatClimate
 
@@ -118,7 +119,9 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
             device, mc.KEY_STANDBY
         )
 
-    def _handle_Appliance_Control_Screen_Brightness(self, header: dict, payload: dict):
+    def _handle_Appliance_Control_Screen_Brightness(
+        self, header: "mt.MerossHeaderType", payload: "mt.MerossPayloadType", /
+    ):
         for p_channel in payload[mc.KEY_BRIGHTNESS]:
             if p_channel[mc.KEY_CHANNEL] == 0:
                 self.number_brightness_operation.update_device_value(

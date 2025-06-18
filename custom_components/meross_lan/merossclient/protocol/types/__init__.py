@@ -2,38 +2,42 @@
 A collection of typing definitions for payloads
 
 """
-import typing
+from typing import Any, Mapping, NotRequired, TypedDict, Union
 
 type MerossNamespaceType = str
 type MerossMethodType = str
-MerossHeaderType = typing.TypedDict(
+MerossHeaderType = TypedDict(
     "MerossHeaderType",
     {
         "messageId": str,
         "namespace": str,
         "method": str,
         "payloadVersion": int,
-        "triggerSrc": typing.NotRequired[str],
+        "triggerSrc": NotRequired[str],
         "from": str,
-        "uuid": typing.NotRequired[str],
+        "uuid": NotRequired[str],
         "timestamp": int,
         "timestampMs": int,
         "sign": str,
     },
 )
-MerossPayloadType = dict[str, typing.Any]
-class MerossMessageType(typing.TypedDict):
+class _MerossPayloadType(TypedDict):
+    pass
+
+type MerossPayloadType = dict[str, Any]
+
+class MerossMessageType(TypedDict):
     header: MerossHeaderType
     payload: MerossPayloadType
 
-MerossRequestType = tuple[MerossNamespaceType, MerossMethodType, MerossPayloadType]
-type KeyType = typing.Union[MerossHeaderType, str, None]
+type MerossRequestType = tuple[MerossNamespaceType, MerossMethodType, MerossPayloadType]
+type KeyType = Union[MerossHeaderType, str, None]
 
 
-class ChannelPayload(typing.TypedDict):
-    channel: int
+class ChannelPayload(TypedDict):
+    channel: Any
 
-class HubIdPayload(typing.TypedDict):
+class HubIdPayload(TypedDict):
     id: str
 
 class HubSubIdPayload(ChannelPayload):

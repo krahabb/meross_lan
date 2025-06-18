@@ -229,11 +229,8 @@ class Namespace:
             # In a Hub this conditional should not be reached since
             # sensor namespaces in hubs are being mapped to 'is_hub_subid'
             assert not self.is_hub_subid
-            # This is tricky since we still don't really know.
-            # It seems *.History and Latest namespaces were queried by LIST_C
-            # while *.HistoryX and LatestX don't work actually.
             self.key_channel = mc.KEY_CHANNEL
-            payload = payload or PayloadType.DICT_C
+            payload = payload or PayloadType.LIST_C
         elif not payload:
             # Don't pass any payload arg if we want to automatically
             # apply heuristics to incoming new namespaces.
@@ -260,10 +257,9 @@ class Namespace:
                     if map is HUB_NAMESPACES:
                         self.is_hub_subid = True
                         self.key_channel = mc.KEY_SUBID
-                        payload = PayloadType.LIST_C
                     else:
                         self.key_channel = mc.KEY_CHANNEL
-                        payload = PayloadType.DICT_C
+                    payload = PayloadType.LIST_C
                 case (_, "Control", "Thermostat", *_):
                     self.is_thermostat = True
                     self.key_channel = mc.KEY_CHANNEL
@@ -502,12 +498,12 @@ Appliance_Control_Sensor_Latest = ns(
 Appliance_Control_Sensor_HistoryX = ns(
     "Appliance.Control.Sensor.HistoryX",
     mc.KEY_HISTORY,
-    ARGS_GET | P_DICT_C | IS_SENSOR | G_EXPERIMENTAL,
+    ARGS_GET | P_LIST_C | IS_SENSOR,
 )  # cannot get query to work...
 Appliance_Control_Sensor_LatestX = ns(
     "Appliance.Control.Sensor.LatestX",
     mc.KEY_LATEST,
-    ARGS_GETPUSH | P_DICT_C | IS_SENSOR | G_EXPERIMENTAL,
+    ARGS_GETPUSH | P_LIST_C | IS_SENSOR,
 )
 Appliance_Control_Spray = ns("Appliance.Control.Spray", mc.KEY_SPRAY, ARGS_GETSETPUSH)
 Appliance_Control_TempUnit = ns(

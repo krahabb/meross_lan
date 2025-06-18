@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from typing import Any, Callable, Coroutine
 
     from . import Loggable
+    from ..merossclient.protocol import types as mt
     from ..merossclient.protocol.message import MerossResponse
     from .device import AsyncRequestFunc, Device
     from .entity import MLEntity
@@ -73,7 +74,7 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
             timeout=14400,
         )
 
-    def _handle(self, header: dict, payload: dict, /):
+    def _handle(self, header, payload, /):
         """
         Raw handler to be used as a direct callback for NamespaceHandler.
         Contrary to _parse which is invoked after splitting (x channel) the payload,
@@ -136,7 +137,9 @@ class NamespaceHandler:
         ns: "mn.Namespace",
         /,
         *,
-        handler: "Callable[[dict, dict], None] | None" = None,
+        handler: (
+            "Callable[[mt.MerossHeaderType, mt.MerossPayloadType], None] | None"
+        ) = None,
         config: "NamespaceConfigType | None" = None,
     ):
         namespace = ns.name
@@ -204,17 +207,22 @@ class NamespaceHandler:
                 {ns.key: request_payload_type.value},
             )
 
-    def polling_request_add_channel(self, channel, /):
-        """Ensures the channel is set in polling request payload should
-        the ns need it. Also adjusts the estimated polling_response_size.
-        Returns False if not needed"""
+    def polling_request_add_channel(self, channel, extra: dict = {}, /):
+        # Ensures the channel is set in polling request payload should
+        # the ns need it. Also adjusts the estimated polling_response_size.
         polling_request_channels = self.polling_request_channels
         key_channel = self.ns.key_channel
         for channel_payload in polling_request_channels:
             if channel_payload[key_channel] == channel:
+                # using log_exception to signal a suspicious situation in testing
+                self.device.log_exception(
+                    self.device.WARNING,
+                    Exception(f"channel({channel}) already present"),
+                    f"polling_request_add_channel(ns={self.ns.name})",
+                )
                 break
         else:
-            polling_request_channels.append({key_channel: channel})
+            polling_request_channels.append({key_channel: channel} | extra)
         self.polling_response_size = (
             self.polling_response_base_size
             + len(polling_request_channels) * self.polling_response_item_size
@@ -376,7 +384,9 @@ class NamespaceHandler:
                     _parse = self._try_create_entity(key_error)
                 _parse(p_channel)
 
-    def _handle_undefined(self, header: dict, payload: dict, /):
+    def _handle_undefined(
+        self, header: "mt.MerossHeaderType", payload: "mt.MerossPayloadType", /
+    ):
         device = self.device
         device.log(
             device.DEBUG,
@@ -390,19 +400,19 @@ class NamespaceHandler:
             # since we're parsing an unknown namespace, our euristic about
             # the key_namespace might be wrong so we use another euristic
             ns = self.ns
-            for key, payload in payload.items():
+            for _key, _payload in payload.items():
                 # since the ns_key might be often the same across different namespaces
                 # we add the last split of the namespace to the extracted payload key
-                if type(payload) is dict:
+                if type(_payload) is dict:
                     self._parse_undefined_dict(
-                        f"{ns.slug}_{key}", payload, payload.get(ns.key_channel)
+                        f"{ns.slug}_{_key}", _payload, _payload.get(ns.key_channel)
                     )
                 else:
-                    key = f"{ns.slug}_{key}"
-                    for payload in payload:
+                    _key = f"{ns.slug}_{_key}"
+                    for __payload in _payload:
                         # not having a "channel" in the list payloads is unexpected so far
                         self._parse_undefined_dict(
-                            key, payload, payload[ns.key_channel]
+                            _key, __payload, __payload[ns.key_channel]
                         )
 
     def parse_list(self, digest: list, /):
@@ -871,7 +881,7 @@ class VoidNamespaceHandler(NamespaceHandler):
     def __init__(self, device: "Device", namespace: "mn.Namespace"):
         NamespaceHandler.__init__(self, device, namespace, handler=self._handle_void)
 
-    def _handle_void(self, header: dict, payload: dict):
+    def _handle_void(self, header, payload, /):
         pass
 
 

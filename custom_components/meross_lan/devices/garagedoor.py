@@ -20,7 +20,7 @@ if typing.TYPE_CHECKING:
     from typing import Unpack
 
     from ..helpers.device import Device, DigestInitReturnType
-    from ..merossclient import MerossRequestType
+    from ..merossclient.protocol import types as mt
 
 
 class MLGarageTimeoutBinarySensor(me.MEPartialAvailableMixin, MLBinarySensor):
@@ -275,7 +275,7 @@ class MLGarage(MLCover):
         MLCover.EntityFeature.OPEN | MLCover.EntityFeature.CLOSE
     )
 
-    _state_request: "MerossRequestType"
+    _state_request: "mt.MerossRequestType"
 
     __slots__ = (
         "_config",
@@ -631,7 +631,7 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
             handler=self._handle_Appliance_GarageDoor_Config,
         )
 
-    def _handle_Appliance_GarageDoor_Config(self, header: dict, payload: dict):
+    def _handle_Appliance_GarageDoor_Config(self, header, payload: "mt.MerossPayloadType"):
         # {"config": {"signalDuration": 1000, "buzzerEnable": 0, "doorOpenDuration": 30000, "doorCloseDuration": 30000}}
         payload = payload[mc.KEY_CONFIG]
         if mc.KEY_SIGNALDURATION in payload:

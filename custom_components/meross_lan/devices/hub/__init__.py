@@ -951,7 +951,16 @@ class GS559SubDevice(SubDevice):
             await self.async_request_ack(
                 ns.name,
                 mc.METHOD_SET,
-                {ns.key: [{ns.key_channel: self.id, mc.KEY_STATUS: GS559SubDevice.MUTE_MAP[self._smokealarm_status]}]},
+                {
+                    ns.key: [
+                        {
+                            ns.key_channel: self.id,
+                            mc.KEY_STATUS: GS559SubDevice.MUTE_MAP[
+                                self._smokealarm_status
+                            ],
+                        }
+                    ]
+                },
             )
         except KeyError as e:
             # in case the state is not present in the MUTE_MAP (i.e. not mutable)
@@ -964,6 +973,7 @@ class GS559SubDevice(SubDevice):
             mc.METHOD_SET,
             {ns.key: [{ns.key_channel: self.id, mc.KEY_STATUS: 23}]},
         )
+
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_GS559] = GS559SubDevice
 # smokeAlarm devices (mc.TYPE_GS559) are presented as
@@ -1076,7 +1086,9 @@ class MS130SubDevice(SubDevice):
                 else None
             )
         if handler:
-            handler.polling_request_add_channel(self.id)
+            handler.polling_request_add_channel(
+                self.id, {"channel": 0, "data": ["light", "temp", "humi"]}
+            )
 
     async def async_shutdown(self):
         await super().async_shutdown()

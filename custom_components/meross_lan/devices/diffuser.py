@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from typing import Final
 
     from ..helpers.device import Device, DigestInitReturnType
+    from ..merossclient.protocol import types as mt
     from ..sensor import MLNumericSensor
 
     DIFFUSER_SENSOR_CLASS_MAP: Final
@@ -60,7 +61,9 @@ def digest_init_diffuser(device: "Device", digest: dict) -> "DigestInitReturnTyp
     if mn.Appliance_Control_Diffuser_Sensor.name in device.descriptor.ability:
         # former mod100 devices reported fake values for sensors, maybe the mod150 and/or a new firmware
         # are supporting correct values so we implement them (#243)
-        def _handle_Appliance_Control_Diffuser_Sensor(header: dict, payload: dict):
+        def _handle_Appliance_Control_Diffuser_Sensor(
+            header, payload: "mt.MerossPayloadType", /
+        ):
             """
             {
                 "type": "mod100",

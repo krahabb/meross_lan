@@ -30,6 +30,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .helpers.device import Device, DigestInitReturnType
+    from .merossclient.protocol import types as mt
 
 
 async def async_setup_entry(
@@ -812,7 +813,9 @@ class MLLightEffect(MLLight):
         await super().async_turn_on(**kwargs)
 
     # interface: self
-    def _handle_Appliance_Control_Light_Effect(self, header: dict, payload: dict):
+    def _handle_Appliance_Control_Light_Effect(
+        self, header, payload: "mt.MerossPayloadType", /
+    ):
         """
         {
             "effect": [
@@ -933,7 +936,7 @@ def digest_init_light_effect(device: "Device", digest: list) -> "DigestInitRetur
                     handler.lastresponse + handler.polling_period
                 )
                 # this is redirecting to light._handle_Appliance_Control_Light_Effect
-                handler.handler({}, {mc.KEY_EFFECT: digest})
+                handler.handler({}, {mc.KEY_EFFECT: digest})  # type: ignore (header not used)
 
             return _parse, ()
     except KeyError:

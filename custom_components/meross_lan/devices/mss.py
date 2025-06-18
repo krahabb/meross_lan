@@ -21,6 +21,7 @@ from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
     from ..helpers.device import Device
+    from ..merossclient.protocol import types as mt
 
 
 class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
@@ -143,7 +144,9 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
             self.native_value = int(self._estimate)
 
     # interface: self
-    def _handle_Appliance_Control_Electricity(self, header: dict, payload: dict):
+    def _handle_Appliance_Control_Electricity(
+        self, header, payload: "mt.MerossPayloadType"
+    ):
         self._parse(payload[mc.KEY_ELECTRICITY])
 
     def _parse(self, payload: dict):
