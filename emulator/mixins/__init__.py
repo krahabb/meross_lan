@@ -477,7 +477,7 @@ class MerossEmulator:
             self._log_message("TX", response)
             if cipher:
                 response_bytes = response.encode("utf-8")
-                response_bytes += bytes([0] * (16 - (len(response_bytes) % 16)))
+                response_bytes += bytes(16 - (len(response_bytes) % 16))
                 encryptor = cipher.encryptor()
                 response = b64encode(
                     encryptor.update(response_bytes) + encryptor.finalize()

@@ -172,8 +172,7 @@ class MerossHttpClient:
 
             if _cipher := self._encryption_cipher:
                 request_bytes = request.encode("utf-8")
-                if pad_length := (len(request_bytes) % 16):
-                    request_bytes += bytes([0] * (16 - pad_length))
+                request_bytes += bytes(16 - (len(request_bytes) % 16))
                 encryptor = _cipher.encryptor()
                 request = b64encode(
                     encryptor.update(request_bytes) + encryptor.finalize()
@@ -215,11 +214,9 @@ class MerossHttpClient:
             response = await response.text()
             if _cipher:
                 decryptor = _cipher.decryptor()
-                response = (
-                    (decryptor.update(b64decode(response)) + decryptor.finalize())
-                    .decode("utf8")
-                    .rstrip("\0")
-                )
+                decrypted_bytes = decryptor.update(b64decode(response))
+                decrypted_bytes += decryptor.finalize()
+                response = decrypted_bytes.decode("utf8").rstrip("\0")
 
             if logger:
                 logger.log(
