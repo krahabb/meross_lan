@@ -2,7 +2,7 @@
 
 import enum
 import logging
-from typing import Final, NotRequired, TypedDict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Final, NotRequired, TypedDict
 
 from homeassistant import const as hac
 

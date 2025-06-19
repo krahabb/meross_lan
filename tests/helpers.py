@@ -13,7 +13,7 @@ from unittest.mock import ANY, MagicMock, patch
 
 import aiohttp
 from freezegun.api import freeze_time
-from homeassistant import config_entries, const as hac
+from homeassistant import config_entries as ce, const as hac
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import entity_registry as er
 import pytest
@@ -65,7 +65,12 @@ if TYPE_CHECKING:
 
     _TimeFactory = FrozenDateTimeFactory | StepTickTimeFactory | TickingDateTimeFactory
 
-    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.config_entries import (
+        ConfigEntriesFlowManager,
+        ConfigEntry,
+        ConfigFlowResult,
+        OptionsFlowManager,
+    )
     from homeassistant.core import HomeAssistant
 
     MqttMockPahoClient = MagicMock
@@ -86,15 +91,14 @@ if TYPE_CHECKING:
         MerossMessage,
         MerossResponse,
     )
-
     from emulator import MerossEmulator
 
 LOGGER = logging.getLogger("meross_lan.tests")
 
 
 async def async_assert_flow_menu_to_step(
-    flow: config_entries.ConfigEntriesFlowManager | config_entries.OptionsFlowManager,
-    result: config_entries.ConfigFlowResult,
+    flow: "ConfigEntriesFlowManager | OptionsFlowManager",
+    result: "ConfigFlowResult",
     menu_step_id: str,
     next_step_id: str,
     next_step_type: FlowResultType = FlowResultType.FORM,
@@ -354,6 +358,8 @@ class LogManager:
         request: Final[FixtureRequest]
         capsys: Final[CaptureFixture | None]  # type: ignore
         caplog: Final[LogCaptureFixture | None]  # type: ignore
+        time_mock: Final[TimeMocker | None]  # type: ignore
+        aioclient_mock: Final[AiohttpClientMocker | None]  # type: ignore
 
         class LogMatchArgs(TypedDict):
             level: NotRequired[int]
@@ -370,12 +376,24 @@ class LogManager:
     """List of logs to be automatically ignored when dumping
      the WARNINGS in flush_logs."""
 
-    OPTIONAL_FIXTURES: "ClassVar" = ["capsys", "caplog"]
+    OPTIONAL_FIXTURES: "ClassVar[tuple[str, ...]]" = (
+        "capsys",
+        "caplog",
+        "time_mock",
+        "aioclient_mock",
+    )
+    REQUESTED_FIXTURES: "ClassVar[tuple[str, ...]]" = ()
 
-    __slots__ = ["request"] + OPTIONAL_FIXTURES
+    __slots__ = ("request",) + OPTIONAL_FIXTURES
 
     def __init__(self, request: "FixtureRequest"):
         self.request = request
+        for fixture in self.__class__.REQUESTED_FIXTURES:
+            setattr(
+                self,
+                fixture,
+                request.getfixturevalue(fixture),
+            )
         for fixture in self.__class__.OPTIONAL_FIXTURES:
             setattr(
                 self,
@@ -386,8 +404,6 @@ class LogManager:
                         if fixture in request.fixturenames
                         else None
                     )
-                    if request
-                    else None
                 ),
             )
 
@@ -516,7 +532,7 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
 
     @property
     def config_entry_loaded(self):
-        return self.config_entry.state == config_entries.ConfigEntryState.LOADED
+        return self.config_entry.state is ce.ConfigEntryState.LOADED
 
     async def async_setup(self):
         result = await self.hass.config_entries.async_setup(self.config_entry_id)
@@ -533,7 +549,9 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
         diagnostic = await async_get_config_entry_diagnostics(
             self.hass, self.config_entry
         )
-        assert diagnostic
+        assert diagnostic["version"] == mlc.CONF_TRACE_VERSION
+        assert diagnostic["config"].keys() == self.config_entry.data.keys()
+        return diagnostic
 
     async def __aenter__(self):
         if self.auto_setup:
@@ -541,7 +559,7 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
-        if self.config_entry.state.recoverable:
+        if self.config_entry.state is ce.ConfigEntryState.LOADED:
             assert await self.async_unload()
         self.flush_logs(self.config_entry.title)
         return None
@@ -568,6 +586,23 @@ class ProfileEntryMocker(ConfigEntryMocker):
 
         class Args(ConfigEntryMocker.Args):
             pass
+
+        time_mock: Final[TimeMocker]  # type: ignore
+        aioclient_mock: Final[AiohttpClientMocker]  # type: ignore
+        cloudapi_mock: Final["CloudApiMocker"]  # type: ignore
+        merossmqtt_mock: Final["MerossMQTTMocker"]  # type: ignore
+
+    REQUESTED_FIXTURES = (
+        "time_mock",
+        "aioclient_mock",
+        "cloudapi_mock",
+        "merossmqtt_mock",
+    ) + ConfigEntryMocker.REQUESTED_FIXTURES
+
+    __slots__ = (
+        "cloudapi_mock",
+        "merossmqtt_mock",
+    )
 
     def __init__(
         self, request: "FixtureRequest", hass: "HomeAssistant", **kwargs: "Unpack[Args]"
@@ -746,9 +781,10 @@ class DeviceContext(ConfigEntryMocker):
     if TYPE_CHECKING:
 
         class Args(ConfigEntryMocker.Args):
-            time: NotRequired[TimeMocker | datetime | None]
+            time: NotRequired[datetime]
 
-        time: Final[TimeMocker]
+        time_mock: Final[TimeMocker]  # type: ignore
+        aioclient_mock: Final[AiohttpClientMocker]  # type: ignore
 
     IGNORED_LOGS = (
         LogManager.LogMatchTuple(
@@ -756,13 +792,15 @@ class DeviceContext(ConfigEntryMocker):
         ),
     )
 
+    REQUESTED_FIXTURES = (
+        "time_mock",
+        "aioclient_mock",
+    ) + ConfigEntryMocker.REQUESTED_FIXTURES
+
     __slots__ = (
         "emulator",
         "emulator_context",
         "device_id",
-        "time",
-        "_aioclient_mock",
-        "_time_mock_owned",
     )
 
     def __init__(
@@ -770,7 +808,6 @@ class DeviceContext(ConfigEntryMocker):
         request: "FixtureRequest",
         hass: "HomeAssistant",
         emulator: "MerossEmulator | str",
-        aioclient_mock: "AiohttpClientMocker",
         **kwargs: "Unpack[Args]",
     ):
         if isinstance(emulator, str):
@@ -790,24 +827,18 @@ class DeviceContext(ConfigEntryMocker):
         )
         self.emulator = emulator
         self.device_id = emulator.uuid
-        self._aioclient_mock = aioclient_mock
-        time = kwargs.get("time")
-        if isinstance(time, TimeMocker):
-            self.time = time
-            self._time_mock_owned = False
-        else:
-            self.time = TimeMocker(hass, time)
-            self._time_mock_owned = True
+        try:
+            self.time_mock.time.move_to(kwargs["time"])  # type: ignore
+        except KeyError:
+            pass
 
     @property
     def device(self) -> "Device":
         return self.api.devices[self.device_id]  # type: ignore
 
     async def __aenter__(self):
-        if self._time_mock_owned:
-            self.time.__enter__()
         self.emulator_context = EmulatorContext(
-            self.emulator, self._aioclient_mock, frozen_time=self.time.time
+            self.emulator, self.aioclient_mock, frozen_time=self.time_mock.time
         )
         self.emulator_context.__enter__()
         return await super().__aenter__()
@@ -817,8 +848,6 @@ class DeviceContext(ConfigEntryMocker):
             return await super().__aexit__(exc_type, exc_value, traceback)
         finally:
             self.emulator_context.__exit__(exc_type, exc_value, traceback)
-            if self._time_mock_owned:
-                self.time.__exit__(exc_type, exc_value, traceback)
             if exc_value:
                 exc_value.args = (*exc_value.args, self.emulator.uuid)
 
@@ -832,7 +861,9 @@ class DeviceContext(ConfigEntryMocker):
         if not self.config_entry_loaded:
             await self.async_setup()
         assert (device := self.device) and not device.online
-        await self.time.async_tick(timedelta(seconds=mlc.PARAM_COLDSTARTPOLL_DELAY))
+        await self.time_mock.async_tick(
+            timedelta(seconds=mlc.PARAM_COLDSTARTPOLL_DELAY)
+        )
         assert device.online
         return device
 
@@ -862,15 +893,13 @@ class DeviceContext(ConfigEntryMocker):
         # fire the entity registry changed
         await self.hass.async_block_till_done()
         # perform the reload task after RELOAD_AFTER_UPDATE_DELAY
-        await self.time.async_tick(
-            timedelta(seconds=config_entries.RELOAD_AFTER_UPDATE_DELAY)
-        )
+        await self.time_mock.async_tick(timedelta(seconds=ce.RELOAD_AFTER_UPDATE_DELAY))
         # (re)online the device
         return await self.perform_coldstart()
 
     async def async_poll_single(self):
         """Advances the time mocker up to the next polling cycle and executes it."""
-        await self.time.async_tick(
+        await self.time_mock.async_tick(
             self.device._polling_callback_unsub.when() - self.hass.loop.time()  # type: ignore
         )
 
@@ -882,11 +911,11 @@ class DeviceContext(ConfigEntryMocker):
         stepping exactly through each single polling loop."""
         if not isinstance(timeout, datetime):
             if isinstance(timeout, timedelta):
-                timeout = self.time() + timeout
+                timeout = self.time_mock() + timeout
             else:
-                timeout = self.time() + timedelta(seconds=timeout)
+                timeout = self.time_mock() + timedelta(seconds=timeout)
 
-        while self.time() < timeout:
+        while self.time_mock() < timeout:
             await self.async_poll_single()
 
 

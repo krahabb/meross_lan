@@ -119,7 +119,7 @@ class EntityTest(EntityComponentTest):
     async def async_test_enabled_callback(self, entity: MLNumber):
         is_config_number = isinstance(entity, MLConfigNumber)
         states = self.hass_states
-        time_mocker = self.device_context.time
+        time_mocker = self.device_context.time_mock
         await self.async_service_call(
             haec.SERVICE_SET_VALUE, {haec.ATTR_VALUE: entity.max_value}
         )
@@ -137,7 +137,7 @@ class EntityTest(EntityComponentTest):
 
     async def async_test_disabled_callback(self, entity: MLNumber):
         is_config_number = isinstance(entity, MLConfigNumber)
-        time_mocker = self.device_context.time
+        time_mocker = self.device_context.time_mock
         await entity.async_set_native_value(entity.native_max_value)
         if is_config_number:
             await time_mocker.async_tick(entity.DEBOUNCE_DELAY)

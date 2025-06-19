@@ -37,7 +37,6 @@ except ImportError:
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
-
     from pytest_homeassistant_custom_component.test_util.aiohttp import (
         AiohttpClientMocker,
     )
@@ -47,6 +46,7 @@ async def _cleanup_config_entry(hass: "HomeAssistant", result: ConfigFlowResult)
     config_entry: ConfigEntry = result["result"]  # type: ignore
     assert config_entry.state == ConfigEntryState.LOADED
     await hass.config_entries.async_unload(config_entry.entry_id)
+    await hass.config_entries.async_remove(config_entry.entry_id)
 
 
 async def test_device_config_flow(hass: "HomeAssistant", aioclient_mock):
@@ -387,9 +387,7 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
     device_type = mc.TYPE_MTS200
     flow = hass.config_entries.flow
 
-    async with helpers.DeviceContext(
-        request, hass, device_type, aioclient_mock
-    ) as device_context:
+    async with helpers.DeviceContext(request, hass, device_type) as device_context:
         emulator = device_context.emulator
         device = await device_context.perform_coldstart()
 
@@ -465,18 +463,15 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
             )
 
 
-async def test_options_flow(
-    request, hass: "HomeAssistant", aioclient_mock, hamqtt_mock, merossmqtt_mock
-):
+async def test_device_options_flow(request, hass: "HomeAssistant"):
     """
     Tests the device config entry option flow. This code could potentially use
     either HTTP or MQTT so we accordingly mock both. TODO: perform the test check
     against different config options (namely: the protocol) in order to see if
-    they behave as expected
+    they behave as expected.
+    TODO: check device bind and reset
     """
-    async with helpers.DeviceContext(
-        request, hass, mc.TYPE_MTS200, aioclient_mock
-    ) as context:
+    async with helpers.DeviceContext(request, hass, mc.TYPE_MTS200) as context:
         device = await context.perform_coldstart()
 
         options_flow = hass.config_entries.options
@@ -497,6 +492,64 @@ async def test_options_flow(
             options_flow, result, "keyerror", "device"
         )
         user_input[mlc.CONF_KEY] = device.key
+        result = await options_flow.async_configure(
+            result["flow_id"], user_input=user_input
+        )
+        assert result.get("type") == FlowResultType.CREATE_ENTRY
+
+
+async def test_device_unbind_options_flow(request, hass: "HomeAssistant"):
+
+    async with helpers.DeviceContext(request, hass, mc.TYPE_MTS200) as context:
+        await context.perform_coldstart()
+
+        options_flow = hass.config_entries.options
+        result = await options_flow.async_init(context.config_entry_id)
+        result = await helpers.async_assert_flow_menu_to_step(
+            options_flow, result, "menu", "unbind"
+        )
+        user_input = {
+            "post_action": "delete",
+        }
+        result = await options_flow.async_configure(
+            result["flow_id"], user_input=user_input
+        )
+        assert result.get("type") == FlowResultType.CREATE_ENTRY
+
+        await hass.async_block_till_done()  # entry remove Task
+        assert not hass.config_entries.async_has_entries(mlc.DOMAIN)
+
+
+async def test_mqtthub_options_flow(request, hass: "HomeAssistant", hamqtt_mock):
+    async with helpers.MQTTHubEntryMocker(request, hass) as context:
+
+        options_flow = hass.config_entries.options
+        result = await options_flow.async_init(context.config_entry_id)
+        result = await helpers.async_assert_flow_menu_to_step(
+            options_flow, result, "menu", "hub"
+        )
+        user_input = {
+            mlc.CONF_KEY: "meross",
+            mlc.CONF_ALLOW_MQTT_PUBLISH: True,
+        }
+        result = await options_flow.async_configure(
+            result["flow_id"], user_input=user_input
+        )
+        assert result.get("type") == FlowResultType.CREATE_ENTRY
+
+
+async def test_profile_options_flow(request, hass: "HomeAssistant"):
+    async with helpers.ProfileEntryMocker(request, hass) as context:
+
+        options_flow = hass.config_entries.options
+        result = await options_flow.async_init(context.config_entry_id)
+        result = await helpers.async_assert_flow_menu_to_step(
+            options_flow, result, "menu", "profile"
+        )
+        user_input = {
+            mlc.CONF_ALLOW_MQTT_PUBLISH: True,
+            mlc.CONF_CHECK_FIRMWARE_UPDATES: True,
+        }
         result = await options_flow.async_configure(
             result["flow_id"], user_input=user_input
         )

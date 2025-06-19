@@ -19,10 +19,6 @@ from tests import const as tc, helpers
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
-    from pytest_homeassistant_custom_component.test_util.aiohttp import (
-        AiohttpClientMocker,
-    )
-
 
 # We can pass fixtures as defined in conftest.py to tell pytest to use the fixture
 # for a given test. We can also leverage fixtures and mocks that are available in
@@ -63,9 +59,7 @@ async def test_mqtthub_entry_notready(request, hass: "HomeAssistant"):
         )
 
 
-async def test_device_entry(
-    request, hass: "HomeAssistant", aioclient_mock: "AiohttpClientMocker"
-):
+async def test_device_entry(request, hass: "HomeAssistant"):
     """
     Generic device setup testing:
     we'll try to configure and setup devices according to our
@@ -76,9 +70,7 @@ async def test_device_entry(
     i.e. we're testing something close to http connected devices
     """
     for emulator in helpers.build_emulators():
-        async with helpers.DeviceContext(
-            request, hass, emulator, aioclient_mock
-        ) as context:
+        async with helpers.DeviceContext(request, hass, emulator) as context:
             assert await context.async_setup()
 
             descriptor = emulator.descriptor
@@ -119,12 +111,7 @@ async def test_device_entry(
                 assert state and state.state.isdigit()
 
 
-async def test_profile_entry(
-    request,
-    hass: "HomeAssistant",
-    cloudapi_mock: helpers.CloudApiMocker,
-    merossmqtt_mock: helpers.MerossMQTTMocker,
-):
+async def test_profile_entry(request, hass: "HomeAssistant"):
     """
     Test a Meross cloud profile entry
     """

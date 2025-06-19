@@ -19,7 +19,7 @@ if typing.TYPE_CHECKING:
 
 
 async def test_hamqtt_device_session(
-    request, hass: "HomeAssistant", hamqtt_mock: helpers.HAMQTTMocker, aioclient_mock
+    request, hass: "HomeAssistant", hamqtt_mock: helpers.HAMQTTMocker
 ):
     """
     check the local broker session management handles the device transactions
@@ -28,9 +28,7 @@ async def test_hamqtt_device_session(
 
     # We need to provide a configured device so that our
     # api HAMQTTConnection doesn't spawn discoveries
-    async with helpers.DeviceContext(
-        request, hass, mc.TYPE_MSS310, aioclient_mock
-    ) as context:
+    async with helpers.DeviceContext(request, hass, mc.TYPE_MSS310) as context:
         # let the device perform it's poll and come online
         await context.perform_coldstart()
 

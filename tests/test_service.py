@@ -46,14 +46,11 @@ async def test_request_on_device(
     request,
     hass: "HomeAssistant",
     hamqtt_mock: helpers.HAMQTTMocker,
-    aioclient_mock,
 ):
     """
     Test service calls routed through a device
     """
-    async with helpers.DeviceContext(
-        request, hass, mc.TYPE_MSS310, aioclient_mock
-    ) as context:
+    async with helpers.DeviceContext(request, hass, mc.TYPE_MSS310) as context:
         # let the device perform it's poll and come online
         await context.perform_coldstart()
 
@@ -93,14 +90,11 @@ async def test_request_notification(
     request,
     hass: "HomeAssistant",
     hamqtt_mock: helpers.HAMQTTMocker,
-    aioclient_mock,
 ):
     """
     Test service calls routed through a device
     """
-    async with helpers.DeviceContext(
-        request, hass, mc.TYPE_MSS310, aioclient_mock
-    ) as context:
+    async with helpers.DeviceContext(request, hass, mc.TYPE_MSS310) as context:
         # let the device perform it's poll and come online
         await context.perform_coldstart()
         # when routing the call through a device the service data 'key' is not used

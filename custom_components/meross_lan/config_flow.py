@@ -1327,11 +1327,13 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                             ce.ConfigEntryDisabler.USER,
                         ),
                         f".OptionsFlow.async_set_disabled_by",
+                        eager_start=False,
                     )
                 elif action == KEY_ACTION_DELETE:
                     api.async_create_task(
                         self.hass.config_entries.async_remove(self.config_entry_id),
                         f".OptionsFlow.async_remove",
+                        eager_start=False,
                     )
                 return self.async_create_entry(data=None)  # type: ignore
 

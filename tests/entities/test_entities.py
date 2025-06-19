@@ -99,7 +99,6 @@ for entity_domain in (
 async def test_entities(
     request,
     hass: "HomeAssistant",
-    aioclient_mock,
     capsys: "CaptureFixture",
     disable_entity_registry_update,
 ):
@@ -169,9 +168,7 @@ async def test_entities(
                                 _add_func(HUB_SUBDEVICES_ENTITIES[p_key])
                             break
 
-            async with helpers.DeviceContext(
-                request, hass, emulator, aioclient_mock
-            ) as device_context:
+            async with helpers.DeviceContext(request, hass, emulator) as device_context:
                 EntityComponentTest.device_context = device_context
                 try:
                     device_name = device_context.config_entry.title
