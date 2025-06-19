@@ -1,23 +1,43 @@
 {
   "domain": "meross_lan",
   "name": "Meross LAN",
-  "after_dependencies": ["mqtt", "dhcp", "recorder", "persistent_notification"],
-  "codeowners": ["@krahabb"],
+  "after_dependencies": [
+    "mqtt",
+    "dhcp",
+    "recorder",
+    "persistent_notification"
+  ],
+  "codeowners": [
+    "@krahabb"
+  ],
   "config_flow": true,
   "dhcp": [
-    {"hostname": "*", "macaddress": "48E1E9*"},
-    {"hostname": "*", "macaddress": "C4E7AE*"},
-    {"hostname": "*", "macaddress": "34298F1*"},
-    {"registered_devices": true}
+    {
+      "hostname": "*",
+      "macaddress": "48E1E9*"
+    },
+    {
+      "hostname": "*",
+      "macaddress": "C4E7AE*"
+    },
+    {
+      "hostname": "*",
+      "macaddress": "34298F1*"
+    },
+    {
+      "registered_devices": true
+    }
   ],
   "documentation": "https://github.com/krahabb/meross_lan",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
-  "loggers": ["custom_components.meross_lan"],
+  "loggers": [
+    "custom_components.meross_lan"
+  ],
   "mqtt": [
     "/appliance/+/publish"
   ],
   "requirements": [],
-  "version": "5.5.1-alpha.1"
+  "version": "5.6.0-alpha.0"
 }
