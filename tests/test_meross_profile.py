@@ -42,8 +42,8 @@ async def test_meross_profile(
         # Our profile starts with config as in tc.MOCK_PROFILE_STORAGE and
         # the cloud api is setup with data from MOCK_CLOUDAPI_DEVICE_DEVLIST.
 
-        await time_mock.async_tick(5)
-        await time_mock.async_tick(5)
+        await time_mock.async_tick(mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
+        await time_mock.async_tick(mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
         await hass.async_block_till_done()
 
         assert len(cloudapi_mock.api_calls) >= 2

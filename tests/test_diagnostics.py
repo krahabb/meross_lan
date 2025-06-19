@@ -83,8 +83,12 @@ async def test_profile_diagnostics(
     request,
     hass: "HomeAssistant",
     merossmqtt_mock: helpers.MerossMQTTMocker,
+    time_mock: helpers.TimeMocker,
 ):
     async with helpers.ProfileEntryMocker(request, hass) as entry_mock:
+        time_mock.tick(mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
+        time_mock.tick(mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
+        await hass.async_block_till_done()
         await entry_mock.async_test_config_entry_diagnostics()
 
 
@@ -97,6 +101,9 @@ async def test_profile_tracing(
 ):
     async with helpers.ProfileEntryMocker(request, hass) as entry_mock:
         await _async_configure_options_tracing(entry_mock)
+        time_mock.tick(mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
+        time_mock.tick(mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
+        await hass.async_block_till_done()
         await _async_run_tracing(entry_mock, time_mock)
 
 
