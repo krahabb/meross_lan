@@ -388,6 +388,7 @@ class Device(BaseDevice, ConfigEntryManager):
         mn.Appliance_System_Time.name,
         mn.Appliance_Control_TriggerX.name,
         mn.Appliance_Control_Unbind.name,
+        mn.Appliance_Control_Sensor_HistoryX.name, # in mts300 our brute-force querying reboots
         mn.Appliance_Mcu_Firmware.name,  # disconnects
         mn.Appliance_Mcu_Upgrade.name,  # disconnects
         mn.Appliance_Mcu_Hp110_Preview.name,  # disconnects

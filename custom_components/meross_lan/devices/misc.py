@@ -129,9 +129,9 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
         if device.descriptor.type.startswith(mc.TYPE_MS600):
             MLPresenceSensor(device, 0, "sensor_presence")
             MLLightSensor(device, 0, "sensor_light")
-            self.polling_request_add_channel(0, {"data": ["presence", "light"]})
+            self.polling_request_add_channel(0, {mc.KEY_DATA: [mc.KEY_PRESENCE, mc.KEY_LIGHT]})
         else:
-            self.polling_request_add_channel(0, {"data": []})
+            self.polling_request_add_channel(0, {mc.KEY_DATA: []})
 
     def _handle_Appliance_Control_Sensor_LatestX(self, header, payload, /):
         ns = self.ns
@@ -164,7 +164,7 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
                             channel_payload[mc.KEY_DATA].append(data_key)
                             break
                     else:
-                        polling_request_channels.append({key_channel: channel, "data": [data_key]})
+                        polling_request_channels.append({key_channel: channel, mc.KEY_DATA: [data_key]})
                         self.polling_response_size = (
                             self.polling_response_base_size
                             + len(polling_request_channels) * self.polling_response_item_size

@@ -98,6 +98,8 @@ class PayloadType(enum.Enum):
     """Command GET with an empty list returns all the (channels) state."""
     LIST_C = [{mc.KEY_CHANNEL: 0}]
     """Command GET with channel index dicts in a list returns the states requested."""
+    LIST_SX = [{mc.KEY_CHANNEL: 0, mc.KEY_DATA: []}]
+    """Command GET for *.LatestX (and maybe *.HistoryX) ns."""
 
 
 class Grammar(enum.StrEnum):
@@ -368,6 +370,7 @@ P_DICT: "Namespace.Args" = {"payload": PayloadType.DICT}
 P_DICT_C: "Namespace.Args" = {"payload": PayloadType.DICT_C}
 P_LIST: "Namespace.Args" = {"payload": PayloadType.LIST}
 P_LIST_C: "Namespace.Args" = {"payload": PayloadType.LIST_C}
+P_LIST_SX: "Namespace.Args" = {"payload": PayloadType.LIST_SX}
 G_UNKNOWN: "Namespace.Args" = {"grammar": Grammar.UNKNOWN}
 G_STABLE: "Namespace.Args" = {"grammar": Grammar.STABLE}
 G_EXPERIMENTAL: "Namespace.Args" = {"grammar": Grammar.EXPERIMENTAL}
@@ -436,7 +439,7 @@ Appliance_Control_Diffuser_Light = ns(
 )
 Appliance_Control_Diffuser_Sensor = ns(
     "Appliance.Control.Diffuser.Sensor", mc.KEY_SENSOR, ARGS_GETPUSH
-) # this ns has no ns_key in payload response
+)  # this ns has no ns_key in payload response
 Appliance_Control_Diffuser_Spray = ns(
     "Appliance.Control.Diffuser.Spray", mc.KEY_SPRAY, ARGS_GETSETPUSH
 )
@@ -449,8 +452,12 @@ Appliance_Control_ElectricityX = ns(
     ARGS_GETPUSH | P_LIST_C | G_EXPERIMENTAL,
 )
 Appliance_Control_Fan = ns("Appliance.Control.Fan", mc.KEY_FAN, ARGS_GETSET | P_LIST_C)
-Appliance_Control_Fan_BtnConfig = ns("Appliance.Control.Fan.BtnConfig", mc.KEY_FAN, ARGS_GETSETPUSHQ | P_LIST_C)
-Appliance_Control_Fan_Config = ns("Appliance.Control.Fan.Config", mc.KEY_FAN, ARGS_GETSET | P_LIST_C)
+Appliance_Control_Fan_BtnConfig = ns(
+    "Appliance.Control.Fan.BtnConfig", mc.KEY_FAN, ARGS_GETSETPUSHQ | P_LIST_C
+)
+Appliance_Control_Fan_Config = ns(
+    "Appliance.Control.Fan.Config", mc.KEY_FAN, ARGS_GETSET | P_LIST_C
+)
 Appliance_Control_FilterMaintenance = ns(
     "Appliance.Control.FilterMaintenance", mc.KEY_FILTER, ARGS_PUSHQ | P_LIST
 )
@@ -498,20 +505,18 @@ Appliance_Control_Sensor_Latest = ns(
 Appliance_Control_Sensor_HistoryX = ns(
     "Appliance.Control.Sensor.HistoryX",
     mc.KEY_HISTORY,
-    ARGS_GET | P_LIST_C | IS_SENSOR,
-)  # cannot get query to work...
+    ARGS_GET | P_LIST_SX | IS_SENSOR,
+)  # cannot get query to work...it might look like LatestX
 Appliance_Control_Sensor_LatestX = ns(
     "Appliance.Control.Sensor.LatestX",
     mc.KEY_LATEST,
-    ARGS_GETPUSH | P_LIST_C | IS_SENSOR,
+    ARGS_GETPUSH | P_LIST_SX | IS_SENSOR,
 )
 Appliance_Control_Spray = ns("Appliance.Control.Spray", mc.KEY_SPRAY, ARGS_GETSETPUSH)
 Appliance_Control_TempUnit = ns(
     "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, ARGS_GETSET | P_LIST_C
 )
-Appliance_Control_Timer = ns(
-    "Appliance.Control.Timer", mc.KEY_TIMER, ARGS_GET | P_LIST
-)
+Appliance_Control_Timer = ns("Appliance.Control.Timer", mc.KEY_TIMER, ARGS_GET | P_LIST)
 Appliance_Control_TimerX = ns("Appliance.Control.TimerX", mc.KEY_TIMERX, ARGS_NO_Q)
 Appliance_Control_Toggle = ns(
     "Appliance.Control.Toggle", mc.KEY_TOGGLE, ARGS_GETSETPUSH

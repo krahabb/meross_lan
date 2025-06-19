@@ -214,12 +214,6 @@ class NamespaceHandler:
         key_channel = self.ns.key_channel
         for channel_payload in polling_request_channels:
             if channel_payload[key_channel] == channel:
-                # using log_exception to signal a suspicious situation in testing
-                self.device.log_exception(
-                    self.device.WARNING,
-                    Exception(f"channel({channel}) already present"),
-                    f"polling_request_add_channel(ns={self.ns.name})",
-                )
                 break
         else:
             polling_request_channels.append({key_channel: channel} | extra)
