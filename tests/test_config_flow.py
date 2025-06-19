@@ -1,5 +1,6 @@
 """Test meross_lan config flow"""
 
+import asyncio
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -536,6 +537,9 @@ async def test_mqtthub_options_flow(request, hass: "HomeAssistant", hamqtt_mock)
             result["flow_id"], user_input=user_input
         )
         assert result.get("type") == FlowResultType.CREATE_ENTRY
+
+    # try to fight subscribe/unsubscribe cooldowns
+    await asyncio.sleep(1)
 
 
 async def test_profile_options_flow(request, hass: "HomeAssistant"):
