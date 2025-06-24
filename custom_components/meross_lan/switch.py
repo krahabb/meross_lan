@@ -47,6 +47,7 @@ class MLEmulatedSwitch(me.MEPartialAvailableMixin, MLSwitchBase):
         manager: "BaseDevice",
         channel: object,
         entitykey: str | None = None,
+        /,
         **kwargs: "Unpack[MLSwitchBase.Args]",
     ):
         super().__init__(
@@ -82,7 +83,7 @@ class MLSwitch(MLSwitchBase):
     """
 
     @abstractmethod
-    async def async_request_value(self, device_value):
+    async def async_request_value(self, device_value, /):
         raise NotImplementedError("'async_request_value' needs to be overriden")
 
     async def async_turn_on(self, **kwargs):
@@ -111,7 +112,7 @@ class MLToggle(me.MENoChannelMixin, MLSwitch):
 
     ns = mn.Appliance_Control_Toggle
 
-    def __init__(self, manager: "Device"):
+    def __init__(self, manager: "Device", /):
         # 2024-03-13: passing entitykey="0" instead of channel in order
         # to mantain unique_id compatibility with installations but
         # updating to new toggle entity model (where channel is None for this entity type)
@@ -119,7 +120,7 @@ class MLToggle(me.MENoChannelMixin, MLSwitch):
         manager.register_parser_entity(self)
 
 
-def digest_init_toggle(device: "Device", digest: dict) -> "DigestInitReturnType":
+def digest_init_toggle(device: "Device", digest: dict, /) -> "DigestInitReturnType":
     """{"onoff": 0, "lmTime": 1645391086}"""
     MLToggle(device)
     handler = device.namespace_handlers[mn.Appliance_Control_Toggle.name]
@@ -130,15 +131,14 @@ class MLToggleX(me.MEDictChannelMixin, MLSwitch):
 
     ns = mn.Appliance_Control_ToggleX
 
-    def __init__(self, manager: "Device", channel: object):
+    def __init__(self, manager: "Device", channel: object, /):
         super().__init__(manager, channel, None, MLSwitch.DeviceClass.OUTLET)
         manager.register_parser_entity(self)
 
 
 def digest_init_togglex(
-    device: "Device", togglex_digest: list
+    device: "Device", togglex_digest: list, /
 ) -> "DigestInitReturnType":
-    """[{ "channel": 0, "onoff": 1 }]"""
     # We don't initialize every switch/ToggleX here since the digest reported channels
     # might be mapped to more specialized entities:
     # this is true for lights (MLLight), garageDoor (MLGarage) and fan (MLFan) though

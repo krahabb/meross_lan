@@ -23,7 +23,16 @@ from . import Loggable
 from .namespaces import NamespaceParser, mc, mn
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, ClassVar, Final, Mapping, NotRequired, TypedDict, Unpack
+    from typing import (
+        Any,
+        Callable,
+        ClassVar,
+        Final,
+        Mapping,
+        NotRequired,
+        TypedDict,
+        Unpack,
+    )
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -157,6 +166,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         channel: object | None,
         entitykey: str | None = None,
         device_class: str | None = None,
+        /,
         **kwargs: "Unpack[Args]",
     ):
         """
@@ -254,7 +264,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         self.manager: "EntityManager" = None  # type: ignore
 
     @final
-    def register_state_callback(self, state_callback: "StateCallback"):
+    def register_state_callback(self, state_callback: "StateCallback", /):
         if not self.state_callbacks:
             self.state_callbacks = set()
         self.state_callbacks.add(state_callback)
@@ -275,19 +285,19 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         self.available = False
         self.flush_state()
 
-    def update_device_value(self, device_value):
+    def update_device_value(self, device_value, /):
         """This is a stub definition. It will be called by _parse (when namespace dispatching
         is configured so) or directly as a short path inside other parsers to forward the
         incoming device value to the underlyinh HA entity state."""
         raise NotImplementedError("Called 'update_device_value' on wrong entity type")
 
-    def update_native_value(self, native_value):
+    def update_native_value(self, native_value, /):
         """This is a stub definition. It will usually be called by update_device_value
         with the result of the conversion from the incoming device value (from Meross protocol)
         to the proper HA type/value for the entity class."""
         raise NotImplementedError("Called 'update_native_value' on wrong entity type")
 
-    async def async_request_value(self, device_value):
+    async def async_request_value(self, device_value, /):
         """Sends the actual request to the device. This needs to be overloaded in entities
         actually supporting the method SET on their namespace. Since the syntax for the payload
         is almost generalized we have some defaults implementations based on mixins ready to be
@@ -328,7 +338,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         return self.manager.generate_unique_id(self)
 
     # interface: NamespaceParser
-    def _parse(self, payload: "Mapping[str, Any]"):
+    def _parse(self, payload: "Mapping[str, Any]", /):
         """Default parsing for entities. Set the proper
         key_value in class/instance definition to make it work."""
         self.update_device_value(payload[self.key_value])
@@ -343,7 +353,7 @@ class MENoChannelMixin(MLEntity if TYPE_CHECKING else object):
     manager: "BaseDevice"
 
     # interface: MLEntity
-    async def async_request_value(self, device_value):
+    async def async_request_value(self, device_value, /):
         """sends the actual request to the device. this is likely to be overloaded"""
         ns = self.ns
         return await self.manager.async_request_ack(
@@ -363,7 +373,7 @@ class MEDictChannelMixin(MLEntity if TYPE_CHECKING else object):
     manager: "BaseDevice"
 
     # interface: MLEntity
-    async def async_request_value(self, device_value):
+    async def async_request_value(self, device_value, /):
         """sends the actual request to the device. this is likely to be overloaded"""
         ns = self.ns
         return await self.manager.async_request_ack(
@@ -388,7 +398,7 @@ class MEListChannelMixin(MLEntity if TYPE_CHECKING else object):
     manager: "BaseDevice"
 
     # interface: MLEntity
-    async def async_request_value(self, device_value):
+    async def async_request_value(self, device_value, /):
         """sends the actual request to the device. this is likely to be overloaded"""
         ns = self.ns
         return await self.manager.async_request_ack(
@@ -403,15 +413,17 @@ class MEAutoChannelMixin(MLEntity if TYPE_CHECKING else object):
     Implementation for protocol method 'SET' on entities/namespaces backed by a channel
     where the command payload could be either a list or a dict. This mixin actually
     tries to learn the correct format at runtime buy 'sensing' it
-    Actual examples: Appliance.Control.ToggleX
+    Actual examples: None.
     """
 
-    manager: "BaseDevice"
+    if TYPE_CHECKING:
+        manager: "BaseDevice"
+        _set_format: type | None
 
     _set_format = None
 
     # interface: MLEntity
-    async def async_request_value(self, device_value):
+    async def async_request_value(self, device_value, /):
         """sends the actual request to the device. this is likely to be overloaded"""
         ns = self.ns
         if self._set_format is None:
@@ -520,6 +532,7 @@ class MLBinaryEntity(MLEntity):
         channel: object,
         entitykey: str | None = None,
         device_class: str | None = None,
+        /,
         **kwargs: "Unpack[Args]",
     ):
         self.is_on = kwargs.pop("device_value", None)
@@ -586,6 +599,7 @@ class MLNumericEntity(MLEntity):
         channel: object,
         entitykey: str | None = None,
         device_class: str | None = None,
+        /,
         **kwargs: "Unpack[Args]",
     ):
         self.suggested_display_precision = kwargs.pop(
@@ -608,14 +622,14 @@ class MLNumericEntity(MLEntity):
         self.native_value = None
         super().set_unavailable()
 
-    def update_device_value(self, device_value: int | float):
+    def update_device_value(self, device_value: int | float, /):
         if self.device_value != device_value:
             self.device_value = device_value
             self.native_value = device_value / self.device_scale
             self.flush_state()
             return True
 
-    def update_native_value(self, native_value: int | float | None):
+    def update_native_value(self, native_value: int | float | None, /):
         if self.native_value != native_value:
             self.native_value = native_value
             self.flush_state()
