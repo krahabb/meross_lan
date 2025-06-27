@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from time import time
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_point_in_time
@@ -19,7 +19,9 @@ from ..helpers.namespaces import (
 from ..sensor import MLEnumSensor, MLNumericSensor
 from ..switch import MLSwitch
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
+    from typing import ClassVar, Final
+
     from ..helpers.device import Device
     from ..merossclient.protocol import types as mt
 
@@ -33,20 +35,28 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
     when the power is very low (likely due to power readings being a bit off).
     """
 
-    manager: "Device"
+    if TYPE_CHECKING:
+        manager: Device
 
-    SENSOR_DEFS: typing.ClassVar[
-        dict[
-            str,
-            tuple[
-                bool,
-                MLNumericSensor.DeviceClass,
-                MLNumericSensor.StateClass,
-                int,
-                int,
-            ],
+        SENSOR_DEFS: ClassVar[
+            dict[
+                str,
+                tuple[
+                    bool,
+                    MLNumericSensor.DeviceClass,
+                    MLNumericSensor.StateClass,
+                    int,
+                    int,
+                ],
+            ]
         ]
-    ] = {
+
+        # HA core entity attributes:
+        native_value: int
+
+        sensor_consumptionx: "ConsumptionXSensor | None"
+
+    SENSOR_DEFS = {
         # key: (not-optional, DeviceClass, StateClass, suggested_display_precision, device_scale)
         mc.KEY_CURRENT: (
             True,
@@ -73,7 +83,6 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
 
     # HA core entity attributes:
     entity_registry_enabled_default = False
-    native_value: int
 
     __slots__ = (
         "_estimate",
@@ -82,12 +91,12 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
         "sensor_consumptionx",
     )
 
-    def __init__(self, manager: "Device", channel: object | None):
+    def __init__(self, manager: "Device", channel: object | None, /):
         self._estimate = 0.0
         self._electricity_lastepoch = 0.0
         self._reset_unsub = None
         # depending on init order we might not have this ready now...
-        self.sensor_consumptionx: ConsumptionXSensor | None = manager.entities.get(mlc.CONSUMPTIONX_SENSOR_KEY)  # type: ignore
+        self.sensor_consumptionx = manager.entities.get(mlc.CONSUMPTIONX_SENSOR_KEY)  # type: ignore
         # here entitykey is the 'legacy' EnergyEstimateSensor one to mantain compatibility
         super().__init__(
             manager,
@@ -145,37 +154,24 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
 
     # interface: self
     def _handle_Appliance_Control_Electricity(
-        self, header, payload: "mt.MerossPayloadType"
+        self, header, payload: "mt.MerossPayloadType", /
     ):
+        # BEWARE: this indirection is needed since _parse is also used in ElectricityX
         self._parse(payload[mc.KEY_ELECTRICITY])
 
-    def _parse(self, payload: dict):
+    def _parse(self, payload: dict, /):
         """{"channel": 0, "power": 11000, ...}"""
         device = self.manager
         entities = device.entities
 
-        def _get_sensor_from_key(key: str):
-            try:
-                sensor: MLNumericSensor = entities[key if self.channel is None else f"{self.channel}_{key}"]  # type: ignore
-            except KeyError:
-                entity_def = self.SENSOR_DEFS[key]
-                sensor = MLNumericSensor(
-                    device,
-                    self.channel,
-                    key,
-                    entity_def[1],
-                    state_class=entity_def[2],
-                    suggested_display_precision=entity_def[3],
-                    device_scale=entity_def[4],
-                )
-            return sensor
-
-        sensor_power = _get_sensor_from_key(mc.KEY_POWER)
+        sensor_power = self._get_sensor_from_key(entities, mc.KEY_POWER)
         last_power = sensor_power.native_value
 
         for key in self.SENSOR_DEFS:
             if key in payload:
-                _get_sensor_from_key(key).update_device_value(payload[key])
+                self._get_sensor_from_key(entities, key).update_device_value(
+                    payload[key]
+                )
 
         power = sensor_power.native_value
         if not power:
@@ -184,7 +180,7 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
             device.check_device_timezone()
 
         # device.device_timestamp 'should be' current epoch of the message
-        if last_power is not None:
+        try:
             de = (
                 (last_power + power)  # type: ignore
                 * (device.device_timestamp - self._electricity_lastepoch)
@@ -195,14 +191,27 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
                 self.sensor_consumptionx.energy_estimate += de
             self._estimate += de
             self.update_native_value(int(self._estimate))
+        except TypeError:
+            assert last_power is None
 
         self._electricity_lastepoch = device.device_timestamp
 
-    def reset_estimate(self):
-        self._estimate -= self.native_value  # preserve fraction
-        self.update_native_value(0)
+    def _get_sensor_from_key(self, entities, key: str, /) -> MLNumericSensor:
+        try:
+            return entities[key if self.channel is None else f"{self.channel}_{key}"]
+        except KeyError:
+            entity_def = self.SENSOR_DEFS[key]
+            return MLNumericSensor(
+                self.manager,
+                self.channel,
+                key,
+                entity_def[1],
+                state_class=entity_def[2],
+                suggested_display_precision=entity_def[3],
+                device_scale=entity_def[4],
+            )
 
-    def _schedule_reset(self, _now: datetime):
+    def _schedule_reset(self, _now: datetime, /):
         with self.exception_warning("_schedule_reset"):
             today = _now.date()
             tomorrow = today + timedelta(days=1)
@@ -222,14 +231,15 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
             self.log(self.DEBUG, "_schedule_reset at %s", next_reset.isoformat())
 
     @callback
-    def _reset(self, _now: datetime):
+    def _reset(self, _now: datetime, /):
         self._reset_unsub = None
         self.log(self.DEBUG, "_reset at %s", _now.isoformat())
-        self.reset_estimate()
+        self._estimate -= self.native_value  # preserve fraction
+        self.update_native_value(0)
         self._schedule_reset(_now)
 
 
-def namespace_init_electricity(device: "Device"):
+def namespace_init_electricity(device: "Device", /):
     NamespaceHandler(
         device,
         mn.Appliance_Control_Electricity,
@@ -272,7 +282,7 @@ class ElectricityXSensor(ElectricitySensor):
 
     __slots__ = ()
 
-    def __init__(self, manager: "Device", channel: object):
+    def __init__(self, manager: "Device", channel: object, /):
         super().__init__(manager, channel)
         manager.register_parser(self, mn.Appliance_Control_ElectricityX)
 
@@ -289,7 +299,7 @@ class ElectricityXNamespaceHandler(NamespaceHandler):
     the same approach as in ConsumptionH namespace
     """
 
-    def __init__(self, device: "Device"):
+    def __init__(self, device: "Device", /):
         NamespaceHandler.__init__(
             self,
             device,
@@ -300,7 +310,7 @@ class ElectricityXNamespaceHandler(NamespaceHandler):
         # but they should come when polling.
         self.register_entity_class(ElectricityXSensor, build_from_digest=True)
 
-    def polling_request_configure(self, request_payload_type: mn.PayloadType | None):
+    def polling_request_configure(self, request_payload_type: mn.PayloadType | None, /):
         # TODO: move this device type 'patching' to some 'smart' Namespace grammar
         NamespaceHandler.polling_request_configure(
             self,
@@ -316,10 +326,22 @@ class ElectricityXNamespaceHandler(NamespaceHandler):
 
 
 class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
-    ATTR_OFFSET: typing.Final = "offset"
-    ATTR_RESET_TS: typing.Final = "reset_ts"
 
-    manager: "Device"
+    if TYPE_CHECKING:
+        manager: "Device"
+
+        ATTR_OFFSET: Final
+        ATTR_RESET_TS: Final
+
+        offset: int
+        reset_ts: int
+        energy_estimate: float
+        _consumption_last_value: int | None
+        _consumption_last_time: int | None
+
+    ATTR_OFFSET = "offset"
+    ATTR_RESET_TS = "reset_ts"
+
     ns = mn.Appliance_Control_ConsumptionX
 
     __slots__ = (
@@ -333,12 +355,12 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         "_tomorrow_midnight_epoch",
     )
 
-    def __init__(self, manager: "Device"):
-        self.offset: int = 0
-        self.reset_ts: int = 0
-        self.energy_estimate: float = 0.0
-        self._consumption_last_value: int | None = None
-        self._consumption_last_time: int | None = None
+    def __init__(self, manager: "Device", /):
+        self.offset = 0
+        self.reset_ts = 0
+        self.energy_estimate = 0.0
+        self._consumption_last_value = None
+        self._consumption_last_time = None
         # these are the device actual EPOCHs of the last midnight
         # and the midnight of they before. midnight epoch(s) are
         # the times at which the device local time trips around
@@ -418,14 +440,18 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
             self.flush_state()
             self.log(self.DEBUG, "no readings available for new day - resetting")
 
-    def _handle(self, header: dict, payload: dict):
+    def _handle(self, header, payload: dict, /):
         device = self.manager
-        # we'll look through the device array values to see
-        # data timestamped (in device time) after last midnight
-        # since we usually reset this around midnight localtime
-        # the device timezone should be aligned else it will roundtrip
-        # against it's own midnight and we'll see a delayed 'sawtooth'
+        days = payload[mc.KEY_CONSUMPTIONX]
+
         if device.device_timestamp > self._tomorrow_midnight_epoch:
+            # we're optimizing the payload response_size calculation
+            # so our multiple requests are more reliable. If anything
+            # goes wrong, the Device multiple payload managment
+            # is smart enough to adapt to wrong estimates
+            device.namespace_handlers[
+                mn.Appliance_Control_ConsumptionX.name
+            ].polling_response_size_adj(len(days))
             # catch the device starting a new day since our last update (yesterday)
             devtime = device.get_device_datetime(device.device_timestamp)
             devtime_today_midnight = datetime(
@@ -440,29 +466,19 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
             # and spend some cpu resources this way...
             self._today_midnight_epoch = devtime_today_midnight.timestamp()
             daydelta = timedelta(days=1)
-            self._tomorrow_midnight_epoch = (
-                devtime_today_midnight + daydelta
-            ).timestamp()
-            self._yesterday_midnight_epoch = (
-                devtime_today_midnight - daydelta
-            ).timestamp()
-            self.log(
-                self.DEBUG,
-                "updated midnight epochs: yesterday=%s - today=%s - tomorrow=%s",
-                str(self._yesterday_midnight_epoch),
-                str(self._today_midnight_epoch),
-                str(self._tomorrow_midnight_epoch),
-            )
+            devtime_tomorrow_midnight = devtime_today_midnight + daydelta
+            self._tomorrow_midnight_epoch = devtime_tomorrow_midnight.timestamp()
+            devtime_yesterday_midnight = devtime_today_midnight - daydelta
+            self._yesterday_midnight_epoch = devtime_yesterday_midnight.timestamp()
+            if self.isEnabledFor(self.DEBUG):
+                self.log(
+                    self.DEBUG,
+                    "updated midnight epochs: yesterday=%s - today=%s - tomorrow=%s",
+                    devtime_yesterday_midnight.isoformat(),
+                    devtime_today_midnight.isoformat(),
+                    devtime_tomorrow_midnight.isoformat(),
+                )
 
-        # we're optimizing the payload response_size calculation
-        # so our multiple requests are more reliable. If anything
-        # goes wrong, the Device multiple payload managment
-        # is smart enough to adapt to wrong estimates
-        days = payload[mc.KEY_CONSUMPTIONX]
-        days_len = len(days)
-        device.namespace_handlers[
-            mn.Appliance_Control_ConsumptionX.name
-        ].polling_response_size_adj(days_len)
         # the days array contains a month worth of data
         # but we're only interested in the last few days (today
         # and maybe yesterday) so we discard a bunch of
@@ -470,17 +486,15 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         # checks for 'not enough meaningful data' are post-poned
         # and just for safety since they're unlikely to happen
         # in a normal running environment over few days
-        days = [
-            day for day in days if day[mc.KEY_TIME] >= self._yesterday_midnight_epoch
-        ]
+        def _get_timestamp(_day, /):
+            return _day[mc.KEY_TIME]
+
+        days = sorted(
+            (day for day in days if day[mc.KEY_TIME] >= self._yesterday_midnight_epoch),
+            key=_get_timestamp,
+        )
         days_len = len(days)
-        if days_len:
-
-            def _get_timestamp(day):
-                return day[mc.KEY_TIME]
-
-            days = sorted(days, key=_get_timestamp)
-        else:
+        if not days_len:
             self.reset_consumption()
             return
 
@@ -556,7 +570,7 @@ class ConsumptionConfigNamespaceHandler(VoidNamespaceHandler):
     """Suppress processing Appliance.Control.ConsumptionConfig since
     it is already processed at the MQTTConnection message handling."""
 
-    def __init__(self, device: "Device"):
+    def __init__(self, device: "Device", /):
         super().__init__(device, mn.Appliance_Control_ConsumptionConfig)
 
 
@@ -570,7 +584,7 @@ class OverTempEnableSwitch(EntityNamespaceMixin, me.MENoChannelMixin, MLSwitch):
 
     __slots__ = ("sensor_overtemp_type",)
 
-    def __init__(self, manager: "Device"):
+    def __init__(self, manager: "Device", /):
         super().__init__(
             manager, None, "config_overtemp_enable", MLSwitch.DeviceClass.SWITCH
         )
@@ -585,7 +599,7 @@ class OverTempEnableSwitch(EntityNamespaceMixin, me.MENoChannelMixin, MLSwitch):
         self.sensor_overtemp_type = None  # type: ignore
 
     # interface: self
-    def _handle(self, header: dict, payload: dict):
+    def _handle(self, header, payload: dict, /):
         """{"overTemp": {"enable": 1,"type": 1}}"""
         overtemp = payload[mc.KEY_OVERTEMP]
         if mc.KEY_ENABLE in overtemp:
