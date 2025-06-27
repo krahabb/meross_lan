@@ -48,6 +48,7 @@ class MLNumber(me.MLNumericEntity, number.NumberEntity):
         DEVICE_CLASS_DURATION: me.MLEntity.hac.UnitOfTime.SECONDS,
         DeviceClass.HUMIDITY: me.MLEntity.hac.PERCENTAGE,
         DeviceClass.TEMPERATURE: me.MLEntity.hac.UnitOfTemperature.CELSIUS,
+        DeviceClass.TEMPERATURE_INTERVAL: me.MLEntity.hac.UnitOfTemperatureInterval.CELSIUS,
     }
 
     # HA core entity attributes:
@@ -77,6 +78,7 @@ class MLConfigNumber(me.MEListChannelMixin, MLNumber):
         channel: object | None,
         entitykey: str | None = None,
         device_class: MLNumber.DeviceClass | str | None = None,
+        /,
         **kwargs: "Unpack[MLConfigNumber.Args]",
     ):
         self._async_request_debounce_unsub = None
@@ -114,7 +116,7 @@ class MLConfigNumber(me.MEListChannelMixin, MLNumber):
         )
 
     # interface: self
-    async def _async_request_debounce(self, device_value):
+    async def _async_request_debounce(self, device_value, /):
         self._async_request_debounce_unsub = None
         if await self.async_request_value(device_value):
             self.update_device_value(device_value)
@@ -142,5 +144,5 @@ class MLEmulatedNumber(me.MEPartialAvailableMixin, MLNumber):
             if last_state := await self.get_last_state_available():
                 self.native_value = float(last_state.state)
 
-    async def async_set_native_value(self, value: float):
+    async def async_set_native_value(self, value: float, /):
         self.update_native_value(value)

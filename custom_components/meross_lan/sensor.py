@@ -49,7 +49,7 @@ class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
         kwargs: "Final[MLEnumSensor.Args]"
 
         def __init__(
-            self, entitykey: str | None = None, **kwargs: "Unpack[MLEnumSensor.Args]"
+            self, entitykey: str | None = None, /, **kwargs: "Unpack[MLEnumSensor.Args]"
         ):
             self.type = MLEnumSensor
             self.entitykey = entitykey
@@ -68,6 +68,7 @@ class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
         manager: "EntityManager",
         channel: object | None,
         entitykey: str | None,
+        /,
         **kwargs: "Unpack[Args]",
     ):
         self.native_value = kwargs.pop("native_value", None)
@@ -79,7 +80,7 @@ class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
         self.native_value = None
         super().set_unavailable()
 
-    def update_native_value(self, native_value: sensor.StateType):
+    def update_native_value(self, native_value: sensor.StateType, /):
         if self.native_value != native_value:
             self.native_value = native_value
             self.flush_state()
@@ -106,6 +107,7 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
             self,
             type: "type[MLNumericSensor] | None" = None,
             entitykey: str | None = None,
+            /,
             **kwargs: "Unpack[MLNumericSensor.Args]",
         ):
             self.type = type or MLNumericSensor
@@ -122,6 +124,7 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
         DeviceClass.VOLTAGE: me.MLEntity.hac.UnitOfElectricPotential.VOLT,
         DeviceClass.ENERGY: me.MLEntity.hac.UnitOfEnergy.WATT_HOUR,
         DeviceClass.TEMPERATURE: me.MLEntity.hac.UnitOfTemperature.CELSIUS,
+        DeviceClass.TEMPERATURE_INTERVAL: me.MLEntity.hac.UnitOfTemperatureInterval.CELSIUS,
         DeviceClass.HUMIDITY: me.MLEntity.hac.PERCENTAGE,
         DeviceClass.BATTERY: me.MLEntity.hac.PERCENTAGE,
         DeviceClass.ILLUMINANCE: me.MLEntity.hac.LIGHT_LUX,
@@ -145,6 +148,7 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
         channel: object | None,
         entitykey: str | None,
         device_class: DeviceClass | None = None,
+        /,
         **kwargs: "Unpack[Args]",
     ):
         assert device_class is not sensor.SensorDeviceClass.ENUM
@@ -166,6 +170,7 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
     def build_for_device(
         device: "Device",
         device_class: "MLNumericSensor.DeviceClass",
+        /,
         **kwargs: "Unpack[Args]",
     ):
         return MLNumericSensor(
@@ -192,6 +197,7 @@ class MLHumiditySensor(MLNumericSensor):
         manager: "EntityManager",
         channel: object | None,
         entitykey: str = "humidity",
+        /,
         **kwargs: "Unpack[MLNumericSensor.Args]",
     ):
         kwargs.setdefault("name", entitykey.capitalize())
@@ -218,6 +224,7 @@ class MLTemperatureSensor(MLNumericSensor):
         manager: "EntityManager",
         channel: object | None,
         entitykey: str = "temperature",
+        /,
         **kwargs: "Unpack[MLNumericSensor.Args]",
     ):
         kwargs.setdefault("name", entitykey.capitalize())
@@ -242,6 +249,7 @@ class MLLightSensor(MLNumericSensor):
         manager: "EntityManager",
         channel: object | None,
         entitykey: str = "light",
+        /,
         **kwargs: "Unpack[MLNumericSensor.Args]",
     ):
         kwargs.setdefault("name", entitykey.capitalize())
@@ -264,7 +272,7 @@ class MLDiagnosticSensor(MLEnumSensor):
     # HA core entity attributes:
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
 
-    def _parse(self, payload: dict):
+    def _parse(self, payload: dict, /):
         """
         This implementation aims at diagnostic sensors installed in 'well-known'
         namespace handlers to manage 'unexpected' channels when they eventually
@@ -297,10 +305,7 @@ class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
     def _get_attr_state(value):
         return ProtocolSensor.STATE_ACTIVE if value else ProtocolSensor.STATE_INACTIVE
 
-    def __init__(
-        self,
-        manager: "Device",
-    ):
+    def __init__(self, manager: "Device", /):
         self.extra_state_attributes = {}
         super().__init__(
             manager,
@@ -341,19 +346,19 @@ class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
     # and the full state will be flushed by the update_connected call
     # and call them 'after' any eventual disconnection for the same reason
 
-    def update_attr(self, attrname: str, attr_state):
+    def update_attr(self, attrname: str, attr_state, /):
         attrs = self.extra_state_attributes
         if attrname in attrs:
             attrs[attrname] = self._get_attr_state(attr_state)
             self.flush_state()
 
-    def update_attr_active(self, attrname: str):
+    def update_attr_active(self, attrname: str, /):
         attrs = self.extra_state_attributes
         if attrname in attrs:
             attrs[attrname] = self.STATE_ACTIVE
             self.flush_state()
 
-    def update_attr_inactive(self, attrname: str):
+    def update_attr_inactive(self, attrname: str, /):
         attrs = self.extra_state_attributes
         if attrname in attrs:
             attrs[attrname] = self.STATE_INACTIVE
@@ -378,7 +383,7 @@ class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
     icon = "mdi:wifi"
 
-    def __init__(self, manager: "Device"):
+    def __init__(self, manager: "Device", /):
         super().__init__(
             manager,
             None,
@@ -388,7 +393,7 @@ class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
         )
         EntityNamespaceHandler(self)
 
-    def _handle(self, header: dict, payload: dict):
+    def _handle(self, header: dict, payload: dict, /):
         self.update_native_value(payload[mc.KEY_RUNTIME][mc.KEY_SIGNAL])
 
 
@@ -400,7 +405,7 @@ class MLFilterMaintenanceSensor(MLNumericSensor):
     # HA core entity attributes:
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
 
-    def __init__(self, manager: "Device", channel):
+    def __init__(self, manager: "Device", channel, /):
         super().__init__(
             manager,
             channel,
@@ -413,7 +418,7 @@ class MLFilterMaintenanceSensor(MLNumericSensor):
 
 class FilterMaintenanceNamespaceHandler(NamespaceHandler):
 
-    def __init__(self, device: "Device"):
+    def __init__(self, device: "Device", /):
         NamespaceHandler.__init__(
             self,
             device,
@@ -431,7 +436,7 @@ class ConsumptionHSensor(MLNumericSensor):
 
     __slots__ = ()
 
-    def __init__(self, manager: "Device", channel: object | None):
+    def __init__(self, manager: "Device", channel: object | None, /):
         super().__init__(
             manager,
             channel,
@@ -441,7 +446,7 @@ class ConsumptionHSensor(MLNumericSensor):
         )
         manager.register_parser_entity(self)
 
-    def _parse_consumptionH(self, payload: dict):
+    def _parse_consumptionH(self, payload: dict, /):
         """
         {"channel": 1, "total": 958, "data": [{"timestamp": 1721548740, "value": 0}]}
         """
@@ -463,7 +468,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
     em06: 6 channels (but the query works without setting any)
     """
 
-    def __init__(self, device: "Device"):
+    def __init__(self, device: "Device", /):
         NamespaceHandler.__init__(
             self,
             device,
@@ -476,7 +481,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
             ConsumptionHSensor, initially_disabled=False, build_from_digest=True
         )
 
-    def polling_request_configure(self, request_payload_type: mn.PayloadType | None):
+    def polling_request_configure(self, request_payload_type: mn.PayloadType | None, /):
         # TODO: move this device type 'patching' to some 'smart' Namespace grammar
         NamespaceHandler.polling_request_configure(
             self,

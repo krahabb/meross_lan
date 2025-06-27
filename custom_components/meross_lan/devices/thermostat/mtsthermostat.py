@@ -95,9 +95,11 @@ class MtsCommonTemperatureNumber(MtsTemperatureNumber):
     def __init__(
         self,
         climate: "MtsThermostatClimate",
+        device_class: str = MLConfigNumber.DeviceClass.TEMPERATURE,
+        /,
         **kwargs: "Unpack[MtsCommonTemperatureNumber.Args]",
     ):
-        super().__init__(climate, self.__class__.ns.slug, **kwargs)
+        super().__init__(climate, self.__class__.ns.slug, device_class, **kwargs)
         self.manager.register_parser_entity(self)
 
     def _parse(self, payload: "mt_t.CommonTemperature_C"):
@@ -407,7 +409,9 @@ class MtsThermostatClimate(MtsClimate):
             self.native_max_value = 8
             self.native_min_value = -8
             self.native_step = 0.1
-            super().__init__(climate)
+            super().__init__(
+                climate, MtsCommonTemperatureNumber.DeviceClass.TEMPERATURE_INTERVAL
+            )
 
     def __init__(self, manager: "Device", channel):
         super().__init__(manager, channel)

@@ -308,6 +308,8 @@ class MtsTemperatureNumber(MLConfigNumber):
         self,
         climate: "MtsClimate",
         entitykey: str,
+        device_class: str = MLConfigNumber.DeviceClass.TEMPERATURE,
+        /,
         **kwargs: "Unpack[MLConfigNumber.Args]",
     ):
         kwargs["device_scale"] = climate.device_scale
@@ -315,7 +317,7 @@ class MtsTemperatureNumber(MLConfigNumber):
             climate.manager,
             climate.channel,
             entitykey,
-            MLConfigNumber.DeviceClass.TEMPERATURE,
+            device_class,
             **kwargs,
         )
 
