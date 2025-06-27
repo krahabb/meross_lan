@@ -10,7 +10,7 @@
       "justMyCode": false,
       "args": [
         "-H",
-        "127.0.0.1",
+        "0.0.0.0",
         "-P",
         "40000",
         "emulator:run",
