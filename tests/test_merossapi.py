@@ -20,7 +20,7 @@ if typing.TYPE_CHECKING:
 
 
 async def test_hamqtt_device_session(
-    request, hass: "HomeAssistant", hamqtt_mock: helpers.HAMQTTMocker, /
+    request, hass: "HomeAssistant", hamqtt_mock: helpers.HAMQTTMocker
 ):
     """
     check the local broker session management handles the device transactions
