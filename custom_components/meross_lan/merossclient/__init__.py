@@ -13,7 +13,7 @@ from uuid import uuid4
 from .protocol import const as mc
 
 if TYPE_CHECKING:
-    from typing import Any, Iterable
+    from typing import Any, Callable, Final, Iterable, Mapping
 
     from protocol.message import MerossResponse
     from protocol.types import MerossRequestType
@@ -289,6 +289,9 @@ class MerossDeviceDescriptor:
     """
 
     if TYPE_CHECKING:
+
+        DYNAMIC_ATTRS: Final[Mapping[str, Callable[["MerossDeviceDescriptor"], Any]]]
+
         all: dict[str, Any]
         ability: dict[str, Any]
         digest: dict[str, Any]
@@ -312,15 +315,8 @@ class MerossDeviceDescriptor:
         productnametype: str
         productmodel: str
 
-    __slots__ = (
-        "payload",
-        "all",
-        "ability",
-        "digest",
-        "__dict__",
-    )
-
-    _dynamicattrs = {
+    DYNAMIC_ATTRS = {
+        # TODO: use cached_property
         mc.KEY_ALL: lambda _self: _self.payload.get(mc.KEY_ALL, {}),
         mc.KEY_ABILITY: lambda _self: _self.payload.get(mc.KEY_ABILITY, {}),
         mc.KEY_DIGEST: lambda _self: _self.all.get(mc.KEY_DIGEST, {}),
@@ -345,11 +341,19 @@ class MerossDeviceDescriptor:
         "productmodel": lambda _self: f"{_self.type} {_self.hardware.get(mc.KEY_VERSION, '')}",
     }
 
+    __slots__ = (
+        "payload",
+        "all",
+        "ability",
+        "digest",
+        "__dict__",
+    )
+
     def __init__(self, payload: dict):
         self.payload = payload
 
     def __getattr__(self, name):
-        value = MerossDeviceDescriptor._dynamicattrs[name](self)
+        value = MerossDeviceDescriptor.DYNAMIC_ATTRS[name](self)
         setattr(self, name, value)
         return value
 
@@ -358,7 +362,7 @@ class MerossDeviceDescriptor:
         reset the cached pointers
         """
         self.payload |= payload
-        for key in MerossDeviceDescriptor._dynamicattrs.keys():
+        for key in MerossDeviceDescriptor.DYNAMIC_ATTRS:
             # don't use hasattr() or so to inspect else the whole
             # dynamic attrs logic gets f...d
             try:

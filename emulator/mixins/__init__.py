@@ -457,9 +457,9 @@ class MerossEmulator:
                     request_header[mc.KEY_NAMESPACE],
                     mc.METHOD_ERROR,
                     {mc.KEY_ERROR: {mc.KEY_CODE: mc.ERROR_INVALIDKEY}},
+                    request_header[mc.KEY_MESSAGEID],
                     self.key,
                     self.topic_response,
-                    request_header[mc.KEY_MESSAGEID],
                 )
             else:
                 response = self._handle_message(request_header, request_payload)
@@ -531,9 +531,9 @@ class MerossEmulator:
                 header[mc.KEY_NAMESPACE],
                 response_method,
                 response_payload,
+                header[mc.KEY_MESSAGEID],
                 self.key,
                 self.topic_response,
-                header[mc.KEY_MESSAGEID],
             )
             return response
 
@@ -832,11 +832,12 @@ class MerossEmulator:
         # capture context before delaying
         mqtt_client = self.mqtt_client
         message = MerossRequest(
-            self.key,
             namespace,
             mc.METHOD_PUSH,
             payload,
+            self.key,
             mqtt_client.topic_publish,
+            mc.HEADER_TRIGGERSRC_DEVICE,
         ).json()
 
         def _mqtt_publish():
@@ -871,7 +872,6 @@ class MerossEmulator:
             # This is to start a kind of session establishment with
             # Meross brokers. Check the SETACK reply to follow the state machine
             message = MerossRequest(
-                self.key,
                 mn.Appliance_Control_Bind.name,
                 mc.METHOD_SET,
                 {
@@ -882,10 +882,10 @@ class MerossEmulator:
                         mc.KEY_FIRMWARE: self.descriptor.firmware,
                     }
                 },
+                self.key,
                 mqtt_client.topic_subscribe,
-            )
-            message[mc.KEY_HEADER][mc.KEY_TRIGGERSRC] = "DevBoot"
-            message = message.json()
+                mc.HEADER_TRIGGERSRC_DEVBOOT,
+            ).json()
             self._log_message("TX(MQTT)", message)
             mqtt_client.publish(mqtt_client.topic_publish, message)
 

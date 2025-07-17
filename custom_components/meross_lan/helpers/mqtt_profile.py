@@ -62,7 +62,6 @@ class ConnectionSensor(me.MEAlwaysAvailableMixin, MLDiagnosticSensor):
 
         manager: "MQTTProfile"
 
-
         # HA core entity attributes:
         class AttrDictType(TypedDict):
             devices: dict[str, str]
@@ -77,7 +76,6 @@ class ConnectionSensor(me.MEAlwaysAvailableMixin, MLDiagnosticSensor):
     STATE_DISCONNECTED = "disconnected"
     STATE_CONNECTED = "connected"
     STATE_DROPPING = "dropping"
-
 
     ATTR_DEVICES = "devices"
     ATTR_RECEIVED = "received"
@@ -567,9 +565,10 @@ class MQTTConnection(Loggable):
                 await self.async_mqtt_publish(
                     device_id,
                     MerossRequest(
-                        key,
                         *mn.Appliance_System_Ability.request_get,
+                        key,
                         self.topic_response,
+                        mlc.DOMAIN,
                     ),
                 )
             )
@@ -584,9 +583,10 @@ class MQTTConnection(Loggable):
                 await self.async_mqtt_publish(
                     device_id,
                     MerossRequest(
-                        key,
                         *mn.Appliance_System_All.request_get,
+                        key,
                         self.topic_response,
+                        mlc.DOMAIN,
                     ),
                 )
             )

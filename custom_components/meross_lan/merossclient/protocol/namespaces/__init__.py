@@ -78,7 +78,7 @@ class imdict(dict):
     __delitem__ = _immutable
     __ior__ = _immutable
     clear = _immutable
-    update = _immutable
+    update = _immutable  # type: ignore
     setdefault = _immutable  # type: ignore
     pop = _immutable
     popitem = _immutable

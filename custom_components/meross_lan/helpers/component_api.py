@@ -255,9 +255,9 @@ class HAMQTTConnection(MQTTConnection):
             await self.async_mqtt_publish(
                 device_id,
                 MerossAckReply(
-                    key,
                     header,
                     {},
+                    key,
                     mc.TOPIC_RESPONSE.format(device_id),
                 ),
             )
@@ -296,8 +296,7 @@ class HAMQTTConnection(MQTTConnection):
             await self.async_mqtt_publish(
                 device_id,
                 MerossPushReply(
-                    header,
-                    {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}},
+                    header, {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}}
                 ),
             )
         # keep forwarding the message
@@ -450,11 +449,12 @@ class ComponentApi(MQTTProfile):
 
             async def _async_device_request(device: "Device"):
                 service_response["request"] = request = MerossRequest(
-                    key or device.key,
                     namespace,
                     method,
                     payload,
+                    key or device.key,
                     device._topic_response,
+                    mlc.DOMAIN,
                 )
                 service_response["response"] = (
                     await device.async_mqtt_request_raw(request)
@@ -476,11 +476,12 @@ class ComponentApi(MQTTProfile):
                     and mqtt_connection.mqtt_is_connected
                 ):
                     service_response["request"] = request = MerossRequest(
-                        key or self.key,
                         namespace,
                         method,
                         payload,
+                        key or self.key,
                         mqtt_connection.topic_response,
+                        mlc.DOMAIN,
                     )
                     service_response["response"] = (
                         await mqtt_connection.async_mqtt_publish(device_id, request)
@@ -495,20 +496,20 @@ class ComponentApi(MQTTProfile):
 
                 if protocol is not mlc.CONF_PROTOCOL_MQTT:
                     service_response["request"] = request = MerossRequest(
-                        key or self.key,
                         namespace,
                         method,
                         payload,
-                        mc.MANUFACTURER,
+                        key or self.key,
+                        mc.HEADER_FROM_DEFAULT,
+                        mlc.DOMAIN,
                     )
                     try:
                         service_response["response"] = (
                             await MerossHttpClient(
                                 host,
                                 key or self.key,
-                                None,
-                                self,  # type: ignore (self almost duck-compatible with logging.Logger)
-                                self.VERBOSE,
+                                logger=self,
+                                log_level_dump=self.VERBOSE,
                             ).async_request_raw(request.json())
                             or {}
                         )

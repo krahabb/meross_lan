@@ -35,6 +35,7 @@ from .merossclient.httpclient import MerossHttpClient
 from .merossclient.mqttclient import MerossMQTTDeviceClient
 from .merossclient.protocol import MerossKeyError, const as mc, namespaces as mn
 from .merossclient.protocol.message import (
+    check_message_strict,
     compute_message_encryption_key,
     get_message_uuid,
 )
@@ -452,20 +453,23 @@ class MerossFlowHandlerMixin(
         key = key or ""
         api = self.api
         _httpclient = MerossHttpClient(
-            host,
-            key,
-            None,
-            api,  # type: ignore (api almost duck-compatible with logging.Logger)
-            api.VERBOSE,
+            host, key, logger=api, log_level_dump=api.VERBOSE
         )
 
-        response_ability = await _httpclient.async_request_strict(
-            *mn.Appliance_System_Ability.request_default
+        response_ability = check_message_strict(
+            await _httpclient.async_request(
+                *mn.Appliance_System_Ability.request_default
+            )
+        )
+        response_ability = check_message_strict(
+            await _httpclient.async_request(
+                *mn.Appliance_System_Ability.request_default
+            )
         )
         ability = response_ability[mc.KEY_PAYLOAD][mc.KEY_ABILITY]
         try:
-            all = (
-                await _httpclient.async_request_strict(
+            all = check_message_strict(
+                await _httpclient.async_request(
                     *mn.Appliance_System_All.request_default
                 )
             )[mc.KEY_PAYLOAD][mc.KEY_ALL]
@@ -481,8 +485,8 @@ class MerossFlowHandlerMixin(
                     uuid, key, get_macaddress_from_uuid(uuid)
                 ).encode("utf-8")
             )
-            all = (
-                await _httpclient.async_request_strict(
+            all = check_message_strict(
+                await _httpclient.async_request(
                     *mn.Appliance_System_All.request_default
                 )
             )[mc.KEY_PAYLOAD][mc.KEY_ALL]

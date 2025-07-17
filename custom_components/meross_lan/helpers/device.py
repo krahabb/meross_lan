@@ -388,7 +388,7 @@ class Device(BaseDevice, ConfigEntryManager):
         mn.Appliance_System_Time.name,
         mn.Appliance_Control_TriggerX.name,
         mn.Appliance_Control_Unbind.name,
-        mn.Appliance_Control_Sensor_HistoryX.name, # in mts300 our brute-force querying reboots
+        mn.Appliance_Control_Sensor_HistoryX.name,  # in mts300 our brute-force querying reboots
         mn.Appliance_Mcu_Firmware.name,  # disconnects
         mn.Appliance_Mcu_Upgrade.name,  # disconnects
         mn.Appliance_Mcu_Hp110_Preview.name,  # disconnects
@@ -482,7 +482,7 @@ class Device(BaseDevice, ConfigEntryManager):
         )
         self.lastrequest = 0.0
         self.lastresponse = 0.0
-        self._topic_response = mc.MANUFACTURER
+        self._topic_response = mc.HEADER_FROM_DEFAULT
         self._profile = None
         self._mqtt_connection = None
         self._mqtt_connected = None
@@ -1500,7 +1500,9 @@ class Device(BaseDevice, ConfigEntryManager):
         payload: "MerossPayloadType",
     ):
         return await self.async_mqtt_request_raw(
-            MerossRequest(self.key, namespace, method, payload, self._topic_response)
+            MerossRequest(
+                namespace, method, payload, self.key, self._topic_response, mlc.DOMAIN
+            )
         )
 
     def mqtt_request(
@@ -1632,7 +1634,9 @@ class Device(BaseDevice, ConfigEntryManager):
         payload: "MerossPayloadType",
     ):
         return await self.async_http_request_raw(
-            MerossRequest(self.key, namespace, method, payload, self._topic_response)
+            MerossRequest(
+                namespace, method, payload, self.key, self._topic_response, mlc.DOMAIN
+            )
         )
 
     async def async_request_poll(self, handler: NamespaceHandler):
