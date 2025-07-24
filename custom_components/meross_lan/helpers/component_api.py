@@ -177,7 +177,9 @@ class HAMQTTConnection(MQTTConnection):
                 self._mqtt_connected()
             result = True
         except Exception as exception:
-            self.log_exception(self.WARNING, exception, "async_mqtt_subscribe")
+            self.log_exception(
+                self.WARNING, exception, "async_mqtt_subscribe", timeout=14400
+            )
             result = False
 
         self._mqtt_subscribe_future.set_result(result)
