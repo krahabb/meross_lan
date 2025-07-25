@@ -9,11 +9,6 @@ from homeassistant.core import callback
 
 from . import Loggable, entity as me
 from .. import const as mlc
-from ..const import (
-    CONF_ALLOW_MQTT_PUBLISH,
-    CONF_PROTOCOL_MQTT,
-    DOMAIN,
-)
 from ..merossclient import (
     HostAddress,
     json_dumps,
@@ -498,13 +493,13 @@ class MQTTConnection(Loggable):
             # lookout for any disabled/ignored entry
             if (
                 (profile is api)
-                and (not api.get_config_entry(DOMAIN))
-                and (not api.get_config_flow(DOMAIN))
+                and (not api.get_config_entry(mlc.DOMAIN))
+                and (not api.get_config_flow(mlc.DOMAIN))
             ):
                 # not really needed but we would like to always have the
                 # MQTT hub entry in case so if the user removed that..retrigger
                 await api.hass.config_entries.flow.async_init(
-                    DOMAIN,
+                    mlc.DOMAIN,
                     context={"source": "hub"},
                     data=None,
                 )
@@ -613,7 +608,7 @@ class MQTTConnection(Loggable):
         self.mqttdiscovering.add(device_id)
         try:
             result = await profile.hass.config_entries.flow.async_init(
-                DOMAIN,
+                mlc.DOMAIN,
                 context={"source": SOURCE_INTEGRATION_DISCOVERY},
                 data=await self.async_identify_device(device_id, profile.key),
             )
@@ -738,7 +733,9 @@ class MQTTProfile(ConfigEntryManager):
     async def entry_update_listener(self, hass, config_entry: "ConfigEntry"):
         config = config_entry.data
         # the ComponentApi always enable (independent of config) mqtt publish
-        allow_mqtt_publish = config.get(CONF_ALLOW_MQTT_PUBLISH) or (self is self.api)
+        allow_mqtt_publish = config.get(mlc.CONF_ALLOW_MQTT_PUBLISH) or (
+            self is self.api
+        )
         if allow_mqtt_publish != self.allow_mqtt_publish:
             # device._mqtt_publish is rather 'passive' so
             # we do some fast 'smart' updates:
@@ -760,7 +757,7 @@ class MQTTProfile(ConfigEntryManager):
     # interface: self
     @property
     def allow_mqtt_publish(self):
-        return self.config.get(CONF_ALLOW_MQTT_PUBLISH)
+        return self.config.get(mlc.CONF_ALLOW_MQTT_PUBLISH)
 
     def link(self, device: "Device"):
         device_id = device.id
@@ -792,7 +789,7 @@ class MQTTProfile(ConfigEntryManager):
                 message[mc.KEY_PAYLOAD],
                 header[mc.KEY_NAMESPACE],
                 header[mc.KEY_METHOD],
-                CONF_PROTOCOL_MQTT,
+                mlc.CONF_PROTOCOL_MQTT,
                 rxtx,
             )
         if self.isEnabledFor(self.VERBOSE):
@@ -801,7 +798,7 @@ class MQTTProfile(ConfigEntryManager):
                 self.VERBOSE,
                 "%s(%s) %s %s (uuid:%s messageId:%s) %s",
                 rxtx,
-                CONF_PROTOCOL_MQTT,
+                mlc.CONF_PROTOCOL_MQTT,
                 header[mc.KEY_METHOD],
                 header[mc.KEY_NAMESPACE],
                 self.loggable_device_id(device_id),
@@ -818,7 +815,7 @@ class MQTTProfile(ConfigEntryManager):
                 self.DEBUG,
                 "%s(%s) %s %s (uuid:%s messageId:%s)",
                 rxtx,
-                CONF_PROTOCOL_MQTT,
+                mlc.CONF_PROTOCOL_MQTT,
                 header[mc.KEY_METHOD],
                 header[mc.KEY_NAMESPACE],
                 self.loggable_device_id(device_id),

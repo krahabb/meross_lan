@@ -2,6 +2,7 @@
 A collection of typing definitions for
 
 """
+
 import enum
 from typing import TYPE_CHECKING
 
@@ -12,7 +13,13 @@ if TYPE_CHECKING:
 #
 # Custom Exceptions
 #
-class MerossProtocolError(Exception):
+class MerossError(Exception):
+    """Base class for any exception reised by the library."""
+
+    pass
+
+
+class MerossProtocolError(MerossError):
     """
     signal a protocol error like:
     - missing header keys

@@ -106,9 +106,11 @@ CONF_DEVICE_ID: Final = hac.CONF_DEVICE_ID
 CONF_CLOUD_KEY: Final = "cloud_key"
 CONF_PAYLOAD: Final = hac.CONF_PAYLOAD
 CONF_HOST: Final = hac.CONF_HOST
+CONF_BT_ADDR: Final = "bt_address"
 # protocol used to communicate with device
 CONF_PROTOCOL: Final = hac.CONF_PROTOCOL
 CONF_PROTOCOL_AUTO: Final = "auto"
+CONF_PROTOCOL_BLUETOOTH: Final = "bluetooth"
 CONF_PROTOCOL_MQTT: Final = "mqtt"
 CONF_PROTOCOL_HTTP: Final = "http"
 CONF_PROTOCOL_OPTIONS: dict[str | None, str] = {
@@ -143,7 +145,9 @@ class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
     cloud_key: NotRequired[str | None]
     """deprecated field: used to store the device key as recovered from the cloud account"""
     host: NotRequired[str]
-    """device address: when empty the device can still use the host address recovered through MQTT payloads"""
+    """device host (name or ip address): when empty the device can still use the host address recovered through MQTT payloads"""
+    bt_address: NotRequired[str]
+    """device bluetooth address: the device was discovered via bluetooth."""
     protocol: NotRequired[str]
     """configures the protocol: auto will automatically switch between the available transports"""
     polling_period: NotRequired[int | None]

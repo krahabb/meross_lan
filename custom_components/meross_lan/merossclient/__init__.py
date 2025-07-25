@@ -13,10 +13,15 @@ from uuid import uuid4
 from .protocol import const as mc
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Final, Iterable, Mapping
+    from typing import Any, Callable, Final, Iterable, Mapping, Protocol
 
-    from protocol.message import MerossResponse
-    from protocol.types import MerossRequestType
+    class LoggerT(Protocol):
+        """Protocol definition for logger-like instances used in the library."""
+
+        def getEffectiveLevel(self) -> int: ...
+        def isEnabledFor(self, level: int) -> bool: ...
+        def log(self, level: int, msg: str, *args, **kwargs) -> None: ...
+
 
 try:
     from random import randint
@@ -195,6 +200,10 @@ class HostAddress:
 
     def __str__(self) -> str:
         return f"{self.host}:{self.port}"
+
+
+def validate_uuid(uuid: str):
+    """Asserts the uuid string is a 'correct' 16 byte hex string."""
 
 
 def get_macaddress_from_uuid(uuid: str):

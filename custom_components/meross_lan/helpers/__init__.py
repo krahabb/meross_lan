@@ -217,7 +217,10 @@ class Loggable(abc.ABC):
     def configure_logger(self):
         self.logtag = f"{self.__class__.__name__}({self.id})"
 
-    def isEnabledFor(self, level: int):
+    def getEffectiveLevel(self) -> int:
+        return self.logger.getEffectiveLevel()
+
+    def isEnabledFor(self, level: int) -> bool:
         return self.logger.isEnabledFor(level)
 
     def log(self, level: int, msg: str, *args, **kwargs):

@@ -24,13 +24,10 @@ from .protocol.message import (
 )
 
 if TYPE_CHECKING:
-    from typing import ClassVar, Protocol
+    from typing import ClassVar
 
-    from protocol.types import MerossHeaderType, MerossPayloadType
-
-    class LoggerT(Protocol):
-        def isEnabledFor(self, level: int) -> bool: ...
-        def log(self, level: int, msg: str, *args, **kwargs) -> None: ...
+    from . import LoggerT
+    from .protocol.types import MerossHeaderType, MerossPayloadType
 
 
 class TerminatedException(Exception):

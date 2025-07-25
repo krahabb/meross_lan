@@ -23,6 +23,7 @@ from ..const import (
     CONF_HOST,
     CONF_PAYLOAD,
     CONF_PROTOCOL_AUTO,
+    CONF_PROTOCOL_BLUETOOTH,
     CONF_PROTOCOL_HTTP,
     CONF_PROTOCOL_MQTT,
     PARAM_HEADER_SIZE,
@@ -36,6 +37,7 @@ from ..merossclient import (
     is_device_online,
     json_dumps,
 )
+from ..merossclient.bluetooth import BluetoothClient
 from ..merossclient.httpclient import MerossHttpClient, TerminatedException
 from ..merossclient.protocol.message import (
     MerossRequest,
@@ -69,13 +71,14 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from ..devices.hub import SubDevice
-    from ..merossclient import MerossDeviceDescriptor, MerossRequestType
+    from ..merossclient import MerossDeviceDescriptor
     from ..merossclient.cloudapi import DeviceInfoType, LatestVersionType
     from ..merossclient.protocol.message import MerossMessage
     from ..merossclient.protocol.types import (
         MerossHeaderType,
         MerossMessageType,
         MerossPayloadType,
+        MerossRequestType,
     )
     from .component_api import ComponentApi
     from .entity import MLEntity
@@ -259,12 +262,14 @@ class Device(BaseDevice, ConfigEntryManager):
         conf_protocol: str
         pref_protocol: str
         curr_protocol: str
+        host: str | None
         # other default property values
         tz: tzinfo
 
         device_timestamp: int
 
         _profile: MQTTProfile | None
+        _bluetooth: BluetoothClient | None
         _mqtt_connection: MQTTConnection | None
         _mqtt_connected: MQTTConnection | None
         _mqtt_publish: MQTTConnection | None
@@ -386,6 +391,9 @@ class Device(BaseDevice, ConfigEntryManager):
         mn.Appliance_System_Online.name,
         mn.Appliance_System_Position.name,
         mn.Appliance_System_Time.name,
+        mn.Appliance_Config_Wifi.name,
+        mn.Appliance_Config_WifiList.name,
+        mn.Appliance_Config_WifiX.name,
         mn.Appliance_Control_TriggerX.name,
         mn.Appliance_Control_Unbind.name,
         mn.Appliance_Control_Sensor_HistoryX.name,  # in mts300 our brute-force querying reboots
@@ -411,6 +419,7 @@ class Device(BaseDevice, ConfigEntryManager):
         "conf_protocol",
         "pref_protocol",
         "curr_protocol",
+        "host",
         "needsave",
         "_async_entry_update_unsub",
         "device_debug",
@@ -484,6 +493,7 @@ class Device(BaseDevice, ConfigEntryManager):
         self.lastresponse = 0.0
         self._topic_response = mc.HEADER_FROM_DEFAULT
         self._profile = None
+        self._bluetooth = None
         self._mqtt_connection = None
         self._mqtt_connected = None
         self._mqtt_publish = None
@@ -546,22 +556,11 @@ class Device(BaseDevice, ConfigEntryManager):
             entity_category=MLPersistentButton.EntityCategory.DIAGNOSTIC,
         )
 
-        self._update_config()
-
-        # the update entity will only be instantiated 'on demand' since
-        # we might not have this for devices not related to a cloud profile
-        # This cleanup code is to ease the transition out of the registry
-        # when previous version polluted it
-        ent_reg = self.api.entity_registry
-        update_firmware_entity_id = ent_reg.async_get_entity_id(
-            MLUpdate.PLATFORM, mlc.DOMAIN, f"{self.id}_update_firmware"
-        )
-        if update_firmware_entity_id:
-            ent_reg.async_remove(update_firmware_entity_id)
-
     async def async_init(self):
         api = self.api
         descriptor = self.descriptor
+
+        await self._async_update_config()
 
         if tzname := descriptor.timezone:
             # self.tz defaults to UTC on init
@@ -651,6 +650,128 @@ class Device(BaseDevice, ConfigEntryManager):
             0, self._async_polling_callback, None
         )
 
+    # miscellaneous internals to prepare/refresh internal config
+    async def _async_update_config(self):
+        """
+        common properties caches, read from ConfigEntry on __init__ or when a configentry updates
+        """
+        config = self.config
+        self.conf_protocol = conf_protocol = mlc.CONF_PROTOCOL_OPTIONS.get(
+            config.get(mlc.CONF_PROTOCOL), CONF_PROTOCOL_AUTO
+        )
+        self.polling_period = (
+            config.get(mlc.CONF_POLLING_PERIOD) or mlc.CONF_POLLING_PERIOD_DEFAULT
+        )
+        if self.polling_period < mlc.CONF_POLLING_PERIOD_MIN:
+            self.polling_period = mlc.CONF_POLLING_PERIOD_MIN
+        self._polling_delay = self.polling_period
+
+        if config.get(mlc.CONF_DISABLE_MULTIPLE):
+            self.disable_multiple()
+        else:
+            self.enable_multiple()
+
+        self._update_host()
+
+        if (bt_address := config.get(mlc.CONF_BT_ADDR)) and (
+            (conf_protocol is CONF_PROTOCOL_BLUETOOTH)
+            or ((conf_protocol is CONF_PROTOCOL_AUTO) and not self.host)
+        ):
+            if _bluetooth := self._bluetooth:
+                if _bluetooth.address != bt_address:
+                    await _bluetooth.disconnect()
+                    self._bluetooth = BluetoothClient(
+                        bt_address, loop=self.hass.loop, logger=self
+                    )
+            else:
+                self._bluetooth = BluetoothClient(
+                    bt_address, loop=self.hass.loop, logger=self
+                )
+        else:
+            if _bluetooth := self._bluetooth:
+                self._bluetooth = None
+                await _bluetooth.disconnect()
+
+    def _update_host(self):
+        host = self.config.get(CONF_HOST)
+        if not host:
+            host = self.descriptor.innerIp
+            if host == "0.0.0.0":  # unbinded device
+                host = None
+        self.host = host
+        if host and (self.conf_protocol in (CONF_PROTOCOL_AUTO, CONF_PROTOCOL_HTTP)):
+            # we need http: setup/update
+            if _http := self._http:
+                _http.host = host
+                _http.key = self.key
+            else:
+                _http = self._http = MerossHttpClient(host, self.key)
+            _http.set_encryption(
+                compute_message_encryption_key(
+                    self.descriptor.uuid, self.key, self.descriptor.macAddress
+                ).encode("utf-8")
+                if mn.Appliance_Encrypt_ECDHE.name in self.descriptor.ability
+                else None
+            )
+        elif _http := self._http:
+            _http.terminate()
+            self._http = self._http_active = None
+            self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_HTTP)
+
+    def _check_protocol_ext(self):
+        api = self.api
+        userId = self.descriptor.userId
+        if userId in api.profiles:
+            profile = api.profiles[userId]
+            if profile and (profile.key != self.key):
+                profile = api
+        else:
+            profile = api
+        _profile = self._profile
+        if _profile != profile:
+            if _profile:
+                _profile.unlink(self)
+            if profile:
+                profile.link(self)
+                # _check_protocol already called
+                return
+        self._check_protocol()
+
+    def _check_protocol(self):
+        """called whenever the configuration or the profile linking changes to fix protocol transports"""
+        _profile = self._profile
+        conf_protocol = self.conf_protocol
+        if conf_protocol is CONF_PROTOCOL_AUTO:
+            # When using CONF_PROTOCOL_AUTO we try to use our 'preferred' (pref_protocol)
+            # and eventually fallback (curr_protocol) until some good news allow us
+            # to retry pref_protocol. When binded to a cloud_profile always prefer
+            # 'local' http since it should be faster and less prone to cloud 'issues'
+            if self.config.get(CONF_HOST) or (_profile and _profile.id):
+                self.pref_protocol = CONF_PROTOCOL_HTTP
+                if self.curr_protocol is not CONF_PROTOCOL_HTTP and self._http_active:
+                    self._switch_protocol(CONF_PROTOCOL_HTTP)
+            else:
+                self.pref_protocol = CONF_PROTOCOL_MQTT
+                if self.curr_protocol is not CONF_PROTOCOL_MQTT and self._mqtt_active:
+                    self._switch_protocol(CONF_PROTOCOL_MQTT)
+        else:
+            self.pref_protocol = conf_protocol
+            if self.curr_protocol is not conf_protocol:
+                self._switch_protocol(conf_protocol)
+
+        _mqtt_connection = self._mqtt_connection
+        if conf_protocol in (CONF_PROTOCOL_BLUETOOTH, CONF_PROTOCOL_HTTP):
+            if _mqtt_connection:
+                _mqtt_connection.detach(self)
+        else:
+            if _mqtt_connection:
+                if _mqtt_connection.profile == _profile:
+                    return
+                _mqtt_connection.detach(self)
+
+            if _profile:
+                _profile.attach_mqtt(self)
+
     # interface: ConfigEntryManager
     async def entry_update_listener(
         self, hass: "HomeAssistant", config_entry: "ConfigEntry"
@@ -671,7 +792,7 @@ class Device(BaseDevice, ConfigEntryManager):
             return
 
         await super().entry_update_listener(hass, config_entry)
-        self._update_config()
+        await self._async_update_config()
         self._check_protocol_ext()
 
         # config_entry update might come from DHCP or OptionsFlowHandler address update
@@ -812,7 +933,7 @@ class Device(BaseDevice, ConfigEntryManager):
         if self.is_tracing:
             self.trace_close()
 
-        if self._http_active and self.conf_protocol is not CONF_PROTOCOL_MQTT:
+        if self._http_active:
             # shortcut with fast HTTP querying
             self._trace_data = trace_data = [mlc.CONF_TRACE_COLUMNS]
             await self._async_poll()
@@ -849,6 +970,12 @@ class Device(BaseDevice, ConfigEntryManager):
             "polling_period": self.polling_period,
             "device_response_size_min": self.device_response_size_min,
             "device_response_size_max": self.device_response_size_max,
+            "BLUETOOTH": {
+                "bluetooth": bool(self._bluetooth),
+                "bluetooth_active": bool(
+                    self._bluetooth and self._bluetooth.is_connected
+                ),
+            },
             "MQTT": {
                 "cloud_profile": (
                     self._profile.is_cloud_profile if self._profile else None
@@ -903,6 +1030,9 @@ class Device(BaseDevice, ConfigEntryManager):
         # is invalidated and this shortens the eventual polling loop
         if self._profile:
             self._profile.unlink(self)
+        if self._bluetooth:
+            await self._bluetooth.disconnect()
+            self._bluetooth = None
         if self._http:
             # to be called before stopping polling so that it breaks http timeouts
             await self._http.async_terminate()
@@ -969,6 +1099,10 @@ class Device(BaseDevice, ConfigEntryManager):
         avoid reusing the same (old) timestamps and messageids
         """
         self.lastrequest = time()
+        if self._bluetooth:
+            # BL should be active alone when the device is unpaired so no other transport is available
+            return await self.async_bluetooth_request(namespace, method, payload)
+
         mqttfailed = False
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
             if self._mqtt_publish:
@@ -981,7 +1115,6 @@ class Device(BaseDevice, ConfigEntryManager):
             if self.conf_protocol is CONF_PROTOCOL_MQTT:
                 return None
 
-        # curr_protocol is HTTP or mqtt failed somehow
         if response := await self.async_http_request(namespace, method, payload):
             return response
 
@@ -1028,10 +1161,6 @@ class Device(BaseDevice, ConfigEntryManager):
         return self.descriptor.productname
 
     # interface: self
-    @property
-    def host(self):
-        return self.config.get(CONF_HOST) or self.descriptor.innerIp
-
     @property
     def mqtt_cloudactive(self):
         """
@@ -1254,8 +1383,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 }
             },
         )
-        # we don't have a clue if it works or not..just go over http
-        return await self.async_http_request(*bind)
+        return await self.async_request(*bind)
 
     async def async_unbind(self):
         """
@@ -1469,12 +1597,39 @@ class Device(BaseDevice, ConfigEntryManager):
                         break
                 return
 
+    async def async_bluetooth_request(self, *request_args: "Unpack[MerossRequestType]"):
+        if not (_bluetooth := self._bluetooth):
+            # even if we're smart enough to not call this, it could happen
+            # we loose it when asynchronously coming here
+            self.log(
+                self.DEBUG,
+                "Attempting to use async_bluetooth_request with no bluetooth client",
+            )
+            return None
+
+        request = MerossRequest(*request_args, "")
+        self._trace_or_log(
+            time(),
+            request,
+            CONF_PROTOCOL_BLUETOOTH,
+            ConfigEntryManager.TRACE_TX,
+        )
+        try:
+            response = await _bluetooth.async_request_raw(request.json())
+            epoch = time()
+            self._trace_or_log(epoch, response, CONF_PROTOCOL_BLUETOOTH, self.TRACE_RX)
+            if self.curr_protocol is not CONF_PROTOCOL_BLUETOOTH:
+                self._switch_protocol(CONF_PROTOCOL_BLUETOOTH)
+            self._receive(epoch, response)
+            return response
+        except Exception as e:
+            self.log_exception(self.WARNING, e, "async_bluetooth_request")
+
     async def async_mqtt_request_raw(
-        self,
-        request: "MerossMessage",
+        self, request: "MerossMessage", /
     ) -> MerossResponse | None:
-        _mqtt_publish = self._mqtt_publish
-        if not _mqtt_publish:
+
+        if not (_mqtt_publish := self._mqtt_publish):
             # even if we're smart enough to not call async_mqtt_request when no mqtt
             # available, it could happen we loose that when asynchronously coming here
             self.log(
@@ -1494,10 +1649,7 @@ class Device(BaseDevice, ConfigEntryManager):
         return await _mqtt_publish.async_mqtt_publish(self.id, request)
 
     async def async_mqtt_request(
-        self,
-        namespace: str,
-        method: str,
-        payload: "MerossPayloadType",
+        self, namespace: str, method: str, payload: "MerossPayloadType", /
     ):
         return await self.async_mqtt_request_raw(
             MerossRequest(
@@ -1506,10 +1658,7 @@ class Device(BaseDevice, ConfigEntryManager):
         )
 
     def mqtt_request(
-        self,
-        namespace: str,
-        method: str,
-        payload: "MerossPayloadType",
+        self, namespace: str, method: str, payload: "MerossPayloadType", /
     ):
         return self.async_create_task(
             self.async_mqtt_request(namespace, method, payload),
@@ -1517,7 +1666,7 @@ class Device(BaseDevice, ConfigEntryManager):
         )
 
     async def async_http_request_raw(
-        self, request: MerossRequest
+        self, request: MerossRequest, /
     ) -> MerossResponse | None:
         if not (http := self._http):
             # even if we're smart enough to not call async_http_request_raw when no http
@@ -1628,10 +1777,7 @@ class Device(BaseDevice, ConfigEntryManager):
         return response
 
     async def async_http_request(
-        self,
-        namespace: str,
-        method: str,
-        payload: "MerossPayloadType",
+        self, namespace: str, method: str, payload: "MerossPayloadType", /
     ):
         return await self.async_http_request_raw(
             MerossRequest(
@@ -1639,7 +1785,7 @@ class Device(BaseDevice, ConfigEntryManager):
             )
         )
 
-    async def async_request_poll(self, handler: NamespaceHandler):
+    async def async_request_poll(self, handler: NamespaceHandler, /):
         handler.lastrequest = self._polling_epoch
         handler.polling_epoch_next = handler.lastrequest + handler.polling_period
         if (self._multiple_requests is None) or (
@@ -1690,15 +1836,15 @@ class Device(BaseDevice, ConfigEntryManager):
         await self.async_request_poll(handler)
         return True
 
-    def request_lazypoll(self, handler: NamespaceHandler):
+    def request_lazypoll(self, handler: NamespaceHandler, /):
         """Insert into the lazypoll_requests ordering by least recently polled"""
 
-        def _lazypoll_key(_handler: NamespaceHandler):
+        def _lazypoll_key(_handler: NamespaceHandler, /):
             return _handler.lastrequest - self._polling_epoch
 
         bisect.insort(self._lazypoll_requests, handler, key=_lazypoll_key)
 
-    async def _async_request_updates(self, namespace: str | None):
+    async def _async_request_updates(self, namespace: str | None, /):
         """
         This is a 'versatile' polling strategy called on timer
         or when the device comes online (passing in the received namespace)
@@ -1765,7 +1911,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 self.log_exception(self.WARNING, exception, "diagnostic scan")
 
     @callback
-    async def _async_polling_callback(self, namespace: str | None):
+    async def _async_polling_callback(self, namespace: str | None, /):
         try:
             self._polling_callback_unsub = None
             self._polling_epoch = epoch = time()
@@ -1841,11 +1987,15 @@ class Device(BaseDevice, ConfigEntryManager):
                 ns_all_handler = self.namespace_handlers[mn.Appliance_System_All.name]
                 ns_all_response = None
                 if self.conf_protocol is CONF_PROTOCOL_AUTO:
-                    if self._http:
+                    if self._bluetooth:
+                        ns_all_response = await self.async_bluetooth_request(
+                            *ns_all_handler.polling_request
+                        )
+                    if not ns_all_response and self._http:
                         ns_all_response = await self.async_http_request(
                             *ns_all_handler.polling_request
                         )
-                    if self._mqtt_publish and not self.online:
+                    if not ns_all_response and self._mqtt_publish:
                         ns_all_response = await self.async_mqtt_request(
                             *ns_all_handler.polling_request
                         )
@@ -1854,7 +2004,7 @@ class Device(BaseDevice, ConfigEntryManager):
                         ns_all_response = await self.async_mqtt_request(
                             *ns_all_handler.polling_request
                         )
-                else:  # self.conf_protocol is CONF_PROTOCOL_HTTP:
+                elif self.conf_protocol is CONF_PROTOCOL_HTTP:
                     if self._http:
                         ns_all_response = await self.async_http_request(
                             *ns_all_handler.polling_request
@@ -1906,7 +2056,7 @@ class Device(BaseDevice, ConfigEntryManager):
             # this will also restart/schedule the cycle
             await self._async_polling_callback(None)
 
-    def mqtt_receive(self, message: "MerossResponse"):
+    def mqtt_receive(self, message: "MerossResponse", /):
         assert self._mqtt_connected
         self._mqtt_lastresponse = epoch = time()
         self._trace_or_log(epoch, message, CONF_PROTOCOL_MQTT, self.TRACE_RX)
@@ -1919,8 +2069,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 self._switch_protocol(CONF_PROTOCOL_MQTT)
         self._receive(epoch, message)
 
-    def mqtt_attached(self, mqtt_connection: "MQTTConnection"):
-        assert self.conf_protocol is not CONF_PROTOCOL_HTTP
+    def mqtt_attached(self, mqtt_connection: "MQTTConnection", /):
         if self._mqtt_connection:
             self._mqtt_connection.detach(self)
         self.log(
@@ -1991,7 +2140,7 @@ class Device(BaseDevice, ConfigEntryManager):
             ProtocolSensor.ATTR_MQTT_BROKER, ProtocolSensor.ATTR_MQTT
         )
 
-    def profile_linked(self, profile: "MQTTProfile"):
+    def profile_linked(self, profile: "MQTTProfile", /):
         if self._profile is not profile:
             if self._profile:
                 self._profile.unlink(self)
@@ -2014,62 +2163,7 @@ class Device(BaseDevice, ConfigEntryManager):
         )
         self._profile = None
 
-    def _check_protocol_ext(self):
-        api = self.api
-        userId = self.descriptor.userId
-        if userId in api.profiles:
-            profile = api.profiles[userId]
-            if profile and (profile.key != self.key):
-                profile = api
-        else:
-            profile = api
-        _profile = self._profile
-        if _profile != profile:
-            if _profile:
-                _profile.unlink(self)
-            if profile:
-                profile.link(self)
-                # _check_protocol already called
-                return
-        self._check_protocol()
-
-    def _check_protocol(self):
-        """called whenever the configuration or the profile linking changes to fix protocol transports"""
-        _profile = self._profile
-        conf_protocol = self.conf_protocol
-        if conf_protocol is CONF_PROTOCOL_AUTO:
-            # When using CONF_PROTOCOL_AUTO we try to use our 'preferred' (pref_protocol)
-            # and eventually fallback (curr_protocol) until some good news allow us
-            # to retry pref_protocol. When binded to a cloud_profile always prefer
-            # 'local' http since it should be faster and less prone to cloud 'issues'
-            if self.config.get(CONF_HOST) or (_profile and _profile.id):
-                self.pref_protocol = CONF_PROTOCOL_HTTP
-                if self.curr_protocol is not CONF_PROTOCOL_HTTP and self._http_active:
-                    self._switch_protocol(CONF_PROTOCOL_HTTP)
-            else:
-                self.pref_protocol = CONF_PROTOCOL_MQTT
-                if self.curr_protocol is not CONF_PROTOCOL_MQTT and self._mqtt_active:
-                    self._switch_protocol(CONF_PROTOCOL_MQTT)
-        else:
-            self.pref_protocol = conf_protocol
-            if self.curr_protocol is not conf_protocol:
-                self._switch_protocol(conf_protocol)
-
-        _mqtt_connection = self._mqtt_connection
-        if conf_protocol is CONF_PROTOCOL_HTTP:
-            # strictly HTTP so detach MQTT in case
-            if _mqtt_connection:
-                _mqtt_connection.detach(self)
-        else:
-            if _mqtt_connection:
-                if _mqtt_connection.profile == _profile:
-                    return
-                _mqtt_connection.detach(self)
-
-            if _profile:
-                _profile.attach_mqtt(self)
-
-    def _receive(self, epoch: float, message: MerossResponse):
+    def _receive(self, epoch: float, message: MerossResponse, /):
         """
         default (received) message handling entry point
         """
@@ -2131,11 +2225,7 @@ class Device(BaseDevice, ConfigEntryManager):
 
         return self._handle(header, message[mc.KEY_PAYLOAD])
 
-    def _handle(
-        self,
-        header: "MerossHeaderType",
-        payload: "MerossPayloadType",
-    ):
+    def _handle(self, header: "MerossHeaderType", payload: "MerossPayloadType", /):
         namespace = header[mc.KEY_NAMESPACE]
         method = header[mc.KEY_METHOD]
         if method == mc.METHOD_GETACK:
@@ -2195,24 +2285,24 @@ class Device(BaseDevice, ConfigEntryManager):
         except Exception as exception:
             handler.handle_exception(exception, handler.handler.__name__, payload)
 
-    def _create_handler(self, ns: "mn.Namespace"):
+    def _create_handler(self, ns: "mn.Namespace", /):
         """Called by the base device message parsing chain when a new
         NamespaceHandler need to be defined (This happens the first time
         the namespace enters the message handling flow)"""
         return NamespaceHandler(self, ns)
 
-    def _handle_Appliance_Config_Info(self, header: dict, payload: dict):
+    def _handle_Appliance_Config_Info(self, header, payload, /):
         """{"info":{"homekit":{"model":"MSH300HK","sn":"#","category":2,"setupId":"#","setupCode":"#","uuid":"#","token":"#"}}}"""
         pass
 
-    def _handle_Appliance_Control_Bind(self, header: dict, payload: dict):
+    def _handle_Appliance_Control_Bind(self, header, payload, /):
         # already processed by the MQTTConnection session manager
         pass
 
-    def _handle_Appliance_System_Ability(self, header: dict, payload: dict):
+    def _handle_Appliance_System_Ability(self, header, payload, /):
         pass
 
-    def _handle_Appliance_System_All(self, header: dict, payload: dict):
+    def _handle_Appliance_System_All(self, header, payload: dict, /):
         # see issue #341. In case we receive a formally correct response from a
         # mismatched device we should stop everything and obviously don't update our
         # ConfigEntry. Here we check first the identity of the device sending this payload
@@ -2242,17 +2332,8 @@ class Device(BaseDevice, ConfigEntryManager):
                 # reports a newer fw
                 update_firmware.installed_version = descr.firmwareVersion
                 update_firmware.flush_state()
-            if (
-                self.conf_protocol is not CONF_PROTOCOL_MQTT
-                and not self.config.get(CONF_HOST)
-                and (host := descr.innerIp)
-            ):
-                # dynamically adjust the http host in case our config misses it and
-                # we're so depending on MQTT updates of descriptor.firmware to innerIp
-                if _http := self._http:
-                    _http.host = host
-                else:
-                    self._http = MerossHttpClient(host, self.key)
+            if not self.config.get(CONF_HOST):
+                self._update_host()
         else:
             query_abilities = False
 
@@ -2274,11 +2355,11 @@ class Device(BaseDevice, ConfigEntryManager):
         if self.needsave:
             self.schedule_entry_update(query_abilities)
 
-    def _handle_Appliance_System_Clock(self, header: dict, payload: dict):
+    def _handle_Appliance_System_Clock(self, header, payload, /):
         # already processed by the MQTTConnection session manager
         pass
 
-    def _handle_Appliance_System_Debug(self, header: dict, payload: dict):
+    def _handle_Appliance_System_Debug(self, header, payload: dict, /):
         # this ns is queried when we're HTTP connected and the device reports it is
         # also MQTT connected but meross_lan has no confirmation (_mqtt_active == None)
         # we're then going to inspect the device reported broker and see if
@@ -2296,19 +2377,19 @@ class Device(BaseDevice, ConfigEntryManager):
                 return
             mqtt_connection.detach(self)
 
-    def _handle_Appliance_System_Online(self, header: dict, payload: dict):
+    def _handle_Appliance_System_Online(self, header, payload, /):
         # already processed by the MQTTConnection session manager
         pass
 
-    def _handle_Appliance_System_Report(self, header: dict, payload: dict):
+    def _handle_Appliance_System_Report(self, header, payload, /):
         # No clue: sent (MQTT PUSH) by the device on initial connection
         pass
 
-    def _handle_Appliance_System_Time(self, header: dict, payload: dict):
+    def _handle_Appliance_System_Time(self, header, payload: dict, /):
         self.descriptor.update_time(payload[mc.KEY_TIME])
         self.schedule_entry_update(False)
 
-    def _config_device_timestamp(self, epoch):
+    def _config_device_timestamp(self, epoch: float, /):
         if self.mqtt_locallyactive and (
             mn.Appliance_System_Clock.name in self.descriptor.ability
         ):
@@ -2539,49 +2620,6 @@ class Device(BaseDevice, ConfigEntryManager):
         self.curr_protocol = protocol
         if self.online:
             self.sensor_protocol.set_available()
-
-    def _update_config(self):
-        """
-        common properties caches, read from ConfigEntry on __init__ or when a configentry updates
-        """
-        config = self.config
-        self.conf_protocol = mlc.CONF_PROTOCOL_OPTIONS.get(
-            config.get(mlc.CONF_PROTOCOL), CONF_PROTOCOL_AUTO
-        )
-        self.polling_period = (
-            config.get(mlc.CONF_POLLING_PERIOD) or mlc.CONF_POLLING_PERIOD_DEFAULT
-        )
-        if self.polling_period < mlc.CONF_POLLING_PERIOD_MIN:
-            self.polling_period = mlc.CONF_POLLING_PERIOD_MIN
-        self._polling_delay = self.polling_period
-
-        if config.get(mlc.CONF_DISABLE_MULTIPLE):
-            self.disable_multiple()
-        else:
-            self.enable_multiple()
-
-        _http = self._http
-        host = self.host
-        if (self.conf_protocol is CONF_PROTOCOL_MQTT) or (not host):
-            # no room for http transport...
-            if _http:
-                _http.terminate()
-                self._http = self._http_active = None
-                self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_HTTP)
-        else:
-            # we need http: setup/update
-            if _http:
-                _http.host = host
-                _http.key = self.key
-            else:
-                _http = self._http = MerossHttpClient(host, self.key)
-            _http.set_encryption(
-                compute_message_encryption_key(
-                    self.descriptor.uuid, self.key, self.descriptor.macAddress
-                ).encode("utf-8")
-                if mn.Appliance_Encrypt_ECDHE.name in self.descriptor.ability
-                else None
-            )
 
     def _check_uuid_mismatch(self, response_uuid: str):
         """when detecting a wrong uuid from a response we offline the device"""

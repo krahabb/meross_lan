@@ -381,6 +381,17 @@ class ComponentApi(MQTTProfile):
             hass.bus.async_listen_once(
                 hac.EVENT_HOMEASSISTANT_STOP, _async_unload_merossapi
             )
+
+            # REMOVE
+            if MEROSSDEBUG:
+
+                import habluetooth
+
+                habluetooth.wrappers._LOGGER.setLevel(ComponentApi.DEBUG)
+                from bleak.backends.bluezdbus.client import logger as _bluez_logger
+
+                _bluez_logger.setLevel(ComponentApi.DEBUG)
+
             return api
 
     def active_devices(self):
