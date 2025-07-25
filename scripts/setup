@@ -6,9 +6,7 @@ cd "$(dirname "$0")/.."
 
 # add support for ffmpeg/libpcap (ms python container lacks these by default)
 apt update
-apt -y install ffmpeg
-apt -y install libpcap-dev
-apt -y install libturbojpeg0
+apt -y install ffmpeg libpcap-dev libturbojpeg0 bluez
 
 python3 -m pip install --upgrade pip
 python3 -m pip install --requirement requirements_test.txt
