@@ -347,6 +347,7 @@ class ComponentApi(MQTTProfile):
         _mqtt_connection: HAMQTTConnection | None
 
         _deviceclasses: Final[dict[str, type[Device]]]
+        _available_timezones: list[str] | None
         _zoneinfo: Final[dict[str, zoneinfo.ZoneInfo]]
 
     __slots__ = (
@@ -357,6 +358,7 @@ class ComponentApi(MQTTProfile):
         "entity_registry",
         "_mqtt_connection",
         "_deviceclasses",
+        "_available_timezones",
         "_zoneinfo",
         "_import_module_lock",
         "_import_module_cache",
@@ -420,6 +422,7 @@ class ComponentApi(MQTTProfile):
         self.entity_registry = er.async_get(hass)
         self._mqtt_connection = None
         self._deviceclasses = {}
+        self._available_timezones = None
         self._zoneinfo = {}
         self._import_module_lock = asyncio.Lock()
         self._import_module_cache = {}
@@ -655,6 +658,27 @@ class ComponentApi(MQTTProfile):
             class_type = type(class_name, tuple(mixin_classes), {})
             self._deviceclasses[class_name] = class_type
             return class_type(self, config_entry, descriptor)
+
+    async def async_available_timezones(self):
+        timezones = self._available_timezones
+        if not timezones:
+
+            def _load():
+                """
+                These functions will use low levels imports and HA core 2024.5
+                complains about executing it in the main loop thread. We'll
+                so run these in an executor
+                """
+                return sorted(zoneinfo.available_timezones())
+
+            try:
+                timezones = await self.hass.async_add_executor_job(_load)
+            except Exception as e:
+                self.log_exception(self.WARNING, e, "retrieving available timezones")
+                timezones = []
+            self._available_timezones = timezones
+
+        return timezones
 
     async def async_load_zoneinfo(self, key: str):
         """

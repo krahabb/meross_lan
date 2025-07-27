@@ -94,9 +94,6 @@ if TYPE_CHECKING:
     ]
 
 
-TIMEZONES_SET = None
-
-
 class BaseDevice(EntityManager):
     """
     Abstract base class for Device and SubDevice (from hub)
@@ -151,13 +148,11 @@ class BaseDevice(EntityManager):
         """
         returns a proper (friendly) device name for logging purposes
         """
-        if _device_registry_entry := self.device_registry_entry:
-            return (
-                _device_registry_entry.name_by_user
-                or _device_registry_entry.name
-                or self._get_internal_name()
-            )
-        return self._get_internal_name()
+        return (
+            self.device_registry_entry.name_by_user
+            or self.device_registry_entry.name
+            or self._get_internal_name()
+        )
 
     # interface: self
     async def async_request(
@@ -532,7 +527,14 @@ class Device(BaseDevice, ConfigEntryManager):
             model=descriptor.productmodel,
             hw_version=descriptor.hardwareVersion,
             sw_version=descriptor.firmwareVersion,
-            connections={(dr.CONNECTION_NETWORK_MAC, descriptor.macAddress)},
+            connections=(
+                {
+                    (dr.CONNECTION_BLUETOOTH, _bt_address),
+                    (dr.CONNECTION_NETWORK_MAC, descriptor.macAddress),
+                }
+                if (_bt_address := config_entry.data.get(mlc.CONF_BT_ADDR))
+                else {(dr.CONNECTION_NETWORK_MAC, descriptor.macAddress)}
+            ),
         )
 
         self.sensor_protocol = ProtocolSensor(self)
@@ -678,15 +680,10 @@ class Device(BaseDevice, ConfigEntryManager):
             or ((conf_protocol is CONF_PROTOCOL_AUTO) and not self.host)
         ):
             if _bluetooth := self._bluetooth:
-                if _bluetooth.address != bt_address:
-                    await _bluetooth.disconnect()
-                    self._bluetooth = BluetoothClient(
-                        bt_address, loop=self.hass.loop, logger=self
-                    )
-            else:
-                self._bluetooth = BluetoothClient(
-                    bt_address, loop=self.hass.loop, logger=self
-                )
+                await _bluetooth.disconnect()
+            self._bluetooth = BluetoothClient(
+                bt_address, loop=self.hass.loop, logger=self
+            )
         else:
             if _bluetooth := self._bluetooth:
                 self._bluetooth = None
@@ -1100,7 +1097,7 @@ class Device(BaseDevice, ConfigEntryManager):
         """
         self.lastrequest = time()
         if self._bluetooth:
-            # BL should be active alone when the device is unpaired so no other transport is available
+            # BL should be active alone when the device is unbound so no other transport is available
             return await self.async_bluetooth_request(namespace, method, payload)
 
         mqttfailed = False
@@ -1297,67 +1294,6 @@ class Device(BaseDevice, ConfigEntryManager):
                 self.tz = await self.api.async_load_zoneinfo(tzname)
         else:
             self.tz = UTC
-
-    async def async_entry_option_setup(self, config_schema: dict):
-        """
-        called when setting up an OptionsFlowHandler to expose
-        configurable device preoperties which are stored at the device level
-        and not at the configuration/option level
-        see derived implementations
-        """
-        if mn.Appliance_Control_Multiple.name in self.descriptor.ability:
-            config_schema[
-                vol.Optional(
-                    mlc.CONF_DISABLE_MULTIPLE,
-                    default=False,
-                    description={
-                        "suggested_value": self.config.get(mlc.CONF_DISABLE_MULTIPLE)
-                    },
-                )
-            ] = bool
-
-        if mn.Appliance_System_Time.name in self.descriptor.ability:
-            global TIMEZONES_SET
-            if TIMEZONES_SET is None:
-
-                def _load():
-                    """
-                    These functions will use low levels imports and HA core 2024.5
-                    complains about executing it in the main loop thread. We'll
-                    so run these in an executor
-                    """
-                    return vol.In(sorted(zoneinfo.available_timezones()))
-
-                try:
-                    TIMEZONES_SET = await self.hass.async_add_executor_job(_load)
-                except Exception as exception:
-                    self.log_exception(
-                        self.WARNING, exception, "building list of available timezones"
-                    )
-                    TIMEZONES_SET = str
-
-            config_schema[
-                vol.Optional(
-                    mc.KEY_TIMEZONE,
-                    description={"suggested_value": self.descriptor.timezone},
-                )
-            ] = TIMEZONES_SET
-
-    async def async_entry_option_update(self, user_input: mlc.DeviceConfigType):
-        """
-        called when the user 'SUBMIT' an OptionsFlowHandler: here we'll
-        receive the full user_input so to update device config properties
-        (this is actually called in sequence with entry_update_listener
-        just the latter is async)
-        """
-        if mn.Appliance_System_Time.name in self.descriptor.ability:
-            timezone = user_input.get(mc.KEY_TIMEZONE)
-            if timezone != self.descriptor.timezone:
-                if await self.async_config_device_timezone(timezone):
-                    # if there's a pending issue, the user might still
-                    # use the OptionsFlow to fix stuff so we'll
-                    # shut this down anyway..it will reappear in case
-                    self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
 
     async def async_bind(
         self, broker: HostAddress, *, key: str | None = None, userid: str | None = None
@@ -2034,6 +1970,8 @@ class Device(BaseDevice, ConfigEntryManager):
                     self._polling_delay, self._async_polling_callback, None
                 )
             self.log(self.DEBUG, "Polling end")
+            if self._bluetooth:
+                await self._bluetooth.disconnect()
 
     async def _async_polling_stop(self):
         """Ensure we're not polling nor any schedule is in place."""
@@ -2500,11 +2438,7 @@ class Device(BaseDevice, ConfigEntryManager):
             # appliance so it knows how and when to offset utc to localtime
 
             # brutal patch for missing tz names (AEST #402)
-            _TZ_PATCH = {
-                "AEST": "Australia/Brisbane",
-            }
-            if tzname in _TZ_PATCH:
-                tzname = _TZ_PATCH[tzname]
+            tzname = {"AEST": "Australia/Brisbane"}.get(tzname, tzname)
 
             try:
                 tz = await self.api.async_load_zoneinfo(tzname)

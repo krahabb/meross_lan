@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from bleak import BleakClient, uuids
 from bleak.backends.bluezdbus.client import BleakClientBlueZDBus
+
 from . import MerossDeviceDescriptor
 from .protocol import MerossError, const as mc, namespaces as mn
 from .protocol.message import MerossRequest, MerossResponse, check_message_strict
@@ -137,9 +138,9 @@ class BluetoothClient(BleakClient):
                 if self.is_connected:
                     return True
 
-                await super().connect(**kwargs)
-
                 logger = self.logger
+
+                await super().connect(**kwargs)
                 # Bad patch for bluez mtu_size (bad code always needs bad approaches)
                 # We'll cache the mtu_size assuming it will not change across reconnections
                 _backend = self._backend

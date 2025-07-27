@@ -55,10 +55,6 @@ if TYPE_CHECKING:
     from .helpers.meross_profile import MQTTConnection
 
 
-# helper conf keys not persisted to config
-_DESCR = "suggested_value"
-
-
 class FlowErrorKey(StrEnum):
     """These error keys are common to both Config and Options flows"""
 
@@ -85,20 +81,22 @@ class FlowError(Exception):
         self.key = key
 
 
-def _optional(key: str, config, default=None):
-    try:
-        default = config.get(key, default)
-    except:
-        pass
-    return vol.Optional(key, description={_DESCR: default})
+def _optional(key: str, config: "Mapping | None", default=None):
+    return vol.Optional(
+        key,
+        description={
+            "suggested_value": (config and config.get(key, default)) or default
+        },
+    )
 
 
-def _required(key: str, config, default=None):
-    try:
-        default = config.get(key, default)
-    except:
-        pass
-    return vol.Required(key, description={_DESCR: default})
+def _required(key: str, config: "Mapping | None", default=None):
+    return vol.Required(
+        key,
+        description={
+            "suggested_value": (config and config.get(key, default)) or default
+        },
+    )
 
 
 class MerossFlowHandlerMixin(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
@@ -220,7 +218,7 @@ class MerossFlowHandlerMixin(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object
     @staticmethod
     def merge_userinput(
         config,
-        user_input: dict,
+        user_input: "Mapping",
         *nullable_keys,
     ):
         """
@@ -1029,7 +1027,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
             case (ConfigEntryType.HUB, _):
                 return await self.async_step_menu("hub")
 
-    async def async_step_menu(self, user_input):
+    async def async_step_menu(self, user_input: str):
         if self.repair_issue_id:
             return await getattr(self, f"async_step_{user_input}")(None)
         else:
@@ -1038,7 +1036,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                 menu_options=self._MENU_OPTIONS[user_input],
             )
 
-    async def async_step_hub(self, user_input=None):
+    async def async_step_hub(self, user_input: "Mapping | None" = None):
         hub_config = self.config
         if user_input is not None:
             self.merge_userinput(hub_config, user_input, mlc.CONF_KEY)
@@ -1053,149 +1051,169 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
             step_id="hub", data_schema=vol.Schema(config_schema)
         )
 
-    async def async_step_device(self, user_input=None):
+    async def async_step_device(self, user_input: "Mapping | None" = None):
         """
         general (common) device configuration allowing key set and
         general parameters to be entered/modified
         """
         api = self.api
         device_id = self.device_id
-        device_config = self.device_config
         device = api.devices[device_id]
+        device_config = self.device_config
+        device_descriptor = self.device_descriptor
+        ability = device_descriptor.ability
+        _bt_address = device_config.get(mlc.CONF_BT_ADDR)
 
         with self.show_form_errorcontext():
             if user_input is not None:
-                self.merge_userinput(
-                    device_config, user_input, mlc.CONF_KEY, mlc.CONF_HOST
-                )
-                try:
-                    inner_exception = None
-                    device_config_update = None
-                    descriptor_update = None
-                    _host = user_input.get(mlc.CONF_HOST)
-                    _key = user_input.get(mlc.CONF_KEY)
-                    _conf_protocol = mlc.CONF_PROTOCOL_OPTIONS.get(
-                        user_input.get(mlc.CONF_PROTOCOL), mlc.CONF_PROTOCOL_AUTO
+                if _bt_address:
+                    self.merge_userinput(device_config, user_input)
+                else:
+                    self.merge_userinput(
+                        device_config, user_input, mlc.CONF_KEY, mlc.CONF_HOST
                     )
-                    if _conf_protocol is not mlc.CONF_PROTOCOL_HTTP:
-                        try:
-                            (
-                                device_config_update,
-                                descriptor_update,
-                            ) = await self._async_mqtt_discovery(
-                                device_id, _key, self.device_descriptor
-                            )
-                        except Exception as e:
-                            inner_exception = e
-                    if _conf_protocol is not mlc.CONF_PROTOCOL_MQTT:
-                        if _try_host := (_host or self.device_descriptor.innerIp):
+                    try:
+                        inner_exception = None
+                        device_config_update = None
+                        descriptor_update = None
+                        _host = user_input.get(mlc.CONF_HOST)
+                        _key = user_input.get(mlc.CONF_KEY)
+                        _conf_protocol = mlc.CONF_PROTOCOL_OPTIONS.get(
+                            user_input.get(mlc.CONF_PROTOCOL), mlc.CONF_PROTOCOL_AUTO
+                        )
+                        if _conf_protocol is not mlc.CONF_PROTOCOL_HTTP:
                             try:
                                 (
                                     device_config_update,
                                     descriptor_update,
-                                ) = await self._async_http_discovery(_try_host, _key)
+                                ) = await self._async_mqtt_discovery(
+                                    device_id, _key, device_descriptor
+                                )
                             except Exception as e:
                                 inner_exception = e
+                        if _conf_protocol is not mlc.CONF_PROTOCOL_MQTT:
+                            if _try_host := (_host or device_descriptor.innerIp):
+                                try:
+                                    (
+                                        device_config_update,
+                                        descriptor_update,
+                                    ) = await self._async_http_discovery(
+                                        _try_host, _key
+                                    )
+                                except Exception as e:
+                                    inner_exception = e
 
-                    if not device_config_update or not descriptor_update:
-                        raise inner_exception or FlowError(FlowErrorKey.CANNOT_CONNECT)
-                    if device_id != device_config_update[mlc.CONF_DEVICE_ID]:
-                        raise FlowError(OptionsFlowErrorKey.DEVICE_ID_MISMATCH)
-                    device_config[mlc.CONF_PAYLOAD] = device_config_update[
-                        mlc.CONF_PAYLOAD
-                    ]
-
-                    try:
-                        await device.async_entry_option_update(user_input)  # type: ignore
-                    except Exception:
-                        pass  # forgive any error
-
-                    # cleanup keys which might wrongly have been persisted
-                    device_config.pop(mlc.CONF_CLOUD_KEY, None)
-                    device_config.pop(mc.KEY_TIMEZONE, None)
-
-                    if self.config_entry.state == ce.ConfigEntryState.SETUP_ERROR:
-                        try:  # to fix the device registry in case it was corrupted by #341
-                            dev_reg = api.device_registry
-                            device_identifiers = {(str(mlc.DOMAIN), device_id)}
-                            device_entry = dev_reg.async_get_device(
-                                identifiers=device_identifiers
+                        if not device_config_update or not descriptor_update:
+                            raise inner_exception or FlowError(
+                                FlowErrorKey.CANNOT_CONNECT
                             )
-                            if device_entry and (
-                                len(device_entry.connections) > 1
-                                or len(device_entry.config_entries) > 1
-                            ):
-                                _area_id = device_entry.area_id
-                                _name_by_user = device_entry.name_by_user
-                                dev_reg.async_remove_device(device_entry.id)
-                                dev_reg.async_get_or_create(
-                                    config_entry_id=self.config_entry.entry_id,
-                                    suggested_area=_area_id,
-                                    name=descriptor_update.productname,
-                                    model=descriptor_update.productmodel,
-                                    hw_version=descriptor_update.hardwareVersion,
-                                    sw_version=descriptor_update.firmwareVersion,
-                                    manufacturer=mc.MANUFACTURER,
-                                    connections={
-                                        (
-                                            dr.CONNECTION_NETWORK_MAC,
-                                            descriptor_update.macAddress,
-                                        )
-                                    },
-                                    identifiers=device_identifiers,
+                        if device_id != device_config_update[mlc.CONF_DEVICE_ID]:
+                            raise FlowError(OptionsFlowErrorKey.DEVICE_ID_MISMATCH)
+                        device_config[mlc.CONF_PAYLOAD] = device_config_update[
+                            mlc.CONF_PAYLOAD
+                        ]
+
+                        if self.config_entry.state == ce.ConfigEntryState.SETUP_ERROR:
+                            try:  # to fix the device registry in case it was corrupted by #341
+                                dev_reg = api.device_registry
+                                device_identifiers = {(str(mlc.DOMAIN), device_id)}
+                                device_entry = dev_reg.async_get_device(
+                                    identifiers=device_identifiers
                                 )
-                                api.log(
+                                if device_entry and (
+                                    len(device_entry.connections) > 1
+                                    or len(device_entry.config_entries) > 1
+                                ):
+                                    _area_id = device_entry.area_id
+                                    _name_by_user = device_entry.name_by_user
+                                    dev_reg.async_remove_device(device_entry.id)
+                                    dev_reg.async_get_or_create(
+                                        config_entry_id=self.config_entry.entry_id,
+                                        suggested_area=_area_id,
+                                        name=descriptor_update.productname,
+                                        model=descriptor_update.productmodel,
+                                        hw_version=descriptor_update.hardwareVersion,
+                                        sw_version=descriptor_update.firmwareVersion,
+                                        manufacturer=mc.MANUFACTURER,
+                                        connections={
+                                            (
+                                                dr.CONNECTION_NETWORK_MAC,
+                                                descriptor_update.macAddress,
+                                            )
+                                        },
+                                        identifiers=device_identifiers,
+                                    )
+                                    api.log(
+                                        api.WARNING,
+                                        "Device registry entry for %s (uuid:%s) was updated in order to fix it. The friendly name ('%s') has been lost and needs to be manually re-entered",
+                                        descriptor_update.productmodel,
+                                        api.loggable_device_id(device_id),
+                                        _name_by_user,
+                                    )
+
+                            except Exception as error:
+                                api.log_exception(
                                     api.WARNING,
-                                    "Device registry entry for %s (uuid:%s) was updated in order to fix it. The friendly name ('%s') has been lost and needs to be manually re-entered",
+                                    error,
+                                    "repairing device registry for %s (uuid:%s)",
                                     descriptor_update.productmodel,
                                     api.loggable_device_id(device_id),
-                                    _name_by_user,
                                 )
+                            return self.finish_options_flow(device_config, True)
 
-                        except Exception as error:
-                            api.log_exception(
-                                api.WARNING,
-                                error,
-                                "repairing device registry for %s (uuid:%s)",
-                                descriptor_update.productmodel,
-                                api.loggable_device_id(device_id),
-                            )
-                        return self.finish_options_flow(device_config, True)
+                    except MerossKeyError:
+                        return await self.async_step_keyerror()
 
-                    return self.finish_options_flow(device_config)
+                # mc.KEY_TIMEZONE is 'volatile' i.e. a device conf not stored in ConfigEntry
+                if (
+                    (timezone := device_config.pop(mc.KEY_TIMEZONE, None))
+                    and device
+                    and (timezone != device.descriptor.timezone)
+                ):
+                    if await device.async_config_device_timezone(timezone):
+                        # if there's a pending issue, the user might still
+                        # use the OptionsFlow to fix stuff so we'll
+                        # shut this down anyway..it will reappear in case
+                        device.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
 
-                except MerossKeyError:
-                    return await self.async_step_keyerror()
+                # cleanup keys which might wrongly have been persisted
+                device_config.pop(mlc.CONF_CLOUD_KEY, None)
+                return self.finish_options_flow(device_config)
 
             else:
                 _host = device_config.get(mlc.CONF_HOST)
                 _key = device_config.get(mlc.CONF_KEY)
 
-        self.device_placeholders["host"] = _host or "MQTT"
         config_schema = self.get_schema_with_errors()
-        config_schema |= {
-            _optional(mlc.CONF_HOST, None, _host): str,
-            _optional(mlc.CONF_KEY, None, _key): str,
-            _required(mlc.CONF_PROTOCOL, device_config, mlc.CONF_PROTOCOL_AUTO): vol.In(
-                mlc.CONF_PROTOCOL_OPTIONS.keys()
-            ),
+        if _bt_address:
+            self.device_placeholders["host"] = f"BT_{_bt_address}"
+        else:
+            self.device_placeholders["host"] = _host or "MQTT"
+            config_schema[_optional(mlc.CONF_HOST, None, _host)] = str
+            config_schema[_optional(mlc.CONF_KEY, None, _key)] = str
+            config_schema[
+                _required(mlc.CONF_PROTOCOL, device_config, mlc.CONF_PROTOCOL_AUTO)
+            ] = vol.In(mlc.CONF_PROTOCOL_OPTIONS.keys())
+        config_schema[
             _required(
                 mlc.CONF_POLLING_PERIOD, device_config, mlc.CONF_POLLING_PERIOD_DEFAULT
-            ): cv.positive_int,
-        }
-        # setup device specific config right before last option
-        try:
-            await device.async_entry_option_setup(config_schema)  # type: ignore
-        except Exception:
-            pass  # forgive any error
-
+            )
+        ] = cv.positive_int
+        if mn.Appliance_Control_Multiple.name in ability:
+            config_schema[
+                _optional(mlc.CONF_DISABLE_MULTIPLE, device_config, False)
+            ] = bool
+        if device and mn.Appliance_System_Time.name in ability:
+            config_schema[
+                _optional(mc.KEY_TIMEZONE, None, device.descriptor.timezone)
+            ] = vol.In(await api.async_available_timezones())
         self._setup_entitymanager_schema(config_schema, device_config)
         return self.async_show_form_with_errors(
             "device",
             description_placeholders=self.device_placeholders,
         )
 
-    async def async_step_diagnostics(self, user_input=None):
+    async def async_step_diagnostics(self, user_input: "Mapping | None" = None):
         # when choosing to start a diagnostic from the OptionsFlow UI we'll
         # reload the entry so we trace also the full initialization process
         # for a more complete insight on the EntityManager context.
@@ -1232,7 +1250,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
             vol.Required(
                 mlc.CONF_LOGGING_LEVEL,
                 description={
-                    _DESCR: mlc.CONF_LOGGING_LEVEL_OPTIONS.get(
+                    "suggested_value": mlc.CONF_LOGGING_LEVEL_OPTIONS.get(
                         config.get(mlc.CONF_LOGGING_LEVEL, logging.NOTSET), "default"
                     )
                 },
@@ -1255,7 +1273,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
             step_id="diagnostics", data_schema=vol.Schema(config_schema)
         )
 
-    async def async_step_bind(self, user_input=None):
+    async def async_step_bind(self, user_input: "Mapping | None" = None):
         with self.show_form_errorcontext():
             if user_input:
                 hass = self.hass
@@ -1439,7 +1457,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
 
     def finish_options_flow(
         self,
-        config: mlc.DeviceConfigType | mlc.ProfileConfigType | mlc.HubConfigType,
+        config: "Mapping",
         reload: bool = False,
     ):
         """Used in OptionsFlow to terminate and exit (with save)."""
