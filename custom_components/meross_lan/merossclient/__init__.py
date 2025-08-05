@@ -8,7 +8,6 @@ import json
 import re
 from time import time
 from typing import TYPE_CHECKING
-from uuid import uuid4
 
 from .protocol import const as mc
 
@@ -80,6 +79,8 @@ JSON_ENCODER = json.JSONEncoder(
     ensure_ascii=False, check_circular=False, separators=(",", ":")
 )
 JSON_DECODER = json.JSONDecoder()
+
+JSONDecodeError = json.JSONDecodeError
 
 
 def json_dumps(obj):
@@ -316,7 +317,7 @@ class MerossDeviceDescriptor:
         macAddress: str
         macAddress_fmt: str
         innerIp: str | None
-        userId: str | None
+        userId: str
         firmwareVersion: str
         time: dict
         timezone: str | None

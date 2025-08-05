@@ -1,6 +1,5 @@
 import asyncio
 from collections import deque
-from hashlib import md5
 import logging
 import random
 import ssl
@@ -13,14 +12,14 @@ from uuid import uuid4
 import paho.mqtt.client as mqtt
 
 from . import HostAddress, get_macaddress_from_uuid
-from .protocol import const as mc
+from .protocol import const as mc, md5hexdigest
 
 if typing.TYPE_CHECKING:
     from .protocol.message import MerossMessage
 
 
 def generate_app_id():
-    return md5(uuid4().hex.encode("utf-8")).hexdigest()
+    return md5hexdigest(uuid4().hex)
 
 
 class MerossMQTTRateLimitException(Exception):
@@ -388,7 +387,7 @@ class MerossMQTTAppClient(_MerossMQTTClient):
         super().__init__(
             f"app:{app_id}", [(self.topic_push, 1), (self.topic_command, 1)], loop=loop
         )
-        self.username_pw_set(userid, md5(f"{userid}{key}".encode("utf8")).hexdigest())
+        self.username_pw_set(userid, md5hexdigest(userid, key))
         if sslcontext:
             self.tls_set_context(sslcontext)
         else:
@@ -430,7 +429,7 @@ class MerossMQTTDeviceClient(_MerossMQTTClient):
             loop=loop,
         )
         macaddress = get_macaddress_from_uuid(uuid)
-        pwd = md5(f"{macaddress}{key}".encode("utf8")).hexdigest()
+        pwd = md5hexdigest(macaddress, key)
         self.username_pw_set(macaddress, f"{userid}_{pwd}")
         if sslcontext:
             self.tls_set_context(sslcontext)

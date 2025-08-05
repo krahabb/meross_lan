@@ -1,9 +1,14 @@
-from hashlib import md5
 from time import time
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from . import MerossKeyError, MerossProtocolError, const as mc, namespaces as mn
+from . import (
+    MerossKeyError,
+    MerossProtocolError,
+    compute_message_signature,
+    const as mc,
+    namespaces as mn,
+)
 from .. import JSON_DECODER, JSON_ENCODER
 
 if TYPE_CHECKING:
@@ -13,17 +18,6 @@ if TYPE_CHECKING:
 #
 # Low level message building helpers
 #
-def compute_message_signature(messageid: str, key: str, timestamp, /):
-    return md5(
-        "".join((messageid, key, str(timestamp))).encode("utf-8"), usedforsecurity=False
-    ).hexdigest()
-
-
-def compute_message_encryption_key(uuid: str, key: str, mac: str, /):
-    return md5(
-        "".join((uuid[3:22], key[1:9], mac, key[10:28])).encode("utf-8"),
-        usedforsecurity=False,
-    ).hexdigest()
 
 
 def build_message(

@@ -1,7 +1,5 @@
 import asyncio
 from base64 import b64encode
-from hashlib import md5
-import json
 import logging
 from time import time
 import typing
@@ -9,8 +7,8 @@ from uuid import uuid4
 
 import aiohttp
 
-from . import MEROSSDEBUG
-from .protocol import MerossProtocolError, const as mc
+from . import MEROSSDEBUG, json_dumps, json_loads
+from .protocol import MerossProtocolError, const as mc, md5hexdigest
 
 SECRET = "23x17ahWarFH6w29"
 
@@ -173,7 +171,7 @@ class CloudApiError(MerossProtocolError):
             reason
             or APISTATUS_MAP.get(self.apistatus)  # type: ignore
             or response.get(mc.KEY_INFO)
-            or json.dumps(response),
+            or json_dumps(response),
         )
 
 
@@ -241,11 +239,8 @@ async def async_cloudapi_post(
 
         timestamp = int(time() * 1000)
         nonce = uuid4().hex
-        params = json.dumps(data, ensure_ascii=False)
-        params = b64encode(params.encode("utf-8")).decode("utf-8")
-        sign = md5(
-            "".join((SECRET, str(timestamp), nonce, params)).encode("utf-8")
-        ).hexdigest()
+        params = json_dumps(data)
+        params = b64encode(params.encode()).decode()
         if credentials:
             url_or_path = (
                 credentials.get(mc.KEY_DOMAIN) or LEGACY_API_URL
@@ -261,7 +256,7 @@ async def async_cloudapi_post(
             mc.KEY_TIMESTAMP: timestamp,
             mc.KEY_NONCE: nonce,
             mc.KEY_PARAMS: params,
-            mc.KEY_SIGN: sign,
+            mc.KEY_SIGN: md5hexdigest(SECRET, str(timestamp), nonce, params),
         }
         if logger:
             logger.log(
@@ -288,7 +283,7 @@ async def async_cloudapi_post(
                 obfuscate_func(text_response),
             )
 
-        json_response = json.loads(text_response)
+        json_response = json_loads(text_response)
         if not isinstance(json_response, dict):
             raise Exception("HTTP response is not a json dictionary")
 
@@ -359,7 +354,7 @@ async def async_cloudapi_signin(
 ) -> MerossCloudCredentials:
     request_data = {
         mc.KEY_EMAIL: email,
-        mc.KEY_PASSWORD: md5(password.encode("utf8")).hexdigest(),
+        mc.KEY_PASSWORD: md5hexdigest(password),
         mc.KEY_ACCOUNTCOUNTRYCODE: region,
         mc.KEY_ENCRYPTION: 1,
         mc.KEY_AGREE: 0,

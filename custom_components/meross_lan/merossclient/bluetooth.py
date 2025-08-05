@@ -1,7 +1,7 @@
 import asyncio
 import binascii
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from bleak import BleakClient, uuids
 from bleak.backends.bluezdbus.client import BleakClientBlueZDBus
@@ -12,6 +12,7 @@ from .protocol.message import MerossRequest, MerossResponse, check_message_stric
 
 if TYPE_CHECKING:
     from typing import (
+        Callable,
         Final,
         Iterable,
         NotRequired,
@@ -109,7 +110,7 @@ class BluetoothClient(BleakClient):
     ):
         super().__init__(
             address_or_ble_device,
-            self._disconnected_callback,
+            None,
             services,
             timeout=timeout,
             winrt=winrt,
@@ -129,6 +130,7 @@ class BluetoothClient(BleakClient):
         self._mtu_size = None
 
     # interface: BleakClient
+    @override
     async def connect(self, **kwargs: "Unpack[ConnectArgs]") -> bool:
 
         async with asyncio.timeout(kwargs.get("timeout", self.timeout)):
@@ -226,7 +228,8 @@ class BluetoothClient(BleakClient):
                     self._char_notify = None  # type: ignore
                     self._char_write = None  # type: ignore
                     raise
-
+                self._on_connected()
+                _backend.set_disconnected_callback(self._on_disconnected)
                 return True
             except Exception as e:
                 if logger:
@@ -237,6 +240,7 @@ class BluetoothClient(BleakClient):
             finally:
                 self._connect_lock.release()
 
+    @override
     async def disconnect(self) -> bool:
         async with self._connect_lock:
             if self.is_connected:
@@ -248,9 +252,24 @@ class BluetoothClient(BleakClient):
                             logging.DEBUG, "%s(%s) in stop_notify", type(e), str(e)
                         )
                 await super().disconnect()
+                self._on_disconnected()
             return True
 
     # interface: self
+    def _on_connected(self):
+        """Placeholder member called when device is connected."""
+        if self.logger:
+            self.logger.log(
+                logging.DEBUG, "Bluetooth device %s connected", self.address
+            )
+
+    def _on_disconnected(self):
+        """Placeholder member called when device is disconnected."""
+        if self.logger:
+            self.logger.log(
+                logging.DEBUG, "Bluetooth device %s disconnected", self.address
+            )
+
     async def async_request_raw(
         self, request: str, /, **kwargs: "Unpack[RequestArgs]"
     ) -> MerossResponse:
@@ -323,11 +342,6 @@ class BluetoothClient(BleakClient):
         )
         return MerossDeviceDescriptor(
             ns_all_response[mc.KEY_PAYLOAD] | ns_ability_response[mc.KEY_PAYLOAD]
-        )
-
-    def _disconnected_callback(self, client: BleakClient, /):
-        a = self.logger and self.logger.log(
-            logging.DEBUG, "Bluetooth device %s disconnected", self.address
         )
 
     def _packet_handler(self, data: bytearray, /):

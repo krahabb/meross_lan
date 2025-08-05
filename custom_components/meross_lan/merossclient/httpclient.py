@@ -4,7 +4,6 @@ for Meross devices.
 """
 
 import asyncio
-from base64 import b64decode, b64encode
 import logging
 import socket
 import sys
@@ -12,11 +11,10 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 import aiohttp
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from yarl import URL
 
 from . import JSON_ENCODER, MEROSSDEBUG
-from .protocol import MerossKeyError, const as mc
+from .protocol import AESCipher, MerossKeyError, const as mc
 from .protocol.message import (
     MerossResponse,
     build_message,
@@ -41,7 +39,7 @@ class MerossHttpClient:
         SESSION_TIMEOUT: ClassVar
         _SESSION: ClassVar[aiohttp.ClientSession | None]
 
-        _encryption_cipher: Cipher | None
+        _encryption_cipher: AESCipher | None
         _key_header: MerossHeaderType
 
     SESSION_MAXIMUM_CONNECTIONS = 50
@@ -135,13 +133,7 @@ class MerossHttpClient:
         self._requesturl = URL(f"http://{value}/config")
 
     def set_encryption(self, encryption_key: bytes | None, /):
-        if encryption_key:
-            self._encryption_cipher = Cipher(
-                algorithms.AES(encryption_key),
-                modes.CBC("0000000000000000".encode("utf8")),
-            )
-        else:
-            self._encryption_cipher = None
+        self._encryption_cipher = AESCipher(encryption_key) if encryption_key else None
 
     def _check_terminated(self):
         if self._terminate:
@@ -181,12 +173,7 @@ class MerossHttpClient:
                 MEROSSDEBUG.http_random_timeout()
 
             if _cipher := self._encryption_cipher:
-                request_bytes = request.encode("utf-8")
-                request_bytes += bytes(16 - (len(request_bytes) % 16))
-                encryptor = _cipher.encryptor()
-                request = b64encode(
-                    encryptor.update(request_bytes) + encryptor.finalize()
-                ).decode("utf-8")
+                request = _cipher.encript_text(request)
                 headers = {
                     aiohttp.hdrs.CONTENT_TYPE: "application/octet-stream",
                 }
@@ -223,10 +210,7 @@ class MerossHttpClient:
             response.raise_for_status()
             response = await response.text()
             if _cipher:
-                decryptor = _cipher.decryptor()
-                decrypted_bytes = decryptor.update(b64decode(response))
-                decrypted_bytes += decryptor.finalize()
-                response = decrypted_bytes.decode("utf8").rstrip("\0")
+                response = _cipher.decript_text(response)
 
             if logger:
                 logger.log(

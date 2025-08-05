@@ -408,9 +408,9 @@ Appliance_Config_Matter = ns("Appliance.Config.Matter", mc.KEY_CONFIG, ARGS_PUSH
 Appliance_Config_NtpSite = ns("Appliance.Config.NtpSite", None, ARGS_NO_Q)
 Appliance_Config_OverTemp = ns("Appliance.Config.OverTemp", mc.KEY_OVERTEMP, ARGS_GET)
 Appliance_Config_Trace = ns("Appliance.Config.Trace", None, ARGS_NO_Q)
-Appliance_Config_Wifi = ns("Appliance.Config.Wifi", None, ARGS_SET)
+Appliance_Config_Wifi = ns("Appliance.Config.Wifi", mc.KEY_WIFI, ARGS_SET)
 Appliance_Config_WifiList = ns("Appliance.Config.WifiList", None, ARGS_GET)
-Appliance_Config_WifiX = ns("Appliance.Config.WifiX", None, ARGS_SET)
+Appliance_Config_WifiX = ns("Appliance.Config.WifiX", mc.KEY_WIFI, ARGS_SET)
 
 Appliance_Config_Sensor_Association = ns(
     "Appliance.Config.Sensor.Association",

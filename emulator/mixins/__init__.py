@@ -1,19 +1,16 @@
 import asyncio
 from base64 import b64decode, b64encode
 from enum import Enum
-from json import JSONDecodeError
 import threading
 from time import time
 import typing
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.helpers.manager import ConfigEntryManager
 from custom_components.meross_lan.merossclient import (
     HostAddress,
+    JSONDecodeError,
     MerossDeviceDescriptor,
     extract_dict_payloads,
     get_element_by_key,
@@ -25,6 +22,8 @@ from custom_components.meross_lan.merossclient import (
 )
 from custom_components.meross_lan.merossclient.mqttclient import MerossMQTTDeviceClient
 from custom_components.meross_lan.merossclient.protocol import (
+    AESCipher,
+    compute_message_encryption_key,
     const as mc,
     namespaces as mn,
 )
@@ -32,7 +31,6 @@ from custom_components.meross_lan.merossclient.protocol.message import (
     MerossMessage,
     MerossRequest,
     build_message,
-    compute_message_encryption_key,
     get_replykey,
 )
 
@@ -347,13 +345,10 @@ class MerossEmulator:
         self._scheduler_unsub = None
         self._tzinfo: ZoneInfo | None = None
         self._cipher = (
-            Cipher(
-                algorithms.AES(
-                    compute_message_encryption_key(
-                        descriptor.uuid, key, descriptor.macAddress
-                    ).encode("utf-8")
-                ),
-                modes.CBC("0000000000000000".encode("utf8")),
+            AESCipher(
+                compute_message_encryption_key(
+                    descriptor.uuid, key, descriptor.macAddress
+                )
             )
             if mn.Appliance_Encrypt_ECDHE.name in descriptor.ability
             else None
@@ -848,7 +843,7 @@ class MerossEmulator:
 
     def _mqtt_setup(self):
         self.mqtt_client = mqtt_client = MerossMQTTDeviceClient(
-            self.uuid, key=self.key, userid=self.descriptor.userId or ""
+            self.uuid, key=self.key, userid=self.descriptor.userId
         )
         mqtt_client.on_subscribe = self._mqttc_subscribe
         mqtt_client.on_disconnect = self._mqttc_disconnect
