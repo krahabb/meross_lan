@@ -277,6 +277,7 @@ class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
     STATE_DISCONNECTED = "disconnected"
     STATE_ACTIVE = "active"
     STATE_INACTIVE = "inactive"
+    ATTR_BLUETOOTH = mlc.CONF_PROTOCOL_BLUETOOTH
     ATTR_HTTP = mlc.CONF_PROTOCOL_HTTP
     ATTR_MQTT = mlc.CONF_PROTOCOL_MQTT
     ATTR_MQTT_BROKER = "mqtt_broker"
@@ -289,8 +290,9 @@ class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
     native_value: str
     options: list[str] = [
         STATE_DISCONNECTED,
-        mlc.CONF_PROTOCOL_MQTT,
-        mlc.CONF_PROTOCOL_HTTP,
+        ATTR_BLUETOOTH,
+        ATTR_HTTP,
+        ATTR_MQTT,
     ]
 
     @staticmethod
@@ -317,6 +319,7 @@ class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
         if manager.conf_protocol is not manager.curr_protocol:
             # this is to identify when conf_protocol is CONF_PROTOCOL_AUTO
             # if conf_protocol is fixed we'll not set these attrs (redundant)
+            attrs[self.ATTR_BLUETOOTH] = _get_attr_state(manager._bluetooth_active)
             attrs[self.ATTR_HTTP] = _get_attr_state(manager._http_active)
             attrs[self.ATTR_MQTT] = _get_attr_state(manager._mqtt_active)
             attrs[self.ATTR_MQTT_BROKER] = _get_attr_state(manager._mqtt_connected)
@@ -340,13 +343,6 @@ class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
     # call them 'before' connecting the device so they'll not flush
     # and the full state will be flushed by the update_connected call
     # and call them 'after' any eventual disconnection for the same reason
-
-    def update_attr(self, attrname: str, attr_state):
-        attrs = self.extra_state_attributes
-        if attrname in attrs:
-            attrs[attrname] = self._get_attr_state(attr_state)
-            self.flush_state()
-
     def update_attr_active(self, attrname: str):
         attrs = self.extra_state_attributes
         if attrname in attrs:

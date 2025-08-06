@@ -34,11 +34,10 @@ async def async_setup_entry(
 
     match ConfigEntryType.get_type_and_id(config_entry.unique_id):
         case (ConfigEntryType.DEVICE, device_id):
-            if device_id in api.devices:
+            try:
                 assert api.devices[device_id] is None, "device already initialized"
-            else:
-                # this could happen when we add profile entries
-                # after boot
+            except KeyError:
+                # this could happen when we add profile entries after boot
                 api.devices[device_id] = None
             device = await api.async_build_device(device_id, config_entry)
             try:
@@ -54,11 +53,10 @@ async def async_setup_entry(
                 raise ConfigEntryError from error
 
         case (ConfigEntryType.PROFILE, profile_id):
-            if profile_id in api.profiles:
-                assert api.profiles[profile_id] is None
-            else:
-                # this could happen when we add profile entries
-                # after boot
+            try:
+                assert api.profiles[profile_id] is None, "profile already initialized"
+            except KeyError:
+                # this could happen when we add entries after boot
                 api.profiles[profile_id] = None
             profile = MerossProfile(profile_id, api, config_entry)
             try:
@@ -79,9 +77,6 @@ async def async_setup_entry(
         case (ConfigEntryType.HUB, _):
             if not await api.mqtt_connection.async_mqtt_subscribe():
                 raise ConfigEntryNotReady("MQTT unavailable")
-            api.config_entry = config_entry  # type: ignore
-            config_entry.runtime_data = api
-            await api.entry_update_listener(hass, config_entry)
             await api.async_setup_entry(hass, config_entry)
             return True
 

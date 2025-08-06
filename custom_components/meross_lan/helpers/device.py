@@ -1,7 +1,6 @@
 import abc
 import bisect
 from datetime import UTC, tzinfo
-from json import JSONDecodeError
 from time import time
 from typing import TYPE_CHECKING
 from uuid import uuid4
@@ -33,17 +32,20 @@ from ..const import (
 from ..helpers.obfuscate import obfuscated_dict
 from ..merossclient import (
     HostAddress,
+    JSONDecodeError,
     get_active_broker,
     is_device_online,
     json_dumps,
 )
 from ..merossclient.bluetooth import BluetoothClient
 from ..merossclient.httpclient import MerossHttpClient, TerminatedException
+from ..merossclient.protocol import (
+    compute_message_encryption_key,
+    compute_message_signature,
+)
 from ..merossclient.protocol.message import (
     MerossRequest,
     MerossResponse,
-    compute_message_encryption_key,
-    compute_message_signature,
     get_message_uuid,
 )
 from ..sensor import ProtocolSensor
@@ -155,6 +157,15 @@ class BaseDevice(EntityManager):
         )
 
     # interface: self
+    def update_device_registry(
+        self, *, connections: set[tuple[str, str]] | None = None
+    ):
+        device_registry_entry = self.device_registry_entry
+        if connections is not None and device_registry_entry.connections != connections:
+            self.api.device_registry.async_update_device(
+                device_registry_entry.id, new_connections=connections
+            )
+
     async def async_request(
         self,
         namespace: str,
@@ -263,18 +274,19 @@ class Device(BaseDevice, ConfigEntryManager):
 
         device_timestamp: int
 
-        _profile: MQTTProfile | None
-        _bluetooth: BluetoothClient | None
+        _bluetooth: ComponentApi.BTDevice | None
+        _bluetooth_active: ComponentApi.BTDevice | None
+        _http: MerossHttpClient | None
+        _http_active: MerossHttpClient | None
+        _http_lastrequest: float
+        _http_lastresponse: float
         _mqtt_connection: MQTTConnection | None
         _mqtt_connected: MQTTConnection | None
         _mqtt_publish: MQTTConnection | None
         _mqtt_active: MQTTConnection | None
         _mqtt_lastrequest: float
         _mqtt_lastresponse: float
-        _http: MerossHttpClient | None
-        _http_active: MerossHttpClient | None
-        _http_lastrequest: float
-        _http_lastresponse: float
+        _profile: MQTTProfile | None
         namespace_handlers: dict[str, NamespaceHandler]
         namespace_pushes: dict[str, Mapping]
         digest_handlers: dict[str, DigestParseFunc]
@@ -428,17 +440,19 @@ class Device(BaseDevice, ConfigEntryManager):
         "lastrequest",
         "lastresponse",
         "_topic_response",  # sets the "from" field in request messages
-        "_profile",
+        "_bluetooth",
+        "_bluetooth_active",
+        "_http",
+        "_http_active",  # HTTP is 'online' i.e. reachable
+        "_http_lastrequest",
+        "_http_lastresponse",
         "_mqtt_connection",  # we're binded to an MQTT profile/broker
         "_mqtt_connected",  # the broker is online/connected
         "_mqtt_publish",  # the broker accepts 'publish' (cloud broker conf might disable publishing)
         "_mqtt_active",  # the broker receives valid traffic i.e. the device is 'mqtt' reachable
         "_mqtt_lastrequest",
         "_mqtt_lastresponse",
-        "_http",  # cached MerossHttpClient
-        "_http_active",  # HTTP is 'online' i.e. reachable
-        "_http_lastrequest",
-        "_http_lastresponse",
+        "_profile",
         "namespace_handlers",
         "namespace_pushes",
         "digest_handlers",
@@ -487,18 +501,19 @@ class Device(BaseDevice, ConfigEntryManager):
         self.lastrequest = 0.0
         self.lastresponse = 0.0
         self._topic_response = mc.HEADER_FROM_DEFAULT
-        self._profile = None
         self._bluetooth = None
+        self._bluetooth_active = None
+        self._http = None
+        self._http_active = None
+        self._http_lastrequest = 0
+        self._http_lastresponse = 0
         self._mqtt_connection = None
         self._mqtt_connected = None
         self._mqtt_publish = None
         self._mqtt_active = None
         self._mqtt_lastrequest = 0
         self._mqtt_lastresponse = 0
-        self._http = None
-        self._http_active = None
-        self._http_lastrequest = 0
-        self._http_lastresponse = 0
+        self._profile = None
         self.namespace_handlers = {}
         self.namespace_pushes = {}
         self.digest_handlers = {}
@@ -527,14 +542,7 @@ class Device(BaseDevice, ConfigEntryManager):
             model=descriptor.productmodel,
             hw_version=descriptor.hardwareVersion,
             sw_version=descriptor.firmwareVersion,
-            connections=(
-                {
-                    (dr.CONNECTION_BLUETOOTH, _bt_address),
-                    (dr.CONNECTION_NETWORK_MAC, descriptor.macAddress),
-                }
-                if (_bt_address := config_entry.data.get(mlc.CONF_BT_ADDR))
-                else {(dr.CONNECTION_NETWORK_MAC, descriptor.macAddress)}
-            ),
+            connections={(dr.CONNECTION_NETWORK_MAC, descriptor.macAddress)},
         )
 
         self.sensor_protocol = ProtocolSensor(self)
@@ -658,9 +666,18 @@ class Device(BaseDevice, ConfigEntryManager):
         common properties caches, read from ConfigEntry on __init__ or when a configentry updates
         """
         config = self.config
-        self.conf_protocol = conf_protocol = mlc.CONF_PROTOCOL_OPTIONS.get(
-            config.get(mlc.CONF_PROTOCOL), CONF_PROTOCOL_AUTO
-        )
+        # map CONF_PROTOCOL value to a const symbol in order to use 'is' in Device code checks
+        _protocols = [
+            CONF_PROTOCOL_AUTO,
+            CONF_PROTOCOL_BLUETOOTH,
+            CONF_PROTOCOL_MQTT,
+            CONF_PROTOCOL_HTTP,
+        ]
+        try:
+            conf_protocol = _protocols[_protocols.index(config[mlc.CONF_PROTOCOL])]  # type: ignore
+        except (KeyError, ValueError):
+            conf_protocol = CONF_PROTOCOL_AUTO
+        self.conf_protocol = conf_protocol
         self.polling_period = (
             config.get(mlc.CONF_POLLING_PERIOD) or mlc.CONF_POLLING_PERIOD_DEFAULT
         )
@@ -675,19 +692,15 @@ class Device(BaseDevice, ConfigEntryManager):
 
         self._update_host()
 
-        if (bt_address := config.get(mlc.CONF_BT_ADDR)) and (
-            (conf_protocol is CONF_PROTOCOL_BLUETOOTH)
-            or ((conf_protocol is CONF_PROTOCOL_AUTO) and not self.host)
-        ):
-            if _bluetooth := self._bluetooth:
-                await _bluetooth.disconnect()
-            self._bluetooth = BluetoothClient(
-                bt_address, loop=self.hass.loop, logger=self
+        if conf_protocol is CONF_PROTOCOL_BLUETOOTH:
+            if not self._bluetooth:
+                if _bluetooth := self.api.get_bt_device(self.id):
+                    _bluetooth.attach(self)
+        elif _bluetooth := self._bluetooth:
+            _bluetooth.detach()
+            self.update_device_registry(
+                connections={(dr.CONNECTION_NETWORK_MAC, self.descriptor.macAddress)}
             )
-        else:
-            if _bluetooth := self._bluetooth:
-                self._bluetooth = None
-                await _bluetooth.disconnect()
 
     def _update_host(self):
         host = self.config.get(CONF_HOST)
@@ -703,11 +716,12 @@ class Device(BaseDevice, ConfigEntryManager):
                 _http.key = self.key
             else:
                 _http = self._http = MerossHttpClient(host, self.key)
+            descriptor = self.descriptor
             _http.set_encryption(
                 compute_message_encryption_key(
-                    self.descriptor.uuid, self.key, self.descriptor.macAddress
-                ).encode("utf-8")
-                if mn.Appliance_Encrypt_ECDHE.name in self.descriptor.ability
+                    descriptor.uuid, self.key, descriptor.macAddress
+                )
+                if mn.Appliance_Encrypt_ECDHE.name in descriptor.ability
                 else None
             )
         elif _http := self._http:
@@ -717,12 +731,11 @@ class Device(BaseDevice, ConfigEntryManager):
 
     def _check_protocol_ext(self):
         api = self.api
-        userId = self.descriptor.userId
-        if userId in api.profiles:
-            profile = api.profiles[userId]
+        try:
+            profile = api.profiles[self.descriptor.userId]
             if profile and (profile.key != self.key):
                 profile = api
-        else:
+        except KeyError:
             profile = api
         _profile = self._profile
         if _profile != profile:
@@ -969,9 +982,7 @@ class Device(BaseDevice, ConfigEntryManager):
             "device_response_size_max": self.device_response_size_max,
             "BLUETOOTH": {
                 "bluetooth": bool(self._bluetooth),
-                "bluetooth_active": bool(
-                    self._bluetooth and self._bluetooth.is_connected
-                ),
+                "bluetooth_active": bool(self._bluetooth_active),
             },
             "MQTT": {
                 "cloud_profile": (
@@ -1028,8 +1039,7 @@ class Device(BaseDevice, ConfigEntryManager):
         if self._profile:
             self._profile.unlink(self)
         if self._bluetooth:
-            await self._bluetooth.disconnect()
-            self._bluetooth = None
+            self._bluetooth.detach()
         if self._http:
             # to be called before stopping polling so that it breaks http timeouts
             await self._http.async_terminate()
@@ -1146,7 +1156,7 @@ class Device(BaseDevice, ConfigEntryManager):
     def _set_offline(self):
         super()._set_offline()
         self._polling_delay = self.polling_period
-        self._mqtt_active = self._http_active = None
+        self._bluetooth_active = self._http_active = self._mqtt_active = None
         self.device_debug = None
         for handler in self.namespace_handlers.values():
             handler.polling_epoch_next = 0.0
@@ -1298,11 +1308,7 @@ class Device(BaseDevice, ConfigEntryManager):
     async def async_bind(
         self, broker: HostAddress, *, key: str | None = None, userid: str | None = None
     ):
-        if key is None:
-            key = self.key
-        if userid is None:
-            userid = self.descriptor.userId or ""
-        bind = (
+        return await self.async_request(
             mn.Appliance_Config_Key.name,
             mc.METHOD_SET,
             {
@@ -1314,12 +1320,11 @@ class Device(BaseDevice, ConfigEntryManager):
                         mc.KEY_SECONDPORT: broker.port,
                         mc.KEY_REDIRECT: 1,
                     },
-                    mc.KEY_KEY: key,
-                    mc.KEY_USERID: userid,
+                    mc.KEY_KEY: self.key if key is None else key,
+                    mc.KEY_USERID: self.descriptor.userId if userid is None else userid,
                 }
             },
         )
-        return await self.async_request(*bind)
 
     async def async_unbind(self):
         """
@@ -1534,15 +1539,6 @@ class Device(BaseDevice, ConfigEntryManager):
                 return
 
     async def async_bluetooth_request(self, *request_args: "Unpack[MerossRequestType]"):
-        if not (_bluetooth := self._bluetooth):
-            # even if we're smart enough to not call this, it could happen
-            # we loose it when asynchronously coming here
-            self.log(
-                self.DEBUG,
-                "Attempting to use async_bluetooth_request with no bluetooth client",
-            )
-            return None
-
         request = MerossRequest(*request_args, "")
         self._trace_or_log(
             time(),
@@ -1551,7 +1547,7 @@ class Device(BaseDevice, ConfigEntryManager):
             ConfigEntryManager.TRACE_TX,
         )
         try:
-            response = await _bluetooth.async_request_raw(request.json())
+            response = await self._bluetooth.async_request_raw(request.json())  # type: ignore
             epoch = time()
             self._trace_or_log(epoch, response, CONF_PROTOCOL_BLUETOOTH, self.TRACE_RX)
             if self.curr_protocol is not CONF_PROTOCOL_BLUETOOTH:
@@ -1559,7 +1555,14 @@ class Device(BaseDevice, ConfigEntryManager):
             self._receive(epoch, response)
             return response
         except Exception as e:
-            self.log_exception(self.WARNING, e, "async_bluetooth_request")
+            if self._bluetooth:
+                self.log_exception(self.WARNING, e, "async_bluetooth_request")
+                await self._bluetooth.disconnect()
+            else:
+                self.log(
+                    self.DEBUG,
+                    "Attempting to use async_bluetooth_request with no bluetooth client",
+                )
 
     async def async_mqtt_request_raw(
         self, request: "MerossMessage", /
@@ -1923,11 +1926,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 ns_all_handler = self.namespace_handlers[mn.Appliance_System_All.name]
                 ns_all_response = None
                 if self.conf_protocol is CONF_PROTOCOL_AUTO:
-                    if self._bluetooth:
-                        ns_all_response = await self.async_bluetooth_request(
-                            *ns_all_handler.polling_request
-                        )
-                    if not ns_all_response and self._http:
+                    if self._http:
                         ns_all_response = await self.async_http_request(
                             *ns_all_handler.polling_request
                         )
@@ -1943,6 +1942,11 @@ class Device(BaseDevice, ConfigEntryManager):
                 elif self.conf_protocol is CONF_PROTOCOL_HTTP:
                     if self._http:
                         ns_all_response = await self.async_http_request(
+                            *ns_all_handler.polling_request
+                        )
+                elif self.conf_protocol is CONF_PROTOCOL_BLUETOOTH:
+                    if self._bluetooth:
+                        ns_all_response = await self.async_bluetooth_request(
                             *ns_all_handler.polling_request
                         )
 
@@ -1970,8 +1974,6 @@ class Device(BaseDevice, ConfigEntryManager):
                     self._polling_delay, self._async_polling_callback, None
                 )
             self.log(self.DEBUG, "Polling end")
-            if self._bluetooth:
-                await self._bluetooth.disconnect()
 
     async def _async_polling_stop(self):
         """Ensure we're not polling nor any schedule is in place."""
@@ -1993,6 +1995,71 @@ class Device(BaseDevice, ConfigEntryManager):
                 handler.polling_epoch_next = 0.0
             # this will also restart/schedule the cycle
             await self._async_polling_callback(None)
+
+    def bt_attached(self, bt_device: "ComponentApi.BTDevice", /):
+        if _bluetooth := self._bluetooth:
+            if _bluetooth is bt_device:
+                return
+            _bluetooth.detach()
+        self.log(
+            self.DEBUG,
+            "bt_attached to %s",
+            bt_device.address,
+        )
+        self._bluetooth = bt_device
+        if bt_device.is_connected:
+            self.bt_connected()
+
+        self.update_device_registry(
+            connections={
+                (dr.CONNECTION_NETWORK_MAC, self.descriptor.macAddress),
+                (dr.CONNECTION_BLUETOOTH, bt_device.address),
+            }
+        )
+
+    def bt_detached(self):
+        _bluetooth = self._bluetooth
+        assert _bluetooth
+        self.log(
+            self.DEBUG,
+            "bt_detached from %s",
+            _bluetooth.address,
+        )
+        if self._bluetooth_active:
+            self.bt_disconnected()
+        self._bluetooth = None
+
+    def bt_connected(self):
+        _bluetooth = self._bluetooth
+        assert _bluetooth
+        self.log(
+            self.DEBUG,
+            "bt_connected to %s",
+            _bluetooth.address,
+        )
+        self._bluetooth_active = _bluetooth
+        if not self.online and self._polling_callback_unsub:
+            # reschedule immediately
+            self._polling_callback_unsub.cancel()
+            self._polling_callback_unsub = self.schedule_async_callback(
+                0, self._async_polling_callback, None
+            )
+        self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_BLUETOOTH)
+
+    def bt_disconnected(self):
+        assert self._bluetooth
+        self.log(
+            self.DEBUG,
+            "bt_disconnected from %s",
+            self._bluetooth.address,
+        )
+        self._bluetooth_active = None
+        self.device_debug = None
+        if self.online:
+            self._set_offline()
+            return
+        # run this at the end so it will not double flush
+        self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_BLUETOOTH)
 
     def mqtt_receive(self, message: "MerossResponse", /):
         assert self._mqtt_connected

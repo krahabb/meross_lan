@@ -85,7 +85,7 @@ class EntityManager(Loggable):
         class Args(Loggable.Args):
             api: ComponentApi
             hass: HomeAssistant
-            config_entry: NotRequired[ConfigEntry]
+            config_entry: ConfigEntry | None
             deviceentry_id: NotRequired["EntityManager.DeviceEntryIdType"]
 
     IssueSeverity = ir.IssueSeverity
@@ -276,16 +276,16 @@ class ConfigEntryManager(EntityManager):
 
     def __init__(self, id: str, **kwargs: "Unpack[Args]"):
 
+        config_entry = kwargs["config_entry"]
         try:
-            config_entry = kwargs["config_entry"]  # type: ignore
-            self.config = config = config_entry.data
-            self.key = config.get(CONF_KEY) or ""
+            self.config = config = config_entry.data  # type: ignore
+            self.key = config.get(CONF_KEY, mlc.PARAM_DEFAULT_KEY)
             self.obfuscate = config.get(CONF_OBFUSCATE, True)
-        except KeyError:
-            # this is the ComponentApi: it will be better initialized when
-            # the ConfigEntry is loaded
+        except AttributeError:
+            # this is the ComponentApi: ConfigEntry not configured..
+            assert id == mlc.CONF_PROFILE_ID_LOCAL
             self.config = {}
-            self.key = ""
+            self.key = mlc.PARAM_DEFAULT_KEY
             self.obfuscate = True
         # when we build an entity we also add the relative platform name here
         # so that the async_setup_entry for this integration will be able to forward

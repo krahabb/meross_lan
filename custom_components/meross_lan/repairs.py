@@ -38,7 +38,7 @@ class SimpleRepairFlow(ConfirmRepairFlow):
             ):
                 device.remove_issue(self.issue_id)
             else:
-                return super().async_abort(reason="cannot_connect")
+                return self.async_abort(reason="cannot_connect")
 
         return await super().async_step_confirm(user_input)
 

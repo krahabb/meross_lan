@@ -74,6 +74,7 @@ class ManagerConfigType(TypedDict):
     """override the default log level set in HA configuration"""
     obfuscate: NotRequired[bool]
     """obfuscate sensitive data when logging/tracing"""
+    # deprecated -> trace: NotRequired[bool]
     trace_timeout: NotRequired[int | None]
     """duration of the tracing feature when activated"""
 
@@ -103,21 +104,15 @@ CONF_DEVICE_ID: Final = hac.CONF_DEVICE_ID
 # This has been superseded by cloud_profile and will be
 # removed from configentries as soon as the users
 # update/repair/fix their configuration (no automatic migration)
-CONF_CLOUD_KEY: Final = "cloud_key"
+CONF_CLOUD_KEY: Final = "cloud_key"  # deprecated
 CONF_PAYLOAD: Final = hac.CONF_PAYLOAD
 CONF_HOST: Final = hac.CONF_HOST
-CONF_BT_ADDR: Final = "bt_address"
 # protocol used to communicate with device
 CONF_PROTOCOL: Final = hac.CONF_PROTOCOL
 CONF_PROTOCOL_AUTO: Final = "auto"
 CONF_PROTOCOL_BLUETOOTH: Final = "bluetooth"
 CONF_PROTOCOL_MQTT: Final = "mqtt"
 CONF_PROTOCOL_HTTP: Final = "http"
-CONF_PROTOCOL_OPTIONS: dict[str | None, str] = {
-    CONF_PROTOCOL_AUTO: CONF_PROTOCOL_AUTO,
-    CONF_PROTOCOL_MQTT: CONF_PROTOCOL_MQTT,
-    CONF_PROTOCOL_HTTP: CONF_PROTOCOL_HTTP,
-}
 # general device state polling or whatever
 CONF_POLLING_PERIOD: Final = "polling_period"
 CONF_POLLING_PERIOD_MIN: Final = 5
@@ -142,12 +137,9 @@ class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
     and defined though DeviceConfigTypeMinimal
     """
 
-    cloud_key: NotRequired[str | None]
-    """deprecated field: used to store the device key as recovered from the cloud account"""
+    # deprecated -> cloud_key: NotRequired[str | None]
     host: NotRequired[str]
     """device host (name or ip address): when empty the device can still use the host address recovered through MQTT payloads"""
-    bt_address: NotRequired[str]
-    """device bluetooth address: the device was discovered via bluetooth."""
     protocol: NotRequired[str]
     """configures the protocol: auto will automatically switch between the available transports"""
     polling_period: NotRequired[int | None]

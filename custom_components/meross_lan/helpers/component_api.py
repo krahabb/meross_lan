@@ -1,11 +1,14 @@
 import asyncio
 import importlib
 from time import time
-import typing
+from typing import TYPE_CHECKING, override
 import zoneinfo
 
+from bleak.exc import BleakDeviceNotFoundError, BleakError
 from homeassistant import const as hac
+from homeassistant.components import bluetooth as ha_bt
 from homeassistant.core import SupportsResponse, callback
+from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.exceptions import (
     ConfigEntryError,
     HomeAssistantError,
@@ -18,6 +21,7 @@ from ..merossclient import (
     MEROSSDEBUG,
     HostAddress,
     MerossDeviceDescriptor,
+    bluetooth as m_bt,
     json_loads,
 )
 from ..merossclient.httpclient import MerossHttpClient
@@ -31,14 +35,20 @@ from .device import Device
 from .manager import ConfigEntryManager
 from .mqtt_profile import MQTTConnection, MQTTProfile
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
 
     from typing import Callable, Final
 
     from homeassistant.components.mqtt import async_publish as mqtt_async_publish
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse
+    from homeassistant.core import (
+        CALLBACK_TYPE,
+        HomeAssistant,
+        ServiceCall,
+        ServiceResponse,
+    )
 
+    from ..config_flow import ConfigFlow
     from ..merossclient.protocol.message import MerossMessage
     from ..merossclient.protocol.types import MerossHeaderType, MerossPayloadType
     from .meross_profile import MerossProfile
@@ -57,7 +67,7 @@ MIXIN_DIGEST_INIT = {
 
 class HAMQTTConnection(MQTTConnection):
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
         is_cloud_connection: Final[bool]
 
         _unsub_mqtt_subscribe: Callable | None
@@ -319,7 +329,169 @@ class ComponentApi(MQTTProfile):
     and MQTT discovery and message routing
     """
 
-    if typing.TYPE_CHECKING:
+    class BTDevice(m_bt.BluetoothClient):
+        if TYPE_CHECKING:
+            api: Final["ComponentApi"]
+            address: Final[str]
+            info: ha_bt.BluetoothServiceInfoBleak
+            uuid: Final[str]  # BEWARE: not valid until _init_task done
+            descriptor: Final[
+                MerossDeviceDescriptor
+            ]  # BEWARE: not valid until _init_task done
+            device: Final[Device | None]
+            _flow_id: Final[str]
+            _bt_unavailable_unsub: Final[CALLBACK_TYPE]
+            _init_task: asyncio.Task["ComponentApi.BTDevice"]
+
+        __slots__ = (
+            "api",
+            "address",
+            "info",
+            "uuid",
+            "descriptor",
+            "device",
+            "_flow_id",
+            "_bt_unavailable_unsub",
+            "_init_task",
+        )
+
+        def __init__(self, api: "ComponentApi", address: str, flow_id: str, /):
+            self.api = api
+            self.getEffectiveLevel = api.getEffectiveLevel
+            self.isEnabledFor = api.isEnabledFor
+            self.address = address
+            self.uuid = None  # type: ignore
+            self.descriptor = None  # type: ignore
+            self.device = None
+            self._flow_id = flow_id
+            m_bt.BluetoothClient.__init__(
+                self, address, loop=api.hass.loop, logger=self
+            )
+            self._bt_unavailable_unsub = ha_bt.async_track_unavailable(
+                api.hass, self._bt_unavailable, address, connectable=True
+            )
+            api._bt_devices[address] = self
+            self._init_task = api.async_create_task(
+                self._async_init(), f"BTDevice({address})._async_init", False
+            )
+
+        async def _async_init(self):
+            api = self.api
+            while True:
+                try:
+                    self.descriptor = descriptor = await super().async_identify_device()  # type: ignore
+                    self.uuid = uuid = descriptor.uuid  # type: ignore
+                    for _bt_device in api._bt_devices.values():
+                        if (_bt_device is not self) and (_bt_device.uuid == uuid):
+                            # an existing device has a new bt address
+                            await _bt_device.async_shutdown()
+                            break
+                    # check to see if the device is one of our configureds
+                    try:
+                        device = api.devices[uuid]
+                        if device:
+                            conf_protocol = device.config.get(mlc.CONF_PROTOCOL)
+                        else:
+                            config_entry = api.get_config_entry(uuid)
+                            assert config_entry
+                            conf_protocol = config_entry.data.get(mlc.CONF_PROTOCOL)
+                        if conf_protocol == mlc.CONF_PROTOCOL_BLUETOOTH:
+                            # already configured to use BT
+                            if device:
+                                self.attach(device)
+                            raise AbortFlow("already_configured")
+                    except KeyError:
+                        # device not configured yet..proceed with ConfigFlow
+                        pass
+
+                    return self
+                except (TimeoutError, BleakError) as e:
+                    self.log_exception(
+                        ComponentApi.WARNING,
+                        e,
+                        "device identification. Retrying in 30 sec",
+                    )
+                    await self.disconnect()
+                    await asyncio.sleep(30)
+
+        async def async_shutdown(self):
+            self._bt_unavailable_unsub()
+            del self.api._bt_devices[self.address]
+            if self.device:
+                self.device.bt_detached()
+                self.device = None  # type: ignore
+            else:
+                self._init_task.cancel()
+            if self.is_connected:
+                await self.disconnect()
+
+        def attach(self, device: Device):
+            if self.device:
+                self.device.bt_detached()
+            device.bt_attached(self)
+            self.device = device  # type: ignore
+
+        def detach(self):
+            assert self.device
+            self.device.bt_detached()
+            self.device = None  # type: ignore
+
+        def log(self, level: int, msg: str, *args, **kwargs):
+            self.api.log(level, f"BTDevice({self.address}): {msg}", *args, **kwargs)
+
+        def log_exception(
+            self, level: int, exception: Exception, msg: str, *args, **kwargs
+        ):
+            self.log(
+                level,
+                f"{exception.__class__.__name__}({str(exception)}) in {msg}",
+                *args,
+                **kwargs,
+            )
+
+        """ REMOVE
+        def update(self, info: ha_bt.BluetoothServiceInfoBleak):
+            self.info = info
+            if not self.uuid:
+                try:
+                    uuid = info.manufacturer_data[0xFFFF].hex()
+                    if mc.RE_PATTERN_UUID.match(uuid):
+                        self.uuid = uuid
+                    else:
+                        self.log(
+                            ComponentApi.DEBUG,
+                            "Malformed UUID in manufacturer data: %s",
+                            uuid,
+                        )
+                except KeyError:
+                    self.log(
+                        ComponentApi.DEBUG,
+                        "Missing UUID in manufacturer data: %r",
+                        info.manufacturer_data,
+                    )
+            self.log(ComponentApi.DEBUG, "Updated service_info: %s", info)
+        """
+
+        @override
+        def _on_connected(self):
+            if self.device:
+                self.device.bt_connected()
+
+        @override
+        def _on_disconnected(self):
+            if self.device:
+                self.device.bt_disconnected()
+
+        @callback
+        def _bt_unavailable(self, info: ha_bt.BluetoothServiceInfoBleak):
+            self.log(
+                ComponentApi.DEBUG, "_bt_unavailable_callback(service_info: %s)", info
+            )
+            self.api.async_create_task(
+                self.async_shutdown(), "_bt_unavailable_callback"
+            )
+
+    if TYPE_CHECKING:
         is_cloud_profile: Final[bool]
 
         devices: Final[dict[str, Device | None]]
@@ -350,6 +522,8 @@ class ComponentApi(MQTTProfile):
         _available_timezones: list[str] | None
         _zoneinfo: Final[dict[str, zoneinfo.ZoneInfo]]
 
+        _bt_devices: Final[dict[str, BTDevice]]
+
     __slots__ = (
         "devices",
         "profiles",
@@ -362,6 +536,7 @@ class ComponentApi(MQTTProfile):
         "_zoneinfo",
         "_import_module_lock",
         "_import_module_cache",
+        "_bt_devices",
     )
 
     @staticmethod
@@ -374,27 +549,7 @@ class ComponentApi(MQTTProfile):
         try:
             return hass.data[mlc.DOMAIN]
         except KeyError:
-            hass.data[mlc.DOMAIN] = api = ComponentApi(hass)
-
-            async def _async_unload_merossapi(_event) -> None:
-                await api.async_terminate()
-                hass.data.pop(mlc.DOMAIN)
-
-            hass.bus.async_listen_once(
-                hac.EVENT_HOMEASSISTANT_STOP, _async_unload_merossapi
-            )
-
-            # REMOVE
-            if MEROSSDEBUG:
-
-                import habluetooth
-
-                habluetooth.wrappers._LOGGER.setLevel(ComponentApi.DEBUG)
-                from bleak.backends.bluezdbus.client import logger as _bluez_logger
-
-                _bluez_logger.setLevel(ComponentApi.DEBUG)
-
-            return api
+            return ComponentApi(hass)
 
     def active_devices(self):
         """Iterates over the currently loaded MerossDevices."""
@@ -414,7 +569,15 @@ class ComponentApi(MQTTProfile):
 
     def __init__(self, hass: "HomeAssistant"):
         self.is_cloud_profile = False
-        MQTTProfile.__init__(self, mlc.CONF_PROFILE_ID_LOCAL, api=self, hass=hass)
+        MQTTProfile.__init__(
+            self,
+            mlc.CONF_PROFILE_ID_LOCAL,
+            api=self,
+            hass=hass,
+            config_entry=hass.config_entries.async_entry_for_domain_unique_id(
+                mlc.DOMAIN, mlc.DOMAIN
+            ),
+        )
         self.devices = {}
         self.profiles = {}
         self.managers_transient_state = {}
@@ -432,6 +595,7 @@ class ComponentApi(MQTTProfile):
                     self.devices[device_id] = None
                 case (ConfigEntryType.PROFILE, profile_id):
                     self.profiles[profile_id] = None
+        self._bt_devices = {}
 
         async def _async_service_request(
             service_call: "ServiceCall",
@@ -443,8 +607,8 @@ class ComponentApi(MQTTProfile):
                 raise HomeAssistantError(
                     "Missing both device_id and host: provide at least one valid entry"
                 )
-            protocol = mlc.CONF_PROTOCOL_OPTIONS.get(
-                service_call.data.get(mlc.CONF_PROTOCOL), mlc.CONF_PROTOCOL_AUTO
+            protocol = (
+                service_call.data.get(mlc.CONF_PROTOCOL) or mlc.CONF_PROTOCOL_AUTO
             )
             namespace = service_call.data[mc.KEY_NAMESPACE]
             method = service_call.data.get(mc.KEY_METHOD, mc.METHOD_GET)
@@ -463,31 +627,56 @@ class ComponentApi(MQTTProfile):
             else:
                 payload = {}  # likely failing the request...
 
+            async def _async_bluetooth_request(bt_device: ComponentApi.BTDevice):
+                service_response["request"] = request = MerossRequest(
+                    namespace,
+                    method,
+                    payload,
+                    "",
+                    mc.HEADER_FROM_DEFAULT,
+                    mlc.DOMAIN,
+                )
+                try:
+                    service_response["response"] = await bt_device.async_request_raw(
+                        request.json()
+                    )
+                except Exception as exception:
+                    service_response["exception"] = (
+                        f"{exception.__class__.__name__}({str(exception)})"
+                    )
+
+                return service_response
+
             async def _async_device_request(device: "Device"):
                 service_response["request"] = request = MerossRequest(
                     namespace,
                     method,
                     payload,
-                    key or device.key,
+                    device.key if key is None else key,
                     device._topic_response,
                     mlc.DOMAIN,
                 )
                 service_response["response"] = (
                     await device.async_mqtt_request_raw(request)
-                    if protocol is mlc.CONF_PROTOCOL_MQTT
+                    if protocol == mlc.CONF_PROTOCOL_MQTT
                     else (
                         await device.async_http_request_raw(request)
-                        if protocol is mlc.CONF_PROTOCOL_HTTP
+                        if protocol == mlc.CONF_PROTOCOL_HTTP
                         else await device.async_request_raw(request)
                     )
                 ) or {}
                 return service_response
 
             if device_id:
+                if (
+                    protocol in (mlc.CONF_PROTOCOL_AUTO, mlc.CONF_PROTOCOL_BLUETOOTH)
+                ) and (_bt_device := self.get_bt_device(device_id)):
+                    # check first since _async_device_request does not handle BT
+                    return await _async_bluetooth_request(_bt_device)
                 if device := self.devices.get(device_id):
                     return await _async_device_request(device)
                 if (
-                    protocol is not mlc.CONF_PROTOCOL_HTTP
+                    protocol in (mlc.CONF_PROTOCOL_AUTO, mlc.CONF_PROTOCOL_MQTT)
                     and (mqtt_connection := self._mqtt_connection)
                     and mqtt_connection.mqtt_is_connected
                 ):
@@ -495,7 +684,7 @@ class ComponentApi(MQTTProfile):
                         namespace,
                         method,
                         payload,
-                        key or self.key,
+                        self.key if key is None else key,
                         mqtt_connection.topic_response,
                         mlc.DOMAIN,
                     )
@@ -509,13 +698,17 @@ class ComponentApi(MQTTProfile):
                 for device in self.active_devices():
                     if device.host == host:
                         return await _async_device_request(device)
+                if (
+                    protocol in (mlc.CONF_PROTOCOL_AUTO, mlc.CONF_PROTOCOL_BLUETOOTH)
+                ) and (_bt_device := self._bt_devices.get(host)):
+                    return await _async_bluetooth_request(_bt_device)
 
-                if protocol is not mlc.CONF_PROTOCOL_MQTT:
+                if protocol in (mlc.CONF_PROTOCOL_AUTO, mlc.CONF_PROTOCOL_HTTP):
                     service_response["request"] = request = MerossRequest(
                         namespace,
                         method,
                         payload,
-                        key or self.key,
+                        self.key if key is None else key,
                         mc.HEADER_FROM_DEFAULT,
                         mlc.DOMAIN,
                     )
@@ -523,7 +716,7 @@ class ComponentApi(MQTTProfile):
                         service_response["response"] = (
                             await MerossHttpClient(
                                 host,
-                                key or self.key,
+                                self.key if key is None else key,
                                 logger=self,
                                 log_level_dump=self.VERBOSE,
                             ).async_request_raw(request.json())
@@ -546,9 +739,38 @@ class ComponentApi(MQTTProfile):
             _async_service_request,
             supports_response=SupportsResponse.OPTIONAL,
         )
-        return
+
+        async def _async_terminate(*args):
+            """complete shutdown when HA exits. See self.async_shutdown for differences"""
+            hass.services.async_remove(mlc.DOMAIN, mlc.SERVICE_REQUEST)
+            for device in self.active_devices():
+                await device.async_shutdown()
+            for profile in self.active_profiles():
+                await profile.async_shutdown()
+            for bt_device in tuple(self._bt_devices.values()):
+                await bt_device.async_shutdown()
+            await MQTTProfile.async_shutdown(self)
+            await MerossHttpClient.async_shutdown_session()
+            self._mqtt_connection = None
+            del self.device_registry  # type: ignore
+            del self.entity_registry  # type: ignore
+            hass.data.pop(mlc.DOMAIN)
+
+        hass.bus.async_listen_once(hac.EVENT_HOMEASSISTANT_STOP, _async_terminate)
+        # REMOVE
+        if MEROSSDEBUG:
+
+            import habluetooth
+
+            habluetooth.wrappers._LOGGER.setLevel(ComponentApi.DEBUG)
+            from bleak.backends.bluezdbus.client import logger as _bluez_logger
+
+            _bluez_logger.setLevel(ComponentApi.DEBUG)
+
+        hass.data[mlc.DOMAIN] = self
 
     # interface: ConfigEntryManager
+    @override
     async def async_shutdown(self):
         # This is the base entry point when the config entry (MQTT Hub) is unloaded
         # but we want to actually preserve some of our state since ComponentApi provides
@@ -560,16 +782,27 @@ class ComponentApi(MQTTProfile):
         # for real shutdown there's self.async_terminate
         await ConfigEntryManager.async_shutdown(self)
 
+    @override
     def get_logger_name(self) -> str:
         return "api"
 
-    # interface: ApiProfile
+    # interface: MQTTProfile
     @property
+    @override
     def allow_mqtt_publish(self):
         return True  # ComponentApi still doesnt support configuring entry for this
 
+    @override
     def attach_mqtt(self, device: "Device"):
         self.mqtt_connection.attach(device)
+
+    @override
+    async def async_setup_entry(
+        self, hass: "HomeAssistant", config_entry: "ConfigEntry"
+    ):
+        self.config_entry = config_entry  # type: ignore
+        await self.entry_update_listener(hass, config_entry)
+        await MQTTProfile.async_setup_entry(self, hass, config_entry)
 
     # interface: self
     @property
@@ -577,21 +810,6 @@ class ComponentApi(MQTTProfile):
         if not (mqtt_connection := self._mqtt_connection):
             self._mqtt_connection = mqtt_connection = HAMQTTConnection(self)
         return mqtt_connection
-
-    async def async_terminate(self):
-        """complete shutdown when HA exits. See self.async_shutdown for differences"""
-        self.hass.services.async_remove(mlc.DOMAIN, mlc.SERVICE_REQUEST)
-        for device in self.active_devices():
-            await device.async_shutdown()
-        for profile in self.active_profiles():
-            await profile.async_shutdown()
-        await super().async_shutdown()
-        await MerossHttpClient.async_shutdown_session()
-        self._mqtt_connection = None
-        self.hass = None  # type: ignore
-        self.api = None  # type: ignore
-        self.device_registry = None  # type: ignore
-        self.entity_registry = None  # type: ignore
 
     async def async_build_device(
         self, device_id: str, config_entry: "ConfigEntry"
@@ -751,3 +969,53 @@ class ComponentApi(MQTTProfile):
                     config_entries.async_reload(entry_id),
                     f".schedule_reload({entry.title},{entry_id})",
                 )
+
+    def get_bt_device(self, uuid: str):
+        for bt_device in self._bt_devices.values():
+            if bt_device.uuid == uuid:
+                return bt_device
+        return None
+
+    async def async_bt_advertisement(
+        self, service_info: ha_bt.BluetoothServiceInfoBleak, flow: "ConfigFlow", /
+    ):
+        bt_address = service_info.address
+        self.log(
+            self.DEBUG,
+            "Received BT advertisement (address: %s service_info: %r)",
+            bt_address,
+            service_info,
+        )
+
+        try:
+            self._bt_devices[bt_address].info = service_info
+            self.log(
+                self.DEBUG,
+                "Updated BTDevice(%s)",
+                bt_address,
+            )
+            raise AbortFlow("already_configured")
+
+        except KeyError:
+            # First time seen: proceed to identification
+            """
+            try:
+                uuid = service_info.manufacturer_data[0xFFFF].hex()
+                if not mc.RE_PATTERN_UUID.match(uuid):
+                    uuid = None
+                    self.log(
+                        ComponentApi.DEBUG,
+                        "Malformed UUID in manufacturer data: %s",
+                        uuid,
+                    )
+            except KeyError:
+                uuid = None
+                self.log(
+                    ComponentApi.DEBUG,
+                    "Missing UUID in manufacturer data: %r",
+                    service_info.manufacturer_data,
+                )
+            """
+            bt_device = ComponentApi.BTDevice(self, bt_address, flow.flow_id)
+            bt_device.info = service_info
+            return await bt_device._init_task

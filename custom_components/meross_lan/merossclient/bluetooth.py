@@ -50,6 +50,10 @@ class BluetoothError(MerossError):
     pass
 
 
+class BluetoothFrameError(BluetoothError):
+    pass
+
+
 class BluetoothClient(BleakClient):
 
     if TYPE_CHECKING:
@@ -200,28 +204,12 @@ class BluetoothClient(BleakClient):
                             BL_SERVICE_CHAR_NOTIFY_DESCR_ENABLE_UUID,
                         )
 
-                    try:
-                        # TODO: this might be not needed though (see https://github.com/kennedn/meross)
-                        await self.write_gatt_descriptor(
-                            write_enable_descr.handle, bytes([0x01, 0x00])
-                        )
-                    except Exception as e:
-                        if logger:
-                            logger.log(
-                                logging.DEBUG,
-                                "%s(%s) in write_gatt_descriptor to enable notify char",
-                                type(e),
-                                str(e),
-                            )
-
                     self._service = service
                     self._char_notify = _char_notify
                     self._char_write = _char_write
 
                 try:
-                    await self._backend.start_notify(
-                        self._char_notify, self._packet_handler
-                    )
+                    await _backend.start_notify(self._char_notify, self._packet_handler)
                 except:
                     # nullify so next time we'll refresh
                     self._service = None
@@ -252,7 +240,7 @@ class BluetoothClient(BleakClient):
                             logging.DEBUG, "%s(%s) in stop_notify", type(e), str(e)
                         )
                 await super().disconnect()
-                self._on_disconnected()
+                # self._on_disconnected()
             return True
 
     # interface: self
@@ -284,7 +272,7 @@ class BluetoothClient(BleakClient):
                     await self.connect(dangerous_use_bleak_cache=True, **kwargs)
 
                 self._rx_future = self.loop.create_future()
-
+                self._rx_frame_size = 0  # flush receive buffer
                 tx_frame = request.encode()
                 tx_frame_size = len(tx_frame)
                 crc32 = binascii.crc32(tx_frame)
@@ -346,7 +334,7 @@ class BluetoothClient(BleakClient):
 
     def _packet_handler(self, data: bytearray, /):
         if logger := self.logger:
-            logger.log(logging.DEBUG, "Received: %s", data)
+            logger.log(logging.DEBUG, "Received %s", data)
 
         try:
             # TODO: improve framer resiliency ?
@@ -374,6 +362,10 @@ class BluetoothClient(BleakClient):
                     else:
                         if logger:
                             logger.log(logging.DEBUG, "Frame error: invalid checksum")
+                        if self._rx_future:
+                            self._rx_future.set_exception(
+                                BluetoothFrameError("Invalid checksum")
+                            )
                     return
 
                 if rx_frame_len > rx_frame_size:
@@ -384,6 +376,10 @@ class BluetoothClient(BleakClient):
                             "Frame error: received size = %i - expected size = %i",
                             rx_frame_len,
                             rx_frame_size,
+                        )
+                    if self._rx_future:
+                        self._rx_future.set_exception(
+                            BluetoothFrameError("Size mismatch")
                         )
                     return
 
@@ -396,6 +392,10 @@ class BluetoothClient(BleakClient):
                 except IndexError:
                     if logger:
                         logger.log(logging.DEBUG, "Frame error: packet too short")
+                    if self._rx_future:
+                        self._rx_future.set_exception(
+                            BluetoothFrameError("Packet too short")
+                        )
         except Exception as e:
             if logger:
                 logger.log(
@@ -404,7 +404,7 @@ class BluetoothClient(BleakClient):
 
     def _frame_handler(self, rx_frame: bytearray, /):
         if logger := self.logger:
-            logger.log(logging.DEBUG, "Received frame: %s", rx_frame)
+            logger.log(logging.DEBUG, "Received frame %s", rx_frame)
 
         if self._rx_future:
             self._rx_future.set_result(MerossResponse(rx_frame.decode()))
