@@ -119,32 +119,23 @@ class RollerShutterMixin(MerossEmulator if TYPE_CHECKING else object):
     NAMESPACES_DEFAULT: "MerossEmulator.NSDefault" = {
         mn.Appliance_RollerShutter_Adjust: (
             MerossEmulator.NSDefaultMode.MixOut,
-            {
-                mc.KEY_STATUS: 0,
-            },
-            0,
+            {mc.KEY_CHANNEL: 0, mc.KEY_STATUS: 0},
         ),
         mn.Appliance_RollerShutter_Config: (
             MerossEmulator.NSDefaultMode.MixIn,
             {
+                mc.KEY_CHANNEL: 0,
                 mc.KEY_SIGNALCLOSE: SIGNALCLOSE,
                 mc.KEY_SIGNALOPEN: SIGNALOPEN,
             },
-            0,
         ),
         mn.Appliance_RollerShutter_Position: (
             MerossEmulator.NSDefaultMode.MixIn,
-            {
-                mc.KEY_POSITION: mc.ROLLERSHUTTER_POSITION_CLOSED,
-            },
-            0,
+            {mc.KEY_CHANNEL: 0, mc.KEY_POSITION: mc.ROLLERSHUTTER_POSITION_CLOSED},
         ),
         mn.Appliance_RollerShutter_State: (
             MerossEmulator.NSDefaultMode.MixIn,
-            {
-                mc.KEY_STATE: mc.ROLLERSHUTTER_STATE_IDLE,
-            },
-            0,
+            {mc.KEY_CHANNEL: 0, mc.KEY_STATE: mc.ROLLERSHUTTER_STATE_IDLE},
         ),
     }
 

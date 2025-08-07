@@ -475,17 +475,3 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         self.register_entity_class(
             ConsumptionHSensor, initially_disabled=False, build_from_digest=True
         )
-
-    def polling_request_configure(self, request_payload_type: mn.PayloadType | None):
-        # TODO: move this device type 'patching' to some 'smart' Namespace grammar
-        NamespaceHandler.polling_request_configure(
-            self,
-            (
-                request_payload_type
-                or (
-                    mn.PayloadType.DICT
-                    if self.device.descriptor.type.startswith(mc.TYPE_EM06)
-                    else None
-                )
-            ),
-        )

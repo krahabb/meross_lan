@@ -13,7 +13,7 @@ from custom_components.meross_lan.merossclient.protocol import (
 )
 
 if TYPE_CHECKING:
-    from .. import MerossEmulator, MerossEmulatorDescriptor
+    from . import MerossEmulator, MerossEmulatorDescriptor
 
 
 class LightMixin(MerossEmulator if TYPE_CHECKING else object):

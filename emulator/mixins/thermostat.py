@@ -30,13 +30,11 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
     NAMESPACES_DEFAULT: "MerossEmulator.NSDefault" = {
         mn.Appliance_Control_TempUnit: (
             MerossEmulator.NSDefaultMode.MixOut,
-            {"tempUnit": 1},
-            0,
+            {mc.KEY_CHANNEL: 0, "tempUnit": 1},
         ),
         mn_t.Appliance_Control_Thermostat_HoldAction: (
             MerossEmulator.NSDefaultMode.MixOut,
-            {"mode": 0, "time": 0},
-            0,
+            {mc.KEY_CHANNEL: 0, "mode": 0, "time": 0},
         ),
     }
 
@@ -58,6 +56,7 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
                 MerossEmulator.NSDefaultMode.MixOut,
                 (
                     {
+                        mc.KEY_CHANNEL: 0,
                         "value": 0,
                         "max": 450,
                         "min": -450,
@@ -66,19 +65,20 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
                     if descriptor.type.startswith("mts300")
                     else (
                         {
+                            mc.KEY_CHANNEL: 0,
                             "value": 0,
                             "max": 2000,
                             "min": -2000,
                         }
                         if descriptor.type.startswith("mts960")
                         else {
+                            mc.KEY_CHANNEL: 0,
                             "value": 0,
                             "max": 8 * self.device_scale,
                             "min": -8 * self.device_scale,
                         }
                     )
                 ),
-                0,
             )
         ns = mn_t.Appliance_Control_Thermostat_DeadZone
         if ns.name in descriptor.ability:
@@ -86,11 +86,11 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
                 ns,
                 MerossEmulator.NSDefaultMode.MixOut,
                 {
+                    mc.KEY_CHANNEL: 0,
                     "value": 0.5 * self.device_scale,
                     "max": 3.5 * self.device_scale,
                     "min": 0.5 * self.device_scale,
                 },
-                0,
             )
         ns = mn_t.Appliance_Control_Thermostat_Frost
         if ns.name in descriptor.ability:
@@ -98,13 +98,13 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
                 ns,
                 MerossEmulator.NSDefaultMode.MixOut,
                 {
+                    mc.KEY_CHANNEL: 0,
                     "value": 0.5 * self.device_scale,
                     "max": 3.5 * self.device_scale,
                     "min": 0.5 * self.device_scale,
                     "onoff": 0,
                     "warning": 0,
                 },
-                0,
             )
         ns = mn_t.Appliance_Control_Thermostat_Overheat
         if ns.name in descriptor.ability:
@@ -112,6 +112,7 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
                 ns,
                 MerossEmulator.NSDefaultMode.MixOut,
                 {
+                    mc.KEY_CHANNEL: 0,
                     "value": 32 * self.device_scale,
                     "max": 70 * self.device_scale,
                     "min": 20 * self.device_scale,
@@ -119,7 +120,6 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
                     "warning": 0,
                     "currentTemp": 32 * self.device_scale,
                 },
-                0,
             )
 
     def _SET_Appliance_Control_TempUnit(self, header, payload):

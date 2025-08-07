@@ -233,15 +233,15 @@ class MerossEmulator:
         """Determines the type of ns state update."""
 
         MixIn = 0
-        # keys in provided payload overwrite existing state
+        """Keys in provided payload overwrite existing state."""
         MixOut = 1
-        # keys in existing state are preserved (only non-existing keys are added)
+        """Keys in existing state are preserved (only non-existing keys are added)."""
 
     if typing.TYPE_CHECKING:
         NAMESPACES: ClassVar
         MAXIMUM_RESPONSE_SIZE: ClassVar
 
-        type NSDefaultArgs = tuple[NSDefaultMode, dict, Any]
+        type NSDefaultArgs = tuple[NSDefaultMode, dict]
         type NSDefault = dict[Namespace, NSDefaultArgs]
         NAMESPACES_DEFAULT: ClassVar[NSDefault]
         """Contains default data for namespaces initialization.
@@ -258,7 +258,7 @@ class MerossEmulator:
     MAXIMUM_RESPONSE_SIZE = 3000
 
     NAMESPACES_DEFAULT = {
-        mn.Appliance_System_DNDMode: (NSDefaultMode.MixOut, {mc.KEY_MODE: 0}, None),
+        mn.Appliance_System_DNDMode: (NSDefaultMode.MixOut, {mc.KEY_MODE: 0}),
     }
 
     NAMESPACES_DEFAULT_IGNORE = (
@@ -321,8 +321,8 @@ class MerossEmulator:
                     continue
 
                 if ns in namespaces_default:
-                    _nsdefaultmode, _payload, _channel = namespaces_default[ns]
-                    self.update_namespace_state(ns, _nsdefaultmode, _payload, _channel)
+                    _nsdefaultmode, _payload = namespaces_default[ns]
+                    self.update_namespace_state(ns, _nsdefaultmode, _payload)
                     continue
 
                 # no default state set in NAMESPACES_DEFAULT
@@ -335,11 +335,7 @@ class MerossEmulator:
                 # Either namespace missing or malformed according to our grammar.
                 # Setup a 'default' (which will not work for hubs though...)
                 # but we cannot use copy because request_payload_type.value is immutable
-                _ns_default_payload = ns.request_payload_type.value
-                if isinstance(_ns_default_payload, dict):
-                    p_namespace[ns.key] = dict(_ns_default_payload)
-                else:
-                    p_namespace[ns.key] = list(_ns_default_payload)
+                # p_namespace[ns.key] = ns.request_payload_type.value.clone()
 
         self.topic_response = mc.TOPIC_RESPONSE.format(descriptor.uuid)
         self.mqtt_client: MerossMQTTDeviceClient = None  # type: ignore
@@ -784,45 +780,43 @@ class MerossEmulator:
         self,
         ns: "Namespace",
         nsdefaultmode: NSDefaultMode,
-        payload: dict,
-        channel=None,
+        payload: dict | list,
         /,
     ):
         """updates the current state (stored in namespace key) eventually creating a default.
         Useful when sanitizing mixin state during init should the trace miss some well-known namespaces info
         """
-        if channel is None:
-            assert isinstance(
-                ns.request_payload_type.value, dict
-            ), f"Namespace {ns.name} requires a channel list payload"
+        try:
+            p_namespace = self.namespaces[ns.name]
+        except KeyError:
+            self.namespaces[ns.name] = p_namespace = {}
+
+        if isinstance(ns.request_payload_type.value, dict):
+            assert type(payload) is dict
             try:
-                p_namespace = self.namespaces[ns.name]
                 if nsdefaultmode is MerossEmulator.NSDefaultMode.MixIn:
                     p_namespace[ns.key] |= payload
                 else:
                     p_namespace[ns.key] = payload | p_namespace[ns.key]
             except KeyError:
-                self.namespaces[ns.name] = {ns.key: payload}
-        else:
-            assert isinstance(
-                ns.request_payload_type.value, list
-            ), f"Namespace {ns.name} requires a dict payload"
+                p_namespace[ns.key] = payload
+        else:  # isinstance(ns.request_payload_type.value, list):
             try:
-                p_state: list = self.namespaces[ns.name][ns.key]
-                try:
-                    p_channel_state = get_element_by_key(
-                        p_state, ns.key_channel, channel
-                    )
-                    if nsdefaultmode is MerossEmulator.NSDefaultMode.MixIn:
-                        p_channel_state |= payload
-                    else:
-                        p_channel_state |= payload | p_channel_state
-                except KeyError:
-                    p_state.append({ns.key_channel: channel} | payload)
+                p_state: list = p_namespace[ns.key]
             except KeyError:
-                self.namespaces[ns.name] = {
-                    ns.key: [{ns.key_channel: channel} | payload]
-                }
+                p_namespace[ns.key] = p_state = []
+
+            key_channel = ns.key_channel
+            for p_payload_channel in extract_dict_payloads(payload):
+                channel = p_payload_channel[key_channel]
+                try:
+                    p_channel_state = get_element_by_key(p_state, key_channel, channel)
+                    if nsdefaultmode is MerossEmulator.NSDefaultMode.MixIn:
+                        p_channel_state |= p_payload_channel
+                    else:
+                        p_channel_state |= p_payload_channel | p_channel_state
+                except KeyError:
+                    p_state.append(p_payload_channel)
 
     def mqtt_publish_push(self, namespace: str, payload: dict):
         """

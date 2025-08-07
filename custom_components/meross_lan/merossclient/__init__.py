@@ -314,6 +314,7 @@ class MerossDeviceDescriptor:
         productname: str
         productnametype: str
         productmodel: str
+        is_refoss: bool
 
     DYNAMIC_ATTRS = {
         # TODO: use cached_property
@@ -339,6 +340,7 @@ class MerossDeviceDescriptor:
         "productname": lambda _self: get_productnameuuid(_self.type, _self.uuid),
         "productnametype": lambda _self: get_productnametype(_self.type),
         "productmodel": lambda _self: f"{_self.type} {_self.hardware.get(mc.KEY_VERSION, '')}",
+        "is_refoss": lambda _self: mc.RefossModel.match(_self.type),
     }
 
     __slots__ = (

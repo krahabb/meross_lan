@@ -252,6 +252,10 @@ class Device(BaseDevice, ConfigEntryManager):
         this list will be excluded from enumeration since it's redundant/exposing sensitive info
         or simply crashes/hangs the device."""
 
+        descriptor: Final[MerossDeviceDescriptor]
+        is_refoss: Final[bool]
+        tz: tzinfo
+
         # these are set from ConfigEntry
         config: mlc.DeviceConfigType
         polling_period: int
@@ -259,8 +263,6 @@ class Device(BaseDevice, ConfigEntryManager):
         conf_protocol: str
         pref_protocol: str
         curr_protocol: str
-        # other default property values
-        tz: tzinfo
 
         device_timestamp: int
 
@@ -405,6 +407,7 @@ class Device(BaseDevice, ConfigEntryManager):
 
     __slots__ = (
         "descriptor",
+        "is_refoss",
         "tz",
         "polling_period",
         "_polling_delay",
@@ -463,6 +466,7 @@ class Device(BaseDevice, ConfigEntryManager):
         descriptor: "MerossDeviceDescriptor",
     ):
         self.descriptor = descriptor
+        self.is_refoss = descriptor.is_refoss
         self.tz = UTC
         self.needsave = False
         self._async_entry_update_unsub = None

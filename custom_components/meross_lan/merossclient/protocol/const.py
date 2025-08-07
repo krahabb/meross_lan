@@ -2,6 +2,7 @@
 static constants symbols for Meross protocol symbols/semantics
 """
 
+import enum
 import collections
 import re
 
@@ -515,10 +516,31 @@ TYPE_NAME_MAP[TYPE_MS400] = "Smart Water Leak Sensor"
 TYPE_MS600 = "ms600"
 TYPE_NAME_MAP[TYPE_MS600] = "Smart Presence Sensor"
 
-# REFOSS device types
-TYPE_EM06 = "em06"
-TYPE_NAME_MAP[TYPE_EM06] = "Smart Energy Monitor"
 
+# REFOSS device types
+_SMART_ENERGY_MONITOR = "Smart Energy Monitor"
+
+
+class RefossModel(enum.Enum):
+    em06 = _SMART_ENERGY_MONITOR
+    em16 = _SMART_ENERGY_MONITOR
+    em = _SMART_ENERGY_MONITOR
+    p11 = TYPE_NAME_MAP[TYPE_MSS310]  # Smart Plug
+    r10 = TYPE_NAME_MAP["mss"]  # Smart Switch
+    r11 = TYPE_NAME_MAP["mss"]  # Smart Switch
+    r21 = TYPE_NAME_MAP["mss"]  # Smart Switch
+    rsg = TYPE_NAME_MAP["msg"]  # Garage Door
+
+    @staticmethod
+    def match(type: str):
+        for _rt in RefossModel:
+            if type.startswith(_rt.name):
+                return _rt
+        return None
+
+
+for _rt in RefossModel:
+    TYPE_NAME_MAP[_rt.name] = _rt.value
 #
 # HUB helpers symbols
 #
