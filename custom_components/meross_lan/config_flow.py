@@ -98,7 +98,7 @@ def _required(key: str, config: "Mapping | None", default=None):
     )
 
 
-class MerossFlowHandlerMixin(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
+class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
     """Mixin providing commons for Config and Option flows"""
 
     if TYPE_CHECKING:
@@ -514,14 +514,14 @@ class MerossFlowHandlerMixin(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object
             if wifi_list := bt_device and await bt_device.async_request_ns(
                 mn.Appliance_Config_WifiList
             ):
-                wifi_list = [
+                wifi_list = {
                     b64decode(wifi_network[mc.KEY_SSID]).decode()
                     for wifi_network in wifi_list[mc.KEY_PAYLOAD][
                         mn.Appliance_Config_WifiList.key
                     ]
-                ]
+                }
             else:
-                wifi_list = []
+                wifi_list = ()
             config_schema = {
                 _required(mc.KEY_SSID, bind_config): vol.In(wifi_list),
                 _required(mc.KEY_PASSWORD, bind_config): str,
@@ -547,50 +547,13 @@ class MerossFlowHandlerMixin(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object
     ) -> tuple[mlc.DeviceConfigType, MerossDeviceDescriptor]:
         # passing key=None would allow key-hack and we don't want it aymore
         key = key or ""
-        api = self.api
-        _httpclient = MerossHttpClient(
-            host, key, logger=api, log_level_dump=api.VERBOSE
-        )
-
-        response_ability = check_message_strict(
-            await _httpclient.async_request(
-                *mn.Appliance_System_Ability.request_default
-            )
-        )
-        ability = response_ability[mc.KEY_PAYLOAD][mc.KEY_ABILITY]
-        try:
-            all = check_message_strict(
-                await _httpclient.async_request(
-                    *mn.Appliance_System_All.request_default
-                )
-            )[mc.KEY_PAYLOAD][mc.KEY_ALL]
-        except:
-            # might it be the device needs encryption?
-            if mn.Appliance_Encrypt_ECDHE.name not in ability:
-                raise
-            # here we'd need the uuid and mac but we have no ns_all
-            # to parse so we'll try extract these info from ns_ability query
-            uuid = get_message_uuid(response_ability[mc.KEY_HEADER])
-            _httpclient.set_encryption(
-                compute_message_encryption_key(
-                    uuid, key, get_macaddress_from_uuid(uuid)
-                )
-            )
-            all = check_message_strict(
-                await _httpclient.async_request(
-                    *mn.Appliance_System_All.request_default
-                )
-            )[mc.KEY_PAYLOAD][mc.KEY_ALL]
-
-        payload = {
-            mc.KEY_ALL: all,
-            mc.KEY_ABILITY: ability,
-        }
-        descriptor = MerossDeviceDescriptor(payload)
+        descriptor = await MerossHttpClient(
+            host, key, loop=self.hass.loop, logger=self.api
+        ).async_identify_device()
         return (
             {
                 mlc.CONF_HOST: host,
-                mlc.CONF_PAYLOAD: payload,
+                mlc.CONF_PAYLOAD: descriptor.payload,
                 mlc.CONF_KEY: key,
                 mlc.CONF_DEVICE_ID: descriptor.uuid,
             },
@@ -666,7 +629,7 @@ class MerossFlowHandlerMixin(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object
         """
 
 
-class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
+class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
     """Handle a config flow for Meross IoT local LAN."""
 
     if TYPE_CHECKING:
@@ -1011,7 +974,7 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
         self.context["title_placeholders"] = {"name": flow_title}
 
 
-class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
+class OptionsFlow(BaseFlow, ce.OptionsFlow):
     """
     Manage device options configuration
     """
@@ -1414,14 +1377,13 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                 key = key or api.key or ""
                 userid = "" if userid is None else str(userid)
                 mqttclient = MerossMQTTDeviceClient(
-                    device.id,
                     key=key,
-                    userid=userid,
+                    uuid=device.id,
+                    user_id=userid,
                     loop=hass.loop,
                     sslcontext=get_default_no_verify_ssl_context(),
+                    logger=api,
                 )
-                if api.isEnabledFor(api.VERBOSE):
-                    mqttclient.enable_logger(api)  # type: ignore (Loggable is duck-compatible with Logger)
                 try:
                     await asyncio.wait_for(
                         await mqttclient.async_connect(broker_address), 5

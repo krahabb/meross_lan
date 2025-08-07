@@ -7,8 +7,14 @@ from uuid import uuid4
 
 import aiohttp
 
-from . import MEROSSDEBUG, json_dumps, json_loads
-from .protocol import MerossProtocolError, const as mc, md5hexdigest
+from . import MEROSSDEBUG
+from .protocol import (
+    MerossProtocolError,
+    const as mc,
+    json_dumps,
+    json_loads,
+    md5hexdigest,
+)
 
 SECRET = "23x17ahWarFH6w29"
 

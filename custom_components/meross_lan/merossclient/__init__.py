@@ -4,15 +4,29 @@ A collection of utilities to help managing the Meross device protocol
 
 import asyncio
 from dataclasses import dataclass
-import json
 import re
 from time import time
 from typing import TYPE_CHECKING
 
-from .protocol import const as mc
+from .protocol import const as mc, namespaces as mn
+from .protocol.message import MerossRequest, MerossResponse, check_message_strict
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Final, Iterable, Mapping, Protocol
+    from typing import (
+        Any,
+        Callable,
+        ClassVar,
+        Final,
+        Iterable,
+        Mapping,
+        NotRequired,
+        Protocol,
+        TypedDict,
+        Unpack,
+    )
+
+    from .protocol.namespaces import Namespace
+    from .protocol.types import MerossPayloadType, MerossRequestType
 
     class LoggerT(Protocol):
         """Protocol definition for logger-like instances used in the library."""
@@ -23,12 +37,13 @@ if TYPE_CHECKING:
 
 
 try:
+    import json
     from random import randint
 
     class MEROSSDEBUG:
         # this will raise an OSError on non-dev machines missing the
         # debug configuration so the MEROSSDEBUG symbol will be invalidated
-        data = json.load(
+        data: dict = json.load(
             open(
                 file="./custom_components/meross_lan/merossclient/debug.secret.json",
                 mode="r",
@@ -71,26 +86,6 @@ try:
 
 except Exception:
     MEROSSDEBUG = None  # type: ignore
-
-#
-# Optimized JSON encoding/decoding
-#
-JSON_ENCODER = json.JSONEncoder(
-    ensure_ascii=False, check_circular=False, separators=(",", ":")
-)
-JSON_DECODER = json.JSONDecoder()
-
-JSONDecodeError = json.JSONDecodeError
-
-
-def json_dumps(obj):
-    """Slightly optimized json.dumps with pre-configured encoder"""
-    return JSON_ENCODER.encode(obj)
-
-
-def json_loads(s: str):
-    """Slightly optimized json.loads with pre-configured decoder"""
-    return JSON_DECODER.raw_decode(s)[0]
 
 
 #
@@ -289,9 +284,6 @@ def get_mts_digest(p_subdevice_digest: dict) -> dict | None:
     return None
 
 
-#
-#
-#
 class MerossDeviceDescriptor:
     """
     Utility class to extract various info from Appliance.System.All
@@ -415,3 +407,77 @@ class MerossDeviceDescriptor:
                     HostAddress(second_server, get_port_safe(fw, mc.KEY_SECONDPORT))
                 )
         return _brokers
+
+
+class _BaseClient:
+    """Abstract base client providing common api for different transports (HTTP-MQTT-BT)."""
+
+    if TYPE_CHECKING:
+
+        class Args(TypedDict):
+            loop: NotRequired[asyncio.AbstractEventLoop]
+            logger: NotRequired[LoggerT | None]
+            timeout: NotRequired[float]
+
+        class RequestArgs(TypedDict):
+            timeout: NotRequired[float]
+
+        key: str
+        loop: Final[asyncio.AbstractEventLoop]
+        logger: LoggerT | None
+        timeout: float
+
+    LOG_DUMP = 5  # logging level for raw messages dumping
+    TIMEOUT_DEFAULT = 10
+
+    # Using a 'placeholder' definition to ease including in diamond pattern hierarchies:
+    # just add a __slots__ = BaseClient.__SLOTS + (...) in actual classes to actually implement.
+    __SLOTS__ = (
+        "key",
+        "loop",
+        "logger",
+        "timeout",
+    )
+
+    @classmethod
+    def _calc_slots(cls, *slots: "Unpack[tuple[str, ...]]"):
+        _slots = set(slots)
+        for _base in cls.__mro__:
+            try:
+                _slots.update(_base.__SLOTS__)
+            except AttributeError:
+                pass
+        return _slots
+
+    def __init__(self, key: str, **kwargs: "Unpack[Args]"):
+        self.key = key
+        self.loop = kwargs.pop("loop", asyncio.get_running_loop())
+        self.logger = kwargs.pop("logger", None)
+        self.timeout = kwargs.pop("timeout", self.TIMEOUT_DEFAULT)
+
+    async def async_request_raw(
+        self, request: str, /, **kwargs: "Unpack[RequestArgs]"
+    ) -> MerossResponse:
+        raise NotImplementedError("async_request_raw")
+
+    async def async_request(
+        self, *args: "Unpack[MerossRequestType]", **kwargs: "Unpack[RequestArgs]"
+    ) -> MerossResponse:
+        return await self.async_request_raw(
+            MerossRequest(*args, self.key).json(), **kwargs
+        )
+
+    async def async_request_ns(
+        self, ns: "Namespace", /, **kwargs: "Unpack[RequestArgs]"
+    ) -> MerossResponse:
+        return await self.async_request(*ns.request_default, **kwargs)
+
+    async def async_identify_device(self, *args, **kwargs: "Unpack[RequestArgs]"):
+        return MerossDeviceDescriptor(
+            check_message_strict(
+                await self.async_request_ns(mn.Appliance_System_All, **kwargs)
+            )[mc.KEY_PAYLOAD]
+            | check_message_strict(
+                await self.async_request_ns(mn.Appliance_System_Ability, **kwargs)
+            )[mc.KEY_PAYLOAD]
+        )

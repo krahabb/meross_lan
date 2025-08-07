@@ -10,21 +10,21 @@ from zoneinfo import ZoneInfo
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.merossclient import (
     HostAddress,
-    JSONDecodeError,
     MerossDeviceDescriptor,
     extract_dict_payloads,
     get_element_by_key,
     get_macaddress_from_uuid,
-    json_dumps,
-    json_loads,
     update_dict_strict,
     update_dict_strict_by_key,
 )
 from custom_components.meross_lan.merossclient.mqttclient import MerossMQTTDeviceClient
 from custom_components.meross_lan.merossclient.protocol import (
     AESCipher,
+    JSONDecodeError,
     compute_message_encryption_key,
     const as mc,
+    json_dumps,
+    json_loads,
     namespaces as mn,
 )
 from custom_components.meross_lan.merossclient.protocol.message import (
@@ -843,7 +843,7 @@ class MerossEmulator:
 
     def _mqtt_setup(self):
         self.mqtt_client = mqtt_client = MerossMQTTDeviceClient(
-            self.uuid, key=self.key, userid=self.descriptor.userId
+            key=self.key, uuid=self.uuid, user_id=self.descriptor.userId
         )
         mqtt_client.on_subscribe = self._mqttc_subscribe
         mqtt_client.on_disconnect = self._mqttc_disconnect

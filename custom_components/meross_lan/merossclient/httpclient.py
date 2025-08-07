@@ -7,33 +7,35 @@ import asyncio
 import logging
 import socket
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 from uuid import uuid4
 
 import aiohttp
 from yarl import URL
 
-from . import JSON_ENCODER, MEROSSDEBUG
-from .protocol import AESCipher, MerossKeyError, const as mc
-from .protocol.message import (
-    MerossResponse,
-    build_message,
-    build_message_keyhack,
-)
+from . import MEROSSDEBUG, _BaseClient
+from .protocol import JSON_ENCODER, AESCipher, MerossKeyError, const as mc
+from .protocol.message import MerossResponse, build_message, build_message_keyhack
 
 if TYPE_CHECKING:
-    from typing import ClassVar
+    from typing import ClassVar, NotRequired, Unpack
 
-    from . import LoggerT
-    from .protocol.types import MerossHeaderType, MerossPayloadType
+    from .protocol.types import MerossHeaderType, MerossPayloadType, MerossRequestType
 
 
 class TerminatedException(Exception):
     pass
 
 
-class MerossHttpClient:
+class MerossHttpClient(_BaseClient):
     if TYPE_CHECKING:
+
+        class Args(_BaseClient.Args):
+            session: NotRequired[aiohttp.ClientSession]
+
+        class RequestArgs(_BaseClient.RequestArgs):
+            pass
+
         SESSION_MAXIMUM_CONNECTIONS: ClassVar
         SESSION_MAXIMUM_CONNECTIONS_PER_HOST: ClassVar
         SESSION_TIMEOUT: ClassVar
@@ -79,49 +81,36 @@ class MerossHttpClient:
             await MerossHttpClient._SESSION.close()
             MerossHttpClient._SESSION = None
 
-    __slots__ = (
+    __slots__ = _BaseClient.__SLOTS__ + (
         "_host",
         "_requesturl",
-        "key",
-        "timeout",
         "_session",
-        "_logger",
-        "_logid",
-        "_log_level_dump",
         "_terminate",
         "_terminate_guard",
         "_encryption_cipher",
         "_key_header",
     )
 
-    def __init__(
-        self,
-        host: str,
-        key: str | None = None,
-        *,
-        session: aiohttp.ClientSession | None = None,
-        logger: "LoggerT | None" = None,
-        log_level_dump: int = logging.NOTSET,
-    ):
+    def __init__(self, host: str, key: str, **kwargs: "Unpack[Args]"):
         """
         host: the ip or hostname of the device
+        kwargs:
         key: pass in the (str) device key used for signing or None to attempt 'key-hack'
         session: the shared session to use or None to use the library dedicated one
         logger: a shared logger to enable logging
-        log_level_dump: the logging level at which the full json payloads will be dumped (costly)
+        timeout: total request timeout
         """
         self._host = host
         self._requesturl = URL(f"http://{host}/config")
-        self.key = key
-        self.timeout = MerossHttpClient.SESSION_TIMEOUT
-        self._session = session or MerossHttpClient._get_or_create_client_session()
-        self._logger = logger
-        self._logid = None
-        self._log_level_dump = log_level_dump
+        self._session = (
+            kwargs.pop("session", MerossHttpClient._SESSION)
+            or MerossHttpClient._get_or_create_client_session()
+        )
         self._terminate = False
         self._terminate_guard = 0
         self._encryption_cipher = None
         self._key_header = {}  # type: ignore
+        _BaseClient.__init__(self, key, **kwargs)
 
     @property
     def host(self):
@@ -154,19 +143,20 @@ class MerossHttpClient:
         while self._terminate_guard:
             await asyncio.sleep(0.5)
 
-    async def async_request_raw(self, request: str, /) -> MerossResponse:
+    @override
+    async def async_request_raw(
+        self, request: str, /, **kwargs: "Unpack[RequestArgs]"
+    ) -> MerossResponse:
         self._check_terminated()
-        logger = self._logger
+        logger = self.logger
         logid = None
         self._terminate_guard += 1
         try:
-            if logger and logger.isEnabledFor(self._log_level_dump):
+            if logger and logger.isEnabledFor(self.LOG_DUMP):
                 # we catch the 'request' id before json dumping so
                 # to reasonably set the context before any exception
                 logid = f"MerossHttpClient({self._host}:{id(request)})"
-                logger.log(
-                    self._log_level_dump, "%s: HTTP Request (%s)", logid, request
-                )
+                logger.log(logging.DEBUG, "%s: HTTP Request (%s)", logid, request)
             else:
                 logger = None
             if MEROSSDEBUG:
@@ -186,7 +176,7 @@ class MerossHttpClient:
             # reason we're using an increasing timeout loop to try recover
             # when this timeout is transient. This will lead to a total timeout
             # (for the caller) exceeding the value(s) actually set in self.timeout
-            _connect_timeout_max = self.timeout.connect or self.timeout.total or 5
+            _timeout = kwargs.get("timeout", self.timeout)
             _connect_timeout = 1
             while True:
                 try:
@@ -195,13 +185,13 @@ class MerossHttpClient:
                         data=request,
                         headers=headers,
                         timeout=aiohttp.ClientTimeout(
-                            total=self.timeout.total, connect=_connect_timeout
+                            total=_timeout, connect=_connect_timeout
                         ),
                     )
                     break
                 except aiohttp.ServerTimeoutError as exception:
                     self._check_terminated()
-                    if _connect_timeout < _connect_timeout_max:
+                    if _connect_timeout < _timeout:
                         _connect_timeout = _connect_timeout * 2
                     else:
                         raise exception
@@ -213,9 +203,7 @@ class MerossHttpClient:
                 response = _cipher.decript_text(response)
 
             if logger:
-                logger.log(
-                    self._log_level_dump, "%s: HTTP Response (%s)", logid, response
-                )
+                logger.log(self.LOG_DUMP, "%s: HTTP Response (%s)", logid, response)
             self._check_terminated()
             return MerossResponse(response)
         except TerminatedException as e:
@@ -234,27 +222,17 @@ class MerossHttpClient:
         finally:
             self._terminate_guard -= 1
 
+    @override
     async def async_request(
-        self, namespace: str, method: str, payload: "MerossPayloadType", /
+        self, *args: "Unpack[MerossRequestType]", **kwargs: "Unpack[RequestArgs]"
     ) -> MerossResponse:
         key = self.key
         request = (
-            build_message_keyhack(
-                namespace,
-                method,
-                payload,
-                self._key_header,
-            )
+            build_message_keyhack(*args, self._key_header)
             if key is None
-            else build_message(
-                namespace,
-                method,
-                payload,
-                uuid4().hex,
-                key,
-            )
+            else build_message(*args, uuid4().hex, key)
         )
-        response = await self.async_request_raw(JSON_ENCODER.encode(request))
+        response = await self.async_request_raw(JSON_ENCODER.encode(request), **kwargs)
         if (
             response.get(mc.KEY_PAYLOAD, {}).get(mc.KEY_ERROR, {}).get(mc.KEY_CODE)
             == mc.ERROR_INVALIDKEY
@@ -262,13 +240,13 @@ class MerossHttpClient:
             if key is not None:
                 raise MerossKeyError(response)
             # sign error... hack and fool
-            if self._logger:
-                self._logger.log(
+            if self.logger:
+                self.logger.log(
                     logging.WARNING,
                     "MerossHttpClient(%s): Key error on %s %s -> retrying with key-reply hack",
                     self._host,
-                    method,
-                    namespace,
+                    args[1],
+                    args[0],
                 )
             req_header = request[mc.KEY_HEADER]
             resp_header = response[mc.KEY_HEADER]
@@ -276,7 +254,9 @@ class MerossHttpClient:
             req_header[mc.KEY_TIMESTAMP] = resp_header[mc.KEY_TIMESTAMP]
             req_header[mc.KEY_SIGN] = resp_header[mc.KEY_SIGN]
             try:
-                response = await self.async_request_raw(JSON_ENCODER.encode(request))
+                response = await self.async_request_raw(
+                    JSON_ENCODER.encode(request), **kwargs
+                )
             except TerminatedException as e:
                 raise e
             except Exception:

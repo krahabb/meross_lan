@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING, override
 from bleak import BleakClient, uuids
 from bleak.backends.bluezdbus.client import BleakClientBlueZDBus
 
-from . import MerossDeviceDescriptor
+from . import _BaseClient
 from .protocol import MerossError, const as mc, namespaces as mn
-from .protocol.message import MerossRequest, MerossResponse, check_message_strict
+from .protocol.message import MerossResponse
 
 if TYPE_CHECKING:
     from typing import (
@@ -26,10 +26,6 @@ if TYPE_CHECKING:
     from bleak.backends.client import BaseBleakClient
     from bleak.backends.device import BLEDevice
     from bleak.backends.service import BleakGATTService
-
-    from . import LoggerT
-    from .protocol.namespaces import Namespace
-    from .protocol.types import MerossPayloadType, MerossRequestType
 
 
 BL_SERVICE_UUID = "0000a00a-0000-1000-8000-00805f9b34fb"
@@ -54,22 +50,20 @@ class BluetoothFrameError(BluetoothError):
     pass
 
 
-class BluetoothClient(BleakClient):
+class BluetoothClient(_BaseClient, BleakClient):
 
     if TYPE_CHECKING:
 
-        class ConnectArgs(TypedDict, total=False):
+        class Args(_BaseClient.Args):
+            pass
+
+        class ConnectArgs(TypedDict):
             dangerous_use_bleak_cache: NotRequired[bool]
             timeout: NotRequired[float]
 
-        class RequestArgs(TypedDict, total=False):
-            timeout: NotRequired[float]
+        class RequestArgs(_BaseClient.RequestArgs):
+            pass
 
-        loop: Final[asyncio.AbstractEventLoop]
-        logger: LoggerT | None
-        timeout: float | None
-
-        # uuid: Final[str] # TODO: decide about uuid
         _connect_lock: Final[asyncio.Lock]
         _rx_frame_size: int
         _rx_future: asyncio.Future[MerossResponse] | None
@@ -84,11 +78,7 @@ class BluetoothClient(BleakClient):
             await super().__aenter__()
             return self
 
-    __slots__ = (
-        "loop",
-        "logger",
-        "timeout",
-        "uuid",
+    __slots__ = _BaseClient.__SLOTS__ + (
         "_connect_lock",
         "_rx_buf",
         "_rx_frame_size",
@@ -105,25 +95,19 @@ class BluetoothClient(BleakClient):
         address_or_ble_device: "BLEDevice | str",
         services: "Iterable[str] | None" = (BL_SERVICE_UUID,),
         *,
-        loop: asyncio.AbstractEventLoop | None = None,
-        logger: "LoggerT | None" = None,
-        timeout: float = 20.0,
         winrt: "WinRTClientArgs" = {},
         backend: "type[BaseBleakClient] | None" = None,
-        **kwargs,
+        **kwargs: "Unpack[Args]",
     ):
-        super().__init__(
+        BleakClient.__init__(
+            self,
             address_or_ble_device,
             None,
             services,
-            timeout=timeout,
             winrt=winrt,
             backend=backend,
-            **kwargs,
         )
-        self.loop = loop or asyncio.get_running_loop()
-        self.logger = logger
-        self.timeout = timeout
+        _BaseClient.__init__(self, "", **kwargs)
         self._connect_lock = asyncio.Lock()
         self._rx_frame_size = 0
         self._rx_future = None
@@ -132,6 +116,57 @@ class BluetoothClient(BleakClient):
         self._char_notify = None  # type: ignore
         self._char_write = None  # type: ignore
         self._mtu_size = None
+
+    # interface: BaseClient
+    @override
+    async def async_request_raw(
+        self, request: str, /, **kwargs: "Unpack[RequestArgs]"
+    ) -> MerossResponse:
+
+        # TODO: maybe add a retry loop
+        async with asyncio.timeout(kwargs.get("timeout", self.timeout)):
+
+            await self._tx_lock.acquire()
+
+            try:
+                if not self.is_connected:
+                    await self.connect(dangerous_use_bleak_cache=True, **kwargs)
+
+                self._rx_future = self.loop.create_future()
+                self._rx_frame_size = 0  # flush receive buffer
+                tx_frame = request.encode()
+                tx_frame_size = len(tx_frame)
+                crc32 = binascii.crc32(tx_frame)
+                tx_frame = bytes(
+                    (
+                        0x55,
+                        0xAA,
+                        tx_frame_size // 256,
+                        tx_frame_size % 256,
+                        *tx_frame,
+                        (crc32 >> 24) & 0xFF,
+                        (crc32 >> 16) & 0xFF,
+                        (crc32 >> 8) & 0xFF,
+                        crc32 & 0xFF,
+                        0xAA,
+                        0x55,
+                    )
+                )
+                chunk_size = self.mtu_size - 3
+                for chunk in (
+                    tx_frame[i : i + chunk_size]
+                    for i in range(0, len(tx_frame), chunk_size)
+                ):
+                    await self.write_gatt_char(self._char_write, chunk, response=False)
+
+                if self.logger:
+                    self.logger.log(logging.DEBUG, "Transmitted frame: %s", tx_frame)
+
+                return await self._rx_future
+
+            finally:
+                self._rx_future = None
+                self._tx_lock.release()
 
     # interface: BleakClient
     @override
@@ -258,80 +293,6 @@ class BluetoothClient(BleakClient):
                 logging.DEBUG, "Bluetooth device %s disconnected", self.address
             )
 
-    async def async_request_raw(
-        self, request: str, /, **kwargs: "Unpack[RequestArgs]"
-    ) -> MerossResponse:
-
-        # TODO: maybe add a retry loop
-        async with asyncio.timeout(kwargs.get("timeout", self.timeout)):
-
-            await self._tx_lock.acquire()
-
-            try:
-                if not self.is_connected:
-                    await self.connect(dangerous_use_bleak_cache=True, **kwargs)
-
-                self._rx_future = self.loop.create_future()
-                self._rx_frame_size = 0  # flush receive buffer
-                tx_frame = request.encode()
-                tx_frame_size = len(tx_frame)
-                crc32 = binascii.crc32(tx_frame)
-                tx_frame = bytes(
-                    (
-                        0x55,
-                        0xAA,
-                        tx_frame_size // 256,
-                        tx_frame_size % 256,
-                        *tx_frame,
-                        (crc32 >> 24) & 0xFF,
-                        (crc32 >> 16) & 0xFF,
-                        (crc32 >> 8) & 0xFF,
-                        crc32 & 0xFF,
-                        0xAA,
-                        0x55,
-                    )
-                )
-                chunk_size = self.mtu_size - 3
-                for chunk in (
-                    tx_frame[i : i + chunk_size]
-                    for i in range(0, len(tx_frame), chunk_size)
-                ):
-                    await self.write_gatt_char(self._char_write, chunk, response=False)
-
-                if logger := self.logger:
-                    logger.log(logging.DEBUG, "Transmitted frame: %s", tx_frame)
-
-                return await self._rx_future
-
-            finally:
-                self._rx_future = None
-                self._tx_lock.release()
-
-    async def async_request(
-        self, *request: "Unpack[MerossRequestType]", **kwargs: "Unpack[RequestArgs]"
-    ) -> MerossResponse:
-        return await self.async_request_raw(
-            MerossRequest(*request, "").json(), **kwargs
-        )
-
-    async def async_request_ns(
-        self, ns: "Namespace", /, **kwargs: "Unpack[RequestArgs]"
-    ) -> MerossResponse:
-        return await self.async_request_raw(
-            MerossRequest(*ns.request_default, "").json(), **kwargs
-        )
-
-    async def async_identify_device(self, *args, **kwargs: "Unpack[RequestArgs]"):
-        ns_all_response = check_message_strict(
-            await self.async_request_ns(mn.Appliance_System_All, **kwargs)
-        )
-        ns_ability_response = check_message_strict(
-            await self.async_request_ns(mn.Appliance_System_Ability, **kwargs)
-        )
-        return MerossDeviceDescriptor(
-            ns_all_response[mc.KEY_PAYLOAD] | ns_ability_response[mc.KEY_PAYLOAD]
-        )
-
     def _packet_handler(self, data: bytearray, /):
         if logger := self.logger:
             logger.log(logging.DEBUG, "Received %s", data)
@@ -403,8 +364,8 @@ class BluetoothClient(BleakClient):
                 )
 
     def _frame_handler(self, rx_frame: bytearray, /):
-        if logger := self.logger:
-            logger.log(logging.DEBUG, "Received frame %s", rx_frame)
+        if self.logger:
+            self.logger.log(logging.DEBUG, "Received frame %s", rx_frame)
 
         if self._rx_future:
             self._rx_future.set_result(MerossResponse(rx_frame.decode()))

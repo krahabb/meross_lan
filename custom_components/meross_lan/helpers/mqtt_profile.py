@@ -9,12 +9,14 @@ from homeassistant.core import callback
 
 from . import Loggable, entity as me
 from .. import const as mlc
-from ..merossclient import (
-    HostAddress,
-    json_dumps,
-)
+from ..merossclient import HostAddress
 from ..merossclient.mqttclient import MerossMQTTRateLimitException
-from ..merossclient.protocol import MerossKeyError, const as mc, namespaces as mn
+from ..merossclient.protocol import (
+    MerossKeyError,
+    const as mc,
+    json_dumps,
+    namespaces as mn,
+)
 from ..merossclient.protocol.message import (
     MerossRequest,
     MerossResponse,

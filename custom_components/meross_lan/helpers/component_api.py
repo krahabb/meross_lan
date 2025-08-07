@@ -22,10 +22,9 @@ from ..merossclient import (
     HostAddress,
     MerossDeviceDescriptor,
     bluetooth as m_bt,
-    json_loads,
 )
 from ..merossclient.httpclient import MerossHttpClient
-from ..merossclient.protocol import const as mc, namespaces as mn
+from ..merossclient.protocol import const as mc, json_loads, namespaces as mn
 from ..merossclient.protocol.message import (
     MerossAckReply,
     MerossPushReply,
@@ -717,8 +716,8 @@ class ComponentApi(MQTTProfile):
                             await MerossHttpClient(
                                 host,
                                 self.key if key is None else key,
+                                loop=self.hass.loop,
                                 logger=self,
-                                log_level_dump=self.VERBOSE,
                             ).async_request_raw(request.json())
                             or {}
                         )

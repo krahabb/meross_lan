@@ -6,15 +6,18 @@ import ssl
 import string
 import threading
 from time import monotonic
-import typing
+from typing import TYPE_CHECKING, override
 from uuid import uuid4
 
 import paho.mqtt.client as mqtt
 
-from . import HostAddress, get_macaddress_from_uuid
+from . import HostAddress, _BaseClient, get_macaddress_from_uuid
 from .protocol import const as mc, md5hexdigest
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
+    from typing import ClassVar, Final, NotRequired, Unpack
+
+    from . import LoggerT
     from .protocol.message import MerossMessage
 
 
@@ -55,8 +58,12 @@ class _MQTTRateLimiter:
     We should eventually setup also a long-term data rate-limiting (e.g. 200 messages in 1 hour)
     """
 
-    DURATION: typing.Final = 60
-    MAXQUEUE: typing.Final = 6
+    if TYPE_CHECKING:
+        DURATION: ClassVar
+        MAXQUEUE: ClassVar
+
+    DURATION = 60
+    MAXQUEUE = 6
 
     __slots__ = (
         "dropped",
@@ -68,11 +75,21 @@ class _MQTTRateLimiter:
         self.t_queue: deque[float] = deque()
 
 
-class _MerossMQTTClient(mqtt.Client):
+class _MerossMQTTClient(_BaseClient, mqtt.Client):
     """
     Implements a rather abstract MQTT client used by both the MerossMQTTAppClient
     and MerossMQTTDeviceClient
     """
+
+    if TYPE_CHECKING:
+
+        class Args(_BaseClient.Args):
+            pass
+
+        class RequestArgs(_BaseClient.RequestArgs):
+            pass
+
+        _logger: LoggerT | None  # override paho client attribute type-hint
 
     MQTT_ERR_SUCCESS = mqtt.MQTT_ERR_SUCCESS
 
@@ -82,12 +99,101 @@ class _MerossMQTTClient(mqtt.Client):
     STATE_DISCONNECTING = "disconnecting"
     STATE_DISCONNECTED = "disconnected"
 
+    __SLOTS__ = (
+        "_lock_state",
+        "_lock_queue",
+        "_rl_dropped",
+        "_rl2_queues",
+        "_stateext",
+        "_subscribe_error",
+        "_subscribe_topics",
+        "_future_connected",
+        "_tasks",
+        # mqtt.Client slots
+        "_manual_ack",
+        "_transport",
+        "_protocol",
+        "_userdata",
+        "_sock",
+        "_sockpairR",
+        "_sockpairW",
+        "_keepalive",
+        "_connect_timeout",
+        "_client_mode",
+        "_callback_api_version",
+        "_clean_start",
+        "_clean_session",
+        "_client_id",
+        "_username",
+        "_password",
+        "_in_packet",
+        "_out_packet",
+        "_last_msg_in",
+        "_last_msg_out",
+        "_reconnect_min_delay",
+        "_reconnect_max_delay",
+        "_reconnect_delay",
+        "_reconnect_on_failure",
+        "_ping_t",
+        "_last_mid",
+        "_state",
+        "_out_messages",
+        "_in_messages",
+        "_max_inflight_messages",
+        "_inflight_messages",
+        "_max_queued_messages",
+        "_connect_properties",
+        "_will_properties",
+        "_will",
+        "_will_topic",
+        "_will_payload",
+        "_will_qos",
+        "_will_retain",
+        "_on_message_filtered",
+        "_host",
+        "_port",
+        "_bind_address",
+        "_bind_port",
+        "_proxy",
+        "_in_callback_mutex",
+        "_callback_mutex",
+        "_msgtime_mutex",
+        "_out_message_mutex",
+        "_in_message_mutex",
+        "_reconnect_delay_mutex",
+        "_mid_generate_mutex",
+        "_thread",
+        "_thread_terminate",
+        "_ssl",
+        "_ssl_context",
+        "_tls_insecure",
+        "_logger",
+        "_registered_write",
+        "_on_log",
+        "_on_pre_connect",
+        "_on_connect",
+        "_on_connect_fail",
+        "_on_subscribe",
+        "_on_message",
+        "_on_publish",
+        "_on_unsubscribe",
+        "_on_disconnect",
+        "_on_socket_open",
+        "_on_socket_close",
+        "_on_socket_register_write",
+        "_on_socket_unregister_write",
+        "_websocket_path",
+        "_websocket_extra_headers",
+        "_mqttv5_first_connect",
+        "suppress_exceptions",
+    )
+
     def __init__(
         self,
         client_id: str,
         subscribe_topics: list[tuple[str, int]],
-        *,
-        loop: asyncio.AbstractEventLoop | None = None,
+        key: str,
+        **kwargs: "Unpack[Args]",
     ):
         """
         2025-02-28 paho-mqtt is now on v2... which has different callback signatures and
@@ -97,13 +203,15 @@ class _MerossMQTTClient(mqtt.Client):
         to v2 if needed.
         """
         try:
-            super().__init__(
+            mqtt.Client.__init__(
+                self,
                 client_id=client_id,
                 protocol=mqtt.MQTTv311,
                 callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
             )
         except:  # fallback to legacy (pre v2)
-            super().__init__(client_id=client_id, protocol=mqtt.MQTTv311)
+            mqtt.Client.__init__(self, client_id=client_id, protocol=mqtt.MQTTv311)
+        _BaseClient.__init__(self, key, **kwargs)
         self._lock_state = threading.Lock()
         """synchronize connect/disconnect (not contended by the mqtt thread)"""
         self._lock_queue = threading.Lock()
@@ -113,7 +221,7 @@ class _MerossMQTTClient(mqtt.Client):
         self._stateext = self.STATE_DISCONNECTED
         self._subscribe_error = None
         self._subscribe_topics = subscribe_topics
-        if loop:
+        if self.loop:
             # our async interface would fail or simply not work
             # without the loop but we don't want to disseminate
             # checks here and there. Not setting this object property
@@ -121,7 +229,6 @@ class _MerossMQTTClient(mqtt.Client):
             # to raise the missing attr exception and tell us we're doing it wrong
             # Also type checking will benefit since the attr is expected to host
             # a non null value
-            self._asyncio_loop = loop
             self._future_connected = None
             self._tasks: list[asyncio.Task] = []
             self.on_subscribe = self._mqttc_subscribe_loop
@@ -139,6 +246,24 @@ class _MerossMQTTClient(mqtt.Client):
         for task in self._tasks:
             await task
 
+    # interface: mqtt.Client
+    @override
+    def enable_logger(self, logger: "LoggerT | None" = None) -> None:
+        """
+        Our _BaseClient already provides a 'logger' attribute and it's going to override
+        the paho client property.
+        We're providing this override in order to 'maintain' the paho interface behavior (enable logging)
+        """
+        if logger is None:
+            if self._logger is not None:
+                return
+            logger = logging.getLogger(__name__)
+        self.logger = self._logger = logger
+
+    @override
+    def disable_logger(self):
+        self.logger = self._logger = None
+
     @property
     def rl_dropped(self):
         return self._rl_dropped
@@ -155,23 +280,8 @@ class _MerossMQTTClient(mqtt.Client):
     def state_inactive(self):
         return self._stateext in (self.STATE_DISCONNECTING, self.STATE_DISCONNECTED)
 
-    def enable_logger(self, logger: logging.Logger | None = None) -> None:
-        """
-        In v2 we patch the original method so to avoid usage of the (new) 'logger' property
-        because it is used in our framweork and that would mess with the intended behavior.
-        The underlying _logger member instead will keep working as usual.
-        """
-        if logger is None:
-            if self._logger is not None:
-                return
-            logger = logging.getLogger(__name__)
-        self._logger = logger
-
-    def disable_logger(self):
-        self._logger = None
-
     async def async_connect(self, broker: HostAddress):
-        loop = self._asyncio_loop
+        loop = self.loop
         future = self._future_connected
         if not future:
             self._future_connected = future = loop.create_future()
@@ -183,13 +293,13 @@ class _MerossMQTTClient(mqtt.Client):
             self._future_connected.cancel()
             self._future_connected = None
         if self.state_active:
-            await self._asyncio_loop.run_in_executor(None, self.safe_stop)
+            await self.loop.run_in_executor(None, self.safe_stop)
 
     def schedule_connect(self, broker: HostAddress):
         # even if safe_connect should be as fast as possible and thread-safe
         # we still might incur some contention with thread stop/restart
         # so we delegate its call to an executor
-        self._asyncio_loop.run_in_executor(None, self.safe_start, broker)
+        self.loop.run_in_executor(None, self.safe_start, broker)
 
     def safe_start(self, broker: HostAddress):
         """
@@ -317,7 +427,7 @@ class _MerossMQTTClient(mqtt.Client):
         main thread when the mqtt client receives a message. Defaults to creating
         a task for processing the message in async_mqtt_message
         """
-        task = self._asyncio_loop.create_task(self.async_mqtt_message(msg))
+        task = self.loop.create_task(self.async_mqtt_message(msg))
         self._tasks.append(task)
         task.add_done_callback(self._tasks.remove)
 
@@ -338,7 +448,7 @@ class _MerossMQTTClient(mqtt.Client):
     def _mqttc_subscribe_loop(self, *args):
         """This is the asynced version of the callback: called when we're managed through a loop"""
         self._stateext = self.STATE_CONNECTED
-        self._asyncio_loop.call_soon_threadsafe(self._mqtt_connected)
+        self.loop.call_soon_threadsafe(self._mqtt_connected)
 
     def _mqttc_disconnect(self, *args):
         """This is the standard version of the callback: called when we're not managed through a loop"""
@@ -351,13 +461,13 @@ class _MerossMQTTClient(mqtt.Client):
         self._stateext = (
             self.STATE_DISCONNECTED if self.state_inactive else self.STATE_RECONNECTING
         )
-        self._asyncio_loop.call_soon_threadsafe(self._mqtt_disconnected)
+        self.loop.call_soon_threadsafe(self._mqtt_disconnected)
 
     def _mqttc_publish_loop(self, *args):
-        self._asyncio_loop.call_soon_threadsafe(self._mqtt_published)
+        self.loop.call_soon_threadsafe(self._mqtt_published)
 
     def _mqttc_message_loop(self, client, userdata, msg: mqtt.MQTTMessage):
-        self._asyncio_loop.call_soon_threadsafe(self.mqtt_message, msg)
+        self.loop.call_soon_threadsafe(self.mqtt_message, msg)
 
 
 class MerossMQTTAppClient(_MerossMQTTClient):
@@ -370,27 +480,35 @@ class MerossMQTTAppClient(_MerossMQTTClient):
     and app client) connect to the same broker and talk the same protocol
     """
 
-    def __init__(
-        self,
-        key: str,
-        userid: str,
-        *,
-        app_id: str | None = None,
-        loop: asyncio.AbstractEventLoop | None = None,
-        sslcontext: ssl.SSLContext | None = None,
-    ):
-        if not app_id:
-            app_id = generate_app_id()
-        self.app_id = app_id
-        self.topic_command = f"/app/{userid}-{app_id}/subscribe"
-        self.topic_push = f"/app/{userid}/subscribe"
+    if TYPE_CHECKING:
+
+        class Args(_MerossMQTTClient.Args):
+            app_id: NotRequired[str]
+            sslcontext: NotRequired[ssl.SSLContext]
+
+        class RequestArgs(_MerossMQTTClient.RequestArgs):
+            pass
+
+    __SLOTS__ = (
+        "app_id",
+        "topic_command",
+        "topic_push",
+    )
+
+    def __init__(self, key: str, *, user_id: str, **kwargs: "Unpack[Args]"):
+        self.app_id = app_id = kwargs.pop("app_id", None) or generate_app_id()
+        self.topic_command = f"/app/{user_id}-{app_id}/subscribe"
+        self.topic_push = f"/app/{user_id}/subscribe"
         super().__init__(
-            f"app:{app_id}", [(self.topic_push, 1), (self.topic_command, 1)], loop=loop
+            f"app:{app_id}",
+            [(self.topic_push, 1), (self.topic_command, 1)],
+            key,
+            **kwargs,
         )
-        self.username_pw_set(userid, md5hexdigest(userid, key))
-        if sslcontext:
-            self.tls_set_context(sslcontext)
-        else:
+        self.username_pw_set(user_id, md5hexdigest(user_id, key))
+        try:
+            self.tls_set_context(kwargs["sslcontext"])  # type: ignore
+        except KeyError:
             self.tls_set(
                 cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS_CLIENT
             )
@@ -405,15 +523,20 @@ class MerossMQTTDeviceClient(_MerossMQTTClient):
     and app client) connect to the same broker and talk the same protocol
     """
 
-    def __init__(
-        self,
-        uuid: str,
-        *,
-        key: str = "",
-        userid: str = "",
-        loop: asyncio.AbstractEventLoop | None = None,
-        sslcontext: ssl.SSLContext | None = None,
-    ):
+    if TYPE_CHECKING:
+
+        class Args(_MerossMQTTClient.Args):
+            sslcontext: NotRequired[ssl.SSLContext]
+
+        class RequestArgs(_MerossMQTTClient.RequestArgs):
+            pass
+
+    __slots__ = _MerossMQTTClient._calc_slots(
+        "topic_publish",
+        "topic_subscribe",
+    )
+
+    def __init__(self, key: str, *, uuid: str, user_id: str, **kwargs: "Unpack[Args]"):
         """
         uuid: 16 bytes hex string (lowercase)
         key: see device key
@@ -426,12 +549,13 @@ class MerossMQTTDeviceClient(_MerossMQTTClient):
         super().__init__(
             f"fmware:{uuid}_{''.join(random.choices(characters, k=16))}",
             [(self.topic_subscribe, 1)],
-            loop=loop,
+            key,
+            **kwargs,
         )
         macaddress = get_macaddress_from_uuid(uuid)
         pwd = md5hexdigest(macaddress, key)
-        self.username_pw_set(macaddress, f"{userid}_{pwd}")
-        if sslcontext:
-            self.tls_set_context(sslcontext)
-        else:
+        self.username_pw_set(macaddress, f"{user_id}_{pwd}")
+        try:
+            self.tls_set_context(kwargs["sslcontext"])  # type: ignore
+        except KeyError:
             self.tls_set(cert_reqs=ssl.CERT_NONE, tls_version=ssl.PROTOCOL_TLSv1_2)

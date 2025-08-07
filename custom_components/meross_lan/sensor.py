@@ -12,7 +12,7 @@ from .helpers.namespaces import (
     mc,
     mn,
 )
-from .merossclient import json_dumps
+from .merossclient.protocol import json_dumps
 
 if TYPE_CHECKING:
     from typing import Final, NotRequired, Unpack

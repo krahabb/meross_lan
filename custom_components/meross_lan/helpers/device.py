@@ -30,18 +30,13 @@ from ..const import (
     PARAM_TIMESTAMP_TOLERANCE,
 )
 from ..helpers.obfuscate import obfuscated_dict
-from ..merossclient import (
-    HostAddress,
-    JSONDecodeError,
-    get_active_broker,
-    is_device_online,
-    json_dumps,
-)
-from ..merossclient.bluetooth import BluetoothClient
+from ..merossclient import HostAddress, get_active_broker, is_device_online
 from ..merossclient.httpclient import MerossHttpClient, TerminatedException
 from ..merossclient.protocol import (
+    JSONDecodeError,
     compute_message_encryption_key,
     compute_message_signature,
+    json_dumps,
 )
 from ..merossclient.protocol.message import (
     MerossRequest,
@@ -715,7 +710,9 @@ class Device(BaseDevice, ConfigEntryManager):
                 _http.host = host
                 _http.key = self.key
             else:
-                _http = self._http = MerossHttpClient(host, self.key)
+                _http = self._http = MerossHttpClient(
+                    host, self.key, loop=self.hass.loop
+                )
             descriptor = self.descriptor
             _http.set_encryption(
                 compute_message_encryption_key(
@@ -2111,6 +2108,8 @@ class Device(BaseDevice, ConfigEntryManager):
             self._mqtt_publish = _mqtt_connection
             if not self.online and self._polling_callback_unsub:
                 # reschedule immediately
+                # TODO: this is not actually triggering when device is only
+                # reachable over cloud MQTT (at config entry load time/boot)
                 self._polling_callback_unsub.cancel()
                 self._polling_callback_unsub = self.schedule_async_callback(
                     0, self._async_polling_callback, None

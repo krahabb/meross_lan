@@ -6,7 +6,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from time import time
 import typing
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from homeassistant.core import callback
 from homeassistant.helpers import storage
@@ -61,32 +61,19 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
     if TYPE_CHECKING:
         is_cloud_connection: Final[bool]
 
-    __slots__ = (
-        "_asyncio_loop",
-        "_future_connected",
-        "_tasks",
-        "_lock_state",
-        "_lock_queue",
-        "_rl_dropped",
-        "_rl2_queues",
-        "_stateext",
-        "_subscribe_topics",
-        "_unsub_random_disconnect",
-    )
+    __slots__ = MerossMQTTAppClient._calc_slots("_unsub_random_disconnect")
 
     def __init__(self, profile: "MerossProfile", broker: "HostAddress"):
         MerossMQTTAppClient.__init__(
             self,
             profile.key,
-            profile.userid,
             app_id=profile.app_id,
+            user_id=profile.userid,
             loop=profile.hass.loop,
             sslcontext=get_default_ssl_context(),
         )
         self.is_cloud_connection = True
         MQTTConnection.__init__(self, profile, broker, self.topic_command)
-        if profile.isEnabledFor(profile.VERBOSE):
-            self.enable_logger(self)  # type: ignore (Loggable is duck-compatible with Logger)
 
         if MEROSSDEBUG:
 
@@ -118,13 +105,6 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
         await MerossMQTTAppClient.async_shutdown(self)
         await MQTTConnection.async_shutdown(self)
 
-    async def entry_update_listener(self, profile: "MerossProfile"):
-        await MQTTConnection.entry_update_listener(self, profile)
-        if profile.isEnabledFor(profile.VERBOSE):
-            self.enable_logger(self)  # type: ignore (Loggable is duck-compatible with Logger)
-        else:
-            self.disable_logger()
-
     def get_rl_safe_delay(self, uuid: str):
         return MerossMQTTAppClient.get_rl_safe_delay(self, uuid)
 
@@ -152,6 +132,12 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
                 # enforce the state eventually cancelling queued, dropped...
                 sensor_connection.native_value = ConnectionSensor.STATE_CONNECTED
             sensor_connection.flush_state()
+
+    # interface: MerossMQTTAppClient
+    @override
+    def _easy_log(self, level, fmt: str, *args) -> None:
+        # TODO: obfuscate in case (paho logs the topics...)
+        self.log(self.DEBUG, f"PAHO-LOG{{%s}} -> {fmt}", level, *args)
 
 
 MerossMQTTConnection.SESSION_HANDLERS = {

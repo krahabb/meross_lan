@@ -6,9 +6,9 @@ from uuid import uuid4
 
 from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
 
-from custom_components.meross_lan.merossclient import json_dumps
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
+    json_dumps,
     namespaces as mn,
 )
 from custom_components.meross_lan.merossclient.protocol.message import build_message

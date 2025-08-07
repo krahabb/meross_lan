@@ -4,9 +4,9 @@ import typing
 from unittest.mock import ANY
 
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.merossclient import json_dumps
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
+    json_dumps,
     namespaces as mn,
 )
 

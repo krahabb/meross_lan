@@ -3,13 +3,14 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from . import (
+    JSON_DECODER,
+    JSON_ENCODER,
     MerossKeyError,
     MerossProtocolError,
     compute_message_signature,
     const as mc,
     namespaces as mn,
 )
-from .. import JSON_DECODER, JSON_ENCODER
 
 if TYPE_CHECKING:
     from .types import KeyType, MerossHeaderType, MerossMessageType, MerossPayloadType

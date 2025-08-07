@@ -33,11 +33,8 @@ from custom_components.meross_lan.helpers.meross_profile import (
     MerossMQTTConnection,
     MQTTConnection,
 )
-from custom_components.meross_lan.merossclient import (
-    cloudapi,
-    json_loads,
-)
-from custom_components.meross_lan.merossclient.protocol import const as mc
+from custom_components.meross_lan.merossclient import cloudapi
+from custom_components.meross_lan.merossclient.protocol import const as mc, json_loads
 import emulator
 
 from . import const as tc

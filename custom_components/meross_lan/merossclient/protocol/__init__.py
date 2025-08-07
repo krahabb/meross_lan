@@ -5,6 +5,7 @@ Meross protocol core types and helpers
 
 from base64 import b64decode, b64encode
 from hashlib import md5
+import json
 from typing import TYPE_CHECKING
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -13,6 +14,27 @@ if TYPE_CHECKING:
     from typing import ClassVar, Unpack
 
     from message import MerossResponse
+
+
+#
+# Optimized JSON encoding/decoding
+#
+JSON_ENCODER = json.JSONEncoder(
+    ensure_ascii=False, check_circular=False, separators=(",", ":")
+)
+JSON_DECODER = json.JSONDecoder()
+
+JSONDecodeError = json.JSONDecodeError
+
+
+def json_dumps(obj):
+    """Slightly optimized json.dumps with pre-configured encoder"""
+    return JSON_ENCODER.encode(obj)
+
+
+def json_loads(s: str):
+    """Slightly optimized json.loads with pre-configured decoder"""
+    return JSON_DECODER.raw_decode(s)[0]
 
 
 #

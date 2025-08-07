@@ -60,7 +60,6 @@ from custom_components.meross_lan.merossclient.protocol.namespaces import (
 
 from .mixins import MerossEmulator, MerossEmulatorDescriptor
 
-
 if TYPE_CHECKING:
     from typing import Iterable
 
