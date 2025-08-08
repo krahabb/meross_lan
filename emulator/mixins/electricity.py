@@ -10,8 +10,10 @@ from custom_components.meross_lan.merossclient.protocol import (
     namespaces as mn,
 )
 
+from . import MerossEmulator
+
 if TYPE_CHECKING:
-    from .. import MerossEmulator, MerossEmulatorDescriptor
+    from . import MerossEmulatorDescriptor
 
 
 class ElectricityMixin(MerossEmulator if TYPE_CHECKING else object):
@@ -73,10 +75,11 @@ class ElectricityXMixin(MerossEmulator if TYPE_CHECKING else object):
 
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
-        self.payload_electricityx = descriptor.namespaces.setdefault(
-            mn.Appliance_Control_ElectricityX.name,
-            {
-                mc.KEY_ELECTRICITY: [
+        if mc.RefossModel.match(descriptor.type) is mc.RefossModel.em06:
+            self.update_namespace_state(
+                mn.Appliance_Control_ElectricityX,
+                MerossEmulator.NSDefaultMode.MixOut,
+                [
                     {
                         "channel": 1,
                         "current": 0,
@@ -125,9 +128,11 @@ class ElectricityXMixin(MerossEmulator if TYPE_CHECKING else object):
                         "mConsume": 0,
                         "factor": -0.0001285076141357422,
                     },
-                ]
-            },
-        )
+                ],
+            )
+        self.payload_electricityx = descriptor.namespaces[
+            mn.Appliance_Control_ElectricityX.name
+        ]
         self.electricityx = self.payload_electricityx[mc.KEY_ELECTRICITY]
 
     def _GET_Appliance_Control_ElectricityX(self, header, payload):

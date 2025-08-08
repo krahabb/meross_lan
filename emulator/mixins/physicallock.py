@@ -15,10 +15,7 @@ class PhysicalLockMixin(MerossEmulator if TYPE_CHECKING else object):
     NAMESPACES_DEFAULT: "MerossEmulator.NSDefault" = {
         mn.Appliance_Control_PhysicalLock: (
             MerossEmulator.NSDefaultMode.MixOut,
-            {
-                mc.KEY_ONOFF: 0,
-            },
-            0,
+            {mc.KEY_CHANNEL: 0, mc.KEY_ONOFF: 0},
         ),
     }
 

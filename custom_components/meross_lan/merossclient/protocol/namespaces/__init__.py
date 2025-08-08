@@ -3,6 +3,7 @@ Descriptors for namespaces management.
 This file contains the knowledge about how namespaces work (their syntax and behaviors).
 """
 
+from copy import deepcopy
 import enum
 from functools import cached_property
 from typing import TYPE_CHECKING
@@ -10,7 +11,7 @@ from typing import TYPE_CHECKING
 from .. import const as mc
 
 if TYPE_CHECKING:
-    from typing import Final, Mapping, NotRequired, TypedDict, Unpack
+    from typing import Any, Final, Mapping, NotRequired, TypedDict, Unpack
 
     from ..types import MerossRequestType
 
@@ -67,38 +68,58 @@ class _HubNamespacesMap(dict):
 HUB_NAMESPACES = _HubNamespacesMap()
 
 
-class imdict(dict):
+class _immutable:
     def __hash__(self):
         return id(self)
 
-    def _immutable(self, *args, **kws):
+    def _raise(self, *args, **kws):
         raise TypeError(f"object of type <{type(self)}> is immutable")
 
-    __setitem__ = _immutable
-    __delitem__ = _immutable
-    __ior__ = _immutable
-    clear = _immutable
-    update = _immutable  # type: ignore
-    setdefault = _immutable  # type: ignore
-    pop = _immutable
-    popitem = _immutable
+    clear = _raise
+    pop = _raise
+    __setitem__ = _raise
+    __delitem__ = _raise
+
+
+class _immutabledict(_immutable, dict[str, "Any"]):
+    __ior__ = _immutable._raise  # type: ignore
+    update = _immutable._raise  # type: ignore
+    setdefault = _immutable._raise  # type: ignore
+    pop = _immutable._raise  # type: ignore
+    popitem = _immutable._raise  # type: ignore
+
+    def clone(self):
+        return {key: deepcopy(value) for key, value in self.items()}
+
+
+class _immutablelist(_immutable, list[_immutabledict]):
+    append = _immutable._raise  # type: ignore
+    extend = _immutable._raise  # type: ignore
+    insert = _immutable._raise  # type: ignore
+    remove = _immutable._raise  # type: ignore
+    sort = _immutable._raise  # type: ignore
+    __iadd__ = _immutable._raise  # type: ignore
+    __imul__ = _immutable._raise  # type: ignore
+
+    def clone(self):
+        return [value.clone() for value in self]
 
 
 class PayloadType(enum.Enum):
     """Depicts the payload structure in GET queries (defaults to DICT in case)."""
 
-    NONE = imdict({})
+    NONE = _immutabledict({})
     """No GET query supported."""
-    DICT = imdict({})
+    DICT = _immutabledict({})
     """Command GET with an empty dict (should) return all the (channels) state.
     This is used as default unless some heuristic (in __init__) states something different."""
-    DICT_C = imdict({mc.KEY_CHANNEL: 0})
+    DICT_C = _immutabledict({mc.KEY_CHANNEL: 0})
     """Command GET with channel index in dict returns the state requested."""
-    LIST = []
+    LIST = _immutablelist([])
     """Command GET with an empty list returns all the (channels) state."""
-    LIST_C = [{mc.KEY_CHANNEL: 0}]
+    LIST_C = _immutablelist([DICT_C])
     """Command GET with channel index dicts in a list returns the states requested."""
-    LIST_SX = [{mc.KEY_CHANNEL: 0, mc.KEY_DATA: []}]
+    LIST_SX = _immutablelist([_immutabledict({mc.KEY_CHANNEL: 0, mc.KEY_DATA: []})])
     """Command GET for *.LatestX (and maybe *.HistoryX) ns."""
 
 

@@ -14,19 +14,11 @@ class FanMixin(MerossEmulator if TYPE_CHECKING else object):
     NAMESPACES_DEFAULT: "MerossEmulator.NSDefault" = {
         mn.Appliance_Control_Fan: (
             MerossEmulator.NSDefaultMode.MixOut,
-            {
-                mc.KEY_SPEED: 0,
-                mc.KEY_MAXSPEED: 4,
-            },
-            0,
+            {mc.KEY_CHANNEL: 0, mc.KEY_SPEED: 0, mc.KEY_MAXSPEED: 4},
         ),
         mn.Appliance_Control_FilterMaintenance: (
             MerossEmulator.NSDefaultMode.MixOut,
-            {
-                mc.KEY_LIFE: 100,
-                mc.KEY_LMTIME: 0,
-            },
-            0,
+            {mc.KEY_CHANNEL: 0, mc.KEY_LIFE: 100, mc.KEY_LMTIME: 0},
         ),
     }
 

@@ -18,7 +18,7 @@ from custom_components.meross_lan.merossclient.protocol.namespaces import hub as
 if TYPE_CHECKING:
     from typing import Any, Mapping
 
-    from .. import MerossEmulator, MerossEmulatorDescriptor
+    from . import MerossEmulator, MerossEmulatorDescriptor
 
 
 class HubMixin(MerossEmulator if TYPE_CHECKING else object):
@@ -69,7 +69,7 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
         ability = descriptor.ability
 
         ns_state: dict[mn.Namespace, list[dict]] = {
-            ns: namespaces[ns.name][ns.key]  # type: ignore
+            ns: namespaces[ns.name].setdefault(ns.key, [])
             for ns in (
                 mn_h.Appliance_Hub_Mts100_Adjust,
                 mn_h.Appliance_Hub_Mts100_All,

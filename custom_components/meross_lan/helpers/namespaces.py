@@ -190,21 +190,25 @@ class NamespaceHandler:
         Passing None as request_payload_type configures the default for the namespace.
         """
         ns = self.ns
-        request_payload_type = request_payload_type or ns.request_payload_type
-        if request_payload_type is mn.PayloadType.LIST_C:
+        _request_payload_type = request_payload_type or ns.request_payload_type
+        if _request_payload_type is mn.PayloadType.LIST_C:
             self.polling_request = (
                 ns.name,
                 mc.METHOD_GET,
-                {ns.key: self.polling_request_channels},
+                (
+                    {ns.key: {mc.KEY_CHANNEL: 65535}}
+                    if self.device.is_refoss and (not request_payload_type)
+                    else {ns.key: self.polling_request_channels}
+                ),
             )
-        elif request_payload_type is ns.request_payload_type:
+        elif _request_payload_type is ns.request_payload_type:
             # we'll reuse the default in the ns definition
             self.polling_request = ns.request_default
         else:
             self.polling_request = (
                 ns.name,
                 mc.METHOD_GET,
-                {ns.key: request_payload_type.value},
+                {ns.key: _request_payload_type.value},
             )
 
     def polling_request_add_channel(self, channel, extra: dict = {}, /):
