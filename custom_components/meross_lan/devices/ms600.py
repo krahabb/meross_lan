@@ -2,8 +2,7 @@ import typing
 
 from ..binary_sensor import MLBinarySensor
 from ..helpers import entity as me
-from ..helpers.namespaces import NamespaceHandler
-from ..merossclient import const as mc, namespaces as mn
+from ..helpers.namespaces import NamespaceHandler, mc, mn
 from ..number import MLConfigNumber
 from ..select import MLConfigSelect
 from ..sensor import MLNumericSensor

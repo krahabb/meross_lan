@@ -1,0 +1,2260 @@
+{
+  "home_assistant": {
+    "installation_type": "Home Assistant OS",
+    "version": "2025.5.3",
+    "dev": false,
+    "hassio": true,
+    "virtualenv": false,
+    "python_version": "3.13.3",
+    "docker": true,
+    "arch": "x86_64",
+    "timezone": "America/Denver",
+    "os_name": "Linux",
+    "os_version": "6.12.23-haos",
+    "supervisor": "2025.05.3",
+    "host_os": "Home Assistant OS 15.2",
+    "docker_version": "28.0.4",
+    "chassis": "vm",
+    "run_as_root": true
+  },
+  "custom_components": {
+    "hacs": {
+      "documentation": "https://hacs.xyz/docs/use/",
+      "version": "2.0.5",
+      "requirements": [
+        "aiogithubapi>=22.10.1"
+      ]
+    },
+    "watchman": {
+      "documentation": "https://github.com/dummylabs/thewatchman",
+      "version": "0.6.5",
+      "requirements": [
+        "prettytable==3.12.0"
+      ]
+    },
+    "teamtracker": {
+      "documentation": "https://github.com/vasqued2/ha-teamtracker",
+      "version": "0.1",
+      "requirements": [
+        "arrow",
+        "aiofiles"
+      ]
+    },
+    "meross_lan": {
+      "documentation": "https://github.com/krahabb/meross_lan",
+      "version": "5.4.2",
+      "requirements": []
+    },
+    "yahoofinance": {
+      "documentation": "https://github.com/iprak/yahoofinance",
+      "version": "1.3.1",
+      "requirements": []
+    }
+  },
+  "integration_manifest": {
+    "domain": "meross_lan",
+    "name": "Meross LAN",
+    "after_dependencies": [
+      "mqtt",
+      "dhcp",
+      "recorder",
+      "persistent_notification"
+    ],
+    "codeowners": [
+      "krahabb"
+    ],
+    "config_flow": true,
+    "dhcp": [
+      {
+        "hostname": "*",
+        "macaddress": "48E1E9*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "C4E7AE*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "34298F1*"
+      },
+      {
+        "registered_devices": true
+      }
+    ],
+    "documentation": "https://github.com/krahabb/meross_lan",
+    "integration_type": "hub",
+    "iot_class": "local_polling",
+    "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
+    "loggers": [
+      "custom_components.meross_lan"
+    ],
+    "mqtt": [
+      "/appliance/+/publish"
+    ],
+    "requirements": [],
+    "version": "5.4.2",
+    "is_built_in": false,
+    "overwrites_built_in": false
+  },
+  "setup_times": {},
+  "data": {
+    "device_id": "###############################0",
+    "host": "#######1",
+    "key": "###############################0",
+    "payload": {
+      "ability": {
+        "Appliance.Config.DeviceCfg": {},
+        "Appliance.Config.Info": {},
+        "Appliance.Config.Key": {},
+        "Appliance.Config.Matter": {},
+        "Appliance.Config.NtpSite": {},
+        "Appliance.Config.Sensor.Association": {},
+        "Appliance.Config.Trace": {},
+        "Appliance.Config.Wifi": {},
+        "Appliance.Config.WifiList": {},
+        "Appliance.Config.WifiX": {},
+        "Appliance.Control.AlertConfig": {},
+        "Appliance.Control.AlertReport": {},
+        "Appliance.Control.Bind": {},
+        "Appliance.Control.ChangeWiFi": {},
+        "Appliance.Control.FilterMaintenance": {},
+        "Appliance.Control.McuUpgrade": {},
+        "Appliance.Control.Multiple": {
+          "maxCmdNum": 3
+        },
+        "Appliance.Control.PhysicalLock": {},
+        "Appliance.Control.Screen.Brightness": {},
+        "Appliance.Control.Sensor.Association": {},
+        "Appliance.Control.Sensor.HistoryX": {},
+        "Appliance.Control.TempUnit": {},
+        "Appliance.Control.Thermostat.Calibration": {},
+        "Appliance.Control.Thermostat.HoldAction": {},
+        "Appliance.Control.Thermostat.ModeC": {},
+        "Appliance.Control.Thermostat.ScheduleB": {},
+        "Appliance.Control.Thermostat.System": {},
+        "Appliance.Control.Unbind": {},
+        "Appliance.Control.Upgrade": {},
+        "Appliance.Control.Weather": {},
+        "Appliance.Digest.TimerX": {},
+        "Appliance.Digest.TriggerX": {},
+        "Appliance.Mcu.Firmware": {},
+        "Appliance.System.Ability": {},
+        "Appliance.System.All": {},
+        "Appliance.System.Clock": {},
+        "Appliance.System.Debug": {},
+        "Appliance.System.Firmware": {},
+        "Appliance.System.Hardware": {},
+        "Appliance.System.Online": {},
+        "Appliance.System.Position": {},
+        "Appliance.System.Report": {},
+        "Appliance.System.Runtime": {},
+        "Appliance.System.Time": {}
+      },
+      "all": {
+        "system": {
+          "hardware": {
+            "type": "mts300",
+            "subType": "us",
+            "version": "9.0.0",
+            "chipType": "rtl8720cm",
+            "uuid": "###############################0",
+            "macAddress": "################1"
+          },
+          "firmware": {
+            "version": "9.1.12",
+            "compileTime": "2024/12/25-10:24:50",
+            "encrypt": 1,
+            "wifiMac": "################1",
+            "innerIp": "#######1",
+            "server": "###################1",
+            "port": "@0",
+            "userId": "@0"
+          },
+          "time": {
+            "timestamp": 1748838005,
+            "timezone": "America/Denver",
+            "timeRule": [
+              [
+                1741510800,
+                -21600,
+                1
+              ],
+              [
+                1762070400,
+                -25200,
+                0
+              ],
+              [
+                1772960400,
+                -21600,
+                1
+              ],
+              [
+                1793520000,
+                -25200,
+                0
+              ],
+              [
+                1805014800,
+                -21600,
+                1
+              ],
+              [
+                1825574400,
+                -25200,
+                0
+              ],
+              [
+                1836464400,
+                -21600,
+                1
+              ],
+              [
+                1857024000,
+                -25200,
+                0
+              ],
+              [
+                1867914000,
+                -21600,
+                1
+              ],
+              [
+                1888473600,
+                -25200,
+                0
+              ],
+              [
+                1899363600,
+                -21600,
+                1
+              ],
+              [
+                1919923200,
+                -25200,
+                0
+              ],
+              [
+                1930813200,
+                -21600,
+                1
+              ],
+              [
+                1951372800,
+                -25200,
+                0
+              ],
+              [
+                1962867600,
+                -21600,
+                1
+              ],
+              [
+                1983427200,
+                -25200,
+                0
+              ],
+              [
+                1994317200,
+                -21600,
+                1
+              ],
+              [
+                2014876800,
+                -25200,
+                0
+              ],
+              [
+                2025766800,
+                -21600,
+                1
+              ],
+              [
+                2046326400,
+                -25200,
+                0
+              ]
+            ]
+          },
+          "online": {
+            "status": 1,
+            "bindId": "4MmFbGWENKIiATYr",
+            "who": 1
+          }
+        },
+        "digest": {}
+      }
+    },
+    "timestamp": 1748772119.1106036,
+    "device": {
+      "class": "MerossDevice",
+      "conf_protocol": "auto",
+      "pref_protocol": "http",
+      "curr_protocol": "http",
+      "polling_period": 30,
+      "device_response_size_min": 1537,
+      "device_response_size_max": 5000,
+      "MQTT": {
+        "cloud_profile": true,
+        "locally_active": false,
+        "mqtt_connection": true,
+        "mqtt_connected": true,
+        "mqtt_publish": false,
+        "mqtt_active": true
+      },
+      "HTTP": {
+        "http": true,
+        "http_active": true
+      },
+      "namespace_handlers": {
+        "Appliance.System.All": {
+          "lastrequest": 1748838006.5458074,
+          "lastresponse": 1748838006.6270614,
+          "polling_epoch_next": 1748838301.5458074,
+          "polling_strategy": "async_poll_all"
+        },
+        "Appliance.Control.FilterMaintenance": {
+          "lastrequest": 1748877627.5950096,
+          "lastresponse": 1748878581.74468,
+          "polling_epoch_next": 1748880376.74468,
+          "polling_strategy": "async_poll_smart"
+        },
+        "Appliance.Control.PhysicalLock": {
+          "lastrequest": 1748878930.1774387,
+          "lastresponse": 1748878930.682045,
+          "polling_epoch_next": 1748879230.682045,
+          "polling_strategy": "async_poll_lazy"
+        },
+        "Appliance.Control.Screen.Brightness": {
+          "lastrequest": 1748878930.1774035,
+          "lastresponse": 1748878930.682045,
+          "polling_epoch_next": 1748879230.682045,
+          "polling_strategy": "async_poll_lazy"
+        },
+        "Appliance.System.Runtime": {
+          "lastrequest": 1748878930.1774035,
+          "lastresponse": 1748878930.682045,
+          "polling_epoch_next": 1748879230.682045,
+          "polling_strategy": "async_poll_lazy"
+        },
+        "Appliance.System.Debug": {
+          "lastrequest": 0.0,
+          "lastresponse": 1748878629.8883612,
+          "polling_epoch_next": 1748878629.8883612,
+          "polling_strategy": null
+        },
+        "Appliance.Control.Thermostat.ModeC": {
+          "lastrequest": 0.0,
+          "lastresponse": 1748878881.4469297,
+          "polling_epoch_next": 1748879181.4469297,
+          "polling_strategy": null
+        },
+        "Appliance.Control.Thermostat.ScheduleB": {
+          "lastrequest": 1748878840.1097472,
+          "lastresponse": 1748878840.173291,
+          "polling_epoch_next": 1748879140.173291,
+          "polling_strategy": "async_poll_lazy"
+        },
+        "Appliance.Control.Thermostat.HoldAction": {
+          "lastrequest": 0.0,
+          "lastresponse": 1748878628.366168,
+          "polling_epoch_next": 1748878928.366168,
+          "polling_strategy": null
+        },
+        "Appliance.Config.DeviceCfg": {
+          "lastrequest": 0.0,
+          "lastresponse": 1748878580.5303996,
+          "polling_epoch_next": 1748878880.5303996,
+          "polling_strategy": null
+        },
+        "Appliance.Config.Info": {
+          "lastrequest": 0.0,
+          "lastresponse": 1748878580.647707,
+          "polling_epoch_next": 1748878880.647707,
+          "polling_strategy": null
+        },
+        "Appliance.Config.Matter": {
+          "lastrequest": 0.0,
+          "lastresponse": 1748878580.7767305,
+          "polling_epoch_next": 1748878880.7767305,
+          "polling_strategy": null
+        },
+        "Appliance.Config.NtpSite": {
+          "lastrequest": 0.0,
+          "lastresponse": 1748878580.9362314,
+          "polling_epoch_next": 1748878880.9362314,
+          "polling_strategy": null
+        },
+        "Appliance.Config.Sensor.Association": {
+          "lastrequest": 0.0,
+          "lastresponse": 1748878581.2137105,
+          "polling_epoch_next": 1748878881.2137105,
+          "polling_strategy": null
+        },
+        "Appliance.Control.AlertConfig": {
+          "lastrequest": 0.0,
+          "lastresponse": 1748878581.4584312,
+          "polling_epoch_next": 1748878881.4584312,
+          "polling_strategy": null
+        },
+        "Appliance.Control.AlertReport": {
+          "lastrequest": 0.0,
+          "lastresponse": 0.0,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Control.ChangeWiFi": {
+          "lastrequest": 0.0,
+          "lastresponse": 0.0,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Control.McuUpgrade": {
+          "lastrequest": 0.0,
+          "lastresponse": 0.0,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Control.Sensor.Association": {
+          "lastrequest": 0.0,
+          "lastresponse": 1748878582.0201046,
+          "polling_epoch_next": 1748878882.0201046,
+          "polling_strategy": null
+        },
+        "Appliance.Control.Sensor.HistoryX": {
+          "lastrequest": 0.0,
+          "lastresponse": 1748878582.1350477,
+          "polling_epoch_next": 1748878882.1350477,
+          "polling_strategy": null
+        },
+        "Appliance.Control.TempUnit": {
+          "lastrequest": 0.0,
+          "lastresponse": 0.0,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Control.Thermostat.Calibration": {
+          "lastrequest": 1748878840.109749,
+          "lastresponse": 1748878840.173291,
+          "polling_epoch_next": 1748879140.173291,
+          "polling_strategy": "async_poll_lazy"
+        },
+        "Appliance.Control.Thermostat.System": {
+          "lastrequest": 0.0,
+          "lastresponse": 1748878629.535292,
+          "polling_epoch_next": 1748878929.535292,
+          "polling_strategy": null
+        },
+        "Appliance.Control.Weather": {
+          "lastrequest": 0.0,
+          "lastresponse": 0.0,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.System.Online": {
+          "lastrequest": 0.0,
+          "lastresponse": 1748878629.588582,
+          "polling_epoch_next": 1748878929.588582,
+          "polling_strategy": null
+        }
+      },
+      "namespace_pushes": {
+        "Appliance.Control.FilterMaintenance": {
+          "filter": [
+            {
+              "channel": 0,
+              "life": 100,
+              "lmTime": 1748695021
+            }
+          ]
+        },
+        "Appliance.Control.PhysicalLock": {
+          "lock": [
+            {
+              "channel": 0,
+              "onoff": 0
+            }
+          ]
+        },
+        "Appliance.Control.Thermostat.ModeC": {
+          "control": [
+            {
+              "fan": {
+                "fMode": 0,
+                "speed": 0,
+                "hTime": 99999
+              },
+              "sensorTemp": 2200,
+              "currentTemp": 2200,
+              "more": {
+                "hdStatus": 0,
+                "humi": 495,
+                "cStatus": 0,
+                "hStatus": 0,
+                "fStatus": 0,
+                "aStatus": 0
+              },
+              "channel": 0,
+              "mode": 3,
+              "work": 2,
+              "targetTemp": {
+                "heat": 2100,
+                "cold": 2400
+              }
+            }
+          ]
+        },
+        "Appliance.Control.Thermostat.ScheduleB": {
+          "scheduleB": [
+            {
+              "pre": {
+                "enable": 2,
+                "time": 30
+              },
+              "tue": [
+                [
+                  360,
+                  2111,
+                  2611
+                ],
+                [
+                  900,
+                  2111,
+                  2388
+                ],
+                [
+                  180,
+                  2111,
+                  2611
+                ]
+              ],
+              "sun": [
+                [
+                  360,
+                  2111,
+                  2611
+                ],
+                [
+                  900,
+                  2111,
+                  2388
+                ],
+                [
+                  180,
+                  2111,
+                  2611
+                ]
+              ],
+              "mon": [
+                [
+                  360,
+                  2111,
+                  2611
+                ],
+                [
+                  900,
+                  2111,
+                  2388
+                ],
+                [
+                  180,
+                  2111,
+                  2611
+                ]
+              ],
+              "fri": [
+                [
+                  360,
+                  2111,
+                  2611
+                ],
+                [
+                  900,
+                  2111,
+                  2388
+                ],
+                [
+                  180,
+                  2111,
+                  2611
+                ]
+              ],
+              "sat": [
+                [
+                  360,
+                  2111,
+                  2611
+                ],
+                [
+                  900,
+                  2111,
+                  2388
+                ],
+                [
+                  180,
+                  2111,
+                  2611
+                ]
+              ],
+              "channel": 0,
+              "thu": [
+                [
+                  360,
+                  2111,
+                  2611
+                ],
+                [
+                  900,
+                  2111,
+                  2388
+                ],
+                [
+                  180,
+                  2111,
+                  2611
+                ]
+              ],
+              "wed": [
+                [
+                  360,
+                  2111,
+                  2611
+                ],
+                [
+                  900,
+                  2111,
+                  2388
+                ],
+                [
+                  180,
+                  2111,
+                  2611
+                ]
+              ]
+            }
+          ]
+        },
+        "Appliance.Control.Thermostat.HoldAction": {
+          "holdAction": [
+            {
+              "channel": 0,
+              "mode": 1,
+              "expire": 1748865629
+            }
+          ]
+        },
+        "Appliance.Config.DeviceCfg": {
+          "config": [
+            {
+              "channel": 0,
+              "mts300Cfg": {
+                "eH": 2,
+                "fan": {
+                  "wTime": 0
+                },
+                "threshold": {
+                  "heat1": 50,
+                  "heat2": 150,
+                  "heat3": 250,
+                  "cold1": 50,
+                  "cold2": 150,
+                  "aux1": 200,
+                  "aux2": 250,
+                  "aux3": 300,
+                  "hdTime": 30,
+                  "cdTime": 60,
+                  "auxHMTime": 2,
+                  "hmTime": 2,
+                  "cmTime": 5,
+                  "comdTime": 5,
+                  "auxHLOTempEnable": 0,
+                  "auxHLOTemp": 450,
+                  "crs": 0,
+                  "auxHrs": 0,
+                  "hrs": 0
+                }
+              }
+            }
+          ]
+        },
+        "Appliance.Config.Info": {
+          "info": {
+            "matter": {}
+          }
+        },
+        "Appliance.Config.Matter": {
+          "config": {
+            "matterPlatform": [
+              4996,
+              4933,
+              4937,
+              4939
+            ]
+          }
+        },
+        "Appliance.Config.Sensor.Association": {
+          "config": [
+            {
+              "channel": 0,
+              "temp": {
+                "association": 2
+              }
+            }
+          ]
+        },
+        "Appliance.Control.AlertConfig": {
+          "config": [
+            {
+              "channel": 0,
+              "type": 5,
+              "value": {
+                "mts300": {
+                  "hcMal": 1,
+                  "auxLO": 1,
+                  "auxLOT": 240
+                }
+              }
+            }
+          ]
+        },
+        "Appliance.Control.Thermostat.System": {
+          "control": [
+            {
+              "channel": 0,
+              "fLevel": 1,
+              "hLevel": 1,
+              "cLevel": 1,
+              "sysType": 0,
+              "hdType": 0,
+              "compTempEnable": 1,
+              "compType": 0,
+              "compTemp": 150,
+              "OBType": 0,
+              "AUXType": 0,
+              "AUXWorkType": 0,
+              "dType": 0,
+              "wire": {
+                "R": 2,
+                "Rh": 2,
+                "Rc": 1,
+                "C": 1,
+                "E": 2,
+                "WAux": 1
+              }
+            }
+          ]
+        },
+        "Appliance.System.Online": {
+          "online": {
+            "status": 1
+          }
+        }
+      },
+      "device_info": {
+        "uuid": "###############################0",
+        "onlineStatus": 1,
+        "devName": "Downstairs",
+        "devIconId": "device_mts300_us",
+        "bindTime": 1748625609,
+        "deviceType": "mts300",
+        "subType": "us",
+        "channels": [
+          {}
+        ],
+        "region": "us",
+        "fmwareVersion": "9.1.12",
+        "hdwareVersion": "9.0.0",
+        "userDevIcon": "",
+        "iconType": 1,
+        "domain": "###################1",
+        "reservedDomain": "###################1",
+        "hardwareCapabilities": []
+      }
+    },
+    "trace": [
+      [
+        "time",
+        "rxtx",
+        "protocol",
+        "method",
+        "namespace",
+        "data"
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "system": {
+            "hardware": {
+              "type": "mts300",
+              "subType": "us",
+              "version": "9.0.0",
+              "chipType": "rtl8720cm",
+              "uuid": "###############################0",
+              "macAddress": "################1"
+            },
+            "firmware": {
+              "version": "9.1.12",
+              "compileTime": "2024/12/25-10:24:50",
+              "encrypt": 1,
+              "wifiMac": "################1",
+              "innerIp": "#######1",
+              "server": "###################1",
+              "port": "@0",
+              "userId": "@0"
+            },
+            "time": {
+              "timestamp": 1748838005,
+              "timezone": "America/Denver",
+              "timeRule": [
+                [
+                  1741510800,
+                  -21600,
+                  1
+                ],
+                [
+                  1762070400,
+                  -25200,
+                  0
+                ],
+                [
+                  1772960400,
+                  -21600,
+                  1
+                ],
+                [
+                  1793520000,
+                  -25200,
+                  0
+                ],
+                [
+                  1805014800,
+                  -21600,
+                  1
+                ],
+                [
+                  1825574400,
+                  -25200,
+                  0
+                ],
+                [
+                  1836464400,
+                  -21600,
+                  1
+                ],
+                [
+                  1857024000,
+                  -25200,
+                  0
+                ],
+                [
+                  1867914000,
+                  -21600,
+                  1
+                ],
+                [
+                  1888473600,
+                  -25200,
+                  0
+                ],
+                [
+                  1899363600,
+                  -21600,
+                  1
+                ],
+                [
+                  1919923200,
+                  -25200,
+                  0
+                ],
+                [
+                  1930813200,
+                  -21600,
+                  1
+                ],
+                [
+                  1951372800,
+                  -25200,
+                  0
+                ],
+                [
+                  1962867600,
+                  -21600,
+                  1
+                ],
+                [
+                  1983427200,
+                  -25200,
+                  0
+                ],
+                [
+                  1994317200,
+                  -21600,
+                  1
+                ],
+                [
+                  2014876800,
+                  -25200,
+                  0
+                ],
+                [
+                  2025766800,
+                  -21600,
+                  1
+                ],
+                [
+                  2046326400,
+                  -25200,
+                  0
+                ]
+              ]
+            },
+            "online": {
+              "status": 1,
+              "bindId": "4MmFbGWENKIiATYr",
+              "who": 1
+            }
+          },
+          "digest": {}
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.Ability",
+        {
+          "Appliance.Config.DeviceCfg": {},
+          "Appliance.Config.Info": {},
+          "Appliance.Config.Key": {},
+          "Appliance.Config.Matter": {},
+          "Appliance.Config.NtpSite": {},
+          "Appliance.Config.Sensor.Association": {},
+          "Appliance.Config.Trace": {},
+          "Appliance.Config.Wifi": {},
+          "Appliance.Config.WifiList": {},
+          "Appliance.Config.WifiX": {},
+          "Appliance.Control.AlertConfig": {},
+          "Appliance.Control.AlertReport": {},
+          "Appliance.Control.Bind": {},
+          "Appliance.Control.ChangeWiFi": {},
+          "Appliance.Control.FilterMaintenance": {},
+          "Appliance.Control.McuUpgrade": {},
+          "Appliance.Control.Multiple": {
+            "maxCmdNum": 3
+          },
+          "Appliance.Control.PhysicalLock": {},
+          "Appliance.Control.Screen.Brightness": {},
+          "Appliance.Control.Sensor.Association": {},
+          "Appliance.Control.Sensor.HistoryX": {},
+          "Appliance.Control.TempUnit": {},
+          "Appliance.Control.Thermostat.Calibration": {},
+          "Appliance.Control.Thermostat.HoldAction": {},
+          "Appliance.Control.Thermostat.ModeC": {},
+          "Appliance.Control.Thermostat.ScheduleB": {},
+          "Appliance.Control.Thermostat.System": {},
+          "Appliance.Control.Unbind": {},
+          "Appliance.Control.Upgrade": {},
+          "Appliance.Control.Weather": {},
+          "Appliance.Digest.TimerX": {},
+          "Appliance.Digest.TriggerX": {},
+          "Appliance.Mcu.Firmware": {},
+          "Appliance.System.Ability": {},
+          "Appliance.System.All": {},
+          "Appliance.System.Clock": {},
+          "Appliance.System.Debug": {},
+          "Appliance.System.Firmware": {},
+          "Appliance.System.Hardware": {},
+          "Appliance.System.Online": {},
+          "Appliance.System.Position": {},
+          "Appliance.System.Report": {},
+          "Appliance.System.Runtime": {},
+          "Appliance.System.Time": {}
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Config.DeviceCfg",
+        {}
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Config.DeviceCfg",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "mts300Cfg": {
+                "eH": 2,
+                "fan": {
+                  "wTime": 0
+                },
+                "threshold": {
+                  "heat1": 50,
+                  "heat2": 150,
+                  "heat3": 250,
+                  "cold1": 50,
+                  "cold2": 150,
+                  "aux1": 200,
+                  "aux2": 250,
+                  "aux3": 300,
+                  "hdTime": 30,
+                  "cdTime": 60,
+                  "auxHMTime": 2,
+                  "hmTime": 2,
+                  "cmTime": 5,
+                  "comdTime": 5,
+                  "auxHLOTempEnable": 0,
+                  "auxHLOTemp": 450,
+                  "crs": 0,
+                  "auxHrs": 0,
+                  "hrs": 0
+                }
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:PUSH namespace:Appliance.Config.DeviceCfg payload:{'config': [{'channel': 0, 'mts300Cfg': {'eH': 2, 'fan': {'wTime': 0}, 'threshold': {'heat1': 50, 'heat2': 150, 'heat3': 250, 'cold1': 50, 'cold2': 150, 'aux1': 200, 'aux2': 250, 'aux3': 300, 'hdTime': 30, 'cdTime': 60, 'auxHMTime': 2, 'hmTime': 2, 'cmTime': 5, 'comdTime': 5, 'auxHLOTempEnable': 0, 'auxHLOTemp': 450, 'crs': 0, 'auxHrs': 0, 'hrs': 0}}}]}"
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.DeviceCfg",
+        {
+          "deviceCfg": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Config.DeviceCfg (messageId:535f3fb237934626ba423f96326c5eca ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.DeviceCfg",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.DeviceCfg",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Config.DeviceCfg payload:{'config': []}"
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.DeviceCfg",
+        {
+          "config": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.DeviceCfg",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "mts300Cfg": {
+                "eH": 2,
+                "fan": {
+                  "wTime": 0
+                },
+                "threshold": {
+                  "heat1": 50,
+                  "heat2": 150,
+                  "heat3": 250,
+                  "cold1": 50,
+                  "cold2": 150,
+                  "aux1": 200,
+                  "aux2": 250,
+                  "aux3": 300,
+                  "hdTime": 30,
+                  "cdTime": 60,
+                  "auxHMTime": 2,
+                  "hmTime": 2,
+                  "cmTime": 5,
+                  "comdTime": 5,
+                  "auxHLOTempEnable": 0,
+                  "auxHLOTemp": 450,
+                  "crs": 0,
+                  "auxHrs": 0,
+                  "hrs": 0
+                }
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Config.DeviceCfg payload:{'config': [{'channel': 0, 'mts300Cfg': {'eH': 2, 'fan': {'wTime': 0}, 'threshold': {'heat1': 50, 'heat2': 150, 'heat3': 250, 'cold1': 50, 'cold2': 150, 'aux1': 200, 'aux2': 250, 'aux3': 300, 'hdTime': 30, 'cdTime': 60, 'auxHMTime': 2, 'hmTime': 2, 'cmTime': 5, 'comdTime': 5, 'auxHLOTempEnable': 0, 'auxHLOTemp': 450, 'crs': 0, 'auxHrs': 0, 'hrs': 0}}}]}"
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Config.Info",
+        {}
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Config.Info",
+        {
+          "info": {
+            "matter": {}
+          }
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Info",
+        {
+          "info": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.Info",
+        {
+          "info": {
+            "matter": {}
+          }
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Config.Matter",
+        {}
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Config.Matter",
+        {
+          "config": {
+            "matterPlatform": [
+              4996,
+              4933,
+              4937,
+              4939
+            ]
+          }
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:PUSH namespace:Appliance.Config.Matter payload:{'config': {'matterPlatform': [4996, 4933, 4937, 4939]}}"
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Matter",
+        {
+          "matter": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Config.Matter (messageId:ea37a58043fd4eb8ac3d0c919cc34521 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Matter",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Config.Matter (messageId:1e486844aaea402e80375ea8b85bcc8d ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Config.NtpSite",
+        {}
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "RX",
+        "http",
+        "SET",
+        "Appliance.Config.NtpSite",
+        {}
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:SET namespace:Appliance.Config.NtpSite payload:{}"
+      ],
+      [
+        "2025/06/02 - 09:42:52",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.NtpSite",
+        {
+          "ntpSite": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Config.NtpSite (messageId:970602545e2044c59f88efbf9612aace ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Config.Sensor.Association",
+        {}
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Config.Sensor.Association",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "temp": {
+                "association": 2
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:PUSH namespace:Appliance.Config.Sensor.Association payload:{'config': [{'channel': 0, 'temp': {'association': 2}}]}"
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Sensor.Association",
+        {
+          "association": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Config.Sensor.Association (messageId:de989e015125453e9348bf7de5adf509 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Sensor.Association",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.Sensor.Association",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Config.Sensor.Association payload:{'config': []}"
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Sensor.Association",
+        {
+          "config": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.Sensor.Association",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "temp": {
+                "association": 2
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Config.Sensor.Association payload:{'config': [{'channel': 0, 'temp': {'association': 2}}]}"
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.AlertConfig",
+        {}
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Control.AlertConfig",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "type": 5,
+              "value": {
+                "mts300": {
+                  "hcMal": 1,
+                  "auxLO": 1,
+                  "auxLOT": 240
+                }
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:PUSH namespace:Appliance.Control.AlertConfig payload:{'config': [{'channel': 0, 'type': 5, 'value': {'mts300': {'hcMal': 1, 'auxLO': 1, 'auxLOT': 240}}}]}"
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.AlertConfig",
+        {
+          "alertConfig": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.AlertConfig (messageId:b4a35e14c18b437c83161e918439a859 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.AlertConfig",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.AlertConfig",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.AlertConfig payload:{'config': []}"
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.AlertConfig",
+        {
+          "config": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.AlertConfig",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "type": 5,
+              "value": {
+                "mts300": {
+                  "hcMal": 1,
+                  "auxLO": 1,
+                  "auxLOT": 240
+                }
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.AlertConfig payload:{'config': [{'channel': 0, 'type': 5, 'value': {'mts300': {'hcMal': 1, 'auxLO': 1, 'auxLOT': 240}}}]}"
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.AlertReport",
+        {}
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.Control.AlertReport (messageId:71db03c850654907bec4fa40d06fc7b1 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.AlertReport",
+        {
+          "alertReport": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.AlertReport (messageId:2d5577bb3b3746ba9815dd6350afe70c ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.ChangeWiFi",
+        {}
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.Control.ChangeWiFi (messageId:9ef2fe95431a45808702c73d5c89ec76 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/02 - 09:42:53",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.ChangeWiFi",
+        {
+          "changeWiFi": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:54",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.ChangeWiFi (messageId:b969e9aed00a49e985aab594ea8b8c69 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/02 - 09:42:54",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.FilterMaintenance",
+        {}
+      ],
+      [
+        "2025/06/02 - 09:42:54",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Control.FilterMaintenance",
+        {
+          "filter": [
+            {
+              "channel": 0,
+              "life": 100,
+              "lmTime": 1748695021
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:54",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.McuUpgrade",
+        {}
+      ],
+      [
+        "2025/06/02 - 09:42:54",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.Control.McuUpgrade (messageId:25acc721313241b88815cd7dc6d9abae ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/02 - 09:42:54",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.McuUpgrade",
+        {
+          "mcuUpgrade": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:54",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.McuUpgrade (messageId:9f757e6b917b4bd78812605e50bbd581 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/02 - 09:42:54",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Screen.Brightness",
+        {
+          "brightness": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:55",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Screen.Brightness",
+        {
+          "brightness": [
+            {
+              "channel": 0,
+              "standby": 50,
+              "operation": 100,
+              "standbyView": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:55",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.Sensor.Association",
+        {}
+      ],
+      [
+        "2025/06/02 - 09:42:55",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.Control.Sensor.Association (messageId:7abb672b8ebb471ba61707146b1106fa ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/02 - 09:42:55",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Sensor.Association",
+        {
+          "association": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:55",
+        "RX",
+        "http",
+        "GET",
+        "Appliance.Control.Sensor.Association",
+        {
+          "control": [
+            {
+              "channel": 0,
+              "value": [
+                "temp"
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:55",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GET namespace:Appliance.Control.Sensor.Association payload:{'control': [{'channel': 0, 'value': ['temp']}]}"
+      ],
+      [
+        "2025/06/02 - 09:42:55",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.Sensor.HistoryX",
+        {}
+      ],
+      [
+        "2025/06/02 - 09:42:55",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.Control.Sensor.HistoryX (messageId:12b35688d01d475fac9d61b77ff60ca0 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/02 - 09:42:55",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Sensor.HistoryX",
+        {
+          "history": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:55",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Sensor.HistoryX",
+        {
+          "history": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:42:55",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.Sensor.HistoryX payload:{'history': []}"
+      ],
+      [
+        "2025/06/02 - 09:42:55",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Sensor.HistoryX",
+        {
+          "history": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/02 - 09:43:05",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.Sensor.HistoryX (messageId:bb94dfd1840e4c0dbeb725958b47dfa6 TimeoutError:)"
+      ],
+      [
+        "2025/06/02 - 09:43:05",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.TempUnit",
+        {
+          "tempUnit": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:43:10",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Polling begin"
+      ],
+      [
+        "2025/06/02 - 09:43:10",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Polling end"
+      ],
+      [
+        "2025/06/02 - 09:43:21",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.TempUnit (messageId:ba0ec65939004a8ab3b6104b4f249fef ConnectionTimeoutError:Connection timeout to host http://10.0.0.4/config)"
+      ],
+      [
+        "2025/06/02 - 09:43:21",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Thermostat.Calibration",
+        {
+          "calibration": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:43:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.Thermostat.Calibration (messageId:fe27dd8912a0438cbf63a9e02b6c01a8 ClientConnectorError:Cannot connect to host 10.0.0.4:80 ssl:default [Connect call failed ('10.0.0.4', 80)])"
+      ],
+      [
+        "2025/06/02 - 09:43:33",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Thermostat.HoldAction",
+        {
+          "holdAction": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:43:36",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.Thermostat.HoldAction (messageId:6628d4813039495fba6c62da3404292a ClientConnectorError:Cannot connect to host 10.0.0.4:80 ssl:default [Connect call failed ('10.0.0.4', 80)])"
+      ],
+      [
+        "2025/06/02 - 09:43:36",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.Thermostat.ModeC",
+        {}
+      ],
+      [
+        "2025/06/02 - 09:43:40",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.Control.Thermostat.ModeC (messageId:13b5caf708ff48c2a7ec2174a99cb472 ClientConnectorError:Cannot connect to host 10.0.0.4:80 ssl:default [Connect call failed ('10.0.0.4', 80)])"
+      ],
+      [
+        "2025/06/02 - 09:43:40",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Thermostat.ModeC",
+        {
+          "control": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:43:40",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Polling begin"
+      ],
+      [
+        "2025/06/02 - 09:43:40",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Polling end"
+      ],
+      [
+        "2025/06/02 - 09:43:43",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.Thermostat.ModeC (messageId:728eff57fc444da7b75fbbde28073c5d ClientConnectorError:Cannot connect to host 10.0.0.4:80 ssl:default [Connect call failed ('10.0.0.4', 80)])"
+      ],
+      [
+        "2025/06/02 - 09:43:43",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Thermostat.ScheduleB",
+        {
+          "scheduleB": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:43:46",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Thermostat.ScheduleB",
+        {
+          "scheduleB": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:43:46",
+        "",
+        "auto",
+        "LOG",
+        "warning",
+        "Incorrect timestamp: 1748879007 seconds behind HA (174887901 on average)"
+      ],
+      [
+        "2025/06/02 - 09:43:46",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.Thermostat.ScheduleB payload:{'scheduleB': []}"
+      ],
+      [
+        "2025/06/02 - 09:43:46",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.Thermostat.System",
+        {}
+      ],
+      [
+        "2025/06/02 - 09:43:47",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Control.Thermostat.System",
+        {
+          "control": [
+            {
+              "channel": 0,
+              "fLevel": 1,
+              "hLevel": 1,
+              "cLevel": 1,
+              "sysType": 0,
+              "hdType": 0,
+              "compTempEnable": 1,
+              "compType": 0,
+              "compTemp": 150,
+              "OBType": 0,
+              "AUXType": 0,
+              "AUXWorkType": 0,
+              "dType": 0,
+              "wire": {
+                "R": 2,
+                "Rh": 2,
+                "Rc": 1,
+                "C": 1,
+                "E": 2,
+                "WAux": 1
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/02 - 09:43:47",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:PUSH namespace:Appliance.Control.Thermostat.System payload:{'control': [{'channel': 0, 'fLevel': 1, 'hLevel': 1, 'cLevel': 1, 'sysType': 0, 'hdType': 0, 'compTempEnable': 1, 'compType': 0, 'compTemp': 150, 'OBType': 0, 'AUXType': 0, 'AUXWorkType': 0, 'dType': 0, 'wire': {'R': 2, 'Rh': 2, 'Rc': 1, 'C': 1, 'E': 2, 'WAux': 1}}]}"
+      ],
+      [
+        "2025/06/02 - 09:43:47",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Thermostat.System",
+        {
+          "system": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:43:48",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.Thermostat.System (messageId:8deec7ee2fd04786bac49a65c84d19a6 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/02 - 09:43:48",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Thermostat.System",
+        {
+          "control": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:43:48",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Thermostat.System",
+        {
+          "control": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:43:48",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.Thermostat.System payload:{'control': []}"
+      ],
+      [
+        "2025/06/02 - 09:43:48",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Thermostat.System",
+        {
+          "control": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/02 - 09:43:48",
+        "RX",
+        "mqtt",
+        "PUSH",
+        "Appliance.System.Online",
+        {
+          "online": {
+            "status": 1
+          }
+        }
+      ],
+      [
+        "2025/06/02 - 09:43:48",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Thermostat.System",
+        {
+          "control": [
+            {
+              "channel": 0,
+              "fLevel": 1,
+              "hLevel": 1,
+              "cLevel": 1,
+              "sysType": 0,
+              "hdType": 0,
+              "compTempEnable": 1,
+              "compType": 0,
+              "compTemp": 150,
+              "OBType": 0,
+              "AUXType": 0,
+              "AUXWorkType": 0,
+              "dType": 0,
+              "wire": {
+                "R": 2,
+                "Rh": 2,
+                "Rc": 1,
+                "C": 1,
+                "E": 2,
+                "WAux": 1
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2025/06/02 - 09:43:48",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.Thermostat.System payload:{'control': [{'channel': 0, 'fLevel': 1, 'hLevel': 1, 'cLevel': 1, 'sysType': 0, 'hdType': 0, 'compTempEnable': 1, 'compType': 0, 'compTemp': 150, 'OBType': 0, 'AUXType': 0, 'AUXWorkType': 0, 'dType': 0, 'wire': {'R': 2, 'Rh': 2, 'Rc': 1, 'C': 1, 'E': 2, 'WAux': 1}}]}"
+      ],
+      [
+        "2025/06/02 - 09:43:48",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.Weather",
+        {}
+      ],
+      [
+        "2025/06/02 - 09:43:48",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.Control.Weather (messageId:a1465fa09fc44c24b87f4678c2770307 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/02 - 09:43:48",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Weather",
+        {
+          "weather": []
+        }
+      ],
+      [
+        "2025/06/02 - 09:43:48",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.Weather (messageId:70abcdbf2f224bc996df0083babb3346 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/06/02 - 09:43:48",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Debug",
+        {
+          "debug": {}
+        }
+      ],
+      [
+        "2025/06/02 - 09:43:48",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Debug",
+        {
+          "debug": {
+            "system": {
+              "version": "9.1.12",
+              "sysUpTime": "0h0m22s",
+              "UTC": 1748879028,
+              "localTimeOffset": -21600,
+              "localTime": "Mon Jun  2 09:43:48 2025",
+              "suncalc": "5:59;20:52",
+              "memTotal": 3978240,
+              "memFree": 3577304,
+              "memMini": 3577240
+            },
+            "network": {
+              "linkStatus": "connected",
+              "snr": 32,
+              "channel": 4,
+              "signal": 100,
+              "rssi": -37,
+              "ssid": "#0",
+              "gatewayMac": "################1",
+              "innerIp": "#######1",
+              "wifiDisconnectCount": 0,
+              "wifiDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            },
+            "cloud": {
+              "linkStatus": "connecting",
+              "activeServer": "###################1",
+              "mainServer": "###################1",
+              "mainPort": "@0",
+              "secondServer": "#2",
+              "secondPort": "@1",
+              "userId": "@0",
+              "sysConnectTime": "Thu Jan  1 00:00:00 1970",
+              "sysOnlineTime": "485799h43m48s",
+              "sysDisconnectCount": 0,
+              "iotDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2025/06/02 - 09:43:48",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2025/06/02 - 09:43:48",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 100,
+            "ssid": "#0"
+          }
+        }
+      ]
+    ]
+  }
+}

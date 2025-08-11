@@ -1,26 +1,61 @@
 from homeassistant.components import number as haec
 
 from custom_components.meross_lan.cover import MLRollerShutterConfigNumber
-from custom_components.meross_lan.devices.garageDoor import (
+from custom_components.meross_lan.devices.garagedoor import (
     MLGarageConfigNumber,
     MLGarageMultipleConfigNumber,
 )
 from custom_components.meross_lan.devices.hub import MLHubSensorAdjustNumber
-from custom_components.meross_lan.devices.mts100 import Mts100AdjustNumber
-from custom_components.meross_lan.devices.thermostat import (
+from custom_components.meross_lan.devices.hub.mts100 import Mts100Climate
+from custom_components.meross_lan.devices.thermostat.mts200 import Mts200Climate
+from custom_components.meross_lan.devices.thermostat.mts300 import Mts300Climate
+from custom_components.meross_lan.devices.thermostat.mts960 import Mts960Climate
+from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
     MLScreenBrightnessNumber,
-    MtsRichTemperatureNumber,
+    MtsCommonTemperatureExtNumber,
+    MtsDeadZoneNumber,
+    MtsFrostNumber,
+    MtsOverheatNumber,
+    MtsThermostatClimate,
+    mn_t,
 )
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 from custom_components.meross_lan.number import MLConfigNumber, MLNumber
+from custom_components.meross_lan.switch import MLEmulatedSwitch
 
 from tests.entities import EntityComponentTest
+
+_MTS100_ENTITES = [
+    Mts100Climate.AdjustNumber,
+    Mts100Climate.SetPointNumber,
+    Mts100Climate.SetPointNumber,
+    Mts100Climate.SetPointNumber,
+]
 
 
 class EntityTest(EntityComponentTest):
 
     ENTITY_TYPE = haec.NumberEntity
 
+    DIGEST_ENTITIES = {
+        mc.KEY_THERMOSTAT: {
+            mc.KEY_MODE: [
+                Mts200Climate.AdjustNumber,
+                Mts200Climate.SetPointNumber,
+                Mts200Climate.SetPointNumber,
+                Mts200Climate.SetPointNumber,
+            ],
+            mc.KEY_MODEB: [
+                Mts960Climate.AdjustNumber,
+                Mts960Climate.TimerConfigNumber,
+                Mts960Climate.TimerConfigNumber,
+                Mts960Climate.TimerConfigNumber,
+            ],
+        },
+    }
     NAMESPACES_ENTITIES = {
         mn.Appliance_GarageDoor_Config.name: [MLGarageConfigNumber],
         mn.Appliance_GarageDoor_MultipleConfig.name: [MLGarageMultipleConfigNumber],
@@ -32,27 +67,59 @@ class EntityTest(EntityComponentTest):
             MLScreenBrightnessNumber,
             MLScreenBrightnessNumber,
         ],
+        mn_t.Appliance_Control_Thermostat_Calibration.name: [
+            MtsThermostatClimate.AdjustNumber
+        ],
+        mn_t.Appliance_Control_Thermostat_DeadZone.name: [MtsDeadZoneNumber],
+        mn_t.Appliance_Control_Thermostat_Frost.name: [MtsFrostNumber],
+        mn_t.Appliance_Control_Thermostat_ModeC.name: [
+            Mts300Climate.AdjustNumber,
+            MLConfigNumber,  # humidity_calibration
+            MLConfigNumber,  # fan_hold_time
+        ],
+        mn_t.Appliance_Control_Thermostat_Overheat.name: [MtsOverheatNumber],
     }
     HUB_SUBDEVICES_ENTITIES = {
         mc.TYPE_MS100: [MLHubSensorAdjustNumber, MLHubSensorAdjustNumber],
-        mc.TYPE_MTS100: [Mts100AdjustNumber],
-        mc.TYPE_MTS100V3: [Mts100AdjustNumber],
-        mc.TYPE_MTS150: [Mts100AdjustNumber],
+        mc.TYPE_MTS100: _MTS100_ENTITES,
+        mc.TYPE_MTS100V3: _MTS100_ENTITES,
+        mc.TYPE_MTS150: _MTS100_ENTITES,
     }
 
     async def async_test_each_callback(self, entity: MLNumber):
-        if isinstance(entity, MtsRichTemperatureNumber):
+        if isinstance(entity, MtsThermostatClimate.AdjustNumber):
+            # This is to intercept thermostat Calibration namespace requirement where
+            # every MtsThermostatClimate descendant should instantiate
+            # MtsThermostatClimate.AdjustNumber or a descendant
+            EntityComponentTest.expected_entity_types.remove(
+                MtsThermostatClimate.AdjustNumber
+            )
+        elif isinstance(entity, MtsCommonTemperatureExtNumber):
             # rich temperatures are set to 'unavailable' when
-            # the corresponding function is 'off'
-            if switch := entity.switch:
-                if not switch.is_on:
-                    return
+            # the corresponding function is 'off'. We'll so use
+            # the associated switch to turn it on in case.
+            switch = entity.switch
+            ison = switch.is_on
+            assert ison is entity.available  # either both True or False
+            if not ison:
+                await switch.async_turn_on()
+        elif entity.entitykey == "fan_hold_time":
+            # This entity too (mts300) might be unavailable if
+            # the device is configured to disable 'fan hold'.
+            # Again we can control this function through a dedicated switch.
+            device = self.device_context.device
+            switch = device.entities[f"{entity.channel}_fan_hold_enable"]
+            assert type(switch) is MLEmulatedSwitch
+            # Here we cannot check for availability consistence
+            # since at start it is a bit messed up.
+            if not switch.is_on:
+                await switch.async_turn_on()
         await super().async_test_each_callback(entity)
 
     async def async_test_enabled_callback(self, entity: MLNumber):
         is_config_number = isinstance(entity, MLConfigNumber)
         states = self.hass_states
-        time_mocker = self.device_context.time
+        time_mocker = self.device_context.time_mock
         await self.async_service_call(
             haec.SERVICE_SET_VALUE, {haec.ATTR_VALUE: entity.max_value}
         )
@@ -70,7 +137,7 @@ class EntityTest(EntityComponentTest):
 
     async def async_test_disabled_callback(self, entity: MLNumber):
         is_config_number = isinstance(entity, MLConfigNumber)
-        time_mocker = self.device_context.time
+        time_mocker = self.device_context.time_mock
         await entity.async_set_native_value(entity.native_max_value)
         if is_config_number:
             await time_mocker.async_tick(entity.DEBOUNCE_DELAY)

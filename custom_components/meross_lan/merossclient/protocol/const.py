@@ -1,7 +1,8 @@
 """
-    static constants symbols for Meross protocol symbols/semantics
+static constants symbols for Meross protocol symbols/semantics
 """
 
+import enum
 import collections
 import re
 
@@ -279,6 +280,10 @@ STATUS_ONLINE = 1
 STATUS_OFFLINE = 2
 STATUS_UPGRADING = 3
 
+# Appliance.Control.TempUnit
+TEMPUNIT_CELSIUS = 1
+TEMPUNIT_FAHRENHEIT = 2
+
 # light bulb capacity enums
 LIGHT_CAPACITY_RGB = 1
 LIGHT_CAPACITY_TEMPERATURE = 2
@@ -301,16 +306,14 @@ ROLLERSHUTTER_POSITION_STOP = -1
 ROLLERSHUTTER_POSITION_OPENED = 100
 ROLLERSHUTTER_POSITION_CLOSED = 0
 
-MTS_TEMP_SCALE = 10  # native mts temperatures expressed in tenths of °C
-MTS960_TEMP_SCALE = 100  # native mts960 temperatures expressed in hundredths of °C
-
 
 # mts100 (and the likes..) valves mode
+MTS100_TEMP_SCALE = 10  # native mts temperatures expressed in tenths of °C
 MTS100_MODE_CUSTOM = 0
-MTS100_MODE_HEAT = 1
-MTS100_MODE_COOL = 2
-MTS100_MODE_ECO = 4
-MTS100_MODE_AUTO = 3
+MTS100_MODE_HEAT = 1  # preset heat/comfort
+MTS100_MODE_COOL = 2  # preset cool/night
+MTS100_MODE_ECO = 4  # preset away/eco
+MTS100_MODE_AUTO = 3  # schedule mode
 MTS100_MODE_TO_CURRENTSET_MAP = {
     MTS100_MODE_CUSTOM: KEY_CUSTOM,
     MTS100_MODE_HEAT: KEY_COMFORT,
@@ -320,11 +323,16 @@ MTS100_MODE_TO_CURRENTSET_MAP = {
 }
 
 
+MTS_HOLDACTION_PERMANENT = 0
+MTS_HOLDACTION_NEXT_SCHEDULE = 1
+MTS_HOLDACTION_TIMER = 2
+
 # I don't have an MTS200 to test so these are inferred from a user trace
-MTS200_MODE_HEAT = 0
-MTS200_MODE_COOL = 1
-MTS200_MODE_ECO = 2
-MTS200_MODE_AUTO = 3
+MTS200_TEMP_SCALE = 10  # native mts temperatures expressed in tenths of °C
+MTS200_MODE_HEAT = 0  # preset heat/comfort
+MTS200_MODE_COOL = 1  # preset cool/night
+MTS200_MODE_ECO = 2  # preset away/eco
+MTS200_MODE_AUTO = 3  # schedule mode
 MTS200_MODE_MANUAL = 4
 MTS200_MODE_TO_TARGETTEMP_MAP = {
     MTS200_MODE_MANUAL: KEY_MANUALTEMP,
@@ -347,6 +355,29 @@ MTS200_OVERHEAT_WARNING_MAP = {
     MTS200_OVERHEAT_WARNING_NOTCONNECTED: "disconnected",
 }
 
+MTS300_TEMP_SCALE = 100  # 1°C == 100 device value
+MTS300_MODE_OFF = 0
+MTS300_MODE_HEAT = 1
+MTS300_MODE_COOL = 2
+MTS300_MODE_AUTO = 3  # switching automatically between heat/cool
+MTS300_WORK_MANUAL = 1  # manual target temp
+MTS300_WORK_SCHEDULE = 2  # using the schedule to set the target temp
+MTS300_MODE_TO_TARGETTEMP_MAP = {
+    MTS300_MODE_OFF: "",
+    MTS300_MODE_HEAT: "heat",
+    MTS300_MODE_COOL: "cold",
+    MTS300_MODE_AUTO: "",
+    None: "",
+}
+MTS300_FAN_MODE_AUTO = 0
+MTS300_FAN_MODE_ON = 1
+MTS300_FAN_SPEED_AUTO = 0
+MTS300_FAN_SPEED_LOW = 1
+MTS300_FAN_SPEED_MEDIUM = 2
+MTS300_FAN_SPEED_HIGH = 3
+MTS300_FAN_HOLD_DISABLED = 99999
+
+MTS960_TEMP_SCALE = 100  # 1°C == 100 device value
 # inferring the mts960 modes from the manual
 MTS960_MODE_HEAT_COOL = 1
 MTS960_MODE_SCHEDULE = 2
@@ -485,10 +516,31 @@ TYPE_NAME_MAP[TYPE_MS400] = "Smart Water Leak Sensor"
 TYPE_MS600 = "ms600"
 TYPE_NAME_MAP[TYPE_MS600] = "Smart Presence Sensor"
 
-# REFOSS device types
-TYPE_EM06 = "em06"
-TYPE_NAME_MAP[TYPE_EM06] = "Smart Energy Monitor"
 
+# REFOSS device types
+_SMART_ENERGY_MONITOR = "Smart Energy Monitor"
+
+
+class RefossModel(enum.Enum):
+    em06 = _SMART_ENERGY_MONITOR
+    em16 = _SMART_ENERGY_MONITOR
+    em = _SMART_ENERGY_MONITOR
+    p11 = TYPE_NAME_MAP[TYPE_MSS310]  # Smart Plug
+    r10 = TYPE_NAME_MAP["mss"]  # Smart Switch
+    r11 = TYPE_NAME_MAP["mss"]  # Smart Switch
+    r21 = TYPE_NAME_MAP["mss"]  # Smart Switch
+    rsg = TYPE_NAME_MAP["msg"]  # Garage Door
+
+    @staticmethod
+    def match(type: str):
+        for _rt in RefossModel:
+            if type.startswith(_rt.name):
+                return _rt
+        return None
+
+
+for _rt in RefossModel:
+    TYPE_NAME_MAP[_rt.name] = _rt.value
 #
 # HUB helpers symbols
 #
@@ -500,5 +552,9 @@ MTS100_ALL_TYPESET = {TYPE_MTS150, TYPE_MTS150P, TYPE_MTS100V3, TYPE_MTS100}
     GP constants
 """
 MANUFACTURER = "Meross"
+HEADER_TRIGGERSRC_DEFAULT = HEADER_FROM_DEFAULT = "MerossClient"
+HEADER_TRIGGERSRC_CLOUDCONTROL = "CloudControl"
+HEADER_TRIGGERSRC_DEVBOOT = "DevBoot"
+HEADER_TRIGGERSRC_DEVICE = "Device"
 MEROSS_MACADDRESS = "48:e1:e9:xx:xx:xx"
 MQTT_DEFAULT_PORT = 443

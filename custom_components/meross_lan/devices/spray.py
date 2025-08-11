@@ -1,7 +1,7 @@
 import typing
 
 from ..helpers.entity import MEDictChannelMixin
-from ..merossclient import const as mc, namespaces as mn
+from ..merossclient.protocol import const as mc, namespaces as mn
 from ..select import MLConfigSelect
 
 if typing.TYPE_CHECKING:
@@ -34,6 +34,8 @@ class MLSpray(MEDictChannelMixin, MLConfigSelect):
     }
 
     manager: "Device"
+
+    entity_category = None
 
     def __init__(self, manager: "Device", channel: object):
         super().__init__(manager, channel, mc.KEY_SPRAY)

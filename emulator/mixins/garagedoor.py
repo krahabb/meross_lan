@@ -2,21 +2,23 @@
 
 import asyncio
 from random import randint
-import typing
+from typing import TYPE_CHECKING
 
 from custom_components.meross_lan.merossclient import (
-    const as mc,
     get_element_by_key,
-    namespaces as mn,
     update_dict_strict,
     update_dict_strict_by_key,
 )
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 
-if typing.TYPE_CHECKING:
-    from .. import MerossEmulator
+if TYPE_CHECKING:
+    from . import MerossEmulator
 
 
-class GarageDoorMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+class GarageDoorMixin(MerossEmulator if TYPE_CHECKING else object):
 
     OPENDURATION = 2
     CLOSEDURATION = 10
@@ -37,16 +39,14 @@ class GarageDoorMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 )
 
     def _SET_Appliance_GarageDoor_Config(self, header, payload):
-        p_config = self.descriptor.namespaces[mn.Appliance_GarageDoor_Config.name][
-            mc.KEY_CONFIG
-        ]
+        p_config = self.namespaces[mn.Appliance_GarageDoor_Config.name][mc.KEY_CONFIG]
         update_dict_strict(p_config, payload[mc.KEY_CONFIG])
         return mc.METHOD_SETACK, {}
 
     def _SET_Appliance_GarageDoor_MultipleConfig(self, header, payload):
-        p_config: list = self.descriptor.namespaces[
-            mn.Appliance_GarageDoor_MultipleConfig.name
-        ][mc.KEY_CONFIG]
+        p_config: list = self.namespaces[mn.Appliance_GarageDoor_MultipleConfig.name][
+            mc.KEY_CONFIG
+        ]
         p_state: list = self.descriptor.digest[mc.KEY_GARAGEDOOR]
         for p_payload_channel in payload[mc.KEY_CONFIG]:
             """{"channel":3,"doorEnable":0,"timestamp":1699130748,"timestampMs":663,"signalClose":10000,"signalOpen":10000,"buzzerEnable":1}"""

@@ -1,11 +1,11 @@
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.components import number
 
 from .helpers import entity as me, reverse_lookup
-from .merossclient import const as mc
+from .merossclient.protocol import const as mc
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from typing import Unpack
 
     from homeassistant.config_entries import ConfigEntry
@@ -29,6 +29,14 @@ class MLNumber(me.MLNumericEntity, number.NumberEntity):
     These in turn will be managed with HA state-restoration.
     """
 
+    if TYPE_CHECKING:
+        manager: "BaseDevice"
+        # HA core entity attributes:
+        mode: number.NumberMode
+        native_max_value: float
+        native_min_value: float
+        native_step: float
+
     PLATFORM = number.DOMAIN
     DeviceClass = number.NumberDeviceClass
 
@@ -42,14 +50,10 @@ class MLNumber(me.MLNumericEntity, number.NumberEntity):
         DeviceClass.TEMPERATURE: me.MLEntity.hac.UnitOfTemperature.CELSIUS,
     }
 
-    manager: "BaseDevice"
-
     # HA core entity attributes:
     entity_category = me.MLNumericEntity.EntityCategory.CONFIG
-    mode: number.NumberMode = number.NumberMode.BOX
-    native_max_value: float
-    native_min_value: float
-    native_step: float
+    mode = number.NumberMode.BOX
+    native_step = 1
 
 
 class MLConfigNumber(me.MEListChannelMixin, MLNumber):
@@ -128,7 +132,8 @@ class MLConfigNumber(me.MEListChannelMixin, MLNumber):
 
 class MLEmulatedNumber(me.MEPartialAvailableMixin, MLNumber):
     """
-    Number entity for locally (HA recorder) stored parameters.
+    Number entity not directly binded to a device parameter (like MLConfigNumber)
+    but used to store in HA a bit of component configuration.
     """
 
     async def async_added_to_hass(self):
@@ -139,86 +144,3 @@ class MLEmulatedNumber(me.MEPartialAvailableMixin, MLNumber):
 
     async def async_set_native_value(self, value: float):
         self.update_native_value(value)
-
-
-class MtsTemperatureNumber(MLConfigNumber):
-    """
-    Common number entity for representing MTS temperatures configuration
-    """
-
-    # HA core entity attributes:
-    _attr_suggested_display_precision = 1
-
-    __slots__ = ("climate",)
-
-    def __init__(
-        self,
-        climate: "MtsClimate",
-        entitykey: str,
-        **kwargs: "Unpack[MLConfigNumber.Args]",
-    ):
-        self.climate = climate
-        kwargs["device_scale"] = climate.device_scale
-        super().__init__(
-            climate.manager,
-            climate.channel,
-            entitykey,
-            MLConfigNumber.DeviceClass.TEMPERATURE,
-            **kwargs,
-        )
-
-
-class MtsSetPointNumber(MtsTemperatureNumber):
-    """
-    Helper entity to configure MTS100/150/200 setpoints
-    AKA: Heat(comfort) - Cool(sleep) - Eco(away)
-    """
-
-    # HA core entity attributes:
-    icon: str
-
-    __slots__ = ("icon",)
-
-    def __init__(
-        self,
-        climate: "MtsClimate",
-        preset_mode: str,
-    ):
-        self.key_value = climate.MTS_MODE_TO_TEMPERATUREKEY_MAP[
-            reverse_lookup(climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
-        ]
-        self.icon = climate.PRESET_TO_ICON_MAP[preset_mode]
-        super().__init__(
-            climate,
-            f"config_temperature_{self.key_value}",
-            name=f"{preset_mode} temperature",
-        )
-
-    @property
-    def native_max_value(self):
-        return self.climate.max_temp
-
-    @property
-    def native_min_value(self):
-        return self.climate.min_temp
-
-    @property
-    def native_step(self):
-        return self.climate.target_temperature_step
-
-    async def async_request_value(self, device_value):
-        if response := await super().async_request_value(device_value):
-            # mts100(s) reply to the setack with the 'full' (or anyway richer) payload
-            # so we'll use the _parse_temperature logic (a bit overkill sometimes) to
-            # make sure the climate state is consistent and all the correct roundings
-            # are processed when changing any of the presets
-            # not sure about mts200 replies..but we're optimist
-            key_namespace = self.ns.key
-            payload = response[mc.KEY_PAYLOAD]
-            if key_namespace in payload:
-                # by design key_namespace is either "temperature" (mts100) or "mode" (mts200)
-                getattr(self.climate, f"_parse_{key_namespace}")(
-                    payload[key_namespace][0]
-                )
-
-        return response

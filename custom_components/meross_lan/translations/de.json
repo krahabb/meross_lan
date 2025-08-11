@@ -38,7 +38,11 @@
             "common": {
                 "state": {
                     "ok": "Ok",
-                    "disconnected": "Getrennt"
+                    "disconnected": "Getrennt",
+                    "low": "Niedrig",
+                    "medium": "Mittel",
+                    "high": "Hoch",
+                    "idle": "Leerlauf"
                 }
             },
             "mts_overheat_warning": {
@@ -53,6 +57,21 @@
                     "0": "Ok",
                     "1": "Freezing",
                     "2": "Getrennt"
+                }
+            },
+            "mts300_status": {
+                "state": {
+                    "0": "Leerlauf",
+                    "1": "Niedrig",
+                    "2": "Mittel",
+                    "3": "Hoch"
+                }
+            },
+            "mts300_hdstatus": {
+                "state": {
+                    "1": "Entfeuchtung",
+                    "2": "Befeuchtung",
+                    "0": "Leerlauf"
                 }
             }
         }
@@ -144,7 +163,7 @@
                 "data": {
                     "key": "Geräteschlüssel",
                     "error": "Fehlermeldung",
-                    "allow_mqtt_publish": "MQTT-Veröffentlichung zulassen"
+                    "allow_mqtt_publish": "Lokales MQTT-Veröffentlichen erlauben"
                 }
             },
             "device": {
@@ -283,6 +302,23 @@
                 "step": {
                     "confirm": {
                         "title": "Die Zeitzone für {device_name} ist nicht eingestellt oder unterscheidet sich von der HomeAssistant-Standard"
+                    }
+                }
+            }
+        },
+        "hub_subdevice_removed": {
+            "title": "{device_name} vom Hub abgemeldet",
+            "fix_flow": {
+                "abort": {
+                    "subdevice_still_registered": "Das Subgerät ist noch registriert"
+                },
+                "step": {
+                    "confirm": {
+                        "title": "Gerät und Entitätsregistrierungen entfernen",
+                        "description": "Das Gerät reagiert nicht und wird aus der Konfiguration entfernt",
+                        "data": {
+                            "delete": "Die (Sub-)Gerätekonfiguration dauerhaft löschen"
+                        }
                     }
                 }
             }

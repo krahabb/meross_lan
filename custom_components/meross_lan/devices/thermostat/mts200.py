@@ -1,52 +1,51 @@
-import typing
+from typing import TYPE_CHECKING
 
-from ..calendar import MtsSchedule
-from ..climate import MtsClimate
-from ..merossclient import const as mc, namespaces as mn
-from ..number import MtsSetPointNumber
+from ...calendar import MtsSchedule
+from ...climate import MtsSetPointNumber
+from .mtsthermostat import MtsThermostatClimate, mc, mn_t
 
-if typing.TYPE_CHECKING:
-    from ..helpers.device import Device
-    from ..number import MtsTemperatureNumber
+if TYPE_CHECKING:
+    from ...helpers.device import Device
 
 
-class Mts200SetPointNumber(MtsSetPointNumber):
-    """
-    customize MtsSetPointNumber to interact with Mts200 family valves
-    """
-
-    ns = mn.Appliance_Control_Thermostat_Mode
-
-
-class Mts200Climate(MtsClimate):
+class Mts200Climate(MtsThermostatClimate):
     """Climate entity for MTS200 devices"""
 
-    manager: "Device"
-    ns = mn.Appliance_Control_Thermostat_Mode
+    ns = mn_t.Appliance_Control_Thermostat_Mode
+
+    # MtsClimate class attributes
+    device_scale = mc.MTS200_TEMP_SCALE
+
+    class SetPointNumber(MtsSetPointNumber):
+        ns = mn_t.Appliance_Control_Thermostat_Mode
+
+    class Schedule(MtsSchedule):
+        ns = mn_t.Appliance_Control_Thermostat_Schedule
 
     MTS_MODE_TO_PRESET_MAP = {
-        mc.MTS200_MODE_MANUAL: MtsClimate.PRESET_CUSTOM,
-        mc.MTS200_MODE_HEAT: MtsClimate.PRESET_COMFORT,
-        mc.MTS200_MODE_COOL: MtsClimate.PRESET_SLEEP,
-        mc.MTS200_MODE_ECO: MtsClimate.PRESET_AWAY,
-        mc.MTS200_MODE_AUTO: MtsClimate.PRESET_AUTO,
-    }
-    # right now we're only sure summermode == '1' is 'HEAT'
-    MTS_SUMMERMODE_TO_HVAC_MODE = {
-        None: MtsClimate.HVACMode.HEAT,  # mapping when no summerMode avail
-        mc.MTS200_SUMMERMODE_COOL: MtsClimate.HVACMode.COOL,
-        mc.MTS200_SUMMERMODE_HEAT: MtsClimate.HVACMode.HEAT,
-    }
-    HVAC_MODE_TO_MTS_SUMMERMODE = {
-        MtsClimate.HVACMode.HEAT: mc.MTS200_SUMMERMODE_HEAT,
-        MtsClimate.HVACMode.COOL: mc.MTS200_SUMMERMODE_COOL,
-    }
-    MTS_SUMMERMODE_TO_HVAC_ACTION: dict[int | None, MtsClimate.HVACAction] = {
-        None: MtsClimate.HVACAction.HEATING,  # mapping when no summerMode avail
-        mc.MTS200_SUMMERMODE_COOL: MtsClimate.HVACAction.COOLING,
-        mc.MTS200_SUMMERMODE_HEAT: MtsClimate.HVACAction.HEATING,
+        mc.MTS200_MODE_MANUAL: MtsThermostatClimate.Preset.CUSTOM,
+        mc.MTS200_MODE_HEAT: MtsThermostatClimate.Preset.COMFORT,
+        mc.MTS200_MODE_COOL: MtsThermostatClimate.Preset.SLEEP,
+        mc.MTS200_MODE_ECO: MtsThermostatClimate.Preset.AWAY,
+        mc.MTS200_MODE_AUTO: MtsThermostatClimate.Preset.AUTO,
     }
     MTS_MODE_TO_TEMPERATUREKEY_MAP = mc.MTS200_MODE_TO_TARGETTEMP_MAP
+
+    # right now we're only sure summermode == '1' is 'HEAT'
+    MTS_SUMMERMODE_TO_HVAC_MODE = {
+        None: MtsThermostatClimate.HVACMode.HEAT,  # mapping when no summerMode avail
+        mc.MTS200_SUMMERMODE_COOL: MtsThermostatClimate.HVACMode.COOL,
+        mc.MTS200_SUMMERMODE_HEAT: MtsThermostatClimate.HVACMode.HEAT,
+    }
+    HVAC_MODE_TO_MTS_SUMMERMODE = {
+        MtsThermostatClimate.HVACMode.HEAT: mc.MTS200_SUMMERMODE_HEAT,
+        MtsThermostatClimate.HVACMode.COOL: mc.MTS200_SUMMERMODE_COOL,
+    }
+    MTS_SUMMERMODE_TO_HVAC_ACTION: dict[int | None, MtsThermostatClimate.HVACAction] = {
+        None: MtsThermostatClimate.HVACAction.HEATING,  # mapping when no summerMode avail
+        mc.MTS200_SUMMERMODE_COOL: MtsThermostatClimate.HVACAction.COOLING,
+        mc.MTS200_SUMMERMODE_HEAT: MtsThermostatClimate.HVACAction.HEATING,
+    }
 
     __slots__ = (
         "_mts_summermode",
@@ -57,25 +56,19 @@ class Mts200Climate(MtsClimate):
         self,
         manager: "Device",
         channel: object,
-        adjust_number_class: typing.Type["MtsTemperatureNumber"],
+        /,
     ):
-        super().__init__(
-            manager,
-            channel,
-            adjust_number_class,
-            Mts200SetPointNumber,
-            Mts200Schedule,
-        )
+        super().__init__(manager, channel)
         self._mts_summermode = None
         self._mts_summermode_supported = (
-            mn.Appliance_Control_Thermostat_SummerMode.name
+            mn_t.Appliance_Control_Thermostat_SummerMode.name
             in manager.descriptor.ability
         )
         if self._mts_summermode_supported:
             self.hvac_modes = [
-                MtsClimate.HVACMode.OFF,
-                MtsClimate.HVACMode.HEAT,
-                MtsClimate.HVACMode.COOL,
+                MtsThermostatClimate.HVACMode.OFF,
+                MtsThermostatClimate.HVACMode.HEAT,
+                MtsThermostatClimate.HVACMode.COOL,
             ]
 
     # interface: MtsClimate
@@ -86,16 +79,16 @@ class Mts200Climate(MtsClimate):
             self.hvac_action = (
                 self.MTS_SUMMERMODE_TO_HVAC_ACTION.get(self._mts_summermode)
                 if self._mts_active
-                else MtsClimate.HVACAction.IDLE
+                else MtsThermostatClimate.HVACAction.IDLE
             )
         else:
-            self.hvac_mode = MtsClimate.HVACMode.OFF
-            self.hvac_action = MtsClimate.HVACAction.OFF
+            self.hvac_mode = MtsThermostatClimate.HVACMode.OFF
+            self.hvac_action = MtsThermostatClimate.HVACAction.OFF
 
         super().flush_state()
 
-    async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
-        if hvac_mode == MtsClimate.HVACMode.OFF:
+    async def async_set_hvac_mode(self, hvac_mode: MtsThermostatClimate.HVACMode, /):
+        if hvac_mode == MtsThermostatClimate.HVACMode.OFF:
             await self.async_request_onoff(0)
             return
 
@@ -107,7 +100,7 @@ class Mts200Climate(MtsClimate):
 
         await self.async_request_onoff(1)
 
-    async def async_set_temperature(self, **kwargs):
+    async def async_set_temperature(self, /, **kwargs):
         mode = self._mts_mode
         if self.SET_TEMP_FORCE_MANUAL_MODE or (mode == mc.MTS200_MODE_AUTO):
             # ensure we're not in schedule mode or any other preset (#401)
@@ -125,7 +118,7 @@ class Mts200Climate(MtsClimate):
             }
         )
 
-    async def async_request_mode(self, mode: int):
+    async def async_request_preset(self, mode: int, /):
         await self._async_request_mode(
             {
                 mc.KEY_CHANNEL: self.channel,
@@ -134,7 +127,7 @@ class Mts200Climate(MtsClimate):
             }
         )
 
-    async def async_request_onoff(self, onoff: int):
+    async def async_request_onoff(self, onoff: int, /):
         await self._async_request_mode(
             {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}
         )
@@ -142,28 +135,20 @@ class Mts200Climate(MtsClimate):
     def is_mts_scheduled(self):
         return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
 
-    def get_ns_adjust(self):
-        return self.manager.namespace_handlers[
-            mn.Appliance_Control_Thermostat_Calibration.name
-        ]
-
     # interface: self
-    async def async_request_summermode(self, summermode: int):
+    async def async_request_summermode(self, summermode: int, /):
+        ns = mn_t.Appliance_Control_Thermostat_SummerMode
         if await self.manager.async_request_ack(
-            mn.Appliance_Control_Thermostat_SummerMode.name,
+            ns.name,
             mc.METHOD_SET,
-            {
-                mn.Appliance_Control_Thermostat_SummerMode.key: [
-                    {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: summermode}
-                ]
-            },
+            {ns.key: [{ns.key_channel: self.channel, mc.KEY_MODE: summermode}]},
         ):
             # it looks that (at least when sending '0') even
             # if acknowledged the mts doesnt really update it
             self._mts_summermode = summermode
             self.flush_state()
 
-    async def _async_request_mode(self, p_mode: dict):
+    async def _async_request_mode(self, p_mode: dict, /):
         if response := await self.manager.async_request_ack(
             self.ns.name,
             mc.METHOD_SET,
@@ -181,7 +166,7 @@ class Mts200Climate(MtsClimate):
             self._parse_mode(payload)
 
     # message handlers
-    def _parse_mode(self, payload: dict):
+    def _parse_mode(self, payload: dict, /):
         """{
             "channel": 0,
             "onoff": 1,
@@ -225,21 +210,9 @@ class Mts200Climate(MtsClimate):
 
         self.flush_state()
 
-    def _parse_holdAction(self, payload: dict):
-        """{"channel": 0, "mode": 0, "expire": 1697010767}"""
-        # TODO: it looks like this message is related to #369.
-        # The trace shows the log about the missing handler in 4.5.2
-        # and it looks like when we receive this, it is a notification
-        # the mts is not really changing its setpoint (as per the issue).
-        # We need more info about how to process this.
-
-    def _parse_summerMode(self, payload: dict):
+    def _parse_summerMode(self, payload: dict, /):
         """{ "channel": 0, "mode": 0 }"""
         summermode = payload[mc.KEY_MODE]
         if self._mts_summermode != summermode:
             self._mts_summermode = summermode
             self.flush_state()
-
-
-class Mts200Schedule(MtsSchedule):
-    ns = mn.Appliance_Control_Thermostat_Schedule

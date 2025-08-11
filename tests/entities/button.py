@@ -2,7 +2,7 @@ from homeassistant.components import button as habc
 from homeassistant.util import dt as dt_util
 
 from custom_components.meross_lan.button import MLButton, MLPersistentButton
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
+from custom_components.meross_lan.merossclient.protocol import const as mc
 
 from tests.entities import EntityComponentTest
 
@@ -17,7 +17,9 @@ class EntityTest(EntityComponentTest):
 
     NAMESPACES_ENTITIES = {}
 
-    HUB_SUBDEVICES_ENTITIES = {}
+    HUB_SUBDEVICES_ENTITIES = {
+        mc.KEY_SMOKEALARM: [MLButton, MLButton],  # mute, test
+    }
 
     async def async_test_enabled_callback(self, entity: MLButton):
         # We'll patch the hard way so that pressing thse buttons has no consequences.

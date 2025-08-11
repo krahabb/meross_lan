@@ -1,9 +1,11 @@
 import asyncio
 from base64 import b64decode, b64encode
+from enum import Enum
 from json import JSONDecodeError
 import threading
 from time import time
 import typing
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -13,32 +15,43 @@ from custom_components.meross_lan.helpers.manager import ConfigEntryManager
 from custom_components.meross_lan.merossclient import (
     HostAddress,
     MerossDeviceDescriptor,
-    MerossHeaderType,
-    MerossMessage,
-    MerossNamespaceType,
-    MerossPayloadType,
-    MerossRequest,
-    build_message,
-    compute_message_encryption_key,
-    const as mc,
     extract_dict_payloads,
     get_element_by_key,
     get_macaddress_from_uuid,
-    get_replykey,
     json_dumps,
     json_loads,
-    namespaces as mn,
     update_dict_strict,
     update_dict_strict_by_key,
 )
 from custom_components.meross_lan.merossclient.mqttclient import MerossMQTTDeviceClient
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
+from custom_components.meross_lan.merossclient.protocol.message import (
+    MerossMessage,
+    MerossRequest,
+    build_message,
+    compute_message_encryption_key,
+    get_replykey,
+)
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
+    from io import TextIOWrapper
+    from typing import Any, ClassVar, Mapping
+
     import paho.mqtt.client as mqtt
+
+    from custom_components.meross_lan.merossclient.protocol.namespaces import Namespace
+    from custom_components.meross_lan.merossclient.protocol.types import (
+        MerossHeaderType,
+        MerossNamespaceType,
+        MerossPayloadType,
+    )
 
 
 class MerossEmulatorDescriptor(MerossDeviceDescriptor):
-    namespaces: dict[MerossNamespaceType, MerossPayloadType]
+    namespaces: "dict[MerossNamespaceType, MerossPayloadType]"
 
     __slots__ = ("namespaces",)
 
@@ -52,7 +65,7 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
     ):
         self.namespaces = {}
         with open(tracefile, "r", encoding="utf8") as f:
-            if tracefile.endswith(".json.txt"):
+            if tracefile.endswith(".json.txt") or tracefile.endswith(".json"):
                 # HA diagnostics trace
                 self._import_json(f)
             else:
@@ -77,64 +90,126 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         if userId:
             self.firmware[mc.KEY_USERID] = userId
 
-    def _import_tsv(self, f):
+    def _import_tsv(self, f: "TextIOWrapper"):
         """
         parse a legacy tab separated values meross_lan trace
         """
+        row = next(f).split("\t")
+
+        def _import_legacy_config(_row):
+            ns = mn.Appliance_System_All
+            self.namespaces[ns.name] = {ns.key: json_loads(_row[-1])}
+            _row = next(f).split("\t")
+            ns = mn.Appliance_System_Ability
+            self.namespaces[ns.name] = {ns.key: json_loads(_row[-1])}
+
+        # detect version: lot of heuristic since the structure was not so smart
+        if len(row) == 5:
+            # earlier versions missing 'txrx' - no column headers though
+            # 2 'auto' rows carrying ns.All and ns.Ability from config
+            version = 0
+            _import_legacy_config(row)
+        else:
+            match row[2]:  # 'protocol' column
+                case "auto":
+                    # Version 1: no column headers - trace starting with
+                    # 2 'auto' rows carrying ns.All and ns.Ability from config
+                    version = 1
+                    _import_legacy_config(row)
+                case "protocol":
+                    # Version 2 (and on): we have column headers
+                    columns = row
+                    row = next(f).split("\t")
+                    # first data row contains an 'HEADER' i.e. 'diagnostic like' dict
+                    _header: "mlc.TracingHeaderType" = json_loads(row[-1])
+                    version = _header["version"]
+                    config_payload = _header["config"]["payload"]
+                    ns = mn.Appliance_System_All
+                    self.namespaces[ns.name] = {ns.key: config_payload[ns.key]}
+                    ns = mn.Appliance_System_Ability
+                    self.namespaces[ns.name] = {ns.key: config_payload[ns.key]}
+                    for namespace, payload in _header["state"][
+                        "namespace_pushes"
+                    ].items():
+                        self.namespaces[namespace] = payload
+
         for line in f:
             row = line.split("\t")
-            self._import_tracerow(row)
+            if not version:
+                row.insert(1, "")  # patch earlier versions missing 'txrx'
+            if row[2] == "auto":
+                continue
+            row[-1] = json_loads(row[-1])
+            self._import_tracerow(*row)  # type:ignore
 
-    def _import_json(self, f):
+    def _import_json(self, f: "TextIOWrapper"):
         """
         parse a 'diagnostics' HA trace
         """
         try:
-            _json = json_loads(f.read())
-            _data: dict = _json["data"]
-            columns = None
-            for row in _data["trace"]:
-                if columns is None:
-                    columns = row
-                    # we could parse and setup a 'column search'
-                    # algorithm here should the trace layout change
-                    # right now it's the same as for csv files...
-                else:
-                    self._import_tracerow(row)
+            _data: dict = json_loads(f.read())["data"]
 
-            _device: dict = _data["device"]
             try:
-                # also add the pushed numespaces if not already traced
-                for namespace, payload in _device["namespace_pushes"].items():
-                    if namespace not in self.namespaces:
-                        self.namespaces[namespace] = payload
-            except:
-                pass
+                version = _data["version"]
+            except KeyError:
+                version = 1
+
+            match version:
+                case 2:
+                    config_payload = _data["config"]["payload"]
+                    pushes = _data["state"]["namespace_pushes"]
+                    rows = iter(_data["trace"])
+                    columns = next(rows)
+                case 1:
+                    config_payload = _data["payload"]
+                    try:
+                        pushes = _data["device"]["namespace_pushes"]
+                    except KeyError:
+                        # earlier versions missing pushes
+                        pushes = {}
+                    rows = iter(_data["trace"])
+                    columns = next(rows)
+                    # mandatory All and Ability stored in the first 2 rows
+                    # now loaded from _config before parsing trace rows
+                    next(rows)
+                    next(rows)
+
+            ns = mn.Appliance_System_All
+            self.namespaces[ns.name] = {ns.key: config_payload[ns.key]}
+            ns = mn.Appliance_System_Ability
+            self.namespaces[ns.name] = {ns.key: config_payload[ns.key]}
+            for namespace, payload in pushes.items():
+                self.namespaces[namespace] = payload
+
+            for row in rows:
+                if row[2] == "auto":
+                    continue
+                self._import_tracerow(*row)
 
         except:
-            pass
+            raise
 
         return
 
-    def _import_tracerow(self, values: list):
-        protocol = values[-4]
-        method = values[-3]
-        namespace = values[-2]
-        data = values[-1]
-
-        def _get_data_dict(_data):
-            return _data if type(_data) is dict else json_loads(_data)
+    def _import_tracerow(
+        self,
+        epoch: str,
+        rxtx: str,
+        protocol: str,
+        method: str,
+        namespace: str,
+        data: dict,
+    ):
 
         match method:
+            case mc.METHOD_PUSH:
+                if rxtx == "RX" and (namespace not in self.namespaces):
+                    self.namespaces[namespace] = data
             case mc.METHOD_GETACK:
-                self.namespaces[namespace] = (
-                    {mn.NAMESPACES[namespace].key: _get_data_dict(data)}
-                    if protocol == mlc.CONF_PROTOCOL_AUTO
-                    else _get_data_dict(data)
-                )
+                self.namespaces[namespace] = data
             case mc.METHOD_SETACK:
                 if namespace == mn.Appliance_Control_Multiple.name:
-                    for message in _get_data_dict(data)[mc.KEY_MULTIPLE]:
+                    for message in data[mc.KEY_MULTIPLE]:
                         header = message[mc.KEY_HEADER]
                         if header[mc.KEY_METHOD] == mc.METHOD_GETACK:
                             self.namespaces[header[mc.KEY_NAMESPACE]] = message[
@@ -154,7 +229,50 @@ class MerossEmulator:
     command carrying the message and so automatically managed too
     """
 
+    class NSDefaultMode(Enum):
+        """Determines the type of ns state update."""
+
+        MixIn = 0
+        """Keys in provided payload overwrite existing state."""
+        MixOut = 1
+        """Keys in existing state are preserved (only non-existing keys are added)."""
+
+    if typing.TYPE_CHECKING:
+        NAMESPACES: ClassVar
+        MAXIMUM_RESPONSE_SIZE: ClassVar
+
+        type NSDefaultArgs = tuple[NSDefaultMode, dict]
+        type NSDefault = dict[Namespace, NSDefaultArgs]
+        NAMESPACES_DEFAULT: ClassVar[NSDefault]
+        """Contains default data for namespaces initialization.
+        Some traces could miss some important namespaces because of the way they're collected
+        so we'll add the 'well-known minimum working configuration' for those namespaces which
+        should (always) work in emulator (to the best of our knowledge).
+        This container must be defined in every custom mixin with defaults
+        relevant for the features they're implementing. The complete class defaults
+        will be 'explored' in MerossEmulator.__init__."""
+        NAMESPACES_DEFAULT_IGNORE: ClassVar[tuple[Namespace, ...]]
+
+    NAMESPACES = mn.NAMESPACES
+
     MAXIMUM_RESPONSE_SIZE = 3000
+
+    NAMESPACES_DEFAULT = {
+        mn.Appliance_System_DNDMode: (NSDefaultMode.MixOut, {mc.KEY_MODE: 0}),
+    }
+
+    NAMESPACES_DEFAULT_IGNORE = (
+        mn.Appliance_Control_Diffuser_Light,
+        mn.Appliance_Control_Diffuser_Sensor,
+        mn.Appliance_Control_Diffuser_Spray,
+        mn.Appliance_Control_Multiple,
+        mn.Appliance_System_Clock,
+        mn.Appliance_System_Debug,
+        mn.Appliance_System_Firmware,
+        mn.Appliance_System_Hardware,
+        mn.Appliance_System_Time,
+        mn.Appliance_System_Online,
+    )
 
     __slots__ = (
         "epoch",
@@ -162,7 +280,7 @@ class MerossEmulator:
         "loop",
         "key",
         "descriptor",
-        "p_dndmode",
+        "namespaces",
         "topic_response",
         "mqtt_client",
         "mqtt_connected",
@@ -172,13 +290,53 @@ class MerossEmulator:
         "__dict__",
     )
 
-    def __init__(self, descriptor: MerossEmulatorDescriptor, key: str):
+    def __init__(self, descriptor: MerossEmulatorDescriptor, key: str, /):
         self.lock = threading.Lock()
         self.loop: asyncio.AbstractEventLoop = None  # type: ignore
         self.key = key
         self.descriptor = descriptor
-        if mn.Appliance_System_DNDMode.name in descriptor.ability:
-            self.p_dndmode = {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}}
+        self.namespaces = namespaces = descriptor.namespaces
+        namespaces_default: "MerossEmulator.NSDefault" = {}
+        namespaces_default_ignore = []
+        for cls in self.__class__.mro():
+            if cls is object:
+                continue
+            try:
+                namespaces_default |= cls.NAMESPACES_DEFAULT
+            except AttributeError:
+                pass
+
+            try:
+                namespaces_default_ignore.extend(cls.NAMESPACES_DEFAULT_IGNORE)
+            except AttributeError:
+                pass
+
+        for ability in descriptor.ability:
+            ns = self.NAMESPACES.get(ability)
+            if ns and ns.grammar is not mn.Grammar.UNKNOWN:
+                if (not (ns.has_get or ns.has_push_query)) or (
+                    ns in namespaces_default_ignore
+                ):
+                    # not querable
+                    continue
+
+                if ns in namespaces_default:
+                    _nsdefaultmode, _payload = namespaces_default[ns]
+                    self.update_namespace_state(ns, _nsdefaultmode, _payload)
+                    continue
+
+                # no default state set in NAMESPACES_DEFAULT
+                try:
+                    p_namespace = namespaces[ability]
+                    if ns.key in p_namespace:
+                        continue
+                except KeyError:
+                    namespaces[ability] = p_namespace = {}
+                # Either namespace missing or malformed according to our grammar.
+                # Setup a 'default' (which will not work for hubs though...)
+                # but we cannot use copy because request_payload_type.value is immutable
+                # p_namespace[ns.key] = ns.request_payload_type.value.clone()
+
         self.topic_response = mc.TOPIC_RESPONSE.format(descriptor.uuid)
         self.mqtt_client: MerossMQTTDeviceClient = None  # type: ignore
         self.mqtt_connected = None
@@ -217,7 +375,7 @@ class MerossEmulator:
         if self.mqtt_client:
             self._mqtt_shutdown()
 
-    def set_timezone(self, timezone: str):
+    def set_timezone(self, timezone: str, /):
         # beware when using TZ names: here we expect a IANA zoneinfo key
         # as "US/Pacific" or so. Using tzname(s) like "PDT" or "PST"
         # such as those recovered from tzinfo.tzname() might be wrong
@@ -247,7 +405,7 @@ class MerossEmulator:
         """
         self.descriptor.time[mc.KEY_TIMESTAMP] = self.epoch = int(time())
 
-    def handle(self, request: MerossMessage | str) -> str | None:
+    def handle(self, request: MerossMessage | str, /) -> str | None:
         """
         main message handler entry point: this is called either from web.Request
         for request routed from the web.Application or from the mqtt.Client.
@@ -295,9 +453,9 @@ class MerossEmulator:
                     request_header[mc.KEY_NAMESPACE],
                     mc.METHOD_ERROR,
                     {mc.KEY_ERROR: {mc.KEY_CODE: mc.ERROR_INVALIDKEY}},
+                    request_header[mc.KEY_MESSAGEID],
                     self.key,
                     self.topic_response,
-                    request_header[mc.KEY_MESSAGEID],
                 )
             else:
                 response = self._handle_message(request_header, request_payload)
@@ -315,7 +473,7 @@ class MerossEmulator:
             self._log_message("TX", response)
             if cipher:
                 response_bytes = response.encode("utf-8")
-                response_bytes += bytes([0] * (16 - (len(response_bytes) % 16)))
+                response_bytes += bytes(16 - (len(response_bytes) % 16))
                 encryptor = cipher.encryptor()
                 response = b64encode(
                     encryptor.update(response_bytes) + encryptor.finalize()
@@ -324,7 +482,9 @@ class MerossEmulator:
 
         return None
 
-    def _handle_message(self, header: MerossHeaderType, payload: MerossPayloadType):
+    def _handle_message(
+        self, header: "MerossHeaderType", payload: "MerossPayloadType", /
+    ):
         namespace = header[mc.KEY_NAMESPACE]
         method = header[mc.KEY_METHOD]
         try:
@@ -355,22 +515,27 @@ class MerossEmulator:
         except Exception as e:
             self._log_message(e.__class__.__name__, str(e))
             response_method = mc.METHOD_ERROR
-            response_payload = {mc.KEY_ERROR: {mc.KEY_CODE: -1, "message": str(e)}}
+            response_payload = {
+                mc.KEY_ERROR: {
+                    mc.KEY_CODE: -1,
+                    "message": f"{e.__class__.__name__}({e})",
+                }
+            }
 
         if response_method:
             response = build_message(
                 header[mc.KEY_NAMESPACE],
                 response_method,
                 response_payload,
+                header[mc.KEY_MESSAGEID],
                 self.key,
                 self.topic_response,
-                header[mc.KEY_MESSAGEID],
             )
             return response
 
         return None
 
-    def _handler_default(self, method: str, namespace: str, payload: dict):
+    def _handler_default(self, method: str, namespace: str, payload: "Mapping", /):
         """
         This is an euristhic to try parse a namespace carrying state stored in all->digest
         If the state is not stored in all->digest we'll search our namespace(s) list for
@@ -381,13 +546,13 @@ class MerossEmulator:
         except Exception as exception:
             # when the 'looking for state' euristic fails
             # we might fallback to a static reply should it fit...
-            if (method == mc.METHOD_GET) and (namespace in self.descriptor.namespaces):
-                return mc.METHOD_GETACK, self.descriptor.namespaces[namespace]
+            if (method == mc.METHOD_GET) and (namespace in self.namespaces):
+                return mc.METHOD_GETACK, self.namespaces[namespace]
             raise Exception(
                 f"{namespace} not supported in emulator ({exception})"
             ) from exception
 
-        ns = mn.NAMESPACES[namespace]
+        ns = self.NAMESPACES[namespace]
 
         match method:
             case mc.METHOD_GET:
@@ -412,18 +577,18 @@ class MerossEmulator:
                 else:
                     update_dict_strict(p_state, p_payload)
 
-                if self.mqtt_connected:
+                if self.mqtt_connected and ns.has_push:
                     self.mqtt_publish_push(namespace, {key_namespace: p_state})
 
                 return mc.METHOD_SETACK, {}
 
             case mc.METHOD_PUSH:
-                if (ns.has_get is False) and (ns.has_push):
-                    return mc.METHOD_PUSH, self.descriptor.namespaces[namespace]
+                if ns.has_push_query:
+                    return mc.METHOD_PUSH, {key_namespace: p_state}
 
         raise Exception(f"{method} not supported in emulator for {namespace}")
 
-    def _SET_Appliance_Config_Key(self, header, payload):
+    def _SET_Appliance_Config_Key(self, header, payload, /):
         """
         When connecting to a Meross cloud broker we're receiving this 'on the fly'
         so we should try to accomplish the new config
@@ -480,7 +645,7 @@ class MerossEmulator:
 
         return mc.METHOD_SETACK, {}
 
-    def _SETACK_Appliance_Control_Bind(self, header, payload):
+    def _SETACK_Appliance_Control_Bind(self, header, payload, /):
         self.mqtt_publish_push(
             mn.Appliance_System_Report.name,
             {
@@ -495,12 +660,12 @@ class MerossEmulator:
         )
         return None, None
 
-    def _GET_Appliance_Control_Toggle(self, header, payload):
+    def _GET_Appliance_Control_Toggle(self, header, payload, /):
         # only actual example of this usage comes from legacy firmwares
         # carrying state in all->control
         return mc.METHOD_GETACK, {mc.KEY_TOGGLE: self._get_control_key(mc.KEY_TOGGLE)}
 
-    def _SET_Appliance_Control_Toggle(self, header, payload):
+    def _SET_Appliance_Control_Toggle(self, header, payload, /):
         # only acual example of this usage comes from legacy firmwares
         # carrying state in all->control
         self._get_control_key(mc.KEY_TOGGLE)[mc.KEY_ONOFF] = payload[mc.KEY_TOGGLE][
@@ -508,7 +673,7 @@ class MerossEmulator:
         ]
         return mc.METHOD_SETACK, {}
 
-    def _GET_Appliance_System_Debug(self, header, payload):
+    def _GET_Appliance_System_Debug(self, header, payload, /):
         firmware = self.descriptor.firmware
         return mc.METHOD_GETACK, {
             mc.KEY_DEBUG: {
@@ -545,28 +710,21 @@ class MerossEmulator:
             }
         }
 
-    def _GET_Appliance_System_DNDMode(self, header, payload):
-        return mc.METHOD_GETACK, self.p_dndmode
-
-    def _SET_Appliance_System_DNDMode(self, header, payload):
-        update_dict_strict(self.p_dndmode, payload)
-        return mc.METHOD_SETACK, {}
-
-    def _GET_Appliance_System_Firmware(self, header, payload):
+    def _GET_Appliance_System_Firmware(self, header, payload, /):
         return mc.METHOD_GETACK, {mc.KEY_FIRMWARE: self.descriptor.firmware}
 
-    def _GET_Appliance_System_Hardware(self, header, payload):
+    def _GET_Appliance_System_Hardware(self, header, payload, /):
         return mc.METHOD_GETACK, {mc.KEY_HARDWARE: self.descriptor.hardware}
 
-    def _GET_Appliance_System_Online(self, header, payload):
+    def _GET_Appliance_System_Online(self, header, payload, /):
         return mc.METHOD_GETACK, {mc.KEY_ONLINE: self.descriptor.all[mc.KEY_ONLINE]}
 
-    def _SET_Appliance_System_Time(self, header, payload):
+    def _SET_Appliance_System_Time(self, header, payload, /):
         self.descriptor.update_time(payload[mc.KEY_TIME])
         self.update_epoch()
         return mc.METHOD_SETACK, {}
 
-    def _get_key_state(self, namespace: str) -> tuple[str, dict | list]:
+    def _get_key_state(self, namespace: str, /) -> tuple[str, dict | list]:
         """
         general device state is usually carried in NS_ALL into the "digest" key
         and is also almost regularly keyed by using the camelCase of the last verb
@@ -574,13 +732,9 @@ class MerossEmulator:
         For some devices not all state is carried there tho, so we'll inspect the
         GETACK payload for the relevant namespace looking for state there too
         """
-        key = mn.NAMESPACES[namespace].key
+        key = self.NAMESPACES[namespace].key
 
         match namespace.split("."):
-            case (_, "RollerShutter", _):
-                return key, self.descriptor.namespaces[namespace][key]
-            case (_, "Config", _):
-                return key, self.descriptor.namespaces[namespace][key]
             case (_, "Control", _):
                 p_digest = self.descriptor.digest
             case (_, "Control", ns_2, _):
@@ -589,14 +743,14 @@ class MerossEmulator:
                 if subkey in p_digest:
                     p_digest = p_digest[subkey]
             case _:
-                raise Exception(f"{namespace} not supported in emulator")
+                return key, self.namespaces[namespace][key]
 
         if key in p_digest:
             return key, p_digest[key]
 
-        return key, self.descriptor.namespaces[namespace][key]
+        return key, self.namespaces[namespace][key]
 
-    def _get_control_key(self, key):
+    def _get_control_key(self, key, /):
         """Extracts the legacy 'control' key from NS_ALL (previous to 'digest' introduction)."""
         p_control = self.descriptor.all.get(mc.KEY_CONTROL)
         if p_control is None:
@@ -605,7 +759,7 @@ class MerossEmulator:
             raise Exception(f"'{key}' not present in 'control' key")
         return p_control[key]
 
-    def _log_message(self, tag: str, message: str):
+    def _log_message(self, tag: str, message: str, /):
         print(f"Emulator({self.uuid}) {tag}: {message}")
 
     def _scheduler(self):
@@ -618,39 +772,52 @@ class MerossEmulator:
         )
         self.update_epoch()
 
-    def get_namespace_state(
-        self, namespace: str, channel, key_channel: str = mc.KEY_CHANNEL
-    ) -> dict:
-        p_namespace_state = self.descriptor.namespaces[namespace][
-            mn.NAMESPACES[namespace].key
-        ]
-        return get_element_by_key(p_namespace_state, key_channel, channel)
+    def get_namespace_state(self, ns: "Namespace", channel, /) -> dict:
+        return get_element_by_key(
+            self.namespaces[ns.name][ns.key], ns.key_channel, channel
+        )
 
     def update_namespace_state(
-        self, namespace: str, channel, payload: dict, key_channel: str = mc.KEY_CHANNEL
+        self,
+        ns: "Namespace",
+        nsdefaultmode: NSDefaultMode,
+        payload: dict | list,
+        /,
     ):
         """updates the current state (stored in namespace key) eventually creating a default.
         Useful when sanitizing mixin state during init should the trace miss some well-known namespaces info
         """
         try:
-            p_namespace_state: list = self.descriptor.namespaces[namespace][
-                mn.NAMESPACES[namespace].key
-            ]
-            try:
-                p_channel_state = get_element_by_key(
-                    p_namespace_state, key_channel, channel
-                )
-            except KeyError:
-                p_channel_state = {key_channel: channel}
-                p_namespace_state.append(p_channel_state)
+            p_namespace = self.namespaces[ns.name]
         except KeyError:
-            p_channel_state = {key_channel: channel}
-            p_namespace_state = [p_channel_state]
-            self.descriptor.namespaces[namespace] = {
-                mn.NAMESPACES[namespace].key: p_namespace_state
-            }
+            self.namespaces[ns.name] = p_namespace = {}
 
-        p_channel_state.update(payload)
+        if isinstance(ns.request_payload_type.value, dict):
+            assert type(payload) is dict
+            try:
+                if nsdefaultmode is MerossEmulator.NSDefaultMode.MixIn:
+                    p_namespace[ns.key] |= payload
+                else:
+                    p_namespace[ns.key] = payload | p_namespace[ns.key]
+            except KeyError:
+                p_namespace[ns.key] = payload
+        else:  # isinstance(ns.request_payload_type.value, list):
+            try:
+                p_state: list = p_namespace[ns.key]
+            except KeyError:
+                p_namespace[ns.key] = p_state = []
+
+            key_channel = ns.key_channel
+            for p_payload_channel in extract_dict_payloads(payload):
+                channel = p_payload_channel[key_channel]
+                try:
+                    p_channel_state = get_element_by_key(p_state, key_channel, channel)
+                    if nsdefaultmode is MerossEmulator.NSDefaultMode.MixIn:
+                        p_channel_state |= p_payload_channel
+                    else:
+                        p_channel_state |= p_payload_channel | p_channel_state
+                except KeyError:
+                    p_state.append(p_payload_channel)
 
     def mqtt_publish_push(self, namespace: str, payload: dict):
         """
@@ -660,11 +827,12 @@ class MerossEmulator:
         # capture context before delaying
         mqtt_client = self.mqtt_client
         message = MerossRequest(
-            self.key,
             namespace,
             mc.METHOD_PUSH,
             payload,
+            self.key,
             mqtt_client.topic_publish,
+            mc.HEADER_TRIGGERSRC_DEVICE,
         ).json()
 
         def _mqtt_publish():
@@ -699,7 +867,6 @@ class MerossEmulator:
             # This is to start a kind of session establishment with
             # Meross brokers. Check the SETACK reply to follow the state machine
             message = MerossRequest(
-                self.key,
                 mn.Appliance_Control_Bind.name,
                 mc.METHOD_SET,
                 {
@@ -710,10 +877,10 @@ class MerossEmulator:
                         mc.KEY_FIRMWARE: self.descriptor.firmware,
                     }
                 },
+                self.key,
                 mqtt_client.topic_subscribe,
-            )
-            message[mc.KEY_HEADER][mc.KEY_TRIGGERSRC] = "DevBoot"
-            message = message.json()
+                mc.HEADER_TRIGGERSRC_DEVBOOT,
+            ).json()
             self._log_message("TX(MQTT)", message)
             mqtt_client.publish(mqtt_client.topic_publish, message)
 

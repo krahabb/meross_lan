@@ -95,7 +95,7 @@ def disable_entity_registry_update():
     in our tests to cover this scenario so we totally disable calling into
     the entity registry."""
 
-    from custom_components.meross_lan.devices.garageDoor import (
+    from custom_components.meross_lan.devices.garagedoor import (
         MLGarageDoorEnableSwitch,
         MLGarageMultipleConfigSwitch,
     )
@@ -105,8 +105,9 @@ def disable_entity_registry_update():
     yield
     MLGarageDoorEnableSwitch.update_onoff = saved
 
+
 @pytest.fixture(autouse=True, scope="function")
-def log_exception(request: pytest.FixtureRequest, capsys: pytest.CaptureFixture):
+def log_exception(request: "pytest.FixtureRequest", capsys: "pytest.CaptureFixture"):
     """Intercepts any code managed exception sent to logging."""
 
     with helpers.LoggableException() as patch:

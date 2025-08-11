@@ -1,7 +1,7 @@
-import typing
+from typing import TYPE_CHECKING
 
 from ..helpers.entity import MEListChannelMixin
-from ..helpers.namespaces import NamespaceHandler
+from ..helpers.namespaces import NamespaceHandler, mc, mn
 from ..light import (
     ATTR_BRIGHTNESS,
     ATTR_EFFECT,
@@ -15,18 +15,23 @@ from ..light import (
     native_to_rgb,
     rgb_to_native,
 )
-from ..merossclient import const as mc, namespaces as mn
-from ..sensor import MLHumiditySensor, MLNumericSensorDef, MLTemperatureSensor
+from ..sensor import MLHumiditySensor, MLTemperatureSensor
 from .spray import MLSpray
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
+    from typing import Final
+
     from ..helpers.device import Device, DigestInitReturnType
+    from ..merossclient.protocol import types as mt
     from ..sensor import MLNumericSensor
 
+    DIFFUSER_SENSOR_CLASS_MAP: Final
 
-DIFFUSER_SENSOR_CLASS_MAP: dict[str, MLNumericSensorDef] = {
-    mc.KEY_HUMIDITY: MLNumericSensorDef(MLHumiditySensor, {}),
-    mc.KEY_TEMPERATURE: MLNumericSensorDef(MLTemperatureSensor, {"device_scale": 10}),
+DIFFUSER_SENSOR_CLASS_MAP = {
+    mc.KEY_HUMIDITY: MLHumiditySensor.SensorDef(MLHumiditySensor),
+    mc.KEY_TEMPERATURE: MLTemperatureSensor.SensorDef(
+        MLTemperatureSensor, device_scale=10
+    ),
 }
 
 
@@ -56,7 +61,9 @@ def digest_init_diffuser(device: "Device", digest: dict) -> "DigestInitReturnTyp
     if mn.Appliance_Control_Diffuser_Sensor.name in device.descriptor.ability:
         # former mod100 devices reported fake values for sensors, maybe the mod150 and/or a new firmware
         # are supporting correct values so we implement them (#243)
-        def _handle_Appliance_Control_Diffuser_Sensor(header: dict, payload: dict):
+        def _handle_Appliance_Control_Diffuser_Sensor(
+            header, payload: "mt.MerossPayloadType", /
+        ):
             """
             {
                 "type": "mod100",
@@ -68,10 +75,10 @@ def digest_init_diffuser(device: "Device", digest: dict) -> "DigestInitReturnTyp
             for key in DIFFUSER_SENSOR_CLASS_MAP:
                 if key in payload:
                     try:
-                        entity: MLNumericSensor = entities[key]  # type: ignore
+                        entity: "MLNumericSensor" = entities[key]  # type: ignore
                     except KeyError:
                         entity_def = DIFFUSER_SENSOR_CLASS_MAP[key]
-                        entity = entity_def.type(device, None, key, **entity_def.args)
+                        entity = entity_def.type(device, None, key, **entity_def.kwargs)
                     entity.update_device_value(payload[key][mc.KEY_VALUE])
 
         NamespaceHandler(

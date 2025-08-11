@@ -1,40 +1,37 @@
 """"""
 
-import typing
+from typing import TYPE_CHECKING
 
 from custom_components.meross_lan.merossclient import (
-    const as mc,
     get_element_by_key,
-    get_element_by_key_safe,
-    namespaces as mn,
     update_dict_strict,
 )
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 
-if typing.TYPE_CHECKING:
-    from .. import MerossEmulator, MerossEmulatorDescriptor
+if TYPE_CHECKING:
+    from . import MerossEmulator, MerossEmulatorDescriptor
 
 
-class LightMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+class LightMixin(MerossEmulator if TYPE_CHECKING else object):
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
 
-        if get_element_by_key_safe(
-            descriptor.digest.get(mc.KEY_TOGGLEX),
-            mc.KEY_CHANNEL,
-            descriptor.digest[mc.KEY_LIGHT][mc.KEY_CHANNEL],
-        ):
+        try:
+            get_element_by_key(
+                descriptor.digest[mc.KEY_TOGGLEX],
+                mc.KEY_CHANNEL,
+                descriptor.digest[mc.KEY_LIGHT][mc.KEY_CHANNEL],
+            )
             self._togglex_switch = True  # use TOGGLEX to (auto) switch
             self._togglex_mode = (
                 True  # True: need TOGGLEX to switch / False: auto-switch
             )
-        else:
+        except:
             self._togglex_switch = False
             self._togglex_mode = False
-
-        if mn.Appliance_Control_Light_Effect.name in descriptor.ability:
-            descriptor.namespaces.setdefault(
-                mn.Appliance_Control_Light_Effect.name, {mc.KEY_EFFECT: []}
-            )
 
     def _SET_Appliance_Control_Light(self, header, payload):
         # need to override basic handler since lights turning on/off is tricky between
@@ -80,12 +77,12 @@ class LightMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     def _GET_Appliance_Control_Light_Effect(self, header, payload):
         return (
             mc.METHOD_GETACK,
-            self.descriptor.namespaces[mn.Appliance_Control_Light_Effect.name],
+            self.namespaces[mn.Appliance_Control_Light_Effect.name],
         )
 
     def _SET_Appliance_Control_Light_Effect(self, header, payload):
 
-        p_state_effect_list: list[dict] = self.descriptor.namespaces[
+        p_state_effect_list: list[dict] = self.namespaces[
             mn.Appliance_Control_Light_Effect.name
         ][mc.KEY_EFFECT]
         effect_id_enabled = None

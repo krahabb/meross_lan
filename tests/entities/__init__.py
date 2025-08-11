@@ -1,23 +1,29 @@
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.core import HomeAssistant, StateMachine
 from homeassistant.helpers import entity
 
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient.protocol import const as mc
 from custom_components.meross_lan.switch import MLToggleX
 
 from tests.helpers import DeviceContext
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from typing import Any, ClassVar
 
     from custom_components.meross_lan.helpers.entity import MLEntity
 
     EntityType = type[entity.Entity]
     MerossEntityTypesList = list[type[MLEntity]]
-    MerossEntityTypesDigestContainer = (
+    type MerossEntityTypesDigestContainer = (
         MerossEntityTypesList | dict[str, MerossEntityTypesList]
     )
+    DeviceEntitiesType = MerossEntityTypesList
+    DigestEntitiesType = dict[str, MerossEntityTypesDigestContainer]
+    NamespaceEntitiesType = dict[str, MerossEntityTypesList]
+    HubSubDeviceEntitiesType = dict[str | None, MerossEntityTypesList]
+    """Container mapping the expected entities for any specific subdevice type.
+    None (in the map) means the entities list is expected for any device type (i.e. battery)."""
 
 
 class EntityComponentTest:
@@ -26,7 +32,7 @@ class EntityComponentTest:
     proper testing on the different test types.
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
         # static test context
         hass: ClassVar[HomeAssistant]
         hass_service_call: ClassVar
@@ -40,13 +46,13 @@ class EntityComponentTest:
         # class members: configure the entity component testing
         DOMAIN: str
         ENTITY_TYPE: ClassVar[EntityType]
-        DEVICE_ENTITIES: ClassVar[MerossEntityTypesList]
+        DEVICE_ENTITIES: ClassVar[DeviceEntitiesType]
         """Types of entities which are instanced on every device."""
-        DIGEST_ENTITIES: ClassVar[dict[str, MerossEntityTypesDigestContainer]]
+        DIGEST_ENTITIES: ClassVar[DigestEntitiesType]
         """Types of entities which are instanced based off the digest structure."""
-        NAMESPACES_ENTITIES: ClassVar[dict[str, MerossEntityTypesList]]
+        NAMESPACES_ENTITIES: ClassVar[NamespaceEntitiesType]
         """Types of entities which are instanced based off namespace ability presence."""
-        HUB_SUBDEVICES_ENTITIES: ClassVar[dict[str, MerossEntityTypesList]]
+        HUB_SUBDEVICES_ENTITIES: ClassVar[HubSubDeviceEntitiesType]
         """Types of entities which are instanced based off subdevice definition in Hub digest."""
 
     DEVICE_ENTITIES = []
@@ -88,8 +94,8 @@ class EntityComponentTest:
         return state
 
     async def async_test_each_callback(self, entity: "MLEntity"):
-        if entity.manager.online:
-            assert entity.available, f"entity {entity.entity_id} not available"
+        # manager should be online so this should always be true
+        assert entity.available, f"entity {entity.entity_id} not available"
 
     async def async_test_enabled_callback(self, entity: "MLEntity"):
         pass

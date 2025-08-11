@@ -1,11 +1,24 @@
 from homeassistant.components import switch as haec
 from homeassistant.helpers.entity import STATE_OFF, STATE_ON
 
-from custom_components.meross_lan.devices.hub import GS559MuteToggle
 from custom_components.meross_lan.devices.mss import OverTempEnableSwitch
-from custom_components.meross_lan.devices.thermostat import MtsExternalSensorSwitch
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
-from custom_components.meross_lan.switch import MLToggle, MLToggleX, PhysicalLockSwitch
+from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
+    MtsConfigSwitch,
+    MtsExternalSensorSwitch,
+)
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
+from custom_components.meross_lan.merossclient.protocol.namespaces import (
+    thermostat as mn_t,
+)
+from custom_components.meross_lan.switch import (
+    MLEmulatedSwitch,
+    MLToggle,
+    MLToggleX,
+    PhysicalLockSwitch,
+)
 
 from tests.entities import EntityComponentTest
 
@@ -19,16 +32,21 @@ class EntityTest(EntityComponentTest):
     DIGEST_ENTITIES = {
         mc.KEY_TOGGLEX: [MLToggleX],
     }
-
     NAMESPACES_ENTITIES = {
         mn.Appliance_Config_OverTemp.name: [OverTempEnableSwitch],
         mn.Appliance_Control_PhysicalLock.name: [PhysicalLockSwitch],
-        mn.Appliance_Control_Thermostat_Sensor.name: [MtsExternalSensorSwitch],
+        mn_t.Appliance_Control_Thermostat_ModeC.name: [
+            MLEmulatedSwitch,  # fan_hold_enable
+        ],
+        mn_t.Appliance_Control_Thermostat_Frost.name: [MtsConfigSwitch],
+        mn_t.Appliance_Control_Thermostat_Sensor.name: [MtsExternalSensorSwitch],
+        mn_t.Appliance_Control_Thermostat_Overheat.name: [MtsConfigSwitch],
         mn.Appliance_Control_Toggle.name: [MLToggle],
     }
-
     HUB_SUBDEVICES_ENTITIES = {
-        mc.KEY_SMOKEALARM: [GS559MuteToggle],  #  interConn switch
+        mc.TYPE_MTS100: [MLEmulatedSwitch],  # patch hvacaction
+        mc.TYPE_MTS100V3: [MLEmulatedSwitch],  # patch hvacaction
+        mc.TYPE_MTS150: [MLEmulatedSwitch],  # patch hvacaction
     }
 
     async def async_test_enabled_callback(self, entity: haec.SwitchEntity):

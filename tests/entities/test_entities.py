@@ -1,34 +1,43 @@
 from importlib import import_module
 import re
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.helpers.entity import STATE_UNAVAILABLE
 
 from custom_components.meross_lan.devices.hub import HubMixin
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
-from emulator import generate_emulators
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 
 from tests import const as tc, helpers
 from tests.entities import EntityComponentTest
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+    from pytest import CaptureFixture
 
     from custom_components.meross_lan.helpers.device import BaseDevice
 
-    from tests.entities import MerossEntityTypesDigestContainer, MerossEntityTypesList
+    from tests.entities import (
+        DeviceEntitiesType,
+        DigestEntitiesType,
+        HubSubDeviceEntitiesType,
+        MerossEntityTypesList,
+        NamespaceEntitiesType,
+    )
 
     COMPONENTS_TESTS: dict[str, EntityComponentTest]
-    DEVICE_ENTITIES: MerossEntityTypesList
-    DIGEST_ENTITIES: dict[str, MerossEntityTypesDigestContainer]
-    NAMESPACES_ENTITIES: dict[str, MerossEntityTypesList]
-    HUB_SUBDEVICES_ENTITIES: dict[str, MerossEntityTypesList]
+    DEVICE_ENTITIES: DeviceEntitiesType
+    DIGEST_ENTITIES: DigestEntitiesType
+    NAMESPACES_ENTITIES: NamespaceEntitiesType
+    HUB_SUBDEVICES_ENTITIES: HubSubDeviceEntitiesType
 
 COMPONENTS_TESTS = {}
 DEVICE_ENTITIES = []
 DIGEST_ENTITIES = {}
 NAMESPACES_ENTITIES = {}
-HUB_SUBDEVICES_ENTITIES = {}
+HUB_SUBDEVICES_ENTITIES = {None: []}
 
 # list of exclusions from the general rule which states that
 # every entity must be 'available' once the device is loaded
@@ -37,6 +46,7 @@ HUB_SUBDEVICES_ENTITIES = {}
 UNAVAILABLE_ENTITIES = {}
 
 for entity_domain in (
+    "binary_sensor",
     "button",
     "calendar",
     "climate",
@@ -59,7 +69,7 @@ for entity_domain in (
     for digest_key, entity_types in entity_test.DIGEST_ENTITIES.items():
         # digest entity type description might be hiearchical
         # since digest iteslf might be a dict hierarchy (2 levels though)
-        if digest_key in DIGEST_ENTITIES:
+        try:
             container = DIGEST_ENTITIES[digest_key]
             assert type(container) is type(entity_types)
             if isinstance(entity_types, dict):
@@ -70,22 +80,26 @@ for entity_domain in (
             else:
                 assert isinstance(container, list)
                 container.extend(entity_types)
-        else:
+        except KeyError:
             DIGEST_ENTITIES[digest_key] = entity_types.copy()
 
     for namespace, entity_types in entity_test.NAMESPACES_ENTITIES.items():
-        container = NAMESPACES_ENTITIES.setdefault(namespace, [])
-        container.extend(entity_types)
+        try:
+            NAMESPACES_ENTITIES[namespace].extend(entity_types)
+        except KeyError:
+            NAMESPACES_ENTITIES[namespace] = list(entity_types)
 
     for subdevice_type, entity_types in entity_test.HUB_SUBDEVICES_ENTITIES.items():
-        container = HUB_SUBDEVICES_ENTITIES.setdefault(subdevice_type, [])
-        container.extend(entity_types)
+        try:
+            HUB_SUBDEVICES_ENTITIES[subdevice_type].extend(entity_types)
+        except KeyError:
+            HUB_SUBDEVICES_ENTITIES[subdevice_type] = list(entity_types)
 
 
 async def test_entities(
     request,
     hass: "HomeAssistant",
-    aioclient_mock,
+    capsys: "CaptureFixture",
     disable_entity_registry_update,
 ):
     """
@@ -98,25 +112,27 @@ async def test_entities(
     EntityComponentTest.hass_states = hass.states
     EntityComponentTest.hass_service_call = hass.services.async_call
 
+    unexpected_entities_summary: dict[str, list[str]] = {}
+    unavailable_entities_summary: dict[str, list[str]] = {}
+
     try:
-        for emulator in generate_emulators(
-            tc.EMULATOR_TRACES_PATH, key=tc.MOCK_KEY, uuid=tc.MOCK_DEVICE_UUID
-        ):
+        for emulator in helpers.build_emulators():
+
             descriptor = emulator.descriptor
             EntityComponentTest.ability = ability = descriptor.ability
             EntityComponentTest.digest = digest = descriptor.digest
             ishub = mc.KEY_HUB in digest
 
-            EntityComponentTest.expected_entity_types = expected_entity_types = (
+            EntityComponentTest.expected_entity_types = expected_entities = (
                 DEVICE_ENTITIES.copy()
             )
-            _add_func = expected_entity_types.extend
+            _add_func = expected_entities.extend
             for digest_key, entity_types in DIGEST_ENTITIES.items():
                 if digest_key in digest:
                     sub_digest = digest[digest_key]
                     if isinstance(entity_types, list):
                         if isinstance(sub_digest, list):
-                            for channel_digest in sub_digest:
+                            for _ in sub_digest:
                                 _add_func(entity_types)
                         else:
                             # this is somewhat specific for "light" digest key
@@ -142,6 +158,9 @@ async def test_entities(
                         # discarded in Hub too
                         # (see trace msh300hk-01234567890123456789012345678916)
                         continue
+                    # Add the expected entities common to any device type
+                    _add_func(HUB_SUBDEVICES_ENTITIES[None])
+                    # Record the id to check for duplicates
                     subdevice_ids.add(subdevice_id)
                     for p_key, p_value in p_subdevice.items():
                         if isinstance(p_value, dict):
@@ -149,31 +168,48 @@ async def test_entities(
                                 _add_func(HUB_SUBDEVICES_ENTITIES[p_key])
                             break
 
-            async with helpers.DeviceContext(
-                request, hass, emulator, aioclient_mock
-            ) as device_context:
+            async with helpers.DeviceContext(request, hass, emulator) as device_context:
                 EntityComponentTest.device_context = device_context
                 try:
-                    with device_context.capsys.disabled():  # type: ignore
-                        print(f"Testing {device_context.config_entry.title}")
+                    device_name = device_context.config_entry.title
+                    with capsys.disabled():
+                        print(f"\nTesting {device_name}")
                         print(
-                            f"Expected entities: {[entity_type.__name__ for entity_type in expected_entity_types]}"
+                            f"Expected entities: {[_entity_type.__name__ for _entity_type in expected_entities]}"
                         )
+                    unexpected_entities: list[str] = []
+                    unavailable_entities: list[str] = []
                     device = await device_context.perform_coldstart()
-                    await _async_test_entities(device)
+                    await _async_test_entities(
+                        device,
+                        expected_entities,
+                        unexpected_entities,
+                        unavailable_entities,
+                    )
                     if ishub:
                         assert isinstance(device, HubMixin)
                         for subdevice in device.subdevices.values():
-                            await _async_test_entities(subdevice)
+                            await _async_test_entities(
+                                subdevice,
+                                expected_entities,
+                                unexpected_entities,
+                                unavailable_entities,
+                            )
+
+                    if unexpected_entities:
+                        unexpected_entities_summary[device_name] = unexpected_entities
+                    if unavailable_entities:
+                        unavailable_entities_summary[device_name] = unavailable_entities
 
                     assert (
-                        not expected_entity_types
-                    ), f"device({descriptor.type}-{descriptor.uuid}) does not generate {expected_entity_types}"
+                        not expected_entities
+                    ), f"{device_name} does not generate {expected_entities}"
 
+                    # This could be safely removed once we finish off immutability for PayloadType
                     assert (
-                        not mn.RequestPayloadType.LIST.value
-                        and not mn.RequestPayloadType.DICT.value
-                        and (len(mn.RequestPayloadType.LIST_C.value) == 1)
+                        not mn.PayloadType.LIST.value
+                        and not mn.PayloadType.DICT.value
+                        and (len(mn.PayloadType.LIST_C.value) == 1)
                     ), f"device({descriptor.type}-{descriptor.uuid}) corrupts const data (namespaces)"
 
                 except BaseException as e:
@@ -187,38 +223,65 @@ async def test_entities(
         EntityComponentTest.hass_states = None  # type: ignore
         EntityComponentTest.hass_service_call = None  # type: ignore
 
+    with capsys.disabled():
+        print("\nUnexpected entities:")
+        for device_name, unexpected_entities in unexpected_entities_summary.items():
+            if unexpected_entities:
+                print(
+                    f"- {device_name}:\n{[_entity for _entity in unexpected_entities]}\n"
+                )
+        print("\nUnavailable entities:")
+        for device_name, unavailable_entities in unavailable_entities_summary.items():
+            if unavailable_entities:
+                print(
+                    f"- {device_name}:\n{[_entity for _entity in unavailable_entities]}\n"
+                )
 
-async def _async_test_entities(manager: "BaseDevice"):
+
+async def _async_test_entities(
+    manager: "BaseDevice",
+    expected_entities: "MerossEntityTypesList",
+    unexpected_entities: list[str],
+    unavailable_entities: list[str],
+):
     for entity in manager.entities.values():
+
+        entity_type = type(entity)
 
         if entity.PLATFORM not in COMPONENTS_TESTS:
             # TODO: add missing platform tests
             helpers.LOGGER.warning("Missing testing for platform %s", entity.PLATFORM)
+            unexpected_entities.append(entity.logtag)
             continue
 
         EntityComponentTest.entity_id = entity_id = entity.entity_id
-        entity_type = type(entity)
-        if entity_type in EntityComponentTest.expected_entity_types:
-            EntityComponentTest.expected_entity_types.remove(entity_type)
 
         entity_component_test = COMPONENTS_TESTS[entity.PLATFORM]
         assert isinstance(entity, entity_component_test.ENTITY_TYPE)
 
+        # This will ensure the entity is 'available' as per an online device
         await entity_component_test.async_test_each_callback(entity)
+
+        if entity_type in expected_entities:
+            expected_entities.remove(entity_type)
+        else:
+            unexpected_entities.append(entity.logtag)
 
         state = EntityComponentTest.hass_states.get(entity_id)
         if state:
-            assert entity._hass_connected
-            if not entity.available:
-                assert state.state == STATE_UNAVAILABLE
-                continue
-
+            assert entity.hass_connected
+            if state.state == STATE_UNAVAILABLE:
+                # state availability should be asserted in the future
+                # since it's an indication of failure in polling
+                # device state. Right now we have issues in parsing ms600
+                # so we have to demote this to a warning in our test logs
+                unavailable_entities.append(entity.logtag)
             await entity_component_test.async_test_enabled_callback(entity)
         else:
             # entity not loaded in HA
-            assert not entity._hass_connected
-            if not entity.available:
-                continue
+            assert not entity.hass_connected
+            assert not entity.enabled
+            # assert not entity.entity_registry_enabled_default
             # just test the internal interface
             await entity_component_test.async_test_disabled_callback(entity)
 

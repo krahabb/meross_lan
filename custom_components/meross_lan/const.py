@@ -2,18 +2,25 @@
 
 import enum
 import logging
-from typing import Final, NotRequired, TypedDict
+from typing import TYPE_CHECKING, Final, NotRequired, TypedDict
 
 from homeassistant import const as hac
 
-from .merossclient import cloudapi, const as mc
+from .merossclient import cloudapi
+from .merossclient.protocol import const as mc
+
+if TYPE_CHECKING:
+    from typing import Any, Mapping
+
 
 DOMAIN: Final = "meross_lan"
+
 
 class DeviceType(enum.Enum):
     DEVICE = 1
     HUB = 2
     SUBDEVICE = 3
+
 
 #########################
 # common ConfigEntry keys
@@ -44,6 +51,16 @@ CONF_TRACE_TIMEOUT_DEFAULT: Final = 600
 CONF_TRACE_MAXSIZE: Final = 262144  # or when MAXSIZE exceeded
 # folder where to store traces
 CONF_TRACE_DIRECTORY: Final = "traces"
+# versioning
+CONF_TRACE_VERSION: Final = 2
+CONF_TRACE_COLUMNS: Final = ["time", "rxtx", "protocol", "method", "namespace", "data"]
+if TYPE_CHECKING:
+
+    class TracingHeaderType(TypedDict):
+        version: int
+        config: Mapping[str, Any]
+        state: Mapping[str, Any]
+        trace: NotRequired[list[list]]
 
 
 class ManagerConfigType(TypedDict):
@@ -186,6 +203,8 @@ ISSUE_DEVICE_ID_MISMATCH = "device_identity_mismatch"
 """raised when a device receives data from a different (uuid) appliance"""
 ISSUE_DEVICE_TIMEZONE = "device_timezone"
 """raised when a device timezone is not set or is anyway different from HA default"""
+ISSUE_HUB_SUBDEVICE_REMOVED = "hub_subdevice_removed"
+"""raised when an Hub SubDevice is no more available (unbinded) and the device_egistry needs cleanup."""
 
 # general working/configuration parameters
 PARAM_DEFAULT_KEY = "meross"

@@ -1,5 +1,5 @@
 from time import time
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant import const as hac
 from homeassistant.components import select
@@ -9,8 +9,8 @@ from homeassistant.util.unit_conversion import TemperatureConverter
 
 from .helpers import entity as me, reverse_lookup
 
-if typing.TYPE_CHECKING:
-    from typing import Unpack
+if TYPE_CHECKING:
+    from typing import Any, ClassVar, Unpack
 
     from homeassistant.components.sensor import SensorEntity
     from homeassistant.config_entries import ConfigEntry
@@ -20,7 +20,6 @@ if typing.TYPE_CHECKING:
 
     from .climate import MtsClimate
     from .helpers.device import BaseDevice
-
 
 
 async def async_setup_entry(
@@ -37,9 +36,12 @@ class MLSelect(me.MLEntity, select.SelectEntity):
 
     PLATFORM = select.DOMAIN
 
-    # HA core entity attributes:
-    current_option: str | None
-    options: list[str]
+    if TYPE_CHECKING:
+        # HA core entity attributes:
+        current_option: str | None
+        options: list[str]
+
+    entity_category = me.MLEntity.EntityCategory.CONFIG
 
     __slots__ = (
         "current_option",
@@ -66,10 +68,13 @@ class MLConfigSelect(MLSelect):
     (which also auto-updates should the device provide an unmapped value).
     """
 
-    # configure initial options(map) through a class default
-    OPTIONS_MAP: typing.ClassVar[dict[typing.Any, str]] = {}
+    if TYPE_CHECKING:
+        OPTIONS_MAP: ClassVar[dict[Any, str]]
+        options_map: dict[Any, str]
 
-    options_map: dict[typing.Any, str]
+    # configure initial options(map) through a class default
+    OPTIONS_MAP = {}
+
     __slots__ = ("options_map",)
 
     def __init__(
@@ -87,9 +92,9 @@ class MLConfigSelect(MLSelect):
         super().__init__(manager, channel, entitykey, None, **kwargs)
 
     def update_device_value(self, device_value):
-        if device_value in self.options_map:
+        try:
             self.update_option(self.options_map[device_value])
-        else:
+        except KeyError:
             self.options_map[device_value] = option = str(device_value)
             self.options.append(option)
             self.update_option(option)
@@ -115,7 +120,6 @@ class MtsTrackedSensor(me.MEAlwaysAvailableMixin, MLSelect):
 
     # HA core entity attributes:
     current_option: str
-    entity_category = MLSelect.EntityCategory.CONFIG
     entity_registry_enabled_default = False
 
     __slots__ = (
@@ -236,11 +240,11 @@ class MtsTrackedSensor(me.MEAlwaysAvailableMixin, MLSelect):
             )
             if not tracked_temperature_unit:
                 raise ValueError("tracked entity has no unit of measure")
-            if tracked_temperature_unit != climate.TEMP_CELSIUS:
+            if tracked_temperature_unit != climate.temperature_unit:
                 tracked_temperature = TemperatureConverter.convert(
                     tracked_temperature,
                     tracked_temperature_unit,
-                    climate.TEMP_CELSIUS,
+                    climate.temperature_unit,
                 )
             error_temperature: float = tracked_temperature - current_temperature
             native_error_temperature = round(error_temperature * climate.device_scale)
@@ -273,7 +277,7 @@ class MtsTrackedSensor(me.MEAlwaysAvailableMixin, MLSelect):
                 self.DEBUG,
                 "Applying correction of %s %s to %s",
                 adjust_temperature,
-                climate.TEMP_CELSIUS,
+                climate.temperature_unit,
                 climate.entity_id,
             )
 

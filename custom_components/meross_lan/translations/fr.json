@@ -38,7 +38,11 @@
             "common": {
                 "state": {
                     "ok": "Ok",
-                    "disconnected": "Débranché"
+                    "disconnected": "Débranché",
+                    "low": "Faible",
+                    "medium": "Moyen",
+                    "high": "Élevé",
+                    "idle": "Inactif"
                 }
             },
             "mts_overheat_warning": {
@@ -53,6 +57,21 @@
                     "0": "Ok",
                     "1": "Freezing",
                     "2": "Débranché"
+                }
+            },
+            "mts300_status": {
+                "state": {
+                    "0": "Inactif",
+                    "1": "Faible",
+                    "2": "Moyen",
+                    "3": "Élevé"
+                }
+            },
+            "mts300_hdstatus": {
+                "state": {
+                    "1": "Déshumidification",
+                    "2": "Humidification",
+                    "0": "Inactif"
                 }
             }
         }
@@ -144,7 +163,7 @@
                 "data": {
                     "key": "Clé",
                     "error": "Message d'erreur",
-                    "allow_mqtt_publish": "Autoriser la publication MQTT"
+                    "allow_mqtt_publish": "Autoriser la publication MQTT locale"
                 }
             },
             "device": {
@@ -283,6 +302,23 @@
                 "step": {
                     "confirm": {
                         "title": "Le fuseau horaire pour {device_name} n'est pas défini ou diffère de celui par défaut de HomeAssistant"
+                    }
+                }
+            }
+        },
+        "hub_subdevice_removed": {
+            "title": "{device_name} supprimé du hub",
+            "fix_flow": {
+                "abort": {
+                    "subdevice_still_registered": "Le sous-appareil est toujours enregistré"
+                },
+                "step": {
+                    "confirm": {
+                        "title": "Supprimer l'appareil et les enregistrements d'entités",
+                        "description": "L'appareil ne répond pas et sera supprimé de la configuration",
+                        "data": {
+                            "delete": "Supprimer définitivement la configuration du (sous-)appareil"
+                        }
                     }
                 }
             }

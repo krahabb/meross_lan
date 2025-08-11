@@ -27,17 +27,18 @@ from .helpers.manager import CloudApiClient
 from .merossclient import (
     HostAddress,
     MerossDeviceDescriptor,
-    MerossKeyError,
     cloudapi,
-    compute_message_encryption_key,
-    const as mc,
     fmt_macaddress,
     get_macaddress_from_uuid,
-    get_message_uuid,
-    namespaces as mn,
 )
 from .merossclient.httpclient import MerossHttpClient
 from .merossclient.mqttclient import MerossMQTTDeviceClient
+from .merossclient.protocol import MerossKeyError, const as mc, namespaces as mn
+from .merossclient.protocol.message import (
+    check_message_strict,
+    compute_message_encryption_key,
+    get_message_uuid,
+)
 
 if typing.TYPE_CHECKING:
     from typing import Final
@@ -142,7 +143,6 @@ class MerossFlowHandlerMixin(
 
     @cached_property
     def api(self):
-        # TODO: improve consistence in caching/access to api
         return ComponentApi.get(self.hass)
 
     @ce.callback
@@ -453,20 +453,23 @@ class MerossFlowHandlerMixin(
         key = key or ""
         api = self.api
         _httpclient = MerossHttpClient(
-            host,
-            key,
-            None,
-            api,  # type: ignore (api almost duck-compatible with logging.Logger)
-            api.VERBOSE,
+            host, key, logger=api, log_level_dump=api.VERBOSE
         )
 
-        response_ability = await _httpclient.async_request_strict(
-            *mn.Appliance_System_Ability.request_default
+        response_ability = check_message_strict(
+            await _httpclient.async_request(
+                *mn.Appliance_System_Ability.request_default
+            )
+        )
+        response_ability = check_message_strict(
+            await _httpclient.async_request(
+                *mn.Appliance_System_Ability.request_default
+            )
         )
         ability = response_ability[mc.KEY_PAYLOAD][mc.KEY_ABILITY]
         try:
-            all = (
-                await _httpclient.async_request_strict(
+            all = check_message_strict(
+                await _httpclient.async_request(
                     *mn.Appliance_System_All.request_default
                 )
             )[mc.KEY_PAYLOAD][mc.KEY_ALL]
@@ -482,8 +485,8 @@ class MerossFlowHandlerMixin(
                     uuid, key, get_macaddress_from_uuid(uuid)
                 ).encode("utf-8")
             )
-            all = (
-                await _httpclient.async_request_strict(
+            all = check_message_strict(
+                await _httpclient.async_request(
                     *mn.Appliance_System_All.request_default
                 )
             )[mc.KEY_PAYLOAD][mc.KEY_ALL]
@@ -510,7 +513,7 @@ class MerossFlowHandlerMixin(
         if key is None:
             key = ""
         if descriptor:
-            profile = ComponentApi.profiles.get(descriptor.userId)  # type: ignore
+            profile = self.api.profiles.get(descriptor.userId)  # type: ignore
             if profile and (profile.key == key):
                 if profile.allow_mqtt_publish:
                     mqttconnections = await profile.get_or_create_mqttconnections(
@@ -865,7 +868,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
     """
 
     if typing.TYPE_CHECKING:
-        config_entry: Final[ce.ConfigEntry]
+        config_entry: Final[ce.ConfigEntry[ConfigEntryManager]]
         config_entry_id: Final[str]
         repair_issue_id: Final[str | None]
 
@@ -917,7 +920,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                 self._device_id = device_id
                 assert device_id == self.device_config[mlc.CONF_DEVICE_ID]
                 try:
-                    device: Device = self.config_entry.runtime_data
+                    device: Device = self.config_entry.runtime_data  # type: ignore
                     self.device_descriptor = device.descriptor
                 except AttributeError:
                     # if config not loaded the device is None
@@ -1137,7 +1140,11 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                 state = self.api.managers_transient_state.setdefault(
                     self.config_entry_id, {}
                 )
-                state[mlc.CONF_TRACE] = user_input[mlc.CONF_TRACE]
+                # we're saving the 'diagnostic state' before reloading so that when tracing starts
+                # it'll be dumped at the start of the trace together with config and other info (maybe)
+                state[mlc.CONF_TRACE] = (
+                    self.config_entry.runtime_data.loggable_diagnostic_state()
+                )
                 return self.finish_options_flow(config, True)
             return self.finish_options_flow(config)
 
@@ -1324,11 +1331,13 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                             ce.ConfigEntryDisabler.USER,
                         ),
                         f".OptionsFlow.async_set_disabled_by",
+                        eager_start=False,
                     )
                 elif action == KEY_ACTION_DELETE:
                     api.async_create_task(
                         self.hass.config_entries.async_remove(self.config_entry_id),
                         f".OptionsFlow.async_remove",
+                        eager_start=False,
                     )
                 return self.async_create_entry(data=None)  # type: ignore
 

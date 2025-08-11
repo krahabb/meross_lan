@@ -17,15 +17,16 @@ from .. import const as mlc
 from ..merossclient import (
     MEROSSDEBUG,
     HostAddress,
-    MerossAckReply,
     MerossDeviceDescriptor,
-    MerossPushReply,
-    MerossRequest,
-    const as mc,
     json_loads,
-    namespaces as mn,
 )
 from ..merossclient.httpclient import MerossHttpClient
+from ..merossclient.protocol import const as mc, namespaces as mn
+from ..merossclient.protocol.message import (
+    MerossAckReply,
+    MerossPushReply,
+    MerossRequest,
+)
 from .device import Device
 from .manager import ConfigEntryManager
 from .mqtt_profile import MQTTConnection, MQTTProfile
@@ -38,7 +39,8 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse
 
-    from ..merossclient import MerossHeaderType, MerossMessage, MerossPayloadType
+    from ..merossclient.protocol.message import MerossMessage
+    from ..merossclient.protocol.types import MerossHeaderType, MerossPayloadType
     from .meross_profile import MerossProfile
 
 
@@ -56,6 +58,8 @@ MIXIN_DIGEST_INIT = {
 class HAMQTTConnection(MQTTConnection):
 
     if typing.TYPE_CHECKING:
+        is_cloud_connection: Final[bool]
+
         _unsub_mqtt_subscribe: Callable | None
         _unsub_mqtt_disconnected: Callable | None
         _unsub_mqtt_connected: Callable | None
@@ -83,7 +87,7 @@ class HAMQTTConnection(MQTTConnection):
         self._unsub_mqtt_connected = None
         self._mqtt_subscribe_future = None
         if MEROSSDEBUG:
-            # TODO : check bug in hass shutdown
+
             async def _async_random_disconnect():
                 self._unsub_random_disconnect = api.schedule_async_callback(
                     60, _async_random_disconnect
@@ -251,9 +255,9 @@ class HAMQTTConnection(MQTTConnection):
             await self.async_mqtt_publish(
                 device_id,
                 MerossAckReply(
-                    key,
                     header,
                     {},
+                    key,
                     mc.TOPIC_RESPONSE.format(device_id),
                 ),
             )
@@ -292,8 +296,7 @@ class HAMQTTConnection(MQTTConnection):
             await self.async_mqtt_publish(
                 device_id,
                 MerossPushReply(
-                    header,
-                    {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}},
+                    header, {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}}
                 ),
             )
         # keep forwarding the message
@@ -315,6 +318,8 @@ class ComponentApi(MQTTProfile):
     """
 
     if typing.TYPE_CHECKING:
+        is_cloud_profile: Final[bool]
+
         devices: Final[dict[str, Device | None]]
         """
         dict of configured devices. Every device config_entry in the system is mapped here and
@@ -393,6 +398,7 @@ class ComponentApi(MQTTProfile):
         return None
 
     def __init__(self, hass: "HomeAssistant"):
+        self.is_cloud_profile = False
         MQTTProfile.__init__(self, mlc.CONF_PROFILE_ID_LOCAL, api=self, hass=hass)
         self.devices = {}
         self.profiles = {}
@@ -443,11 +449,12 @@ class ComponentApi(MQTTProfile):
 
             async def _async_device_request(device: "Device"):
                 service_response["request"] = request = MerossRequest(
-                    key or device.key,
                     namespace,
                     method,
                     payload,
+                    key or device.key,
                     device._topic_response,
+                    mlc.DOMAIN,
                 )
                 service_response["response"] = (
                     await device.async_mqtt_request_raw(request)
@@ -469,11 +476,12 @@ class ComponentApi(MQTTProfile):
                     and mqtt_connection.mqtt_is_connected
                 ):
                     service_response["request"] = request = MerossRequest(
-                        key or self.key,
                         namespace,
                         method,
                         payload,
+                        key or self.key,
                         mqtt_connection.topic_response,
+                        mlc.DOMAIN,
                     )
                     service_response["response"] = (
                         await mqtt_connection.async_mqtt_publish(device_id, request)
@@ -488,20 +496,20 @@ class ComponentApi(MQTTProfile):
 
                 if protocol is not mlc.CONF_PROTOCOL_MQTT:
                     service_response["request"] = request = MerossRequest(
-                        key or self.key,
                         namespace,
                         method,
                         payload,
-                        mc.MANUFACTURER,
+                        key or self.key,
+                        mc.HEADER_FROM_DEFAULT,
+                        mlc.DOMAIN,
                     )
                     try:
                         service_response["response"] = (
                             await MerossHttpClient(
                                 host,
                                 key or self.key,
-                                None,
-                                self,  # type: ignore (self almost duck-compatible with logging.Logger)
-                                self.VERBOSE,
+                                logger=self,
+                                log_level_dump=self.VERBOSE,
                             ).async_request_raw(request.json())
                             or {}
                         )

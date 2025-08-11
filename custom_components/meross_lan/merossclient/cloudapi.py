@@ -9,7 +9,8 @@ from uuid import uuid4
 
 import aiohttp
 
-from . import MEROSSDEBUG, MerossProtocolError, const as mc
+from . import MEROSSDEBUG
+from .protocol import MerossProtocolError, const as mc
 
 SECRET = "23x17ahWarFH6w29"
 

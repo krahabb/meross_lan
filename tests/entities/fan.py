@@ -1,7 +1,10 @@
 from homeassistant.components import fan as haec
 
 from custom_components.meross_lan.fan import MLFan
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 
 from tests.entities import EntityComponentTest
 

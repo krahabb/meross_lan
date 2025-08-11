@@ -1,10 +1,9 @@
 import abc
-import asyncio
 import bisect
 from datetime import UTC, tzinfo
 from json import JSONDecodeError
 from time import time
-import typing
+from typing import TYPE_CHECKING
 from uuid import uuid4
 import zoneinfo
 
@@ -12,7 +11,7 @@ import aiohttp
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
-from homeassistant.util import dt as dt_util
+from homeassistant.util import dt as dt_util, slugify
 import voluptuous as vol
 
 from . import datetime_from_epoch
@@ -30,93 +29,67 @@ from ..const import (
     PARAM_HEARTBEAT_PERIOD,
     PARAM_TIMESTAMP_TOLERANCE,
 )
+from ..helpers.obfuscate import obfuscated_dict
 from ..merossclient import (
     HostAddress,
+    get_active_broker,
+    is_device_online,
+    json_dumps,
+)
+from ..merossclient.httpclient import MerossHttpClient, TerminatedException
+from ..merossclient.protocol.message import (
     MerossRequest,
     MerossResponse,
     compute_message_encryption_key,
     compute_message_signature,
-    const as mc,
-    get_active_broker,
     get_message_uuid,
-    is_device_online,
-    json_dumps,
-    namespaces as mn,
 )
-from ..merossclient.httpclient import MerossHttpClient, TerminatedException
 from ..sensor import ProtocolSensor
 from ..update import MLUpdate
 from .manager import ConfigEntryManager, EntityManager
-from .namespaces import NamespaceHandler
+from .namespaces import NamespaceHandler, mc, mn
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
+    from asyncio import Future, TimerHandle
     from types import CoroutineType
-    from typing import Any, Callable, Final, Iterable, NotRequired, Unpack
+    from typing import (
+        Any,
+        Callable,
+        ClassVar,
+        Collection,
+        Final,
+        Iterable,
+        Iterator,
+        Mapping,
+        NotRequired,
+        Unpack,
+    )
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from ..merossclient import (
-        MerossDeviceDescriptor,
+    from ..devices.hub import SubDevice
+    from ..merossclient import MerossDeviceDescriptor, MerossRequestType
+    from ..merossclient.cloudapi import DeviceInfoType, LatestVersionType
+    from ..merossclient.protocol.message import MerossMessage
+    from ..merossclient.protocol.types import (
         MerossHeaderType,
-        MerossMessage,
         MerossMessageType,
         MerossPayloadType,
-        MerossRequestType,
     )
-    from ..merossclient.cloudapi import DeviceInfoType, LatestVersionType
     from .component_api import ComponentApi
     from .entity import MLEntity
     from .mqtt_profile import MQTTConnection, MQTTProfile
     from .namespaces import NamespaceParser
 
-    DigestParseFunc = Callable[[dict], None] | Callable[[list], None]
-    DigestInitReturnType = tuple[DigestParseFunc, Iterable[NamespaceHandler]]
-    DigestInitFunc = Callable[["Device", Any], DigestInitReturnType]
-    NamespaceInitFunc = Callable[["Device"], None]
-    AsyncRequestFunc = Callable[
+    type DigestParseFunc = Callable[[dict], None] | Callable[[list], None]
+    type DigestInitReturnType = tuple[DigestParseFunc, Iterable[NamespaceHandler]]
+    type DigestInitFunc = Callable[["Device", Any], DigestInitReturnType]
+    type NamespaceInitFunc = Callable[["Device"], None]
+    type AsyncRequestFunc = Callable[
         [str, str, MerossPayloadType], CoroutineType[Any, Any, MerossResponse | None]
     ]
 
-
-# when tracing we enumerate appliance abilities to get insights on payload structures
-# this list will be excluded from enumeration since it's redundant/exposing sensitive info
-# or simply crashes/hangs the device
-TRACE_ABILITY_EXCLUDE = (
-    mn.Appliance_System_Ability.name,
-    mn.Appliance_System_All.name,
-    mn.Appliance_System_Clock.name,
-    mn.Appliance_System_DNDMode.name,
-    mn.Appliance_System_Firmware.name,
-    mn.Appliance_System_Hardware.name,
-    mn.Appliance_System_Online.name,
-    mn.Appliance_System_Position.name,
-    mn.Appliance_System_Report.name,
-    mn.Appliance_System_Time.name,
-    mn.Appliance_Config_Key.name,
-    mn.Appliance_Config_Trace.name,
-    mn.Appliance_Config_Wifi.name,
-    mn.Appliance_Config_WifiList.name,
-    mn.Appliance_Config_WifiX.name,
-    mn.Appliance_Control_Bind.name,
-    mn.Appliance_Control_Multiple.name,
-    mn.Appliance_Control_PhysicalLock.name,  # disconnects
-    mn.Appliance_Control_TimerX.name,
-    mn.Appliance_Control_TriggerX.name,
-    mn.Appliance_Control_Unbind.name,
-    mn.Appliance_Control_Upgrade.name,  # disconnects
-    mn.Appliance_Digest_TimerX.name,
-    mn.Appliance_Digest_TriggerX.name,
-    mn.Appliance_Hub_Exception.name,  # disconnects
-    mn.Appliance_Hub_Report.name,  # disconnects
-    mn.Appliance_Hub_SubdeviceList.name,  # disconnects
-    mn.Appliance_Hub_PairSubDev.name,  # disconnects
-    mn.Appliance_Hub_SubDevice_Beep.name,  # protocol replies with error code: 5000
-    mn.Appliance_Hub_SubDevice_MotorAdjust.name,  # protocol replies with error code: 5000
-    mn.Appliance_Mcu_Firmware.name,  # disconnects
-    mn.Appliance_Mcu_Upgrade.name,  # disconnects
-    mn.Appliance_Mcu_Hp110_Preview.name,  # disconnects
-)
 
 TIMEZONES_SET = None
 
@@ -127,7 +100,7 @@ class BaseDevice(EntityManager):
     giving common behaviors like device_registry interface
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
         # override some nullable since we're pretty sure they're none
         config_entry: Final[ConfigEntry]  # type: ignore
         deviceentry_id: Final[EntityManager.DeviceEntryIdType]  # type: ignore
@@ -244,9 +217,44 @@ class Device(BaseDevice, ConfigEntryManager):
     Generic protocol handler class managing the physical device stack/state
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
+        NAMESPACES: ClassVar[mn.NamespacesMapType]
+        """ Accesses the namespaces definitions for this Device. This could be overriden
+        when needed to extend with other namespaces (this is actually true for Hub). This
+        way, when we're working only with standard devices we don't need to import the namespaces
+        only relevant to hubs."""
         DIGEST_INIT: Final[dict[str, Any]]
+        """ Static dict of 'digest initialization function(s)'.
+        This is built on demand during Device init whenever a new digest key
+        is encountered. This static dict in turn is used to setup the Device instance
+        'digest_handlers' dict which contains a lookup to the digest parsing function when
+        an NS_ALL message is received/parsed.
+        The 'digest initialization function' will (at device init time) parse the digest to
+        setup the dedicated entities for the particular digest key.
+        The definition of this init function is looked up at runtime by an algorithm that:
+        - looks-up if the digest key is in DIGEST_INITIALIZERS where it'll find either the
+        function or the (str) module coordinates of the init function for the digest key.
+        - if not configured, the algorithm will try load the module in meross_lan/devices
+        with the same name as the digest key.
+        - if any is not found we'll set a 'digest_init_empty' function in order to not
+        repeat the lookup process. That function will just pass so that the key
+        init/parsing will not harm."""
         NAMESPACE_INIT: Final[dict[str, Any]]
+        """ Static dict of namespace initialization functions. This will be looked up
+        and matched against the current device abilities (at device init time) and
+        usually setups a dedicated namespace handler and/or a dedicated entity.
+        As far as the initialization functions are looked up in related modules,
+        they'll be cached in the dict.
+        Namespace handlers will be initialized in the order as they appear in the dict
+        and this could have consequences in the order of polls."""
+        TRACE_ABILITY_EXCLUDE: ClassVar[tuple[str, ...]]
+        """ When tracing we enumerate appliance abilities to get insights on payload structures
+        this list will be excluded from enumeration since it's redundant/exposing sensitive info
+        or simply crashes/hangs the device."""
+
+        descriptor: Final[MerossDeviceDescriptor]
+        is_refoss: Final[bool]
+        tz: tzinfo
 
         # these are set from ConfigEntry
         config: mlc.DeviceConfigType
@@ -255,8 +263,6 @@ class Device(BaseDevice, ConfigEntryManager):
         conf_protocol: str
         pref_protocol: str
         curr_protocol: str
-        # other default property values
-        tz: tzinfo
 
         device_timestamp: int
 
@@ -272,22 +278,26 @@ class Device(BaseDevice, ConfigEntryManager):
         _http_lastrequest: float
         _http_lastresponse: float
         namespace_handlers: dict[str, NamespaceHandler]
-        namespace_pushes: dict[str, dict]
+        namespace_pushes: dict[str, Mapping]
         digest_handlers: dict[str, DigestParseFunc]
         digest_pollers: set[NamespaceHandler]
         _lazypoll_requests: list[NamespaceHandler]
         _polling_epoch: float
-        _polling_callback_unsub: asyncio.TimerHandle | None
-        _polling_callback_shutdown: asyncio.Future | None
+        _polling_callback_unsub: TimerHandle | None
+        _polling_callback_shutdown: Future | None
         _queued_cloudpoll_requests: int
         multiple_max: int
         _timezone_next_check: float
-        _trace_ability_callback_unsub: asyncio.TimerHandle | None
+        _trace_ability_callback_unsub: TimerHandle | None
         _diagnostics_build: bool
 
         # entities
         sensor_protocol: ProtocolSensor
         update_firmware: MLUpdate | None
+
+        # HubMixin attributes: beware these are only
+        # initialized in HubMixin(s) and not set/available in standard Device(s)
+        subdevices: dict[str, "SubDevice"]
 
     @staticmethod
     def digest_parse_empty(digest: dict | list):
@@ -303,9 +313,12 @@ class Device(BaseDevice, ConfigEntryManager):
     def namespace_init_empty(device: "Device"):
         pass
 
+    NAMESPACES = mn.NAMESPACES
+
     DIGEST_INIT = {
         mc.KEY_FAN: ".fan",
         mc.KEY_LIGHT: ".light",
+        "light.effect": ".light",
         mc.KEY_TIMER: digest_init_empty,
         mc.KEY_TIMERX: digest_init_empty,
         mc.KEY_TOGGLE: ".switch",
@@ -313,23 +326,6 @@ class Device(BaseDevice, ConfigEntryManager):
         mc.KEY_TRIGGER: digest_init_empty,
         mc.KEY_TRIGGERX: digest_init_empty,
     }
-    """
-    Static dict of 'digest initialization function(s)'.
-    This is built on demand during Device init whenever a new digest key
-    is encountered. This static dict in turn is used to setup the Device instance
-    'digest_handlers' dict which contains a lookup to the digest parsing function when
-    an NS_ALL message is received/parsed.
-    The 'digest initialization function' will (at device init time) parse the digest to
-    setup the dedicated entities for the particular digest key.
-    The definition of this init function is looked up at runtime by an algorithm that:
-    - looks-up if the digest key is in DIGEST_INITIALIZERS where it'll find either the
-    function or the (str) module coordinates of the init function for the digest key.
-    - if not configured, the algorithm will try load the module in meross_lan/devices
-    with the same name as the digest key.
-    - if any is not found we'll set a 'digest_init_empty' function in order to not
-    repeat the lookup process. That function will just pass so that the key
-    init/parsing will not harm.
-    """
 
     NAMESPACE_INIT = {
         mn.Appliance_Config_OverTemp.name: (".devices.mss", "OverTempEnableSwitch"),
@@ -373,19 +369,37 @@ class Device(BaseDevice, ConfigEntryManager):
             ".devices.misc",
             "namespace_init_sensor_latestx",
         ),
+        "Appliance.Control.Thermostat.ModeC": (
+            ".devices.thermostat.mts300",
+            "Mts300Climate",
+        ),
         mn.Appliance_RollerShutter_State.name: (".cover", "MLRollerShutter"),
         mn.Appliance_System_DNDMode.name: (".light", "MLDNDLightEntity"),
         mn.Appliance_System_Runtime.name: (".sensor", "MLSignalStrengthSensor"),
     }
-    """
-    Static dict of namespace initialization functions. This will be looked up
-    and matched against the current device abilities (at device init time) and
-    usually setups a dedicated namespace handler and/or a dedicated entity.
-    As far as the initialization functions are looked up in related modules,
-    they'll be cached in the dict.
-    Namespace handlers will be initialized in the order as they appear in the dict
-    and this could have consequences in the order of polls
-    """
+
+    TRACE_ABILITY_EXCLUDE = (
+        mn.Appliance_System_Ability.name,
+        mn.Appliance_System_All.name,
+        mn.Appliance_System_Clock.name,
+        mn.Appliance_System_DNDMode.name,
+        mn.Appliance_System_Firmware.name,
+        mn.Appliance_System_Hardware.name,
+        mn.Appliance_System_Online.name,
+        mn.Appliance_System_Position.name,
+        mn.Appliance_System_Time.name,
+        mn.Appliance_Control_TriggerX.name,
+        mn.Appliance_Control_Unbind.name,
+        mn.Appliance_Control_Sensor_HistoryX.name,  # in mts300 our brute-force querying reboots
+        mn.Appliance_Mcu_Firmware.name,  # disconnects
+        mn.Appliance_Mcu_Upgrade.name,  # disconnects
+        mn.Appliance_Mcu_Hp110_Preview.name,  # disconnects
+        *(
+            name
+            for name, ns in mn.NAMESPACES.items()
+            if (ns.has_get is False) and (ns.has_push_query is False)
+        ),
+    )
 
     DEFAULT_PLATFORMS = ConfigEntryManager.DEFAULT_PLATFORMS | {
         MLUpdate.PLATFORM: None,
@@ -393,6 +407,7 @@ class Device(BaseDevice, ConfigEntryManager):
 
     __slots__ = (
         "descriptor",
+        "is_refoss",
         "tz",
         "polling_period",
         "_polling_delay",
@@ -451,6 +466,7 @@ class Device(BaseDevice, ConfigEntryManager):
         descriptor: "MerossDeviceDescriptor",
     ):
         self.descriptor = descriptor
+        self.is_refoss = descriptor.is_refoss
         self.tz = UTC
         self.needsave = False
         self._async_entry_update_unsub = None
@@ -470,7 +486,7 @@ class Device(BaseDevice, ConfigEntryManager):
         )
         self.lastrequest = 0.0
         self.lastresponse = 0.0
-        self._topic_response = mc.MANUFACTURER
+        self._topic_response = mc.HEADER_FROM_DEFAULT
         self._profile = None
         self._mqtt_connection = None
         self._mqtt_connected = None
@@ -602,12 +618,13 @@ class Device(BaseDevice, ConfigEntryManager):
                     # KeyError: key is unknown to our code (fallback to lookup ".devices.{key_digest}")
                     # TypeError: key is a string containing the module path
                     try:
+                        key_slug = slugify(key_digest)
                         _module_path = Device.DIGEST_INIT.get(
-                            key_digest, f".devices.{key_digest}"
+                            key_digest, f".devices.{key_slug}"
                         )
                         digest_init_func: "DigestInitFunc" = getattr(
                             await api.async_import_module(_module_path),
-                            f"digest_init_{key_digest}",
+                            f"digest_init_{key_slug}",
                         )
                     except Exception as exception:
                         self.log_exception(
@@ -684,16 +701,11 @@ class Device(BaseDevice, ConfigEntryManager):
         return f"{self.descriptor.type}_{self.loggable_device_id(self.id)}"
 
     def _trace_opened(self, epoch: float):
-        descr = self.descriptor
-        # set the scheduled callback first so it gets (eventually) cleaned
-        # should the following self.trace close the file due to an error
         self._trace_ability_callback_unsub = self.schedule_async_callback(
             mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
             self._async_trace_ability,
-            iter(descr.ability),
+            iter(self.descriptor.ability),
         )
-        self.trace(epoch, descr.all, mn.Appliance_System_All.name)
-        self.trace(epoch, descr.ability, mn.Appliance_System_Ability.name)
 
     def trace_close(
         self, exception: Exception | None = None, error_context: str | None = None
@@ -702,6 +714,188 @@ class Device(BaseDevice, ConfigEntryManager):
             self._trace_ability_callback_unsub.cancel()
             self._trace_ability_callback_unsub = None
         super().trace_close(exception, error_context)
+
+    async def _async_trace_ability(self, abilities_iterator: "Iterator[str]"):
+        try:
+            # avoid interleave tracing ability with polling loop
+            # also, since we could trigger this at early stages
+            # in device init, this check will prevent iterating
+            # at least until the device fully initialize through
+            # self.start()
+            if self.online and not self._polling_epoch:
+                while (
+                    ability := next(abilities_iterator)
+                ) in self.TRACE_ABILITY_EXCLUDE:
+                    continue
+                self.log(self.DEBUG, "Tracing %s ability", ability)
+                await self.get_handler_by_name(ability).async_trace(self.async_request)
+
+        except StopIteration:
+            self._trace_ability_callback_unsub = None
+            self.log(self.DEBUG, "Tracing abilities end")
+            return
+        except Exception as exception:
+            self.log_exception(self.WARNING, exception, "_async_trace_ability")
+
+        self._trace_ability_callback_unsub = None
+        if not self.is_tracing:
+            return
+
+        if (self.curr_protocol is CONF_PROTOCOL_MQTT) and self._mqtt_publish:
+            timeout = (
+                mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT
+                + self._mqtt_publish.get_rl_safe_delay(self.id)
+            )
+        else:
+            timeout = mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT
+        self._trace_ability_callback_unsub = self.schedule_async_callback(
+            timeout,
+            self._async_trace_ability,
+            abilities_iterator,
+        )
+
+    def _trace_or_log(
+        self,
+        epoch: float,
+        message: "MerossMessage",
+        protocol: str,
+        rxtx: str,
+    ):
+        if self.is_tracing:
+            header = message[mc.KEY_HEADER]
+            self.trace(
+                epoch,
+                message[mc.KEY_PAYLOAD],
+                header[mc.KEY_NAMESPACE],
+                header[mc.KEY_METHOD],
+                protocol,
+                rxtx,
+            )
+        # here we avoid using self.log since it would
+        # log to the trace file too but we've already 'traced' the
+        # message if that's the case
+        logger = self.logger
+        if logger.isEnabledFor(self.VERBOSE):
+            header = message[mc.KEY_HEADER]
+            logger._log(
+                self.VERBOSE,
+                "%s(%s) %s %s (messageId:%s) %s",
+                (
+                    rxtx,
+                    protocol,
+                    header[mc.KEY_METHOD],
+                    header[mc.KEY_NAMESPACE],
+                    header[mc.KEY_MESSAGEID],
+                    json_dumps(self.loggable_dict(message)),
+                ),
+            )
+        elif logger.isEnabledFor(self.DEBUG):
+            header = message[mc.KEY_HEADER]
+            logger._log(
+                self.DEBUG,
+                "%s(%s) %s %s (messageId:%s)",
+                (
+                    rxtx,
+                    protocol,
+                    header[mc.KEY_METHOD],
+                    header[mc.KEY_NAMESPACE],
+                    header[mc.KEY_MESSAGEID],
+                ),
+            )
+
+    async def _async_get_diagnostics_trace(self) -> list[list]:
+        """
+        invoked by the diagnostics callback:
+        here we set the device to start tracing the classical way (in file)
+        but we also fill in a dict which will set back as the result of the
+        Future we're returning to diagnostics.
+        """
+        if self._trace_future:
+            # avoid re-entry..keep going the running trace
+            return await self._trace_future
+        if self.is_tracing:
+            self.trace_close()
+
+        if self._http_active and self.conf_protocol is not CONF_PROTOCOL_MQTT:
+            # shortcut with fast HTTP querying
+            self._trace_data = trace_data = [mlc.CONF_TRACE_COLUMNS]
+            await self._async_poll()
+            try:
+                abilities = iter(self.descriptor.ability)
+                while self.online and self.is_tracing:
+                    ability = next(abilities)
+                    if ability not in self.TRACE_ABILITY_EXCLUDE:
+                        await self.get_handler_by_name(ability).async_trace(
+                            self.async_http_request
+                        )
+                self._trace_data = None
+                return trace_data  # might be truncated because offlining or async shutting trace
+            except StopIteration:
+                self._trace_data = None
+                return trace_data
+            except Exception as exception:
+                self.log_exception(self.DEBUG, exception, "async_get_diagnostics_trace")
+                # in case of error we're going to try the legacy approach
+
+        # reset and restart with a debug tracing to build the diagnostics
+        self._trace_data = [mlc.CONF_TRACE_COLUMNS]
+        self._trace_future = future = self.hass.loop.create_future()
+        await self.async_trace_open()
+        return await future
+
+    def loggable_diagnostic_state(self):
+        """Return a 'loggable' version of the entry state (for diagnostic/logging purposes)"""
+        return {
+            "class": type(self).__name__,
+            "conf_protocol": self.conf_protocol,
+            "pref_protocol": self.pref_protocol,
+            "curr_protocol": self.curr_protocol,
+            "polling_period": self.polling_period,
+            "device_response_size_min": self.device_response_size_min,
+            "device_response_size_max": self.device_response_size_max,
+            "MQTT": {
+                "cloud_profile": (
+                    self._profile.is_cloud_profile if self._profile else None
+                ),
+                "locally_active": bool(self.mqtt_locallyactive),
+                "mqtt_connection": bool(self._mqtt_connection),
+                "mqtt_connected": bool(self._mqtt_connected),
+                "mqtt_publish": bool(self._mqtt_publish),
+                "mqtt_active": bool(self._mqtt_active),
+            },
+            "HTTP": {
+                "http": bool(self._http),
+                "http_active": bool(self._http_active),
+            },
+            "namespace_handlers": {
+                handler.ns.name: {
+                    "lastrequest": handler.lastrequest,
+                    "lastresponse": handler.lastresponse,
+                    "polling_epoch_next": handler.polling_epoch_next,
+                    "polling_strategy": (
+                        handler.polling_strategy.__name__
+                        if handler.polling_strategy
+                        else None
+                    ),
+                }
+                for handler in self.namespace_handlers.values()
+            },
+            "namespace_pushes": (
+                obfuscated_dict(self.namespace_pushes)
+                if self.obfuscate
+                else self.namespace_pushes
+            ),
+            "device_info": (
+                obfuscated_dict(self.device_info)
+                if self.obfuscate and self.device_info
+                else self.device_info
+            ),
+        }
+
+    async def async_get_diagnostics(self):
+        data = await super().async_get_diagnostics()
+        data["trace"] = await self._async_get_diagnostics_trace()
+        return data
 
     # interface: BaseDevice
     async def async_shutdown(self):
@@ -894,32 +1088,34 @@ class Device(BaseDevice, ConfigEntryManager):
         try:
             return self.namespace_handlers[namespace]
         except KeyError:
-            return self._create_handler(mn.NAMESPACES[namespace])
+            return self._create_handler(self.NAMESPACES[namespace])
 
     def register_parser(
         self,
         parser: "NamespaceParser",
         ns: "mn.Namespace",
-        *,
-        key_channel: str | None = None,
     ):
-        self.get_handler(ns).register_parser(parser, key_channel or ns.key_channel)
+        self.get_handler(ns).register_parser(parser)
 
     def register_parser_entity(
         self,
         entity: "MLEntity",
     ):
-        self.get_handler(entity.ns).register_parser(entity, entity.ns.key_channel)
+        self.get_handler(entity.ns).register_parser(entity)
 
     def register_togglex_channel(self, entity: "MLEntity"):
         """
         Checks if entity has an associated ToggleX behavior and eventually
         registers it
         """
-        for togglex_digest in self.descriptor.digest.get(mc.KEY_TOGGLEX, []):
-            if togglex_digest[mc.KEY_CHANNEL] == entity.channel:
-                self.register_parser(entity, mn.Appliance_Control_ToggleX)
-                return True
+        try:
+            for togglex_digest in self.descriptor.digest[mc.KEY_TOGGLEX]:
+                if togglex_digest[mc.KEY_CHANNEL] == entity.channel:
+                    self.register_parser(entity, mn.Appliance_Control_ToggleX)
+                    return True
+        except KeyError:
+            # no "togglex" in digest ?
+            pass
         return False
 
     def schedule_entry_update(self, query_abilities: bool):
@@ -1095,7 +1291,7 @@ class Device(BaseDevice, ConfigEntryManager):
             self._multiple_response_size = PARAM_HEADER_SIZE
 
     async def async_multiple_requests_ack(
-        self, requests: typing.Collection["MerossRequestType"], auto_handle: bool = True
+        self, requests: "Collection[MerossRequestType]", auto_handle: bool = True
     ) -> list["MerossMessageType"] | None:
         """Send requests in a single NS_APPLIANCE_CONTROL_MULTIPLE message.
         If the whole request is succesful (might be partial if the device response
@@ -1152,7 +1348,7 @@ class Device(BaseDevice, ConfigEntryManager):
                     if (
                         handler.polling_response_size + multiple_response_size
                     ) < self.device_response_size_max:
-                        handler.lastrequest = time()
+                        handler.lastrequest = self._polling_epoch
                         handler.polling_epoch_next = (
                             handler.lastrequest + handler.polling_period
                         )
@@ -1308,7 +1504,9 @@ class Device(BaseDevice, ConfigEntryManager):
         payload: "MerossPayloadType",
     ):
         return await self.async_mqtt_request_raw(
-            MerossRequest(self.key, namespace, method, payload, self._topic_response)
+            MerossRequest(
+                namespace, method, payload, self.key, self._topic_response, mlc.DOMAIN
+            )
         )
 
     def mqtt_request(
@@ -1440,7 +1638,9 @@ class Device(BaseDevice, ConfigEntryManager):
         payload: "MerossPayloadType",
     ):
         return await self.async_http_request_raw(
-            MerossRequest(self.key, namespace, method, payload, self._topic_response)
+            MerossRequest(
+                namespace, method, payload, self.key, self._topic_response, mlc.DOMAIN
+            )
         )
 
     async def async_request_poll(self, handler: NamespaceHandler):
@@ -1549,12 +1749,18 @@ class Device(BaseDevice, ConfigEntryManager):
                 abilities = iter(self.descriptor.ability)
                 while self.online and not self._polling_callback_shutdown:
                     ability = next(abilities)
-                    if (ability in TRACE_ABILITY_EXCLUDE) or (
+                    if (ability in self.TRACE_ABILITY_EXCLUDE) or (
                         (handler := self.namespace_handlers.get(ability))
-                        and (handler.polling_strategy)
+                        and (
+                            handler.polling_strategy
+                            or (
+                                (handler.ns.has_get is False)
+                                and (handler.ns.has_push_query is False)
+                            )
+                        )
                     ):
                         continue
-                    await self.async_request(*mn.NAMESPACES[ability].request_get)
+                    await self.async_request(*self.NAMESPACES[ability].request_get)
             except StopIteration:
                 self._diagnostics_build = False
                 self.log(self.DEBUG, "Diagnostic scan end")
@@ -1690,9 +1896,7 @@ class Device(BaseDevice, ConfigEntryManager):
             self._polling_callback_unsub = None
         elif self._polling_epoch:
             if not self._polling_callback_shutdown:
-                self._polling_callback_shutdown = (
-                    asyncio.get_running_loop().create_future()
-                )
+                self._polling_callback_shutdown = self.hass.loop.create_future()
             await self._polling_callback_shutdown
 
     async def _async_poll(self):
@@ -1983,11 +2187,10 @@ class Device(BaseDevice, ConfigEntryManager):
                 return
             # here the namespace might be unknown to our definitions (mn.Namespace)
             # so we try, in case, to build a new one with good presets
-            if namespace in mn.NAMESPACES:
-                ns = mn.NAMESPACES[namespace]
-            else:
-                ns = mn.ns_build_from_message(namespace, method, payload)
-            handler = self._create_handler(ns)
+            handler = self._create_handler(
+                self.NAMESPACES.get(namespace)
+                or mn.ns_build_from_message(namespace, method, payload, self.NAMESPACES)
+            )
 
         handler.lastresponse = self.lastresponse
         handler.polling_epoch_next = handler.lastresponse + handler.polling_period
@@ -2094,8 +2297,8 @@ class Device(BaseDevice, ConfigEntryManager):
                     self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
                     if self.curr_protocol is not self.pref_protocol:
                         self._switch_protocol(self.pref_protocol)
-                return
-            mqtt_connection.detach(self)
+            elif mqtt_connection.is_cloud_connection:
+                mqtt_connection.detach(self)
 
     def _handle_Appliance_System_Online(self, header: dict, payload: dict):
         # already processed by the MQTTConnection session manager
@@ -2443,141 +2646,6 @@ class Device(BaseDevice, ConfigEntryManager):
             update_firmware.flush_state()
         else:
             self.update_firmware = MLUpdate(self, latest_version)
-
-    async def async_get_diagnostics_trace(self) -> list:
-        """
-        invoked by the diagnostics callback:
-        here we set the device to start tracing the classical way (in file)
-        but we also fill in a dict which will set back as the result of the
-        Future we're returning to diagnostics.
-        """
-        if self._trace_future:
-            # avoid re-entry..keep going the running trace
-            return await self._trace_future
-        if self.is_tracing:
-            self.trace_close()
-
-        if self._http_active and self.conf_protocol is not CONF_PROTOCOL_MQTT:
-            # shortcut with fast HTTP querying
-            epoch = time()
-            descr = self.descriptor
-            # setting _trace_data will already activate tracing (kind of)
-            self._trace_data = trace_data = [
-                ["time", "rxtx", "protocol", "method", "namespace", "data"]
-            ]
-            # TODO: remove these from diagnostic since they're present in header data
-            # before that we need to update the emulator code to extract those
-            self.trace(epoch, descr.all, mn.Appliance_System_All.name)
-            self.trace(epoch, descr.ability, mn.Appliance_System_Ability.name)
-            await self._async_poll()
-            try:
-                abilities = iter(descr.ability)
-                while self.online and self.is_tracing:
-                    ability = next(abilities)
-                    if ability not in TRACE_ABILITY_EXCLUDE:
-                        await self.get_handler_by_name(ability).async_trace(
-                            self.async_http_request
-                        )
-
-                return trace_data  # might be truncated because offlining or async shutting trace
-            except StopIteration:
-                return trace_data
-            except Exception as exception:
-                self.log_exception(self.DEBUG, exception, "async_get_diagnostics_trace")
-                # in case of error we're going to try the legacy approach
-            finally:
-                self._trace_data = None
-
-        self._trace_data = [["time", "rxtx", "protocol", "method", "namespace", "data"]]
-        self._trace_future = future = asyncio.get_running_loop().create_future()
-        await self.async_trace_open()
-        return await future
-
-    async def _async_trace_ability(self, abilities_iterator: typing.Iterator[str]):
-        try:
-            # avoid interleave tracing ability with polling loop
-            # also, since we could trigger this at early stages
-            # in device init, this check will prevent iterating
-            # at least until the device fully initialize through
-            # self.start()
-            if self._polling_callback_unsub and self.online:
-                while (ability := next(abilities_iterator)) in TRACE_ABILITY_EXCLUDE:
-                    continue
-                self.log(self.DEBUG, "Tracing %s ability", ability)
-                await self.get_handler_by_name(ability).async_trace(self.async_request)
-
-        except StopIteration:
-            self._trace_ability_callback_unsub = None
-            self.log(self.DEBUG, "Tracing abilities end")
-            return
-        except Exception as exception:
-            self.log_exception(self.WARNING, exception, "_async_trace_ability")
-
-        self._trace_ability_callback_unsub = None
-        if not self.is_tracing:
-            return
-
-        if (self.curr_protocol is CONF_PROTOCOL_MQTT) and self._mqtt_publish:
-            timeout = (
-                mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT
-                + self._mqtt_publish.get_rl_safe_delay(self.id)
-            )
-        else:
-            timeout = mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT
-        self._trace_ability_callback_unsub = self.schedule_async_callback(
-            timeout,
-            self._async_trace_ability,
-            abilities_iterator,
-        )
-
-    def _trace_or_log(
-        self,
-        epoch: float,
-        message: "MerossMessage",
-        protocol: str,
-        rxtx: str,
-    ):
-        if self.is_tracing:
-            header = message[mc.KEY_HEADER]
-            self.trace(
-                epoch,
-                message[mc.KEY_PAYLOAD],
-                header[mc.KEY_NAMESPACE],
-                header[mc.KEY_METHOD],
-                protocol,
-                rxtx,
-            )
-        # here we avoid using self.log since it would
-        # log to the trace file too but we've already 'traced' the
-        # message if that's the case
-        logger = self.logger
-        if logger.isEnabledFor(self.VERBOSE):
-            header = message[mc.KEY_HEADER]
-            logger._log(
-                self.VERBOSE,
-                "%s(%s) %s %s (messageId:%s) %s",
-                (
-                    rxtx,
-                    protocol,
-                    header[mc.KEY_METHOD],
-                    header[mc.KEY_NAMESPACE],
-                    header[mc.KEY_MESSAGEID],
-                    json_dumps(self.loggable_dict(message)),
-                ),
-            )
-        elif logger.isEnabledFor(self.DEBUG):
-            header = message[mc.KEY_HEADER]
-            logger._log(
-                self.DEBUG,
-                "%s(%s) %s %s (messageId:%s)",
-                (
-                    rxtx,
-                    protocol,
-                    header[mc.KEY_METHOD],
-                    header[mc.KEY_NAMESPACE],
-                    header[mc.KEY_MESSAGEID],
-                ),
-            )
 
     async def _async_button_refresh_press(self):
         """Forces a full poll."""

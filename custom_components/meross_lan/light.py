@@ -21,14 +21,16 @@ from .helpers.namespaces import (
     EntityNamespaceHandler,
     EntityNamespaceMixin,
     NamespaceHandler,
+    mc,
+    mn,
 )
-from .merossclient import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
     from .helpers.device import Device, DigestInitReturnType
+    from .merossclient.protocol import types as mt
 
 
 async def async_setup_entry(
@@ -811,7 +813,9 @@ class MLLightEffect(MLLight):
         await super().async_turn_on(**kwargs)
 
     # interface: self
-    def _handle_Appliance_Control_Light_Effect(self, header: dict, payload: dict):
+    def _handle_Appliance_Control_Light_Effect(
+        self, header, payload: "mt.MerossPayloadType", /
+    ):
         """
         {
             "effect": [
@@ -830,10 +834,9 @@ class MLLightEffect(MLLight):
         _light_effect_list = payload[mc.KEY_EFFECT]
         if self._light_effect_list != _light_effect_list:
             self._light_effect_list = _light_effect_list
-            self.effect_list = effect_list = [
+            self.effect_list = [
                 _light_effect[mc.KEY_EFFECTNAME] for _light_effect in _light_effect_list
-            ]
-            effect_list.append(MLLightBase.EFFECT_OFF)
+            ] + [MLLightBase.EFFECT_OFF]
             # add a 'fake' key so the next update will force-flush
             self._light["_"] = None
             self.manager.request(mn.Appliance_Control_Light.request_default)
@@ -893,7 +896,6 @@ class MLDNDLightEntity(EntityNamespaceMixin, me.MLBinaryEntity, light.LightEntit
 
 
 def digest_init_light(device: "Device", digest: dict) -> "DigestInitReturnType":
-    """{ "channel": 0, "capacity": 4 }"""
 
     ability = device.descriptor.ability
 
@@ -906,3 +908,38 @@ def digest_init_light(device: "Device", digest: dict) -> "DigestInitReturnType":
 
     handler = device.namespace_handlers[mn.Appliance_Control_Light.name]
     return handler.parse_generic, (handler,)
+
+
+def digest_init_light_effect(device: "Device", digest: list) -> "DigestInitReturnType":
+    # This is a 'new' (2025-06-17) key appearing in msl320cpr digest.
+    # The key itself is 'light.entity' and carries the effect list
+    # (same as ns Appliance.Control.Light.Effect)
+
+    try:
+        # MLLightEffect should be in place
+        light = device.entities[0]
+        if isinstance(light, MLLightEffect):
+            # initialize light effect_list (we're loading config at device init time
+            # so this could be outdated but..)
+            light._light_effect_list = digest
+            light.effect_list = [
+                _light_effect[mc.KEY_EFFECTNAME] for _light_effect in digest
+            ] + [MLLightBase.EFFECT_OFF]
+
+            handler = device.namespace_handlers[mn.Appliance_Control_Light_Effect.name]
+
+            # custom digest parser for the case
+            def _parse(digest: list):
+                # This is called inside ns_all parsing at the device handler
+                handler.lastresponse = handler.device.lastresponse
+                handler.polling_epoch_next = (
+                    handler.lastresponse + handler.polling_period
+                )
+                # this is redirecting to light._handle_Appliance_Control_Light_Effect
+                handler.handler({}, {mc.KEY_EFFECT: digest})  # type: ignore (header not used)
+
+            return _parse, ()
+    except KeyError:
+        pass
+
+    return lambda digest: None, ()

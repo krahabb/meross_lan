@@ -8,12 +8,12 @@ import hashlib
 import logging
 import re
 import time
-import typing
+from typing import TYPE_CHECKING
 from unittest.mock import ANY, MagicMock, patch
 
 import aiohttp
 from freezegun.api import freeze_time
-from homeassistant import config_entries, const as hac
+from homeassistant import config_entries as ce, const as hac
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import entity_registry as er
 import pytest
@@ -22,7 +22,6 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed_exact,
 )
 from pytest_homeassistant_custom_component.test_util.aiohttp import (
-    AiohttpClientMocker,
     AiohttpClientMockResponse,
 )
 
@@ -36,14 +35,14 @@ from custom_components.meross_lan.helpers.meross_profile import (
 )
 from custom_components.meross_lan.merossclient import (
     cloudapi,
-    const as mc,
     json_loads,
 )
-from emulator import MerossEmulator, build_emulator as emulator_build_emulator
+from custom_components.meross_lan.merossclient.protocol import const as mc
+import emulator
 
 from . import const as tc
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from typing import (
         Any,
         Callable,
@@ -66,7 +65,12 @@ if typing.TYPE_CHECKING:
 
     _TimeFactory = FrozenDateTimeFactory | StepTickTimeFactory | TickingDateTimeFactory
 
-    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.config_entries import (
+        ConfigEntriesFlowManager,
+        ConfigEntry,
+        ConfigFlowResult,
+        OptionsFlowManager,
+    )
     from homeassistant.core import HomeAssistant
 
     MqttMockPahoClient = MagicMock
@@ -76,18 +80,25 @@ if typing.TYPE_CHECKING:
     MqttMockHAClientGenerator = Callable[..., Coroutine[Any, Any, MqttMockHAClient]]
 
     from pytest import CaptureFixture, FixtureRequest, LogCaptureFixture
+    from pytest_homeassistant_custom_component.test_util.aiohttp import (
+        AiohttpClientMocker,
+    )
 
     from custom_components.meross_lan.helpers.component_api import ComponentApi
     from custom_components.meross_lan.helpers.device import Device
     from custom_components.meross_lan.helpers.manager import ConfigEntryManager
-    from custom_components.meross_lan.merossclient import MerossMessage, MerossResponse
+    from custom_components.meross_lan.merossclient.protocol.message import (
+        MerossMessage,
+        MerossResponse,
+    )
+    from emulator import MerossEmulator
 
 LOGGER = logging.getLogger("meross_lan.tests")
 
 
 async def async_assert_flow_menu_to_step(
-    flow: config_entries.ConfigEntriesFlowManager | config_entries.OptionsFlowManager,
-    result: config_entries.ConfigFlowResult,
+    flow: "ConfigEntriesFlowManager | OptionsFlowManager",
+    result: "ConfigFlowResult",
     menu_step_id: str,
     next_step_id: str,
     next_step_type: FlowResultType = FlowResultType.FORM,
@@ -339,7 +350,7 @@ class LogManager:
 
     MEROSS_LAN_LOGGER: "Final" = r"custom_components\.meross_lan.*"
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
 
         class Args(TypedDict):
             pass
@@ -347,6 +358,8 @@ class LogManager:
         request: Final[FixtureRequest]
         capsys: Final[CaptureFixture | None]  # type: ignore
         caplog: Final[LogCaptureFixture | None]  # type: ignore
+        time_mock: Final[TimeMocker | None]  # type: ignore
+        aioclient_mock: Final[AiohttpClientMocker | None]  # type: ignore
 
         class LogMatchArgs(TypedDict):
             level: NotRequired[int]
@@ -363,12 +376,24 @@ class LogManager:
     """List of logs to be automatically ignored when dumping
      the WARNINGS in flush_logs."""
 
-    OPTIONAL_FIXTURES: "ClassVar" = ["capsys", "caplog"]
+    OPTIONAL_FIXTURES: "ClassVar[tuple[str, ...]]" = (
+        "capsys",
+        "caplog",
+        "time_mock",
+        "aioclient_mock",
+    )
+    REQUESTED_FIXTURES: "ClassVar[tuple[str, ...]]" = ()
 
-    __slots__ = ["request"] + OPTIONAL_FIXTURES
+    __slots__ = ("request",) + OPTIONAL_FIXTURES
 
     def __init__(self, request: "FixtureRequest"):
         self.request = request
+        for fixture in self.__class__.REQUESTED_FIXTURES:
+            setattr(
+                self,
+                fixture,
+                request.getfixturevalue(fixture),
+            )
         for fixture in self.__class__.OPTIONAL_FIXTURES:
             setattr(
                 self,
@@ -379,8 +404,6 @@ class LogManager:
                         if fixture in request.fixturenames
                         else None
                     )
-                    if request
-                    else None
                 ),
             )
 
@@ -450,7 +473,7 @@ class LogManager:
 
 class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
 
         class Args(TypedDict):
             data: NotRequired[Mapping[str, Any]]
@@ -509,7 +532,7 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
 
     @property
     def config_entry_loaded(self):
-        return self.config_entry.state == config_entries.ConfigEntryState.LOADED
+        return self.config_entry.state is ce.ConfigEntryState.LOADED
 
     async def async_setup(self):
         result = await self.hass.config_entries.async_setup(self.config_entry_id)
@@ -526,7 +549,9 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
         diagnostic = await async_get_config_entry_diagnostics(
             self.hass, self.config_entry
         )
-        assert diagnostic
+        assert diagnostic["version"] == mlc.CONF_TRACE_VERSION
+        assert diagnostic["config"].keys() == self.config_entry.data.keys()
+        return diagnostic
 
     async def __aenter__(self):
         if self.auto_setup:
@@ -534,7 +559,7 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
-        if self.config_entry.state.recoverable:
+        if self.config_entry.state is ce.ConfigEntryState.LOADED:
             assert await self.async_unload()
         self.flush_logs(self.config_entry.title)
         return None
@@ -542,7 +567,7 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
 
 class MQTTHubEntryMocker(ConfigEntryMocker):
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
 
         class Args(ConfigEntryMocker.Args):
             pass
@@ -557,10 +582,27 @@ class MQTTHubEntryMocker(ConfigEntryMocker):
 
 class ProfileEntryMocker(ConfigEntryMocker):
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
 
         class Args(ConfigEntryMocker.Args):
             pass
+
+        time_mock: Final[TimeMocker]  # type: ignore
+        aioclient_mock: Final[AiohttpClientMocker]  # type: ignore
+        cloudapi_mock: Final["CloudApiMocker"]  # type: ignore
+        merossmqtt_mock: Final["MerossMQTTMocker"]  # type: ignore
+
+    REQUESTED_FIXTURES = (
+        "time_mock",
+        "aioclient_mock",
+        "cloudapi_mock",
+        "merossmqtt_mock",
+    ) + ConfigEntryMocker.REQUESTED_FIXTURES
+
+    __slots__ = (
+        "cloudapi_mock",
+        "merossmqtt_mock",
+    )
 
     def __init__(
         self, request: "FixtureRequest", hass: "HomeAssistant", **kwargs: "Unpack[Args]"
@@ -585,10 +627,10 @@ def build_emulator(
     uuid: str = tc.MOCK_DEVICE_UUID,
     broker: str | None = None,
     userId: int | None = None,
-) -> MerossEmulator:
+) -> "MerossEmulator":
     # Watchout: this call will not use the uuid and key set
     # in the filename, just DEFAULT_UUID and DEFAULT_KEY
-    return emulator_build_emulator(
+    return emulator.build_emulator(
         tc.EMULATOR_TRACES_PATH + tc.EMULATOR_TRACES_MAP[model],
         key=key,
         uuid=uuid,
@@ -602,7 +644,7 @@ def build_emulator_for_profile(
     *,
     model: str | None = None,
     device_id=tc.MOCK_DEVICE_UUID,
-) -> MerossEmulator:
+) -> "MerossEmulator":
     """
     This call will setup the emulator patching its configuration
     in order to be 'binded' to the provided cloud profile data.
@@ -644,7 +686,7 @@ def build_emulator_for_profile(
 
 
 def build_emulator_config_entry(
-    emulator: MerossEmulator, config_data: "Mapping | None" = None
+    emulator: "MerossEmulator", config_data: "Mapping | None" = None
 ):
     """
     Builds a consistent config_entry for an emulated device with HTTP communication.
@@ -674,11 +716,26 @@ def build_emulator_config_entry(
     return data
 
 
+def build_emulators():
+    return emulator.build_emulators(
+        tc.EMULATOR_TRACES_PATH,
+        key=tc.MOCK_KEY,
+        uuid=tc.MOCK_DEVICE_UUID,
+    )
+    """
+    included_uuid=(
+            "01234567890123456789012345678925",
+            "01234567890123456789012345678926",
+            "01234567890123456789012345678927",
+    )
+    """
+
+
 class EmulatorContext(contextlib.AbstractContextManager):
     def __init__(
         self,
-        emulator: MerossEmulator | str,
-        aioclient_mock: AiohttpClientMocker,
+        emulator: "MerossEmulator | str",
+        aioclient_mock: "AiohttpClientMocker",
         *,
         frozen_time: "_TimeFactory | None" = None,
         host: str | None = None,
@@ -721,12 +778,13 @@ class DeviceContext(ConfigEntryMocker):
     It also provides timefreezing
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
 
         class Args(ConfigEntryMocker.Args):
-            time: NotRequired[TimeMocker | datetime | None]
+            time: NotRequired[datetime]
 
-        time: Final[TimeMocker]
+        time_mock: Final[TimeMocker]  # type: ignore
+        aioclient_mock: Final[AiohttpClientMocker]  # type: ignore
 
     IGNORED_LOGS = (
         LogManager.LogMatchTuple(
@@ -734,21 +792,22 @@ class DeviceContext(ConfigEntryMocker):
         ),
     )
 
+    REQUESTED_FIXTURES = (
+        "time_mock",
+        "aioclient_mock",
+    ) + ConfigEntryMocker.REQUESTED_FIXTURES
+
     __slots__ = (
         "emulator",
         "emulator_context",
         "device_id",
-        "time",
-        "_aioclient_mock",
-        "_time_mock_owned",
     )
 
     def __init__(
         self,
         request: "FixtureRequest",
         hass: "HomeAssistant",
-        emulator: MerossEmulator | str,
-        aioclient_mock: AiohttpClientMocker,
+        emulator: "MerossEmulator | str",
         **kwargs: "Unpack[Args]",
     ):
         if isinstance(emulator, str):
@@ -763,29 +822,23 @@ class DeviceContext(ConfigEntryMocker):
             request,
             hass,
             emulator.uuid,
-            f"Device({descriptor.productname}-{descriptor.productmodel})",
+            f"{descriptor.productname}-{descriptor.productmodel}",
             **kwargs,
         )
         self.emulator = emulator
         self.device_id = emulator.uuid
-        self._aioclient_mock = aioclient_mock
-        time = kwargs.get("time")
-        if isinstance(time, TimeMocker):
-            self.time = time
-            self._time_mock_owned = False
-        else:
-            self.time = TimeMocker(hass, time)
-            self._time_mock_owned = True
+        try:
+            self.time_mock.time.move_to(kwargs["time"])  # type: ignore
+        except KeyError:
+            pass
 
     @property
     def device(self) -> "Device":
         return self.api.devices[self.device_id]  # type: ignore
 
     async def __aenter__(self):
-        if self._time_mock_owned:
-            self.time.__enter__()
         self.emulator_context = EmulatorContext(
-            self.emulator, self._aioclient_mock, frozen_time=self.time.time
+            self.emulator, self.aioclient_mock, frozen_time=self.time_mock.time
         )
         self.emulator_context.__enter__()
         return await super().__aenter__()
@@ -795,8 +848,6 @@ class DeviceContext(ConfigEntryMocker):
             return await super().__aexit__(exc_type, exc_value, traceback)
         finally:
             self.emulator_context.__exit__(exc_type, exc_value, traceback)
-            if self._time_mock_owned:
-                self.time.__exit__(exc_type, exc_value, traceback)
             if exc_value:
                 exc_value.args = (*exc_value.args, self.emulator.uuid)
 
@@ -810,7 +861,9 @@ class DeviceContext(ConfigEntryMocker):
         if not self.config_entry_loaded:
             await self.async_setup()
         assert (device := self.device) and not device.online
-        await self.time.async_tick(timedelta(seconds=mlc.PARAM_COLDSTARTPOLL_DELAY))
+        await self.time_mock.async_tick(
+            timedelta(seconds=mlc.PARAM_COLDSTARTPOLL_DELAY)
+        )
         assert device.online
         return device
 
@@ -840,15 +893,13 @@ class DeviceContext(ConfigEntryMocker):
         # fire the entity registry changed
         await self.hass.async_block_till_done()
         # perform the reload task after RELOAD_AFTER_UPDATE_DELAY
-        await self.time.async_tick(
-            timedelta(seconds=config_entries.RELOAD_AFTER_UPDATE_DELAY)
-        )
+        await self.time_mock.async_tick(timedelta(seconds=ce.RELOAD_AFTER_UPDATE_DELAY))
         # (re)online the device
         return await self.perform_coldstart()
 
     async def async_poll_single(self):
         """Advances the time mocker up to the next polling cycle and executes it."""
-        await self.time.async_tick(
+        await self.time_mock.async_tick(
             self.device._polling_callback_unsub.when() - self.hass.loop.time()  # type: ignore
         )
 
@@ -860,11 +911,11 @@ class DeviceContext(ConfigEntryMocker):
         stepping exactly through each single polling loop."""
         if not isinstance(timeout, datetime):
             if isinstance(timeout, timedelta):
-                timeout = self.time() + timeout
+                timeout = self.time_mock() + timeout
             else:
-                timeout = self.time() + timedelta(seconds=timeout)
+                timeout = self.time_mock() + timedelta(seconds=timeout)
 
-        while self.time() < timeout:
+        while self.time_mock() < timeout:
             await self.async_poll_single()
 
 
@@ -873,7 +924,7 @@ class CloudApiMocker(contextlib.AbstractContextManager):
     Emulates the Meross server side api by leveraging aioclient_mock
     """
 
-    def __init__(self, aioclient_mock: AiohttpClientMocker, online: bool = True):
+    def __init__(self, aioclient_mock: "AiohttpClientMocker", online: bool = True):
         self.aioclient_mock = aioclient_mock
         self.online = online
         self.api_calls: dict[str, int] = {}

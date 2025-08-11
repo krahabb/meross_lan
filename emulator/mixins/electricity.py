@@ -3,15 +3,20 @@
 from datetime import datetime, timezone
 from random import randint
 from time import gmtime
-import typing
+from typing import TYPE_CHECKING
 
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 
-if typing.TYPE_CHECKING:
-    from .. import MerossEmulator, MerossEmulatorDescriptor
+from . import MerossEmulator
+
+if TYPE_CHECKING:
+    from . import MerossEmulatorDescriptor
 
 
-class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+class ElectricityMixin(MerossEmulator if TYPE_CHECKING else object):
     # used to 'fix' and control the power level in tests
     # if None (default) it will generate random values
     _power_set: int | None = None
@@ -26,7 +31,6 @@ class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         self.electricity = self.payload_electricity[mc.KEY_ELECTRICITY]
         self.voltage_average: int = self.electricity[mc.KEY_VOLTAGE] or 2280
         self.power = self.electricity[mc.KEY_POWER]
-        self._power_set = None
 
     def set_power(self, power: int | None):
         self._power_set = power
@@ -46,14 +50,15 @@ class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         }
         """
         if self._power_set is None:
-            if randint(0, 5) == 0:
+            noise = randint(-10, 10) * 1000
+            if randint(0, 3) == 0:
                 # make a big power step
-                power = self.power + randint(-1000000, 1000000)
+                power = self.power + randint(-20, 20) * noise
             else:
                 # make some noise
-                power = self.power + randint(-1000, 1000)
+                power = self.power + noise
             if power > 3600000:
-                power = 3600000
+                power = 2400000
             elif power < 0:
                 power = 0
         else:
@@ -66,14 +71,15 @@ class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         return mc.METHOD_GETACK, self.payload_electricity
 
 
-class ElectricityXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+class ElectricityXMixin(MerossEmulator if TYPE_CHECKING else object):
 
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
-        self.payload_electricityx = descriptor.namespaces.setdefault(
-            mn.Appliance_Control_ElectricityX.name,
-            {
-                mc.KEY_ELECTRICITY: [
+        if mc.RefossModel.match(descriptor.type) is mc.RefossModel.em06:
+            self.update_namespace_state(
+                mn.Appliance_Control_ElectricityX,
+                MerossEmulator.NSDefaultMode.MixOut,
+                [
                     {
                         "channel": 1,
                         "current": 0,
@@ -122,16 +128,18 @@ class ElectricityXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                         "mConsume": 0,
                         "factor": -0.0001285076141357422,
                     },
-                ]
-            },
-        )
+                ],
+            )
+        self.payload_electricityx = descriptor.namespaces[
+            mn.Appliance_Control_ElectricityX.name
+        ]
         self.electricityx = self.payload_electricityx[mc.KEY_ELECTRICITY]
 
     def _GET_Appliance_Control_ElectricityX(self, header, payload):
         return mc.METHOD_GETACK, self.payload_electricityx
 
 
-class ConsumptionXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+class ConsumptionXMixin(MerossEmulator if TYPE_CHECKING else object):
     # this is a static default but we're likely using
     # the current 'power' state managed by the ElectricityMixin
     power = 0.0  # in mW
@@ -144,7 +152,7 @@ class ConsumptionXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             mn.Appliance_Control_ConsumptionX.name
         ]
         p_consumptionx: list = self.payload_consumptionx[mc.KEY_CONSUMPTIONX]
-        if (len(p_consumptionx)) == 0:
+        if not p_consumptionx:
             p_consumptionx.append(
                 {
                     mc.KEY_DATE: "1970-01-01",

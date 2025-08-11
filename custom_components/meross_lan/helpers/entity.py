@@ -9,7 +9,7 @@ versioning
 """
 
 from functools import partial
-import typing
+from typing import TYPE_CHECKING, final
 
 try:
     from homeassistant.components.recorder import get_instance as r_get_instance
@@ -20,11 +20,19 @@ except ImportError:
 from homeassistant.helpers import entity
 
 from . import Loggable
-from ..merossclient import const as mc, namespaces as mn
-from .namespaces import NamespaceParser
+from .namespaces import NamespaceParser, mc, mn
 
-if typing.TYPE_CHECKING:
-    from typing import Any, ClassVar, NotRequired, TypedDict, Unpack
+if TYPE_CHECKING:
+    from typing import (
+        Any,
+        Callable,
+        ClassVar,
+        Final,
+        Mapping,
+        NotRequired,
+        TypedDict,
+        Unpack,
+    )
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -48,9 +56,7 @@ def platform_setup_entry(
     async_add_devices(manager.managed_entities(platform))
 
 
-class MLEntity(
-    NamespaceParser, Loggable, entity.Entity if typing.TYPE_CHECKING else object
-):
+class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else object):
     """
     Mixin style base class for all of the entity platform(s)
     This class must prepend the HA entity class in our custom
@@ -59,58 +65,79 @@ class MLEntity(
     class MyCustomSwitch(MLEntity, Switch)
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
+
+        type StateCallback = Callable[[], Any]
 
         class Args(TypedDict):
             name: NotRequired[str]
             translation_key: NotRequired[str]
             entity_category: NotRequired[entity.EntityCategory | None]
+            state_callback: NotRequired["MLEntity.StateCallback"]
+
+        EntityCategory: Final
+
+        PLATFORM: ClassVar[str]
+
+        is_diagnostic: ClassVar[bool]
+        """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
+
+        state_callbacks: set[StateCallback] | None
+        # These 'placeholder' definitions support generalization of
+        # Meross protocol message build/parsing when related to the
+        # current entity. These are usually relevant when this entity
+        # is strictly related to a namespace payload key value.
+        # See MLConfigNumber or MerossToggle as basic implementations
+        # supporting this semantic. They're generally set as class definitions
+        # in inherited entities but could nonetheless be set 'per instance'.
+        # These also come handy when generalizing parsing of received payloads
+        # for simple enough entities (like sensors, numbers or switches)
+        ns: mn.Namespace
+        key_value: str
+
+        # used to speed-up checks if entity is enabled and loaded
+        hass_connected: Final[bool]  # public ReadOnly attribute
+
+        # HA core entity attributes:
+        # These are constants throughout our model
+        force_update: Final[bool]
+        has_entity_name: Final[bool]
+        should_poll: Final[bool]
+        # These may be customized here and there per class
+        _attr_available: ClassVar[bool]
+        # These may be customized here and there per class or instance
+        assumed_state: bool = False
+        entity_category: entity.EntityCategory | None
+        entity_registry_enabled_default: bool
+        extra_state_attributes: dict[str, object]
+        icon: str | None
+        translation_key: str | None
+        # These are actually per instance
+        available: bool
+        name: str | None
+        suggested_object_id: str | None
+        unique_id: str
 
     EntityCategory = entity.EntityCategory
 
-    PLATFORM: typing.ClassVar[str]
+    is_diagnostic = False
 
-    is_diagnostic: typing.ClassVar[bool] = False
-    """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
-
-    state_callbacks: set[typing.Callable] | None
-    # These 'placeholder' definitions support generalization of
-    # Meross protocol message build/parsing when related to the
-    # current entity. These are usually relevant when this entity
-    # is strictly related to a namespace payload key value.
-    # See MLConfigNumber or MerossToggle as basic implementations
-    # supporting this semantic. They're generally set as class definitions
-    # in inherited entities but could nonetheless be set 'per instance'.
-    # These also come handy when generalizing parsing of received payloads
-    # for simple enough entities (like sensors, numbers or switches)
-    ns: mn.Namespace
-    key_value: str = mc.KEY_VALUE
+    key_value = mc.KEY_VALUE
 
     # HA core entity attributes:
-    # These are constants throughout our model
-    force_update: typing.Final[bool] = False
-    has_entity_name: typing.Final[bool] = True
-    should_poll: typing.Final[bool] = False
-    # These may be customized here and there per class
-    _attr_available: typing.ClassVar[bool] = False
-    # These may be customized here and there per class or instance
-    assumed_state: bool = False
-    entity_category: EntityCategory | None = None
-    entity_registry_enabled_default: bool = True
-    extra_state_attributes: dict[str, object] = {}
-    icon: str | None = None
-    translation_key: str | None = None
-    # These are actually per instance
-    available: bool
-    name: str | None
-    suggested_object_id: str | None
-    unique_id: str
-
-    # used to speed-up checks if entity is enabled and loaded
-    _hass_connected: bool
+    force_update = False
+    has_entity_name = True
+    should_poll = False
+    _attr_available = False
+    assumed_state = False
+    entity_category = None
+    entity_registry_enabled_default = True
+    extra_state_attributes = {}
+    icon = None
+    translation_key = None
 
     __slots__ = (
-        # slotting also base Entity freqeuntly used attributes...
+        # slotting also base Entity frequently used attributes...
         "entity_id",
         "hass",
         "platform",
@@ -123,13 +150,14 @@ class MLEntity(
         "channel",
         "entitykey",
         "state_callbacks",
+        "hass_connected",
+        # HA core
         "available",
         "device_class",
         "device_info",
         "name",
         "suggested_object_id",
         "unique_id",
-        "_hass_connected",
     )
 
     def __init__(
@@ -138,6 +166,7 @@ class MLEntity(
         channel: object | None,
         entitykey: str | None = None,
         device_class: str | None = None,
+        /,
         **kwargs: "Unpack[Args]",
     ):
         """
@@ -150,25 +179,16 @@ class MLEntity(
         entities for the same channel and usually equal to device_class (but might not be)
         - device_class: used by HA to set some soft 'class properties' for the entity
         """
+        # init these first since Loggable init could call configure_logger which 'sometimes'
+        # could rely on these
+        self.manager = manager
+        self.channel = channel
+        self.entitykey = entitykey
         id = (
             channel
             if entitykey is None
             else entitykey if channel is None else f"{channel}_{entitykey}"
         )
-        self.entity_id = entity.Entity.entity_id
-        self.hass = entity.Entity.hass
-        self.platform = entity.Entity.platform
-        self.registry_entry = None
-        self.device_entry = None
-        self._context = None
-        self._context_set = None
-        self.manager = manager
-        self.channel = channel
-        self.entitykey = entitykey
-        self.state_callbacks = None
-        self.available = self._attr_available or manager.online
-        self.device_class = device_class
-        self.device_info = self.manager.deviceentry_id  # type: ignore
         Loggable.__init__(self, id, logger=manager)
         # init before raising exceptions so that the Loggable is
         # setup before any exception is raised
@@ -178,6 +198,25 @@ class MLEntity(
             )
         if id in manager.entities:
             raise AssertionError(f"id:{id} is not unique inside manager.entities")
+
+        if "state_callback" in kwargs:
+            self.state_callbacks = set()
+            self.state_callbacks.add(kwargs.pop("state_callback"))
+        else:
+            self.state_callbacks = None
+        self.hass_connected = False
+
+        self.entity_id = entity.Entity.entity_id
+        self.hass = entity.Entity.hass
+        self.platform = entity.Entity.platform
+        self.registry_entry = None
+        self.device_entry = None
+
+        self._context = None
+        self._context_set = None
+        self.available = self._attr_available or manager.online
+        self.device_class = device_class
+        self.device_info = self.manager.deviceentry_id  # type: ignore
 
         if "name" in kwargs:
             name = kwargs.pop("name")
@@ -201,7 +240,6 @@ class MLEntity(
         for _attr_name, _attr_value in kwargs.items():
             setattr(self, _attr_name, _attr_value)
 
-        self._hass_connected = False
         manager.entities[id] = self
         async_add_devices = manager.platforms.setdefault(self.PLATFORM)
         if async_add_devices:
@@ -210,12 +248,12 @@ class MLEntity(
     # interface: Entity
     async def async_added_to_hass(self):
         self.log(self.VERBOSE, "Added to HomeAssistant")
-        self._hass_connected = True
+        self.hass_connected = True  # type: ignore
         return await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
         self.log(self.VERBOSE, "Removed from HomeAssistant")
-        self._hass_connected = False
+        self.hass_connected = False  # type: ignore
         return await super().async_will_remove_from_hass()
 
     # interface: self
@@ -225,7 +263,8 @@ class MLEntity(
         self.manager.entities.pop(self.id)
         self.manager: "EntityManager" = None  # type: ignore
 
-    def register_state_callback(self, state_callback: typing.Callable):
+    @final
+    def register_state_callback(self, state_callback: "StateCallback", /):
         if not self.state_callbacks:
             self.state_callbacks = set()
         self.state_callbacks.add(state_callback)
@@ -235,7 +274,7 @@ class MLEntity(
         if self.state_callbacks:
             for state_callback in self.state_callbacks:
                 state_callback()
-        if self._hass_connected:
+        if self.hass_connected:
             self.async_write_ha_state()
 
     def set_available(self):
@@ -246,19 +285,19 @@ class MLEntity(
         self.available = False
         self.flush_state()
 
-    def update_device_value(self, device_value):
+    def update_device_value(self, device_value, /):
         """This is a stub definition. It will be called by _parse (when namespace dispatching
         is configured so) or directly as a short path inside other parsers to forward the
         incoming device value to the underlyinh HA entity state."""
         raise NotImplementedError("Called 'update_device_value' on wrong entity type")
 
-    def update_native_value(self, native_value):
+    def update_native_value(self, native_value, /):
         """This is a stub definition. It will usually be called by update_device_value
         with the result of the conversion from the incoming device value (from Meross protocol)
         to the proper HA type/value for the entity class."""
         raise NotImplementedError("Called 'update_native_value' on wrong entity type")
 
-    async def async_request_value(self, device_value):
+    async def async_request_value(self, device_value, /):
         """Sends the actual request to the device. This needs to be overloaded in entities
         actually supporting the method SET on their namespace. Since the syntax for the payload
         is almost generalized we have some defaults implementations based on mixins ready to be
@@ -299,13 +338,13 @@ class MLEntity(
         return self.manager.generate_unique_id(self)
 
     # interface: NamespaceParser
-    def _parse(self, payload: dict):
+    def _parse(self, payload: "Mapping[str, Any]", /):
         """Default parsing for entities. Set the proper
         key_value in class/instance definition to make it work."""
         self.update_device_value(payload[self.key_value])
 
 
-class MENoChannelMixin(MLEntity if typing.TYPE_CHECKING else object):
+class MENoChannelMixin(MLEntity if TYPE_CHECKING else object):
     """
     Implementation for protocol method 'SET' on entities/namespaces not backed by a channel.
     Actual examples: Appliance.Control.Toggle, Appliance.GarageDoor.Config, and so on..
@@ -314,7 +353,7 @@ class MENoChannelMixin(MLEntity if typing.TYPE_CHECKING else object):
     manager: "BaseDevice"
 
     # interface: MLEntity
-    async def async_request_value(self, device_value):
+    async def async_request_value(self, device_value, /):
         """sends the actual request to the device. this is likely to be overloaded"""
         ns = self.ns
         return await self.manager.async_request_ack(
@@ -324,7 +363,7 @@ class MENoChannelMixin(MLEntity if typing.TYPE_CHECKING else object):
         )
 
 
-class MEDictChannelMixin(MLEntity if typing.TYPE_CHECKING else object):
+class MEDictChannelMixin(MLEntity if TYPE_CHECKING else object):
     """
     Implementation for protocol method 'SET' on entities/namespaces backed by a channel
     where the command payload must be enclosed in a plain dict (without enclosing list).
@@ -334,7 +373,7 @@ class MEDictChannelMixin(MLEntity if typing.TYPE_CHECKING else object):
     manager: "BaseDevice"
 
     # interface: MLEntity
-    async def async_request_value(self, device_value):
+    async def async_request_value(self, device_value, /):
         """sends the actual request to the device. this is likely to be overloaded"""
         ns = self.ns
         return await self.manager.async_request_ack(
@@ -349,7 +388,7 @@ class MEDictChannelMixin(MLEntity if typing.TYPE_CHECKING else object):
         )
 
 
-class MEListChannelMixin(MLEntity if typing.TYPE_CHECKING else object):
+class MEListChannelMixin(MLEntity if TYPE_CHECKING else object):
     """
     Implementation for protocol method 'SET' on entities/namespaces backed by a channel
     where the command payload must be enclosed in a list
@@ -359,7 +398,7 @@ class MEListChannelMixin(MLEntity if typing.TYPE_CHECKING else object):
     manager: "BaseDevice"
 
     # interface: MLEntity
-    async def async_request_value(self, device_value):
+    async def async_request_value(self, device_value, /):
         """sends the actual request to the device. this is likely to be overloaded"""
         ns = self.ns
         return await self.manager.async_request_ack(
@@ -369,20 +408,22 @@ class MEListChannelMixin(MLEntity if typing.TYPE_CHECKING else object):
         )
 
 
-class MEAutoChannelMixin(MLEntity if typing.TYPE_CHECKING else object):
+class MEAutoChannelMixin(MLEntity if TYPE_CHECKING else object):
     """
     Implementation for protocol method 'SET' on entities/namespaces backed by a channel
     where the command payload could be either a list or a dict. This mixin actually
     tries to learn the correct format at runtime buy 'sensing' it
-    Actual examples: Appliance.Control.ToggleX
+    Actual examples: None.
     """
 
-    manager: "BaseDevice"
+    if TYPE_CHECKING:
+        manager: "BaseDevice"
+        _set_format: type | None
 
     _set_format = None
 
     # interface: MLEntity
-    async def async_request_value(self, device_value):
+    async def async_request_value(self, device_value, /):
         """sends the actual request to the device. this is likely to be overloaded"""
         ns = self.ns
         if self._set_format is None:
@@ -437,7 +478,7 @@ class MEAutoChannelMixin(MLEntity if typing.TYPE_CHECKING else object):
             )
 
 
-class MEAlwaysAvailableMixin(MLEntity if typing.TYPE_CHECKING else object):
+class MEAlwaysAvailableMixin(MLEntity if TYPE_CHECKING else object):
     """
     Mixin class for entities which should always be available
     disregarding current device connection state.
@@ -453,7 +494,7 @@ class MEAlwaysAvailableMixin(MLEntity if typing.TYPE_CHECKING else object):
         pass
 
 
-class MEPartialAvailableMixin(MLEntity if typing.TYPE_CHECKING else object):
+class MEPartialAvailableMixin(MLEntity if TYPE_CHECKING else object):
     """
     Mixin class for entities which should be available when device is connected
     but their state needs to be preserved since they're representing a state not directly
@@ -473,7 +514,7 @@ class MLBinaryEntity(MLEntity):
     """Partially abstract common base class for ToggleEntity and BinarySensor.
     The initializer is skipped."""
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
 
         class Args(MLEntity.Args):
             device_value: NotRequired[Any]
@@ -491,6 +532,7 @@ class MLBinaryEntity(MLEntity):
         channel: object,
         entitykey: str | None = None,
         device_class: str | None = None,
+        /,
         **kwargs: "Unpack[Args]",
     ):
         self.is_on = kwargs.pop("device_value", None)
@@ -514,7 +556,7 @@ class MLBinaryEntity(MLEntity):
 class MLNumericEntity(MLEntity):
     """Common base class for (numeric) sensors and numbers."""
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
 
         class Args(MLEntity.Args):
             device_value: NotRequired[int | float]
@@ -522,10 +564,15 @@ class MLNumericEntity(MLEntity):
             native_unit_of_measurement: NotRequired[str]
             suggested_display_precision: NotRequired[int]
 
+        DEVICECLASS_TO_UNIT_MAP: ClassVar[dict[Any | None, str | None]]
+
+        _attr_device_scale: ClassVar[int | float]
+        device_scale: int | float
         device_value: int | float | None
         """The 'native' device value carried in protocol messages."""
 
         # HA core entity attributes:
+
         native_value: int | float | None
         native_unit_of_measurement: str | None
         # these are core attributes only for Sensor entity but we're
@@ -533,9 +580,8 @@ class MLNumericEntity(MLEntity):
         _attr_suggested_display_precision: ClassVar[int | None]
         suggested_display_precision: int | None
 
-    DEVICECLASS_TO_UNIT_MAP: typing.ClassVar[dict[object | None, str | None]]
     """To be init in derived classes with their DeviceClass own types."""
-    _attr_device_scale: int | float = 1
+    _attr_device_scale = 1
     """Provides a class initializer default for device_scale."""
     _attr_suggested_display_precision = None
 
@@ -553,6 +599,7 @@ class MLNumericEntity(MLEntity):
         channel: object,
         entitykey: str | None = None,
         device_class: str | None = None,
+        /,
         **kwargs: "Unpack[Args]",
     ):
         self.suggested_display_precision = kwargs.pop(
@@ -575,14 +622,14 @@ class MLNumericEntity(MLEntity):
         self.native_value = None
         super().set_unavailable()
 
-    def update_device_value(self, device_value: int | float):
+    def update_device_value(self, device_value: int | float, /):
         if self.device_value != device_value:
             self.device_value = device_value
             self.native_value = device_value / self.device_scale
             self.flush_state()
             return True
 
-    def update_native_value(self, native_value: int | float):
+    def update_native_value(self, native_value: int | float | None, /):
         if self.native_value != native_value:
             self.native_value = native_value
             self.flush_state()

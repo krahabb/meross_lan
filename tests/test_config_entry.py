@@ -1,21 +1,22 @@
 """Test meross_lan config entry setup"""
 
 import asyncio
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant import const as hac
 from homeassistant.config_entries import ConfigEntryState
-from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.helpers.component_api import ComponentApi
 from custom_components.meross_lan.light import MLDNDLightEntity
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
-from emulator import generate_emulators
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 
 from tests import const as tc, helpers
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 
@@ -58,9 +59,7 @@ async def test_mqtthub_entry_notready(request, hass: "HomeAssistant"):
         )
 
 
-async def test_device_entry(
-    request, hass: "HomeAssistant", aioclient_mock: AiohttpClientMocker
-):
+async def test_device_entry(request, hass: "HomeAssistant"):
     """
     Generic device setup testing:
     we'll try to configure and setup devices according to our
@@ -70,12 +69,8 @@ async def test_device_entry(
     by communicating to MerossEmulator through the aioclient_mock
     i.e. we're testing something close to http connected devices
     """
-    for emulator in generate_emulators(
-        tc.EMULATOR_TRACES_PATH, key=tc.MOCK_KEY, uuid=tc.MOCK_DEVICE_UUID
-    ):
-        async with helpers.DeviceContext(
-            request, hass, emulator, aioclient_mock
-        ) as context:
+    for emulator in helpers.build_emulators():
+        async with helpers.DeviceContext(request, hass, emulator) as context:
             assert await context.async_setup()
 
             descriptor = emulator.descriptor
@@ -101,10 +96,10 @@ async def test_device_entry(
             for namespace_handler in device.namespace_handlers.values():
                 ns = namespace_handler.ns
                 assert (
-                    (ns.request_payload_type is not mn.RequestPayloadType.LIST_C)
+                    (ns.request_payload_type is not mn.PayloadType.LIST_C)
                     or ns.is_sensor
                     or namespace_handler.polling_request_channels
-                    or descriptor.type.startswith(mc.TYPE_EM06)  # brutal exception
+                    or descriptor.is_refoss  # brutal exception
                 ), f"Incorrect config for {ns.name} namespace"
 
             if entity_dnd:
@@ -116,12 +111,7 @@ async def test_device_entry(
                 assert state and state.state.isdigit()
 
 
-async def test_profile_entry(
-    request,
-    hass: "HomeAssistant",
-    cloudapi_mock: helpers.CloudApiMocker,
-    merossmqtt_mock: helpers.MerossMQTTMocker,
-):
+async def test_profile_entry(request, hass: "HomeAssistant"):
     """
     Test a Meross cloud profile entry
     """

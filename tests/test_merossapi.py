@@ -2,15 +2,16 @@
 
 from time import time
 import typing
+from uuid import uuid4
 
 from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
 
-from custom_components.meross_lan.merossclient import (
-    build_message,
+from custom_components.meross_lan.merossclient import json_dumps
+from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
-    json_dumps,
     namespaces as mn,
 )
+from custom_components.meross_lan.merossclient.protocol.message import build_message
 
 from . import const as tc, helpers
 
@@ -19,7 +20,7 @@ if typing.TYPE_CHECKING:
 
 
 async def test_hamqtt_device_session(
-    request, hass: "HomeAssistant", hamqtt_mock: helpers.HAMQTTMocker, aioclient_mock
+    request, hass: "HomeAssistant", hamqtt_mock: helpers.HAMQTTMocker
 ):
     """
     check the local broker session management handles the device transactions
@@ -28,9 +29,7 @@ async def test_hamqtt_device_session(
 
     # We need to provide a configured device so that our
     # api HAMQTTConnection doesn't spawn discoveries
-    async with helpers.DeviceContext(
-        request, hass, mc.TYPE_MSS310, aioclient_mock
-    ) as context:
+    async with helpers.DeviceContext(request, hass, mc.TYPE_MSS310) as context:
         # let the device perform it's poll and come online
         await context.perform_coldstart()
 
@@ -45,8 +44,10 @@ async def test_hamqtt_device_session(
             mn.Appliance_Control_Bind.name,
             mc.METHOD_SET,
             {mn.Appliance_Control_Bind.key: {}},  # actual payload actually doesn't care
+            uuid4().hex,
             key,
             topic_subscribe,
+            mc.HEADER_TRIGGERSRC_DEVBOOT,
         )
         # since nothing is (yet) built at the moment, we expect this message
         # will go through all of the initialization process of ComponentApi
@@ -60,13 +61,13 @@ async def test_hamqtt_device_session(
             helpers.MessageMatcher(
                 header=helpers.DictMatcher(
                     {
-                        mc.KEY_NAMESPACE: mn.Appliance_Control_Bind.name,
-                        mc.KEY_METHOD: mc.METHOD_SETACK,
                         mc.KEY_MESSAGEID: message_bind_set[mc.KEY_HEADER][
                             mc.KEY_MESSAGEID
                         ],
+                        mc.KEY_NAMESPACE: mn.Appliance_Control_Bind.name,
+                        mc.KEY_METHOD: mc.METHOD_SETACK,
+                        mc.KEY_TRIGGERSRC: mc.HEADER_TRIGGERSRC_CLOUDCONTROL,
                         mc.KEY_FROM: topic_publish,
-                        mc.KEY_TRIGGERSRC: "CloudControl",
                     }
                 )
             ),
@@ -78,14 +79,16 @@ async def test_hamqtt_device_session(
             mn.Appliance_System_Clock.name,
             mc.METHOD_PUSH,
             {"clock": {"timestamp": int(time())}},
+            uuid4().hex,
             key,
             topic_publish,
+            mc.HEADER_TRIGGERSRC_DEVBOOT,
         )
         async_fire_mqtt_message(hass, topic_publish, json_dumps(message_clock_push))
         await hass.async_block_till_done()
         # check the PUSH was replied
         header_clock_reply = helpers.DictMatcher(message_clock_push[mc.KEY_HEADER])
-        header_clock_reply[mc.KEY_TRIGGERSRC] = "CloudControl"
+        header_clock_reply[mc.KEY_TRIGGERSRC] = mc.HEADER_TRIGGERSRC_CLOUDCONTROL
         header_clock_reply[mc.KEY_FROM] = topic_publish
         hamqtt_mock.async_publish_mock.assert_any_call(
             hass,
@@ -106,8 +109,10 @@ async def test_hamqtt_device_session(
                     "powerRatio": 0,
                 }
             },
+            uuid4().hex,
             key,
             topic_publish,
+            mc.HEADER_TRIGGERSRC_DEVBOOT,
         )
         async_fire_mqtt_message(
             hass, topic_publish, json_dumps(message_consumption_push)
@@ -117,7 +122,7 @@ async def test_hamqtt_device_session(
         header_consumption_reply = helpers.DictMatcher(
             message_consumption_push[mc.KEY_HEADER]
         )
-        header_consumption_reply[mc.KEY_TRIGGERSRC] = "CloudControl"
+        header_consumption_reply[mc.KEY_TRIGGERSRC] = mc.HEADER_TRIGGERSRC_CLOUDCONTROL
         header_consumption_reply[mc.KEY_FROM] = topic_publish
         hamqtt_mock.async_publish_mock.assert_any_call(
             hass,

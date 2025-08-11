@@ -1,7 +1,7 @@
 """Test meross_lan config flow"""
 
-import typing
-from typing import Final
+import asyncio
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from homeassistant import config_entries
@@ -15,17 +15,18 @@ except ImportError:
     from homeassistant.components.dhcp import DhcpServiceInfo  # type: ignore
 
 from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
-from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.merossclient import (
-    build_message,
     cloudapi,
-    const as mc,
     fmt_macaddress,
     json_dumps,
+)
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
     namespaces as mn,
 )
+from custom_components.meross_lan.merossclient.protocol.message import build_message
 
 from tests import const as tc, helpers
 
@@ -35,14 +36,18 @@ except ImportError:
     discovery_flow = None
 
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+    from pytest_homeassistant_custom_component.test_util.aiohttp import (
+        AiohttpClientMocker,
+    )
 
 
 async def _cleanup_config_entry(hass: "HomeAssistant", result: ConfigFlowResult):
     config_entry: ConfigEntry = result["result"]  # type: ignore
     assert config_entry.state == ConfigEntryState.LOADED
     await hass.config_entries.async_unload(config_entry.entry_id)
+    await hass.config_entries.async_remove(config_entry.entry_id)
 
 
 async def test_device_config_flow(hass: "HomeAssistant", aioclient_mock):
@@ -159,7 +164,7 @@ async def test_profile_config_flow(
 
 async def test_device_config_flow_with_profile(
     hass: "HomeAssistant",
-    aioclient_mock: AiohttpClientMocker,
+    aioclient_mock: "AiohttpClientMocker",
     cloudapi_mock: helpers.CloudApiMocker,
     merossmqtt_mock: helpers.MerossMQTTMocker,
 ):
@@ -236,6 +241,7 @@ async def test_mqtt_discovery_config_flow(hass: "HomeAssistant", hamqtt_mock):
         mn.Appliance_Control_ToggleX.name,
         mc.METHOD_PUSH,
         {mn.Appliance_Control_ToggleX.key: {mc.KEY_CHANNEL: 0, mc.KEY_ONOFF: 0}},
+        uuid4().hex,
         key,
         mc.TOPIC_REQUEST.format(device_id),
     )
@@ -243,7 +249,7 @@ async def test_mqtt_discovery_config_flow(hass: "HomeAssistant", hamqtt_mock):
     async_fire_mqtt_message(hass, topic, json_dumps(payload))
     await hass.async_block_till_done()
 
-    flow: Final = hass.config_entries.flow
+    flow = hass.config_entries.flow
     # we should have 2 flows now: one for the MQTT hub and the other for the
     # incoming device but this second one needs the time to progress in order to show up
     # so we're not checking now (#TODO: warp the test time so discovery will complete)
@@ -380,19 +386,17 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
     When an entry is already configured, check what happens when dhcp sends
     us a new ip
     """
-    device_type: Final = mc.TYPE_MTS200
-    flow: Final = hass.config_entries.flow
+    device_type = mc.TYPE_MTS200
+    flow = hass.config_entries.flow
 
-    async with helpers.DeviceContext(
-        request, hass, device_type, aioclient_mock
-    ) as device_context:
+    async with helpers.DeviceContext(request, hass, device_type) as device_context:
         emulator = device_context.emulator
         device = await device_context.perform_coldstart()
 
         # better be sure our context is consistent with expectations!
         assert device.host == str(id(emulator))
         assert device.id == device.descriptor.uuid
-        device_macaddress: Final = device.descriptor.macAddress
+        device_macaddress = device.descriptor.macAddress
         # since we check the DHCP renewal comes form a legit device we need to setup
         # a mock responding at the solicited ip with the same device info (descriptor)
         # since dhcp config flow will check by mac address
@@ -408,7 +412,7 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
             emulator_dhcp.descriptor.uuid == device.descriptor.uuid
         ), "wrong emulator clone"
         # now we mock the device emulator at new address
-        DHCP_GOOD_HOST: Final = "88.88.88.88"
+        DHCP_GOOD_HOST = "88.88.88.88"
         with helpers.EmulatorContext(
             emulator_dhcp, aioclient_mock, host=DHCP_GOOD_HOST
         ):
@@ -425,7 +429,7 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
             assert device.host == DHCP_GOOD_HOST, "device host was not updated"
 
         # here we build a different (device uuid) device instance
-        BOGUS_DEVICE_ID: Final = uuid4().hex
+        BOGUS_DEVICE_ID = uuid4().hex
         emulator_dhcp = helpers.build_emulator(
             device_type, key=device.key, uuid=BOGUS_DEVICE_ID
         )
@@ -436,7 +440,7 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
             emulator_dhcp.descriptor.uuid != device.descriptor.uuid
         ), "wrong emulator clone"
         # now we mock the device emulator at new address
-        DHCP_BOGUS_HOST: Final = "99.99.99.99"
+        DHCP_BOGUS_HOST = "99.99.99.99"
         with helpers.EmulatorContext(
             emulator_dhcp, aioclient_mock, host=DHCP_BOGUS_HOST
         ):
@@ -461,18 +465,15 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
             )
 
 
-async def test_options_flow(
-    request, hass: "HomeAssistant", aioclient_mock, hamqtt_mock, merossmqtt_mock
-):
+async def test_device_options_flow(request, hass: "HomeAssistant"):
     """
     Tests the device config entry option flow. This code could potentially use
     either HTTP or MQTT so we accordingly mock both. TODO: perform the test check
     against different config options (namely: the protocol) in order to see if
-    they behave as expected
+    they behave as expected.
+    TODO: check device bind and reset
     """
-    async with helpers.DeviceContext(
-        request, hass, mc.TYPE_MTS200, aioclient_mock
-    ) as context:
+    async with helpers.DeviceContext(request, hass, mc.TYPE_MTS200) as context:
         device = await context.perform_coldstart()
 
         options_flow = hass.config_entries.options
@@ -493,6 +494,67 @@ async def test_options_flow(
             options_flow, result, "keyerror", "device"
         )
         user_input[mlc.CONF_KEY] = device.key
+        result = await options_flow.async_configure(
+            result["flow_id"], user_input=user_input
+        )
+        assert result.get("type") == FlowResultType.CREATE_ENTRY
+
+
+async def test_device_unbind_options_flow(request, hass: "HomeAssistant"):
+
+    async with helpers.DeviceContext(request, hass, mc.TYPE_MTS200) as context:
+        await context.perform_coldstart()
+
+        options_flow = hass.config_entries.options
+        result = await options_flow.async_init(context.config_entry_id)
+        result = await helpers.async_assert_flow_menu_to_step(
+            options_flow, result, "menu", "unbind"
+        )
+        user_input = {
+            "post_action": "delete",
+        }
+        result = await options_flow.async_configure(
+            result["flow_id"], user_input=user_input
+        )
+        assert result.get("type") == FlowResultType.CREATE_ENTRY
+
+        await hass.async_block_till_done()  # entry remove Task
+        assert not hass.config_entries.async_has_entries(mlc.DOMAIN)
+
+
+async def test_mqtthub_options_flow(request, hass: "HomeAssistant", hamqtt_mock):
+    async with helpers.MQTTHubEntryMocker(request, hass) as context:
+
+        options_flow = hass.config_entries.options
+        result = await options_flow.async_init(context.config_entry_id)
+        result = await helpers.async_assert_flow_menu_to_step(
+            options_flow, result, "menu", "hub"
+        )
+        user_input = {
+            mlc.CONF_KEY: "meross",
+            mlc.CONF_ALLOW_MQTT_PUBLISH: True,
+        }
+        result = await options_flow.async_configure(
+            result["flow_id"], user_input=user_input
+        )
+        assert result.get("type") == FlowResultType.CREATE_ENTRY
+
+    # try to fight subscribe/unsubscribe cooldowns
+    await asyncio.sleep(1)
+
+
+async def test_profile_options_flow(request, hass: "HomeAssistant"):
+    async with helpers.ProfileEntryMocker(request, hass) as context:
+
+        options_flow = hass.config_entries.options
+        result = await options_flow.async_init(context.config_entry_id)
+        result = await helpers.async_assert_flow_menu_to_step(
+            options_flow, result, "menu", "profile"
+        )
+        user_input = {
+            mlc.CONF_ALLOW_MQTT_PUBLISH: True,
+            mlc.CONF_CHECK_FIRMWARE_UPDATES: True,
+        }
         result = await options_flow.async_configure(
             result["flow_id"], user_input=user_input
         )

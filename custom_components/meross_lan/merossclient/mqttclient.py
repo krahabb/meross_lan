@@ -12,10 +12,11 @@ from uuid import uuid4
 
 import paho.mqtt.client as mqtt
 
-from . import HostAddress, const as mc, get_macaddress_from_uuid
+from . import HostAddress, get_macaddress_from_uuid
+from .protocol import const as mc
 
 if typing.TYPE_CHECKING:
-    from . import MerossMessage
+    from .protocol.message import MerossMessage
 
 
 def generate_app_id():
@@ -102,7 +103,7 @@ class _MerossMQTTClient(mqtt.Client):
                 protocol=mqtt.MQTTv311,
                 callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
             )
-        except: # fallback to legacy (pre v2)
+        except:  # fallback to legacy (pre v2)
             super().__init__(client_id=client_id, protocol=mqtt.MQTTv311)
         self._lock_state = threading.Lock()
         """synchronize connect/disconnect (not contended by the mqtt thread)"""

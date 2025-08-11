@@ -3,7 +3,7 @@ import asyncio
 import logging
 import os
 from time import localtime, strftime, time
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.components import persistent_notification as pn
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
@@ -20,7 +20,8 @@ from ..const import (
     CONF_PROTOCOL_AUTO,
     DOMAIN,
 )
-from ..merossclient import cloudapi, const as mc, json_dumps
+from ..merossclient import cloudapi, json_dumps
+from ..merossclient.protocol import const as mc
 from .obfuscate import (
     OBFUSCATE_DEVICE_ID_MAP,
     OBFUSCATE_SERVER_MAP,
@@ -29,14 +30,26 @@ from .obfuscate import (
     obfuscated_dict,
 )
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     import io
-    from typing import Callable, ClassVar, Coroutine, Final, NotRequired, Unpack
+    from types import MappingProxyType
+    from typing import (
+        Any,
+        Callable,
+        ClassVar,
+        Coroutine,
+        Final,
+        Mapping,
+        NotRequired,
+        TypedDict,
+        Unpack,
+    )
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 
-    from ..merossclient import HostAddress, MerossPayloadType
+    from ..merossclient import HostAddress
+    from ..merossclient.protocol.types import MerossPayloadType
     from .component_api import ComponentApi
     from .entity import MLEntity
 
@@ -53,15 +66,18 @@ class EntityManager(Loggable):
     an isolation level between SubDevice and a ConfigEntry
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
 
-        class DeviceEntryIdType(typing.TypedDict):
+        class DeviceEntryIdType(TypedDict):
             identifiers: set[tuple[str, str]]
+
+        type PlatformsType = dict[str, Callable | None]
 
         api: Final[ComponentApi]
         hass: Final[HomeAssistant]
         config_entry: Final[ConfigEntry | None]
         deviceentry_id: Final[DeviceEntryIdType | None]
+        platforms: PlatformsType  # init in derived
         entities: Final[dict[object, MLEntity]]
         _tasks: set[asyncio.Future]
         _issues: set[str]  # BEWARE: on demand attribute
@@ -194,12 +210,14 @@ class EntityManager(Loggable):
 
     def create_issue(
         self,
-        issue_id: str,
+        issue_key: str,
+        issue_subkey: str = "",
         *,
+        data: dict[str, str | int | float | None] | None = None,
         severity: ir.IssueSeverity = ir.IssueSeverity.CRITICAL,
         translation_placeholders: dict[str, str] | None = None,
     ):
-
+        issue_id = f"{issue_key}.{self.id}.{issue_subkey}"
         try:
             issues = self._issues
             if issue_id in issues:
@@ -209,36 +227,40 @@ class EntityManager(Loggable):
         ir.async_create_issue(
             self.hass,
             mlc.DOMAIN,
-            f"{issue_id}.{self.id}",
+            issue_id,
+            data=data,
             is_fixable=True,
             severity=severity,
-            translation_key=issue_id,
+            translation_key=issue_key,
             translation_placeholders=translation_placeholders,
         )
         issues.add(issue_id)
 
-    def remove_issue(self, issue_id: str):
+    def remove_issue_id(self, issue_id: str, /):
         try:
             self._issues.remove(issue_id)
-            ir.async_delete_issue(self.hass, mlc.DOMAIN, f"{issue_id}.{self.id}")
+            ir.async_delete_issue(self.hass, mlc.DOMAIN, issue_id)
         except (AttributeError, KeyError):
             # either no _issues attr or issue_id not in set
             return
 
+    def remove_issue(self, issue_key: str, issue_subkey: str = "", /):
+        self.remove_issue_id(f"{issue_key}.{self.id}.{issue_subkey}")
+
 
 class ConfigEntryManager(EntityManager):
     """
-    This is an abstraction of an actual (device or other) container
-    for MLEntity(s). This container is very 'hybrid', end its main purpose
-    is to provide interfaces to their owned MerossEntities.
-    It could represent a Device, a SubDevice or an ApiProfile
-    and manages the relation(s) with the ConfigEntry (config, life-cycle)
+    This class manages the relationships with an actual ConfigEntry and its managed
+    device(s) and entities. A typical Meross device inherits from this but also
+    A MerossCloudProfile and the 'MQTTHub'.
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
+
         TRACE_RX: Final
         TRACE_TX: Final
-        DEFAULT_PLATFORMS: ClassVar[dict[str, Callable | None]]
+        DEFAULT_PLATFORMS: ClassVar[EntityManager.PlatformsType]
+        config: Mapping[str, Any]
         key: str
         logger: logging.Logger
         _trace_file: io.TextIOWrapper | None
@@ -262,7 +284,6 @@ class ConfigEntryManager(EntityManager):
 
         try:
             config_entry = kwargs["config_entry"]  # type: ignore
-            config_entry.runtime_data = self
             self.config = config = config_entry.data
             self.key = config.get(CONF_KEY) or ""
             self.obfuscate = config.get(CONF_OBFUSCATE, True)
@@ -339,12 +360,18 @@ class ConfigEntryManager(EntityManager):
         self, hass: "HomeAssistant", config_entry: "ConfigEntry"
     ):
         assert self.config_entry == config_entry
+        config_entry.runtime_data = self
         api = self.api
-        # open the trace before adding the entities
-        # so we could catch logs in this phase too
-        state = api.managers_transient_state.setdefault(config_entry.entry_id, {})
-        if state.pop(mlc.CONF_TRACE, None):
-            await self.async_trace_open()
+        # open the (eventual) trace before adding the entities
+        # so we could catch logs in this phase too. See
+        # OptionsFlow.async_step_diagnostics for the mechanic.
+        try:
+            await self.async_trace_open(
+                api.managers_transient_state[config_entry.entry_id].pop(mlc.CONF_TRACE)
+            )
+        except KeyError:
+            # no CONF_TRACE key and/or no config_entry.entry_id...no tracing configured
+            pass
 
         if self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES):
             await self.async_create_diagnostic_entities()
@@ -364,7 +391,7 @@ class ConfigEntryManager(EntityManager):
         ):
             return False
         self._cleanup_subscriptions()
-        self.platforms = {}
+        self.platforms.clear()
         self.config = {}
         await self.async_shutdown()
         return True
@@ -406,7 +433,7 @@ class ConfigEntryManager(EntityManager):
         ent_reg = self.api.entity_registry if remove else None
         for entity in self.managed_entities(SENSOR_DOMAIN):
             if entity.is_diagnostic:
-                if entity._hass_connected:
+                if entity.hass_connected:
                     await entity.async_remove()
                 await entity.async_shutdown()
                 if ent_reg:
@@ -423,9 +450,17 @@ class ConfigEntryManager(EntityManager):
         """
         return obfuscated_any(value) if self.obfuscate else value
 
-    def loggable_dict(self, value: typing.Mapping[str, typing.Any]):
+    def loggable_dict(self, value: "Mapping[str, Any]"):
         """Conditionally obfuscate the dict values (based off OBFUSCATE_KEYS) to send to logging/tracing"""
         return obfuscated_dict(value) if self.obfuscate else value
+
+    def loggable_config(self):
+        """Return a 'loggable' version of the entry config (for diagnostic/logging purposes)"""
+        return obfuscated_dict(self.config) if self.obfuscate else dict(self.config)
+
+    def loggable_diagnostic_state(self):
+        """Return a 'loggable' version of the entry state (for diagnostic/logging purposes)"""
+        return {}
 
     def loggable_broker(self, broker: "HostAddress | str"):
         """Conditionally obfuscate the connection_id (which is a broker address host:port) to send to logging/tracing"""
@@ -453,7 +488,14 @@ class ConfigEntryManager(EntityManager):
     def is_tracing(self):
         return self._trace_file or self._trace_data
 
-    async def async_trace_open(self):
+    async def async_trace_open(self, p_trace_data: dict | None = None, /):
+        """
+        This method could be called either when activating 'tracing' in OptionsFlow so
+        that it opens the (tab separated) file or when 'download diagnostic' is unable
+        to produce an output 'in sync' (async_get_diagnostics). A Device object could
+        fail to produce an immediate result and so fallback to a kind of hybrid tracing
+        with both a file and a json struct (_trace_data) being built in memory.
+        """
         try:
             self.log(self.DEBUG, "Tracing start")
             epoch = time()
@@ -473,7 +515,7 @@ class ConfigEntryManager(EntityManager):
                     encoding="utf8",
                 )
 
-            self._trace_file = await hass.async_add_executor_job(_trace_open)
+            self._trace_file = _t = await hass.async_add_executor_job(_trace_open)
 
             @callback
             def _trace_close_callback():
@@ -485,10 +527,28 @@ class ConfigEntryManager(EntityManager):
                 or mlc.CONF_TRACE_TIMEOUT_DEFAULT,
                 _trace_close_callback,
             )
+
+            if p_trace_data is not None:
+                # p_trace_data is a fragile indication we're being called to
+                # output a 'debug trace' and not a 'diagnostic'. We'll
+                # then add here the same data that are usually output
+                # to the diagnostics platform.
+                _t.write("\t".join(mlc.CONF_TRACE_COLUMNS) + "\r\n")
+                self.trace(
+                    epoch,
+                    {
+                        "version": mlc.CONF_TRACE_VERSION,
+                        "config": self.loggable_config(),
+                        "state": p_trace_data,
+                    },
+                    "",
+                    "HEADER",
+                )
+
             self._trace_opened(epoch)
             pn.async_create(
                 self.hass,
-                f"Device: {self.name}\nFile: {self._trace_file.name}",  # type: ignore
+                f"Device: {self.name}\nFile: {_t.name}",  # type: ignore
                 "meross_lan tracing started",
                 f"{DOMAIN}.{self.id}.tracing",
             )
@@ -545,10 +605,16 @@ class ConfigEntryManager(EntityManager):
         epoch: float,
         payload: "MerossPayloadType",
         namespace: str,
-        method: str = mc.METHOD_GETACK,
+        method: str = "",
         protocol: str = CONF_PROTOCOL_AUTO,
         rxtx: str = "",
+        /,
     ):
+        """
+        A trace typically contains protocol transactions characterized by 'protocol' and 'rxtx'.
+        When (protocol == CONF_PROTOCOL_AUTO) it means the row contains 'extra' informations
+        like logs (see trace_log) or config, diagnostics, state, etc.
+        """
         try:
             data = self.loggable_dict(payload)
             columns = [
@@ -579,12 +645,12 @@ class ConfigEntryManager(EntityManager):
         try:
             columns = [
                 strftime("%Y/%m/%d - %H:%M:%S", localtime(time())),
-                "",
-                CONF_PROTOCOL_AUTO,
-                "LOG",
+                "",  # rxtx
+                CONF_PROTOCOL_AUTO,  # protocol
+                "LOG",  # method
                 mlc.CONF_LOGGING_LEVEL_OPTIONS.get(level)
-                or logging.getLevelName(level),
-                msg,
+                or logging.getLevelName(level),  # namespace
+                msg,  # data
             ]
             if self._trace_data:
                 self._trace_data.append(columns)
@@ -595,6 +661,14 @@ class ConfigEntryManager(EntityManager):
 
         except Exception as exception:
             self.trace_close(exception, "appending log")
+
+    async def async_get_diagnostics(self) -> "mlc.TracingHeaderType":
+        # used to return diagnostic data for this manager ConfigEntry (see diagnostics.py)
+        return {
+            "version": mlc.CONF_TRACE_VERSION,
+            "config": self.loggable_config(),
+            "state": self.loggable_diagnostic_state(),
+        }
 
     def _cleanup_subscriptions(self):
         if self._unsub_entry_update_listener:

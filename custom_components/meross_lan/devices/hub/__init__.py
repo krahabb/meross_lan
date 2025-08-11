@@ -1,16 +1,24 @@
-import typing
+from typing import TYPE_CHECKING
 
-from .. import const as mlc
-from ..binary_sensor import MLBinarySensor
-from ..calendar import MtsSchedule
-from ..climate import MtsClimate
-from ..helpers import entity as me
-from ..helpers.device import BaseDevice, Device
-from ..helpers.namespaces import NamespaceHandler, NamespaceParser
-from ..merossclient import const as mc, get_productnameuuid, namespaces as mn
-from ..number import MLConfigNumber
-from ..select import MtsTrackedSensor
-from ..sensor import (
+from ... import const as mlc
+from ...binary_sensor import MLBinarySensor
+from ...button import MLButton
+from ...calendar import MtsSchedule
+from ...climate import MtsClimate
+from ...helpers import entity as me
+from ...helpers.device import BaseDevice, Device
+from ...helpers.namespaces import (
+    POLLING_STRATEGY_CONF,
+    NamespaceHandler,
+    NamespaceParser,
+    mc,
+    mn,
+)
+from ...merossclient import get_productnameuuid
+from ...merossclient.protocol.namespaces import hub as mn_h
+from ...number import MLConfigNumber
+from ...select import MtsTrackedSensor
+from ...sensor import (
     MLDiagnosticSensor,
     MLEnumSensor,
     MLHumiditySensor,
@@ -18,16 +26,20 @@ from ..sensor import (
     MLNumericSensor,
     MLTemperatureSensor,
 )
-from ..switch import MLSwitch
+from ...switch import MLSwitch
 
-if typing.TYPE_CHECKING:
-    from ..helpers.device import AsyncRequestFunc, DigestInitReturnType
-    from ..helpers.entity import MLEntity
-    from ..merossclient.cloudapi import SubDeviceInfoType
+if TYPE_CHECKING:
+    from typing import Any, Callable, Collection, Final
+
+    from ...helpers.device import AsyncRequestFunc, DigestInitReturnType
+    from ...helpers.entity import MLEntity
+    from ...merossclient.cloudapi import SubDeviceInfoType
+    from ...merossclient.protocol.namespaces import Namespace
     from .mts100 import Mts100Climate
 
+    WELL_KNOWN_TYPE_MAP: Final[dict[str, Callable]]
 
-WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
+WELL_KNOWN_TYPE_MAP = dict(
     {
         # typical entries (they're added on SubDevice declaration)
         # mc.TYPE_MS100: MS100SubDevice,
@@ -37,7 +49,7 @@ WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
 
 
 class MLHubSensorAdjustNumber(MLConfigNumber):
-    ns = mn.Appliance_Hub_Sensor_Adjust
+    ns = mn_h.Appliance_Hub_Sensor_Adjust
 
     __slots__ = (
         "native_max_value",
@@ -78,7 +90,7 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
 
 
 class MLHubToggle(me.MEListChannelMixin, MLSwitch):
-    ns = mn.Appliance_Hub_ToggleX
+    ns = mn_h.Appliance_Hub_ToggleX
 
     # HA core entity attributes:
     entity_category = MLSwitch.EntityCategory.CONFIG
@@ -94,12 +106,8 @@ class HubNamespaceHandler(NamespaceHandler):
 
     device: "HubMixin"
 
-    def __init__(self, device: "HubMixin", ns: "mn.Namespace"):
+    def __init__(self, device: "HubMixin", ns: "Namespace"):
         NamespaceHandler.__init__(self, device, ns, handler=self._handle_subdevice)
-        if ns.is_sensor:
-            # patch the indexing key since by default 'sensor' namespaces
-            # are configured for indexing by mc.KEY_CHANNEL
-            self.key_channel = mc.KEY_SUBID
 
     def _handle_subdevice(self, header, payload):
         """Generalized Hub namespace dispatcher to subdevices"""
@@ -107,9 +115,10 @@ class HubNamespaceHandler(NamespaceHandler):
         subdevices = hub.subdevices
         subdevices_parsed = set()
         key_namespace = self.ns.key
+        key_channel = self.ns.key_channel
         for p_subdevice in payload[key_namespace]:
             try:
-                subdevice_id = p_subdevice[self.key_channel]
+                subdevice_id = p_subdevice[key_channel]
                 if subdevice_id in subdevices_parsed:
                     hub.log_duplicated_subdevice(subdevice_id)
                 else:
@@ -149,8 +158,8 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
     def __init__(
         self,
         device: "HubMixin",
-        ns: "mn.Namespace",
-        models: typing.Collection,
+        ns: "Namespace",
+        models: "Collection",
         included: bool,
         count: int,
     ):
@@ -204,9 +213,10 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
         bigger payloads like NS_APPLIANCE_HUB_MTS100_SCHEDULEB
         """
         payload = []
+        key_channel = self.ns.key_channel
         for subdevice in self.device.subdevices.values():
             if (subdevice.model in self._models) == self._included:
-                payload.append({self.key_channel: subdevice.id})
+                payload.append({key_channel: subdevice.id})
                 if len(payload) == self._count:
                     yield payload
                     payload = []
@@ -214,13 +224,16 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
             yield payload
 
 
-class HubMixin(Device if typing.TYPE_CHECKING else object):
+class HubMixin(Device if TYPE_CHECKING else object):
     """
     Specialized Device for smart hub(s) like MSH300
     """
 
+    NAMESPACES = mn_h.HUB_NAMESPACES
+
     DEFAULT_PLATFORMS = Device.DEFAULT_PLATFORMS | {
         MLBinarySensor.PLATFORM: None,
+        MLButton.PLATFORM: None,
         MtsSchedule.PLATFORM: None,
         MLConfigNumber.PLATFORM: None,
         MLNumericSensor.PLATFORM: None,
@@ -229,7 +242,16 @@ class HubMixin(Device if typing.TYPE_CHECKING else object):
         MtsTrackedSensor.PLATFORM: None,
     }
 
-    subdevices: dict[object, "SubDevice"]
+    TRACE_ABILITY_EXCLUDE = Device.TRACE_ABILITY_EXCLUDE + (
+        "Appliance.Hub.Exception",  # disconnects
+        "Appliance.Hub.Report",  # disconnects
+        "Appliance.Hub.SubdeviceList",  # disconnects
+        *(
+            name
+            for name, ns in mn_h.HUB_NAMESPACES.items()
+            if (ns.has_get is False) and (ns.has_push_query is False)
+        ),
+    )
 
     # interface: EntityManager
     def managed_entities(self, platform):
@@ -253,7 +275,7 @@ class HubMixin(Device if typing.TYPE_CHECKING else object):
     def get_type(self) -> mlc.DeviceType:
         return mlc.DeviceType.HUB
 
-    def _create_handler(self, ns: "mn.Namespace"):
+    def _create_handler(self, ns: "Namespace"):
         _handler = getattr(self, f"_handle_{ns.name.replace('.', '_')}", None)
         if _handler:
             return NamespaceHandler(
@@ -261,7 +283,11 @@ class HubMixin(Device if typing.TYPE_CHECKING else object):
                 ns,
                 handler=_handler,
             )
-        elif ns.is_hub or ns.is_sensor:
+        elif ns.is_hub_id or ns.is_hub_subid:
+            # This rule  states that the payload is a list of subdevices indexed by 'id' or 'subId'.
+            # TODO: For better design we should start getting away from hub parsing general
+            # mechanics and migrate to using the standard dispatching api in NamespaceHandler
+            # by registering subdevices (or directly subdevice entities) as sinks.
             return HubNamespaceHandler(self, ns)
         else:
             return super()._create_handler(ns)
@@ -271,7 +297,7 @@ class HubMixin(Device if typing.TYPE_CHECKING else object):
         # Here we'll check the fresh subdevice list against the actual one and
         # eventually manage newly added subdevices or removed ones #119
         # telling the caller to persist the changed configuration (self.needsave)
-        subdevices_actual = set(self.subdevices.keys())
+        subdevices_actual = set(self.subdevices)
         for p_subdevice_digest in p_hub[mc.KEY_SUBDEVICE]:
             try:
                 subdevice_id = p_subdevice_digest[mc.KEY_ID]
@@ -293,19 +319,28 @@ class HubMixin(Device if typing.TYPE_CHECKING else object):
             # now we're left with non-existent (removed) subdevices
             self.needsave = True
             for subdevice_id in subdevices_actual:
-                subdevice = self.subdevices[subdevice_id]
+                subdevice = self.subdevices.pop(subdevice_id)
                 self.log(
                     self.WARNING,
-                    "Removing subdevice %s (id:%s) - configuration will be reloaded in few sec",
+                    "%s (id:%s) unregistered from hub",
                     subdevice.name,
                     subdevice_id,
                 )
-            # needsave=True might need some time querying abilities before
-            # actually saving. We'll let some time to complete
-            self.schedule_reload(5)
+                if subdevice.online:
+                    subdevice._set_offline()
+                self.async_create_task(
+                    subdevice.async_shutdown(),
+                    f"{subdevice.__class__.__name__}.async_shutdown()",
+                )
+                self.create_issue(
+                    mlc.ISSUE_HUB_SUBDEVICE_REMOVED,
+                    subdevice_id,
+                    severity=self.IssueSeverity.WARNING,
+                    translation_placeholders={"device_name": subdevice.name},
+                )
 
     # interface: self
-    def log_duplicated_subdevice(self, subdevice_id: object):
+    def log_duplicated_subdevice(self, subdevice_id: str, /):
         self.log(
             self.CRITICAL,
             "Subdevice %s (id:%s) appears twice in device data. Shouldn't happen",
@@ -314,7 +349,7 @@ class HubMixin(Device if typing.TYPE_CHECKING else object):
             timeout=604800,  # 1 week
         )
 
-    def setup_chunked_handler(self, ns: mn.Namespace, is_mts100: bool, count: int):
+    def setup_chunked_handler(self, ns: "Namespace", is_mts100: bool, count: int, /):
         if (ns.name not in self.namespace_handlers) and (
             ns.name in self.descriptor.ability
         ):
@@ -322,17 +357,41 @@ class HubMixin(Device if typing.TYPE_CHECKING else object):
                 self, ns, mc.MTS100_ALL_TYPESET, is_mts100, count
             )
 
-    def setup_simple_handler(self, ns: mn.Namespace):
-        if ns.name in self.namespace_handlers:
+    def setup_simple_handler(self, ns: "Namespace", /):
+        try:
             self.namespace_handlers[ns.name].polling_response_size_inc()
-        elif ns.name in self.descriptor.ability:
-            HubNamespaceHandler(self, ns)
+        except KeyError:
+            if ns.name in self.descriptor.ability:
+                HubNamespaceHandler(self, ns)
 
     def _handle_Appliance_Digest_Hub(self, header: dict, payload: dict):
         self._parse_hub(payload[mc.KEY_HUB])
 
-    def _handle_Appliance_Hub_SubdeviceList(self, header: dict, payload: dict):
+    def _handle_Appliance_Hub_ExtraInfo(self, header: dict, payload: dict):
+        """TODO: decode
+        {
+          "extraInfo": {
+            "upgradeSubDevs": [
+              {
+                "type": "ms200"
+              },
+              {
+                "type": "mts150p"
+              },
+              {
+                "type": "ms130"
+              },
+              {
+                "type": "ms120"
+              }
+            ]
+          }
+        }
         """
+        pass
+
+    def _handle_Appliance_Hub_SubdeviceList(self, header: dict, payload: dict):
+        """TODO: decode
         {
             'subdeviceList': {
                 'subdevice': [
@@ -344,14 +403,9 @@ class HubMixin(Device if typing.TYPE_CHECKING else object):
             }
         }
         """
-        p_subdevicelist = payload[mc.KEY_SUBDEVICELIST]
-        for p_subdevice in p_subdevicelist[mc.KEY_SUBDEVICE]:
-            # TODO: decode subdeviceList
-            # actually, the sample payload is reporting status=1 for a device which appears to be offline
-            # is it likely unpaired?
-            pass
+        pass
 
-    def _subdevice_build(self, p_subdevice: dict[str, typing.Any]):
+    def _subdevice_build(self, p_subdevice: "dict[str, Any]"):
         # parses the subdevice payload in 'digest' to look for a well-known type
         # and builds accordingly
         model = None
@@ -364,12 +418,12 @@ class HubMixin(Device if typing.TYPE_CHECKING else object):
             # this is true when subdevice is offline and hub has no recent info
             # we'll check our device registry for luck
             try:
-                hassdevice = self.api.device_registry.async_get_device(
+                device_entry = self.api.device_registry.async_get_device(
                     identifiers={(mlc.DOMAIN, p_subdevice[mc.KEY_ID])}
                 )
-                if not hassdevice:
+                if not device_entry:
                     return None
-                model = hassdevice.model
+                model = device_entry.model
                 assert model
             except Exception:
                 return None
@@ -439,11 +493,12 @@ class SubDevice(NamespaceParser, BaseDevice):
         # 'advertises' it and no specialized implementation is in place
         self.switch_togglex: MLSwitch | None = None
 
-        hub.setup_simple_handler(mn.Appliance_Hub_Battery)
-        hub.setup_simple_handler(mn.Appliance_Hub_ToggleX)
-        hub.setup_simple_handler(mn.Appliance_Hub_SubDevice_Version)
+        hub.setup_simple_handler(mn_h.Appliance_Hub_Battery)
+        hub.setup_simple_handler(mn_h.Appliance_Hub_ToggleX)
+        hub.setup_simple_handler(mn_h.Appliance_Hub_SubDevice_Version)
         if model not in mc.MTS100_ALL_TYPESET:
-            hub.setup_chunked_handler(mn.Appliance_Hub_Sensor_All, False, 8)
+            hub.setup_chunked_handler(mn_h.Appliance_Hub_Sensor_All, False, 8)
+        hub.remove_issue(mlc.ISSUE_HUB_SUBDEVICE_REMOVED, id)
 
     # interface: EntityManager
     def generate_unique_id(self, entity: "MLEntity"):
@@ -481,9 +536,9 @@ class SubDevice(NamespaceParser, BaseDevice):
         # force a re-poll even on MQTT
         self.hub.namespace_handlers[
             (
-                mn.Appliance_Hub_Mts100_All.name
+                mn_h.Appliance_Hub_Mts100_All.name
                 if self.model in mc.MTS100_ALL_TYPESET
-                else mn.Appliance_Hub_Sensor_All.name
+                else mn_h.Appliance_Hub_Sensor_All.name
             )
         ].polling_epoch_next = 0.0
 
@@ -715,9 +770,9 @@ class MTS100SubDevice(SubDevice):
         from .mts100 import Mts100Climate
 
         self.climate = Mts100Climate(self)
-        hub.setup_chunked_handler(mn.Appliance_Hub_Mts100_All, True, 8)
-        hub.setup_chunked_handler(mn.Appliance_Hub_Mts100_ScheduleB, True, 4)
-        hub.setup_simple_handler(mn.Appliance_Hub_Mts100_Adjust)
+        hub.setup_chunked_handler(mn_h.Appliance_Hub_Mts100_All, True, 8)
+        hub.setup_chunked_handler(mn_h.Appliance_Hub_Mts100_ScheduleB, True, 4)
+        hub.setup_simple_handler(mn_h.Appliance_Hub_Mts100_Adjust)
 
     async def async_shutdown(self):
         await super().async_shutdown()
@@ -815,14 +870,18 @@ class MTS150PSubDevice(MTS100SubDevice):
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS150P] = MTS150PSubDevice
 
 
-class GS559MuteToggle(me.MEListChannelMixin, MLSwitch):
-    ns = mn.Appliance_Hub_Sensor_Smoke
-    key_value: str = mc.KEY_INTERCONN
-
-    # HA core entity attributes:
-
-
 class GS559SubDevice(SubDevice):
+
+    if TYPE_CHECKING:
+        binary_sensor_alarm: MLBinarySensor
+        binary_sensor_error: MLBinarySensor
+        binary_sensor_muted: MLBinarySensor
+        button_mute: MLButton
+        button_test: MLButton
+        sensor_status: MLEnumSensor
+        sensor_interConn: MLEnumSensor
+        _smokealarm_status: int | None
+
     STATUS_MAP = {
         17: "error_temperature",
         18: "error_smoke",
@@ -837,7 +896,7 @@ class GS559SubDevice(SubDevice):
         27: "alarm_smoke",
         170: "ok",
     }
-
+    MUTE_MAP = {17: 20, 18: 21, 19: 22, 24: 26, 25: 27, None: 170}
     STATUS_ALARM = {23, 24, 25, 26, 27}
     STATUS_ERROR = {17, 18, 19, 20, 21, 22}
     STATUS_MUTED = {20, 21, 22, 26, 27}
@@ -846,20 +905,15 @@ class GS559SubDevice(SubDevice):
         "binary_sensor_alarm",
         "binary_sensor_error",
         "binary_sensor_muted",
+        "button_mute",
+        "button_test",
         "sensor_status",
-        # "sensor_interConn",
-        "switch_interConn",
+        "sensor_interConn",
+        "_smokealarm_status",
     )
 
     def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_GS559)
-        self.sensor_status = MLEnumSensor(
-            self, self.id, mc.KEY_STATUS, translation_key="smoke_alarm_status"
-        )
-        # self.sensor_interConn = MLEnumSensor(self, self.id, mc.KEY_INTERCONN)
-        self.switch_interConn = GS559MuteToggle(
-            self, self.id, mc.KEY_INTERCONN, MLSwitch.DeviceClass.SWITCH
-        )
         self.binary_sensor_alarm = MLBinarySensor(
             self, self.id, "alarm", MLBinarySensor.DeviceClass.SAFETY
         )
@@ -867,19 +921,31 @@ class GS559SubDevice(SubDevice):
             self, self.id, "error", MLBinarySensor.DeviceClass.PROBLEM
         )
         self.binary_sensor_muted = MLBinarySensor(self, self.id, "muted")
+        self.button_mute = MLButton(
+            self, self.id, "button_mute", self._async_button_mute_press, name="Mute"
+        )
+        self.button_test = MLButton(
+            self, self.id, "button_test", self._async_button_test_press, name="Test"
+        )
+        self.sensor_status = MLEnumSensor(
+            self, self.id, mc.KEY_STATUS, translation_key="smoke_alarm_status"
+        )
+        self.sensor_interConn = MLEnumSensor(self, self.id, mc.KEY_INTERCONN)
+        self._smokealarm_status = None
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.binary_sensor_muted: MLBinarySensor = None  # type: ignore
-        self.binary_sensor_error: MLBinarySensor = None  # type: ignore
-        self.binary_sensor_alarm: MLBinarySensor = None  # type: ignore
-        self.sensor_status: MLEnumSensor = None  # type: ignore
-        self.switch_interConn: GS559MuteToggle = None  # type: ignore
-        # self.sensor_interConn: MLEnumSensor = None  # type: ignore
+        self.binary_sensor_muted = None  # type: ignore
+        self.binary_sensor_error = None  # type: ignore
+        self.binary_sensor_alarm = None  # type: ignore
+        self.button_mute = None  # type: ignore
+        self.button_test = None  # type: ignore
+        self.sensor_status = None  # type: ignore
+        self.sensor_interConn = None  # type: ignore
 
     def _parse_smokeAlarm(self, p_smokealarm: dict):
         if mc.KEY_STATUS in p_smokealarm:
-            value = p_smokealarm[mc.KEY_STATUS]
+            self._smokealarm_status = value = p_smokealarm[mc.KEY_STATUS]
             self.binary_sensor_alarm.update_onoff(value in GS559SubDevice.STATUS_ALARM)
             self.binary_sensor_error.update_onoff(value in GS559SubDevice.STATUS_ERROR)
             self.binary_sensor_muted.update_onoff(value in GS559SubDevice.STATUS_MUTED)
@@ -887,8 +953,36 @@ class GS559SubDevice(SubDevice):
                 GS559SubDevice.STATUS_MAP.get(value, value)
             )
         if mc.KEY_INTERCONN in p_smokealarm:
-            # self.sensor_interConn.update_native_value(p_smokealarm[mc.KEY_INTERCONN])
-            self.switch_interConn.update_onoff(p_smokealarm[mc.KEY_INTERCONN])
+            self.sensor_interConn.update_native_value(p_smokealarm[mc.KEY_INTERCONN])
+
+    async def _async_button_mute_press(self):
+        ns = mn_h.Appliance_Hub_Sensor_Smoke
+        try:
+            await self.async_request_ack(
+                ns.name,
+                mc.METHOD_SET,
+                {
+                    ns.key: [
+                        {
+                            ns.key_channel: self.id,
+                            mc.KEY_STATUS: GS559SubDevice.MUTE_MAP[
+                                self._smokealarm_status
+                            ],
+                        }
+                    ]
+                },
+            )
+        except KeyError as e:
+            # in case the state is not present in the MUTE_MAP (i.e. not mutable)
+            self.log_exception(self.DEBUG, e, "trying to send mute command")
+
+    async def _async_button_test_press(self):
+        ns = mn_h.Appliance_Hub_Sensor_Smoke
+        await self.async_request_ack(
+            ns.name,
+            mc.METHOD_SET,
+            {ns.key: [{ns.key_channel: self.id, mc.KEY_STATUS: 23}]},
+        )
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_GS559] = GS559SubDevice
@@ -925,7 +1019,7 @@ class MS100SubDevice(SubDevice):
             20,
             1,
         )
-        hub.setup_simple_handler(mn.Appliance_Hub_Sensor_Adjust)
+        hub.setup_simple_handler(mn_h.Appliance_Hub_Sensor_Adjust)
 
     async def async_shutdown(self):
         await super().async_shutdown()
@@ -965,7 +1059,9 @@ class MS100SubDevice(SubDevice):
         # the adjust sooner than scheduled in case the change
         # was due to an adjustment
         if sensor.update_device_value(device_value):
-            strategy = self.hub.namespace_handlers[mn.Appliance_Hub_Sensor_Adjust.name]
+            strategy = self.hub.namespace_handlers[
+                mn_h.Appliance_Hub_Sensor_Adjust.name
+            ]
             if strategy.lastrequest < (self.hub.lastresponse - 30):
                 strategy.polling_epoch_next = 0.0
 
@@ -989,9 +1085,20 @@ class MS130SubDevice(SubDevice):
         self.sensor_humidity = MLHumiditySensor(self, self.id)
         self.sensor_temperature = MLTemperatureSensor(self, self.id, device_scale=100)
         self.sensor_light = MLLightSensor(self, self.id)
-        # TODO: check the polling verb/payload since we don't know if
-        # PUSH is enough or if we have to explicitly set the (sub)Id
-        hub.setup_simple_handler(mn.Appliance_Control_Sensor_LatestX)
+        # This hybrid ns should have LIST_C structure in Hub(s)
+        ns = mn_h.Hub_Control_Sensor_LatestX
+        try:
+            handler = hub.namespace_handlers[ns.name]
+        except KeyError:
+            handler = (
+                HubNamespaceHandler(hub, ns)
+                if ns.name in hub.descriptor.ability
+                else None
+            )
+        if handler:
+            handler.polling_request_add_channel(
+                self.id, {"channel": 0, "data": ["light", "temp", "humi"]}
+            )
 
     async def async_shutdown(self):
         await super().async_shutdown()
@@ -1124,6 +1231,26 @@ WELL_KNOWN_TYPE_MAP[mc.KEY_WATERLEAK] = MS400SubDevice
 
 def digest_init_hub(device: "HubMixin", digest) -> "DigestInitReturnType":
 
+    # Check for unbinded subdevices which are 'still' in the device_registry
+    registry_subdevices = {}
+    for (
+        device_entry
+    ) in device.api.device_registry.devices.get_devices_for_config_entry_id(
+        device.config_entry.entry_id
+    ):
+        # The caveat here is to detect if a subdev has been re-binded to
+        # a different hub (so a different config_entry). We need to be sure
+        # we're removing a surely unused device.
+        # To be honest, I don't know about the 'integrity' enforced in DeviceRegistry
+        # at any rate, a subdev is always unique in dev_reg since we use the
+        # subdev "Id" as an identifier.
+        if device_entry.via_device_id == device.device_registry_entry.id:
+            # checking 'via_device_id' should be enough to ensure
+            # the device hasn't been re-binded
+            for identifiers in device_entry.identifiers:
+                if identifiers[0] == mlc.DOMAIN:
+                    registry_subdevices[identifiers[1]] = device_entry
+
     device.subdevices = {}
     for p_subdevice_digest in digest[mc.KEY_SUBDEVICE]:
         try:
@@ -1132,7 +1259,86 @@ def digest_init_hub(device: "HubMixin", digest) -> "DigestInitReturnType":
                 device.log_duplicated_subdevice(subdevice_id)
             else:
                 device._subdevice_build(p_subdevice_digest)
+                try:
+                    del registry_subdevices[subdevice_id]
+                except KeyError:
+                    pass
         except Exception as exception:
             device.log_exception(device.WARNING, exception, "digest_init_hub")
 
+    for subdevice_id, device_entry in registry_subdevices.items():
+        device.create_issue(
+            mlc.ISSUE_HUB_SUBDEVICE_REMOVED,
+            subdevice_id,
+            severity=device.IssueSeverity.WARNING,
+            translation_placeholders={"device_name": device_entry.name},
+        )
+
     return device._parse_hub, ()
+
+
+POLLING_STRATEGY_CONF |= {
+    mn_h.Hub_Control_Sensor_LatestX: (
+        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        220,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn_h.Appliance_Hub_Battery: (
+        3600,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        40,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn_h.Appliance_Hub_Mts100_Adjust: (
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        40,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn_h.Appliance_Hub_Mts100_All: (
+        mlc.PARAM_HEARTBEAT_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        350,
+        None,  # HubChunkedNamespaceHandler.async_poll_chunked
+    ),
+    mn_h.Appliance_Hub_Mts100_ScheduleB: (
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        500,
+        None,  # HubChunkedNamespaceHandler.async_poll_chunked
+    ),
+    mn_h.Appliance_Hub_Sensor_Adjust: (
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        60,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn_h.Appliance_Hub_Sensor_All: (
+        mlc.PARAM_HEARTBEAT_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        250,
+        None,  # HubChunkedNamespaceHandler.async_poll_chunked
+    ),
+    mn_h.Appliance_Hub_SubDevice_Version: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        55,
+        NamespaceHandler.async_poll_once,
+    ),
+    mn_h.Appliance_Hub_ToggleX: (
+        0,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        35,
+        NamespaceHandler.async_poll_default,
+    ),
+}

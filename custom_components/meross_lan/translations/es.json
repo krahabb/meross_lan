@@ -38,7 +38,11 @@
             "common": {
                 "state": {
                     "ok": "Ok",
-                    "disconnected": "Desconectado"
+                    "disconnected": "Desconectado",
+                    "low": "Baja",
+                    "medium": "Medio",
+                    "high": "Alta",
+                    "idle": "Inactivo"
                 }
             },
             "mts_overheat_warning": {
@@ -53,6 +57,21 @@
                     "0": "Ok",
                     "1": "Freezing",
                     "2": "Desconectado"
+                }
+            },
+            "mts300_status": {
+                "state": {
+                    "0": "Inactivo",
+                    "1": "Baja",
+                    "2": "Medio",
+                    "3": "Alta"
+                }
+            },
+            "mts300_hdstatus": {
+                "state": {
+                    "1": "Deshumidificación",
+                    "2": "Humidificación",
+                    "0": "Inactivo"
                 }
             }
         }
@@ -144,7 +163,7 @@
                 "data": {
                     "key": "Clave de dispositivo",
                     "error": "Mensaje de error",
-                    "allow_mqtt_publish": "Permitir la publicación de MQTT"
+                    "allow_mqtt_publish": "Permitir publicación MQTT local"
                 }
             },
             "device": {
@@ -283,6 +302,23 @@
                 "step": {
                     "confirm": {
                         "title": "La zona horaria para {device_name} no está establecida o es diferente de la predeterminada de HomeAssistant"
+                    }
+                }
+            }
+        },
+        "hub_subdevice_removed": {
+            "title": "{device_name} eliminado del concentrador",
+            "fix_flow": {
+                "abort": {
+                    "subdevice_still_registered": "El subdispositivo todavía está registrado"
+                },
+                "step": {
+                    "confirm": {
+                        "title": "Eliminar dispositivo y registros de entidades",
+                        "description": "El dispositivo no responde y se eliminará de la configuración",
+                        "data": {
+                            "delete": "Eliminar permanentemente la configuración del (sub)dispositivo"
+                        }
                     }
                 }
             }

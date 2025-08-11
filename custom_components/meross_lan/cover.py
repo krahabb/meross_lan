@@ -5,7 +5,7 @@ from homeassistant.exceptions import InvalidStateError
 
 from .const import CONF_PROTOCOL_HTTP, PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT
 from .helpers import entity as me, versiontuple
-from .merossclient import const as mc, namespaces as mn
+from .merossclient.protocol import const as mc, namespaces as mn
 from .number import MLConfigNumber
 
 if typing.TYPE_CHECKING:
@@ -141,6 +141,11 @@ class MLRollerShutter(MLCover):
         manager.register_parser(self, mn.Appliance_RollerShutter_Config)
         manager.register_parser(self, mn.Appliance_RollerShutter_Position)
         manager.register_parser(self, mn.Appliance_RollerShutter_State)
+        if mn.Appliance_Control_ToggleX.name in descriptor.ability:
+            # This is still to be understood. This call will do nothing
+            # since the digest seen so far carries an empty list of channels
+            # even though the abilities show ToggleX support.
+            manager.register_togglex_channel(self)
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -420,6 +425,9 @@ class MLRollerShutter(MLCover):
         if self._transition_unsub and (state == mc.ROLLERSHUTTER_STATE_IDLE):
             self._transition_cancel()
 
+    def _parse_togglex(self, payload: dict):
+        pass
+    
     async def _async_transition_callback(self):
         """Schedule a repetitive callback when we detect or suspect shutter movement.
         It will be invalidated only when a successful state message is parsed stating

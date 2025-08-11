@@ -13,7 +13,10 @@ from custom_components.meross_lan.light import (
     native_to_rgb,
     rgb_to_native,
 )
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 
 from tests.entities import EntityComponentTest
 
@@ -27,6 +30,8 @@ class EntityTest(EntityComponentTest):
         mc.KEY_DIFFUSER: {mc.KEY_LIGHT: [MLDiffuserLight]},
     }
     NAMESPACES_ENTITIES = {
+        mn.Appliance_Control_Light_Effect.name: [MLLightEffect],
+        mn.Appliance_Control_Mp3.name: [MLLightMp3],
         mn.Appliance_System_DNDMode.name: [MLDNDLightEntity],
     }
 
@@ -70,11 +75,11 @@ class EntityTest(EntityComponentTest):
                     assert LightEntityFeature.EFFECT in supported_features
                     assert entity.effect_list, "effect_list"
                 if mn.Appliance_Control_Light_Effect.name in ability:
-                    assert isinstance(entity, MLLightEffect)
+                    assert type(entity) is MLLightEffect
                     assert LightEntityFeature.EFFECT in supported_features
                     assert entity.effect_list, "effect_list"
                 if mn.Appliance_Control_Mp3.name in ability:
-                    assert isinstance(entity, MLLightMp3)
+                    assert type(entity) is MLLightMp3
                     assert LightEntityFeature.EFFECT in supported_features
                     assert (
                         entity.effect_list == mc.HP110A_LIGHT_EFFECT_LIST

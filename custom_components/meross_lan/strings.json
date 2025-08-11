@@ -38,7 +38,11 @@
             "common": {
                 "state": {
                     "ok": "Ok",
-                    "disconnected": "Disconnected"
+                    "disconnected": "Disconnected",
+                    "idle": "Idle",
+                    "low": "Low",
+                    "medium": "Medium",
+                    "high": "High"
                 }
             },
             "mts_overheat_warning": {
@@ -53,6 +57,21 @@
                     "0": "[%key:entity::sensor::common::state::ok%]",
                     "1": "Freezing",
                     "2": "[%key:entity::sensor::common::state::disconnected%]"
+                }
+            },
+            "mts300_status": {
+                "state": {
+                    "0": "[%key:entity::sensor::common::state::idle%]",
+                    "1": "[%key:entity::sensor::common::state::low%]",
+                    "2": "[%key:entity::sensor::common::state::medium%]",
+                    "3": "[%key:entity::sensor::common::state::high%]"
+                }
+            },
+            "mts300_hdstatus": {
+                "state": {
+                    "0": "[%key:entity::sensor::common::state::idle%]",
+                    "1": "Dehumidification",
+                    "2": "Humidifying"
                 }
             }
         }
@@ -283,6 +302,23 @@
                 "step": {
                     "confirm": {
                         "title": "[%key:issues::device_timezone::title%]"
+                    }
+                }
+            }
+        },
+        "hub_subdevice_removed": {
+            "title": "{device_name} unregistered from hub",
+            "fix_flow": {
+                "abort": {
+                    "subdevice_still_registered": "Subdevice is still registered"
+                },
+                "step": {
+                    "confirm": {
+                        "title": "Remove device and entities registrations",
+                        "description": "Device is not responding and will be removed from configuration",
+                        "data": {
+                            "delete": "Permanently delete the (sub)device configuration"
+                        }
                     }
                 }
             }

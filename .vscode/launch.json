@@ -10,7 +10,7 @@
       "justMyCode": false,
       "args": [
         "-H",
-        "127.0.0.1",
+        "0.0.0.0",
         "-P",
         "40000",
         "emulator:run",
@@ -54,7 +54,18 @@
       ]
     },
     {
-      "name": "Debug Tests",
+      "name": "Python Debugger: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+    },
+    {
+      "name": "Test Debug",
       "type": "debugpy",
       "request": "launch",
       "program": "${file}",
@@ -67,13 +78,25 @@
       "justMyCode": false
     },
     {
-      "name": "Coverage",
+      "name": "Test Coverage",
       "type": "debugpy",
       "request": "launch",
       "module": "pytest",
       "args": [
         "--cov=custom_components/meross_lan",
         "--cov-report=html:htmlcov",
+      ],
+    },
+    {
+      "name": "Test Profiling",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "-o",
+        "python_files=profile_*.py",
+        "-o",
+        "python_functions=profile_*",
       ],
     }
   ]

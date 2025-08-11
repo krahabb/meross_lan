@@ -8,7 +8,7 @@ from homeassistant.components.media_player.const import (
 )
 
 from .helpers import clamp, entity as me
-from .merossclient import const as mc, namespaces as mn
+from .merossclient.protocol import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry

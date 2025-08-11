@@ -6,6 +6,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from time import time
 import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.core import callback
 from homeassistant.helpers import storage
@@ -22,32 +23,28 @@ from ..const import (
     CONF_PASSWORD,
     DOMAIN,
 )
-from ..merossclient import (
-    MEROSSDEBUG,
-    HostAddress,
-    const as mc,
-    get_active_broker,
-    namespaces as mn,
-)
+from ..helpers.obfuscate import OBFUSCATE_DEVICE_ID_MAP, obfuscated_dict
+from ..merossclient import MEROSSDEBUG, HostAddress, get_active_broker
 from ..merossclient.cloudapi import APISTATUS_TOKEN_ERRORS, CloudApiError
 from ..merossclient.mqttclient import MerossMQTTAppClient, generate_app_id
+from ..merossclient.protocol import const as mc, namespaces as mn
 from .manager import CloudApiClient
 from .mqtt_profile import ConnectionSensor, MQTTConnection, MQTTProfile
 
-if typing.TYPE_CHECKING:
-    from typing import Unpack
+if TYPE_CHECKING:
+    from typing import Final, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
     from ..const import ProfileConfigType
     from ..devices.hub import HubMixin
-    from ..merossclient import MerossMessage
     from ..merossclient.cloudapi import (
         DeviceInfoType,
         LatestVersionType,
         SubDeviceInfoType,
     )
+    from ..merossclient.protocol.message import MerossMessage
     from .component_api import ComponentApi
     from .device import Device, MerossDeviceDescriptor
 
@@ -60,6 +57,9 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
     # here we're acrobatically slottizing MerossMQTTAppClient
     # since it cannot be slotted itself leading to multiple inheritance
     # "forbidden" slots
+
+    if TYPE_CHECKING:
+        is_cloud_connection: Final[bool]
 
     __slots__ = (
         "_asyncio_loop",
@@ -187,18 +187,28 @@ class MerossProfile(MQTTProfile):
     and/or to manage cloud mqtt connection(s)
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
+        is_cloud_profile: Final[bool]
         config: ProfileConfigType
+
+        KEY_APP_ID: Final
+        KEY_DEVICE_INFO: Final
+        KEY_DEVICE_INFO_TIME: Final
+        KEY_SUBDEVICE_INFO: Final
+        KEY_LATEST_VERSION: Final
+        KEY_LATEST_VERSION_TIME: Final
+        KEY_TOKEN_REQUEST_TIME: Final
+
         _data: MerossProfileStoreType
         _unsub_polling_query_device_info: asyncio.TimerHandle | None
 
-    KEY_APP_ID: typing.Final = "appId"
-    KEY_DEVICE_INFO: typing.Final = "deviceInfo"
-    KEY_DEVICE_INFO_TIME: typing.Final = "deviceInfoTime"
-    KEY_SUBDEVICE_INFO: typing.Final = "__subDeviceInfo"
-    KEY_LATEST_VERSION: typing.Final = "latestVersion"
-    KEY_LATEST_VERSION_TIME: typing.Final = "latestVersionTime"
-    KEY_TOKEN_REQUEST_TIME: typing.Final = "tokenRequestTime"
+    KEY_APP_ID = "appId"
+    KEY_DEVICE_INFO = "deviceInfo"
+    KEY_DEVICE_INFO_TIME = "deviceInfoTime"
+    KEY_SUBDEVICE_INFO = "__subDeviceInfo"
+    KEY_LATEST_VERSION = "latestVersion"
+    KEY_LATEST_VERSION_TIME = "latestVersionTime"
+    KEY_TOKEN_REQUEST_TIME = "tokenRequestTime"
 
     __slots__ = (
         "apiclient",
@@ -211,6 +221,7 @@ class MerossProfile(MQTTProfile):
     def __init__(
         self, profile_id: str, api: "ComponentApi", config_entry: "ConfigEntry"
     ):
+        self.is_cloud_profile = True
         MQTTProfile.__init__(
             self, profile_id, api=api, hass=api.hass, config_entry=config_entry
         )
@@ -285,7 +296,7 @@ class MerossProfile(MQTTProfile):
             next_query_delay = mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT
         self._unsub_polling_query_device_info = self.schedule_async_callback(
             next_query_delay,
-            self._async_polling_query_device_info,
+            self._async_query_device_info,
         )
 
     async def async_shutdown(self):
@@ -320,10 +331,32 @@ class MerossProfile(MQTTProfile):
             # no connection - whatsoever) so, having a fresh token and likely
             # good connectivity we're going to retrigger that
             if self.need_query_device_info():
-                await self.async_query_device_info()
+                # retrigger the poll at the right time since async_query_devices
+                # might be called for whatever reason 'asynchronously'
+                # at any time (say the user does a new cloud login or so...)
+                if self._unsub_polling_query_device_info:
+                    self._unsub_polling_query_device_info.cancel()
+                    await self._async_query_device_info()
 
     def get_logger_name(self) -> str:
         return f"profile_{self.loggable_profile_id(self.id)}"
+
+    def loggable_diagnostic_state(self):
+        if self.obfuscate:
+            store_data = obfuscated_dict(self._data)
+            # the profile contains uuid as keys and obfuscation
+            # is not smart enough (but OBFUSCATE_DEVICE_ID_MAP is already
+            # filled with uuid(s) from the profile device_info(s) and
+            # the device_info(s) were already obfuscated in data)
+            store_data[MerossProfile.KEY_DEVICE_INFO] = {
+                OBFUSCATE_DEVICE_ID_MAP[device_id]: device_info
+                for device_id, device_info in store_data[
+                    MerossProfile.KEY_DEVICE_INFO
+                ].items()
+            }
+            return {"store": store_data}
+        else:
+            return {"store": self._data}
 
     # interface: ApiProfile
     def attach_mqtt(self, device: "Device"):
@@ -436,42 +469,6 @@ class MerossProfile(MQTTProfile):
                     return latest_version
                 else:
                     return None
-        return None
-
-    async def async_query_device_info(self):
-        async with self._async_credentials_manager(
-            "async_query_device_info"
-        ) as credentials:
-            if not credentials:
-                return None
-            self.log(
-                self.DEBUG,
-                "Querying device list - last query was at: %s",
-                datetime_from_epoch(
-                    self._device_info_time, dt_util.DEFAULT_TIME_ZONE
-                ).isoformat(),
-            )
-            self._device_info_time = time()
-            device_info_new = await self.apiclient.async_device_devlist()
-            await self._process_device_info_new(device_info_new)
-            self._data[self.KEY_DEVICE_INFO_TIME] = self._device_info_time
-            self._schedule_save_store()
-            # retrigger the poll at the right time since async_query_devices
-            # might be called for whatever reason 'asynchronously'
-            # at any time (say the user does a new cloud login or so...)
-            if self._unsub_polling_query_device_info:
-                self._unsub_polling_query_device_info.cancel()
-            self._unsub_polling_query_device_info = self.schedule_async_callback(
-                mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
-                self._async_polling_query_device_info,
-            )
-            # this is a 'low relevance task' as a new feature (in 4.3.0) to just provide hints
-            # when new updates are available: we're not going (yet) to manage the
-            # effective update since we're not able to do any basic validation
-            # of the whole process and it might be a bit 'dangerous'
-            await self.async_check_query_latest_version(self._device_info_time)
-            return device_info_new
-
         return None
 
     def need_query_device_info(self):
@@ -625,18 +622,33 @@ class MerossProfile(MQTTProfile):
         except Exception as exception:
             self.log_exception(self.WARNING, exception, msg)
 
-    async def _async_polling_query_device_info(self):
-        try:
-            self._unsub_polling_query_device_info = None
-            await self.async_query_device_info()
-        finally:
-            if self._unsub_polling_query_device_info is None:
-                # this happens when 'async_query_devices' is unable to
-                # retrieve fresh cloud data for whatever reason
-                self._unsub_polling_query_device_info = self.schedule_async_callback(
-                    mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
-                    self._async_polling_query_device_info,
-                )
+    async def _async_query_device_info(self):
+        self._unsub_polling_query_device_info = self.schedule_async_callback(
+            mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
+            self._async_query_device_info,
+        )
+        async with self._async_credentials_manager(
+            "_async_query_device_info"
+        ) as credentials:
+            if not credentials:
+                return
+            self.log(
+                self.DEBUG,
+                "Querying device list - last query was at: %s",
+                datetime_from_epoch(
+                    self._device_info_time, dt_util.DEFAULT_TIME_ZONE
+                ).isoformat(),
+            )
+            self._device_info_time = time()
+            device_info_new = await self.apiclient.async_device_devlist()
+            await self._process_device_info_new(device_info_new)
+            self._data[self.KEY_DEVICE_INFO_TIME] = self._device_info_time
+            self._schedule_save_store()
+            # this is a 'low relevance task' as a new feature (in 4.3.0) to just provide hints
+            # when new updates are available: we're not going (yet) to manage the
+            # effective update since we're not able to do any basic validation
+            # of the whole process and it might be a bit 'dangerous'
+            await self.async_check_query_latest_version(self._device_info_time)
 
     async def _async_query_subdevices(self, device_id: str):
         async with self._async_credentials_manager(

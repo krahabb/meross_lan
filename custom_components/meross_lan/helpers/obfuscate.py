@@ -14,7 +14,7 @@ import re
 import typing
 
 from .. import const as mlc
-from ..merossclient import const as mc
+from ..merossclient.protocol import const as mc
 
 
 class ObfuscateRule:
