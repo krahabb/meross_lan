@@ -5,7 +5,7 @@
 
 # Meross LAN
 
-This [homeassistant](https://www.home-assistant.io/) integration allows you to control your *Meross* devices in a very flexible way. Despite it's name (at the origin this was a project to only support local LAN connectivity) it now supports these communication layers:
+This [homeassistant](https://www.home-assistant.io/) integration allows you to control your *Meross* devices in a very flexible way. Despite it's name (at the origin this was a project to only support LAN connectivity) it now supports these communication layers:
 - direct HTTP connection (in LAN) for any reachable device
 - local MQTT broker (the one configured in HA)
 - Meross cloud MQTT brokers
@@ -61,6 +61,7 @@ These other options are available once the device is setup the first time. To ac
 ## Supported hardware
 
 Most of this software has been developed and tested on my owned Meross devices which, over the time, are slowly expanding. I have tried to make it the more optimistic and generalistic as possible based on the work from [@albertogeniola] and [@bytespider] so it should work with most of the hardware out there but I did not test anything other than mines. There are some user reports confirming it works with other devices and the 'official' complete list is here (keep in mind some firmware versions might work while other not: this is the 'hell' of hw & sw):
+This list might not be exhaustive since newer devices are being marketed every now and then. As stated, meross_lan doesn't rely on a specific hardware feature set to work: it uses standard queries against the device to detect the available features and provides an interface between HA and those ones. This implies that, if the device exposes a 'known' feature, even with some new branding name, it will likely work rightaway.
 
 - Switches
   - [MSS110](https://www.meross.com/Detail/58/Smart%20Wi-Fi%20Plug%20Mini): Smart Wifi plug mini
@@ -91,6 +92,8 @@ Most of this software has been developed and tested on my owned Meross devices w
   - [MTS150](https://www.meross.com/en-gc/smart-thermostat/smart-thermostat-valve/99): Smart Thermostat
   Valve
   - [MTS200](https://www.meross.com/Detail/116/Smart%20Wi-Fi%20Thermostat): Smart Wifi Thermostat
+  - [MTS205](https://www.meross.com/en-gc/smart-thermostat/MTS205/196): Smart Wifi Thermostat
+  - [MTS300](https://www.meross.com/en-gc/smart-thermostat/mts300-us/192): Smart Wifi Thermostat
   - [MTS960](https://www.meross.com/en-gc/smart-thermostat/smart-socket-thermostat/145): Smart Wifi Socket Thermostat
 - Covers
   - [MRS100](https://www.meross.com/product/91/article/): Smart WiFi Roller Shutter
