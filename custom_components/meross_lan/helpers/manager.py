@@ -224,12 +224,12 @@ class EntityManager(Loggable):
                 return
         except AttributeError:
             issues = self._issues = set()
-        ir.async_create_issue(
-            self.hass,
+        self.api.issue_registry.async_get_or_create(
             mlc.DOMAIN,
             issue_id,
             data=data,
             is_fixable=True,
+            is_persistent=False,
             severity=severity,
             translation_key=issue_key,
             translation_placeholders=translation_placeholders,
@@ -239,7 +239,7 @@ class EntityManager(Loggable):
     def remove_issue_id(self, issue_id: str, /):
         try:
             self._issues.remove(issue_id)
-            ir.async_delete_issue(self.hass, mlc.DOMAIN, issue_id)
+            self.api.issue_registry.async_delete(mlc.DOMAIN, issue_id)
         except (AttributeError, KeyError):
             # either no _issues attr or issue_id not in set
             return

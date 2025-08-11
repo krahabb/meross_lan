@@ -13,7 +13,11 @@ from homeassistant.exceptions import (
     ConfigEntryError,
     HomeAssistantError,
 )
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import (
+    device_registry as dr,
+    entity_registry as er,
+    issue_registry as ir,
+)
 
 from . import ConfigEntryType
 from .. import const as mlc
@@ -514,6 +518,7 @@ class ComponentApi(MQTTProfile):
 
         device_registry: Final[dr.DeviceRegistry]
         entity_registry: Final[er.EntityRegistry]
+        issue_registry: Final[ir.IssueRegistry]
 
         _mqtt_connection: HAMQTTConnection | None
 
@@ -529,6 +534,7 @@ class ComponentApi(MQTTProfile):
         "managers_transient_state",
         "device_registry",
         "entity_registry",
+        "issue_registry",
         "_mqtt_connection",
         "_deviceclasses",
         "_available_timezones",
@@ -582,6 +588,7 @@ class ComponentApi(MQTTProfile):
         self.managers_transient_state = {}
         self.device_registry = dr.async_get(hass)
         self.entity_registry = er.async_get(hass)
+        self.issue_registry = ir.async_get(hass)
         self._mqtt_connection = None
         self._deviceclasses = {}
         self._available_timezones = None
@@ -753,6 +760,7 @@ class ComponentApi(MQTTProfile):
             self._mqtt_connection = None
             del self.device_registry  # type: ignore
             del self.entity_registry  # type: ignore
+            del self.issue_registry  # type: ignore
             hass.data.pop(mlc.DOMAIN)
 
         hass.bus.async_listen_once(hac.EVENT_HOMEASSISTANT_STOP, _async_terminate)
