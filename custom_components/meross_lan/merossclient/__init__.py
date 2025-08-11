@@ -90,7 +90,7 @@ def json_loads(s: str):
 #
 # General purpose utilities for payload handling
 #
-def get_element_by_key(payload: list, key: str, value: object) -> dict:
+def get_element_by_key(payload: list[dict], key: str, value) -> dict:
     """
     scans the payload(list) looking for the first item matching
     the key value. Usually looking for the matching channel payload
@@ -104,7 +104,7 @@ def get_element_by_key(payload: list, key: str, value: object) -> dict:
     )
 
 
-def get_element_by_key_safe(payload, key: str, value) -> dict | None:
+def get_element_by_key_safe(payload: list[dict], key: str, value) -> dict | None:
     """
     scans the payload (expecting a list) looking for the first item matching
     the key value. Usually looking for the matching channel payload
@@ -116,6 +116,20 @@ def get_element_by_key_safe(payload, key: str, value) -> dict | None:
                 return p
     except Exception:
         return None
+
+
+def delete_element_by_key(payload: list[dict], key: str, value):
+    """
+    scans the payload(list) looking for the first item matching
+    the key value. Usually looking for the matching channel payload
+    inside list payloads
+    """
+    for p in tuple(payload):
+        try:
+            if p[key] == value:
+                payload.remove(p)
+        except KeyError:
+            pass
 
 
 def update_dict_strict(dst_dict: dict, src_dict: dict):

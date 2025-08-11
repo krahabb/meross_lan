@@ -203,6 +203,8 @@ ISSUE_DEVICE_ID_MISMATCH = "device_identity_mismatch"
 """raised when a device receives data from a different (uuid) appliance"""
 ISSUE_DEVICE_TIMEZONE = "device_timezone"
 """raised when a device timezone is not set or is anyway different from HA default"""
+ISSUE_HUB_SUBDEVICE_REMOVED = "hub_subdevice_removed"
+"""raised when an Hub SubDevice is no more available (unbinded) and the device_egistry needs cleanup."""
 
 # general working/configuration parameters
 PARAM_DEFAULT_KEY = "meross"

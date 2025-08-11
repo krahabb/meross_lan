@@ -773,8 +773,9 @@ class MerossEmulator:
         self.update_epoch()
 
     def get_namespace_state(self, ns: "Namespace", channel, /) -> dict:
-        p_namespace_state = self.namespaces[ns.name][ns.key]
-        return get_element_by_key(p_namespace_state, ns.key_channel, channel)
+        return get_element_by_key(
+            self.namespaces[ns.name][ns.key], ns.key_channel, channel
+        )
 
     def update_namespace_state(
         self,

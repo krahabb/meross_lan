@@ -305,6 +305,23 @@
                     }
                 }
             }
+        },
+        "hub_subdevice_removed": {
+            "title": "{device_name} non registrato dall'hub",
+            "fix_flow": {
+                "abort": {
+                    "subdevice_still_registered": "Il sottodispositivo è ancora registrato"
+                },
+                "step": {
+                    "confirm": {
+                        "title": "Rimuovi dispositivo e registrazioni entità",
+                        "description": "Il dispositivo non risponde e verrà rimosso dalla configurazione",
+                        "data": {
+                            "delete": "Elimina definitivamente la configurazione del (sotto)dispositivo"
+                        }
+                    }
+                }
+            }
         }
     },
     "selector": {

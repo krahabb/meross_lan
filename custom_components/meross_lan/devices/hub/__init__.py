@@ -319,19 +319,28 @@ class HubMixin(Device if TYPE_CHECKING else object):
             # now we're left with non-existent (removed) subdevices
             self.needsave = True
             for subdevice_id in subdevices_actual:
-                subdevice = self.subdevices[subdevice_id]
+                subdevice = self.subdevices.pop(subdevice_id)
                 self.log(
                     self.WARNING,
-                    "Removing subdevice %s (id:%s) - configuration will be reloaded in few sec",
+                    "%s (id:%s) unregistered from hub",
                     subdevice.name,
                     subdevice_id,
                 )
-            # needsave=True might need some time querying abilities before
-            # actually saving. We'll let some time to complete
-            self.schedule_reload(5)
+                if subdevice.online:
+                    subdevice._set_offline()
+                self.async_create_task(
+                    subdevice.async_shutdown(),
+                    f"{subdevice.__class__.__name__}.async_shutdown()",
+                )
+                self.create_issue(
+                    mlc.ISSUE_HUB_SUBDEVICE_REMOVED,
+                    subdevice_id,
+                    severity=self.IssueSeverity.WARNING,
+                    translation_placeholders={"device_name": subdevice.name},
+                )
 
     # interface: self
-    def log_duplicated_subdevice(self, subdevice_id: object, /):
+    def log_duplicated_subdevice(self, subdevice_id: str, /):
         self.log(
             self.CRITICAL,
             "Subdevice %s (id:%s) appears twice in device data. Shouldn't happen",
@@ -409,12 +418,12 @@ class HubMixin(Device if TYPE_CHECKING else object):
             # this is true when subdevice is offline and hub has no recent info
             # we'll check our device registry for luck
             try:
-                hassdevice = self.api.device_registry.async_get_device(
+                device_entry = self.api.device_registry.async_get_device(
                     identifiers={(mlc.DOMAIN, p_subdevice[mc.KEY_ID])}
                 )
-                if not hassdevice:
+                if not device_entry:
                     return None
-                model = hassdevice.model
+                model = device_entry.model
                 assert model
             except Exception:
                 return None
@@ -489,6 +498,7 @@ class SubDevice(NamespaceParser, BaseDevice):
         hub.setup_simple_handler(mn_h.Appliance_Hub_SubDevice_Version)
         if model not in mc.MTS100_ALL_TYPESET:
             hub.setup_chunked_handler(mn_h.Appliance_Hub_Sensor_All, False, 8)
+        hub.remove_issue(mlc.ISSUE_HUB_SUBDEVICE_REMOVED, id)
 
     # interface: EntityManager
     def generate_unique_id(self, entity: "MLEntity"):
@@ -1221,6 +1231,26 @@ WELL_KNOWN_TYPE_MAP[mc.KEY_WATERLEAK] = MS400SubDevice
 
 def digest_init_hub(device: "HubMixin", digest) -> "DigestInitReturnType":
 
+    # Check for unbinded subdevices which are 'still' in the device_registry
+    registry_subdevices = {}
+    for (
+        device_entry
+    ) in device.api.device_registry.devices.get_devices_for_config_entry_id(
+        device.config_entry.entry_id
+    ):
+        # The caveat here is to detect if a subdev has been re-binded to
+        # a different hub (so a different config_entry). We need to be sure
+        # we're removing a surely unused device.
+        # To be honest, I don't know about the 'integrity' enforced in DeviceRegistry
+        # at any rate, a subdev is always unique in dev_reg since we use the
+        # subdev "Id" as an identifier.
+        if device_entry.via_device_id == device.device_registry_entry.id:
+            # checking 'via_device_id' should be enough to ensure
+            # the device hasn't been re-binded
+            for identifiers in device_entry.identifiers:
+                if identifiers[0] == mlc.DOMAIN:
+                    registry_subdevices[identifiers[1]] = device_entry
+
     device.subdevices = {}
     for p_subdevice_digest in digest[mc.KEY_SUBDEVICE]:
         try:
@@ -1229,8 +1259,20 @@ def digest_init_hub(device: "HubMixin", digest) -> "DigestInitReturnType":
                 device.log_duplicated_subdevice(subdevice_id)
             else:
                 device._subdevice_build(p_subdevice_digest)
+                try:
+                    del registry_subdevices[subdevice_id]
+                except KeyError:
+                    pass
         except Exception as exception:
             device.log_exception(device.WARNING, exception, "digest_init_hub")
+
+    for subdevice_id, device_entry in registry_subdevices.items():
+        device.create_issue(
+            mlc.ISSUE_HUB_SUBDEVICE_REMOVED,
+            subdevice_id,
+            severity=device.IssueSeverity.WARNING,
+            translation_placeholders={"device_name": device_entry.name},
+        )
 
     return device._parse_hub, ()
 

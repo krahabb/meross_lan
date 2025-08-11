@@ -305,6 +305,23 @@
                     }
                 }
             }
+        },
+        "hub_subdevice_removed": {
+            "title": "{device_name}はハブから登録解除されました",
+            "fix_flow": {
+                "abort": {
+                    "subdevice_still_registered": "サブデバイスはまだ登録されています"
+                },
+                "step": {
+                    "confirm": {
+                        "title": "デバイスとエンティティの登録を削除",
+                        "description": "デバイスが応答していないため、構成から削除されます",
+                        "data": {
+                            "delete": "（サブ）デバイス構成を完全に削除する"
+                        }
+                    }
+                }
+            }
         }
     },
     "selector": {

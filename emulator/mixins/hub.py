@@ -4,6 +4,7 @@ from random import randint
 from typing import TYPE_CHECKING
 
 from custom_components.meross_lan.merossclient import (
+    delete_element_by_key,
     get_element_by_key,
     get_element_by_key_safe,
     get_mts_digest,
@@ -80,6 +81,7 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
                 mn_h.Appliance_Hub_Sensor_All,
                 mn_h.Appliance_Hub_Sensor_Smoke,
                 mn_h.Appliance_Hub_Sensor_DoorWindow,
+                mn_h.Appliance_Hub_Battery,
                 mn_h.Appliance_Hub_Online,
                 mn_h.Appliance_Hub_ToggleX,
                 mn_h.Hub_Control_Sensor_HistoryX,
@@ -104,6 +106,12 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
             mn_h.Appliance_Hub_Sensor_All: NS_BASE_TO_DIGEST_MAP,
         }
         """specialization based on subdevice type for digest <-> ns_all relationship"""
+
+        # DEBUG/TESTING feature: remove a subdevice from hub definitions
+        if subdevice_id_remove := "28004811B776":
+            delete_element_by_key(digest_subdevices, mc.KEY_ID, subdevice_id_remove)
+            for _, _ns_state in ns_state.items():
+                delete_element_by_key(_ns_state, mc.KEY_ID, subdevice_id_remove)
 
         for p_subdevice_digest in digest_subdevices:
             subdevice_id = p_subdevice_digest[mc.KEY_ID]

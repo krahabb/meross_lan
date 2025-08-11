@@ -297,7 +297,7 @@ class Device(BaseDevice, ConfigEntryManager):
 
         # HubMixin attributes: beware these are only
         # initialized in HubMixin(s) and not set/available in standard Device(s)
-        subdevices: dict[object, "SubDevice"]
+        subdevices: dict[str, "SubDevice"]
 
     @staticmethod
     def digest_parse_empty(digest: dict | list):

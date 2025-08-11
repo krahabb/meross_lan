@@ -305,6 +305,23 @@
                     }
                 }
             }
+        },
+        "hub_subdevice_removed": {
+            "title": "{device_name} vom Hub abgemeldet",
+            "fix_flow": {
+                "abort": {
+                    "subdevice_still_registered": "Das Subgerät ist noch registriert"
+                },
+                "step": {
+                    "confirm": {
+                        "title": "Gerät und Entitätsregistrierungen entfernen",
+                        "description": "Das Gerät reagiert nicht und wird aus der Konfiguration entfernt",
+                        "data": {
+                            "delete": "Die (Sub-)Gerätekonfiguration dauerhaft löschen"
+                        }
+                    }
+                }
+            }
         }
     },
     "selector": {

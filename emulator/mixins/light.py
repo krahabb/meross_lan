@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 from custom_components.meross_lan.merossclient import (
     get_element_by_key,
-    get_element_by_key_safe,
     update_dict_strict,
 )
 from custom_components.meross_lan.merossclient.protocol import (
@@ -20,16 +19,17 @@ class LightMixin(MerossEmulator if TYPE_CHECKING else object):
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
 
-        if get_element_by_key_safe(
-            descriptor.digest.get(mc.KEY_TOGGLEX),
-            mc.KEY_CHANNEL,
-            descriptor.digest[mc.KEY_LIGHT][mc.KEY_CHANNEL],
-        ):
+        try:
+            get_element_by_key(
+                descriptor.digest[mc.KEY_TOGGLEX],
+                mc.KEY_CHANNEL,
+                descriptor.digest[mc.KEY_LIGHT][mc.KEY_CHANNEL],
+            )
             self._togglex_switch = True  # use TOGGLEX to (auto) switch
             self._togglex_mode = (
                 True  # True: need TOGGLEX to switch / False: auto-switch
             )
-        else:
+        except:
             self._togglex_switch = False
             self._togglex_mode = False
 
