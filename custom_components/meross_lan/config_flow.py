@@ -513,7 +513,7 @@ class MerossFlowHandlerMixin(
         if key is None:
             key = ""
         if descriptor:
-            profile = ComponentApi.profiles.get(descriptor.userId)  # type: ignore
+            profile = self.api.profiles.get(descriptor.userId)  # type: ignore
             if profile and (profile.key == key):
                 if profile.allow_mqtt_publish:
                     mqttconnections = await profile.get_or_create_mqttconnections(

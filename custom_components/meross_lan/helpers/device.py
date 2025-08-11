@@ -2297,8 +2297,8 @@ class Device(BaseDevice, ConfigEntryManager):
                     self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
                     if self.curr_protocol is not self.pref_protocol:
                         self._switch_protocol(self.pref_protocol)
-                return
-            mqtt_connection.detach(self)
+            elif mqtt_connection.is_cloud_connection:
+                mqtt_connection.detach(self)
 
     def _handle_Appliance_System_Online(self, header: dict, payload: dict):
         # already processed by the MQTTConnection session manager
