@@ -567,7 +567,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         if key is None:
             key = ""
         if descriptor:
-            profile = ComponentApi.profiles.get(descriptor.userId)
+            profile = self.api.profiles.get(descriptor.userId)
             if profile and (profile.key == key):
                 if profile.allow_mqtt_publish:
                     mqttconnections = await profile.get_or_create_mqttconnections(

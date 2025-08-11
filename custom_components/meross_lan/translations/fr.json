@@ -305,6 +305,23 @@
                     }
                 }
             }
+        },
+        "hub_subdevice_removed": {
+            "title": "{device_name} supprimé du hub",
+            "fix_flow": {
+                "abort": {
+                    "subdevice_still_registered": "Le sous-appareil est toujours enregistré"
+                },
+                "step": {
+                    "confirm": {
+                        "title": "Supprimer l'appareil et les enregistrements d'entités",
+                        "description": "L'appareil ne répond pas et sera supprimé de la configuration",
+                        "data": {
+                            "delete": "Supprimer définitivement la configuration du (sous-)appareil"
+                        }
+                    }
+                }
+            }
         }
     },
     "selector": {

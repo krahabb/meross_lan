@@ -210,12 +210,14 @@ class EntityManager(Loggable):
 
     def create_issue(
         self,
-        issue_id: str,
+        issue_key: str,
+        issue_subkey: str = "",
         *,
+        data: dict[str, str | int | float | None] | None = None,
         severity: ir.IssueSeverity = ir.IssueSeverity.CRITICAL,
         translation_placeholders: dict[str, str] | None = None,
     ):
-
+        issue_id = f"{issue_key}.{self.id}.{issue_subkey}"
         try:
             issues = self._issues
             if issue_id in issues:
@@ -225,21 +227,25 @@ class EntityManager(Loggable):
         ir.async_create_issue(
             self.hass,
             mlc.DOMAIN,
-            f"{issue_id}.{self.id}",
+            issue_id,
+            data=data,
             is_fixable=True,
             severity=severity,
-            translation_key=issue_id,
+            translation_key=issue_key,
             translation_placeholders=translation_placeholders,
         )
         issues.add(issue_id)
 
-    def remove_issue(self, issue_id: str):
+    def remove_issue_id(self, issue_id: str, /):
         try:
             self._issues.remove(issue_id)
-            ir.async_delete_issue(self.hass, mlc.DOMAIN, f"{issue_id}.{self.id}")
+            ir.async_delete_issue(self.hass, mlc.DOMAIN, issue_id)
         except (AttributeError, KeyError):
             # either no _issues attr or issue_id not in set
             return
+
+    def remove_issue(self, issue_key: str, issue_subkey: str = "", /):
+        self.remove_issue_id(f"{issue_key}.{self.id}.{issue_subkey}")
 
 
 class ConfigEntryManager(EntityManager):

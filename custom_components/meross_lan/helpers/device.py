@@ -304,7 +304,7 @@ class Device(BaseDevice, ConfigEntryManager):
 
         # HubMixin attributes: beware these are only
         # initialized in HubMixin(s) and not set/available in standard Device(s)
-        subdevices: dict[object, "SubDevice"]
+        subdevices: dict[str, "SubDevice"]
 
     @staticmethod
     def digest_parse_empty(digest: dict | list):
@@ -2382,8 +2382,8 @@ class Device(BaseDevice, ConfigEntryManager):
                     self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
                     if self.curr_protocol is not self.pref_protocol:
                         self._switch_protocol(self.pref_protocol)
-                return
-            mqtt_connection.detach(self)
+            elif mqtt_connection.is_cloud_connection:
+                mqtt_connection.detach(self)
 
     def _handle_Appliance_System_Online(self, header, payload, /):
         # already processed by the MQTTConnection session manager

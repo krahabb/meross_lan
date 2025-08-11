@@ -305,6 +305,23 @@
                     }
                 }
             }
+        },
+        "hub_subdevice_removed": {
+            "title": "{device_name} wyrejestrowany z huba",
+            "fix_flow": {
+                "abort": {
+                    "subdevice_still_registered": "Podurządzenie jest nadal zarejestrowane"
+                },
+                "step": {
+                    "confirm": {
+                        "title": "Usuń urządzenie i rejestracje encji",
+                        "description": "Urządzenie nie odpowiada i zostanie usunięte z konfiguracji",
+                        "data": {
+                            "delete": "Trwale usuń konfigurację (pod)urządzenia"
+                        }
+                    }
+                }
+            }
         }
     },
     "selector": {

@@ -305,6 +305,23 @@
                     }
                 }
             }
+        },
+        "hub_subdevice_removed": {
+            "title": "{device_name} odhlášen z rozbočovače",
+            "fix_flow": {
+                "abort": {
+                    "subdevice_still_registered": "Podzařízení je stále registrováno"
+                },
+                "step": {
+                    "confirm": {
+                        "title": "Odebrat zařízení a registrace entit",
+                        "description": "Zařízení neodpovídá a bude odebráno z konfigurace",
+                        "data": {
+                            "delete": "Trvale odstranit konfiguraci (pod)zařízení"
+                        }
+                    }
+                }
+            }
         }
     },
     "selector": {

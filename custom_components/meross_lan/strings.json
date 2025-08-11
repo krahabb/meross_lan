@@ -305,6 +305,23 @@
                     }
                 }
             }
+        },
+        "hub_subdevice_removed": {
+            "title": "{device_name} unregistered from hub",
+            "fix_flow": {
+                "abort": {
+                    "subdevice_still_registered": "Subdevice is still registered"
+                },
+                "step": {
+                    "confirm": {
+                        "title": "Remove device and entities registrations",
+                        "description": "Device is not responding and will be removed from configuration",
+                        "data": {
+                            "delete": "Permanently delete the (sub)device configuration"
+                        }
+                    }
+                }
+            }
         }
     },
     "selector": {
