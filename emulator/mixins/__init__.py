@@ -417,13 +417,7 @@ class MerossEmulator:
                 request = MerossMessage.decode(request)
             except JSONDecodeError:
                 if cipher := self._cipher:
-                    decryptor = cipher.decryptor()
-                    request = (
-                        (decryptor.update(b64decode(request)) + decryptor.finalize())
-                        .decode("utf8")
-                        .rstrip("\0")
-                    )
-                    request = MerossMessage.decode(request)
+                    request = MerossMessage.decode(cipher.decript_text(request))
                 else:
                     raise
             else:
@@ -838,7 +832,7 @@ class MerossEmulator:
 
     def _mqtt_setup(self):
         self.mqtt_client = mqtt_client = MerossMQTTDeviceClient(
-            key=self.key, uuid=self.uuid, user_id=self.descriptor.userId
+            key=self.key, uuid=self.uuid, userid=self.descriptor.userId
         )
         mqtt_client.on_subscribe = self._mqttc_subscribe
         mqtt_client.on_disconnect = self._mqttc_disconnect
