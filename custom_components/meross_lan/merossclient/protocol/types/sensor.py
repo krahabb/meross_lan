@@ -1,6 +1,5 @@
 """
-A collection of typing definitions for payloads
-in Appliance.Control.Sensor.*
+A collection of typing definitions for payloads in Appliance.Control.Sensor.*
 """
 
 from . import Any, ChannelPayload, TypedDict, _MerossPayloadType

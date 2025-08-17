@@ -2,8 +2,8 @@
 static constants symbols for Meross protocol symbols/semantics
 """
 
-import enum
 import collections
+import enum
 import re
 
 # MQTT topics
@@ -559,3 +559,4 @@ HEADER_TRIGGERSRC_DEVBOOT = "DevBoot"
 HEADER_TRIGGERSRC_DEVICE = "Device"
 MEROSS_MACADDRESS = "48:e1:e9:xx:xx:xx"
 MQTT_DEFAULT_PORT = 443
+HTTP_DEFAULT_IP = "10.0.0.1"

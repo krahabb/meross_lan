@@ -1,6 +1,6 @@
 """
-A collection of typing definitions for payloads
-in Appliance.Control.* (excluding Appliance.Control.Sensor.* and Appliance.Control.Thermostat.*)
+A collection of typing definitions for payloads in Appliance.Control.*
+(excluding Appliance.Control.Sensor.* and Appliance.Control.Thermostat.*)
 """
 
 from . import ChannelPayload

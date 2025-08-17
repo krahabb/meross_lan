@@ -1,6 +1,5 @@
 """
-A collection of typing definitions for payloads
-in Appliance.Config.*
+A collection of typing definitions for payloads in Appliance.Config.*
 """
 
 from . import TypedDict
