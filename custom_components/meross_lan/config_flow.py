@@ -7,6 +7,7 @@ import enum
 from functools import cached_property
 import json
 import logging
+import re
 from time import time
 from types import MappingProxyType
 from typing import TYPE_CHECKING
@@ -14,8 +15,11 @@ from typing import TYPE_CHECKING
 from homeassistant import config_entries as ce, const as hac
 from homeassistant.const import CONF_ERROR
 from homeassistant.data_entry_flow import AbortFlow
-from homeassistant.helpers import config_validation as cv, device_registry as dr
-from homeassistant.helpers.selector import selector
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    selector,
+)
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
@@ -27,6 +31,7 @@ from .helpers import (
 )
 from .helpers.component_api import ComponentApi
 from .helpers.manager import CloudApiClient
+from .helpers.mqtt_profile import MQTTConnection
 from .merossclient import (
     HostAddress,
     MerossDeviceDescriptor,
@@ -60,6 +65,8 @@ if TYPE_CHECKING:
     from .helpers.device import Device
     from .helpers.manager import ConfigEntryManager
     from .helpers.meross_profile import MQTTConnection
+    from .merossclient import _BaseClient
+    from .merossclient.protocol import types as mt
 
 
 class FlowErrorKey(enum.StrEnum):
@@ -72,6 +79,8 @@ class FlowErrorKey(enum.StrEnum):
     INVALID_NULL_KEY = "invalid_nullkey"
     DEVICE_ID_MISMATCH = "device_id_mismatch"
     HABROKER_NOT_CONNECTED = "habroker_not_connected"
+    BROKER_ADDRESS_INVALID = "broker_address_invalid"
+    BROKER_CONNECTION_ERROR = "broker_connection_error"
 
 
 class FlowError(Exception):
@@ -80,7 +89,7 @@ class FlowError(Exception):
         self.key = key
 
 
-def _optional(key: str, config: "Mapping | None", default=None):
+def _optional(key: str, config: "Mapping | None", default=None) -> vol.Marker:
     return vol.Optional(
         key,
         description={
@@ -89,7 +98,7 @@ def _optional(key: str, config: "Mapping | None", default=None):
     )
 
 
-def _required(key: str, config: "Mapping | None", default=None):
+def _required(key: str, config: "Mapping | None", default=None) -> vol.Marker:
     return vol.Required(
         key,
         description={
@@ -125,11 +134,14 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         entry for the profile which is not the actual entry (a device one) under configuration/edit
         """
 
+        # TODO: implement a 'config' child logger to forward logs instead of using the api
+
         class BindConfigType(TypedDict):
-            ssid: NotRequired[str]
-            password: NotRequired[str]
-            timezone: NotRequired[str]
-            domain: NotRequired[str | None]
+            ssid: NotRequired[str | None]
+            password: NotRequired[str | None]
+            timezone: NotRequired[str | None]
+            server: NotRequired[str | None]
+            check: NotRequired[bool | None]
             key: NotRequired[str | None]
             userid: NotRequired[int | None]
 
@@ -163,30 +175,92 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
     def api(self):
         return ComponentApi.get(self.hass)
 
+    @cached_property
+    def http_client(self):
+        """Plain MerossHttpClient. When using ensure the host/key are correctly set/refreshed."""
+        return MerossHttpClient(
+            "",
+            from_=mlc.DOMAIN,
+            trigger_src=self.__class__.__name__,
+            loop=self.hass.loop,
+            logger=self.api,
+        )
+
+    async def async_get_device_client(self, device_id: str) -> "_BaseClient | None":
+        """Returns a suitable low level device client to query/configure the device.
+        This instance must not be modified since it could be an active client used by a Device.
+        """
+        api = self.api
+        try:
+            device = api.devices[device_id]
+            if device:
+                if device._bluetooth:
+                    return device._bluetooth
+                elif device._http_active:
+                    return device._http_active
+                elif device._mqtt_active:
+                    return MQTTConnection.Client(
+                        device._mqtt_active,
+                        device_id,
+                        key=self.device_config.get(mlc.CONF_KEY) or "",
+                        trigger_src=self.__class__.__name__,
+                    )
+                else:
+                    return None
+        except KeyError:
+            pass
+
+        if self._is_bluetooth:
+            return api.get_bt_device(device_id)
+
+        device_config = self.device_config
+        host = device_config.get(mlc.CONF_HOST)
+        if host:
+            http_client = self.http_client
+            http_client.host = host
+            http_client.key = device_config.get(mlc.CONF_KEY) or ""
+            http_client.descriptor = self.device_descriptor
+            return http_client
+
+        profile = api.profiles.get(self.device_descriptor.userId)
+        if profile and profile.allow_mqtt_publish:
+            mqttconnections = await profile.get_or_create_mqttconnections(device_id)
+            if mqttconnections:
+                return MQTTConnection.Client(
+                    mqttconnections[0],
+                    device_id,
+                    key=device_config.get(mlc.CONF_KEY) or "",
+                    trigger_src=self.__class__.__name__,
+                )
+
+        return None
+
     @contextmanager
     def show_form_errorcontext(self):
         """Context manager to catch and show exceptions errors in the user form.
         The CONF_ERROR key will be added as a string label to the UI schema
         containing the exception message so to provide better (untranslated)
         error context."""
+
+        def _render_exception(e: BaseException):
+            self._config_schema = {
+                _optional(CONF_ERROR, None, f"{e.__class__.__name__}({str(e)})"): str
+            }
+
         try:
             self._config_schema = {}
             self._errors = None
             yield
-        except cloudapi.CloudApiError as error:
+        except cloudapi.CloudApiError as e:
             self._errors = {CONF_ERROR: FlowErrorKey.INVALID_AUTH.value}
-            self._config_schema = {_optional(CONF_ERROR, None, str(error)): str}
-        except FlowError as error:
-            self._errors = {"base": error.key}
-        except Exception as exception:
+            _render_exception(e)
+        except FlowError as e:
+            self._errors = {"base": e.key}
+            if e.__cause__:
+                _render_exception(e.__cause__)
+        except Exception as e:
             self._errors = {CONF_ERROR: FlowErrorKey.CANNOT_CONNECT.value}
-            self._config_schema = {
-                _optional(
-                    CONF_ERROR,
-                    None,
-                    str(exception) or exception.__class__.__name__,
-                ): str
-            }
+            _render_exception(e)
 
     def async_show_form_with_errors(
         self,
@@ -416,14 +490,14 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         else:
             # this is not a profile OptionsFlow so we'd need to login for sure
             # with full credentials
-            config_schema[_optional(mlc.CONF_CLOUD_REGION, profile_config)] = selector(
-                {
-                    "select": {
+            config_schema[_optional(mlc.CONF_CLOUD_REGION, profile_config)] = (
+                selector.SelectSelector(
+                    {
                         "options": list(cloudapi.API_URL_MAP.keys()),
                         "translation_key": mlc.CONF_CLOUD_REGION,
-                        "mode": "dropdown",
+                        "mode": selector.SelectSelectorMode.DROPDOWN,
                     }
-                }
+                )
             )
             config_schema[_required(mlc.CONF_EMAIL, profile_config)] = str
             require_login = True
@@ -460,112 +534,284 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
             step_id="keyerror", menu_options=["profile", "device"]
         )
 
-    async def async_step_bind(self, user_input: "Mapping | None" = None):
+    async def async_step_bind(self, user_input: "BindConfigType | None" = None):
+        hass = self.hass
         api = self.api
         device_id = self.device_id
         device_descriptor = self.device_descriptor
+        device_config = self.device_config
+        device_ssid = None
+        device_server = str(device_descriptor.main_broker)
+        device_key = device_config.get(mc.KEY_KEY) or ""
+        try:
+            bind_config = self.bind_config
+        except AttributeError:
+            # We'll set some defaults here based off descriptor
+            # but, if we're able to connect, we'll use the Appliance.System.Debug data
+            # to pre-fill the bind config
+            bind_config = self.bind_config = {
+                mc.KEY_SERVER: device_server,
+                mc.KEY_KEY: device_key,
+                mc.KEY_USERID_: (
+                    int(device_descriptor.userId)
+                    if device_descriptor.userId.isnumeric()
+                    else None
+                ),
+            }
+
+        device_client = await self.async_get_device_client(device_id)
+
+        # Build a list of known valid broker addresses.
+        # We start from locally binded active connections by querying loaded devices
+        mqtt_connections: dict[str, tuple["MQTTConnection", HostAddress, bool]] = {}
+        ha_mqtt_connection = api.mqtt_connection
+        for _device in api.active_devices():
+            if _device.mqtt_locallyactive:
+                _broker = _device.descriptor.main_broker
+                mqtt_connections[f"HomeAssistant (mqtt://{_broker})"] = (
+                    ha_mqtt_connection,
+                    _broker,
+                    False,
+                )
+        # This should work as a fallback but is rather fragile since we don't know for
+        # sure the effective address of the HA broker
+        if not mqtt_connections and ha_mqtt_connection.mqtt_is_subscribed:
+            mqtt_connections[
+                f"HomeAssistant (mqtt://{ha_mqtt_connection.broker.host})"
+            ] = (ha_mqtt_connection, ha_mqtt_connection.broker, True)
+        # Add also Meross cloud bound device connections
+        for _profile in api.active_profiles():
+            for _broker, _mqtt_connection in _profile.mqttconnections.items():
+                mqtt_connections[f"{_profile.name} (mqtt://{_broker})"] = (
+                    _mqtt_connection,
+                    _mqtt_connection.broker,
+                    False,
+                )
 
         with self.show_form_errorcontext():
 
-            # device = api.devices[self.device_id]
-            # if not (device and device.online):
-            #    raise FlowError(FlowErrorKey.CANNOT_CONNECT)
+            if not device_client:
+                raise FlowError(FlowErrorKey.CANNOT_CONNECT)
+
+            # retrieve the current bind config/state (for safety)
+            p_debug: "mt.system.Debug" = await device_client.async_request_ns_payload(
+                mn.Appliance_System_Debug
+            )
+            p_network = p_debug[mc.KEY_NETWORK]
+            device_ssid = p_network[mc.KEY_SSID]
+            p_cloud = p_debug[mc.KEY_CLOUD]
+            device_server = f"{p_cloud[mc.KEY_MAINSERVER]}:{p_cloud[mc.KEY_MAINPORT]}"
+            device_userid = p_cloud[mc.KEY_USERID]
 
             if user_input:
-                bind_config = self.bind_config
-                bind_config[mc.KEY_DOMAIN] = domain = user_input.get(mc.KEY_DOMAIN)
-                bind_config[mc.KEY_KEY] = key = user_input.get(mc.KEY_KEY)
-                bind_config[mc.KEY_USERID_] = userid = user_input.get(mc.KEY_USERID_)
 
-                if self._is_bluetooth:
-                    ssid: str
-                    bind_config[mc.KEY_SSID] = ssid = user_input[mc.KEY_SSID]
-                    bind_config[mc.KEY_PASSWORD] = password = user_input[
-                        mc.KEY_PASSWORD
-                    ]
-                    bt_device = api.get_bt_device(device_id)
-                    if bt_device:
-                        await bt_device.async_request(
-                            mn.Appliance_Config_WifiX.name,
-                            mc.METHOD_SET,
-                            {
-                                mn.Appliance_Config_WifiX.key: {
-                                    mc.KEY_SSID: b64encode(ssid.encode()).decode(),
-                                    mc.KEY_PASSWORD: compute_wifix_password(
-                                        password,
-                                        device_descriptor.type,
-                                        device_id,
-                                        device_descriptor.macAddress,
-                                    ),
-                                }
-                            },
+                bind_config[mc.KEY_SSID] = ssid = user_input.get(mc.KEY_SSID)
+                bind_config[mc.KEY_PASSWORD] = password = user_input.get(
+                    mc.KEY_PASSWORD
+                )
+                bind_config[mc.KEY_SERVER] = server = user_input.get(mc.KEY_SERVER)
+                bind_config["check"] = check = user_input.get("check")
+                bind_config[mc.KEY_KEY] = key = user_input.get(mc.KEY_KEY)
+                bind_config[mc.KEY_USERID_] = user_id = user_input.get(mc.KEY_USERID_)
+
+                configure_wifi = ssid and (ssid != device_ssid)
+                if configure_wifi and not password:
+                    raise ValueError("Password is required when SSID is provided")
+
+                configure_mqtt_args = {}
+                if server and (server != device_server):
+                    # user wants to configure new broker
+                    try:
+                        # check if an available profile/connection was chosen
+                        mqtt_connection, server_address, _resolve_address = (
+                            mqtt_connections[server]
+                        )
+                        # force key,userid if a connection was choosen
+                        if key or user_id:
+                            api.log(
+                                api.WARNING,
+                                "Provided 'key' and 'userid' will be ignored when using a predefined connection",
+                            )
+                        key = mqtt_connection.profile.key
+                        user_id = mqtt_connection.profile.userid
+                    except KeyError:
+                        # or if manual entry
+                        _match = re.match(
+                            r"mqtt://(?P<host>(?:[a-zA-Z0-9\-\.]+|\d{1,3}(?:\.\d{1,3}){3}|localhost))(?::(?P<port>\d{1,5}))?",
+                            server,
+                        ) or re.match(
+                            r"(?P<host>(?:[a-zA-Z0-9\-\.]+|\d{1,3}(?:\.\d{1,3}){3}|localhost))(?::(?P<port>\d{1,5}))?",
+                            server,
+                        )
+                        if not _match:
+                            raise FlowError(FlowErrorKey.BROKER_ADDRESS_INVALID)
+                        _port = _match.group("port")
+                        server_address = HostAddress.build(
+                            _match.group("host"),
+                            int(_port) if _port else 8883,
+                        )
+                        _resolve_address = True
+                        key = (
+                            key or device_key
+                        )  # empty key looks like not supported anymore
+                        user_id = (
+                            str(device_userid) if user_id is None else str(user_id)
                         )
 
-            else:
-                domain = str(next(iter(device_descriptor.brokers), None))
-                bind_config = self.bind_config = {
-                    mc.KEY_DOMAIN: domain,
-                }
-                self.bind_placeholders = {"domain": domain}
+                    if _resolve_address:
+                        # we have to check the broker address is a network bound IPV4 address
+                        # since localhost would have no meaning (or a wrong one) in the device
+                        import socket
 
-        config_schema: "dict[vol.Marker, Any]"
-        if self._is_bluetooth:
-            bt_device = api.get_bt_device(device_id)
-            if wifi_list := bt_device and await bt_device.async_request_ns(
-                mn.Appliance_Config_WifiList
-            ):
-                wifi_list = {
-                    b64decode(wifi_network[mc.KEY_SSID]).decode()
-                    for wifi_network in wifi_list[mc.KEY_PAYLOAD][
-                        mn.Appliance_Config_WifiList.key
-                    ]
-                }
+                        # eventually patch the HA mqtt 'default' port
+                        # if server_address.port == 1883:
+                        #    server_address.port = 8883
+                        # getaddrinfo contains the resolved ipv4 address(es) weather or not
+                        # our broker_address.host is an ipv6 or ipv4 host name/addr
+                        for addrinfo in socket.getaddrinfo(
+                            socket.getfqdn(server_address.host),
+                            server_address.port,
+                            family=socket.AF_INET,
+                            type=socket.SOCK_STREAM,
+                            proto=socket.IPPROTO_TCP,
+                        ):
+                            # addrinfo: (family, type, proto, canonname, sockaddr)
+                            if addrinfo[4][0] == "127.0.0.1":
+                                # localhost could work in our mqtt.Client check but
+                                # it will not when configured in the device bind
+                                # so we're trying to resolve it to a valid network name
+                                from homeassistant.helpers.network import get_url
+                                from yarl import URL
+
+                                _host = URL(get_url(hass, allow_ip=True)).host
+                                if not _host:
+                                    raise FlowError(FlowErrorKey.BROKER_ADDRESS_INVALID)
+                                server_address.host = _host
+                                break
+
+                    server = str(server_address)
+                    if server != device_server:
+                        if check:
+                            _mqttclient = MerossMQTTDeviceClient(
+                                key=key,
+                                uuid=device_id,
+                                user_id=user_id,
+                                loop=hass.loop,
+                                sslcontext=get_default_no_verify_ssl_context(),
+                                logger=api,
+                            )
+                            try:
+                                await asyncio.wait_for(
+                                    await _mqttclient.async_connect(server_address), 5
+                                )
+                            except Exception as e:
+                                api.log_exception(
+                                    api.WARNING,
+                                    e,
+                                    "MQTT connection check to %s",
+                                    server_address,
+                                )
+                                raise FlowError(
+                                    FlowErrorKey.BROKER_CONNECTION_ERROR
+                                ) from e
+                            finally:
+                                await _mqttclient.async_shutdown()
+
+                        configure_mqtt_args["host"] = server_address.host
+                        configure_mqtt_args["port"] = server_address.port
+                        configure_mqtt_args["key"] = key
+                        configure_mqtt_args["userid"] = user_id
+
+                if not configure_mqtt_args:
+                    # broker update skipped, check if we want to update just key/userid
+
+                    key = user_input.get(mc.KEY_KEY) or device_key
+                    user_id = user_input.get(mc.KEY_USERID_) or device_userid
+                    if (key != device_key) or (user_id != device_userid):
+                        configure_mqtt_args["key"] = key
+                        configure_mqtt_args["userid"] = str(user_id)
+                        server = device_server
+
+                if configure_mqtt_args:
+                    api.log(
+                        api.DEBUG,
+                        "Initiating MQTT binding to %s (key=%s, user_id=%s)",
+                        api.loggable_broker(server),  # type: ignore
+                        api.loggable_any(key),
+                        api.loggable_profile_id(user_id),  # type: ignore
+                    )
+                    response = await device_client.async_configure_mqtt(
+                        **configure_mqtt_args
+                    )
+                    if response[mc.KEY_HEADER][mc.KEY_METHOD] != mc.METHOD_SETACK:
+                        raise Exception("Failed MQTT binding configuration")
+                    api.log(api.DEBUG, "MQTT binding to %s was succesfull", api.loggable_broker(server))  # type: ignore
+                    device_config[mlc.CONF_KEY] = key  # type: ignore
+
+                if configure_wifi:
+                    await device_client.async_configure_wifi(
+                        ssid=ssid, password=password  # type: ignore
+                    )
+                    # TODO: use external step flow to wait for (eventual) MQTT/DHCP
+                    # discovery
+
+                return self.finish_flow(device_config)
             else:
-                wifi_list = ()
-            config_schema = {
-                _required(mc.KEY_SSID, bind_config): vol.In(wifi_list),
-                _required(mc.KEY_PASSWORD, bind_config): str,
-                _optional(mc.KEY_DOMAIN, bind_config): str,
-                _optional(mc.KEY_KEY, bind_config): str,
-                _optional(mc.KEY_USERID_, bind_config): cv.positive_int,
-            }
-        else:
-            config_schema = {
-                _optional(mc.KEY_DOMAIN, bind_config): str,
-                _optional(mc.KEY_KEY, bind_config): str,
-                _optional(mc.KEY_USERID_, bind_config): cv.positive_int,
-            }
+                bind_config[mc.KEY_SSID] = (
+                    None if device_ssid == "MEROSS_STA" else device_ssid
+                )
+                bind_config[mc.KEY_SERVER] = device_server
+                bind_config[mc.KEY_USERID_] = device_userid
+
+        try:
+            ssid_list = await device_client.async_get_ssid_scan()
+        except:
+            ssid_list = []
 
         return self.async_show_form_with_errors(
             "bind",
-            config_schema=config_schema,
-            description_placeholders=self.bind_placeholders,
+            config_schema={
+                _optional(mc.KEY_SSID, bind_config): selector.SelectSelector(
+                    {
+                        "options": ssid_list,
+                        "custom_value": True,
+                    }
+                ),
+                _optional(mc.KEY_PASSWORD, bind_config): str,
+                _optional(mc.KEY_SERVER, bind_config): selector.SelectSelector(
+                    {
+                        "options": list(mqtt_connections),
+                        "custom_value": True,
+                    }
+                ),
+                _required("check", bind_config, True): bool,
+                _optional(mc.KEY_KEY, bind_config): str,
+                _optional(mc.KEY_USERID_, bind_config): cv.positive_int,
+            },
+            description_placeholders={"ssid": device_ssid, "server": device_server},
         )
 
     async def _async_http_discovery(
         self, host: str, key: str | None
     ) -> tuple[mlc.DeviceConfigType, MerossDeviceDescriptor]:
-        # passing key=None would allow key-hack and we don't want it aymore
-        key = key or ""
-        descriptor = await MerossHttpClient(
-            host, key, loop=self.hass.loop, logger=self.api
-        ).async_identify_device()
+        http_client = self.http_client
+        http_client.host = host
+        http_client.key = key or ""
+        descriptor = await http_client.async_identify()
         return (
             {
                 mlc.CONF_HOST: host,
                 mlc.CONF_PAYLOAD: descriptor.payload,
-                mlc.CONF_KEY: key,
+                mlc.CONF_KEY: http_client.key,
                 mlc.CONF_DEVICE_ID: descriptor.uuid,
             },
             descriptor,
         )
 
     async def _async_mqtt_discovery(
-        self, device_id: str, key: str | None, descriptor: MerossDeviceDescriptor | None
+        self, device_id: str, key: str, descriptor: MerossDeviceDescriptor | None
     ) -> tuple[mlc.DeviceConfigType, MerossDeviceDescriptor]:
         mqttconnections: list[MQTTConnection] = []
-        if key is None:
-            key = ""
         if descriptor:
             profile = self.api.profiles.get(descriptor.userId)
             if profile and (profile.key == key):
@@ -600,13 +846,12 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         # we'll then wait for the first (and only) success one while
         # eventually collect the exceptions
         exceptions = []
-        identifies = asyncio.as_completed(
-            {
+        for identify_coro in asyncio.as_completed(
+            [
                 mqttconnection.async_identify_device(device_id, key or "")
                 for mqttconnection in mqttconnections
-            }
-        )
-        for identify_coro in identifies:
+            ]
+        ):
             try:
                 device_config = await identify_coro
                 return device_config, MerossDeviceDescriptor(
@@ -633,6 +878,9 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
     """Handle a config flow for Meross IoT local LAN."""
 
     if TYPE_CHECKING:
+        # TODO: DHCP_DISCOVERIES is actually an ever growing dict..we could use it to populate a list
+        # of available host when user starts a flow and/or add epoch information to remove stale entries
+        # also we should ensure the discoveries are removed when a device is configured.
         DHCP_DISCOVERIES: Final[dict[str, Any]]
 
     DHCP_DISCOVERIES = {}
@@ -718,7 +966,6 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
             else:
                 device_config = {
                     mlc.CONF_KEY: "",
-                    mlc.CONF_LOGGING_LEVEL: mlc.CONF_LOGGING_VERBOSE,
                     mlc.CONF_DEVICE_ID: uuid,
                     mlc.CONF_PAYLOAD: descriptor.payload,
                     mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_BLUETOOTH,
@@ -735,18 +982,13 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
                 "device_id": uuid,
             }
             self._set_flow_title(f"{descriptor.type} - {uuid}")
-            return await self.async_step_bluetooth_provisioning()
+            self.bind_config = {}
+            return await self.async_step_bind()
         except AbortFlow:
             raise
         except Exception as e:
             api.log_exception(api.DEBUG, e, "async_step_bluetooth")
             return self.async_abort(reason=FlowErrorKey.CANNOT_CONNECT)
-
-    async def async_step_bluetooth_provisioning(self, user_input=None):
-        return self.async_show_menu(
-            step_id="bluetooth_provisioning",
-            menu_options=["finalize", "bind"],
-        )
 
     async def async_step_dhcp(self, discovery_info: "DhcpServiceInfo"):
         api = self.api
@@ -1088,7 +1330,6 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
         device = api.devices[device_id]
         device_config = self.device_config
         device_descriptor = self.device_descriptor
-        ability = device_descriptor.ability
         _is_bluetooth = self._is_bluetooth
 
         with self.show_form_errorcontext():
@@ -1104,7 +1345,7 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                         device_config_update = None
                         descriptor_update = None
                         _host = user_input.get(mlc.CONF_HOST)
-                        _key = user_input.get(mlc.CONF_KEY)
+                        _key = user_input.get(mlc.CONF_KEY) or ""
                         _conf_protocol = (
                             user_input.get(mlc.CONF_PROTOCOL) or mlc.CONF_PROTOCOL_AUTO
                         )
@@ -1195,7 +1436,7 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                 if (
                     (timezone := device_config.pop(mc.KEY_TIMEZONE, None))
                     and device
-                    and (timezone != device.descriptor.timezone)
+                    and (timezone != descriptor_update.timezone)
                 ):
                     if await device.async_config_device_timezone(timezone):
                         # if there's a pending issue, the user might still
@@ -1232,13 +1473,14 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                 mlc.CONF_POLLING_PERIOD, device_config, mlc.CONF_POLLING_PERIOD_DEFAULT
             )
         ] = cv.positive_int
+        ability = device_descriptor.ability
         if mn.Appliance_Control_Multiple.name in ability:
             config_schema[
                 _optional(mlc.CONF_DISABLE_MULTIPLE, device_config, False)
             ] = bool
-        if device and mn.Appliance_System_Time.name in ability:
+        if mn.Appliance_System_Time.name in ability:
             config_schema[
-                _optional(mc.KEY_TIMEZONE, None, device.descriptor.timezone)
+                _optional(mc.KEY_TIMEZONE, None, device_descriptor.timezone)
             ] = vol.In(await api.async_available_timezones())
         self._setup_entitymanager_schema(config_schema, device_config)
         return self.async_show_form_with_errors(
@@ -1291,15 +1533,11 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                                 "default",
                             )
                         },
-                    ): selector(
+                    ): selector.SelectSelector(
                         {
-                            "select": {
-                                "options": list(
-                                    mlc.CONF_LOGGING_LEVEL_OPTIONS.values()
-                                ),
-                                "translation_key": mlc.CONF_LOGGING_LEVEL,
-                                "mode": "dropdown",
-                            }
+                            "options": list(mlc.CONF_LOGGING_LEVEL_OPTIONS.values()),
+                            "translation_key": mlc.CONF_LOGGING_LEVEL,
+                            "mode": selector.SelectSelectorMode.DROPDOWN,
                         }
                     ),
                     _required(mlc.CONF_OBFUSCATE, config, True): bool,
@@ -1310,138 +1548,6 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                 }
             ),
         )
-
-    async def async_step_bind(self, user_input: "Mapping | None" = None):
-        api = self.api
-
-        try:
-            bind_config = self.bind_config
-        except AttributeError:
-            bind_config = self.bind_config = {}
-            self.bind_placeholders = {
-                "domain": str(next(iter(self.device_descriptor.brokers), None))
-            }
-
-        with self.show_form_errorcontext():
-
-            device = api.devices[self.device_id]
-            if not (device and device.online):
-                raise FlowError(FlowErrorKey.CANNOT_CONNECT)
-
-            if user_input:
-                bind_config[mc.KEY_DOMAIN] = domain = user_input.get(mc.KEY_DOMAIN)
-                bind_config[mc.KEY_KEY] = key = user_input.get(mc.KEY_KEY)
-                bind_config[mc.KEY_USERID_] = userid = user_input.get(mc.KEY_USERID_)
-
-                if domain:
-                    broker_address = HostAddress.build(domain, 8883)
-                else:
-                    mqtt_connection = api.mqtt_connection
-                    if not mqtt_connection.mqtt_is_connected:
-                        raise FlowError(FlowErrorKey.HABROKER_NOT_CONNECTED)
-                    broker_address = mqtt_connection.broker
-                    if broker_address.port == 1883:
-                        broker_address.port = 8883
-                # set back the value so the user has an hint in case of errors connecting
-                bind_config[mc.KEY_DOMAIN] = domain = str(broker_address)
-                # we have to check the broker address is a network bound IPV4 address
-                # since localhost would have no meaning (or a wrong one) in the device
-                import socket
-
-                addrinfos = socket.getaddrinfo(
-                    socket.getfqdn(broker_address.host),
-                    broker_address.port,
-                    family=socket.AF_INET,
-                    type=socket.SOCK_STREAM,
-                    proto=socket.IPPROTO_TCP,
-                )
-                # addrinfos contains the resolved ipv4 address(es) weather or not
-                # our broker_address.host is an ipv6 or ipv4 host name/addr
-                hass = self.hass
-                for addrinfo in addrinfos:
-                    # addrinfo: (family, type, proto, canonname, sockaddr)
-                    if addrinfo[4][0] == "127.0.0.1":
-                        # localhost could work in our mqtt.Client check but
-                        # it will not when configured in the device bind
-                        # so we're trying to resolve it to a valid network name
-                        from homeassistant.helpers.network import get_url
-                        import yarl
-
-                        hasslocalhost = yarl.URL(get_url(hass, allow_ip=True)).host
-                        if not hasslocalhost:
-                            raise FlowError(FlowErrorKey.CANNOT_CONNECT)
-                        broker_address.host = hasslocalhost
-                        bind_config[mc.KEY_DOMAIN] = domain = str(broker_address)
-                        break
-
-                key = key or api.key or ""
-                userid = "" if userid is None else str(userid)
-                mqttclient = MerossMQTTDeviceClient(
-                    key=key,
-                    uuid=device.id,
-                    user_id=userid,
-                    loop=hass.loop,
-                    sslcontext=get_default_no_verify_ssl_context(),
-                    logger=api,
-                )
-                try:
-                    await asyncio.wait_for(
-                        await mqttclient.async_connect(broker_address), 5
-                    )
-                finally:
-                    await mqttclient.async_shutdown()
-
-                device.log(device.DEBUG, "Initiating MQTT binding to %s", domain)
-                response = await device.async_bind(
-                    broker_address, key=key, userid=userid
-                )
-                if (
-                    response
-                    and response[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_SETACK
-                ):
-                    device.log(device.INFO, "MQTT binding to %s was succesfull", domain)
-                    device_config = self.device_config
-                    device_config[mlc.CONF_KEY] = key
-                    # the device config needs to be updated too. This is not critical
-                    # since the device, when onlining will refresh this but we have a chance to speed
-                    # up the process so when it restart it'll be already updated
-                    if host := device.host:
-                        try:
-                            (
-                                device_config_update,
-                                descriptor_update,
-                            ) = await self._async_http_discovery(host, key)
-                            device_config[mlc.CONF_PAYLOAD] = device_config_update[
-                                mlc.CONF_PAYLOAD
-                            ]
-                        except Exception:
-                            pass
-                    hass.config_entries.async_update_entry(
-                        self.config_entry, data=device_config
-                    )
-                    return self.async_show_form(
-                        step_id="bind_finalize",
-                        data_schema=vol.Schema({}),
-                        description_placeholders={"domain": domain},
-                    )
-                else:
-                    device.log(device.DEBUG, "MQTT binding to %s has failed", domain)
-
-                raise FlowError(FlowErrorKey.CANNOT_CONNECT)
-
-        return self.async_show_form_with_errors(
-            "bind",
-            config_schema={
-                _optional(mc.KEY_DOMAIN, bind_config): str,
-                _optional(mc.KEY_KEY, bind_config): str,
-                _optional(mc.KEY_USERID_, bind_config): cv.positive_int,
-            },
-            description_placeholders=self.bind_placeholders,
-        )
-
-    async def async_step_bind_finalize(self, user_input=None):
-        self.api.schedule_entry_reload(self.config_entry_id)
-        return self.async_create_entry(data=None)  # type: ignore
 
     async def async_step_unbind(self, user_input=None):
         KEY_ACTION = "post_action"
@@ -1480,12 +1586,10 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                 vol.Required(
                     KEY_ACTION,
                     default=KEY_ACTION_DISABLE,  # type: ignore
-                ): selector(
+                ): selector.SelectSelector(
                     {
-                        "select": {
-                            "options": [KEY_ACTION_DISABLE, KEY_ACTION_DELETE],
-                            "translation_key": "unbind_post_action",
-                        }
+                        "options": [KEY_ACTION_DISABLE, KEY_ACTION_DELETE],
+                        "translation_key": "unbind_post_action",
                     }
                 )
             },
@@ -1493,7 +1597,7 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
 
     def finish_flow(
         self,
-        config: "Mapping",
+        config: "Mapping[str, Any]",
         reload: bool = False,
     ):
         """Used in OptionsFlow to terminate and exit (with save)."""
