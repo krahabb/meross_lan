@@ -4,14 +4,12 @@ from datetime import UTC, tzinfo
 from time import time
 from typing import TYPE_CHECKING
 from uuid import uuid4
-import zoneinfo
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util, slugify
-import voluptuous as vol
 
 from . import datetime_from_epoch
 from .. import const as mlc
@@ -714,8 +712,12 @@ class Device(BaseDevice, ConfigEntryManager):
                 _http.host = host
                 _http.key = self.key
             else:
-                _http = self._http = MerossHttpClient(
-                    host, self.key, loop=self.hass.loop
+                self._http = _http = MerossHttpClient(
+                    host,
+                    key=self.key,
+                    from_=mlc.DOMAIN,
+                    trigger_src=self.__class__.__name__,
+                    loop=self.hass.loop,
                 )
             descriptor = self.descriptor
             _http.set_encryption(
@@ -1493,7 +1495,7 @@ class Device(BaseDevice, ConfigEntryManager):
                     requests_len,
                     responses_len,
                     multiple_response_size,
-                    len(response.json()),
+                    len(response.json),
                 )
             message: "MerossMessageType"
             if responses_len == requests_len:
@@ -1540,7 +1542,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 return
 
     async def async_bluetooth_request(self, *request_args: "Unpack[MerossRequestType]"):
-        request = MerossRequest(*request_args, "")
+        request = MerossRequest(*request_args, "", mlc.DOMAIN, self.__class__.__name__)
         self._trace_or_log(
             time(),
             request,
@@ -1548,7 +1550,7 @@ class Device(BaseDevice, ConfigEntryManager):
             ConfigEntryManager.TRACE_TX,
         )
         try:
-            response = await self._bluetooth.async_request_raw(request.json())  # type: ignore
+            response = await self._bluetooth.async_request_raw(request)  # type: ignore
             epoch = time()
             self._trace_or_log(epoch, response, CONF_PROTOCOL_BLUETOOTH, self.TRACE_RX)
             if self.curr_protocol is not CONF_PROTOCOL_BLUETOOTH:
@@ -1593,7 +1595,12 @@ class Device(BaseDevice, ConfigEntryManager):
     ):
         return await self.async_mqtt_request_raw(
             MerossRequest(
-                namespace, method, payload, self.key, self._topic_response, mlc.DOMAIN
+                namespace,
+                method,
+                payload,
+                self.key,
+                self._topic_response,
+                self.__class__.__name__,
             )
         )
 
@@ -1625,7 +1632,7 @@ class Device(BaseDevice, ConfigEntryManager):
             ConfigEntryManager.TRACE_TX,
         )
         try:
-            response = await http.async_request_raw(request.json())
+            response = await http.async_request_raw(request)
         except TerminatedException:
             return None
         except JSONDecodeError as jsonerror:
@@ -1721,7 +1728,12 @@ class Device(BaseDevice, ConfigEntryManager):
     ):
         return await self.async_http_request_raw(
             MerossRequest(
-                namespace, method, payload, self.key, self._topic_response, mlc.DOMAIN
+                namespace,
+                method,
+                payload,
+                self.key,
+                self._topic_response,
+                self.__class__.__name__,
             )
         )
 
@@ -1956,7 +1968,7 @@ class Device(BaseDevice, ConfigEntryManager):
                     ns_all_handler.polling_epoch_next = (
                         epoch + ns_all_handler.polling_period
                     )
-                    ns_all_handler.polling_response_size = len(ns_all_response.json())
+                    ns_all_handler.polling_response_size = len(ns_all_response.json)
                     await self._async_request_updates(ns_all_handler.ns.name)
                 elif self.online:
                     self._set_offline()
@@ -2176,7 +2188,7 @@ class Device(BaseDevice, ConfigEntryManager):
         default (received) message handling entry point
         """
         self.lastresponse = epoch
-        message_size = len(message.json())
+        message_size = len(message.json)
         if message_size > self.device_response_size_min:
             self.device_response_size_min = message_size
             if message_size > self.device_response_size_max:

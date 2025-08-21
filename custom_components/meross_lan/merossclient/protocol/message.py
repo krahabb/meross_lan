@@ -1,3 +1,4 @@
+from functools import cached_property
 from time import time
 from typing import TYPE_CHECKING
 from uuid import uuid4
@@ -120,42 +121,45 @@ class MerossMessage(dict):
     """
     Base (almost) abstract class for different source of messages that
     need to be sent to the device (or received from).
-    The actual implementation will setup the slots
     """
 
-    if TYPE_CHECKING:
-        namespace: str
-        method: str
-        messageid: str
-        payload: MerossPayloadType
-
-    __slots__ = (
-        "namespace",
-        "method",
-        "messageid",
-        "payload",
-        "_json_str",
-    )
-
-    def __init__(self, message: dict, json_str: str | None = None, /):
-        self._json_str = json_str
-        super().__init__(message)
-
+    @cached_property
     def json(self):
-        if not self._json_str:
-            self._json_str = JSON_ENCODER.encode(self)
-        return self._json_str
+        return JSON_ENCODER.encode(self)
+
+    @cached_property
+    def header(self) -> "MerossHeaderType":
+        return self[mc.KEY_HEADER]
+
+    @cached_property
+    def namespace(self) -> str:
+        return self.header[mc.KEY_NAMESPACE]
+
+    @cached_property
+    def method(self) -> str:
+        return self.header[mc.KEY_METHOD]
+
+    @cached_property
+    def messageid(self) -> str:
+        return self.header[mc.KEY_MESSAGEID]
+
+    @cached_property
+    def payload(self) -> "MerossPayloadType":
+        return self[mc.KEY_PAYLOAD]
 
     @staticmethod
-    def decode(json_str: str, /):
-        return MerossMessage(JSON_DECODER.decode(json_str), json_str)
+    def decode(json: str, /):
+        message = MerossMessage(JSON_DECODER.decode(json))
+        message.json = json
+        return message
 
 
 class MerossResponse(MerossMessage):
     """Helper for messages received from a device"""
 
-    def __init__(self, json_str: str, /):
-        super().__init__(JSON_DECODER.decode(json_str), json_str)
+    def __init__(self, json: str, /):
+        MerossMessage.__init__(self, JSON_DECODER.decode(json))
+        self.json = json
 
 
 class MerossRequest(MerossMessage):
@@ -166,33 +170,29 @@ class MerossRequest(MerossMessage):
         namespace: str,
         method: str,
         payload: "MerossPayloadType",
-        key: str,
+        key: str = "",
         from_: str = mc.HEADER_FROM_DEFAULT,
-        triggerSrc: str = mc.HEADER_TRIGGERSRC_DEFAULT,
+        trigger_src: str = mc.HEADER_TRIGGERSRC_DEFAULT,
         /,
     ):
-        self.namespace = namespace
-        self.method = method
-        self.payload = payload
-        self.messageid = uuid4().hex
+        messageid = uuid4().hex
         timestamp = int(time())
-        super().__init__(
+        MerossMessage.__init__(
+            self,
             {
                 mc.KEY_HEADER: {
-                    mc.KEY_MESSAGEID: self.messageid,
+                    mc.KEY_MESSAGEID: messageid,
                     mc.KEY_NAMESPACE: namespace,
                     mc.KEY_METHOD: method,
                     mc.KEY_PAYLOADVERSION: 1,
-                    mc.KEY_TRIGGERSRC: triggerSrc,
+                    mc.KEY_TRIGGERSRC: trigger_src,
                     mc.KEY_FROM: from_,
                     mc.KEY_TIMESTAMP: timestamp,
                     mc.KEY_TIMESTAMPMS: 0,
-                    mc.KEY_SIGN: compute_message_signature(
-                        self.messageid, key, timestamp
-                    ),
+                    mc.KEY_SIGN: compute_message_signature(messageid, key, timestamp),
                 },
-                mc.KEY_PAYLOAD: self.payload,
-            }
+                mc.KEY_PAYLOAD: payload,
+            },
         )
 
 
@@ -206,18 +206,15 @@ class MerossPushReply(MerossMessage):
     """
 
     def __init__(self, header: "MerossHeaderType", payload: "MerossPayloadType", /):
-        self.namespace = header[mc.KEY_NAMESPACE]
-        self.method = header[mc.KEY_METHOD]
-        self.messageid = header[mc.KEY_MESSAGEID]
-        self.payload = payload
         header = header.copy()
         header.pop(mc.KEY_UUID, None)
         header[mc.KEY_TRIGGERSRC] = mc.HEADER_TRIGGERSRC_CLOUDCONTROL
-        super().__init__(
+        MerossMessage.__init__(
+            self,
             {
                 mc.KEY_HEADER: header,
                 mc.KEY_PAYLOAD: payload,
-            }
+            },
         )
 
 
@@ -234,26 +231,22 @@ class MerossAckReply(MerossMessage):
         from_: str,
         /,
     ):
-        self.namespace = header[mc.KEY_NAMESPACE]
-        self.method = mc.METHOD_ACK_MAP[header[mc.KEY_METHOD]]
-        self.messageid = header[mc.KEY_MESSAGEID]
-        self.payload = payload
+        messageid = header[mc.KEY_MESSAGEID]
         timestamp = int(time())
-        super().__init__(
+        MerossMessage.__init__(
+            self,
             {
                 mc.KEY_HEADER: {
-                    mc.KEY_MESSAGEID: self.messageid,
-                    mc.KEY_NAMESPACE: self.namespace,
-                    mc.KEY_METHOD: self.method,
+                    mc.KEY_MESSAGEID: messageid,
+                    mc.KEY_NAMESPACE: header[mc.KEY_NAMESPACE],
+                    mc.KEY_METHOD: mc.METHOD_ACK_MAP[header[mc.KEY_METHOD]],
                     mc.KEY_PAYLOADVERSION: 1,
                     mc.KEY_TRIGGERSRC: mc.HEADER_TRIGGERSRC_CLOUDCONTROL,
                     mc.KEY_FROM: from_,
                     mc.KEY_TIMESTAMP: timestamp,
                     mc.KEY_TIMESTAMPMS: 0,
-                    mc.KEY_SIGN: compute_message_signature(
-                        self.messageid, key, timestamp
-                    ),
+                    mc.KEY_SIGN: compute_message_signature(messageid, key, timestamp),
                 },
                 mc.KEY_PAYLOAD: payload,
-            }
+            },
         )

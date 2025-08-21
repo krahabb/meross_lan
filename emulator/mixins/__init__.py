@@ -432,7 +432,7 @@ class MerossEmulator:
 
         request_header = request[mc.KEY_HEADER]
         request_payload = request[mc.KEY_PAYLOAD]
-        self._log_message("RX", request.json())
+        self._log_message("RX", request.json)
         with self.lock:
             # guarantee thread safety by locking the whole message handling
             self.update_epoch()
@@ -822,7 +822,7 @@ class MerossEmulator:
             self.key,
             mqtt_client.topic_publish,
             mc.HEADER_TRIGGERSRC_DEVICE,
-        ).json()
+        ).json
 
         def _mqtt_publish():
             self._log_message("TX(MQTT)", message)
@@ -832,7 +832,7 @@ class MerossEmulator:
 
     def _mqtt_setup(self):
         self.mqtt_client = mqtt_client = MerossMQTTDeviceClient(
-            key=self.key, uuid=self.uuid, userid=self.descriptor.userId
+            key=self.key, uuid=self.uuid, user_id=self.descriptor.userId
         )
         mqtt_client.on_subscribe = self._mqttc_subscribe
         mqtt_client.on_disconnect = self._mqttc_disconnect
@@ -869,7 +869,7 @@ class MerossEmulator:
                 self.key,
                 mqtt_client.topic_subscribe,
                 mc.HEADER_TRIGGERSRC_DEVBOOT,
-            ).json()
+            ).json
             self._log_message("TX(MQTT)", message)
             mqtt_client.publish(mqtt_client.topic_publish, message)
 

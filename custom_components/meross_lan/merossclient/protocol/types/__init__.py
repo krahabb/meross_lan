@@ -5,6 +5,11 @@ A collection of typing definitions for payloads
 
 from typing import Any, Mapping, NotRequired, TypedDict, Union
 
+type JsonDict = dict[str, Any]
+"""Generic data-dict carried in Meross messages."""
+type JsonList = list[JsonDict]
+"""Generic data-list carried in Meross messages."""
+
 type MerossNamespaceType = str
 type MerossMethodType = str
 MerossHeaderType = TypedDict(
@@ -14,9 +19,9 @@ MerossHeaderType = TypedDict(
         "namespace": str,
         "method": str,
         "payloadVersion": int,
-        "triggerSrc": NotRequired[str],
+        "triggerSrc": NotRequired[str],  # Older fw didn't support this. Newer need.
         "from": str,
-        "uuid": NotRequired[str],
+        "uuid": NotRequired[str],  # Older fw didn't support this
         "timestamp": int,
         "timestampMs": int,
         "sign": str,
@@ -24,14 +29,12 @@ MerossHeaderType = TypedDict(
 )
 
 
-class _MerossPayloadType(TypedDict):
-    pass
-
-
-type MerossPayloadType = dict[str, Any]
+type MerossPayloadType = JsonDict
 
 
 class MerossMessageType(TypedDict):
+    """Meross protocol message dictionary, containing header and payload."""
+
     header: MerossHeaderType
     payload: MerossPayloadType
 
@@ -41,7 +44,7 @@ type KeyType = Union[MerossHeaderType, str, None]
 
 
 class ChannelPayload(TypedDict):
-    channel: Any
+    channel: int
 
 
 class HubIdPayload(TypedDict):

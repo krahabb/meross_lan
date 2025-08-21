@@ -1,23 +1,19 @@
 """The Meross IoT local LAN integration."""
 
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .helpers import LOGGER, ConfigEntryType
 from .helpers.component_api import ComponentApi
 from .helpers.meross_profile import MerossProfile, MerossProfileStore
-from .merossclient import cloudapi
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
     from .helpers.manager import ConfigEntryManager
-    from .merossclient.cloudapi import MerossCloudCredentials
-
 
 else:
     # In order to avoid a static dependency we resolve these
@@ -102,8 +98,4 @@ async def async_remove_entry(hass: "HomeAssistant", config_entry: "ConfigEntry")
 
         case (ConfigEntryType.PROFILE, profile_id):
             api.profiles.pop(profile_id)
-            await MerossProfileStore(hass, profile_id).async_remove()
-            credentials: "MerossCloudCredentials" = config_entry.data  # type: ignore
-            await cloudapi.CloudApiClient(
-                credentials=credentials, session=async_get_clientsession(hass)
-            ).async_logout_safe()
+            await MerossProfileStore(hass, profile_id).async_remove_and_logout(config_entry.data)  # type: ignore

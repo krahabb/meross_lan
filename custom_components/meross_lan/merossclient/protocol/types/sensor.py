@@ -2,7 +2,7 @@
 A collection of typing definitions for payloads in Appliance.Control.Sensor.*
 """
 
-from . import Any, ChannelPayload, TypedDict, _MerossPayloadType
+from . import Any, ChannelPayload, TypedDict
 
 
 class SensorXRequest(ChannelPayload):
@@ -38,7 +38,7 @@ class LatestXResponse_C(SensorXResponse):
     data: dict[str, list[LatestXData]]
 
 
-class LatestXResponse(_MerossPayloadType):
+class LatestXResponse(TypedDict):
     """
     {
         "latest": [

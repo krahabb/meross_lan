@@ -15,10 +15,9 @@ from . import HostAddress, _BaseClient, get_macaddress_from_uuid
 from .protocol import const as mc, md5hexdigest
 
 if TYPE_CHECKING:
-    from typing import ClassVar, Final, NotRequired, Unpack
+    from typing import ClassVar, NotRequired, Unpack
 
     from . import LoggerT
-    from .protocol.message import MerossMessage
 
 
 def generate_app_id():
@@ -78,7 +77,7 @@ class _MQTTRateLimiter:
 class _MerossMQTTClient(_BaseClient, mqtt.Client):
     """
     Implements a rather abstract MQTT client used by both the MerossMQTTAppClient
-    and MerossMQTTDeviceClient
+    and MerossMQTTDeviceClient.
     """
 
     if TYPE_CHECKING:
@@ -87,7 +86,7 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
             pass
 
         class RequestArgs(_BaseClient.RequestArgs):
-            pass
+            device_id: str
 
         _logger: LoggerT | None  # override paho client attribute type-hint
 
@@ -99,6 +98,8 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
     STATE_DISCONNECTING = "disconnecting"
     STATE_DISCONNECTED = "disconnected"
 
+    # TODO: consider refactoring to remove  mqtt.Client from hierarchy and use a class member
+    # since we're risking too much about overriding attributes..
     __SLOTS__ = (
         "_lock_state",
         "_lock_queue",
@@ -192,7 +193,6 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
         self,
         client_id: str,
         subscribe_topics: list[tuple[str, int]],
-        key: str,
         **kwargs: "Unpack[Args]",
     ):
         """
@@ -211,7 +211,7 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
             )
         except:  # fallback to legacy (pre v2)
             mqtt.Client.__init__(self, client_id=client_id, protocol=mqtt.MQTTv311)
-        _BaseClient.__init__(self, key, **kwargs)
+        _BaseClient.__init__(self, **kwargs)
         self._lock_state = threading.Lock()
         """synchronize connect/disconnect (not contended by the mqtt thread)"""
         self._lock_queue = threading.Lock()
@@ -365,7 +365,7 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
             # queue empty
             return 0.0
 
-    def rl_publish(self, uuid: str, request: "MerossMessage"):
+    def rl_publish(self, uuid: str, request: str):
         with self._lock_queue:
 
             try:
@@ -395,7 +395,7 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
             return mqtt.Client.publish(
                 self,
                 mc.TOPIC_REQUEST.format(uuid),
-                request.json(),
+                request,
             )
 
     def _mqtt_connected(self):
@@ -477,13 +477,12 @@ class MerossMQTTAppClient(_MerossMQTTClient):
     from multiple clients (and send messages to them) as they're being grouped under
     the same account (userid) by the Meross brokers session management. This is
     different from the client impersonated by a device even though both (device client
-    and app client) connect to the same broker and talk the same protocol
+    and app client) connect to the same broker and talk the same protocol.
     """
 
     if TYPE_CHECKING:
 
         class Args(_MerossMQTTClient.Args):
-            app_id: NotRequired[str]
             sslcontext: NotRequired[ssl.SSLContext]
 
         class RequestArgs(_MerossMQTTClient.RequestArgs):
@@ -495,17 +494,20 @@ class MerossMQTTAppClient(_MerossMQTTClient):
         "topic_push",
     )
 
-    def __init__(self, key: str, *, user_id: str, **kwargs: "Unpack[Args]"):
-        self.app_id = app_id = kwargs.pop("app_id", None) or generate_app_id()
+    def __init__(
+        self, *, user_id: str, app_id: str | None = None, **kwargs: "Unpack[Args]"
+    ):
+        if not app_id:
+            app_id = generate_app_id()
+        self.app_id = app_id
         self.topic_command = f"/app/{user_id}-{app_id}/subscribe"
         self.topic_push = f"/app/{user_id}/subscribe"
         super().__init__(
             f"app:{app_id}",
             [(self.topic_push, 1), (self.topic_command, 1)],
-            key,
             **kwargs,
         )
-        self.username_pw_set(user_id, md5hexdigest(user_id, key))
+        self.username_pw_set(user_id, md5hexdigest(user_id, self.key))
         try:
             self.tls_set_context(kwargs["sslcontext"])  # type: ignore
         except KeyError:
@@ -536,12 +538,10 @@ class MerossMQTTDeviceClient(_MerossMQTTClient):
         "topic_subscribe",
     )
 
-    def __init__(self, key: str, *, uuid: str, user_id: str, **kwargs: "Unpack[Args]"):
+    def __init__(self, *, user_id: str | int, uuid: str, **kwargs: "Unpack[Args]"):
         """
+        userid: represents the user account id
         uuid: 16 bytes hex string (lowercase)
-        key: see device key
-        userid: represents the user account id (any integer number in str form)
-        macaddress: xx:xx:xx:xx:xx:xx (lowercase)
         """
         self.topic_publish = f"/appliance/{uuid}/publish"
         self.topic_subscribe = f"/appliance/{uuid}/subscribe"
@@ -549,11 +549,10 @@ class MerossMQTTDeviceClient(_MerossMQTTClient):
         super().__init__(
             f"fmware:{uuid}_{''.join(random.choices(characters, k=16))}",
             [(self.topic_subscribe, 1)],
-            key,
             **kwargs,
         )
         macaddress = get_macaddress_from_uuid(uuid)
-        pwd = md5hexdigest(macaddress, key)
+        pwd = md5hexdigest(macaddress, self.key)
         self.username_pw_set(macaddress, f"{user_id}_{pwd}")
         try:
             self.tls_set_context(kwargs["sslcontext"])  # type: ignore

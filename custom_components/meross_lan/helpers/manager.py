@@ -21,7 +21,7 @@ from ..const import (
     DOMAIN,
 )
 from ..merossclient import cloudapi
-from ..merossclient.protocol import const as mc, json_dumps
+from ..merossclient.protocol import json_dumps
 from .obfuscate import (
     OBFUSCATE_DEVICE_ID_MAP,
     OBFUSCATE_SERVER_MAP,
@@ -478,7 +478,7 @@ class ConfigEntryManager(EntityManager):
             else device_id
         )
 
-    def loggable_profile_id(self, profile_id: str):
+    def loggable_profile_id(self, profile_id: str | int):
         """Conditionally obfuscate the profile_id (which is the Meross account userId) to send to logging/tracing"""
         return (
             OBFUSCATE_USERID_MAP.obfuscate(profile_id) if self.obfuscate else profile_id

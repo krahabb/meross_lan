@@ -3,12 +3,18 @@ A collection of utilities to help managing the Meross device protocol
 """
 
 import asyncio
-from dataclasses import dataclass
 import re
 from time import time
 from typing import TYPE_CHECKING
 
-from .protocol import const as mc, namespaces as mn
+from .protocol import (
+    b64decode,
+    b64encode,
+    compute_wifix_password,
+    const as mc,
+    namespaces as mn,
+    types as mt,
+)
 from .protocol.message import MerossRequest, MerossResponse, check_message_strict
 
 if TYPE_CHECKING:
@@ -17,6 +23,7 @@ if TYPE_CHECKING:
         Callable,
         ClassVar,
         Final,
+        Generator,
         Iterable,
         Mapping,
         NotRequired,
@@ -26,7 +33,7 @@ if TYPE_CHECKING:
     )
 
     from .protocol.namespaces import Namespace
-    from .protocol.types import MerossPayloadType, MerossRequestType
+    from .protocol.types import JsonDict, JsonList, MerossRequestType
 
     class LoggerT(Protocol):
         """Protocol definition for logger-like instances used in the library."""
@@ -91,7 +98,7 @@ except Exception:
 #
 # General purpose utilities for payload handling
 #
-def get_element_by_key(payload: list[dict], key: str, value) -> dict:
+def get_element_by_key(payload: "JsonList", key: str, value) -> "JsonDict":
     """
     scans the payload(list) looking for the first item matching
     the key value. Usually looking for the matching channel payload
@@ -105,7 +112,7 @@ def get_element_by_key(payload: list[dict], key: str, value) -> dict:
     )
 
 
-def get_element_by_key_safe(payload: list[dict], key: str, value) -> dict | None:
+def get_element_by_key_safe(payload: "JsonList", key: str, value) -> "JsonDict | None":
     """
     scans the payload (expecting a list) looking for the first item matching
     the key value. Usually looking for the matching channel payload
@@ -119,11 +126,9 @@ def get_element_by_key_safe(payload: list[dict], key: str, value) -> dict | None
         return None
 
 
-def delete_element_by_key(payload: list[dict], key: str, value):
+def delete_element_by_key(payload: "JsonList", key: str, value):
     """
-    scans the payload(list) looking for the first item matching
-    the key value. Usually looking for the matching channel payload
-    inside list payloads
+    Scans the payload(list) removinf (dict) elements whose 'key' matches value.
     """
     for p in tuple(payload):
         try:
@@ -133,7 +138,7 @@ def delete_element_by_key(payload: list[dict], key: str, value):
             pass
 
 
-def update_dict_strict(dst_dict: dict, src_dict: dict):
+def update_dict_strict(dst_dict: "JsonDict", src_dict: "JsonDict"):
     """Updates (merge) the dst_dict with values from src_dict checking
     their existence in dst_dict before applying. Used in emulators to update
     current state when receiving a SET payload. This is needed for testing so
@@ -144,18 +149,17 @@ def update_dict_strict(dst_dict: dict, src_dict: dict):
         if key in dst_dict:
             dst_value = dst_dict[key]
             dst_type = type(dst_value)
-            src_type = type(value)
             if dst_type is dict:
-                if src_type is dict:
+                if type(value) is dict:
                     update_dict_strict(dst_value, value)
             elif dst_type is list:
-                if src_type is list:
+                if type(value) is list:
                     dst_dict[key] = value  # lists ?!
             else:
                 dst_dict[key] = value
 
 
-def update_dict_strict_by_key[_T: "dict[str, Any]"](
+def update_dict_strict_by_key[_T: "JsonDict"](
     dst_lst: "Iterable[_T]", src_dict: _T, key: str = mc.KEY_CHANNEL
 ) -> _T:
     """
@@ -172,33 +176,33 @@ def update_dict_strict_by_key[_T: "dict[str, Any]"](
     raise KeyError(f"No match for key '{key}' on value:'{str(key_value)}' in {dst_lst}")
 
 
-def extract_dict_payloads(payload):
+def extract_dict_payloads(payload: "JsonList | JsonDict") -> "Generator[JsonDict]":
     """
     Helper generator to manage payloads which might carry list of payloads:
     payload = { "channel": 0, "onoff": 1}
     or
     payload = [{ "channel": 0, "onoff": 1}]
     """
-    if isinstance(payload, list):
+    if type(payload) is list:
         for p in payload:
             yield p
     elif payload:  # assert isinstance(payload, dict)
-        yield payload
+        yield payload  # type: ignore
 
 
-@dataclass
 class HostAddress:
     """
     Helper class to build an host:port representation for broker addresses
     carried in Meross payloads
     """
 
+    host: str
+    port: int
+
     __slots__ = (
         "host",
         "port",
     )
-    host: str
-    port: int
 
     @staticmethod
     def build(address: str, default_port=mc.MQTT_DEFAULT_PORT):
@@ -207,6 +211,17 @@ class HostAddress:
             return HostAddress(address[0:colon_index], int(address[colon_index + 1 :]))
         else:
             return HostAddress(address, default_port)
+
+    def __init__(self, host: str, port: int):
+        self.host = host
+        self.port = port
+
+    def __eq__(self, value):
+        return (
+            isinstance(value, HostAddress)
+            and (self.host == value.host)
+            and (self.port == value.port)
+        )
 
     def __str__(self) -> str:
         return f"{self.host}:{self.port}"
@@ -226,14 +241,14 @@ def fmt_macaddress(macaddress: str):
     return macaddress.replace(":", "").lower()
 
 
-def is_device_online(payload: dict) -> bool:
+def is_device_online(payload: "JsonDict") -> bool:
     try:
         return payload[mc.KEY_ONLINE][mc.KEY_STATUS] == mc.STATUS_ONLINE
     except Exception:
         return False
 
 
-def get_port_safe(p_dict: dict, key: str) -> int:
+def get_port_safe(p_dict: "JsonDict", key: str) -> int:
     """
     Parses the "firmware" dict in device descriptor (coming from NS_ALL)
     or the "debug" dict and returns the broker port value or what we know
@@ -245,7 +260,7 @@ def get_port_safe(p_dict: dict, key: str) -> int:
         return mc.MQTT_DEFAULT_PORT
 
 
-def get_active_broker(p_debug: dict):
+def get_active_broker(p_debug: "JsonDict"):
     """
     Parses the "debug" dict coming from NS_SYSTEM_DEBUG and returns
     current MQTT active broker
@@ -278,7 +293,7 @@ def get_productnametype(producttype: str) -> str:
     return f"{name} ({producttype})" if name is not producttype else producttype
 
 
-def get_subdevice_type(p_subdevice_digest: dict):
+def get_subdevice_type(p_subdevice_digest: "JsonDict"):
     """Parses the subdevice dict from the hub digest to extract the
     specific dict carrying the specialized subdevice info."""
     for p_key, p_value in p_subdevice_digest.items():
@@ -287,7 +302,7 @@ def get_subdevice_type(p_subdevice_digest: dict):
     return None, None
 
 
-def get_mts_digest(p_subdevice_digest: dict) -> dict | None:
+def get_mts_digest(p_subdevice_digest: "JsonDict") -> "JsonDict | None":
     """Parses the subdevice dict from the hub digest to identify if it's
     an mts-like (and so queried through 'Hub.Mts100.All')."""
     for digest_mts_key in mc.MTS100_ALL_TYPESET:
@@ -308,14 +323,14 @@ class MerossDeviceDescriptor:
 
         DYNAMIC_ATTRS: Final[Mapping[str, Callable[["MerossDeviceDescriptor"], Any]]]
 
-        all: dict[str, Any]
-        ability: dict[str, Any]
-        digest: dict[str, Any]
-        control: dict[str, Any]
-        system: dict[str, Any]
-        hardware: dict[str, Any]
-        firmware: dict[str, Any]
-        online: dict[str, Any]
+        all: JsonDict
+        ability: JsonDict
+        digest: JsonDict
+        control: JsonDict
+        system: JsonDict
+        hardware: JsonDict
+        firmware: JsonDict
+        online: JsonDict
         type: str
         subType: str
         hardwareVersion: str
@@ -367,7 +382,7 @@ class MerossDeviceDescriptor:
         "__dict__",
     )
 
-    def __init__(self, payload: dict):
+    def __init__(self, payload: "JsonDict"):
         self.payload = payload
 
     def __getattr__(self, name):
@@ -375,7 +390,7 @@ class MerossDeviceDescriptor:
         setattr(self, name, value)
         return value
 
-    def update(self, payload: dict):
+    def update(self, payload: "JsonDict"):
         """
         reset the cached pointers
         """
@@ -388,7 +403,7 @@ class MerossDeviceDescriptor:
             except Exception:
                 pass
 
-    def update_time(self, p_time: dict):
+    def update_time(self, p_time: "JsonDict"):
         self.system[mc.KEY_TIME] |= p_time
         for key in (mc.KEY_TIME, mc.KEY_TIMEZONE):
             try:
@@ -431,17 +446,24 @@ class _BaseClient:
     if TYPE_CHECKING:
 
         class Args(TypedDict):
+            key: NotRequired[str]
+            from_: NotRequired[str]
+            trigger_src: NotRequired[str]
+            timeout: NotRequired[float]
+            descriptor: NotRequired[MerossDeviceDescriptor]
             loop: NotRequired[asyncio.AbstractEventLoop]
             logger: NotRequired[LoggerT | None]
-            timeout: NotRequired[float]
 
         class RequestArgs(TypedDict):
             timeout: NotRequired[float]
 
-        key: str
-        loop: Final[asyncio.AbstractEventLoop]
-        logger: LoggerT | None
+        key: str  # default key used to sign Meross protocol messages
+        from_: str  # default value in 'from' header key
+        trigger_src: str  # default value in 'triggerSrc' header key
         timeout: float
+        descriptor: MerossDeviceDescriptor | None
+        logger: LoggerT | None
+        loop: Final[asyncio.AbstractEventLoop]
 
     LOG_DUMP = 5  # logging level for raw messages dumping
     TIMEOUT_DEFAULT = 10
@@ -450,9 +472,10 @@ class _BaseClient:
     # just add a __slots__ = BaseClient.__SLOTS + (...) in actual classes to actually implement.
     __SLOTS__ = (
         "key",
-        "loop",
-        "logger",
         "timeout",
+        "descriptor",
+        "logger",
+        "loop",
     )
 
     @classmethod
@@ -465,14 +488,19 @@ class _BaseClient:
                 pass
         return _slots
 
-    def __init__(self, key: str, **kwargs: "Unpack[Args]"):
-        self.key = key
-        self.loop = kwargs.pop("loop", asyncio.get_running_loop())
-        self.logger = kwargs.pop("logger", None)
+    def __init__(self, **kwargs: "Unpack[Args]"):
+        self.key = kwargs.pop("key", "")
+        self.from_ = kwargs.pop("from_", mc.HEADER_FROM_DEFAULT)
+        self.trigger_src = kwargs.pop("trigger_src", self.__class__.__name__)
         self.timeout = kwargs.pop("timeout", self.TIMEOUT_DEFAULT)
+        self.descriptor = kwargs.pop("descriptor", None)
+
+        self.logger = kwargs.pop("logger", None)
+
+        self.loop = kwargs.pop("loop", asyncio.get_running_loop())
 
     async def async_request_raw(
-        self, request: str, /, **kwargs: "Unpack[RequestArgs]"
+        self, request: MerossRequest, /, **kwargs: "Unpack[RequestArgs]"
     ) -> MerossResponse:
         raise NotImplementedError("async_request_raw")
 
@@ -480,7 +508,7 @@ class _BaseClient:
         self, *args: "Unpack[MerossRequestType]", **kwargs: "Unpack[RequestArgs]"
     ) -> MerossResponse:
         return await self.async_request_raw(
-            MerossRequest(*args, self.key).json(), **kwargs
+            MerossRequest(*args, self.key, self.from_, self.trigger_src), **kwargs
         )
 
     async def async_request_ns(
@@ -488,8 +516,15 @@ class _BaseClient:
     ) -> MerossResponse:
         return await self.async_request(*ns.request_default, **kwargs)
 
-    async def async_identify_device(self, *args, **kwargs: "Unpack[RequestArgs]"):
-        return MerossDeviceDescriptor(
+    async def async_request_ns_payload(
+        self, ns: "Namespace", /, **kwargs: "Unpack[RequestArgs]"
+    ) -> "Any":
+        return (await self.async_request(*ns.request_default, **kwargs))[
+            mc.KEY_PAYLOAD
+        ][ns.key]
+
+    async def async_identify(self, *args, **kwargs: "Unpack[RequestArgs]"):
+        self.descriptor = MerossDeviceDescriptor(
             check_message_strict(
                 await self.async_request_ns(mn.Appliance_System_All, **kwargs)
             )[mc.KEY_PAYLOAD]
@@ -497,3 +532,131 @@ class _BaseClient:
                 await self.async_request_ns(mn.Appliance_System_Ability, **kwargs)
             )[mc.KEY_PAYLOAD]
         )
+        return self.descriptor
+
+    async def async_get_ssid_scan(
+        self,
+        *,
+        sort_key: str | None = mc.KEY_SIGNAL,
+        **kwargs: "Unpack[RequestArgs]",
+    ):
+        """Returns a 'short-list' of available WiFi SSIDs. The native device scan includes
+        multiple bssid(s) while this method only returns unique SSIDs ordered by 'sort-key'.
+        sort_key must be a valid dict key available in the native payload
+        (see protocol.types.config.Wifi)."""
+
+        p_wifilist: "mt.config.WifiList" = await self.async_request_ns_payload(
+            mn.Appliance_Config_WifiList
+        )
+        if sort_key:
+            p_wifilist = sorted(p_wifilist, key=lambda x: x[sort_key], reverse=True)
+
+        ssid_list: list[str] = []
+        for wifi in p_wifilist:
+            try:
+                # It looks like some ssid b64 encodings are 'weird' and we're unable to decode them as UTF-8
+                # strings
+                ssid = b64decode(wifi[mc.KEY_SSID]).rstrip(b"\0").decode()
+                if ssid not in ssid_list:
+                    ssid_list.append(ssid)
+            except:
+                pass
+
+        return ssid_list
+
+    async def async_configure_mqtt(
+        self,
+        *,
+        host: str = "",
+        port: int = mc.MQTT_DEFAULT_PORT,
+        key: str = "",
+        userid: str = "",  # will default to 0
+        **kwargs: "Unpack[RequestArgs]",
+    ):
+        return await self.async_request(
+            mn.Appliance_Config_Key.name,
+            mc.METHOD_SET,
+            {
+                mn.Appliance_Config_Key.key: (
+                    {
+                        mc.KEY_GATEWAY: {
+                            mc.KEY_HOST: host,
+                            mc.KEY_PORT: port,
+                            mc.KEY_SECONDHOST: host,
+                            mc.KEY_SECONDPORT: port,
+                        },
+                        mc.KEY_KEY: key,
+                        mc.KEY_USERID: userid,
+                    }
+                    if host
+                    else {
+                        mc.KEY_KEY: key,
+                        mc.KEY_USERID: userid,
+                    }
+                ),
+            },
+        )
+
+    async def async_configure_wifi(
+        self,
+        *,
+        ssid: str,
+        password: str,
+        **kwargs: "Unpack[RequestArgs]",
+    ):
+        # TODO: check if WifiX supported or fallback to Wifi ns
+        descriptor = self.descriptor
+        assert descriptor, "Device descriptor is not set"
+        ns_wifix = mn.Appliance_Config_WifiX
+        if ns_wifix.name in descriptor.ability:
+            return await self.async_request(
+                ns_wifix.name,
+                mc.METHOD_SET,
+                {
+                    ns_wifix.key: {
+                        mc.KEY_SSID: b64encode(ssid.encode()).decode(),
+                        mc.KEY_PASSWORD: compute_wifix_password(
+                            password,
+                            descriptor.type,
+                            descriptor.uuid,
+                            descriptor.macAddress,
+                        ),
+                    }
+                },
+            )
+        else:
+            return await self.async_request(
+                mn.Appliance_Config_Wifi.name,
+                mc.METHOD_SET,
+                {
+                    mn.Appliance_Config_Wifi.key: {
+                        mc.KEY_SSID: b64encode(ssid.encode()).decode(),
+                        mc.KEY_PASSWORD: b64encode(password.encode()).decode(),
+                    }
+                },
+            )
+
+    async def async_configure(
+        self,
+        *,
+        mqtt_host: str = "",
+        mqtt_port: int = 8883,
+        key: str = "",
+        userid: str = "",
+        wifi_ssid: str = "",
+        wifi_password: str = "",
+        **kwargs: "Unpack[RequestArgs]",
+    ):
+        if wifi_ssid:
+            assert self.descriptor, "Device descriptor is not set"
+            assert wifi_password, "Wifi password is required if ssid is set"
+
+        if mqtt_host or key or userid:
+            await self.async_configure_mqtt(
+                host=mqtt_host, port=mqtt_port, key=key, userid=userid, **kwargs
+            )
+
+        if wifi_ssid:
+            await self.async_configure_wifi(
+                ssid=wifi_ssid, password=wifi_password, **kwargs
+            )

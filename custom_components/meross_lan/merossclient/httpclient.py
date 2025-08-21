@@ -8,19 +8,19 @@ import logging
 import socket
 import sys
 from typing import TYPE_CHECKING, override
-from uuid import uuid4
 
 import aiohttp
 from yarl import URL
 
 from . import MEROSSDEBUG, _BaseClient
-from .protocol import JSON_ENCODER, AESCipher, MerossKeyError, const as mc
-from .protocol.message import MerossResponse, build_message, build_message_keyhack
+from .protocol import AESCipher
+from .protocol.message import MerossResponse
 
 if TYPE_CHECKING:
     from typing import ClassVar, NotRequired, Unpack
 
-    from .protocol.types import MerossHeaderType, MerossPayloadType, MerossRequestType
+    from .protocol.message import MerossRequest
+    from .protocol.types import MerossHeaderType
 
 
 class TerminatedException(Exception):
@@ -91,7 +91,7 @@ class MerossHttpClient(_BaseClient):
         "_key_header",
     )
 
-    def __init__(self, host: str, key: str, **kwargs: "Unpack[Args]"):
+    def __init__(self, host: str, **kwargs: "Unpack[Args]"):
         """
         host: the ip or hostname of the device
         kwargs:
@@ -110,7 +110,7 @@ class MerossHttpClient(_BaseClient):
         self._terminate_guard = 0
         self._encryption_cipher = None
         self._key_header = {}  # type: ignore
-        _BaseClient.__init__(self, key, **kwargs)
+        _BaseClient.__init__(self, **kwargs)
 
     @property
     def host(self):
@@ -145,7 +145,7 @@ class MerossHttpClient(_BaseClient):
 
     @override
     async def async_request_raw(
-        self, request: str, /, **kwargs: "Unpack[RequestArgs]"
+        self, request: "MerossRequest", /, **kwargs: "Unpack[RequestArgs]"
     ) -> MerossResponse:
         self._check_terminated()
         logger = self.logger
@@ -163,12 +163,13 @@ class MerossHttpClient(_BaseClient):
                 MEROSSDEBUG.http_random_timeout()
 
             if _cipher := self._encryption_cipher:
-                request = _cipher.encript_text(request)
+                data = _cipher.encript_text(request.json)
                 headers = {
                     aiohttp.hdrs.CONTENT_TYPE: "application/octet-stream",
                 }
             else:
                 # no encryption: session defaults to json
+                data = request.json
                 headers = {
                     aiohttp.hdrs.CONTENT_TYPE: "application/json",
                 }
@@ -182,7 +183,7 @@ class MerossHttpClient(_BaseClient):
                 try:
                     response = await self._session.post(
                         url=self._requesturl,
-                        data=request,
+                        data=data,
                         headers=headers,
                         timeout=aiohttp.ClientTimeout(
                             total=_timeout, connect=_connect_timeout
@@ -222,8 +223,8 @@ class MerossHttpClient(_BaseClient):
         finally:
             self._terminate_guard -= 1
 
-    @override
-    async def async_request(
+    """TODO: restore hack feature
+    async def async_hack_request(
         self, *args: "Unpack[MerossRequestType]", **kwargs: "Unpack[RequestArgs]"
     ) -> MerossResponse:
         key = self.key
@@ -267,3 +268,4 @@ class MerossHttpClient(_BaseClient):
         if key is None:
             self._key_header = response[mc.KEY_HEADER]
         return response
+        """

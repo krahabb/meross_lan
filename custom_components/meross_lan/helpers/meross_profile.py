@@ -24,8 +24,7 @@ from ..const import (
     DOMAIN,
 )
 from ..helpers.obfuscate import OBFUSCATE_DEVICE_ID_MAP, obfuscated_dict
-from ..merossclient import MEROSSDEBUG, HostAddress, get_active_broker
-from ..merossclient.cloudapi import APISTATUS_TOKEN_ERRORS, CloudApiError
+from ..merossclient import MEROSSDEBUG, HostAddress, cloudapi, get_active_broker
 from ..merossclient.mqttclient import MerossMQTTAppClient, generate_app_id
 from ..merossclient.protocol import const as mc, namespaces as mn
 from .manager import CloudApiClient
@@ -42,9 +41,9 @@ if TYPE_CHECKING:
     from ..merossclient.cloudapi import (
         DeviceInfoType,
         LatestVersionType,
+        MerossCloudCredentials,
         SubDeviceInfoType,
     )
-    from ..merossclient.protocol.message import MerossMessage
     from .component_api import ComponentApi
     from .device import Device, MerossDeviceDescriptor
 
@@ -66,7 +65,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
     def __init__(self, profile: "MerossProfile", broker: "HostAddress"):
         MerossMQTTAppClient.__init__(
             self,
-            profile.key,
+            key=profile.key,
             app_id=profile.app_id,
             user_id=profile.userid,
             loop=profile.hass.loop,
@@ -111,7 +110,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
     async def _async_mqtt_publish(
         self,
         device_id: str,
-        request: "MerossMessage",
+        request: str,
     ):
         return await self.profile.hass.async_add_executor_job(
             self.rl_publish, device_id, request
@@ -165,6 +164,14 @@ class MerossProfileStore(storage.Store[MerossProfileStoreType]):
             MerossProfileStore.VERSION,
             f"{DOMAIN}.profile.{profile_id}",
         )
+
+    async def async_remove_and_logout(self, credentials: "MerossCloudCredentials"):
+        from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+        await super().async_remove()
+        await cloudapi.CloudApiClient(
+            credentials=credentials, session=async_get_clientsession(self.hass)
+        ).async_logout_safe()
 
 
 class MerossProfile(MQTTProfile):
@@ -402,6 +409,7 @@ class MerossProfile(MQTTProfile):
         return bool(self._data.get(mc.KEY_TOKEN))
 
     @property
+    @override
     def userid(self):
         return self.config[mc.KEY_USERID_]
 
@@ -514,10 +522,10 @@ class MerossProfile(MQTTProfile):
         Returns an existing connection from the managed pool or create one and add
         to the mqttconnections pool. The connection state is not ensured.
         """
-        connection_id = str(broker)
-        if connection_id in self.mqttconnections:
-            return self.mqttconnections[connection_id]  # type: ignore
-        return MerossMQTTConnection(self, broker)
+        try:
+            return self.mqttconnections[str(broker)]  # type: ignore
+        except KeyError:
+            return MerossMQTTConnection(self, broker)
 
     async def _async_get_mqttconnection(self, broker: HostAddress):
         """
@@ -599,9 +607,9 @@ class MerossProfile(MQTTProfile):
             if not credentials:
                 self.log(self.WARNING, f"{msg} cancelled: missing cloudapi token")
             yield credentials
-        except CloudApiError as clouderror:
+        except cloudapi.CloudApiError as clouderror:
             self.log_exception(self.WARNING, clouderror, msg)
-            if clouderror.apistatus in APISTATUS_TOKEN_ERRORS:
+            if clouderror.apistatus in cloudapi.APISTATUS_TOKEN_ERRORS:
                 self.apiclient.credentials = None
                 if self._data.pop(mc.KEY_TOKEN, None):  # type: ignore
                     await self.async_token_refresh()

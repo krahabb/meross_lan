@@ -4,7 +4,7 @@ from time import time
 from typing import TYPE_CHECKING, override
 import zoneinfo
 
-from bleak.exc import BleakDeviceNotFoundError, BleakError
+from bleak.exc import BleakError
 from homeassistant import const as hac
 from homeassistant.components import bluetooth as ha_bt
 from homeassistant.core import SupportsResponse, callback
@@ -52,7 +52,6 @@ if TYPE_CHECKING:
     )
 
     from ..config_flow import ConfigFlow
-    from ..merossclient.protocol.message import MerossMessage
     from ..merossclient.protocol.types import MerossHeaderType, MerossPayloadType
     from .meross_profile import MerossProfile
 
@@ -133,13 +132,14 @@ class HAMQTTConnection(MQTTConnection):
     def get_rl_safe_delay(self, uuid: str):
         return 0.0
 
+    @override
     async def _async_mqtt_publish(
         self,
         device_id: str,
-        request: "MerossMessage",
+        request: str,
     ):
         await mqtt_async_publish(
-            self.profile.hass, mc.TOPIC_REQUEST.format(device_id), request.json()
+            self.profile.hass, mc.TOPIC_REQUEST.format(device_id), request
         )
         self._mqtt_published()
 
@@ -337,10 +337,8 @@ class ComponentApi(MQTTProfile):
             api: Final["ComponentApi"]
             address: Final[str]
             info: ha_bt.BluetoothServiceInfoBleak
+            descriptor: Final[MerossDeviceDescriptor]  # type: ignore
             uuid: Final[str]  # BEWARE: not valid until _init_task done
-            descriptor: Final[
-                MerossDeviceDescriptor
-            ]  # BEWARE: not valid until _init_task done
             device: Final[Device | None]
             _flow_id: Final[str]
             _bt_unavailable_unsub: Final[CALLBACK_TYPE]
@@ -351,7 +349,6 @@ class ComponentApi(MQTTProfile):
             "address",
             "info",
             "uuid",
-            "descriptor",
             "device",
             "_flow_id",
             "_bt_unavailable_unsub",
@@ -364,11 +361,14 @@ class ComponentApi(MQTTProfile):
             self.isEnabledFor = api.isEnabledFor
             self.address = address
             self.uuid = None  # type: ignore
-            self.descriptor = None  # type: ignore
             self.device = None
             self._flow_id = flow_id
             m_bt.BluetoothClient.__init__(
-                self, address, loop=api.hass.loop, logger=self
+                self,
+                address,
+                from_=mlc.DOMAIN,
+                loop=api.hass.loop,
+                logger=self,
             )
             self._bt_unavailable_unsub = ha_bt.async_track_unavailable(
                 api.hass, self._bt_unavailable, address, connectable=True
@@ -382,7 +382,7 @@ class ComponentApi(MQTTProfile):
             api = self.api
             while True:
                 try:
-                    self.descriptor = descriptor = await super().async_identify_device()  # type: ignore
+                    descriptor = await self.async_identify()
                     self.uuid = uuid = descriptor.uuid  # type: ignore
                     for _bt_device in api._bt_devices.values():
                         if (_bt_device is not self) and (_bt_device.uuid == uuid):
@@ -633,18 +633,21 @@ class ComponentApi(MQTTProfile):
             else:
                 payload = {}  # likely failing the request...
 
+            from_ = mlc.DOMAIN
+            trigger_src = "service_request"
+
             async def _async_bluetooth_request(bt_device: ComponentApi.BTDevice):
                 service_response["request"] = request = MerossRequest(
                     namespace,
                     method,
                     payload,
                     "",
-                    mc.HEADER_FROM_DEFAULT,
-                    mlc.DOMAIN,
+                    from_,
+                    trigger_src,
                 )
                 try:
                     service_response["response"] = await bt_device.async_request_raw(
-                        request.json()
+                        request
                     )
                 except Exception as exception:
                     service_response["exception"] = (
@@ -660,7 +663,7 @@ class ComponentApi(MQTTProfile):
                     payload,
                     device.key if key is None else key,
                     device._topic_response,
-                    mlc.DOMAIN,
+                    trigger_src,
                 )
                 service_response["response"] = (
                     await device.async_mqtt_request_raw(request)
@@ -692,7 +695,7 @@ class ComponentApi(MQTTProfile):
                         payload,
                         self.key if key is None else key,
                         mqtt_connection.topic_response,
-                        mlc.DOMAIN,
+                        trigger_src,
                     )
                     service_response["response"] = (
                         await mqtt_connection.async_mqtt_publish(device_id, request)
@@ -715,17 +718,16 @@ class ComponentApi(MQTTProfile):
                         method,
                         payload,
                         self.key if key is None else key,
-                        mc.HEADER_FROM_DEFAULT,
-                        mlc.DOMAIN,
+                        from_,
+                        trigger_src,
                     )
                     try:
                         service_response["response"] = (
                             await MerossHttpClient(
                                 host,
-                                self.key if key is None else key,
                                 loop=self.hass.loop,
                                 logger=self,
-                            ).async_request_raw(request.json())
+                            ).async_request_raw(request)
                             or {}
                         )
                     except Exception as exception:
@@ -798,6 +800,11 @@ class ComponentApi(MQTTProfile):
     @override
     def allow_mqtt_publish(self):
         return True  # ComponentApi still doesnt support configuring entry for this
+
+    @property
+    @override
+    def userid(self):
+        return "0"
 
     @override
     def attach_mqtt(self, device: "Device"):

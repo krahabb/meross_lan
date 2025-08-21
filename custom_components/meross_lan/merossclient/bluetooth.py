@@ -7,12 +7,11 @@ from bleak import BleakClient, uuids
 from bleak.backends.bluezdbus.client import BleakClientBlueZDBus
 
 from . import _BaseClient
-from .protocol import MerossError, const as mc, namespaces as mn
+from .protocol import MerossError
 from .protocol.message import MerossResponse
 
 if TYPE_CHECKING:
     from typing import (
-        Callable,
         Final,
         Iterable,
         NotRequired,
@@ -27,6 +26,7 @@ if TYPE_CHECKING:
     from bleak.backends.device import BLEDevice
     from bleak.backends.service import BleakGATTService
 
+    from .protocol.message import MerossRequest
 
 BL_SERVICE_UUID = "0000a00a-0000-1000-8000-00805f9b34fb"
 BL_SERVICE_CHAR_NOTIFY_UUID = "0000b003-0000-1000-8000-00805f9b34fb"
@@ -107,7 +107,7 @@ class BluetoothClient(_BaseClient, BleakClient):
             winrt=winrt,
             backend=backend,
         )
-        _BaseClient.__init__(self, "", **kwargs)
+        _BaseClient.__init__(self, **kwargs)
         self._connect_lock = asyncio.Lock()
         self._rx_frame_size = 0
         self._rx_future = None
@@ -120,7 +120,7 @@ class BluetoothClient(_BaseClient, BleakClient):
     # interface: BaseClient
     @override
     async def async_request_raw(
-        self, request: str, /, **kwargs: "Unpack[RequestArgs]"
+        self, request: "MerossRequest", /, **kwargs: "Unpack[RequestArgs]"
     ) -> MerossResponse:
 
         # TODO: maybe add a retry loop
@@ -134,7 +134,7 @@ class BluetoothClient(_BaseClient, BleakClient):
 
                 self._rx_future = self.loop.create_future()
                 self._rx_frame_size = 0  # flush receive buffer
-                tx_frame = request.encode()
+                tx_frame = request.json.encode()
                 tx_frame_size = len(tx_frame)
                 crc32 = binascii.crc32(tx_frame)
                 tx_frame = bytes(

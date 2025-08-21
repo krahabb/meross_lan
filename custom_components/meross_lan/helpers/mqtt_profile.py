@@ -1,7 +1,7 @@
 import abc
 import asyncio
 from time import time
-from typing import TYPE_CHECKING, final
+from typing import TYPE_CHECKING, final, override
 
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
@@ -9,7 +9,7 @@ from homeassistant.core import callback
 
 from . import Loggable, entity as me
 from .. import const as mlc
-from ..merossclient import HostAddress
+from ..merossclient import HostAddress, _BaseClient
 from ..merossclient.mqttclient import MerossMQTTRateLimitException
 from ..merossclient.protocol import (
     MerossKeyError,
@@ -159,10 +159,7 @@ class _MQTTTransaction:
     __slots__ = (
         "mqtt_connection",
         "device_id",
-        "namespace",
-        "messageid",
-        "method",
-        "request_time",
+        "request",
         "response_future",
     )
 
@@ -174,27 +171,25 @@ class _MQTTTransaction:
     ):
         self.mqtt_connection = mqtt_connection
         self.device_id = device_id
-        self.namespace = request.namespace
-        self.messageid = request.messageid
-        self.method = request.method
-        self.request_time = time()
-        self.response_future: "asyncio.Future[MerossResponse]" = (
+        self.request = request
+        self.response_future: asyncio.Future[MerossResponse] = (
             asyncio.get_running_loop().create_future()
         )
         mqtt_connection._mqtt_transactions[request.messageid] = self
 
     def cancel(self):
         mqtt_connection = self.mqtt_connection
+        request = self.request
         mqtt_connection.log(
             mqtt_connection.DEBUG,
             "Cancelling mqtt transaction on %s %s (uuid:%s messageId:%s)",
-            self.method,
-            self.namespace,
+            request.method,
+            request.namespace,
             mqtt_connection.profile.loggable_device_id(self.device_id),
-            self.messageid,
+            request.messageid,
         )
         self.response_future.cancel()
-        mqtt_connection._mqtt_transactions.pop(self.messageid, None)
+        mqtt_connection._mqtt_transactions.pop(request.messageid, None)
 
 
 class MQTTConnection(Loggable):
@@ -208,6 +203,46 @@ class MQTTConnection(Loggable):
     and represents a link to a broker (either through HA or a
     merosss cloud mqtt)
     """
+
+    class Client(_BaseClient):
+        """Implements  a 'soft' client channel for a single device sharing
+        a connection. This is actually only needed in ConfigFlow but we could
+        rethink all of the MQTT message transaction handling."""
+
+        if TYPE_CHECKING:
+
+            class Args(_BaseClient.Args):
+                key: str  # override NotRequired
+
+            class RequestArgs(_BaseClient.RequestArgs):
+                pass
+
+        __slots__ = _BaseClient._calc_slots(
+            "mqtt_connection",
+            "device_id",
+        )
+
+        def __init__(
+            self,
+            mqtt_connection: "MQTTConnection",
+            device_id: str,
+            **kwargs: "Unpack[Args]",
+        ):
+            kwargs["from_"] = mqtt_connection.topic_response
+            super().__init__(**kwargs)
+            self.mqtt_connection = mqtt_connection
+            self.device_id = device_id
+
+        @override
+        async def async_request_raw(
+            self, request: MerossRequest, /, **kwargs: "Unpack[RequestArgs]"
+        ):
+            response = await self.mqtt_connection.async_mqtt_publish(
+                self.device_id, request, self.timeout
+            )
+            if response:
+                return response
+            raise asyncio.TimeoutError()
 
     if TYPE_CHECKING:
         _MQTT_DROP: Final
@@ -353,19 +388,18 @@ class MQTTConnection(Loggable):
         self,
         device_id: str,
         request: "MerossMessage",
+        timeout: float | None = DEFAULT_RESPONSE_TIMEOUT,
     ) -> MerossResponse | None:
-        if request.method in mc.METHOD_ACK_MAP.keys():
+        if timeout and (request.method in mc.METHOD_ACK_MAP):
             transaction = _MQTTTransaction(self, device_id, request)
         else:
             transaction = None
         try:
             self.profile.trace_or_log(self, device_id, request, MQTTProfile.TRACE_TX)
-            await self._async_mqtt_publish(device_id, request)
+            await self._async_mqtt_publish(device_id, request.json)
             if transaction:
                 try:
-                    return await asyncio.wait_for(
-                        transaction.response_future, self.DEFAULT_RESPONSE_TIMEOUT
-                    )
+                    return await asyncio.wait_for(transaction.response_future, timeout)
                 except Exception as exception:
                     self.log_exception(
                         self.DEBUG,
@@ -377,7 +411,7 @@ class MQTTConnection(Loggable):
                         request.messageid,
                     )
                 finally:
-                    self._mqtt_transactions.pop(transaction.messageid, None)
+                    self._mqtt_transactions.pop(request.messageid, None)
             return None
 
         except MerossMQTTRateLimitException:
@@ -433,10 +467,11 @@ class MQTTConnection(Loggable):
             profile.trace_or_log(self, device_id, message, MQTTProfile.TRACE_RX)
 
             try:
-                if self._mqtt_transactions[messageid].namespace == namespace:
-                    self._mqtt_transactions.pop(messageid).response_future.set_result(
-                        message
-                    )
+                _mqtt_transaction = self._mqtt_transactions.pop(messageid)
+                if _mqtt_transaction.device_id == device_id:
+                    _mqtt_transaction.response_future.set_result(message)
+                else:  # this is unlikely to happen
+                    self._mqtt_transactions[messageid] = _mqtt_transaction
             except KeyError:
                 # special session management: cloud connections would
                 # behave differently than the local MQTT. Their behavior
@@ -565,7 +600,7 @@ class MQTTConnection(Loggable):
                         *mn.Appliance_System_Ability.request_get,
                         key,
                         self.topic_response,
-                        mlc.DOMAIN,
+                        self.__class__.__name__,
                     ),
                 )
             )
@@ -583,7 +618,7 @@ class MQTTConnection(Loggable):
                         *mn.Appliance_System_All.request_get,
                         key,
                         self.topic_response,
-                        mlc.DOMAIN,
+                        self.__class__.__name__,
                     ),
                 )
             )
@@ -631,14 +666,14 @@ class MQTTConnection(Loggable):
             # check and cleanup stale transactions
             epoch = time()
             for transaction in list(self._mqtt_transactions.values()):
-                if (epoch - transaction.request_time) > 15:
+                if (epoch - transaction.request.header[mc.KEY_TIMESTAMP]) > 15:
                     transaction.cancel()
 
     @abc.abstractmethod
     async def _async_mqtt_publish(
         self,
         device_id: str,
-        request: "MerossMessage",
+        request: str,
     ):
         """
         Actually sends the message to the transport. On return gives
@@ -761,6 +796,11 @@ class MQTTProfile(ConfigEntryManager):
     def allow_mqtt_publish(self):
         return self.config.get(mlc.CONF_ALLOW_MQTT_PUBLISH)
 
+    @property
+    @abc.abstractmethod
+    def userid(self) -> str:
+        pass
+
     def link(self, device: "Device"):
         device_id = device.id
         assert device_id not in self.linkeddevices
@@ -808,7 +848,7 @@ class MQTTProfile(ConfigEntryManager):
                 (
                     json_dumps(obfuscated_dict(message))
                     if self.obfuscate
-                    else message.json()
+                    else message.json
                 ),
             )
         elif self.isEnabledFor(self.DEBUG):
