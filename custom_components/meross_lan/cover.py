@@ -1,6 +1,19 @@
 import typing
 
 from homeassistant.components import cover
+from homeassistant.components.cover import CoverState  # new enum in HA 2025.11+
+
+# Backfill removed STATE_* constants so existing code keeps working
+# (HA 2025.11+ removed them in favor of CoverState)
+if not hasattr(cover, "STATE_OPEN"):
+    cover.STATE_OPEN = CoverState.OPEN
+if not hasattr(cover, "STATE_CLOSED"):
+    cover.STATE_CLOSED = CoverState.CLOSED
+if not hasattr(cover, "STATE_OPENING"):
+    cover.STATE_OPENING = CoverState.OPENING
+if not hasattr(cover, "STATE_CLOSING"):
+    cover.STATE_CLOSING = CoverState.CLOSING
+
 from homeassistant.exceptions import InvalidStateError
 
 from .const import CONF_PROTOCOL_HTTP, PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT
