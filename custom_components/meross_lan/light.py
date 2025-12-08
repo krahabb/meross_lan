@@ -535,9 +535,15 @@ class MLLight(MLLightBase):
                     self.color_mode = ColorMode.BRIGHTNESS
                     return
 
-                self.color_mode = ColorMode.UNKNOWN
+                # Here we should set ColorMode.UNKNOWN since capacity is inconsistent
+                # with HA ColorMode(s). This shouldnt happen though in real life
+                # since devices supporting either rgb or color_temp should never
+                # report only luminance capacity. For better behavior (also in our testing)
+                # we'll leave the color_mode unchanged
+                # self.color_mode = ColorMode.UNKNOWN
 
         except Exception as exception:
+            self.color_mode = ColorMode.UNKNOWN
             self.log_exception(
                 self.WARNING,
                 exception,
@@ -571,7 +577,7 @@ class MLLight(MLLightBase):
             elif self._t_temp_end:
                 _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_TEMPERATURE_LUMINANCE
             else:
-                _light[mc.KEY_CAPACITY] |= mc.LIGHT_CAPACITY_LUMINANCE
+                _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_LUMINANCE
         else:
             _t_duration = None
             if ATTR_BRIGHTNESS in kwargs:
@@ -590,7 +596,7 @@ class MLLight(MLLightBase):
                 )
                 _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_TEMPERATURE_LUMINANCE
             else:
-                _light[mc.KEY_CAPACITY] |= mc.LIGHT_CAPACITY_LUMINANCE
+                _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_LUMINANCE
 
         if await self.async_request_light_on_flush(_light):
             if _t_duration:

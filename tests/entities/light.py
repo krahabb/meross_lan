@@ -96,9 +96,7 @@ class EntityTest(EntityComponentTest):
         assert isinstance(entity, MLLightBase)
         supported_color_modes = entity.supported_color_modes
 
-        check_brightness = False
-        if ColorMode.BRIGHTNESS in supported_color_modes:
-            check_brightness = True
+        check_brightness = ColorMode.BRIGHTNESS in supported_color_modes
 
         if ColorMode.RGB in supported_color_modes:
             check_brightness = True
