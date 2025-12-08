@@ -130,13 +130,13 @@ class EntityManager(Loggable):
         their async polling before invalidating the member pointers (which are
         usually referred to inside the polling /parsing code)
         """
-        for task in list(self._tasks):
+        for task in tuple(self._tasks):
             if task.done():
                 continue
             self.log(self.DEBUG, "Shutting down pending task %s", task)
             task.cancel("ConfigEntryManager shutdown")
             try:
-                async with asyncio.timeout(0.1):
+                async with asyncio.timeout(0.5):
                     await task
             except asyncio.CancelledError:
                 pass
@@ -144,7 +144,7 @@ class EntityManager(Loggable):
                 self.log_exception(
                     self.WARNING, exception, "cancelling task %s during shutdown", task
                 )
-        for entity in set(self.entities.values()):
+        for entity in tuple(self.entities.values()):
             # async_shutdown will pop out of self.entities
             await entity.async_shutdown()
         if self._tasks:
@@ -414,10 +414,18 @@ class ConfigEntryManager(EntityManager):
     async def entry_update_listener(
         self, hass: "HomeAssistant", config_entry: "ConfigEntry"
     ):
+        old_config = self.config
         config = self.config = config_entry.data
         self.key = config.get(CONF_KEY) or ""
         self.obfuscate = config.get(CONF_OBFUSCATE, True)
         self.configure_logger()
+        if self.isEnabledFor(self.DEBUG):
+            self.log(
+                self.DEBUG,
+                "Config updated: old=%s new=%s",
+                str(obfuscated_dict(old_config) if self.obfuscate else old_config),
+                str(obfuscated_dict(config) if self.obfuscate else config),
+            )
         if config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES):
             await self.async_create_diagnostic_entities()
         else:

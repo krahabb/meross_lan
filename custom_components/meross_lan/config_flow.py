@@ -1,7 +1,6 @@
 """Config flow for Meross LAN integration."""
 
 import asyncio
-from base64 import b64decode, b64encode
 from contextlib import contextmanager
 import enum
 from functools import cached_property
@@ -20,7 +19,6 @@ from homeassistant.helpers import (
     device_registry as dr,
     selector,
 )
-from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
 from . import const as mlc
@@ -35,23 +33,15 @@ from .helpers.mqtt_profile import MQTTConnection
 from .merossclient import (
     HostAddress,
     MerossDeviceDescriptor,
-    bluetooth as m_bt,
     cloudapi,
     fmt_macaddress,
-    get_macaddress_from_uuid,
 )
 from .merossclient.httpclient import MerossHttpClient
 from .merossclient.mqttclient import MerossMQTTDeviceClient
 from .merossclient.protocol import (
     MerossKeyError,
-    compute_message_encryption_key,
-    compute_wifix_password,
     const as mc,
     namespaces as mn,
-)
-from .merossclient.protocol.message import (
-    check_message_strict,
-    get_message_uuid,
 )
 
 if TYPE_CHECKING:

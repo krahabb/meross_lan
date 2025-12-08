@@ -175,7 +175,7 @@ def digest_init_togglex(
     ns = mn.Appliance_Control_ToggleX
     handler = device.get_handler(ns)
     handler.register_entity_class(MLToggleX)
-    if device.is_refoss:
+    if device.descriptor.is_refoss:
         handler.polling_request = (
             ns.name,
             mc.METHOD_GET,

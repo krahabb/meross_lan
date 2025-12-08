@@ -5,3 +5,4 @@ aiousbwatcher
 async_upnp_client
 radios
 av
+uv

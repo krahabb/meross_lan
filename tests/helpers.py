@@ -3,7 +3,7 @@ import base64
 from collections import namedtuple
 import contextlib
 from copy import deepcopy
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 import hashlib
 import logging
 import re
@@ -234,30 +234,33 @@ class TimeMocker(contextlib.AbstractContextManager):
     def __call__(self):
         return self.time()
 
-    def tick(self, tick: timedelta | float | int):
-        self.time.tick(tick if isinstance(tick, timedelta) else timedelta(seconds=tick))
-        async_fire_time_changed_exact(self.hass)
-
     async def async_tick(self, tick: timedelta | float | int):
-        self.time.tick(tick if isinstance(tick, timedelta) else timedelta(seconds=tick))
-        async_fire_time_changed_exact(self.hass)
+        dt_now = self.time.tick(
+            tick if isinstance(tick, timedelta) else timedelta(seconds=tick)
+        )
+        async_fire_time_changed_exact(self.hass, dt_now.replace(tzinfo=UTC))
         await self.hass.async_block_till_done()
+        return dt_now
 
     async def async_move_to(self, target_datetime: datetime):
-        self.time.move_to(target_datetime)
-        async_fire_time_changed_exact(self.hass)
-        await self.hass.async_block_till_done()
+        """
+        Moves the time mocker to the target_datetime.
+        It is preferable tu use the 'tick' version since that's in the end the underlying freezeapi engine called.
+        """
+        return await self.async_tick(target_datetime - self.time())
 
     async def async_warp(
         self,
         timeout: float | int | timedelta | datetime,
         tick: float | int | timedelta = 1,
     ):
+        dt_now = self.time()
         if not isinstance(timeout, datetime):
-            if isinstance(timeout, timedelta):
-                timeout = self.time() + timeout
-            else:
-                timeout = self.time() + timedelta(seconds=timeout)
+            timeout = dt_now + (
+                timeout
+                if isinstance(timeout, timedelta)
+                else timedelta(seconds=timeout)
+            )
         if not isinstance(tick, timedelta):
             tick = timedelta(seconds=tick)
 
@@ -280,13 +283,10 @@ class TimeMocker(contextlib.AbstractContextManager):
         according to this algorithm and might be undesirable
         (to say the least - dunno if freezegun allows this)
         """
-        time_current = self.time()
-        time_next = time_current + tick
-        while time_current < timeout:
-            await self.async_move_to(time_next)
-            # here self.time() might have been advanced more than tick
-            time_current = self.time()
-            time_next = time_next + tick
+        dt_next = dt_now + tick
+        while dt_now < timeout:
+            dt_now = await self.async_tick(dt_next - dt_now)
+            dt_next = dt_next + tick
 
     async def async_warp_iterator(
         self,
@@ -294,22 +294,21 @@ class TimeMocker(contextlib.AbstractContextManager):
         tick: float | int | timedelta = 1,
     ):
         """generator version of async time warping (async_warp)"""
+        dt_now = self.time()
         if not isinstance(timeout, datetime):
-            if isinstance(timeout, timedelta):
-                timeout = self.time() + timeout
-            else:
-                timeout = self.time() + timedelta(seconds=timeout)
+            timeout = dt_now + (
+                timeout
+                if isinstance(timeout, timedelta)
+                else timedelta(seconds=timeout)
+            )
         if not isinstance(tick, timedelta):
             tick = timedelta(seconds=tick)
 
-        time_current = self.time()
-        time_next = time_current + tick
-        while time_current < timeout:
-            await self.async_move_to(time_next)
-            # here self.time() might have been advanced more than tick
-            time_current = self.time()
-            time_next = time_next + tick
-            yield time_current
+        dt_next = dt_now + tick
+        while dt_now < timeout:
+            dt_now = await self.async_tick(dt_next - dt_now)
+            dt_next = dt_next + tick
+            yield dt_now
 
     def warp(self, tick: float | int | timedelta = 0.5):
         """
@@ -896,8 +895,8 @@ class DeviceContext(ConfigEntryMocker):
 
     async def async_poll_single(self):
         """Advances the time mocker up to the next polling cycle and executes it."""
-        await self.time_mock.async_tick(
-            self.device._polling_callback_unsub.when() - self.hass.loop.time()  # type: ignore
+        return await self.time_mock.async_tick(
+            self.device._polling_unsub.when() - self.hass.loop.time()  # type: ignore
         )
 
     async def async_poll_timeout(
@@ -906,14 +905,16 @@ class DeviceContext(ConfigEntryMocker):
     ):
         """Advances the time mocker up to the timeout (delta or absolute)
         stepping exactly through each single polling loop."""
+        dt_now = self.time_mock()
         if not isinstance(timeout, datetime):
-            if isinstance(timeout, timedelta):
-                timeout = self.time_mock() + timeout
-            else:
-                timeout = self.time_mock() + timedelta(seconds=timeout)
+            timeout = dt_now + (
+                timeout
+                if isinstance(timeout, timedelta)
+                else timedelta(seconds=timeout)
+            )
 
-        while self.time_mock() < timeout:
-            await self.async_poll_single()
+        while dt_now < timeout:
+            dt_now = await self.async_poll_single()
 
 
 class CloudApiMocker(contextlib.AbstractContextManager):

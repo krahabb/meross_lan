@@ -41,13 +41,18 @@ class MLNumber(me.MLNumericEntity, number.NumberEntity):
     DeviceClass = number.NumberDeviceClass
 
     # HA core compatibility layer for NumberDeviceClass.DURATION (HA core 2023.7 misses that)
-    DEVICE_CLASS_DURATION = getattr(number.NumberDeviceClass, "DURATION", "duration")
+    DEVICE_CLASS_DURATION = getattr(DeviceClass, "DURATION", "duration")
+    # HA core compatibility layer for NumberDeviceClass.TEMPERATURE_DELTA (HA core 2025.10 misses that)
+    DEVICE_CLASS_TEMPERATURE_DELTA = getattr(
+        DeviceClass, "TEMPERATURE_DELTA", DeviceClass.TEMPERATURE
+    )
 
     DEVICECLASS_TO_UNIT_MAP = {
         None: None,
         DEVICE_CLASS_DURATION: me.MLEntity.hac.UnitOfTime.SECONDS,
         DeviceClass.HUMIDITY: me.MLEntity.hac.PERCENTAGE,
         DeviceClass.TEMPERATURE: me.MLEntity.hac.UnitOfTemperature.CELSIUS,
+        DEVICE_CLASS_TEMPERATURE_DELTA: me.MLEntity.hac.UnitOfTemperature.CELSIUS,
     }
 
     # HA core entity attributes:

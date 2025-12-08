@@ -13,9 +13,8 @@ from .protocol import (
     compute_wifix_password,
     const as mc,
     namespaces as mn,
-    types as mt,
 )
-from .protocol.message import MerossRequest, MerossResponse, check_message_strict
+from .protocol.message import MerossRequest, MerossResponse
 
 if TYPE_CHECKING:
     from typing import (
@@ -34,6 +33,7 @@ if TYPE_CHECKING:
 
     from .protocol.namespaces import Namespace
     from .protocol.types import JsonDict, JsonList, MerossRequestType
+    from .protocol.types.config import WifiList
 
     class LoggerT(Protocol):
         """Protocol definition for logger-like instances used in the library."""
@@ -136,6 +136,21 @@ def delete_element_by_key(payload: "JsonList", key: str, value):
                 payload.remove(p)
         except KeyError:
             pass
+
+
+def merge_dicts(dict1: dict, dict2: dict):
+    """
+    Recursively merge two dictionaries.
+    """
+    result = dict1.copy()
+    for key, value in dict2.items():
+        if (type(value) is dict) and (key in result):
+            result_value = result[key]
+            if type(result_value) is dict:
+                result[key] = merge_dicts(result_value, value)
+                continue
+        result[key] = value
+    return result
 
 
 def update_dict_strict(dst_dict: "JsonDict", src_dict: "JsonDict"):
@@ -494,9 +509,7 @@ class _BaseClient:
         self.trigger_src = kwargs.pop("trigger_src", self.__class__.__name__)
         self.timeout = kwargs.pop("timeout", self.TIMEOUT_DEFAULT)
         self.descriptor = kwargs.pop("descriptor", None)
-
         self.logger = kwargs.pop("logger", None)
-
         self.loop = kwargs.pop("loop", asyncio.get_running_loop())
 
     async def async_request_raw(
@@ -525,12 +538,12 @@ class _BaseClient:
 
     async def async_identify(self, *args, **kwargs: "Unpack[RequestArgs]"):
         self.descriptor = MerossDeviceDescriptor(
-            check_message_strict(
-                await self.async_request_ns(mn.Appliance_System_All, **kwargs)
-            )[mc.KEY_PAYLOAD]
-            | check_message_strict(
+            (await self.async_request_ns(mn.Appliance_System_All, **kwargs)).check()[
+                mc.KEY_PAYLOAD
+            ]
+            | (
                 await self.async_request_ns(mn.Appliance_System_Ability, **kwargs)
-            )[mc.KEY_PAYLOAD]
+            ).check()[mc.KEY_PAYLOAD]
         )
         return self.descriptor
 
@@ -545,7 +558,7 @@ class _BaseClient:
         sort_key must be a valid dict key available in the native payload
         (see protocol.types.config.Wifi)."""
 
-        p_wifilist: "mt.config.WifiList" = await self.async_request_ns_payload(
+        p_wifilist: "WifiList" = await self.async_request_ns_payload(
             mn.Appliance_Config_WifiList
         )
         if sort_key:

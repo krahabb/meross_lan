@@ -21,16 +21,13 @@ from custom_components.meross_lan.merossclient.mqttclient import MerossMQTTDevic
 from custom_components.meross_lan.merossclient.protocol import (
     AESCipher,
     JSONDecodeError,
-    compute_message_encryption_key,
     const as mc,
-    json_dumps,
     json_loads,
     namespaces as mn,
 )
 from custom_components.meross_lan.merossclient.protocol.message import (
     MerossMessage,
     MerossRequest,
-    build_message,
     get_replykey,
 )
 
@@ -119,17 +116,7 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
                     columns = row
                     row = next(f).split("\t")
                     # first data row contains an 'HEADER' i.e. 'diagnostic like' dict
-                    _header: "mlc.TracingHeaderType" = json_loads(row[-1])
-                    version = _header["version"]
-                    config_payload = _header["config"]["payload"]
-                    ns = mn.Appliance_System_All
-                    self.namespaces[ns.name] = {ns.key: config_payload[ns.key]}
-                    ns = mn.Appliance_System_Ability
-                    self.namespaces[ns.name] = {ns.key: config_payload[ns.key]}
-                    for namespace, payload in _header["state"][
-                        "namespace_pushes"
-                    ].items():
-                        self.namespaces[namespace] = payload
+                    version = self._import_config(json_loads(row[-1]))
 
         for line in f:
             row = line.split("\t")
@@ -147,37 +134,14 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         try:
             _data: dict = json_loads(f.read())["data"]
 
-            try:
-                version = _data["version"]
-            except KeyError:
-                version = 1
+            version = self._import_config(_data)
 
-            match version:
-                case 2:
-                    config_payload = _data["config"]["payload"]
-                    pushes = _data["state"]["namespace_pushes"]
-                    rows = iter(_data["trace"])
-                    columns = next(rows)
-                case 1:
-                    config_payload = _data["payload"]
-                    try:
-                        pushes = _data["device"]["namespace_pushes"]
-                    except KeyError:
-                        # earlier versions missing pushes
-                        pushes = {}
-                    rows = iter(_data["trace"])
-                    columns = next(rows)
-                    # mandatory All and Ability stored in the first 2 rows
-                    # now loaded from _config before parsing trace rows
-                    next(rows)
-                    next(rows)
+            rows = iter(_data["trace"])
+            columns = next(rows)
 
-            ns = mn.Appliance_System_All
-            self.namespaces[ns.name] = {ns.key: config_payload[ns.key]}
-            ns = mn.Appliance_System_Ability
-            self.namespaces[ns.name] = {ns.key: config_payload[ns.key]}
-            for namespace, payload in pushes.items():
-                self.namespaces[namespace] = payload
+            if version == 1:
+                next(rows)  # skip All
+                next(rows)  # skip Ability
 
             for row in rows:
                 if row[2] == "auto":
@@ -188,6 +152,41 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
             raise
 
         return
+
+    def _import_config(self, header: "mlc.TracingHeaderType | dict"):
+        try:
+            version = header["version"]
+        except KeyError:
+            version = 1
+
+        match version:
+            case 3:
+                config_payload = header["config"]["payload"]
+                pushes = {
+                    namespace: handler_state["lastpush"]
+                    for namespace, handler_state in header["state"][
+                        "namespace_handlers"
+                    ].items()
+                    if handler_state["lastpush"]
+                }
+            case 2:
+                config_payload = header["config"]["payload"]
+                pushes = header["state"]["namespace_pushes"]
+            case 1:
+                config_payload = header["payload"]  # type: ignore
+                try:
+                    pushes = header["device"]["namespace_pushes"]  # type: ignore
+                except KeyError:
+                    # earlier versions missing pushes
+                    pushes = {}
+
+        for ns in (mn.Appliance_System_All, mn.Appliance_System_Ability):
+            self.namespaces[ns.name] = {ns.key: config_payload[ns.key]}
+
+        for namespace, payload in pushes.items():
+            self.namespaces[namespace] = payload
+
+        return version
 
     def _import_tracerow(
         self,
@@ -342,13 +341,14 @@ class MerossEmulator:
         self._tzinfo: ZoneInfo | None = None
         self._cipher = (
             AESCipher(
-                compute_message_encryption_key(
+                MerossMessage.compute_encryption_key(
                     descriptor.uuid, key, descriptor.macAddress
                 )
             )
             if mn.Appliance_Encrypt_ECDHE.name in descriptor.ability
             else None
         )
+
         self.update_epoch()
 
     async def async_startup(self, *, enable_scheduler: bool, enable_mqtt: bool):
@@ -438,42 +438,37 @@ class MerossEmulator:
             self.update_epoch()
 
             if get_replykey(request_header, self.key) is not self.key:
-                response = build_message(
+                response = MerossMessage.build(
                     request_header[mc.KEY_NAMESPACE],
                     mc.METHOD_ERROR,
                     {mc.KEY_ERROR: {mc.KEY_CODE: mc.ERROR_INVALIDKEY}},
-                    request_header[mc.KEY_MESSAGEID],
                     self.key,
-                    self.topic_response,
+                    messageid=request_header[mc.KEY_MESSAGEID],
+                    from_=self.topic_response,
                 )
             else:
                 response = self._handle_message(request_header, request_payload)
 
         if response:
-            response = json_dumps(response)
-            if len(response) > self.MAXIMUM_RESPONSE_SIZE:
+            response_json = response.json
+            if len(response_json) > self.MAXIMUM_RESPONSE_SIZE:
                 # Applying 'overflow' if the response text is too big,
                 # thus emulating the same behavior of hw devices.
                 # These have a ranging 'maximum response size' based on my experience:
                 # - msl120:  2k
                 # - msh300:  4k
                 # - mss310:  2.9k
-                response = response[: self.MAXIMUM_RESPONSE_SIZE]
-            self._log_message("TX", response)
+                response_json = response_json[: self.MAXIMUM_RESPONSE_SIZE]
+            self._log_message("TX", response_json)
             if cipher:
-                response_bytes = response.encode("utf-8")
-                response_bytes += bytes(16 - (len(response_bytes) % 16))
-                encryptor = cipher.encryptor()
-                response = b64encode(
-                    encryptor.update(response_bytes) + encryptor.finalize()
-                ).decode("utf-8")
-            return response
+                return cipher.encript_text(response_json)
+            return response_json
 
         return None
 
     def _handle_message(
         self, header: "MerossHeaderType", payload: "MerossPayloadType", /
-    ):
+    ) -> "MerossMessage | None":
         namespace = header[mc.KEY_NAMESPACE]
         method = header[mc.KEY_METHOD]
         try:
@@ -512,13 +507,13 @@ class MerossEmulator:
             }
 
         if response_method:
-            response = build_message(
+            response = MerossMessage.build(
                 header[mc.KEY_NAMESPACE],
                 response_method,
                 response_payload,
-                header[mc.KEY_MESSAGEID],
                 self.key,
-                self.topic_response,
+                messageid=header[mc.KEY_MESSAGEID],
+                from_=self.topic_response,
             )
             return response
 

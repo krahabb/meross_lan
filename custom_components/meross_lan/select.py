@@ -2,7 +2,7 @@ from time import time
 from typing import TYPE_CHECKING
 
 from homeassistant import const as hac
-from homeassistant.components import select
+from homeassistant.components import select, sensor
 from homeassistant.core import CoreState, callback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util.unit_conversion import TemperatureConverter
@@ -283,13 +283,13 @@ class MtsTrackedSensor(me.MEAlwaysAvailableMixin, MLSelect):
 
     @callback
     def _setup_tracking_entities(self, *_):
-        self.options = [hac.STATE_OFF]
-        component: "EntityComponent[SensorEntity]" = self.hass.data["sensor"]
-        for entity in component.entities:
-            um = entity.native_unit_of_measurement
-            if um in (hac.UnitOfTemperature.CELSIUS, hac.UnitOfTemperature.FAHRENHEIT):
-                self.options.append(entity.entity_id)
-
+        _units = (hac.UnitOfTemperature.CELSIUS, hac.UnitOfTemperature.FAHRENHEIT)
+        self.options = [
+            entity.entity_id
+            for entity in self.hass.data[sensor.DATA_COMPONENT].entities
+            if getattr(entity, "native_unit_of_measurement", None) in _units
+        ]
+        self.options.append(hac.STATE_OFF)
         if self.current_option not in self.options:
             # this might happen when restoring a not anymore valid entity
             self.current_option = hac.STATE_OFF

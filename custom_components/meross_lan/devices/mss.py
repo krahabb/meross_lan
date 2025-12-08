@@ -38,6 +38,7 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
     if TYPE_CHECKING:
         manager: Device
 
+        ENTITY_KEY: Final
         SENSOR_DEFS: ClassVar[
             dict[
                 str,
@@ -56,6 +57,7 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
 
         sensor_consumptionx: "ConsumptionXSensor | None"
 
+    ENTITY_KEY = "energy_estimate"
     SENSOR_DEFS = {
         # key: (not-optional, DeviceClass, StateClass, suggested_display_precision, device_scale)
         mc.KEY_CURRENT: (
@@ -96,12 +98,12 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
         self._electricity_lastepoch = 0.0
         self._reset_unsub = None
         # depending on init order we might not have this ready now...
-        self.sensor_consumptionx = manager.entities.get(mlc.CONSUMPTIONX_SENSOR_KEY)  # type: ignore
+        self.sensor_consumptionx = manager.entities.get(ConsumptionXSensor.ENTITY_KEY)  # type: ignore
         # here entitykey is the 'legacy' EnergyEstimateSensor one to mantain compatibility
         super().__init__(
             manager,
             channel,
-            mlc.ELECTRICITY_SENSOR_KEY,
+            ElectricitySensor.ENTITY_KEY,
             self.DeviceClass.ENERGY,
             device_value=0,
         )
@@ -306,7 +308,7 @@ class ElectricityXNamespaceHandler(NamespaceHandler):
             mn.Appliance_Control_ElectricityX,
         )
         # Current approach is to build a sensor for any appearing channel index
-        # in digest. This in turns will not directly build the EM06 sensors
+        # in digest. This in turn will not directly build the EM06 sensors
         # but they should come when polling.
         self.register_entity_class(ElectricityXSensor, build_from_digest=True)
 
@@ -316,6 +318,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
     if TYPE_CHECKING:
         manager: "Device"
 
+        ENTITY_KEY: Final
         ATTR_OFFSET: Final
         ATTR_RESET_TS: Final
 
@@ -325,6 +328,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         _consumption_last_value: int | None
         _consumption_last_time: int | None
 
+    ENTITY_KEY = "energy"
     ATTR_OFFSET = "offset"
     ATTR_RESET_TS = "reset_ts"
 
@@ -355,12 +359,12 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         self._today_midnight_epoch = 0  # 12:00 am today
         self._tomorrow_midnight_epoch = 0  # 12:00 am tomorrow
         # depending on init order we might not have this ready now...
-        sensor_energy_estimate: ElectricitySensor | None = manager.entities.get(mlc.ELECTRICITY_SENSOR_KEY)  # type: ignore
+        sensor_energy_estimate: ElectricitySensor | None = manager.entities.get(ElectricitySensor.ENTITY_KEY)  # type: ignore
         if sensor_energy_estimate:
             sensor_energy_estimate.sensor_consumptionx = self
         self.extra_state_attributes = {}
         super().__init__(
-            manager, None, mlc.CONSUMPTIONX_SENSOR_KEY, self.DeviceClass.ENERGY
+            manager, None, ConsumptionXSensor.ENTITY_KEY, self.DeviceClass.ENERGY
         )
         EntityNamespaceHandler(self).polling_response_size_adj(30)
 

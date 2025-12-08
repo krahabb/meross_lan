@@ -154,7 +154,7 @@ class RollerShutterMixin(MerossEmulator if TYPE_CHECKING else object):
         ) >= versiontuple("6.6.6")
 
     def shutdown(self):
-        for transition in set(self._transitions.values()):
+        for transition in tuple(self._transitions.values()):
             transition.shutdown()
         super().shutdown()
 

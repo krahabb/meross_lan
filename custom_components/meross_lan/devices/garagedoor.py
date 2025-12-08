@@ -53,9 +53,7 @@ class MLGarageTimeoutBinarySensor(me.MEPartialAvailableMixin, MLBinarySensor):
     def update_ok(self, was_closing):
         extra_state_attributes = self.extra_state_attributes
         if extra_state_attributes.get(self.ATTR_TRANSITION_TARGET) == (
-            MLCover.ENTITY_COMPONENT.STATE_CLOSED
-            if was_closing
-            else MLCover.ENTITY_COMPONENT.STATE_OPEN
+            MLCover.CoverState.CLOSED if was_closing else MLCover.CoverState.OPEN
         ):
             extra_state_attributes.pop(self.ATTR_TRANSITION_TIMEOUT, None)
             extra_state_attributes.pop(self.ATTR_TRANSITION_TARGET, None)
@@ -63,9 +61,7 @@ class MLGarageTimeoutBinarySensor(me.MEPartialAvailableMixin, MLBinarySensor):
 
     def update_timeout(self, was_closing):
         self.extra_state_attributes[self.ATTR_TRANSITION_TARGET] = (
-            MLCover.ENTITY_COMPONENT.STATE_CLOSED
-            if was_closing
-            else MLCover.ENTITY_COMPONENT.STATE_OPEN
+            MLCover.CoverState.CLOSED if was_closing else MLCover.CoverState.OPEN
         )
         self.extra_state_attributes[self.ATTR_TRANSITION_TIMEOUT] = now().isoformat()
         self.is_on = True
@@ -631,7 +627,9 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
             handler=self._handle_Appliance_GarageDoor_Config,
         )
 
-    def _handle_Appliance_GarageDoor_Config(self, header, payload: "mt.MerossPayloadType"):
+    def _handle_Appliance_GarageDoor_Config(
+        self, header, payload: "mt.MerossPayloadType"
+    ):
         # {"config": {"signalDuration": 1000, "buzzerEnable": 0, "doorOpenDuration": 30000, "doorCloseDuration": 30000}}
         payload = payload[mc.KEY_CONFIG]
         if mc.KEY_SIGNALDURATION in payload:
@@ -724,20 +722,23 @@ class GarageDoorStateNamespaceHandler(NamespaceHandler):
             device,
             mn.Appliance_GarageDoor_State,
         )
-
-    def polling_request_configure(self, request_payload_type: mn.PayloadType | None):
-        # TODO: move this device type 'patching' to some 'smart' Namespace grammar
-        descriptor = self.device.descriptor
+        descriptor = device.descriptor
         if descriptor.type.startswith(mc.TYPE_MSG200) and (
-            versiontuple(descriptor.firmwareVersion) < (4, 0, 0)
+            versiontuple(descriptor.firmwareVersion) <= (4, 2, 1)
         ):
             # trying to patch lacking of state polling (#538)
             # It's not sure querying with the list of channels works.
             # Also, in fw 4.0.0 the default polling with empty dict correctly returns
-            # the list of channels so this should not be needed
-            request_payload_type = request_payload_type or mn.PayloadType.LIST_C
-
-        NamespaceHandler.polling_request_configure(self, request_payload_type)
+            # the list of channels so this should not be needed.
+            # Here the issue arises when we optimize NS_ALL polling by issuing single digest
+            # namespaces requests: it looks like we're unable to get in a single query the full
+            # state of all channels, at least on these old firmwares.
+            # So we disable NS_ALL 'optimization' and we go straigth to querying for that every time.
+            # As we know it now, this namespace accepts this queries:
+            # - single channel in a DICT_C
+            # - all channels in a DICT (only confirmed in 4.0.0+ fw)
+            # TODO: we might check if DICT_C with {"channel": -1 or 65535} works too...(like refoss queries)
+            device.namespace_handlers[mn.Appliance_System_All.name].polling_period = 0
 
 
 def digest_init_garagedoor(device: "Device", digest: list) -> "DigestInitReturnType":

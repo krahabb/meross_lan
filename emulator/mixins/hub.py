@@ -84,8 +84,8 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
                 mn_h.Appliance_Hub_Battery,
                 mn_h.Appliance_Hub_Online,
                 mn_h.Appliance_Hub_ToggleX,
-                mn_h.Hub_Control_Sensor_HistoryX,
-                mn_h.Hub_Control_Sensor_LatestX,
+                mn_h.Appliance_Control_Sensor_HistoryX,
+                mn_h.Appliance_Control_Sensor_LatestX,
             )
             if ns.name in ability
         }

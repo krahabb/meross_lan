@@ -1,13 +1,13 @@
 import abc
+import asyncio
 import bisect
 from datetime import UTC, tzinfo
 from time import time
 from typing import TYPE_CHECKING
-from uuid import uuid4
+import zoneinfo
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util, slugify
 
@@ -30,24 +30,15 @@ from ..const import (
 from ..helpers.obfuscate import obfuscated_dict
 from ..merossclient import HostAddress, get_active_broker, is_device_online
 from ..merossclient.httpclient import MerossHttpClient, TerminatedException
-from ..merossclient.protocol import (
-    JSONDecodeError,
-    compute_message_encryption_key,
-    compute_message_signature,
-    json_dumps,
-)
-from ..merossclient.protocol.message import (
-    MerossRequest,
-    MerossResponse,
-    get_message_uuid,
-)
+from ..merossclient.protocol import JSONDecodeError, json_dumps
+from ..merossclient.protocol.message import MerossRequest, MerossResponse
 from ..sensor import ProtocolSensor
 from ..update import MLUpdate
 from .manager import ConfigEntryManager, EntityManager
 from .namespaces import NamespaceHandler, mc, mn
 
 if TYPE_CHECKING:
-    from asyncio import Future, TimerHandle
+    from asyncio import Future, Task, TimerHandle
     from types import CoroutineType
     from typing import (
         Any,
@@ -255,7 +246,6 @@ class Device(BaseDevice, ConfigEntryManager):
         or simply crashes/hangs the device."""
 
         descriptor: Final[MerossDeviceDescriptor]
-        is_refoss: Final[bool]
         tz: tzinfo
 
         # these are set from ConfigEntry
@@ -283,15 +273,16 @@ class Device(BaseDevice, ConfigEntryManager):
         _mqtt_lastresponse: float
         _profile: MQTTProfile | None
         namespace_handlers: dict[str, NamespaceHandler]
-        namespace_pushes: dict[str, Mapping]
         digest_handlers: dict[str, DigestParseFunc]
         digest_pollers: set[NamespaceHandler]
         _lazypoll_requests: list[NamespaceHandler]
         _polling_epoch: float
-        _polling_callback_unsub: TimerHandle | None
-        _polling_callback_shutdown: Future | None
+        _polling_unsub: TimerHandle | None
+        _polling_task: Task | None
         _queued_cloudpoll_requests: int
         multiple_max: int
+        _multiple_requests: list[MerossRequestType]
+        _multiple_response_size: int
         _timezone_next_check: float
         _trace_ability_callback_unsub: TimerHandle | None
         _diagnostics_build: bool
@@ -415,7 +406,6 @@ class Device(BaseDevice, ConfigEntryManager):
 
     __slots__ = (
         "descriptor",
-        "is_refoss",
         "tz",
         "polling_period",
         "_polling_delay",
@@ -423,10 +413,8 @@ class Device(BaseDevice, ConfigEntryManager):
         "pref_protocol",
         "curr_protocol",
         "host",
-        "needsave",
         "_async_entry_update_unsub",
         "device_debug",
-        "device_info",
         "device_timestamp",
         "device_timedelta",
         "device_timedelta_log_epoch",
@@ -450,13 +438,12 @@ class Device(BaseDevice, ConfigEntryManager):
         "_mqtt_lastresponse",
         "_profile",
         "namespace_handlers",
-        "namespace_pushes",
         "digest_handlers",
         "digest_pollers",
         "_lazypoll_requests",
         "_polling_epoch",
-        "_polling_callback_unsub",
-        "_polling_callback_shutdown",
+        "_polling_unsub",
+        "_polling_task",
         "_queued_cloudpoll_requests",
         "multiple_max",
         "_multiple_requests",
@@ -477,13 +464,10 @@ class Device(BaseDevice, ConfigEntryManager):
         descriptor: "MerossDeviceDescriptor",
     ):
         self.descriptor = descriptor
-        self.is_refoss = descriptor.is_refoss
         self.tz = UTC
-        self.needsave = False
         self._async_entry_update_unsub = None
         self.curr_protocol = CONF_PROTOCOL_AUTO
         self.device_debug = None
-        self.device_info = None
         self.device_timestamp = 0
         self.device_timedelta = 0
         self.device_timedelta_log_epoch = 0
@@ -495,6 +479,8 @@ class Device(BaseDevice, ConfigEntryManager):
             )
             * 800
         )
+        if self.device_response_size_max < self.device_response_size_min:
+            self.device_response_size_max = self.device_response_size_min
         self.lastrequest = 0.0
         self.lastresponse = 0.0
         self._topic_response = mc.HEADER_FROM_DEFAULT
@@ -512,16 +498,17 @@ class Device(BaseDevice, ConfigEntryManager):
         self._mqtt_lastresponse = 0
         self._profile = None
         self.namespace_handlers = {}
-        self.namespace_pushes = {}
         self.digest_handlers = {}
         self.digest_pollers = set()
         self._lazypoll_requests = []
         NamespaceHandler(self, mn.Appliance_System_All)
         self._polling_epoch = 0.0  # when 0 we're not in the polling callback loop
-        self._polling_callback_unsub = None
-        self._polling_callback_shutdown = None
+        self._polling_unsub = None
+        self._polling_task = None
         self._queued_cloudpoll_requests = 0
         self.multiple_max = 0
+        self._multiple_requests = []
+        self._multiple_response_size = PARAM_HEADER_SIZE
         self._timezone_next_check = (
             0
             if mn.Appliance_System_Time.name in descriptor.ability
@@ -564,11 +551,10 @@ class Device(BaseDevice, ConfigEntryManager):
         )
 
     async def async_init(self):
-        api = self.api
-        descriptor = self.descriptor
 
         await self._async_update_config()
 
+        descriptor = self.descriptor
         if tzname := descriptor.timezone:
             # self.tz defaults to UTC on init
             with self.exception_warning(
@@ -576,7 +562,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 tzname,
                 timeout=14400,
             ):
-                self.tz = await api.async_load_zoneinfo(tzname)
+                self.tz = await self.api.async_load_zoneinfo(tzname)
 
         for namespace, ns_init_func in Device.NAMESPACE_INIT.items():
             if namespace not in descriptor.ability:
@@ -587,7 +573,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 except TypeError:
                     try:
                         ns_init_func = getattr(
-                            await api.async_import_module(ns_init_func[0]),
+                            await self.api.async_import_module(ns_init_func[0]),
                             ns_init_func[1],
                         )
                     except Exception as exception:
@@ -625,7 +611,7 @@ class Device(BaseDevice, ConfigEntryManager):
                             key_digest, f".devices.{key_slug}"
                         )
                         digest_init_func: "DigestInitFunc" = getattr(
-                            await api.async_import_module(_module_path),
+                            await self.api.async_import_module(_module_path),
                             f"digest_init_{key_slug}",
                         )
                     except Exception as exception:
@@ -653,15 +639,16 @@ class Device(BaseDevice, ConfigEntryManager):
         # here we'll register mqtt listening (in case) and start polling after
         # the states have been eventually restored (some entities need this)
         self._check_protocol_ext()
-        self._polling_callback_unsub = self.schedule_async_callback(
-            0, self._async_polling_callback, None
-        )
+        self._polling_unsub = self.schedule_callback(0, self._poll, None)
 
     # miscellaneous internals to prepare/refresh internal config
     async def _async_update_config(self):
         """
         common properties caches, read from ConfigEntry on __init__ or when a configentry updates
         """
+        if self._polling_task:
+            await self._polling_task
+
         config = self.config
         # map CONF_PROTOCOL value to a const symbol in order to use 'is' in Device code checks
         _protocols = [
@@ -682,10 +669,7 @@ class Device(BaseDevice, ConfigEntryManager):
             self.polling_period = mlc.CONF_POLLING_PERIOD_MIN
         self._polling_delay = self.polling_period
 
-        if config.get(mlc.CONF_DISABLE_MULTIPLE):
-            self.disable_multiple()
-        else:
-            self.enable_multiple()
+        self.enable_multiple(not config.get(mlc.CONF_DISABLE_MULTIPLE))
 
         self._update_host()
 
@@ -705,30 +689,30 @@ class Device(BaseDevice, ConfigEntryManager):
             host = self.descriptor.innerIp
             if host == "0.0.0.0":  # unbinded device
                 host = None
+
         self.host = host
         if host and (self.conf_protocol in (CONF_PROTOCOL_AUTO, CONF_PROTOCOL_HTTP)):
             # we need http: setup/update
-            if _http := self._http:
-                _http.host = host
-                _http.key = self.key
+            if self._http:
+                self._http.host = host
+                self._http.key = self.key
             else:
-                self._http = _http = MerossHttpClient(
+                self._http = MerossHttpClient(
                     host,
                     key=self.key,
                     from_=mlc.DOMAIN,
                     trigger_src=self.__class__.__name__,
                     loop=self.hass.loop,
                 )
-            descriptor = self.descriptor
-            _http.set_encryption(
-                compute_message_encryption_key(
-                    descriptor.uuid, self.key, descriptor.macAddress
+
+            if mn.Appliance_Encrypt_ECDHE.name in self.descriptor.ability:
+                self._http.enable_encryption(
+                    self.id, self.key, self.descriptor.macAddress
                 )
-                if mn.Appliance_Encrypt_ECDHE.name in descriptor.ability
-                else None
-            )
-        elif _http := self._http:
-            _http.terminate()
+            else:
+                self._http.disable_encryption()
+
+        elif self._http:
             self._http = self._http_active = None
             self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_HTTP)
 
@@ -846,28 +830,29 @@ class Device(BaseDevice, ConfigEntryManager):
         super().trace_close(exception, error_context)
 
     async def _async_trace_ability(self, abilities_iterator: "Iterator[str]"):
+        self._trace_ability_callback_unsub = None
         try:
             # avoid interleave tracing ability with polling loop
             # also, since we could trigger this at early stages
             # in device init, this check will prevent iterating
             # at least until the device fully initialize through
             # self.start()
-            if self.online and not self._polling_epoch:
+            if self.online and not self._polling_task:
                 while (
                     ability := next(abilities_iterator)
                 ) in self.TRACE_ABILITY_EXCLUDE:
                     continue
                 self.log(self.DEBUG, "Tracing %s ability", ability)
                 await self.get_handler_by_name(ability).async_trace(self.async_request)
-
         except StopIteration:
-            self._trace_ability_callback_unsub = None
             self.log(self.DEBUG, "Tracing abilities end")
             return
-        except Exception as exception:
-            self.log_exception(self.WARNING, exception, "_async_trace_ability")
+        except asyncio.CancelledError as e:
+            self.log_exception(self.DEBUG, e, "_async_trace_ability")
+            raise
+        except Exception as e:
+            self.log_exception(self.WARNING, e, "_async_trace_ability")
 
-        self._trace_ability_callback_unsub = None
         if not self.is_tracing:
             return
 
@@ -949,7 +934,7 @@ class Device(BaseDevice, ConfigEntryManager):
         if self._http_active:
             # shortcut with fast HTTP querying
             self._trace_data = trace_data = [mlc.CONF_TRACE_COLUMNS]
-            await self._async_poll()
+            await self.async_poll_full()
             try:
                 abilities = iter(self.descriptor.ability)
                 while self.online and self.is_tracing:
@@ -975,6 +960,8 @@ class Device(BaseDevice, ConfigEntryManager):
 
     def loggable_diagnostic_state(self):
         """Return a 'loggable' version of the entry state (for diagnostic/logging purposes)"""
+        profile = self._profile
+        device_info = profile.get_device_info(self.id) if profile else None
         return {
             "class": type(self).__name__,
             "conf_protocol": self.conf_protocol,
@@ -988,9 +975,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 "bluetooth_active": bool(self._bluetooth_active),
             },
             "MQTT": {
-                "cloud_profile": (
-                    self._profile.is_cloud_profile if self._profile else None
-                ),
+                "cloud_profile": (profile.is_cloud_profile if profile else None),
                 "locally_active": bool(self.mqtt_locallyactive),
                 "mqtt_connection": bool(self._mqtt_connection),
                 "mqtt_connected": bool(self._mqtt_connected),
@@ -1005,6 +990,11 @@ class Device(BaseDevice, ConfigEntryManager):
                 handler.ns.name: {
                     "lastrequest": handler.lastrequest,
                     "lastresponse": handler.lastresponse,
+                    "lastpush": (
+                        obfuscated_dict(handler.lastpush)
+                        if (handler.lastpush and self.obfuscate)
+                        else handler.lastpush
+                    ),
                     "polling_epoch_next": handler.polling_epoch_next,
                     "polling_strategy": (
                         handler.polling_strategy.__name__
@@ -1014,15 +1004,10 @@ class Device(BaseDevice, ConfigEntryManager):
                 }
                 for handler in self.namespace_handlers.values()
             },
-            "namespace_pushes": (
-                obfuscated_dict(self.namespace_pushes)
-                if self.obfuscate
-                else self.namespace_pushes
-            ),
             "device_info": (
-                obfuscated_dict(self.device_info)
-                if self.obfuscate and self.device_info
-                else self.device_info
+                obfuscated_dict(device_info)
+                if self.obfuscate and device_info
+                else device_info
             ),
         }
 
@@ -1043,12 +1028,13 @@ class Device(BaseDevice, ConfigEntryManager):
             self._profile.unlink(self)
         if self._bluetooth:
             self._bluetooth.detach()
+        """REMOVE
         if self._http:
             # to be called before stopping polling so that it breaks http timeouts
             await self._http.async_terminate()
             self._http = None
-
-        await self._async_polling_stop()
+        """
+        await self.async_poll_stop()
         await super().async_shutdown()
         self.namespace_handlers = None  # type: ignore
         self.digest_handlers = None  # type: ignore
@@ -1278,7 +1264,6 @@ class Device(BaseDevice, ConfigEntryManager):
         execution which independently queries the device itself.
         """
         self._async_entry_update_unsub = None
-        self.needsave = False
 
         with self.exception_warning("_async_entry_update"):
             data = dict(self.config_entry.data)
@@ -1345,18 +1330,16 @@ class Device(BaseDevice, ConfigEntryManager):
         # else go with whatever transport: the device will reset it's configuration
         return await self.async_request(*mn.Appliance_Control_Unbind.request_default)
 
-    def disable_multiple(self):
-        self.multiple_max = 0
-        self._multiple_requests = None
-        self._multiple_response_size = 0
-
-    def enable_multiple(self):
-        if not self.multiple_max:
-            self.multiple_max: int = self.descriptor.ability.get(
-                mn.Appliance_Control_Multiple.name, {}
-            ).get("maxCmdNum", 0)
-            self._multiple_requests = []
-            self._multiple_response_size = PARAM_HEADER_SIZE
+    def enable_multiple(self, enable: bool, /):
+        self.multiple_max = (
+            self.descriptor.ability.get(mn.Appliance_Control_Multiple.name, {}).get(
+                "maxCmdNum", 0
+            )
+            if enable
+            else 0
+        )
+        self._multiple_requests.clear()
+        self._multiple_response_size = PARAM_HEADER_SIZE
 
     async def async_multiple_requests_ack(
         self, requests: "Collection[MerossRequestType]", auto_handle: bool = True
@@ -1377,7 +1360,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 mn.Appliance_Control_Multiple.key: [
                     {
                         mc.KEY_HEADER: {
-                            mc.KEY_MESSAGEID: uuid4().hex,
+                            mc.KEY_MESSAGEID: MerossRequest.generate_id(),
                             mc.KEY_METHOD: request[1],
                             mc.KEY_NAMESPACE: request[0],
                         },
@@ -1398,7 +1381,6 @@ class Device(BaseDevice, ConfigEntryManager):
             return multiple_response[mc.KEY_PAYLOAD][mc.KEY_MULTIPLE]
 
     async def _async_multiple_requests_flush(self):
-        assert self._multiple_requests
         multiple_requests = self._multiple_requests
         multiple_response_size = self._multiple_response_size
         self._multiple_requests = []
@@ -1442,7 +1424,7 @@ class Device(BaseDevice, ConfigEntryManager):
                         mn.Appliance_Control_Multiple.key: [
                             {
                                 mc.KEY_HEADER: {
-                                    mc.KEY_MESSAGEID: uuid4().hex,
+                                    mc.KEY_MESSAGEID: MerossRequest.generate_id(),
                                     mc.KEY_METHOD: request[1],
                                     mc.KEY_NAMESPACE: request[0],
                                 },
@@ -1710,7 +1692,7 @@ class Device(BaseDevice, ConfigEntryManager):
         # and this might (unluckily) be another Meross with the same key
         # so it could rightly respond here. This shouldnt happen over MQTT
         # since the device.id is being taken care of by the routing mechanism
-        if self._check_uuid_mismatch(get_message_uuid(response[mc.KEY_HEADER])):
+        if self._check_uuid_mismatch(response.get_uuid()):
             return None
 
         self._http_lastresponse = epoch
@@ -1740,7 +1722,7 @@ class Device(BaseDevice, ConfigEntryManager):
     async def async_request_poll(self, handler: NamespaceHandler, /):
         handler.lastrequest = self._polling_epoch
         handler.polling_epoch_next = handler.lastrequest + handler.polling_period
-        if (self._multiple_requests is None) or (
+        if (not self.multiple_max) or (
             handler.polling_response_size >= self.device_response_size_max
         ):
             # multiple requests are disabled
@@ -1788,84 +1770,17 @@ class Device(BaseDevice, ConfigEntryManager):
         await self.async_request_poll(handler)
         return True
 
-    def request_lazypoll(self, handler: NamespaceHandler, /):
-        """Insert into the lazypoll_requests ordering by least recently polled"""
+    def _poll(self, namespace: str | None = None):
+        self._polling_unsub = None
+        self._polling_task = task = self.async_create_task(
+            self._async_poll(namespace),
+            f"._async_poll({namespace})",
+            False,
+        )
+        return task
 
-        def _lazypoll_key(_handler: NamespaceHandler, /):
-            return _handler.lastrequest - self._polling_epoch
-
-        bisect.insort(self._lazypoll_requests, handler, key=_lazypoll_key)
-
-    async def _async_request_updates(self, namespace: str | None, /):
-        """
-        This is a 'versatile' polling strategy called on timer
-        or when the device comes online (passing in the received namespace)
-        'namespace' is 'None' when we're handling a scheduled polling when
-        the device is online. When 'namespace' is not 'None' it represents the event
-        of the device coming online following a succesful received message. This is
-        likely to be 'NS_ALL', since it's the only message we request when offline.
-        If we're connected to an MQTT broker anyway it could be any 'PUSH' message.
-        We'll use _queued_smartpoll_requests to track how many polls went through
-        over MQTT for this cycle in order to only send 1 for each if we're
-        binded to a cloud MQTT broker (in order to reduce bursts).
-        If a poll request is discarded because of this, it should go through
-        on the next polling cycle. This will 'spread' smart requests over
-        subsequent polls
-        """
-        self._lazypoll_requests.clear()
-        self._queued_cloudpoll_requests = 0
-        # self.namespace_handlers could change at any time due to async
-        # message parsing (handlers might be dynamically created by then)
-        for handler in [
-            handler
-            for handler in self.namespace_handlers.values()
-            if (handler.ns.name != namespace)
-        ]:
-            if handler.polling_strategy:
-                await handler.polling_strategy(handler)
-                if not self.online or self._polling_callback_shutdown:
-                    break  # do not return: do the flush first!
-
-        # needed even if offline: it takes care of resetting the ns_multiple state
-        if self._multiple_requests:
-            await self._async_multiple_requests_flush()
-
-        # when create_diagnostic_entities is True, after onlining we'll dynamically
-        # scan the abilities to look for 'unknown' namespaces (kind of like tracing)
-        # and try to build diagnostic entitities out of that
-        if (
-            self._diagnostics_build
-            and self.online
-            and not self._polling_callback_shutdown
-        ):
-            self.log(self.DEBUG, "Diagnostic scan begin")
-            try:
-                abilities = iter(self.descriptor.ability)
-                while self.online and not self._polling_callback_shutdown:
-                    ability = next(abilities)
-                    if (ability in self.TRACE_ABILITY_EXCLUDE) or (
-                        (handler := self.namespace_handlers.get(ability))
-                        and (
-                            handler.polling_strategy
-                            or (
-                                (handler.ns.has_get is False)
-                                and (handler.ns.has_push_query is False)
-                            )
-                        )
-                    ):
-                        continue
-                    await self.async_request(*self.NAMESPACES[ability].request_get)
-            except StopIteration:
-                self._diagnostics_build = False
-                self.log(self.DEBUG, "Diagnostic scan end")
-            except Exception as exception:
-                self._diagnostics_build = False
-                self.log_exception(self.WARNING, exception, "diagnostic scan")
-
-    @callback
-    async def _async_polling_callback(self, namespace: str | None, /):
+    async def _async_poll(self, namespace: str | None):
         try:
-            self._polling_callback_unsub = None
             self._polling_epoch = epoch = time()
             self.log(self.DEBUG, "Polling begin")
             # We're 'strictly' online when the device 'was' online and last request
@@ -1933,8 +1848,6 @@ class Device(BaseDevice, ConfigEntryManager):
                                         epoch + mlc.PARAM_TIMEZONE_CHECK_OK_PERIOD
                                     )
 
-                await self._async_request_updates(namespace)
-
             else:  # offline or 'likely' offline (failed last request)
                 ns_all_handler = self.namespace_handlers[mn.Appliance_System_All.name]
                 ns_all_response = None
@@ -1963,51 +1876,117 @@ class Device(BaseDevice, ConfigEntryManager):
                             *ns_all_handler.polling_request
                         )
 
-                if ns_all_response:
-                    ns_all_handler.lastrequest = epoch
-                    ns_all_handler.polling_epoch_next = (
-                        epoch + ns_all_handler.polling_period
-                    )
-                    ns_all_handler.polling_response_size = len(ns_all_response.json)
-                    await self._async_request_updates(ns_all_handler.ns.name)
-                elif self.online:
-                    self._set_offline()
-                else:
-                    if self._polling_delay < PARAM_HEARTBEAT_PERIOD:
-                        self._polling_delay += self.polling_period
+                if not ns_all_response:
+                    if self.online:
+                        self._set_offline()
                     else:
-                        self._polling_delay = PARAM_HEARTBEAT_PERIOD
-        finally:
-            self._polling_epoch = 0.0
-            if self._polling_callback_shutdown:
-                self._polling_callback_shutdown.set_result(True)
-                self._polling_callback_shutdown = None
-            else:
-                self._polling_callback_unsub = self.schedule_async_callback(
-                    self._polling_delay, self._async_polling_callback, None
+                        if self._polling_delay < PARAM_HEARTBEAT_PERIOD:
+                            self._polling_delay += self.polling_period
+                        else:
+                            self._polling_delay = PARAM_HEARTBEAT_PERIOD
+                    return
+                ns_all_handler.lastrequest = epoch
+                ns_all_handler.polling_epoch_next = (
+                    epoch + ns_all_handler.polling_period
                 )
+                ns_all_handler.polling_response_size = len(ns_all_response.json)
+                namespace = ns_all_handler.ns.name
+
+            """
+            When 'namespace' is not 'None' it represents the device coming online
+            following a succesful received message. This is likely to be 'NS_ALL'.
+            If we're connected to an MQTT broker anyway it could be any 'PUSH' message.
+            We'll use _queued_smartpoll_requests to track how many polls went through
+            over MQTT for this cycle in order to only send 1 for each if we're
+            binded to a cloud MQTT broker (in order to reduce bursts).
+            If a poll request is discarded because of this, it should go through
+            on the next polling cycle. This will 'spread' smart requests over
+            subsequent polls
+            """
+            self._lazypoll_requests.clear()
+            self._queued_cloudpoll_requests = 0
+            # self.namespace_handlers could change at any time due to async
+            # message parsing (handlers might be dynamically created by then)
+            for handler in [
+                handler
+                for handler in self.namespace_handlers.values()
+                if (handler.ns.name != namespace)
+            ]:
+                if handler.polling_strategy:
+                    await handler.polling_strategy(handler)
+                    if not self.online:
+                        break  # do not return: do the flush first!
+
+            # needed even if offline: it takes care of resetting the ns_multiple state
+            if self._multiple_requests:
+                await self._async_multiple_requests_flush()
+
+            # when create_diagnostic_entities is True, after onlining we'll dynamically
+            # scan the abilities to look for 'unknown' namespaces (kind of like tracing)
+            # and try to build diagnostic entitities out of that
+            if self._diagnostics_build and self.online:
+                self._diagnostics_build = False
+                self.log(self.DEBUG, "Diagnostic scan begin")
+                try:
+                    abilities = iter(self.descriptor.ability)
+                    while self.online:
+                        ability = next(abilities)
+                        if (ability in self.TRACE_ABILITY_EXCLUDE) or (
+                            (handler := self.namespace_handlers.get(ability))
+                            and (
+                                handler.polling_strategy
+                                or (
+                                    (handler.ns.has_get is False)
+                                    and (handler.ns.has_push_query is False)
+                                )
+                            )
+                        ):
+                            continue
+                        await self.async_request(*self.NAMESPACES[ability].request_get)
+                except StopIteration:
+                    self.log(self.DEBUG, "Diagnostic scan end")
+                except Exception as e:
+                    self.log_exception(self.WARNING, e, "diagnostic scan")
+
+        except asyncio.CancelledError:
+            self.log(self.DEBUG, "Polling cancelled")
+            raise
+        except Exception as e:
+            self._polling_unsub = self.schedule_callback(
+                self._polling_delay, self._poll, None
+            )
+            self.log_exception(self.WARNING, e, "_async_poll")
             self.log(self.DEBUG, "Polling end")
+        else:
+            self._polling_unsub = self.schedule_callback(
+                self._polling_delay, self._poll, None
+            )
+            self.log(self.DEBUG, "Polling end")
+        finally:
+            self._polling_task = None
 
-    async def _async_polling_stop(self):
+    async def async_poll_stop(self):
         """Ensure we're not polling nor any schedule is in place."""
-        if self._polling_callback_unsub:
-            self._polling_callback_unsub.cancel()
-            self._polling_callback_unsub = None
-        elif self._polling_epoch:
-            if not self._polling_callback_shutdown:
-                self._polling_callback_shutdown = self.hass.loop.create_future()
-            await self._polling_callback_shutdown
+        if self._polling_unsub:
+            self._polling_unsub.cancel()
+            self._polling_unsub = None
+        elif self._polling_task:
+            self._polling_task.cancel()
+            try:
+                await self._polling_task
+            except asyncio.CancelledError:
+                pass
 
-    async def _async_poll(self):
+    async def async_poll_full(self):
         """Stops an ongoing poll if any and executes a full poll (like when onlining)."""
-        await self._async_polling_stop()
+        await self.async_poll_stop()
         # before retriggering ensure we're not overlapping with device shutdown
         if self.config_entry.state is ConfigEntryState.LOADED:
             self.device_debug = None
             for handler in self.namespace_handlers.values():
                 handler.polling_epoch_next = 0.0
             # this will also restart/schedule the cycle
-            await self._async_polling_callback(None)
+            await self._poll()
 
     def bt_attached(self, bt_device: "ComponentApi.BTDevice", /):
         if _bluetooth := self._bluetooth:
@@ -2051,12 +2030,10 @@ class Device(BaseDevice, ConfigEntryManager):
             _bluetooth.address,
         )
         self._bluetooth_active = _bluetooth
-        if not self.online and self._polling_callback_unsub:
+        if not self.online and self._polling_unsub:
             # reschedule immediately
-            self._polling_callback_unsub.cancel()
-            self._polling_callback_unsub = self.schedule_async_callback(
-                0, self._async_polling_callback, None
-            )
+            self._polling_unsub.cancel()
+            self._polling_unsub = self.schedule_callback(0, self._poll, None)
         self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_BLUETOOTH)
 
     def bt_disconnected(self):
@@ -2122,14 +2099,12 @@ class Device(BaseDevice, ConfigEntryManager):
         self._mqtt_connected = _mqtt_connection
         if _mqtt_connection.profile.allow_mqtt_publish:
             self._mqtt_publish = _mqtt_connection
-            if not self.online and self._polling_callback_unsub:
+            if not self.online and self._polling_unsub:
                 # reschedule immediately
                 # TODO: this is not actually triggering when device is only
                 # reachable over cloud MQTT (at config entry load time/boot)
-                self._polling_callback_unsub.cancel()
-                self._polling_callback_unsub = self.schedule_async_callback(
-                    0, self._async_polling_callback, None
-                )
+                self._polling_unsub.cancel()
+                self._polling_unsub = self.schedule_callback(0, self._poll, None)
         elif self.conf_protocol is CONF_PROTOCOL_MQTT:
             self.log(
                 self.WARNING,
@@ -2219,9 +2194,7 @@ class Device(BaseDevice, ConfigEntryManager):
             # it appears sometimes the devices
             # send an incorrect signature hash
             # but at the moment this is unlikely to be critical
-            sign = compute_message_signature(
-                header[mc.KEY_MESSAGEID], self.key, header[mc.KEY_TIMESTAMP]
-            )
+            sign = message.compute_signature(self.key)
             if sign != header[mc.KEY_SIGN]:
                 self.log(
                     self.DEBUG,
@@ -2235,12 +2208,10 @@ class Device(BaseDevice, ConfigEntryManager):
             self._polling_delay = self.polling_period
             # retrigger the polling loop in case it is scheduled/pending.
             # This could happen when we receive an MQTT message
-            if self._polling_callback_unsub:
-                self._polling_callback_unsub.cancel()
-                self._polling_callback_unsub = self.schedule_async_callback(
-                    0,
-                    self._async_polling_callback,
-                    header[mc.KEY_NAMESPACE],
+            if self._polling_unsub:
+                self._polling_unsub.cancel()
+                self._polling_unsub = self.schedule_callback(
+                    0, self._poll, header[mc.KEY_NAMESPACE]
                 )
 
         return self._handle(header, message[mc.KEY_PAYLOAD])
@@ -2255,10 +2226,6 @@ class Device(BaseDevice, ConfigEntryManager):
             # no use parsing..moreover, our callbacks system is full
             # in place so we have no need to further process
             return
-        elif method == mc.METHOD_PUSH:
-            # we're saving for diagnostic purposes so we have knowledge of
-            # which data the device pushes asynchronously
-            self.namespace_pushes[namespace] = payload
         elif method == mc.METHOD_ERROR:
             if payload.get(mc.KEY_ERROR) == mc.ERROR_INVALIDKEY:
                 self.log(
@@ -2300,6 +2267,10 @@ class Device(BaseDevice, ConfigEntryManager):
 
         handler.lastresponse = self.lastresponse
         handler.polling_epoch_next = handler.lastresponse + handler.polling_period
+        if method == mc.METHOD_PUSH:
+            # we're saving for diagnostic purposes so we have knowledge of
+            # which data the device pushes asynchronously
+            handler.lastpush = payload
         try:
             handler.handler(header, payload)  # type: ignore
         except Exception as exception:
@@ -2336,16 +2307,17 @@ class Device(BaseDevice, ConfigEntryManager):
         else:
             self.remove_issue(mlc.ISSUE_DEVICE_ID_MISMATCH)
 
+        needsave = query_abilities = False
         descr = self.descriptor
         oldfirmware = descr.firmware
         oldtimezone = descr.timezone
         descr.update(payload)
 
         if oldtimezone != descr.timezone:
-            self.needsave = True
+            needsave = True
 
         if oldfirmware != descr.firmware:
-            self.needsave = True
+            needsave = True
             query_abilities = True
             if update_firmware := self.update_firmware:
                 # self.update_firmware is dynamically created only when the cloud api
@@ -2372,7 +2344,7 @@ class Device(BaseDevice, ConfigEntryManager):
         for key_digest, _digest in descr.digest.items() or descr.control.items():
             self.digest_handlers[key_digest](_digest)
 
-        if self.needsave:
+        if needsave:
             self.schedule_entry_update(query_abilities)
 
     def _handle_Appliance_System_Clock(self, header, payload, /):
@@ -2660,7 +2632,6 @@ class Device(BaseDevice, ConfigEntryManager):
 
     def update_device_info(self, device_info: "DeviceInfoType"):
         api = self.api
-        self.device_info = device_info
         name = device_info.get(mc.KEY_DEVNAME) or self._get_internal_name()
         if name != self.device_registry_entry.name:
             api.device_registry.async_update_device(
@@ -2699,7 +2670,7 @@ class Device(BaseDevice, ConfigEntryManager):
 
     async def _async_button_refresh_press(self):
         """Forces a full poll."""
-        await self._async_poll()
+        await self.async_poll_full()
 
     async def _async_button_reload_press(self):
         """Reload the config_entry."""

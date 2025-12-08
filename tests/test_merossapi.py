@@ -2,16 +2,14 @@
 
 from time import time
 import typing
-from uuid import uuid4
 
 from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
 
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
-    json_dumps,
     namespaces as mn,
 )
-from custom_components.meross_lan.merossclient.protocol.message import build_message
+from custom_components.meross_lan.merossclient.protocol.message import MerossMessage
 
 from . import const as tc, helpers
 
@@ -40,19 +38,18 @@ async def test_hamqtt_device_session(
         #
         # check the mc.NS_APPLIANCE_CONTROL_BIND is replied
         #
-        message_bind_set = build_message(
+        message_bind_set = MerossMessage.build(
             mn.Appliance_Control_Bind.name,
             mc.METHOD_SET,
             {mn.Appliance_Control_Bind.key: {}},  # actual payload actually doesn't care
-            uuid4().hex,
             key,
-            topic_subscribe,
-            mc.HEADER_TRIGGERSRC_DEVBOOT,
+            from_=topic_subscribe,
+            triggerSrc=mc.HEADER_TRIGGERSRC_DEVBOOT,
         )
         # since nothing is (yet) built at the moment, we expect this message
         # will go through all of the initialization process of ComponentApi
         # and then manage the message
-        async_fire_mqtt_message(hass, topic_publish, json_dumps(message_bind_set))
+        async_fire_mqtt_message(hass, topic_publish, message_bind_set.json)
         await hass.async_block_till_done()
 
         hamqtt_mock.async_publish_mock.assert_any_call(
@@ -75,16 +72,15 @@ async def test_hamqtt_device_session(
         #
         # check the NS_APPLIANCE_SYSTEM_CLOCK
         #
-        message_clock_push = build_message(
+        message_clock_push = MerossMessage.build(
             mn.Appliance_System_Clock.name,
             mc.METHOD_PUSH,
             {"clock": {"timestamp": int(time())}},
-            uuid4().hex,
             key,
-            topic_publish,
-            mc.HEADER_TRIGGERSRC_DEVBOOT,
+            from_=topic_publish,
+            triggerSrc=mc.HEADER_TRIGGERSRC_DEVBOOT,
         )
-        async_fire_mqtt_message(hass, topic_publish, json_dumps(message_clock_push))
+        async_fire_mqtt_message(hass, topic_publish, message_clock_push.json)
         await hass.async_block_till_done()
         # check the PUSH was replied
         header_clock_reply = helpers.DictMatcher(message_clock_push[mc.KEY_HEADER])
@@ -98,7 +94,7 @@ async def test_hamqtt_device_session(
         #
         # check the NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG
         #
-        message_consumption_push = build_message(
+        message_consumption_push = MerossMessage.build(
             mn.Appliance_Control_ConsumptionConfig.name,
             mc.METHOD_PUSH,
             {
@@ -109,14 +105,11 @@ async def test_hamqtt_device_session(
                     "powerRatio": 0,
                 }
             },
-            uuid4().hex,
             key,
-            topic_publish,
-            mc.HEADER_TRIGGERSRC_DEVBOOT,
+            from_=topic_publish,
+            triggerSrc=mc.HEADER_TRIGGERSRC_DEVBOOT,
         )
-        async_fire_mqtt_message(
-            hass, topic_publish, json_dumps(message_consumption_push)
-        )
+        async_fire_mqtt_message(hass, topic_publish, message_consumption_push.json)
         await hass.async_block_till_done()
         # check the PUSH was replied
         header_consumption_reply = helpers.DictMatcher(

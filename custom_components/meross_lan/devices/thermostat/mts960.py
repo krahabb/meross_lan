@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, override
 
 from ...binary_sensor import MLBinarySensor
 from ...calendar import MtsSchedule
+from ...merossclient import merge_dicts
 from ...number import MLEmulatedNumber
 from ...sensor import MLDiagnosticSensor
 from .mtsthermostat import MtsThermostatClimate, mc, mn_t
@@ -12,6 +13,7 @@ if TYPE_CHECKING:
     from typing import Final
 
     from ...helpers.device import Device
+    from ...merossclient.protocol.types import MerossPayloadType
 
 
 class Mts960Climate(MtsThermostatClimate):
@@ -51,7 +53,7 @@ class Mts960Climate(MtsThermostatClimate):
         native_min_value = 1
         native_step = 1
 
-        def __init__(self, climate: "Mts960Climate", entitykey: str):
+        def __init__(self, climate: "Mts960Climate", entitykey: str, /):
             super().__init__(
                 climate.manager,
                 climate.channel,
@@ -59,6 +61,12 @@ class Mts960Climate(MtsThermostatClimate):
                 MLEmulatedNumber.DEVICE_CLASS_DURATION,
                 native_unit_of_measurement=MLEmulatedNumber.hac.UnitOfTime.MINUTES,
             )
+
+    if TYPE_CHECKING:
+        binary_sensor_plug_state: PlugState
+        number_timer_down_duration: TimerConfigNumber
+        number_timer_cycle_off_duration: TimerConfigNumber
+        number_timer_cycle_on_duration: TimerConfigNumber
 
     MTS_MODE_TO_PRESET_MAP = {}
 
@@ -95,16 +103,14 @@ class Mts960Climate(MtsThermostatClimate):
         "_mts_timer_mode",
     )
 
-    def __init__(
-        self,
-        manager: "Device",
-        channel: object,
-    ):
+    def __init__(self, manager: "Device", channel: object, /):
         self._mts_working = None
         self._mts_timer_payload = None
         self._mts_timer_mode = None
         super().__init__(manager, channel)
-        self.binary_sensor_plug_state = Mts960Climate.PlugState(manager, channel, "plug_state")
+        self.binary_sensor_plug_state = Mts960Climate.PlugState(
+            manager, channel, "plug_state"
+        )
         self.number_timer_down_duration = Mts960Climate.TimerConfigNumber(
             self, "timer_down_duration"
         )
@@ -118,10 +124,10 @@ class Mts960Climate(MtsThermostatClimate):
     # interface: MLEntity
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.binary_sensor_plug_state: Mts960PlugState = None  # type: ignore
-        self.number_timer_down_duration: MLTimerConfigNumber = None  # type: ignore
-        self.number_timer_cycle_off_duration: MLTimerConfigNumber = None  # type: ignore
-        self.number_timer_cycle_on_duration: MLTimerConfigNumber = None  # type: ignore
+        self.binary_sensor_plug_state = None  # type: ignore
+        self.number_timer_down_duration = None  # type: ignore
+        self.number_timer_cycle_off_duration = None  # type: ignore
+        self.number_timer_cycle_on_duration = None  # type: ignore
 
     def set_unavailable(self):
         self._mts_working = None
@@ -337,7 +343,7 @@ class Mts960Climate(MtsThermostatClimate):
         )
 
     @override
-    async def async_request_preset(self, mode: int):
+    async def async_request_preset(self, mode: int, /):
         await self._async_request_modeB(
             {
                 mc.KEY_CHANNEL: self.channel,
@@ -347,7 +353,7 @@ class Mts960Climate(MtsThermostatClimate):
         )
 
     @override
-    async def async_request_onoff(self, onoff: int):
+    async def async_request_onoff(self, onoff: int, /):
         await self._async_request_modeB(
             {
                 mc.KEY_CHANNEL: self.channel,
@@ -360,20 +366,20 @@ class Mts960Climate(MtsThermostatClimate):
         return self._mts_onoff and (self._mts_mode == mc.MTS960_MODE_SCHEDULE)
 
     # interface: self
-    async def _async_request_modeB(self, p_modeb: dict):
+    async def _async_request_modeB(self, payload: "MerossPayloadType", /):
         if response := await self.manager.async_request_ack(
             self.ns.name,
             mc.METHOD_SET,
-            {self.ns.key: [p_modeb]},
+            {self.ns.key: [payload]},
         ):
             try:
                 payload = response[mc.KEY_PAYLOAD][mc.KEY_MODEB][0]
             except (KeyError, IndexError):
                 # optimistic update
-                payload = self._mts_payload | p_modeb
+                payload = merge_dicts(self._mts_payload, payload)  # type: ignore
             self._parse_modeB(payload)
 
-    async def _async_request_timer(self, timer_type: int, payload: dict):
+    async def _async_request_timer(self, timer_type: int, payload: dict, /):
         ns = mn_t.Appliance_Control_Thermostat_Timer
         p_timer = {
             ns.key_channel: self.channel,
@@ -394,7 +400,7 @@ class Mts960Climate(MtsThermostatClimate):
             return True
 
     # message handlers
-    def _parse_modeB(self, payload: dict):
+    def _parse_modeB(self, payload: dict, /):
         """
         {
             "mode": 3,
@@ -433,20 +439,21 @@ class Mts960Climate(MtsThermostatClimate):
             entities = manager.entities
             channel = self.channel
             for key in self.DIAGNOSTIC_SENSOR_KEYS:
-                if key in payload:
-                    try:
-                        entities[f"{channel}_{key}"].update_native_value(payload[key])
-                    except KeyError:
+                try:
+                    native_value = payload[key]
+                    entities[f"{channel}_{key}"].update_native_value(native_value)
+                except KeyError as key_error:
+                    if key_error.args[0] != key:
                         MLDiagnosticSensor(
                             manager,
                             channel,
                             key,
-                            native_value=payload[key],
+                            native_value=native_value,
                         )
 
         self.flush_state()
 
-    def _parse_timer(self, payload: dict):
+    def _parse_timer(self, payload: dict, /):
         """
         {'channel': 0, 'type': 1, 'down': {'duration': 1, 'end': 1718724107, 'onoff': 2}} ==> Count down Off
         {'channel': 0, 'type': 1, 'down': {'duration': 1, 'end': 1718724107, 'onoff': 1}} ==> Count down On

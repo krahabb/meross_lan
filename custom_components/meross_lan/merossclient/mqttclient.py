@@ -18,10 +18,7 @@ if TYPE_CHECKING:
     from typing import ClassVar, NotRequired, Unpack
 
     from . import LoggerT
-
-
-def generate_app_id():
-    return md5hexdigest(uuid4().hex)
+    from .protocol.message import MerossMessage
 
 
 class MerossMQTTRateLimitException(Exception):
@@ -51,18 +48,14 @@ class _MQTTRateLimiter:
     To ensure optimal performance and security,
     please limit your device's communication to no more than 200 messages every one hour."
 
-    TODO
-    Taking this into account, we should set the rate-limiting to 1 message every 18 seconds
-    on average but I guess the short term burst should be allowed (up to 6 messages in 60 seconds)
-    We should eventually setup also a long-term data rate-limiting (e.g. 200 messages in 1 hour)
     """
 
     if TYPE_CHECKING:
         DURATION: ClassVar
         MAXQUEUE: ClassVar
 
-    DURATION = 60
-    MAXQUEUE = 6
+    DURATION = 91
+    MAXQUEUE = 5
 
     __slots__ = (
         "dropped",
@@ -97,6 +90,10 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
     STATE_RECONNECTING = "reconnecting"
     STATE_DISCONNECTING = "disconnecting"
     STATE_DISCONNECTED = "disconnected"
+
+    @staticmethod
+    def generate_app_id():
+        return md5hexdigest(uuid4().hex)
 
     # TODO: consider refactoring to remove  mqtt.Client from hierarchy and use a class member
     # since we're risking too much about overriding attributes..
@@ -365,7 +362,7 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
             # queue empty
             return 0.0
 
-    def rl_publish(self, uuid: str, request: str):
+    def rl_publish(self, uuid: str, request: "MerossMessage"):
         with self._lock_queue:
 
             try:
@@ -395,7 +392,7 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
             return mqtt.Client.publish(
                 self,
                 mc.TOPIC_REQUEST.format(uuid),
-                request,
+                request.json,
             )
 
     def _mqtt_connected(self):
@@ -498,7 +495,7 @@ class MerossMQTTAppClient(_MerossMQTTClient):
         self, *, user_id: str, app_id: str | None = None, **kwargs: "Unpack[Args]"
     ):
         if not app_id:
-            app_id = generate_app_id()
+            app_id = _MerossMQTTClient.generate_app_id()
         self.app_id = app_id
         self.topic_command = f"/app/{user_id}-{app_id}/subscribe"
         self.topic_push = f"/app/{user_id}/subscribe"

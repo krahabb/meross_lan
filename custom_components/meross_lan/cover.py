@@ -22,6 +22,20 @@ class MLCover(me.MLEntity, cover.CoverEntity):
 
     ENTITY_COMPONENT = cover
     PLATFORM = cover.DOMAIN
+
+    try:
+        CoverState = cover.CoverState  # type: ignore[attr-defined]
+    except AttributeError:
+        import enum
+
+        class CoverState(enum.StrEnum):
+            """State of Cover entities."""
+
+            CLOSED = "closed"
+            CLOSING = "closing"
+            OPEN = "open"
+            OPENING = "opening"
+
     DeviceClass = cover.CoverDeviceClass
     EntityFeature = cover.CoverEntityFeature
 
@@ -128,7 +142,7 @@ class MLRollerShutter(MLCover):
                 if fw_version <= (2, 1, 4):
                     # trying to detect if ns_multiple is offending
                     # 2.1.4 devices (#419)
-                    manager.disable_multiple()
+                    manager.enable_multiple(False)
 
         except Exception:
             self._position_native_isgood = False
@@ -427,7 +441,7 @@ class MLRollerShutter(MLCover):
 
     def _parse_togglex(self, payload: dict):
         pass
-    
+
     async def _async_transition_callback(self):
         """Schedule a repetitive callback when we detect or suspect shutter movement.
         It will be invalidated only when a successful state message is parsed stating

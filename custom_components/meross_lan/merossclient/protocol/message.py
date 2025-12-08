@@ -1,7 +1,7 @@
 from functools import cached_property
+import os
 from time import time
 from typing import TYPE_CHECKING
-from uuid import uuid4
 
 from . import (
     JSON_DECODER,
@@ -10,6 +10,7 @@ from . import (
     MerossProtocolError,
     compute_message_signature,
     const as mc,
+    md5hexdigest,
     namespaces as mn,
 )
 
@@ -22,55 +23,9 @@ if TYPE_CHECKING:
 #
 
 
-def build_message(
-    namespace: str,
-    method: str,
-    payload: "MerossPayloadType",
-    messageid: str,
-    key: str,
-    from_: str = mc.HEADER_FROM_DEFAULT,
-    triggerSrc: str = mc.HEADER_TRIGGERSRC_DEFAULT,
-    /,
-) -> "MerossMessageType":
-    timestamp = int(time())
-    return {
-        mc.KEY_HEADER: {
-            mc.KEY_MESSAGEID: messageid,
-            mc.KEY_NAMESPACE: namespace,
-            mc.KEY_METHOD: method,
-            mc.KEY_PAYLOADVERSION: 1,
-            mc.KEY_TRIGGERSRC: triggerSrc,
-            mc.KEY_FROM: from_,
-            mc.KEY_TIMESTAMP: timestamp,
-            mc.KEY_TIMESTAMPMS: 0,
-            mc.KEY_SIGN: compute_message_signature(messageid, key, timestamp),
-        },
-        mc.KEY_PAYLOAD: payload,
-    }
-
-
-def build_message_keyhack(
-    namespace: str,
-    method: str,
-    payload: "MerossPayloadType",
-    key_header: "MerossHeaderType",
-    from_: str = mc.HEADER_FROM_DEFAULT,
-    triggerSrc: str = mc.HEADER_TRIGGERSRC_DEFAULT,
-    /,
-) -> "MerossMessageType":
-    key_header[mc.KEY_NAMESPACE] = namespace
-    key_header[mc.KEY_METHOD] = method
-    key_header[mc.KEY_PAYLOADVERSION] = 1
-    key_header[mc.KEY_TRIGGERSRC] = triggerSrc
-    key_header[mc.KEY_FROM] = from_
-    return {mc.KEY_HEADER: key_header, mc.KEY_PAYLOAD: payload}
-
-
 #
 # Various helpers to extract some meaningful data from payloads
 #
-def get_message_uuid(header: "MerossHeaderType", /):
-    return header.get(mc.KEY_UUID) or mc.RE_PATTERN_TOPIC_UUID.match(header[mc.KEY_FROM]).group(1)  # type: ignore
 
 
 def get_replykey(header: "MerossHeaderType", key: "KeyType", /) -> "KeyType":
@@ -92,28 +47,6 @@ def get_replykey(header: "MerossHeaderType", key: "KeyType", /) -> "KeyType":
     return header
 
 
-def check_message_strict(message: "MerossResponse | None", /):
-    """
-    Does a formal check of the message structure also raising a
-    typed exception if formally correct but carrying a protocol error
-    """
-    if not message:
-        raise MerossProtocolError(message, "No response")
-    try:
-        payload = message[mc.KEY_PAYLOAD]
-        header = message[mc.KEY_HEADER]
-        header[mc.KEY_NAMESPACE]
-        if header[mc.KEY_METHOD] == mc.METHOD_ERROR:
-            p_error = payload[mc.KEY_ERROR]
-            if p_error.get(mc.KEY_CODE) == mc.ERROR_INVALIDKEY:
-                raise MerossKeyError(message)
-            else:
-                raise MerossProtocolError(message, p_error)
-        return message
-    except KeyError as error:
-        raise MerossProtocolError(message, str(error)) from error
-
-
 #
 # 'Higher level' message representations
 #
@@ -121,7 +54,85 @@ class MerossMessage(dict):
     """
     Base (almost) abstract class for different source of messages that
     need to be sent to the device (or received from).
+    The actual implementation will setup the slots
     """
+
+    @staticmethod
+    def build(
+        namespace: str,
+        method: str,
+        payload: "MerossPayloadType",
+        key: str,
+        *,
+        messageid: str | None = None,
+        from_: str = mc.HEADER_FROM_DEFAULT,
+        triggerSrc: str = mc.HEADER_TRIGGERSRC_DEFAULT,
+    ):
+        timestamp = int(time())
+        messageid = messageid or MerossMessage.generate_id()
+        return MerossMessage(
+            {
+                mc.KEY_HEADER: {
+                    mc.KEY_MESSAGEID: messageid,
+                    mc.KEY_NAMESPACE: namespace,
+                    mc.KEY_METHOD: method,
+                    mc.KEY_PAYLOADVERSION: 1,
+                    mc.KEY_TRIGGERSRC: triggerSrc,
+                    mc.KEY_FROM: from_,
+                    mc.KEY_TIMESTAMP: timestamp,
+                    mc.KEY_TIMESTAMPMS: 0,
+                    mc.KEY_SIGN: compute_message_signature(messageid, key, timestamp),
+                },
+                mc.KEY_PAYLOAD: payload,
+            }
+        )
+
+    @staticmethod
+    def build_keyhack(
+        namespace: str,
+        method: str,
+        payload: "MerossPayloadType",
+        key_header: "MerossHeaderType",
+        from_: str = mc.HEADER_FROM_DEFAULT,
+        triggerSrc: str = mc.HEADER_TRIGGERSRC_DEFAULT,
+        /,
+    ):
+        key_header[mc.KEY_NAMESPACE] = namespace
+        key_header[mc.KEY_METHOD] = method
+        key_header[mc.KEY_PAYLOADVERSION] = 1
+        key_header[mc.KEY_TRIGGERSRC] = triggerSrc
+        key_header[mc.KEY_FROM] = from_
+        return MerossMessage(
+            {
+                mc.KEY_HEADER: key_header,
+                mc.KEY_PAYLOAD: payload,
+            }
+        )
+
+    @staticmethod
+    def decode(json: str, /):
+        message = MerossMessage(JSON_DECODER.decode(json))
+        message.json = json
+        return message
+
+    @staticmethod
+    def check_(message: "MerossMessage | None", /):
+        """
+        Does a formal check of the message structure also raising a
+        typed exception if formally correct but carrying a protocol error
+        TODO: remove
+        """
+        if not message:
+            raise MerossProtocolError(message, "No response")
+        return message.check()
+
+    @staticmethod
+    def generate_id():
+        return "%032x" % int.from_bytes(os.urandom(16))
+
+    @staticmethod
+    def compute_encryption_key(uuid: str, key: str, mac: str, /):
+        return md5hexdigest(uuid[3:22], key[1:9], mac, key[10:28]).encode()
 
     @cached_property
     def json(self):
@@ -147,11 +158,33 @@ class MerossMessage(dict):
     def payload(self) -> "MerossPayloadType":
         return self[mc.KEY_PAYLOAD]
 
-    @staticmethod
-    def decode(json: str, /):
-        message = MerossMessage(JSON_DECODER.decode(json))
-        message.json = json
-        return message
+    def check(self, /):
+        """
+        Does a formal check of the message structure also raising a
+        typed exception if formally correct but carrying a protocol error
+        """
+        try:
+            payload = self[mc.KEY_PAYLOAD]
+            header = self[mc.KEY_HEADER]
+            header[mc.KEY_NAMESPACE]
+            if header[mc.KEY_METHOD] == mc.METHOD_ERROR:
+                if payload[mc.KEY_ERROR].get(mc.KEY_CODE) == mc.ERROR_INVALIDKEY:
+                    raise MerossKeyError(self)
+                else:
+                    raise MerossProtocolError(self, payload[mc.KEY_ERROR])
+            return self
+        except KeyError as error:
+            raise MerossProtocolError(self, str(error)) from error
+
+    def compute_signature(self, key: str, /):
+        return compute_message_signature(
+            self[mc.KEY_HEADER][mc.KEY_MESSAGEID],
+            key,
+            self[mc.KEY_HEADER][mc.KEY_TIMESTAMP],
+        )
+
+    def get_uuid(self, /):
+        return self.header.get(mc.KEY_UUID) or mc.RE_PATTERN_TOPIC_UUID.match(self.header[mc.KEY_FROM]).group(1)  # type: ignore
 
 
 class MerossResponse(MerossMessage):
@@ -175,13 +208,16 @@ class MerossRequest(MerossMessage):
         trigger_src: str = mc.HEADER_TRIGGERSRC_DEFAULT,
         /,
     ):
-        messageid = uuid4().hex
+        self.namespace = namespace
+        self.method = method
+        self.payload = payload
+        self.messageid = MerossMessage.generate_id()
         timestamp = int(time())
         MerossMessage.__init__(
             self,
             {
                 mc.KEY_HEADER: {
-                    mc.KEY_MESSAGEID: messageid,
+                    mc.KEY_MESSAGEID: self.messageid,
                     mc.KEY_NAMESPACE: namespace,
                     mc.KEY_METHOD: method,
                     mc.KEY_PAYLOADVERSION: 1,
@@ -189,7 +225,9 @@ class MerossRequest(MerossMessage):
                     mc.KEY_FROM: from_,
                     mc.KEY_TIMESTAMP: timestamp,
                     mc.KEY_TIMESTAMPMS: 0,
-                    mc.KEY_SIGN: compute_message_signature(messageid, key, timestamp),
+                    mc.KEY_SIGN: compute_message_signature(
+                        self.messageid, key, timestamp
+                    ),
                 },
                 mc.KEY_PAYLOAD: payload,
             },
@@ -206,7 +244,11 @@ class MerossPushReply(MerossMessage):
     """
 
     def __init__(self, header: "MerossHeaderType", payload: "MerossPayloadType", /):
-        header = header.copy()
+        self.namespace = header[mc.KEY_NAMESPACE]
+        self.method = header[mc.KEY_METHOD]
+        self.messageid = header[mc.KEY_MESSAGEID]
+        self.payload = payload
+        self.header = header = header.copy()
         header.pop(mc.KEY_UUID, None)
         header[mc.KEY_TRIGGERSRC] = mc.HEADER_TRIGGERSRC_CLOUDCONTROL
         MerossMessage.__init__(
@@ -231,21 +273,26 @@ class MerossAckReply(MerossMessage):
         from_: str,
         /,
     ):
-        messageid = header[mc.KEY_MESSAGEID]
+        self.namespace = header[mc.KEY_NAMESPACE]
+        self.method = mc.METHOD_ACK_MAP[header[mc.KEY_METHOD]]
+        self.messageid = header[mc.KEY_MESSAGEID]
+        self.payload = payload
         timestamp = int(time())
         MerossMessage.__init__(
             self,
             {
                 mc.KEY_HEADER: {
-                    mc.KEY_MESSAGEID: messageid,
-                    mc.KEY_NAMESPACE: header[mc.KEY_NAMESPACE],
-                    mc.KEY_METHOD: mc.METHOD_ACK_MAP[header[mc.KEY_METHOD]],
+                    mc.KEY_MESSAGEID: self.messageid,
+                    mc.KEY_NAMESPACE: self.namespace,
+                    mc.KEY_METHOD: self.method,
                     mc.KEY_PAYLOADVERSION: 1,
                     mc.KEY_TRIGGERSRC: mc.HEADER_TRIGGERSRC_CLOUDCONTROL,
                     mc.KEY_FROM: from_,
                     mc.KEY_TIMESTAMP: timestamp,
                     mc.KEY_TIMESTAMPMS: 0,
-                    mc.KEY_SIGN: compute_message_signature(messageid, key, timestamp),
+                    mc.KEY_SIGN: compute_message_signature(
+                        self.messageid, key, timestamp
+                    ),
                 },
                 mc.KEY_PAYLOAD: payload,
             },

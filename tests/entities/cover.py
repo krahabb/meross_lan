@@ -25,15 +25,15 @@ class EntityTest(EntityComponentTest):
     }
 
     COVER_TRANSITIONS = {
-        haec.STATE_OPEN: (
+        haec.CoverState.OPEN.value: (
             haec.SERVICE_CLOSE_COVER,
-            haec.STATE_CLOSING,
-            haec.STATE_CLOSED,
+            haec.CoverState.CLOSING,
+            haec.CoverState.CLOSED,
         ),
-        haec.STATE_CLOSED: (
+        haec.CoverState.CLOSED.value: (
             haec.SERVICE_OPEN_COVER,
-            haec.STATE_OPENING,
-            haec.STATE_OPEN,
+            haec.CoverState.OPENING,
+            haec.CoverState.OPEN,
         ),
     }
 
@@ -92,8 +92,8 @@ class EntityTest(EntityComponentTest):
             # ensure we're still opening
             assert (state := states.get(self.entity_id))
             assert (
-                state.state == haec.STATE_OPENING
-            ), f"{haec.SERVICE_SET_COVER_POSITION}: state!={haec.STATE_OPENING}"
+                state.state == haec.CoverState.OPENING
+            ), f"{haec.SERVICE_SET_COVER_POSITION}: state!={haec.CoverState.OPENING}"
             # now stop
             await self._async_test_stop()
 
@@ -135,7 +135,7 @@ class EntityTest(EntityComponentTest):
         current_position = state.attributes[haec.ATTR_CURRENT_POSITION]
         # check the cover is moving
         if target_position > current_position:
-            expected_state = haec.STATE_OPENING
+            expected_state = haec.CoverState.OPENING
             expected_duration = (
                 RollerShutterMixin.SIGNALOPEN
                 * (target_position - current_position)
@@ -143,7 +143,7 @@ class EntityTest(EntityComponentTest):
             )
             expected_duration_max = RollerShutterMixin.SIGNALOPEN / 1000
         else:
-            expected_state = haec.STATE_CLOSING
+            expected_state = haec.CoverState.CLOSING
             expected_duration = (
                 RollerShutterMixin.SIGNALCLOSE
                 * (current_position - target_position)
@@ -201,7 +201,9 @@ class EntityTest(EntityComponentTest):
         ), f"transition to {target_position} still pending:current_epoch=={current_epoch} transition_end={entity._transition_unsub.when()}"
 
         assert (state := self.hass_states.get(self.entity_id))
-        expected_state = haec.STATE_OPEN if target_position else haec.STATE_CLOSED
+        expected_state = (
+            haec.CoverState.OPEN if target_position else haec.CoverState.CLOSED
+        )
         assert (
             state.state == expected_state
         ), f"finished {haec.SERVICE_SET_COVER_POSITION}({target_position}): state=={state.state}"
@@ -213,9 +215,9 @@ class EntityTest(EntityComponentTest):
     async def _async_test_stop(self):
         state = await self.async_service_call(haec.SERVICE_STOP_COVER)
         excpected_state = (
-            haec.STATE_OPEN
+            haec.CoverState.OPEN
             if state.attributes[haec.ATTR_CURRENT_POSITION] > 0
-            else haec.STATE_CLOSED
+            else haec.CoverState.CLOSED
         )
         assert (
             state.state == excpected_state

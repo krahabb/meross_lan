@@ -56,16 +56,19 @@ class EntityTest(EntityComponentTest):
             MLNumericSensor,
         ],
         mn.Appliance_Control_FilterMaintenance.name: [MLFilterMaintenanceSensor],
-        mn_t.Appliance_Control_Thermostat_ModeC.name: [
+        mn_t.Appliance_Control_Thermostat_ModeC.name: [  # mts300
             MLEnumSensor,  # output status sensors
             MLEnumSensor,
             MLEnumSensor,
             MLEnumSensor,
             MLEnumSensor,
             MLTemperatureSensor,  # additional (disabled) current temperature sensor
+            MLHumiditySensor,  # additional (disabled) current humidity sensor
         ],
         mn_t.Appliance_Control_Thermostat_Overheat.name: [MLTemperatureSensor],
-        mn.Appliance_Control_Sensor_Latest.name: [MLHumiditySensor],
+        mn.Appliance_Control_Sensor_Latest.name: [
+            MLHumiditySensor
+        ],  # mts200 (some models)
         mn.Appliance_System_Runtime.name: [MLSignalStrengthSensor],  # Signal strength
     }
 

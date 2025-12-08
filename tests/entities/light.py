@@ -91,7 +91,7 @@ class EntityTest(EntityComponentTest):
         await self.async_service_call_check(haec.SERVICE_TURN_OFF, hac.STATE_OFF)
         await self.async_service_call_check(haec.SERVICE_TURN_ON, hac.STATE_ON)
 
-        if entity.entitykey == mlc.DND_ID:
+        if entity.entitykey == MLDNDLightEntity.ENTITY_KEY:
             return
         assert isinstance(entity, MLLightBase)
         supported_color_modes = entity.supported_color_modes

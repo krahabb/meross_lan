@@ -111,8 +111,7 @@ async def test_meross_profile_cloudapi_offline(
     hass_storage.update(tc.MOCK_PROFILE_STORAGE)
     async with helpers.ProfileEntryMocker(request, hass) as context:
         assert (profile := context.api.profiles.get(tc.MOCK_PROFILE_ID))
-        context.time_mock.tick(mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
-        await hass.async_block_till_done()
+        await context.time_mock.async_tick(mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
 
         # check we have tried to refresh our device list
         assert len(cloudapi_mock.api_calls) == 1
@@ -234,7 +233,7 @@ async def test_meross_profile_with_device(
         assert device.update_firmware is None
         tc.MOCK_CLOUDAPI_DEVICE_LATESTVERSION[0][mc.KEY_VERSION] = "2.1.5"
         await device_context.time_mock.async_tick(
-            mlc.PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT
+            mlc.PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT + 1
         )
         update_firmware = device.update_firmware
         assert update_firmware

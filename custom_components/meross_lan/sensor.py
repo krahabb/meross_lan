@@ -15,7 +15,7 @@ from .helpers.namespaces import (
 from .merossclient.protocol import json_dumps
 
 if TYPE_CHECKING:
-    from typing import Final, NotRequired, Unpack
+    from typing import ClassVar, Final, NotRequired, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -92,6 +92,11 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
 
         class Args(me.MLNumericEntity.Args):
             state_class: NotRequired[sensor.SensorStateClass]
+            suggested_display_precision: NotRequired[int]
+
+        # HA core entity attributes:
+        _attr_suggested_display_precision: ClassVar[int | None]
+        suggested_display_precision: int | None
 
     @dataclass(slots=True)
     class SensorDef:
@@ -116,12 +121,18 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
     DeviceClass = sensor.SensorDeviceClass
     StateClass = sensor.SensorStateClass
 
+    # HA core compatibility layer for NumberDeviceClass.TEMPERATURE_DELTA (HA core 2025.10 misses that)
+    DEVICE_CLASS_TEMPERATURE_DELTA = getattr(
+        DeviceClass, "TEMPERATURE_DELTA", DeviceClass.TEMPERATURE
+    )
+
     DEVICECLASS_TO_UNIT_MAP = {
         DeviceClass.POWER: me.MLEntity.hac.UnitOfPower.WATT,
         DeviceClass.CURRENT: me.MLEntity.hac.UnitOfElectricCurrent.AMPERE,
         DeviceClass.VOLTAGE: me.MLEntity.hac.UnitOfElectricPotential.VOLT,
         DeviceClass.ENERGY: me.MLEntity.hac.UnitOfEnergy.WATT_HOUR,
         DeviceClass.TEMPERATURE: me.MLEntity.hac.UnitOfTemperature.CELSIUS,
+        DEVICE_CLASS_TEMPERATURE_DELTA: me.MLEntity.hac.UnitOfTemperature.CELSIUS,
         DeviceClass.HUMIDITY: me.MLEntity.hac.PERCENTAGE,
         DeviceClass.BATTERY: me.MLEntity.hac.PERCENTAGE,
         DeviceClass.ILLUMINANCE: me.MLEntity.hac.LIGHT_LUX,
@@ -136,8 +147,12 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
 
     # HA core entity attributes:
     state_class: StateClass
+    _attr_suggested_display_precision = None
 
-    __slots__ = ("state_class",)
+    __slots__ = (
+        "state_class",
+        "suggested_display_precision",
+    )
 
     def __init__(
         self,
@@ -153,7 +168,9 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
         ) or self.DEVICECLASS_TO_STATECLASS_MAP.get(
             device_class, MLNumericSensor.StateClass.MEASUREMENT
         )
-
+        self.suggested_display_precision = kwargs.pop(
+            "suggested_display_precision", self._attr_suggested_display_precision
+        )
         super().__init__(
             manager,
             channel,
@@ -180,7 +197,7 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
 class MLHumiditySensor(MLNumericSensor):
     """Specialization for Humidity sensor.
     - device_scale defaults to 10 which is actually the only scale seen so far.
-    - suggested_display_precision defaults to 0
+    - suggested_display_precision defaults to 1
     """
 
     _attr_device_scale = 10
@@ -370,6 +387,8 @@ class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
 
     ns = mn.Appliance_System_Runtime
 
+    ENTITY_KEY = "signal_strength"
+
     # HA core entity attributes:
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
     icon = "mdi:wifi"
@@ -378,7 +397,7 @@ class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
         super().__init__(
             manager,
             None,
-            mlc.SIGNALSTRENGTH_ID,
+            MLSignalStrengthSensor.ENTITY_KEY,
             None,
             native_unit_of_measurement=me.MLEntity.hac.PERCENTAGE,
         )

@@ -17,7 +17,11 @@
 #pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.244 # HA core 2025.5.1
 #pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.248 # HA core 2025.6.0b4
 #pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.262 # HA core 2025.7.2
-pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.269 # HA core 2025.8.0
+#pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.269 # HA core 2025.8.0
+#pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.280 # HA core 2025.9.3
+#pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.286 # HA core 2025.10.1
+#pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.295 # HA core 2025.11.1
+pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.299 # HA core 2025.12.1
 
 aiodiscover
 aiodhcpwatcher

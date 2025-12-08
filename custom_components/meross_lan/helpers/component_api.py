@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     )
 
     from ..config_flow import ConfigFlow
+    from ..merossclient.protocol.message import MerossMessage
     from ..merossclient.protocol.types import MerossHeaderType, MerossPayloadType
     from .meross_profile import MerossProfile
 
@@ -136,10 +137,10 @@ class HAMQTTConnection(MQTTConnection):
     async def _async_mqtt_publish(
         self,
         device_id: str,
-        request: str,
+        request: "MerossMessage",
     ):
         await mqtt_async_publish(
-            self.profile.hass, mc.TOPIC_REQUEST.format(device_id), request
+            self.profile.hass, mc.TOPIC_REQUEST.format(device_id), request.json
         )
         self._mqtt_published()
 

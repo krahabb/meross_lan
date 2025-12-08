@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 if TYPE_CHECKING:
     from typing import ClassVar, Unpack
 
-    from message import MerossResponse
+    from message import MerossMessage, MerossResponse
 
 
 #
@@ -68,7 +68,7 @@ class MerossKeyError(MerossProtocolError):
     reported by device
     """
 
-    def __init__(self, response: "MerossResponse"):
+    def __init__(self, response: "MerossMessage"):
         super().__init__(response, "Invalid key")
 
 
@@ -78,7 +78,7 @@ class MerossSignatureError(MerossProtocolError):
     when validating the received header
     """
 
-    def __init__(self, response: "MerossResponse"):
+    def __init__(self, response: "MerossMessage"):
         super().__init__(response, "Signature error")
 
 
@@ -89,10 +89,6 @@ def md5hexdigest(*args: "Unpack[tuple[str, ...]]"):
 
 def compute_message_signature(messageid: str, key: str, timestamp: int, /):
     return md5hexdigest(messageid, key, str(timestamp))
-
-
-def compute_message_encryption_key(uuid: str, key: str, mac: str, /):
-    return md5hexdigest(uuid[3:22], key[1:9], mac, key[10:28]).encode()
 
 
 def compute_wifix_password(password: str, type: str, uuid: str, mac: str, /):

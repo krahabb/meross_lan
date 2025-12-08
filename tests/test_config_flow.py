@@ -23,10 +23,9 @@ from custom_components.meross_lan.merossclient import (
 )
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
-    json_dumps,
     namespaces as mn,
 )
-from custom_components.meross_lan.merossclient.protocol.message import build_message
+from custom_components.meross_lan.merossclient.protocol.message import MerossMessage
 
 from tests import const as tc, helpers
 
@@ -237,16 +236,15 @@ async def test_mqtt_discovery_config_flow(hass: "HomeAssistant", hamqtt_mock):
     device_id = tc.MOCK_DEVICE_UUID
     key = ""
     topic = mc.TOPIC_RESPONSE.format(device_id)
-    payload = build_message(
+    payload = MerossMessage.build(
         mn.Appliance_Control_ToggleX.name,
         mc.METHOD_PUSH,
         {mn.Appliance_Control_ToggleX.key: {mc.KEY_CHANNEL: 0, mc.KEY_ONOFF: 0}},
-        uuid4().hex,
         key,
-        mc.TOPIC_REQUEST.format(device_id),
+        from_=mc.TOPIC_REQUEST.format(device_id),
     )
 
-    async_fire_mqtt_message(hass, topic, json_dumps(payload))
+    async_fire_mqtt_message(hass, topic, payload.json)
     await hass.async_block_till_done()
 
     flow = hass.config_entries.flow
@@ -322,7 +320,7 @@ async def test_dhcp_discovery_config_flow(hass: "HomeAssistant"):
         DhcpServiceInfo(
             tc.MOCK_DEVICE_IP,
             "",
-            tc.MOCK_MACADDRESS,
+            fmt_macaddress(tc.MOCK_MACADDRESS),
         ),
     )
     assert result, "Dhcp discovery didn't create the discovery flow"
@@ -336,7 +334,7 @@ async def test_dhcp_ignore_config_flow(hass: "HomeAssistant"):
     dhcp_service_info = DhcpServiceInfo(
         tc.MOCK_DEVICE_IP,
         "",
-        tc.MOCK_MACADDRESS,
+        fmt_macaddress(tc.MOCK_MACADDRESS),
     )
     # create the initial discovery
     result = await _create_dhcp_discovery_flow(hass, dhcp_service_info)
@@ -419,7 +417,9 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
             result = await flow.async_init(
                 mlc.DOMAIN,
                 context={"source": config_entries.SOURCE_DHCP},
-                data=DhcpServiceInfo(DHCP_GOOD_HOST, "", device_macaddress),
+                data=DhcpServiceInfo(
+                    DHCP_GOOD_HOST, "", fmt_macaddress(device_macaddress)
+                ),
             )
 
             assert result["type"] == FlowResultType.ABORT  # type: ignore
@@ -447,7 +447,9 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
             result = await flow.async_init(
                 mlc.DOMAIN,
                 context={"source": config_entries.SOURCE_DHCP},
-                data=DhcpServiceInfo(DHCP_BOGUS_HOST, "", device_macaddress),
+                data=DhcpServiceInfo(
+                    DHCP_BOGUS_HOST, "", fmt_macaddress(device_macaddress)
+                ),
             )
 
             assert result["type"] == FlowResultType.ABORT  # type: ignore
@@ -458,7 +460,7 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
             device_context.assert_logs(
                 1,
                 message=(
-                    r"received a DHCP update \(ip:99\.99\.99\.99 mac:00:11:22:33:44:55\) "
+                    r"received a DHCP update \(ip:99\.99\.99\.99 mac:001122334455\) "
                     r"but the new uuid:\S* doesn't match "
                     r"the configured one \(uuid:\S*\)"
                 ),

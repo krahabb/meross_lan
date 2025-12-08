@@ -1,15 +1,14 @@
-import datetime as dt
 from typing import TYPE_CHECKING, override
 
 from homeassistant.components.climate import const as hacc
 
 from ...calendar import MtsSchedule
 from ...helpers import reverse_lookup
+from ...merossclient import merge_dicts
 from ...number import MLConfigNumber
-from ...sensor import MLEnumSensor
+from ...sensor import MLEnumSensor, MLHumiditySensor
 from ...switch import MLEmulatedSwitch
 from .mtsthermostat import (
-    MtsCommonTemperatureNumber,
     MtsThermostatClimate,
     mc,
     mn_t,
@@ -19,7 +18,7 @@ if TYPE_CHECKING:
     from typing import ClassVar, Final
 
     from ...helpers.device import Device
-    from ...merossclient.protocol.types import thermostat as mt_t
+    from ...merossclient.protocol.types import MerossPayloadType, thermostat as mt_t
 
     """
     "Appliance.System.Ability",
@@ -65,11 +64,9 @@ class Mts300Climate(MtsThermostatClimate):
         target_temperature_low: float | None
 
         # entities
+        sensor_current_humidity: MLHumiditySensor
         number_fan_hold: MLConfigNumber
         switch_fan_hold: MLEmulatedSwitch
-        sensor_hStatus: MLEnumSensor
-        sensor_cStatus: MLEnumSensor
-        sensor_fStatus: MLEnumSensor
 
     # MtsClimate class attributes
     ns = mn_t.Appliance_Control_Thermostat_ModeC
@@ -85,32 +82,32 @@ class Mts300Climate(MtsThermostatClimate):
 
         __slots__ = ("number_calibration_humi",)
 
-        def __init__(self, climate: "MtsThermostatClimate"):
+        def __init__(self, climate: "MtsThermostatClimate", /):
             super().__init__(climate)
             self.native_max_value = 4.5
             self.native_min_value = -4.5
             self.native_step = 0.1
 
-        def _parse(self, payload: "mt_t.Calibration_C"):
-            if "humiValue" in payload:
-                try:
-                    self.number_calibration_humi.update_device_value(
-                        payload["humiValue"]
-                    )
-                except AttributeError:
-                    self.number_calibration_humi = MLConfigNumber(
-                        self.manager,
-                        self.channel,
-                        "humidity_calibration",
-                        device_class=MLConfigNumber.DeviceClass.HUMIDITY,
-                        device_scale=10,
-                        device_value=payload["humiValue"],
-                    )
-                    self.number_calibration_humi.ns = self.ns
-                    self.number_calibration_humi.key_value = "humiValue"
-                    self.number_calibration_humi.native_max_value = 5
-                    self.number_calibration_humi.native_min_value = -5
-                    self.number_calibration_humi.native_step = 0.1
+        def _parse(self, payload: "mt_t.Calibration_C", /):
+            try:
+                humidity = payload["humiValue"]  # type: ignore
+                self.number_calibration_humi.update_device_value(humidity)
+            except AttributeError:
+                self.number_calibration_humi = MLConfigNumber(
+                    self.manager,
+                    self.channel,
+                    "humidity_calibration",
+                    device_class=MLConfigNumber.DeviceClass.HUMIDITY,
+                    device_scale=10,
+                    device_value=humidity,
+                )
+                self.number_calibration_humi.ns = self.ns
+                self.number_calibration_humi.key_value = "humiValue"
+                self.number_calibration_humi.native_max_value = 5
+                self.number_calibration_humi.native_min_value = -5
+                self.number_calibration_humi.native_step = 0.1
+            except KeyError:  # missing humiValue
+                pass
 
             super()._parse(payload)
 
@@ -195,15 +192,12 @@ class Mts300Climate(MtsThermostatClimate):
         "target_temperature_high",
         "target_temperature_low",
         "_mts_work",
+        "sensor_current_humidity",
         "number_fan_hold",
         "switch_fan_hold",
     ) + tuple(f"sensor_{_key}" for _key in STATUS_SENSOR_DEF_MAP)
 
-    def __init__(
-        self,
-        manager: "Device",
-        channel=0,
-    ):
+    def __init__(self, manager: "Device", channel=0, /):
         super().__init__(manager, channel)
         self.fan_mode = None
         self.fan_modes = self._attr_fan_modes
@@ -216,7 +210,8 @@ class Mts300Climate(MtsThermostatClimate):
                 f"sensor_{_key}",
                 _def.type(manager, channel, _def.entitykey, **_def.kwargs),
             )
-
+        self.sensor_current_humidity = MLHumiditySensor(manager, channel)
+        self.sensor_current_humidity.entity_registry_enabled_default = False
         self.number_fan_hold = MLConfigNumber(
             manager,
             channel,
@@ -240,6 +235,7 @@ class Mts300Climate(MtsThermostatClimate):
         await super().async_shutdown()
         self.switch_fan_hold = None  # type:ignore
         self.number_fan_hold = None  # type:ignore
+        self.sensor_current_humidity = None  # type: ignore
         for _key in Mts300Climate.STATUS_SENSOR_DEF_MAP:
             setattr(self, f"sensor_{_key}", None)
 
@@ -298,7 +294,7 @@ class Mts300Climate(MtsThermostatClimate):
             )
 
     @override
-    async def async_set_fan_mode(self, fan_mode: str):
+    async def async_set_fan_mode(self, fan_mode: str, /):
         fan_speed = self.FAN_MODE_TO_FAN_SPEED_MAP[fan_mode]
         # actually we assume: (fan_speed != 0) <-> (fMode == mc.MTS300_FAN_MODE_ON)
         await self._async_request_modeC(
@@ -315,22 +311,22 @@ class Mts300Climate(MtsThermostatClimate):
         )
 
     @override
-    async def async_request_preset(self, mode: int):
+    async def async_request_preset(self, mode: int, /):
         # in Mts300 we'll map 'presets' to the 'work' parameter
         await self._async_request_modeC({"work": mode})
 
     @override
-    async def async_request_onoff(self, onoff: int):
+    async def async_request_onoff(self, onoff: int, /):
         await self._async_request_modeC(
             {"mode": self._mts_mode if onoff else mc.MTS300_MODE_OFF}
         )
 
     @override
-    def is_mts_scheduled(self):
+    def is_mts_scheduled(self, /):
         return self._mts_onoff and self._mts_work == mc.MTS300_WORK_SCHEDULE
 
     # interface: self
-    async def _async_request_modeC(self, payload: dict):
+    async def _async_request_modeC(self, payload: "MerossPayloadType", /):
         ns = self.ns
         payload |= {"channel": self.channel}
         if response := await self.manager.async_request_ack(
@@ -342,11 +338,11 @@ class Mts300Climate(MtsThermostatClimate):
                 payload = response[mc.KEY_PAYLOAD][ns.key][0]
             except (KeyError, IndexError):
                 # optimistic update
-                payload = self._mts_payload | payload
+                payload = merge_dicts(self._mts_payload, payload)  # type: ignore
             self._parse_modeC(payload)  # type: ignore
 
     # message handlers
-    def _parse_modeC(self, payload: "mt_t.ModeC_C"):
+    def _parse_modeC(self, payload: "mt_t.ModeC_C", /):
         if self._mts_payload == payload:
             return
         self._mts_payload = payload
@@ -358,7 +354,8 @@ class Mts300Climate(MtsThermostatClimate):
             self.target_temperature_high = targetTemp["cold"] / self.device_scale
             self.target_temperature_low = targetTemp["heat"] / self.device_scale
             more = payload["more"]
-            self.current_humidity = more["humi"] / 10
+            self.sensor_current_humidity.update_device_value(more["humi"])
+            self.current_humidity = self.sensor_current_humidity.native_value
             for _key in Mts300Climate.STATUS_SENSOR_DEF_MAP:
                 getattr(self, f"sensor_{_key}").update_native_value(more[_key])
 
@@ -424,7 +421,7 @@ class Mts300Climate(MtsThermostatClimate):
         except Exception as e:
             self.log_exception(self.WARNING, e, "parsing thermostat ModeC", timeout=300)
 
-    async def _async_request_value_number_fan_hold(self, device_value):
+    async def _async_request_value_number_fan_hold(self, device_value, /):
         # this method (ovverriding MLConfig.Number.async_request_value) should
         # return Success/Failure but we just return None (feailure) since the
         # number entity stata has already been updated/flushed in our _parse_modeC in case

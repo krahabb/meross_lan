@@ -13,6 +13,7 @@ from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
 )
+from custom_components.meross_lan.sensor import MLSignalStrengthSensor
 
 from tests import const as tc, helpers
 
@@ -79,14 +80,16 @@ async def test_device_entry(request, hass: "HomeAssistant"):
 
             entity_dnd = None
             if mn.Appliance_System_DNDMode.name in ability:
-                entity_dnd = device.entities[mlc.DND_ID]
+                entity_dnd = device.entities[MLDNDLightEntity.ENTITY_KEY]
                 assert isinstance(entity_dnd, MLDNDLightEntity)
                 state = hass.states.get(entity_dnd.entity_id)
                 assert state and state.state == hac.STATE_UNAVAILABLE
 
             sensor_signal_strength = None
             if mn.Appliance_System_Runtime.name in ability:
-                sensor_signal_strength = device.entities[mlc.SIGNALSTRENGTH_ID]
+                sensor_signal_strength = device.entities[
+                    MLSignalStrengthSensor.ENTITY_KEY
+                ]
                 state = hass.states.get(sensor_signal_strength.entity_id)
                 assert state and state.state == hac.STATE_UNAVAILABLE
 

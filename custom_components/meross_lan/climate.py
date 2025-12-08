@@ -42,7 +42,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         ATTR_TARGET_TEMP_LOW: Final
 
         device_scale: ClassVar[float]
-        AdjustNumber: ClassVar[type["MtsTemperatureNumber"]]
+        AdjustNumber: ClassVar[type["MLConfigNumber"]]
         """The specific Adjust/Calibrate number class to instantiate."""
         SetPointNumber: ClassVar[type["MtsSetPointNumber"] | None]
         """The (optional) class for setting up a group of preset setpoints."""
@@ -58,7 +58,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         SET_TEMP_FORCE_MANUAL_MODE: Final[bool]
         """Determines the behavior of async_set_temperature."""
         manager: BaseDevice
-        number_adjust_temperature: Final["MtsTemperatureNumber"]
+        number_adjust_temperature: Final["MLConfigNumber"]
         number_preset_temperature: dict[str, "MtsSetPointNumber"]
         schedule: Final[MtsSchedule]
         select_tracked_sensor: Final[MtsTrackedSensor]
@@ -141,7 +141,6 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         "_mts_mode",
         "_mts_onoff",
         "_mts_payload",
-        "_core_config_update_unsub",
         "number_adjust_temperature",
         "number_preset_temperature",
         "schedule",
@@ -149,11 +148,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         "sensor_current_temperature",
     )
 
-    def __init__(
-        self,
-        manager: "BaseDevice",
-        channel: object,
-    ):
+    def __init__(self, manager: "BaseDevice", channel: object, /):
         self.current_humidity = None
         self.current_temperature = None
         self.hvac_action = None
@@ -165,17 +160,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         self.preset_modes = self._attr_preset_modes
         self.supported_features = self._attr_supported_features
         self.target_temperature = None
-        # We need to implement this patch since HA doesn't 'convert' this to
-        # °F when the system is configured so...this is likely due to the nature of °F
-        # which have an offset to 0°C and so, converting a temperature delta should be done
-        # differently (then the actual unit converters). TBH this should be resolved in
-        # HA core but right now we'll patch this until better times ..
-        self.target_temperature_step = (
-            1
-            if manager.hass.config.units.temperature_unit
-            == self.hac.UnitOfTemperature.FAHRENHEIT
-            else 0.5
-        )
+        self.target_temperature_step = 0.5
         self.temperature_unit = self.hac.UnitOfTemperature.CELSIUS
         self._mts_active = None
         self._mts_mode = None
@@ -195,15 +180,8 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         self.sensor_current_temperature = MLTemperatureSensor(manager, channel)
         self.sensor_current_temperature.entity_registry_enabled_default = False
 
-        self._core_config_update_unsub = manager.hass.bus.async_listen(
-            self.hac.EVENT_CORE_CONFIG_UPDATE, self._async_core_config_update
-        )
-
     # interface: MLEntity
     async def async_shutdown(self):
-        if self._core_config_update_unsub:
-            self._core_config_update_unsub()
-            self._core_config_update_unsub = None
         await super().async_shutdown()
         self.sensor_current_temperature = None  # type: ignore
         self.select_tracked_sensor = None  # type: ignore
@@ -246,18 +224,18 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         raise NotImplementedError()
 
     # interface: self
-    async def async_request_preset(self, mode: int):
+    async def async_request_preset(self, mode: int, /):
         """Implements the protocol to set the Meross thermostat mode"""
         raise NotImplementedError()
 
-    async def async_request_onoff(self, onoff: int):
+    async def async_request_onoff(self, onoff: int, /):
         """Implements the protocol to turn on the thermostat"""
         raise NotImplementedError()
 
-    def is_mts_scheduled(self):
+    def is_mts_scheduled(self, /):
         raise NotImplementedError()
 
-    def get_ns_adjust(self) -> "NamespaceHandler":
+    def get_ns_adjust(self, /) -> "NamespaceHandler":
         """
         Returns the correct ns handler for the adjust namespace.
         Used to trigger a poll and the ns which is by default polled
@@ -265,7 +243,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         """
         raise NotImplementedError()
 
-    def _update_current_temperature(self, current_temperature: float | int):
+    def _update_current_temperature(self, current_temperature: float | int, /):
         """
         Common handler for incoming room temperature value
         """
@@ -284,50 +262,12 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
                 # in case the ns is not available for this device
                 pass
 
-    async def _async_core_config_update(self, _event) -> None:
-        self.target_temperature_step = (
-            1
-            if self.manager.hass.config.units.temperature_unit
-            == self.hac.UnitOfTemperature.FAHRENHEIT
-            else 0.5
-        )
-        self.flush_state()
 
-
-class MtsTemperatureNumber(MLConfigNumber):
-    """
-    Common number entity for representing MTS temperatures configuration
-    """
-
-    # HA core entity attributes:
-    _attr_suggested_display_precision = 1
-
-    __slots__ = ()
-
-    def __init__(
-        self,
-        climate: "MtsClimate",
-        entitykey: str,
-        **kwargs: "Unpack[MLConfigNumber.Args]",
-    ):
-        kwargs["device_scale"] = climate.device_scale
-        super().__init__(
-            climate.manager,
-            climate.channel,
-            entitykey,
-            MLConfigNumber.DeviceClass.TEMPERATURE,
-            **kwargs,
-        )
-
-
-class MtsSetPointNumber(MtsTemperatureNumber):
+class MtsSetPointNumber(MLConfigNumber):
     """
     Helper entity to configure MTS100/150/200 setpoints
     AKA: Heat(comfort) - Cool(sleep) - Eco(away)
     """
-
-    # HA core entity attributes:
-    icon: str
 
     __slots__ = (
         "climate",
@@ -335,20 +275,19 @@ class MtsSetPointNumber(MtsTemperatureNumber):
         "key_value",
     )
 
-    def __init__(
-        self,
-        climate: "MtsClimate",
-        preset_mode: "MtsClimate.Preset",
-    ):
+    def __init__(self, climate: "MtsClimate", preset_mode: "MtsClimate.Preset", /):
         self.climate = climate
         self.icon = climate.PRESET_TO_ICON_MAP[preset_mode]
         self.key_value = climate.MTS_MODE_TO_TEMPERATUREKEY_MAP[
             reverse_lookup(climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
         ]
         super().__init__(
-            climate,
+            climate.manager,
+            climate.channel,
             f"config_temperature_{self.key_value}",
+            MLConfigNumber.DeviceClass.TEMPERATURE,
             name=f"{preset_mode} temperature",
+            device_scale=climate.device_scale,
         )
 
     @property
@@ -363,7 +302,7 @@ class MtsSetPointNumber(MtsTemperatureNumber):
     def native_step(self):
         return self.climate.target_temperature_step
 
-    async def async_request_value(self, device_value):
+    async def async_request_value(self, device_value, /):
         if response := await super().async_request_value(device_value):
             # mts100(s) reply to the setack with the 'full' (or anyway richer) payload
             # so we'll use the _parse_temperature logic (a bit overkill sometimes) to

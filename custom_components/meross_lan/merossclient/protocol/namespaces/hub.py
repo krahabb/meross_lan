@@ -23,28 +23,58 @@ IS_HUB_SUBID: "mn.ns.Args" = {
     "payload": mn.PayloadType.LIST_C,
 }  # we can override payload in definitions
 
-Hub_Config_DeviceCfg = mn.ns(
+Appliance_Config_DeviceCfg = mn.ns(
     "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, mn.ARGS_GETSETPUSH | IS_HUB_SUBID
-)  # ms130
-Hub_Config_Sensor_Association = mn.ns(
+)  # ms130-mst100
+Appliance_Config_Sensor_Association = mn.ns(
     "Appliance.Config.Sensor.Association",
     mc.KEY_CONFIG,
     mn.ARGS_GETSETPUSH | mn.IS_SENSOR | IS_HUB_SUBID,
 )  # Not seen really..just an extrapolation for Hub(s)
-Hub_Control_Sensor_HistoryX = mn.ns(
+Appliance_Config_WaterPlan = mn.ns(
+    "Appliance.Config.WaterPlan",
+    mc.KEY_CONFIG,
+    mn.ARGS_GETSET | IS_HUB_SUBID | mn.G_EXPERIMENTAL,
+)  # mst100 (used to read/write watering schedules)
+Appliance_Control_Sensor_HistoryX = mn.ns(
     "Appliance.Control.Sensor.HistoryX",
     mc.KEY_HISTORY,
     mn.ARGS_GET | mn.IS_SENSOR | IS_HUB_SUBID,
 )
-Hub_Control_Sensor_LatestX = mn.ns(
+Appliance_Control_Sensor_LatestX = mn.ns(
     "Appliance.Control.Sensor.LatestX",
     mc.KEY_LATEST,
     mn.ARGS_GETPUSH | mn.IS_SENSOR | IS_HUB_SUBID,
 )
+Appliance_Control_Water = mn.ns(
+    "Appliance.Control.Water",
+    mc.KEY_CONTROL,
+    mn.ARGS_GETSETPUSH | IS_HUB_SUBID,
+)  # mst100
+Appliance_Control_WaterEvent = mn.ns(
+    "Appliance.Control.WaterEvent",
+    mc.KEY_CONTROL,
+    mn.ARGS_NO_Q | IS_HUB_SUBID,
+)  # mst100 (used to report events after each watering cycle is completed)
+Appliance_Control_WaterEvent_Skip = mn.ns(
+    "Appliance.Control.WaterEvent.Skip",
+    mc.KEY_CONTROL,
+    mn.ARGS_GETSET | IS_HUB_SUBID | mn.G_EXPERIMENTAL,
+)  # mst100 (used in the app to skip watering on specific days according to the schedule)
+Appliance_Control_WaterPlan_Skip = mn.ns(
+    "Appliance.Control.WaterPlan.Skip",
+    mc.KEY_CONTROL,
+    mn.ARGS_NO_Q | IS_HUB_SUBID,
+)  # mst100 (allows the device to query cloud server about whether to skip execution on a specific day based on weather conditions)
 
 Appliance_Digest_Hub = mn.ns(
     "Appliance.Digest.Hub", mc.KEY_HUB, mn.ARGS_GET | mn.P_LIST | MAP_HUB
 )
+Appliance_Digest_WaterPlan = mn.ns(
+    "Appliance.Digest.WaterPlan",
+    mc.KEY_DIGEST,
+    mn.ARGS_GETSET | IS_HUB_SUBID | mn.G_EXPERIMENTAL,
+)  # mst100 (used to read/write watering schedules)
 Appliance_Hub_Battery = mn.ns(
     "Appliance.Hub.Battery", mc.KEY_BATTERY, mn.ARGS_GETPUSH | IS_HUB_ID
 )

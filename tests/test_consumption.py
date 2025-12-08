@@ -94,13 +94,13 @@ async def _async_configure_context(context: "DeviceContext", timezone: str):
     assert powerstate
     assert float(powerstate.state) == TEST_POWER
 
-    sensor_consumption = device.entities[mlc.CONSUMPTIONX_SENSOR_KEY]
+    sensor_consumption = device.entities[ConsumptionXSensor.ENTITY_KEY]
     assert isinstance(sensor_consumption, ConsumptionXSensor)
     consumptionstate = states.get(sensor_consumption.entity_id)
     assert consumptionstate
     assert int(consumptionstate.state) == 0
 
-    sensor_electricity = device.entities[mlc.ELECTRICITY_SENSOR_KEY]
+    sensor_electricity = device.entities[ElectricitySensor.ENTITY_KEY]
     assert isinstance(sensor_electricity, ElectricitySensor)
     # energy_estimate is disabled by default
     assert states.get(sensor_electricity.entity_id) is None
@@ -168,8 +168,8 @@ async def test_consumption(request, hass: "HomeAssistant"):
         # now the device polling state is good. We'll tick the states across
         # midnight and check the ongoing updates
         while True:
-            await context.async_poll_single()
-            if context.time_mock() + polling_tick >= tomorrow:
+            dt_now = await context.async_poll_single()
+            if dt_now + polling_tick >= tomorrow:
                 # the next poll will be after midnight
                 # so we're checking last values before the trip
                 _check_energy_states(
@@ -253,8 +253,8 @@ async def test_consumption_with_timezone(request, hass: "HomeAssistant"):
         # now the device polling state is good. We'll tick the states across
         # midnight and check the ongoing updates
         while True:
-            await context.async_poll_single()
-            if context.time_mock() + polling_tick >= tomorrow:
+            dt_now = await context.async_poll_single()
+            if dt_now + polling_tick >= tomorrow:
                 # the next poll will be after midnight
                 # so we're checking last values before the trip
                 _check_energy_states(
@@ -301,9 +301,9 @@ async def test_consumption_with_reload(request, hass: "HomeAssistant"):
 
         device = await context.async_enable_entity(sensor_estimate_entity_id)
         # 'async_enable_entity' will invalidate our references
-        sensor_consumption = device.entities[mlc.CONSUMPTIONX_SENSOR_KEY]
+        sensor_consumption = device.entities[ConsumptionXSensor.ENTITY_KEY]
         assert isinstance(sensor_consumption, ConsumptionXSensor)
-        sensor_electricity = device.entities[mlc.ELECTRICITY_SENSOR_KEY]
+        sensor_electricity = device.entities[ElectricitySensor.ENTITY_KEY]
         assert isinstance(sensor_electricity, ElectricitySensor)
 
         def _check_energy_states(power, duration, msg):
@@ -344,9 +344,9 @@ async def test_consumption_with_reload(request, hass: "HomeAssistant"):
 
             assert await context.async_setup()
             device = context.device
-            sensor_consumption = device.entities[mlc.CONSUMPTIONX_SENSOR_KEY]
+            sensor_consumption = device.entities[ConsumptionXSensor.ENTITY_KEY]
             assert isinstance(sensor_consumption, ConsumptionXSensor)
-            sensor_electricity = device.entities[mlc.ELECTRICITY_SENSOR_KEY]
+            sensor_electricity = device.entities[ElectricitySensor.ENTITY_KEY]
             assert isinstance(sensor_electricity, ElectricitySensor)
 
             # sensor states should have been restored
@@ -384,8 +384,8 @@ async def test_consumption_with_reload(request, hass: "HomeAssistant"):
         # now the device polling state is good. We'll tick the states across
         # midnight and check the ongoing updates
         while True:
-            await context.async_poll_single()
-            if context.time_mock() + polling_tick >= tomorrow:
+            dt_now = await context.async_poll_single()
+            if dt_now + polling_tick >= tomorrow:
                 # the next poll will be after midnight
                 # so we're checking last values before the trip
                 _check_energy_states(
@@ -394,7 +394,13 @@ async def test_consumption_with_reload(request, hass: "HomeAssistant"):
                 yesterday_consumption = sensor_consumption.native_value
                 assert yesterday_consumption is not None
                 # the estimate should be reset right at midnight
-                await context.time_mock.async_move_to(tomorrow)
+                await context.time_mock.async_move_to(
+                    # there's an issue with exact time sync (after HA core 2025.11).
+                    # 1 msec past midnight looks like fixing else ElectriciySensor
+                    # doesnt reset correctly.
+                    tomorrow
+                    + dt.timedelta(milliseconds=1)
+                )
                 assert sensor_electricity.native_value == 0
                 break
 
@@ -412,6 +418,6 @@ async def test_consumption_with_reload(request, hass: "HomeAssistant"):
             or today_offset == yesterday_consumption
         )
 
-        # new we unload/reload/reboot again in order to see
+        # now we unload/reload/reboot again in order to see
         # if the consumption offset gets restored
         await _async_unload_reload("reboot with offset", today_offset)

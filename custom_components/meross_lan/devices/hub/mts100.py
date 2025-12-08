@@ -1,9 +1,10 @@
 from typing import TYPE_CHECKING
 
 from ...calendar import MtsSchedule
-from ...climate import MtsClimate, MtsSetPointNumber, MtsTemperatureNumber
+from ...climate import MtsClimate, MtsSetPointNumber
 from ...merossclient.protocol import const as mc
 from ...merossclient.protocol.namespaces import hub as mn_h
+from ...number import MLConfigNumber
 from ...switch import MLEmulatedSwitch
 
 if TYPE_CHECKING:
@@ -19,7 +20,7 @@ class Mts100Climate(MtsClimate):
     # MtsClimate class attributes
     device_scale = mc.MTS100_TEMP_SCALE
 
-    class AdjustNumber(MtsTemperatureNumber):
+    class AdjustNumber(MLConfigNumber):
 
         ns = mn_h.Appliance_Hub_Mts100_Adjust
         key_value = mc.KEY_TEMPERATURE
@@ -29,14 +30,16 @@ class Mts100Climate(MtsClimate):
         native_min_value = -5
         native_step = 0.5
 
-        def __init__(self, climate: "Mts100Climate"):
-            super().__init__(
-                climate,
+        def __init__(self, climate: "Mts100Climate", /):
+            MLConfigNumber.__init__(
+                self,
+                climate.manager,
+                climate.channel,
                 f"config_{self.ns.key}_{self.key_value}",
+                MLConfigNumber.DEVICE_CLASS_TEMPERATURE_DELTA,
                 name="Adjust temperature",
+                device_scale=100,
             )
-            # override the default climate.device_scale set in base cls
-            self.device_scale = 100
 
     class SetPointNumber(MtsSetPointNumber):
         """
@@ -48,7 +51,7 @@ class Mts100Climate(MtsClimate):
     class Schedule(MtsSchedule):
         ns = mn_h.Appliance_Hub_Mts100_ScheduleB
 
-        def __init__(self, climate: "Mts100Climate"):
+        def __init__(self, climate: "Mts100Climate", /):
             super().__init__(climate)
             self._schedule_unit_time = climate.manager.hub.descriptor.ability.get(
                 mn_h.Appliance_Hub_Mts100_ScheduleB.name, {}
@@ -83,7 +86,7 @@ class Mts100Climate(MtsClimate):
         "switch_patch_hvacaction",
     )
 
-    def __init__(self, manager: "MTS100SubDevice"):
+    def __init__(self, manager: "MTS100SubDevice", /):
         self.extra_state_attributes = {}
         super().__init__(manager, manager.id)
         self.binary_sensor_window = manager.build_binary_sensor_window()
@@ -101,7 +104,7 @@ class Mts100Climate(MtsClimate):
         self.binary_sensor_window: "MLBinarySensor" = None  # type: ignore
         self.switch_patch_hvacaction: "MLEmulatedSwitch" = None  # type: ignore
 
-    def flush_state(self):
+    def flush_state(self, /):
         self.preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)
         if self._mts_onoff:
             self.hvac_mode = MtsClimate.HVACMode.HEAT
@@ -176,7 +179,7 @@ class Mts100Climate(MtsClimate):
         ):
             self._parse_temperature(response[mc.KEY_PAYLOAD][mc.KEY_TEMPERATURE][0])
 
-    async def async_request_preset(self, mode: int):
+    async def async_request_preset(self, mode: int, /):
         """Requests an mts mode and (ensure) turn-on"""
         if await self.manager.async_request_ack(
             mn_h.Appliance_Hub_Mts100_Mode.name,
@@ -206,7 +209,7 @@ class Mts100Climate(MtsClimate):
                 self.target_temperature = target_temperature / self.device_scale
             self.flush_state()
 
-    async def async_request_onoff(self, onoff: int):
+    async def async_request_onoff(self, onoff: int, /):
         if await self.manager.async_request_ack(
             mn_h.Appliance_Hub_ToggleX.name,
             mc.METHOD_SET,
@@ -219,16 +222,16 @@ class Mts100Climate(MtsClimate):
             self._mts_onoff = onoff
             self.flush_state()
 
-    def is_mts_scheduled(self):
+    def is_mts_scheduled(self, /):
         return self._mts_onoff and self._mts_mode == mc.MTS100_MODE_AUTO
 
-    def get_ns_adjust(self):
+    def get_ns_adjust(self, /):
         return self.manager.hub.namespace_handlers[
             mn_h.Appliance_Hub_Mts100_Adjust.name
         ]
 
     # message handlers
-    def _parse_temperature(self, payload: dict):
+    def _parse_temperature(self, payload: dict, /):
         if self._mts_payload == payload:
             return
         self._mts_payload = payload
@@ -255,10 +258,10 @@ class Mts100Climate(MtsClimate):
         self.flush_state()
 
     # interface: self
-    def update_scheduleb_mode(self, mode):
+    def update_scheduleb_mode(self, mode, /):
         self.extra_state_attributes[mc.KEY_SCHEDULEBMODE] = mode
         self.schedule._schedule_entry_count_max = mode
         self.schedule._schedule_entry_count_min = mode
 
-    def _switch_emulate_hvacaction_state_callback(self):
+    def _switch_emulate_hvacaction_state_callback(self, /):
         self.flush_state()

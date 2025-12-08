@@ -18,20 +18,15 @@ from . import (
     versiontuple,
 )
 from .. import const as mlc
-from ..const import (
-    CONF_CHECK_FIRMWARE_UPDATES,
-    CONF_PASSWORD,
-    DOMAIN,
-)
 from ..helpers.obfuscate import OBFUSCATE_DEVICE_ID_MAP, obfuscated_dict
 from ..merossclient import MEROSSDEBUG, HostAddress, cloudapi, get_active_broker
-from ..merossclient.mqttclient import MerossMQTTAppClient, generate_app_id
+from ..merossclient.mqttclient import MerossMQTTAppClient
 from ..merossclient.protocol import const as mc, namespaces as mn
 from .manager import CloudApiClient
-from .mqtt_profile import ConnectionSensor, MQTTConnection, MQTTProfile
+from .mqtt_profile import MQTTConnection, MQTTProfile
 
 if TYPE_CHECKING:
-    from typing import Final, Unpack
+    from typing import Final, TypedDict, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -44,11 +39,22 @@ if TYPE_CHECKING:
         MerossCloudCredentials,
         SubDeviceInfoType,
     )
+    from ..merossclient.protocol.message import MerossMessage
     from .component_api import ComponentApi
     from .device import Device, MerossDeviceDescriptor
 
     UuidType = str
     DeviceInfoDictType = dict[UuidType, "DeviceInfoType"]
+
+    class MerossProfileStoreType(TypedDict):
+        appId: str
+        # TODO credentials: NotRequired[MerossCloudCredentials]
+        deviceInfo: DeviceInfoDictType
+        deviceInfoTime: float
+        latestVersion: list[LatestVersionType]
+        latestVersionTime: float
+        token: str | None  # TODO remove
+        tokenRequestTime: float
 
 
 class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
@@ -107,10 +113,11 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
     def get_rl_safe_delay(self, uuid: str):
         return MerossMQTTAppClient.get_rl_safe_delay(self, uuid)
 
+    @override
     async def _async_mqtt_publish(
         self,
         device_id: str,
-        request: str,
+        request: "MerossMessage",
     ):
         return await self.profile.hass.async_add_executor_job(
             self.rl_publish, device_id, request
@@ -125,11 +132,11 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
     def _mqtt_published(self):
         if sensor_connection := self.sensor_connection:
             attrs = sensor_connection.extra_state_attributes
-            attrs[ConnectionSensor.ATTR_DROPPED] = self.rl_dropped
-            attrs[ConnectionSensor.ATTR_PUBLISHED] += 1
+            attrs[sensor_connection.ATTR_DROPPED] = self.rl_dropped
+            attrs[sensor_connection.ATTR_PUBLISHED] += 1
             if self.mqtt_is_connected:
                 # enforce the state eventually cancelling queued, dropped...
-                sensor_connection.native_value = ConnectionSensor.STATE_CONNECTED
+                sensor_connection.native_value = sensor_connection.STATE_CONNECTED
             sensor_connection.flush_state()
 
     # interface: MerossMQTTAppClient
@@ -144,25 +151,14 @@ MerossMQTTConnection.SESSION_HANDLERS = {
 }
 
 
-class MerossProfileStoreType(typing.TypedDict):
-    appId: str
-    # TODO credentials: typing.NotRequired[MerossCloudCredentials]
-    deviceInfo: "DeviceInfoDictType"
-    deviceInfoTime: float
-    latestVersion: list["LatestVersionType"]
-    latestVersionTime: float
-    token: str | None  # TODO remove
-    tokenRequestTime: float
-
-
-class MerossProfileStore(storage.Store[MerossProfileStoreType]):
+class MerossProfileStore(storage.Store["MerossProfileStoreType"]):
     VERSION = 1
 
     def __init__(self, hass: "HomeAssistant", profile_id: str):
         super().__init__(
             hass,
             MerossProfileStore.VERSION,
-            f"{DOMAIN}.profile.{profile_id}",
+            f"{mlc.DOMAIN}.profile.{profile_id}",
         )
 
     async def async_remove_and_logout(self, credentials: "MerossCloudCredentials"):
@@ -242,13 +238,13 @@ class MerossProfile(MQTTProfile):
         if data := await self._store.async_load():
             self._data = data
             if self.KEY_APP_ID not in data:
-                data[self.KEY_APP_ID] = generate_app_id()
-            if not isinstance(data.get(self.KEY_DEVICE_INFO), dict):
+                data[self.KEY_APP_ID] = MerossMQTTAppClient.generate_app_id()
+            if type(data.get(self.KEY_DEVICE_INFO)) is not dict:
                 data[self.KEY_DEVICE_INFO] = {}
             self._device_info_time = data.get(self.KEY_DEVICE_INFO_TIME, 0.0)
-            if not isinstance(self._device_info_time, float):
+            if type(self._device_info_time) is not float:
                 data[self.KEY_DEVICE_INFO_TIME] = self._device_info_time = 0.0
-            if not isinstance(data.get(self.KEY_LATEST_VERSION), list):
+            if type(data.get(self.KEY_LATEST_VERSION)) is not list:
                 data[self.KEY_LATEST_VERSION] = []
             if self.KEY_LATEST_VERSION_TIME not in data:
                 data[self.KEY_LATEST_VERSION_TIME] = 0.0
@@ -261,11 +257,11 @@ class MerossProfile(MQTTProfile):
                 # to just setup the issue registry in case we're
                 # not configured to automatically refresh
                 self.apiclient.credentials = None
-                await self.async_token_refresh()
+                await self._async_token_refresh()
         else:
             self._device_info_time = 0.0
-            self._data: MerossProfileStoreType = {
-                self.KEY_APP_ID: generate_app_id(),
+            self._data = {
+                self.KEY_APP_ID: MerossMQTTAppClient.generate_app_id(),
                 mc.KEY_TOKEN: self.config.get(mc.KEY_TOKEN),
                 self.KEY_DEVICE_INFO: {},
                 self.KEY_DEVICE_INFO_TIME: 0.0,
@@ -292,6 +288,7 @@ class MerossProfile(MQTTProfile):
             self._async_query_device_info,
         )
 
+    @override
     async def async_shutdown(self):
         if self._unsub_polling_query_device_info:
             self._unsub_polling_query_device_info.cancel()
@@ -300,6 +297,7 @@ class MerossProfile(MQTTProfile):
         self.api.profiles[self.id] = None
 
     # interface: ConfigEntryManager
+    @override
     async def entry_update_listener(self, hass, config_entry: "ConfigEntry"):
         config: ProfileConfigType = config_entry.data  # type: ignore
         self.remove_issue(mlc.ISSUE_CLOUD_TOKEN_EXPIRED)
@@ -323,7 +321,7 @@ class MerossProfile(MQTTProfile):
             # on our polling schedule for whatever reason (invalid token -
             # no connection - whatsoever) so, having a fresh token and likely
             # good connectivity we're going to retrigger that
-            if self.need_query_device_info():
+            if self._need_query_device_info():
                 # retrigger the poll at the right time since async_query_devices
                 # might be called for whatever reason 'asynchronously'
                 # at any time (say the user does a new cloud login or so...)
@@ -331,9 +329,11 @@ class MerossProfile(MQTTProfile):
                     self._unsub_polling_query_device_info.cancel()
                     await self._async_query_device_info()
 
+    @override
     def get_logger_name(self) -> str:
         return f"profile_{self.loggable_profile_id(self.id)}"
 
+    @override
     def loggable_diagnostic_state(self):
         if self.obfuscate:
             store_data = obfuscated_dict(self._data)
@@ -351,7 +351,62 @@ class MerossProfile(MQTTProfile):
         else:
             return {"store": self._data}
 
-    # interface: ApiProfile
+    @override
+    def get_device_info(self, uuid: str):
+        return self._data[self.KEY_DEVICE_INFO].get(uuid)
+
+    @override
+    def get_latest_version(self, descriptor: "MerossDeviceDescriptor"):
+        """returns LatestVersionType info if device has an update available"""
+        _type = descriptor.type
+        _version = versiontuple(descriptor.firmwareVersion)
+        # the LatestVersionType struct reports also the subType for the firmware
+        # but the meaning of this field is a bit confusing since a lot of traces
+        # are reporting the value "un" (undefined?) for the vast majority.
+        # Also, the mcu field (should contain a list of supported mcus?) is not
+        # reported in my api queries and I don't have enough data to guess anything
+        # at any rate, actual implementation is not proceeding with effective
+        # update so these infos we gather and show are just cosmethic right now and
+        # will not harm anyone ;)
+        # _subtype = descriptor.subType
+        for latest_version in self._data[self.KEY_LATEST_VERSION]:
+            if (
+                latest_version.get(mc.KEY_TYPE)
+                == _type
+                # and latest_version.get(mc.KEY_SUBTYPE) == _subtype
+            ):
+                if versiontuple(latest_version.get(mc.KEY_VERSION, "")) > _version:
+                    return latest_version
+                else:
+                    return None
+        return None
+
+    @override
+    def link(self, device: "Device"):
+        """
+        Device linking to a cloud profile sets the environment for
+        the device MQTT attachment/connection. This process uses a lot
+        of euristics to ensure the device really belongs to this cloud
+        profile.
+        A device binded to a cloud profile should:
+        - have the same userid
+        - have the same key
+        - have a broker address compatible with the profile available brokers
+        - be present in the device_info db
+        The second check could be now enforced since the new Meross signin api
+        tells us ('mqttDomain') which is the (only) broker assigned to this profile.
+        It was historically not this way since devices binded to a cloud account could
+        be spread among a pool of brokers.
+        Presence in the device_info db might be unreliable since the query is only
+        done once in 24 hours and thus, the db being out of sync
+        """
+        super().link(device)
+        if device_info := self.get_device_info(device.id):
+            device.update_device_info(device_info)
+        if latest_version := self.get_latest_version(device.descriptor):
+            device.update_latest_version(latest_version)
+
+    @override
     def attach_mqtt(self, device: "Device"):
         descr = device.descriptor
         try:
@@ -413,83 +468,6 @@ class MerossProfile(MQTTProfile):
     def userid(self):
         return self.config[mc.KEY_USERID_]
 
-    def link(self, device: "Device"):
-        """
-        Device linking to a cloud profile sets the environment for
-        the device MQTT attachment/connection. This process uses a lot
-        of euristics to ensure the device really belongs to this cloud
-        profile.
-        A device binded to a cloud profile should:
-        - have the same userid
-        - have the same key
-        - have a broker address compatible with the profile available brokers
-        - be present in the device_info db
-        The second check could be now enforced since the new Meross signin api
-        tells us ('mqttDomain') which is the (only) broker assigned to this profile.
-        It was historically not this way since devices binded to a cloud account could
-        be spread among a pool of brokers.
-        Presence in the device_info db might be unreliable since the query is only
-        done once in 24 hours and thus, the db being out of sync
-        """
-        super().link(device)
-        if device_info := self._data[self.KEY_DEVICE_INFO].get(device.id):
-            device.update_device_info(device_info)
-        if latest_version := self.get_latest_version(device.descriptor):
-            device.update_latest_version(latest_version)
-
-    def get_device_info(self, uuid: str):
-        return self._data[self.KEY_DEVICE_INFO].get(uuid)
-
-    def get_latest_version(self, descriptor: "MerossDeviceDescriptor"):
-        """returns LatestVersionType info if device has an update available"""
-        _type = descriptor.type
-        _version = versiontuple(descriptor.firmwareVersion)
-        # the LatestVersionType struct reports also the subType for the firmware
-        # but the meaning of this field is a bit confusing since a lot of traces
-        # are reporting the value "un" (undefined?) for the vast majority.
-        # Also, the mcu field (should contain a list of supported mcus?) is not
-        # reported in my api queries and I don't have enough data to guess anything
-        # at any rate, actual implementation is not proceeding with effective
-        # update so these infos we gather and show are just cosmethic right now and
-        # will not harm anyone ;)
-        # _subtype = descriptor.subType
-        for latest_version in self._data[self.KEY_LATEST_VERSION]:
-            if (
-                latest_version.get(mc.KEY_TYPE)
-                == _type
-                # and latest_version.get(mc.KEY_SUBTYPE) == _subtype
-            ):
-                if versiontuple(latest_version.get(mc.KEY_VERSION, "")) > _version:
-                    return latest_version
-                else:
-                    return None
-        return None
-
-    def need_query_device_info(self):
-        return (
-            time() - self._device_info_time
-        ) > mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
-
-    async def async_check_query_latest_version(self, epoch: float):
-        if (
-            self.config.get(CONF_CHECK_FIRMWARE_UPDATES)
-            and (epoch - self._data[self.KEY_LATEST_VERSION_TIME])
-            > mlc.PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT
-        ):
-            self._data[self.KEY_LATEST_VERSION_TIME] = epoch
-            async with self._async_credentials_manager(
-                "async_check_query_latest_version"
-            ) as credentials:
-                if not credentials:
-                    return
-                self._data[self.KEY_LATEST_VERSION] = (
-                    await self.apiclient.async_device_latestversion()
-                )
-                self._schedule_save_store()
-                for device in self.api.active_devices():
-                    if latest_version := self.get_latest_version(device.descriptor):
-                        device.update_latest_version(latest_version)
-
     async def get_or_create_mqttconnections(self, device_id: str):
         """
         Returns a list of (active) broker connections according to the cloud configuration.
@@ -549,7 +527,7 @@ class MerossProfile(MQTTProfile):
             )
             return None
 
-    async def async_token_refresh(self):
+    async def _async_token_refresh(self):
         """
         Called when the stored token is dropped (expired) or when needed.
         Tries silently (re)login or raises an issue.
@@ -568,7 +546,7 @@ class MerossProfile(MQTTProfile):
             if config.get(mlc.CONF_MFA_CODE):
                 raise Exception("MFA required")
             credentials = await self.apiclient.async_token_refresh(
-                config[CONF_PASSWORD], config
+                config[mlc.CONF_PASSWORD], config
             )
             # set our (stored) key so the ConfigEntry update will find everything in place
             # and not trigger any side effects. No need to re-trigger _schedule_save_store
@@ -602,7 +580,7 @@ class MerossProfile(MQTTProfile):
             # it just yields the current one or tries it's best to recover a fresh
             # token with a guard to avoid issuing too many requests...
             credentials = self.apiclient.credentials or (
-                await self.async_token_refresh()
+                await self._async_token_refresh()
             )
             if not credentials:
                 self.log(self.WARNING, f"{msg} cancelled: missing cloudapi token")
@@ -612,9 +590,34 @@ class MerossProfile(MQTTProfile):
             if clouderror.apistatus in cloudapi.APISTATUS_TOKEN_ERRORS:
                 self.apiclient.credentials = None
                 if self._data.pop(mc.KEY_TOKEN, None):  # type: ignore
-                    await self.async_token_refresh()
+                    await self._async_token_refresh()
         except Exception as exception:
             self.log_exception(self.WARNING, exception, msg)
+
+    async def _async_check_query_latest_version(self, epoch: float):
+        if (
+            self.config.get(mlc.CONF_CHECK_FIRMWARE_UPDATES)
+            and (epoch - self._data[self.KEY_LATEST_VERSION_TIME])
+            > mlc.PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT
+        ):
+            self._data[self.KEY_LATEST_VERSION_TIME] = epoch
+            async with self._async_credentials_manager(
+                "async_check_query_latest_version"
+            ) as credentials:
+                if not credentials:
+                    return
+                self._data[self.KEY_LATEST_VERSION] = (
+                    await self.apiclient.async_device_latestversion()
+                )
+                self._schedule_save_store()
+                for device in self.api.active_devices():
+                    if latest_version := self.get_latest_version(device.descriptor):
+                        device.update_latest_version(latest_version)
+
+    def _need_query_device_info(self):
+        return (
+            time() - self._device_info_time
+        ) > mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
 
     async def _async_query_device_info(self):
         self._unsub_polling_query_device_info = self.schedule_async_callback(
@@ -642,7 +645,7 @@ class MerossProfile(MQTTProfile):
             # when new updates are available: we're not going (yet) to manage the
             # effective update since we're not able to do any basic validation
             # of the whole process and it might be a bit 'dangerous'
-            await self.async_check_query_latest_version(self._device_info_time)
+            await self._async_check_query_latest_version(self._device_info_time)
 
     async def _async_query_subdevices(self, device_id: str):
         async with self._async_credentials_manager(

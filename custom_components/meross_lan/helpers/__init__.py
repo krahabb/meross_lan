@@ -34,13 +34,7 @@ from .. import const as mlc
 if typing.TYPE_CHECKING:
     from datetime import tzinfo
     import ssl
-    from typing import (
-        Any,
-        Final,
-        NotRequired,
-        TypedDict,
-        Unpack,
-    )
+    from typing import Any, Final, NotRequired, TypedDict, Unpack
 
 
 def clamp(_value, _min, _max):
@@ -154,6 +148,7 @@ class _Logger(logging.Logger if typing.TYPE_CHECKING else object):
     # cache of subclassing types: see getLogger
     _CLASS_HOOKS = {}
 
+    @typing.override
     def _log(self, level, msg, args, **kwargs):
         if "timeout" in kwargs:
             timeout = kwargs.pop("timeout")
@@ -227,7 +222,7 @@ class Loggable(abc.ABC):
         self.logger.log(level, f"{self.logtag}: {msg}", *args, **kwargs)
 
     def log_exception(
-        self, level: int, exception: Exception, msg: str, *args, **kwargs
+        self, level: int, exception: BaseException, msg: str, *args, **kwargs
     ):
         self.log(
             level,

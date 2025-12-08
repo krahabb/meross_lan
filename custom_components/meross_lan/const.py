@@ -52,7 +52,7 @@ CONF_TRACE_MAXSIZE: Final = 262144  # or when MAXSIZE exceeded
 # folder where to store traces
 CONF_TRACE_DIRECTORY: Final = "traces"
 # versioning
-CONF_TRACE_VERSION: Final = 2
+CONF_TRACE_VERSION: Final = 3
 CONF_TRACE_COLUMNS: Final = ["time", "rxtx", "protocol", "method", "namespace", "data"]
 if TYPE_CHECKING:
 
@@ -183,13 +183,6 @@ CONF_NOTIFYRESPONSE = "notifyresponse"
 CONF_PROFILE_ID_LOCAL: Final = ""
 """label for ComponentApi as a 'fake' cloud profile"""
 
-#
-# some common entitykeys
-#
-DND_ID: Final = "dnd"
-SIGNALSTRENGTH_ID: Final = "signal_strength"
-CONSUMPTIONX_SENSOR_KEY: Final = "energy"
-ELECTRICITY_SENSOR_KEY: Final = "energy_estimate"
 #
 # issues general consts
 #

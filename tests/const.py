@@ -1,11 +1,17 @@
 """Constants for integration_blueprint tests."""
 
+from typing import TYPE_CHECKING
+
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.helpers.meross_profile import (
-    MerossProfileStoreType,
-)
 from custom_components.meross_lan.merossclient import cloudapi
 from custom_components.meross_lan.merossclient.protocol import const as mc
+
+if TYPE_CHECKING:
+    from typing import TypedDict
+
+    from custom_components.meross_lan.helpers.meross_profile import (
+        MerossProfileStoreType,
+    )
 
 # Mock config data to be used across multiple tests
 MOCK_DEVICE_UUID = "01234567890123456789001122334455"
@@ -249,19 +255,27 @@ MOCK_PROFILE_STORE_DEVICEINFO_DICT: dict[str, cloudapi.DeviceInfoType] = {
         "hardwareCapabilities": [],
     }
 }
+
+
+if TYPE_CHECKING:
+
+    class MockProfileStoreType(TypedDict):
+        version: int
+        data: MerossProfileStoreType
+
+    MOCK_PROFILE_STORE: MockProfileStoreType
+
 MOCK_PROFILE_STORE = {
     "version": 1,
-    "data": MerossProfileStoreType(
-        {
-            "appId": "0",
-            "deviceInfo": MOCK_PROFILE_STORE_DEVICEINFO_DICT,
-            "deviceInfoTime": 0.0,
-            "latestVersion": [],
-            "latestVersionTime": 0.0,
-            "tokenRequestTime": 0.0,
-            mc.KEY_TOKEN: MOCK_PROFILE_TOKEN,
-        }
-    ),
+    "data": {
+        "appId": "0",
+        "deviceInfo": MOCK_PROFILE_STORE_DEVICEINFO_DICT,
+        "deviceInfoTime": 0.0,
+        "latestVersion": [],
+        "latestVersionTime": 0.0,
+        "tokenRequestTime": 0.0,
+        mc.KEY_TOKEN: MOCK_PROFILE_TOKEN,
+    },
 }
 # storage could contain more than one cloud profiles.
 # right now we just set our 'default' nice one

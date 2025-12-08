@@ -13,14 +13,13 @@ import aiohttp
 from yarl import URL
 
 from . import MEROSSDEBUG, _BaseClient
-from .protocol import AESCipher
-from .protocol.message import MerossResponse
+from .protocol import AESCipher, MerossKeyError, const as mc
+from .protocol.message import MerossMessage, MerossResponse
 
 if TYPE_CHECKING:
     from typing import ClassVar, NotRequired, Unpack
 
-    from .protocol.message import MerossRequest
-    from .protocol.types import MerossHeaderType
+    from .protocol.types import MerossHeaderType, MerossRequestType
 
 
 class TerminatedException(Exception):
@@ -124,16 +123,17 @@ class MerossHttpClient(_BaseClient):
     def set_encryption(self, encryption_key: bytes | None, /):
         self._encryption_cipher = AESCipher(encryption_key) if encryption_key else None
 
+    def enable_encryption(self, uuid: str, key: str, mac: str, /):
+        self._encryption_cipher = AESCipher(
+            MerossResponse.compute_encryption_key(uuid, key, mac)
+        )
+
+    def disable_encryption(self):
+        self._encryption_cipher = None
+
     def _check_terminated(self):
         if self._terminate:
             raise TerminatedException
-
-    def terminate(self):
-        """
-        Marks the client as 'terminating' so that any pending request will abort
-        and raise TerminateException. The client need to be rebuilt after this.
-        """
-        self._terminate = True
 
     async def async_terminate(self):
         """
@@ -145,7 +145,7 @@ class MerossHttpClient(_BaseClient):
 
     @override
     async def async_request_raw(
-        self, request: "MerossRequest", /, **kwargs: "Unpack[RequestArgs]"
+        self, request: "MerossMessage", /, **kwargs: "Unpack[RequestArgs]"
     ) -> MerossResponse:
         self._check_terminated()
         logger = self.logger
@@ -190,12 +190,12 @@ class MerossHttpClient(_BaseClient):
                         ),
                     )
                     break
-                except aiohttp.ServerTimeoutError as exception:
+                except aiohttp.ServerTimeoutError:
                     self._check_terminated()
                     if _connect_timeout < _timeout:
                         _connect_timeout = _connect_timeout * 2
                     else:
-                        raise exception
+                        raise
 
             self._check_terminated()
             response.raise_for_status()
@@ -207,8 +207,6 @@ class MerossHttpClient(_BaseClient):
                 logger.log(self.LOG_DUMP, "%s: HTTP Response (%s)", logid, response)
             self._check_terminated()
             return MerossResponse(response)
-        except TerminatedException as e:
-            raise e
         except Exception as e:
             self._key_header = {}  # type: ignore
             if logger:
@@ -219,21 +217,20 @@ class MerossHttpClient(_BaseClient):
                     type(e).__name__,
                     str(e),
                 )
-            raise e
+            raise
         finally:
             self._terminate_guard -= 1
 
-    """TODO: restore hack feature
-    async def async_hack_request(
+    async def async_request(
         self, *args: "Unpack[MerossRequestType]", **kwargs: "Unpack[RequestArgs]"
     ) -> MerossResponse:
         key = self.key
         request = (
-            build_message_keyhack(*args, self._key_header)
+            MerossMessage.build_keyhack(*args, self._key_header)
             if key is None
-            else build_message(*args, uuid4().hex, key)
+            else MerossMessage.build(*args, key)
         )
-        response = await self.async_request_raw(JSON_ENCODER.encode(request), **kwargs)
+        response = await self.async_request_raw(request, **kwargs)
         if (
             response.get(mc.KEY_PAYLOAD, {}).get(mc.KEY_ERROR, {}).get(mc.KEY_CODE)
             == mc.ERROR_INVALIDKEY
@@ -254,12 +251,11 @@ class MerossHttpClient(_BaseClient):
             req_header[mc.KEY_MESSAGEID] = resp_header[mc.KEY_MESSAGEID]
             req_header[mc.KEY_TIMESTAMP] = resp_header[mc.KEY_TIMESTAMP]
             req_header[mc.KEY_SIGN] = resp_header[mc.KEY_SIGN]
+            delattr(request, "json")  # force re-compute of json
             try:
-                response = await self.async_request_raw(
-                    JSON_ENCODER.encode(request), **kwargs
-                )
-            except TerminatedException as e:
-                raise e
+                response = await self.async_request_raw(request, **kwargs)
+            except TerminatedException:
+                raise
             except Exception:
                 # any error here is likely consequence of key-reply hack
                 # so we'll rethrow that (see #83 lacking invalid key message when configuring)
@@ -268,4 +264,3 @@ class MerossHttpClient(_BaseClient):
         if key is None:
             self._key_header = response[mc.KEY_HEADER]
         return response
-        """

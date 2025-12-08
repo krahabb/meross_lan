@@ -420,6 +420,9 @@ ARGS_PUSHQ = ARGS_PUSH | PUSHQ
 # and time consuming evaluation.
 # Moreover, for some namespaces, the euristics about 'namespace key' and payload structure are not
 # good so we must fix those beforehand.
+Appliance_Config_Alarm = ns(
+    "Appliance.Config.Alarm", mc.KEY_CONFIG, ARGS_GETSETPUSHQ | P_LIST
+)  # mst100
 Appliance_Config_DeviceCfg = ns(
     "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, ARGS_GETSETPUSH | P_LIST_C
 )  # mts300
@@ -428,6 +431,9 @@ Appliance_Config_Key = ns("Appliance.Config.Key", mc.KEY_KEY, ARGS_SET)
 Appliance_Config_Matter = ns("Appliance.Config.Matter", mc.KEY_CONFIG, ARGS_PUSHQ)
 Appliance_Config_NtpSite = ns("Appliance.Config.NtpSite", None, ARGS_NO_Q)
 Appliance_Config_OverTemp = ns("Appliance.Config.OverTemp", mc.KEY_OVERTEMP, ARGS_GET)
+Appliance_Config_StandbyKiller = ns(
+    "Appliance.Config.StandbyKiller", mc.KEY_CONFIG, ARGS_GETSETPUSHQ | P_LIST_C
+)  # mss305
 Appliance_Config_Trace = ns("Appliance.Config.Trace", None, ARGS_NO_Q)
 Appliance_Config_Wifi = ns("Appliance.Config.Wifi", mc.KEY_WIFI, ARGS_SET)
 Appliance_Config_WifiList = ns("Appliance.Config.WifiList", None, ARGS_GET)
@@ -438,11 +444,17 @@ Appliance_Config_Sensor_Association = ns(
     mc.KEY_CONFIG,
     ARGS_GETSETPUSHQ | P_LIST_C | IS_SENSOR,
 )
+
+Appliance_Control_Alarm = ns(
+    "Appliance.Control.Alarm", mc.KEY_ALARM, ARGS_GETSET | P_LIST
+)  # mst100
 Appliance_Control_AlertConfig = ns(
     "Appliance.Control.AlertConfig", mc.KEY_CONFIG, ARGS_GETSETPUSHQ | P_LIST_C
 )  # mts300 support the full set of verbs - em06 also exposes it but that's likely different
 Appliance_Control_AlertReport = ns(
-    "Appliance.Control.AlertReport", mc.KEY_REPORT, ARGS_GETSET | P_LIST_C
+    "Appliance.Control.AlertReport",
+    "alert",
+    ARGS_GETSET | P_LIST_C | G_EXPERIMENTAL,
 )
 Appliance_Control_Bind = ns("Appliance.Control.Bind", mc.KEY_BIND, ARGS_NO_Q)
 Appliance_Control_ChangeWifi = ns("Appliance.Control.ChangeWiFi", None, ARGS_NO_Q)

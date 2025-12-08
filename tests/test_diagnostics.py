@@ -77,16 +77,14 @@ async def test_mqtthub_tracing(
 
 async def test_profile_diagnostics(request, hass: "HomeAssistant"):
     async with helpers.ProfileEntryMocker(request, hass) as context:
-        context.time_mock.tick(mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
-        await hass.async_block_till_done()
+        await context.time_mock.async_tick(mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
         await context.async_test_config_entry_diagnostics()
 
 
 async def test_profile_tracing(request, hass: "HomeAssistant"):
     async with helpers.ProfileEntryMocker(request, hass) as context:
         await _async_configure_options_tracing(context)
-        context.time_mock.tick(mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
-        await hass.async_block_till_done()
+        await context.time_mock.async_tick(mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
         await _async_run_tracing(context, context.time_mock)
 
 

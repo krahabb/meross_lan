@@ -158,6 +158,7 @@ KEY_INTERCONN = "interConn"
 KEY_DOORWINDOW = "doorWindow"
 KEY_WATERLEAK = "waterLeak"
 KEY_LATESTWATERLEAK = "latestWaterLeak"
+KEY_MST = "mst"
 KEY_SCHEDULE = "schedule"
 KEY_SCHEDULEB = "scheduleB"
 KEY_SCHEDULEBMODE = "scheduleBMode"
@@ -517,6 +518,8 @@ TYPE_NAME_MAP[TYPE_MS400] = "Smart Water Leak Sensor"
 TYPE_MS600 = "ms600"
 TYPE_NAME_MAP[TYPE_MS600] = "Smart Presence Sensor"
 
+TYPE_MST100 = "mst100"
+TYPE_NAME_MAP[TYPE_MST100] = "Smart Sprinkler Timer"
 
 # REFOSS device types
 _SMART_ENERGY_MONITOR = "Smart Energy Monitor"

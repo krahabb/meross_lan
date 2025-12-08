@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING
 
 from ...calendar import MtsSchedule
 from ...climate import MtsSetPointNumber
+from ...merossclient import merge_dicts
 from .mtsthermostat import MtsThermostatClimate, mc, mn_t
 
 if TYPE_CHECKING:
@@ -52,12 +53,7 @@ class Mts200Climate(MtsThermostatClimate):
         "_mts_summermode_supported",
     )
 
-    def __init__(
-        self,
-        manager: "Device",
-        channel: object,
-        /,
-    ):
+    def __init__(self, manager: "Device", channel: object, /):
         super().__init__(manager, channel)
         self._mts_summermode = None
         self._mts_summermode_supported = (
@@ -72,7 +68,7 @@ class Mts200Climate(MtsThermostatClimate):
             ]
 
     # interface: MtsClimate
-    def flush_state(self):
+    def flush_state(self, /):
         self.preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)
         if self._mts_onoff:
             self.hvac_mode = self.MTS_SUMMERMODE_TO_HVAC_MODE.get(self._mts_summermode)
@@ -132,7 +128,7 @@ class Mts200Climate(MtsThermostatClimate):
             {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}
         )
 
-    def is_mts_scheduled(self):
+    def is_mts_scheduled(self, /):
         return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
 
     # interface: self
@@ -158,7 +154,7 @@ class Mts200Climate(MtsThermostatClimate):
                 payload = response[mc.KEY_PAYLOAD][mc.KEY_MODE][0]
             except (KeyError, IndexError):
                 # optimistic update
-                payload = self._mts_payload | p_mode
+                payload = merge_dicts(self._mts_payload, p_mode)
                 if mc.KEY_MODE in p_mode:
                     key_temp = mc.MTS200_MODE_TO_TARGETTEMP_MAP.get(p_mode[mc.KEY_MODE])
                     if key_temp in payload:

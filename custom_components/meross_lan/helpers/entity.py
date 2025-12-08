@@ -562,7 +562,6 @@ class MLNumericEntity(MLEntity):
             device_value: NotRequired[int | float]
             device_scale: NotRequired[int | float]
             native_unit_of_measurement: NotRequired[str]
-            suggested_display_precision: NotRequired[int]
 
         DEVICECLASS_TO_UNIT_MAP: ClassVar[dict[Any | None, str | None]]
 
@@ -572,25 +571,17 @@ class MLNumericEntity(MLEntity):
         """The 'native' device value carried in protocol messages."""
 
         # HA core entity attributes:
-
         native_value: int | float | None
         native_unit_of_measurement: str | None
-        # these are core attributes only for Sensor entity but we're
-        # trying emulate that kind of same behavior for Number
-        _attr_suggested_display_precision: ClassVar[int | None]
-        suggested_display_precision: int | None
 
     """To be init in derived classes with their DeviceClass own types."""
     _attr_device_scale = 1
-    """Provides a class initializer default for device_scale."""
-    _attr_suggested_display_precision = None
 
     __slots__ = (
         "device_scale",
         "device_value",
         "native_value",
         "native_unit_of_measurement",
-        "suggested_display_precision",
     )
 
     def __init__(
@@ -602,9 +593,6 @@ class MLNumericEntity(MLEntity):
         /,
         **kwargs: "Unpack[Args]",
     ):
-        self.suggested_display_precision = kwargs.pop(
-            "suggested_display_precision", self._attr_suggested_display_precision
-        )
         self.device_scale = kwargs.pop("device_scale", self._attr_device_scale)
         if "device_value" in kwargs:
             self.device_value = kwargs.pop("device_value")

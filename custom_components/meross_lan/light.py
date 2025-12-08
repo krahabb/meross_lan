@@ -531,7 +531,7 @@ class MLLight(MLLightBase):
                     self.color_mode = ColorMode.COLOR_TEMP
                     return
 
-                if capacity & mc.LIGHT_CAPACITY_LUMINANCE:
+                if ColorMode.BRIGHTNESS in self.supported_color_modes:
                     self.color_mode = ColorMode.BRIGHTNESS
                     return
 
@@ -571,7 +571,7 @@ class MLLight(MLLightBase):
             elif self._t_temp_end:
                 _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_TEMPERATURE_LUMINANCE
             else:
-                _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_LUMINANCE
+                _light[mc.KEY_CAPACITY] |= mc.LIGHT_CAPACITY_LUMINANCE
         else:
             _t_duration = None
             if ATTR_BRIGHTNESS in kwargs:
@@ -590,7 +590,7 @@ class MLLight(MLLightBase):
                 )
                 _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_TEMPERATURE_LUMINANCE
             else:
-                _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_LUMINANCE
+                _light[mc.KEY_CAPACITY] |= mc.LIGHT_CAPACITY_LUMINANCE
 
         if await self.async_request_light_on_flush(_light):
             if _t_duration:
@@ -866,13 +866,15 @@ class MLDNDLightEntity(EntityNamespaceMixin, me.MLBinaryEntity, light.LightEntit
 
     ns = mn.Appliance_System_DNDMode
 
+    ENTITY_KEY = "dnd"
+
     # HA core entity attributes:
     color_mode: ColorMode = ColorMode.ONOFF
     entity_category = me.MLBinaryEntity.EntityCategory.CONFIG
     supported_color_modes: set[ColorMode] = {ColorMode.ONOFF}
 
     def __init__(self, manager: "Device"):
-        super().__init__(manager, None, mlc.DND_ID, mc.KEY_DNDMODE)
+        super().__init__(manager, None, MLDNDLightEntity.ENTITY_KEY, mc.KEY_DNDMODE)
         EntityNamespaceHandler(self)
 
     async def async_turn_on(self, **kwargs):
