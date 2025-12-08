@@ -89,7 +89,9 @@
             "cloud_profile_mismatch": "Cloud profile does not match configuration",
             "invalid_auth": "Authentication error",
             "invalid_key": "Key error: select 'Cloud retrieve' to get from Meross account",
-            "invalid_nullkey": "Key error: select 'Hack mode' to allow empty key"
+            "invalid_nullkey": "Key error: select 'Hack mode' to allow empty key",
+            "broker_address_invalid": "MQTT broker address not recognized",
+            "broker_connection_error": "MQTT broker connection error"
         },
         "step": {
             "user": {
@@ -135,6 +137,24 @@
                     "error": "Error message",
                     "cloud_region": "Account region",
                     "mfa_code": "Authenticator code"
+                }
+            },
+            "bind": {
+                "title": "Wifi/MQTT binding",
+                "description": "Connect the device to a different Wifi network and/or MQTT broker\nCurrent WiFi: {ssid}\nCurrent broker: {server}\nEmpty fields will be skipped or automatically set.",
+                "data": {
+                    "ssid": "Wi-Fi SSID",
+                    "password": "Wi-Fi password",
+                    "server": "Address of the new MQTT broker",
+                    "check": "Check broker compatibility before reconfiguring",
+                    "key": "Device key",
+                    "userid": "User Id",
+                    "error": "Error message"
+                },
+                "data_description": {
+                    "server": "Enter the address in the form 'host(:port)' (leave empty to skip)",
+                    "key": "Enter the Key used to sign protocol messages (empty keeps current value)",
+                    "userid": "Enter the User Id (empty keeps current value)"
                 }
             },
             "finalize": {
@@ -208,24 +228,26 @@
                     "device": "Configure",
                     "profile": "Configure",
                     "diagnostics": "Diagnostics",
-                    "bind": "Reconfigure MQTT (local binding)",
+                    "bind": "Wifi/MQTT binding",
                     "unbind": "Hardware reset"
                 }
             },
             "bind": {
-                "title": "Reconfigure MQTT (local binding)",
-                "description": "Connect (Bind) the device to a different MQTT broker\nCurrent broker: {domain}",
+                "title": "Wifi/MQTT binding",
+                "description": "Connect the device to a different Wifi network and/or MQTT broker\nCurrent WiFi: {ssid}\nCurrent broker: {server}\nEmpty fields will be skipped or automatically set.",
                 "data": {
-                    "domain": "Address of the new MQTT broker",
+                    "ssid": "Wi-Fi SSID",
+                    "password": "Wi-Fi password",
+                    "server": "Address of the new MQTT broker",
                     "check": "Check broker compatibility before reconfiguring",
                     "key": "Device key",
                     "userid": "User Id",
                     "error": "Error message"
                 },
                 "data_description": {
-                    "domain": "Enter the address in the form 'host(:port)' or leave empty to use the HA one",
-                    "userid": "Leave empty for better compatibility with meross_lan",
-                    "key": "Leave empty for better compatibility with meross_lan"
+                    "server": "Enter the address in the form 'host(:port)' (leave empty to skip)",
+                    "key": "Enter the Key used to sign protocol messages (empty keeps current value)",
+                    "userid": "Enter the User Id (empty keeps current value)"
                 }
             },
             "unbind": {
@@ -249,7 +271,9 @@
             "invalid_auth": "Authentication error",
             "invalid_key": "Key error: select 'Cloud retrieve' to get from Meross account",
             "invalid_nullkey": "Key error: select 'Hack mode' to allow empty key",
-            "habroker_not_connected": "The HomeAssistant MQTT broker is not connected"
+            "habroker_not_connected": "The HomeAssistant MQTT broker is not connected",
+            "broker_address_invalid": "MQTT broker address not recognized",
+            "broker_connection_error": "MQTT broker connection error"
         }
     },
     "issues": {
