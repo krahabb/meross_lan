@@ -1780,9 +1780,9 @@ class Device(BaseDevice, ConfigEntryManager):
         return task
 
     async def _async_poll(self, namespace: str | None):
+        self._polling_epoch = epoch = time()
+        self.log(self.DEBUG, "Polling begin")
         try:
-            self._polling_epoch = epoch = time()
-            self.log(self.DEBUG, "Polling begin")
             # We're 'strictly' online when the device 'was' online and last request
             # got succesfully replied.
             # When last request(s) somewhat failed we'll probe NS_ALL before stating it is really
@@ -1952,18 +1952,14 @@ class Device(BaseDevice, ConfigEntryManager):
             self.log(self.DEBUG, "Polling cancelled")
             raise
         except Exception as e:
-            self._polling_unsub = self.schedule_callback(
-                self._polling_delay, self._poll, None
-            )
             self.log_exception(self.WARNING, e, "_async_poll")
-            self.log(self.DEBUG, "Polling end")
-        else:
-            self._polling_unsub = self.schedule_callback(
-                self._polling_delay, self._poll, None
-            )
-            self.log(self.DEBUG, "Polling end")
         finally:
             self._polling_task = None
+
+        self._polling_unsub = self.schedule_callback(
+            self._polling_delay, self._poll, None
+        )
+        self.log(self.DEBUG, "Polling end")
 
     async def async_poll_stop(self):
         """Ensure we're not polling nor any schedule is in place."""
