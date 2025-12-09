@@ -1,6 +1,6 @@
 import asyncio
-from base64 import b64decode, b64encode
 from enum import Enum
+from json import JSONDecodeError
 import threading
 from time import time
 import typing
@@ -17,18 +17,17 @@ from custom_components.meross_lan.merossclient import (
     update_dict_strict,
     update_dict_strict_by_key,
 )
+from custom_components.meross_lan.merossclient.httpclient import MerossHttpClient
 from custom_components.meross_lan.merossclient.mqttclient import MerossMQTTDeviceClient
 from custom_components.meross_lan.merossclient.protocol import (
-    AESCipher,
-    JSONDecodeError,
     const as mc,
-    json_loads,
     namespaces as mn,
 )
 from custom_components.meross_lan.merossclient.protocol.message import (
     MerossMessage,
     MerossRequest,
     get_replykey,
+    json_loads,
 )
 
 if TYPE_CHECKING:
@@ -340,15 +339,10 @@ class MerossEmulator:
         self._scheduler_unsub = None
         self._tzinfo: ZoneInfo | None = None
         self._cipher = (
-            AESCipher(
-                MerossMessage.compute_encryption_key(
-                    descriptor.uuid, key, descriptor.macAddress
-                )
-            )
+            MerossHttpClient.Cipher(descriptor.uuid, key, descriptor.macAddress)
             if mn.Appliance_Encrypt_ECDHE.name in descriptor.ability
             else None
         )
-
         self.update_epoch()
 
     async def async_startup(self, *, enable_scheduler: bool, enable_mqtt: bool):
@@ -425,29 +419,26 @@ class MerossEmulator:
                 # actually resets the TCP connection..here we're just raising an
                 # exception in the hope we can emulate a broken connection
                 if self._cipher and (
-                    request[mc.KEY_HEADER][mc.KEY_NAMESPACE]
-                    != mn.Appliance_System_Ability.name
+                    request.namespace != mn.Appliance_System_Ability.name
                 ):
                     raise Exception("Encryption required")
 
-        request_header = request[mc.KEY_HEADER]
-        request_payload = request[mc.KEY_PAYLOAD]
         self._log_message("RX", request.json)
         with self.lock:
             # guarantee thread safety by locking the whole message handling
             self.update_epoch()
 
-            if get_replykey(request_header, self.key) is not self.key:
+            if get_replykey(request.header, self.key) is not self.key:
                 response = MerossMessage.build(
-                    request_header[mc.KEY_NAMESPACE],
+                    request.namespace,
                     mc.METHOD_ERROR,
                     {mc.KEY_ERROR: {mc.KEY_CODE: mc.ERROR_INVALIDKEY}},
                     self.key,
-                    messageid=request_header[mc.KEY_MESSAGEID],
+                    messageid=request.messageid,
                     from_=self.topic_response,
                 )
             else:
-                response = self._handle_message(request_header, request_payload)
+                response = self._handle_message(request.header, request.payload)
 
         if response:
             response_json = response.json
@@ -507,15 +498,14 @@ class MerossEmulator:
             }
 
         if response_method:
-            response = MerossMessage.build(
-                header[mc.KEY_NAMESPACE],
+            return MerossMessage.build(
+                namespace,
                 response_method,
                 response_payload,
                 self.key,
                 messageid=header[mc.KEY_MESSAGEID],
                 from_=self.topic_response,
             )
-            return response
 
         return None
 

@@ -11,10 +11,9 @@ from . import MEROSSDEBUG
 from .protocol import (
     MerossProtocolError,
     const as mc,
-    json_dumps,
-    json_loads,
     md5hexdigest,
 )
+from .protocol.message import json_dumps, json_loads
 
 SECRET = "23x17ahWarFH6w29"
 

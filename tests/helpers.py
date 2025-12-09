@@ -4,7 +4,6 @@ from collections import namedtuple
 import contextlib
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
-import hashlib
 import logging
 import re
 import time
@@ -34,7 +33,8 @@ from custom_components.meross_lan.helpers.meross_profile import (
     MQTTConnection,
 )
 from custom_components.meross_lan.merossclient import cloudapi
-from custom_components.meross_lan.merossclient.protocol import const as mc, json_loads
+from custom_components.meross_lan.merossclient.protocol import const as mc, md5hexdigest
+from custom_components.meross_lan.merossclient.protocol.message import json_loads
 import emulator
 
 from . import const as tc
@@ -947,12 +947,7 @@ class CloudApiMocker(contextlib.AbstractContextManager):
         params: str = data[mc.KEY_PARAMS]
         assert mc.KEY_SIGN in data
         sign: str = data[mc.KEY_SIGN]
-        assert (
-            sign
-            == hashlib.md5(
-                (cloudapi.SECRET + str(timestamp) + nonce + params).encode("utf-8")
-            ).hexdigest()
-        )
+        assert sign == md5hexdigest(cloudapi.SECRET, str(timestamp), nonce, params)
         params = base64.b64decode(params.encode("utf-8")).decode("utf-8")
         return json_loads(params)
 
@@ -997,10 +992,7 @@ class CloudApiMocker(contextlib.AbstractContextManager):
             return {mc.KEY_APISTATUS: cloudapi.APISTATUS_UNEXISTING_ACCOUNT}
         elif mc.KEY_PASSWORD not in request:
             return {mc.KEY_APISTATUS: cloudapi.APISTATUS_MISSING_PASSWORD}
-        elif (
-            request[mc.KEY_PASSWORD]
-            != hashlib.md5(tc.MOCK_PROFILE_PASSWORD.encode("utf8")).hexdigest()
-        ):
+        elif request[mc.KEY_PASSWORD] != md5hexdigest(tc.MOCK_PROFILE_PASSWORD):
             return {mc.KEY_APISTATUS: cloudapi.APISTATUS_WRONG_CREDENTIALS}
         else:
             return {

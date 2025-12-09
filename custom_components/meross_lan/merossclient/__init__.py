@@ -14,7 +14,7 @@ from .protocol import (
     const as mc,
     namespaces as mn,
 )
-from .protocol.message import MerossRequest, MerossResponse
+from .protocol.message import MerossRequest
 
 if TYPE_CHECKING:
     from typing import (
@@ -31,6 +31,7 @@ if TYPE_CHECKING:
         Unpack,
     )
 
+    from .protocol.message import MerossResponse
     from .protocol.namespaces import Namespace
     from .protocol.types import JsonDict, JsonList, MerossRequestType
     from .protocol.types.config import WifiList
@@ -240,10 +241,6 @@ class HostAddress:
 
     def __str__(self) -> str:
         return f"{self.host}:{self.port}"
-
-
-def validate_uuid(uuid: str):
-    """Asserts the uuid string is a 'correct' 16 byte hex string."""
 
 
 def get_macaddress_from_uuid(uuid: str):
@@ -514,19 +511,19 @@ class _BaseClient:
 
     async def async_request_raw(
         self, request: MerossRequest, /, **kwargs: "Unpack[RequestArgs]"
-    ) -> MerossResponse:
+    ) -> "MerossResponse":
         raise NotImplementedError("async_request_raw")
 
     async def async_request(
         self, *args: "Unpack[MerossRequestType]", **kwargs: "Unpack[RequestArgs]"
-    ) -> MerossResponse:
+    ) -> "MerossResponse":
         return await self.async_request_raw(
             MerossRequest(*args, self.key, self.from_, self.trigger_src), **kwargs
         )
 
     async def async_request_ns(
         self, ns: "Namespace", /, **kwargs: "Unpack[RequestArgs]"
-    ) -> MerossResponse:
+    ) -> "MerossResponse":
         return await self.async_request(*ns.request_default, **kwargs)
 
     async def async_request_ns_payload(

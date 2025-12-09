@@ -2,6 +2,7 @@ import abc
 import asyncio
 import bisect
 from datetime import UTC, tzinfo
+from json import JSONDecodeError
 from time import time
 from typing import TYPE_CHECKING
 import zoneinfo
@@ -30,8 +31,11 @@ from ..const import (
 from ..helpers.obfuscate import obfuscated_dict
 from ..merossclient import HostAddress, get_active_broker, is_device_online
 from ..merossclient.httpclient import MerossHttpClient, TerminatedException
-from ..merossclient.protocol import JSONDecodeError, json_dumps
-from ..merossclient.protocol.message import MerossRequest, MerossResponse
+from ..merossclient.protocol.message import (
+    MerossRequest,
+    MerossResponse,
+    json_dumps,
+)
 from ..sensor import ProtocolSensor
 from ..update import MLUpdate
 from .manager import ConfigEntryManager, EntityManager

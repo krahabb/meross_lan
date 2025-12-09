@@ -28,11 +28,12 @@ from ..merossclient import (
     bluetooth as m_bt,
 )
 from ..merossclient.httpclient import MerossHttpClient
-from ..merossclient.protocol import const as mc, json_loads, namespaces as mn
+from ..merossclient.protocol import const as mc, namespaces as mn
 from ..merossclient.protocol.message import (
     MerossAckReply,
     MerossPushReply,
     MerossRequest,
+    json_loads,
 )
 from .device import Device
 from .manager import ConfigEntryManager

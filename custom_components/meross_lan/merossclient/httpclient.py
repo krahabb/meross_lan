@@ -13,7 +13,7 @@ import aiohttp
 from yarl import URL
 
 from . import MEROSSDEBUG, _BaseClient
-from .protocol import AESCipher, MerossKeyError, const as mc
+from .protocol import AESCipher, MerossKeyError, const as mc, md5hexdigest
 from .protocol.message import MerossMessage, MerossResponse
 
 if TYPE_CHECKING:
@@ -27,6 +27,13 @@ class TerminatedException(Exception):
 
 
 class MerossHttpClient(_BaseClient):
+
+    class Cipher(AESCipher):
+        def __init__(self, uuid: str, key: str, mac: str, /):
+            AESCipher.__init__(
+                self, md5hexdigest(uuid[3:22], key[1:9], mac, key[10:28]).encode()
+            )
+
     if TYPE_CHECKING:
 
         class Args(_BaseClient.Args):
@@ -40,7 +47,7 @@ class MerossHttpClient(_BaseClient):
         SESSION_TIMEOUT: ClassVar
         _SESSION: ClassVar[aiohttp.ClientSession | None]
 
-        _encryption_cipher: AESCipher | None
+        _cipher: Cipher | None
         _key_header: MerossHeaderType
 
     SESSION_MAXIMUM_CONNECTIONS = 50
@@ -86,7 +93,7 @@ class MerossHttpClient(_BaseClient):
         "_session",
         "_terminate",
         "_terminate_guard",
-        "_encryption_cipher",
+        "_cipher",
         "_key_header",
     )
 
@@ -107,7 +114,7 @@ class MerossHttpClient(_BaseClient):
         )
         self._terminate = False
         self._terminate_guard = 0
-        self._encryption_cipher = None
+        self._cipher = None
         self._key_header = {}  # type: ignore
         _BaseClient.__init__(self, **kwargs)
 
@@ -120,16 +127,11 @@ class MerossHttpClient(_BaseClient):
         self._host = value
         self._requesturl = URL(f"http://{value}/config")
 
-    def set_encryption(self, encryption_key: bytes | None, /):
-        self._encryption_cipher = AESCipher(encryption_key) if encryption_key else None
-
     def enable_encryption(self, uuid: str, key: str, mac: str, /):
-        self._encryption_cipher = AESCipher(
-            MerossResponse.compute_encryption_key(uuid, key, mac)
-        )
+        self._cipher = MerossHttpClient.Cipher(uuid, key, mac)
 
     def disable_encryption(self):
-        self._encryption_cipher = None
+        self._cipher = None
 
     def _check_terminated(self):
         if self._terminate:
@@ -162,7 +164,7 @@ class MerossHttpClient(_BaseClient):
             if MEROSSDEBUG:
                 MEROSSDEBUG.http_random_timeout()
 
-            if _cipher := self._encryption_cipher:
+            if _cipher := self._cipher:
                 data = _cipher.encript_text(request.json)
                 headers = {
                     aiohttp.hdrs.CONTENT_TYPE: "application/octet-stream",

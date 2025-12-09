@@ -5,36 +5,14 @@ Meross protocol core types and helpers
 
 from base64 import b64decode, b64encode
 from hashlib import md5
-import json
 from typing import TYPE_CHECKING
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 if TYPE_CHECKING:
-    from typing import ClassVar, Unpack
+    from typing import Final, Unpack
 
-    from message import MerossMessage, MerossResponse
-
-
-#
-# Optimized JSON encoding/decoding
-#
-JSON_ENCODER = json.JSONEncoder(
-    ensure_ascii=False, check_circular=False, separators=(",", ":")
-)
-JSON_DECODER = json.JSONDecoder()
-
-JSONDecodeError = json.JSONDecodeError
-
-
-def json_dumps(obj):
-    """Slightly optimized json.dumps with pre-configured encoder"""
-    return JSON_ENCODER.encode(obj)
-
-
-def json_loads(s: str):
-    """Slightly optimized json.loads with pre-configured decoder"""
-    return JSON_DECODER.raw_decode(s)[0]
+    from message import MerossMessage
 
 
 #
@@ -87,10 +65,6 @@ def md5hexdigest(*args: "Unpack[tuple[str, ...]]"):
     return md5("".join(args).encode(), usedforsecurity=False).hexdigest()
 
 
-def compute_message_signature(messageid: str, key: str, timestamp: int, /):
-    return md5hexdigest(messageid, key, str(timestamp))
-
-
 def compute_wifix_password(password: str, type: str, uuid: str, mac: str, /):
     return AESCipher(md5hexdigest(type, uuid, mac).encode()).encript_text(password)
 
@@ -98,12 +72,12 @@ def compute_wifix_password(password: str, type: str, uuid: str, mac: str, /):
 class AESCipher(Cipher):
 
     if TYPE_CHECKING:
-        IV: ClassVar[bytes]
+        IV: Final[bytes]
 
     IV = "0000000000000000".encode()
 
-    def __init__(self, key: bytes):
-        super().__init__(algorithms.AES(key), modes.CBC(self.IV))
+    def __init__(self, encryption_key: bytes):
+        super().__init__(algorithms.AES(encryption_key), modes.CBC(self.IV))
 
     def encript_text(self, text: str):
         buffer = text.encode()

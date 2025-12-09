@@ -6,9 +6,9 @@ from unittest.mock import ANY
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
-    json_dumps,
     namespaces as mn,
 )
+from custom_components.meross_lan.merossclient.protocol.message import json_dumps
 
 from tests import const as tc, helpers
 

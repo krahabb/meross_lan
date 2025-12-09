@@ -14,13 +14,13 @@ from ..merossclient.mqttclient import MerossMQTTRateLimitException
 from ..merossclient.protocol import (
     MerossKeyError,
     const as mc,
-    json_dumps,
     namespaces as mn,
 )
 from ..merossclient.protocol.message import (
     MerossRequest,
     MerossResponse,
     get_replykey,
+    json_dumps,
 )
 from ..sensor import MLDiagnosticSensor
 from .manager import ConfigEntryManager

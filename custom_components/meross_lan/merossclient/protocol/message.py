@@ -1,14 +1,12 @@
 from functools import cached_property
+import json
 import os
 from time import time
 from typing import TYPE_CHECKING
 
 from . import (
-    JSON_DECODER,
-    JSON_ENCODER,
     MerossKeyError,
     MerossProtocolError,
-    compute_message_signature,
     const as mc,
     md5hexdigest,
     namespaces as mn,
@@ -19,13 +17,26 @@ if TYPE_CHECKING:
 
 
 #
-# Low level message building helpers
+# Optimized JSON encoding/decoding
 #
+JSON_ENCODER = json.JSONEncoder(
+    ensure_ascii=False, check_circular=False, separators=(",", ":")
+)
+JSON_DECODER = json.JSONDecoder()
 
 
-#
-# Various helpers to extract some meaningful data from payloads
-#
+def json_dumps(obj):
+    """Slightly optimized json.dumps with pre-configured encoder"""
+    return JSON_ENCODER.encode(obj)
+
+
+def json_loads(s: str):
+    """Slightly optimized json.loads with pre-configured decoder"""
+    return JSON_DECODER.raw_decode(s)[0]
+
+
+def compute_message_signature(messageid: str, key: str, timestamp: int, /):
+    return md5hexdigest(messageid, key, str(timestamp))
 
 
 def get_replykey(header: "MerossHeaderType", key: "KeyType", /) -> "KeyType":

@@ -21,7 +21,7 @@ from ..const import (
     DOMAIN,
 )
 from ..merossclient import cloudapi
-from ..merossclient.protocol import json_dumps
+from ..merossclient.protocol.message import json_dumps
 from .obfuscate import (
     OBFUSCATE_DEVICE_ID_MAP,
     OBFUSCATE_SERVER_MAP,
