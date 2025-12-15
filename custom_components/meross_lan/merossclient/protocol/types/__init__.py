@@ -29,7 +29,14 @@ MerossHeaderType = TypedDict(
 )
 
 
+class _MerossPayloadType(TypedDict):
+    pass
+
+
 type MerossPayloadType = JsonDict
+
+
+type MerossPayloadType = dict[str, Any]
 
 
 class MerossMessageType(TypedDict):
@@ -44,7 +51,17 @@ type KeyType = Union[MerossHeaderType, str, None]
 
 
 class ChannelPayload(TypedDict):
-    channel: int
+    """These payloads include a channel identifier and are typically included as a
+    list payload in the specific ns payload message.
+    i.e.
+    {
+        header: MerossHeaderType,
+        payload: dict[str, list[ChannelPayload]] # where str is restricted to the ns.key
+    }
+    As an internal convention, inherited types (i.e. specific ns payloads)
+    are coded with a _C suffix."""
+
+    channel: Any
 
 
 class HubIdPayload(TypedDict):
@@ -53,6 +70,15 @@ class HubIdPayload(TypedDict):
 
 class HubSubIdPayload(ChannelPayload):
     subId: str
+
+
+class HistoryData(TypedDict):
+    """
+    A common struct usually appearing in a list of historical data points (LatestX, ConsumptionH).
+    """
+
+    value: int
+    timestamp: int
 
 
 from . import config, control, sensor, system, thermostat

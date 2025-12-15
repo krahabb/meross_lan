@@ -5,7 +5,10 @@ from custom_components.meross_lan.devices.garagedoor import (
     MLGarageConfigNumber,
     MLGarageMultipleConfigNumber,
 )
-from custom_components.meross_lan.devices.hub import HubSensorAdjustNumber
+from custom_components.meross_lan.devices.hub import (
+    HubSensorAdjustNumber,
+    MST100SubDevice,
+)
 from custom_components.meross_lan.devices.hub.mts100 import Mts100Climate
 from custom_components.meross_lan.devices.thermostat.mts200 import Mts200Climate
 from custom_components.meross_lan.devices.thermostat.mts300 import Mts300Climate
@@ -72,6 +75,7 @@ class EntityTest(EntityComponentTest):
         ],
         mn_t.Appliance_Control_Thermostat_DeadZone.name: [MtsDeadZoneNumber],
         mn_t.Appliance_Control_Thermostat_Frost.name: [MtsFrostNumber],
+        mn_t.Appliance_Control_Thermostat_HoldAction.name: [MLConfigNumber],
         mn_t.Appliance_Control_Thermostat_ModeC.name: [
             Mts300Climate.AdjustNumber,
             MLConfigNumber,  # humidity_calibration
@@ -84,6 +88,7 @@ class EntityTest(EntityComponentTest):
         mc.TYPE_MTS100: _MTS100_ENTITES,
         mc.TYPE_MTS100V3: _MTS100_ENTITES,
         mc.TYPE_MTS150: _MTS100_ENTITES,
+        mc.KEY_MST: [MST100SubDevice.WateringDurationNumber],
     }
 
     async def async_test_each_callback(self, entity: MLNumber):

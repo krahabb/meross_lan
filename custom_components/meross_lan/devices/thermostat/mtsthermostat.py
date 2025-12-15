@@ -98,7 +98,7 @@ class MtsCommonTemperatureNumber(MLConfigNumber):
         super().__init__(
             climate.manager,
             climate.channel,
-            self.__class__.ns.slug,
+            self.__class__.ns.slug_end,
             device_class,
             device_scale=climate.device_scale,
         )
@@ -186,6 +186,9 @@ class MtsFrostNumber(MtsCommonTemperatureExtNumber):
 
 class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
 
+    if TYPE_CHECKING:
+        sensor_external_temperature: MLTemperatureSensor
+
     ns = mn_t.Appliance_Control_Thermostat_Overheat
 
     __slots__ = ("sensor_external_temperature",)
@@ -198,7 +201,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.sensor_external_temperature: MLTemperatureSensor = None  # type: ignore
+        self.sensor_external_temperature = None  # type: ignore
 
     def _parse(self, payload: "mt_t.Overheat_C", /):
         try:
@@ -328,7 +331,7 @@ class MtsHoldAction(MLConfigSelect):
 class MtsTempUnit(MEListChannelMixin, MLConfigSelect):
 
     ns = mn.Appliance_Control_TempUnit
-    key_value = mn.Appliance_Control_TempUnit.key  # 'tempUnit'
+    key_value = mc.KEY_TEMPUNIT
 
     OPTIONS_MAP = {
         mc.TEMPUNIT_CELSIUS: MLConfigSelect.hac.UnitOfTemperature.CELSIUS,
@@ -375,6 +378,7 @@ OPTIONAL_NAMESPACES_INITIALIZERS: set["mn.Namespace"] = {
     mn_t.Appliance_Control_Thermostat_SummerMode,  # mts200
     mn_t.Appliance_Control_Thermostat_System,  # mts300
     mn_t.Appliance_Control_Thermostat_Timer,  # mts960
+    mn.Appliance_Config_Sensor_Association,  # mts300
 }
 """These namespaces handlers will forward message parsing to the climate entity"""
 
@@ -457,6 +461,10 @@ class MtsThermostatClimate(MtsClimate):
         pass
 
     def _parse_timer(self, payload: dict, /):
+        # needed to silently support registering OPTIONAL_NAMESPACES_INITIALIZERS
+        pass
+
+    def _parse_association(self, payload: dict, /):
         # needed to silently support registering OPTIONAL_NAMESPACES_INITIALIZERS
         pass
 

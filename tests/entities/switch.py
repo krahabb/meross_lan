@@ -1,6 +1,7 @@
 from homeassistant.components import switch as haec
 from homeassistant.helpers.entity import STATE_OFF, STATE_ON
 
+from custom_components.meross_lan.devices.hub import MST100SubDevice
 from custom_components.meross_lan.devices.mss import OverTempEnableSwitch
 from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
     MtsConfigSwitch,
@@ -47,6 +48,7 @@ class EntityTest(EntityComponentTest):
         mc.TYPE_MTS100: [MLEmulatedSwitch],  # patch hvacaction
         mc.TYPE_MTS100V3: [MLEmulatedSwitch],  # patch hvacaction
         mc.TYPE_MTS150: [MLEmulatedSwitch],  # patch hvacaction
+        mc.KEY_MST: [MST100SubDevice.OnOffSwitch],
     }
 
     async def async_test_enabled_callback(self, entity: haec.SwitchEntity):

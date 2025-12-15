@@ -205,13 +205,6 @@ async def test_entities(
                         not expected_entities
                     ), f"{device_name} does not generate {expected_entities}"
 
-                    # This could be safely removed once we finish off immutability for PayloadType
-                    assert (
-                        not mn.PayloadType.LIST.value
-                        and not mn.PayloadType.DICT.value
-                        and (len(mn.PayloadType.LIST_C.value) == 1)
-                    ), f"device({descriptor.type}-{descriptor.uuid}) corrupts const data (namespaces)"
-
                 except BaseException as e:
                     e.args = (*e.args, EntityComponentTest.entity_id)
                     raise e
@@ -246,7 +239,7 @@ async def _async_test_entities(
 ):
     for entity in manager.entities.values():
 
-        entity_type = type(entity)
+        entity_class = entity.__class__
 
         if entity.PLATFORM not in COMPONENTS_TESTS:
             # TODO: add missing platform tests
@@ -262,8 +255,8 @@ async def _async_test_entities(
         # This will ensure the entity is 'available' as per an online device
         await entity_component_test.async_test_each_callback(entity)
 
-        if entity_type in expected_entities:
-            expected_entities.remove(entity_type)
+        if entity_class in expected_entities:
+            expected_entities.remove(entity_class)
         else:
             unexpected_entities.append(entity.logtag)
 

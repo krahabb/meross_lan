@@ -102,7 +102,6 @@ async def test_device_entry(request, hass: "HomeAssistant"):
                     (ns.request_payload_type is not mn.PayloadType.LIST_C)
                     or ns.is_sensor
                     or namespace_handler.polling_request_channels
-                    or descriptor.is_refoss  # brutal exception
                 ), f"Incorrect config for {ns.name} namespace"
 
             if entity_dnd:

@@ -888,7 +888,9 @@ class ComponentApi(MQTTProfile):
             class_name = class_name + m.__name__
         try:
             return self._deviceclasses[class_name](self, config_entry, descriptor)
-        except KeyError:
+        except KeyError as key_error:
+            if key_error.args[0] != class_name:
+                raise
             class_type = type(class_name, tuple(mixin_classes), {})
             self._deviceclasses[class_name] = class_type
             return class_type(self, config_entry, descriptor)

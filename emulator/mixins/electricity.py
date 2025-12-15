@@ -13,10 +13,15 @@ from custom_components.meross_lan.merossclient.protocol import (
 from . import MerossEmulator
 
 if TYPE_CHECKING:
+    from custom_components.meross_lan.merossclient.protocol.types import control as mt_c
+
     from . import MerossEmulatorDescriptor
 
 
 class ElectricityMixin(MerossEmulator if TYPE_CHECKING else object):
+
+    if TYPE_CHECKING:
+        electricity: mt_c.Electricity_C
     # used to 'fix' and control the power level in tests
     # if None (default) it will generate random values
     _power_set: int | None = None
@@ -72,6 +77,11 @@ class ElectricityMixin(MerossEmulator if TYPE_CHECKING else object):
 
 
 class ElectricityXMixin(MerossEmulator if TYPE_CHECKING else object):
+
+    if TYPE_CHECKING:
+        electricityx: list[mt_c.ElectricityX_C]
+
+    VOLTAGEX_AVERAGE = 228000  # in millivolts
 
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
@@ -134,9 +144,62 @@ class ElectricityXMixin(MerossEmulator if TYPE_CHECKING else object):
             mn.Appliance_Control_ElectricityX.name
         ]
         self.electricityx = self.payload_electricityx[mc.KEY_ELECTRICITY]
+        self._electricityx_epoch = self.epoch
 
     def _GET_Appliance_Control_ElectricityX(self, header, payload):
+        dt = self.epoch - self._electricityx_epoch
+        self._electricityx_epoch = self.epoch
+
+        for p_channel_electricityx in self.electricityx:
+            # implementying some random walk for power
+            power_prev = p_channel_electricityx[mc.KEY_POWER]
+            if randint(0, 3) == 0:
+                # make a big power step
+                power = power_prev + randint(-200000, 200000)
+            else:
+                # make some noise
+                power = power_prev + randint(-10000, 10000)
+            if power > 3600000:
+                power = 2400000
+            elif power < -3600000:
+                power = -2400000
+
+            p_channel_electricityx[mc.KEY_POWER] = power
+            p_channel_electricityx[mc.KEY_VOLTAGE] = self.VOLTAGEX_AVERAGE + randint(
+                -2000, 2000
+            )
+            p_channel_electricityx[mc.KEY_CURRENT] = int(
+                1000 * power / p_channel_electricityx[mc.KEY_VOLTAGE]
+            )
+            # energy consumption is lacking fractional accumulation though
+            # and also monthly reset (TODO when relevant)
+            p_channel_electricityx[mc.KEY_MCONSUME] += int(
+                (power + power_prev) * dt / 7200000
+            )
         return mc.METHOD_GETACK, self.payload_electricityx
+
+
+class ConsumptionHMixin(MerossEmulator if TYPE_CHECKING else object):
+
+    def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
+        super().__init__(descriptor, key)
+        if mc.RefossModel.match(descriptor.type) is mc.RefossModel.em06:
+            self.update_namespace_state(
+                mn.Appliance_Control_ConsumptionH,
+                MerossEmulator.NSDefaultMode.MixOut,
+                [
+                    {
+                        "channel": channel,
+                        "total": 0,
+                        "data": [],
+                    }
+                    for channel in range(1, 7)
+                ],
+            )
+        self.payload_comsuptionh = descriptor.namespaces[
+            mn.Appliance_Control_ConsumptionH.name
+        ]
+        self.consumptionh = self.payload_comsuptionh[mc.KEY_CONSUMPTIONH]
 
 
 class ConsumptionXMixin(MerossEmulator if TYPE_CHECKING else object):
@@ -169,9 +232,9 @@ class ConsumptionXMixin(MerossEmulator if TYPE_CHECKING else object):
             self.payload_consumptionx[mc.KEY_CONSUMPTIONX] = p_consumptionx
 
         self.consumptionx = p_consumptionx
-        self._epoch_prev = 0
-        self._power_prev = None
-        self._energy_fraction = 0.0  # in Wh
+        self._consumptionx_epoch = 0
+        self._consumptionx_power = None
+        self._consumptionx_energy = 0.0  # in Wh
         # REMOVE
         # "Asia/Bangkok" GMT + 7
         # "Asia/Baku" GMT + 4
@@ -209,20 +272,20 @@ class ConsumptionXMixin(MerossEmulator if TYPE_CHECKING else object):
         }
         """
         # energy will be reset every time we update our consumptionx array
-        if self._power_prev is not None:
-            self._energy_fraction += (
-                (self.power + self._power_prev)
-                * (self.epoch - self._epoch_prev)
+        if self._consumptionx_power is not None:
+            self._consumptionx_energy += (
+                (self.power + self._consumptionx_power)
+                * (self.epoch - self._consumptionx_epoch)
                 / 7200000
             )
-        self._epoch_prev = self.epoch
-        self._power_prev = self.power
+        self._consumptionx_epoch = self.epoch
+        self._consumptionx_power = self.power
 
-        if self._energy_fraction < 1.0:
+        if self._consumptionx_energy < 1.0:
             return mc.METHOD_GETACK, self.payload_consumptionx
 
-        energy = int(self._energy_fraction)
-        self._energy_fraction -= energy
+        energy = int(self._consumptionx_energy)
+        self._consumptionx_energy -= energy
 
         y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(self.epoch)
         devtime = datetime(y, m, d, hh, mm, min(ss, 59), 0, timezone.utc)

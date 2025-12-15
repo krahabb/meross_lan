@@ -342,7 +342,7 @@ class Device(BaseDevice, ConfigEntryManager):
             "ElectricityXNamespaceHandler",
         ),
         mn.Appliance_Control_ConsumptionH.name: (
-            ".sensor",
+            ".devices.mss",
             "ConsumptionHNamespaceHandler",
         ),
         mn.Appliance_Control_ConsumptionX.name: (".devices.mss", "ConsumptionXSensor"),
@@ -1032,12 +1032,6 @@ class Device(BaseDevice, ConfigEntryManager):
             self._profile.unlink(self)
         if self._bluetooth:
             self._bluetooth.detach()
-        """REMOVE
-        if self._http:
-            # to be called before stopping polling so that it breaks http timeouts
-            await self._http.async_terminate()
-            self._http = None
-        """
         await self.async_poll_stop()
         await super().async_shutdown()
         self.namespace_handlers = None  # type: ignore

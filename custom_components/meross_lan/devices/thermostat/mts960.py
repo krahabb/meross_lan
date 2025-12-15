@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from typing import Final
 
     from ...helpers.device import Device
-    from ...merossclient.protocol.types import MerossPayloadType
+    from ...merossclient.protocol.types import MerossPayloadType, thermostat as mt_t
 
 
 class Mts960Climate(MtsThermostatClimate):
@@ -63,6 +63,7 @@ class Mts960Climate(MtsThermostatClimate):
             )
 
     if TYPE_CHECKING:
+        _mts_payload: mt_t.ModeB_C
         binary_sensor_plug_state: PlugState
         number_timer_down_duration: TimerConfigNumber
         number_timer_cycle_off_duration: TimerConfigNumber
@@ -366,7 +367,7 @@ class Mts960Climate(MtsThermostatClimate):
         return self._mts_onoff and (self._mts_mode == mc.MTS960_MODE_SCHEDULE)
 
     # interface: self
-    async def _async_request_modeB(self, payload: "MerossPayloadType", /):
+    async def _async_request_modeB(self, payload: "mt_t.ModeBRequest_C", /):
         if response := await self.manager.async_request_ack(
             self.ns.name,
             mc.METHOD_SET,
@@ -376,8 +377,8 @@ class Mts960Climate(MtsThermostatClimate):
                 payload = response[mc.KEY_PAYLOAD][mc.KEY_MODEB][0]
             except (KeyError, IndexError):
                 # optimistic update
-                payload = merge_dicts(self._mts_payload, payload)  # type: ignore
-            self._parse_modeB(payload)
+                payload = merge_dicts(self._mts_payload, payload)
+            self._parse_modeB(payload)  # type: ignore
 
     async def _async_request_timer(self, timer_type: int, payload: dict, /):
         ns = mn_t.Appliance_Control_Thermostat_Timer
@@ -400,7 +401,7 @@ class Mts960Climate(MtsThermostatClimate):
             return True
 
     # message handlers
-    def _parse_modeB(self, payload: dict, /):
+    def _parse_modeB(self, payload: "mt_t.ModeB_C", /):
         """
         {
             "mode": 3,

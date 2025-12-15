@@ -109,6 +109,11 @@ def build_emulator(
         from .mixins.electricity import ElectricityXMixin
 
         mixin_classes.append(ElectricityXMixin)
+    if mn.Appliance_Control_ConsumptionH.name in ability:
+        from .mixins.electricity import ConsumptionHMixin
+
+        mixin_classes.append(ConsumptionHMixin)
+
     if mn.Appliance_Control_ConsumptionX.name in ability:
         from .mixins.electricity import ConsumptionXMixin
 

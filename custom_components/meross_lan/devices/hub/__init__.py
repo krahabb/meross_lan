@@ -17,7 +17,6 @@ from ...helpers.namespaces import (
 from ...merossclient import get_productnameuuid
 from ...merossclient.protocol.namespaces import hub as mn_h
 from ...number import MLConfigNumber
-from ...select import MtsTrackedSensor
 from ...sensor import (
     MLDiagnosticSensor,
     MLEnumSensor,
@@ -167,7 +166,6 @@ class HubSubIdDeviceCfgMixin(MLEntity if TYPE_CHECKING else object):
 
     if TYPE_CHECKING:
         manager: "SubDevice"
-        key_group: str
 
     ns = mn_h.Appliance_Config_DeviceCfg
 
@@ -335,7 +333,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
         MLNumericSensor.PLATFORM: None,
         MLSwitch.PLATFORM: None,
         MtsClimate.PLATFORM: None,
-        MtsTrackedSensor.PLATFORM: None,
+        MtsClimate.TrackSensorSelect.PLATFORM: None,
     }
 
     TRACE_ABILITY_EXCLUDE = Device.TRACE_ABILITY_EXCLUDE + (
@@ -1068,6 +1066,12 @@ class GS559SubDevice(SubDevice):
         if mc.KEY_INTERCONN in p_smokealarm:
             self.sensor_interConn.update_native_value(p_smokealarm[mc.KEY_INTERCONN])
 
+    def _parse_togglex(self, p_togglex: dict):
+        # avoid the base class creating a toggle entity
+        # since we're pretty sure gs559 doesn't have any funcionality here
+        # (https://github.com/krahabb/meross_lan/discussions/6#discussioncomment-15234566)
+        pass
+
     async def _async_button_mute_press(self):
         ns = mn_h.Appliance_Hub_Sensor_Smoke
         try:
@@ -1422,7 +1426,7 @@ class MST100SubDevice(SubDevice):
         self.switch_water_onoff = None  # type: ignore
 
     def _parse_deviceCfg(self, p_devicecfg: "DeviceCfg"):
-        self.number_duration.update_device_value(p_devicecfg["mstCfg"]["dura"])
+        self.number_duration._parse(p_devicecfg)
 
     def _parse_water(self, p_water: "Water"):
         self.switch_water_onoff.update_onoff(p_water[mc.KEY_ONOFF] == 1)

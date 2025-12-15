@@ -92,8 +92,11 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         # in inherited entities but could nonetheless be set 'per instance'.
         # These also come handy when generalizing parsing of received payloads
         # for simple enough entities (like sensors, numbers or switches)
-        ns: mn.Namespace
-        key_value: str
+        # Starting around 2025 some namespaces seems to enrich their payloads structure
+        # by nesting the actual 'key_value' inside 'group_key(s)' (see Appliance.Config.DeviceCfg)
+        ns: mn.Namespace  # no default
+        key_group: str  # no default
+        key_value: str  # defaulted to 'value'
 
         # used to speed-up checks if entity is enabled and loaded
         hass_connected: Final[bool]  # public ReadOnly attribute
@@ -285,13 +288,13 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         self.available = False
         self.flush_state()
 
-    def update_device_value(self, device_value, /):
+    def update_device_value(self, device_value, /) -> bool | None:
         """This is a stub definition. It will be called by _parse (when namespace dispatching
         is configured so) or directly as a short path inside other parsers to forward the
         incoming device value to the underlyinh HA entity state."""
         raise NotImplementedError("Called 'update_device_value' on wrong entity type")
 
-    def update_native_value(self, native_value, /):
+    def update_native_value(self, native_value, /) -> bool | None:
         """This is a stub definition. It will usually be called by update_device_value
         with the result of the conversion from the incoming device value (from Meross protocol)
         to the proper HA type/value for the entity class."""
@@ -340,8 +343,12 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
     # interface: NamespaceParser
     def _parse(self, payload: "Mapping[str, Any]", /):
         """Default parsing for entities. Set the proper
-        key_value in class/instance definition to make it work."""
-        self.update_device_value(payload[self.key_value])
+        key_group/key_value in class/instance definition to make it work."""
+        try:
+            # statistically more common case
+            self.update_device_value(payload[self.key_value])
+        except KeyError:
+            self.update_device_value(payload[self.key_group][self.key_value])
 
 
 class MENoChannelMixin(MLEntity if TYPE_CHECKING else object):
@@ -405,6 +412,32 @@ class MEListChannelMixin(MLEntity if TYPE_CHECKING else object):
             ns.name,
             mc.METHOD_SET,
             {ns.key: [{ns.key_channel: self.channel, self.key_value: device_value}]},
+        )
+
+
+class MEGroupListChannelMixin(MLEntity if TYPE_CHECKING else object):
+    """
+    Implementation for protocol method 'SET' on entities/namespaces backed by a channel
+    list and the actual entity value is embedded in a 'group' key (see Appliance.Config.DeviceCfg).
+    """
+
+    manager: "BaseDevice"
+
+    # interface: MLEntity
+    async def async_request_value(self, device_value, /):
+        """sends the actual request to the device. this is likely to be overloaded"""
+        ns = self.ns
+        return await self.manager.async_request_ack(
+            ns.name,
+            mc.METHOD_SET,
+            {
+                ns.key: [
+                    {
+                        ns.key_channel: self.channel,
+                        self.key_group: {self.key_value: device_value},
+                    }
+                ]
+            },
         )
 
 
