@@ -36,9 +36,6 @@ class _MerossPayloadType(TypedDict):
 type MerossPayloadType = JsonDict
 
 
-type MerossPayloadType = dict[str, Any]
-
-
 class MerossMessageType(TypedDict):
     """Meross protocol message dictionary, containing header and payload."""
 
