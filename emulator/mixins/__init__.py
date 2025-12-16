@@ -760,15 +760,20 @@ class MerossEmulator:
             case (_, "Control", _):
                 p_digest = self.descriptor.digest
             case (_, "Control", ns_2, _):
+                # e.g. Appliance.Control.Thermostat.*
                 p_digest = self.descriptor.digest
-                subkey = "".join([ns_2[0].lower(), ns_2[1:]])
-                if subkey in p_digest:
-                    p_digest = p_digest[subkey]
+                try:
+                    p_digest = p_digest["".join((ns_2[0].lower(), ns_2[1:]))]
+                except KeyError:
+                    pass
             case _:
                 return ns, self.namespaces[namespace]
 
-        if ns.key in p_digest:
-            return ns, p_digest
+        try:
+            if type(p_digest[ns.key]) in (dict, list):
+                return ns, p_digest
+        except KeyError:
+            pass
 
         return ns, self.namespaces[namespace]
 
@@ -839,6 +844,8 @@ class MerossEmulator:
                     p_namespace[ns.key] = payload | p_namespace[ns.key]
             except KeyError:
                 p_namespace[ns.key] = payload
+
+        return p_namespace
 
     def mqtt_publish_push(self, namespace: str, payload: dict):
         """

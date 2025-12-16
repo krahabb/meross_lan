@@ -74,12 +74,6 @@ class LightMixin(MerossEmulator if TYPE_CHECKING else object):
 
         return mc.METHOD_SETACK, {}
 
-    def _GET_Appliance_Control_Light_Effect(self, header, payload):
-        return (
-            mc.METHOD_GETACK,
-            self.namespaces[mn.Appliance_Control_Light_Effect.name],
-        )
-
     def _SET_Appliance_Control_Light_Effect(self, header, payload):
 
         p_state_effect_list: list[dict] = self.namespaces[

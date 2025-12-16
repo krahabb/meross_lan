@@ -1690,7 +1690,15 @@ class Device(BaseDevice, ConfigEntryManager):
         # and this might (unluckily) be another Meross with the same key
         # so it could rightly respond here. This shouldnt happen over MQTT
         # since the device.id is being taken care of by the routing mechanism
-        if self._check_uuid_mismatch(response.get_uuid()):
+        response_uuid = response.get_uuid()
+        if self.id != response_uuid:
+            try:
+                mismatched_payload_all = await http.async_request(
+                    *mn.Appliance_System_All.request_get
+                )
+            except Exception:
+                mismatched_payload_all = None
+            self._process_uuid_mismatch(response_uuid, mismatched_payload_all)
             return None
 
         self._http_lastresponse = epoch
@@ -2294,12 +2302,12 @@ class Device(BaseDevice, ConfigEntryManager):
         # in order to not mess our configuration. All in all this check should be not
         # needed since the only reasonable source of 'device mismatch' is the HTTP protocol
         # which is already guarded in our async_http_request
-        if self._check_uuid_mismatch(
-            payload[mc.KEY_ALL][mc.KEY_SYSTEM][mc.KEY_HARDWARE][mc.KEY_UUID]
-        ):
+        response_uuid = payload[mc.KEY_ALL][mc.KEY_SYSTEM][mc.KEY_HARDWARE][mc.KEY_UUID]
+        if self.id != response_uuid:
+            self._process_uuid_mismatch(response_uuid, payload)
             return
-        else:
-            self.remove_issue(mlc.ISSUE_DEVICE_ID_MISMATCH)
+
+        self.remove_issue(mlc.ISSUE_DEVICE_ID_MISMATCH)
 
         needsave = query_abilities = False
         descr = self.descriptor
@@ -2603,26 +2611,30 @@ class Device(BaseDevice, ConfigEntryManager):
         if self.online:
             self.sensor_protocol.set_available()
 
-    def _check_uuid_mismatch(self, response_uuid: str):
-        """when detecting a wrong uuid from a response we offline the device"""
-        if response_uuid != self.id:
-            # here we're not obfuscating device uuid since we might have an hard time identifying the bogus one
-            self.log(
-                self.CRITICAL,
-                "Received a response from a mismatching device (received uuid:%s, configured uuid:%s)",
-                response_uuid,
-                self.id,
-                timeout=900,
-            )
-            if self.online:
-                self._set_offline()
-            self.create_issue(
-                mlc.ISSUE_DEVICE_ID_MISMATCH,
-                severity=self.IssueSeverity.CRITICAL,
-                translation_placeholders={"device_name": self.name},
-            )
-            return True
-        return False
+    def _process_uuid_mismatch(
+        self, response_uuid: str, payload_all: "MerossPayloadType | None"
+    ):
+        """When detecting a wrong uuid from a response we offline the device and setup an issue."""
+        if self.online:
+            self._set_offline()
+        try:
+            _remote_type = payload_all[mc.KEY_ALL][mc.KEY_SYSTEM][mc.KEY_HARDWARE][mc.KEY_TYPE]  # type: ignore
+        except Exception:
+            _remote_type = "<unknown>"
+        self.log(
+            self.CRITICAL,
+            "Wrong device at configured address %s (own uuid:%s, remote uuid:%s, type:%s)",
+            self.host or "<unknown>",
+            self.id,
+            response_uuid,
+            _remote_type,
+            timeout=900,
+        )
+        self.create_issue(
+            mlc.ISSUE_DEVICE_ID_MISMATCH,
+            severity=self.IssueSeverity.CRITICAL,
+            translation_placeholders={"device_name": self.name},
+        )
 
     def update_device_info(self, device_info: "DeviceInfoType"):
         api = self.api

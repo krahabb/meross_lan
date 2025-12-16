@@ -454,6 +454,9 @@ Appliance_Control_AlertReport = ns(
     "alert",
     ARGS_GETSET | P_LIST_C | G_EXPERIMENTAL,
 )
+Appliance_Control_Beep = ns(
+    "Appliance.Control.Beep", mc.KEY_ALARM, ARGS_GETSET | P_LIST_C
+)
 Appliance_Control_Bind = ns("Appliance.Control.Bind", mc.KEY_BIND, ARGS_NO_Q)
 Appliance_Control_ChangeWifi = ns("Appliance.Control.ChangeWiFi", None, ARGS_NO_Q)
 Appliance_Control_ConsumptionConfig = ns(

@@ -333,6 +333,8 @@ class MerossDeviceDescriptor:
 
         DYNAMIC_ATTRS: Final[Mapping[str, Callable[["MerossDeviceDescriptor"], Any]]]
 
+        payload: Final[JsonDict]
+        channels: Final[frozenset[int]]
         all: JsonDict
         ability: JsonDict
         digest: JsonDict
@@ -356,6 +358,13 @@ class MerossDeviceDescriptor:
         productnametype: str
         productmodel: str
         is_refoss: bool
+
+    NO_CHANNEL = frozenset()
+    SINGLE_CHANNEL = frozenset({0})
+    TYPE_CHANNELS_MAP = {
+        # some lookup when digest euristic parsing doesn't work
+        "em06": frozenset({1, 2, 3, 4, 5, 6}),
+    }
 
     DYNAMIC_ATTRS = {
         # TODO: use cached_property
@@ -386,6 +395,7 @@ class MerossDeviceDescriptor:
 
     __slots__ = (
         "payload",
+        "channels",
         "all",
         "ability",
         "digest",
@@ -394,6 +404,35 @@ class MerossDeviceDescriptor:
 
     def __init__(self, payload: "JsonDict"):
         self.payload = payload
+        # infer supported channels from device type
+        device_type = self.type
+        for _type, _channels in MerossDeviceDescriptor.TYPE_CHANNELS_MAP.items():
+            if device_type.startswith(_type):
+                self.channels = _channels
+                break
+        else:
+            # infer from digest payload
+            _channels = set()
+
+            def _search_channels(d: dict):
+                try:
+                    channel = d[mc.KEY_CHANNEL]
+                    if isinstance(channel, int):
+                        _channels.add(channel)
+                except Exception:
+                    for _value in d.values():
+                        _value_type = type(_value)
+                        if _value_type is dict:
+                            _search_channels(_value)
+                        elif _value_type is list:
+                            for item in _value:
+                                if type(item) is dict:
+                                    _search_channels(item)
+
+            _search_channels(self.digest)
+            self.channels = (
+                frozenset(_channels) if _channels else MerossDeviceDescriptor.NO_CHANNEL
+            )
 
     def __getattr__(self, name):
         value = MerossDeviceDescriptor.DYNAMIC_ATTRS[name](self)
@@ -404,7 +443,7 @@ class MerossDeviceDescriptor:
         """
         reset the cached pointers
         """
-        self.payload |= payload
+        self.payload.update(payload)
         for key in MerossDeviceDescriptor.DYNAMIC_ATTRS:
             # don't use hasattr() or so to inspect else the whole
             # dynamic attrs logic gets f...d

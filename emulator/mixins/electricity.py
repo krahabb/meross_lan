@@ -85,72 +85,29 @@ class ElectricityXMixin(MerossEmulator if TYPE_CHECKING else object):
 
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
-        if mc.RefossModel.match(descriptor.type) is mc.RefossModel.em06:
-            self.update_namespace_state(
-                mn.Appliance_Control_ElectricityX,
-                MerossEmulator.NSDefaultMode.MixOut,
-                [
-                    {
-                        "channel": 1,
-                        "current": 0,
-                        "voltage": 233680,
-                        "power": 0,
-                        "mConsume": 1967,
-                        "factor": 0,
-                    },
-                    {
-                        "channel": 2,
-                        "current": 574,
-                        "voltage": 233184,
-                        "power": 115185,
-                        "mConsume": 4881,
-                        "factor": 0.8602570295333862,
-                    },
-                    {
-                        "channel": 3,
-                        "current": 0,
-                        "voltage": 232021,
-                        "power": 0,
-                        "mConsume": 59,
-                        "factor": 0,
-                    },
-                    {
-                        "channel": 4,
-                        "current": 311,
-                        "voltage": 233748,
-                        "power": 324,
-                        "mConsume": 0,
-                        "factor": 0.004454255104064941,
-                    },
-                    {
-                        "channel": 5,
-                        "current": 0,
-                        "voltage": 233313,
-                        "power": 0,
-                        "mConsume": 0,
-                        "factor": 0,
-                    },
-                    {
-                        "channel": 6,
-                        "current": 339,
-                        "voltage": 232127,
-                        "power": -10,
-                        "mConsume": 0,
-                        "factor": -0.0001285076141357422,
-                    },
-                ],
-            )
-        self.payload_electricityx = descriptor.namespaces[
-            mn.Appliance_Control_ElectricityX.name
-        ]
-        self.electricityx = self.payload_electricityx[mc.KEY_ELECTRICITY]
+
+        self.payload_electricityx = self.update_namespace_state(
+            mn.Appliance_Control_ElectricityX,
+            MerossEmulator.NSDefaultMode.MixOut,
+            [
+                {
+                    "channel": channel,
+                    "current": 0,
+                    "voltage": self.VOLTAGEX_AVERAGE,
+                    "power": 0,
+                    "mConsume": 0,
+                    "factor": 0,
+                }
+                for channel in descriptor.channels
+            ],
+        )
         self._electricityx_epoch = self.epoch
 
     def _GET_Appliance_Control_ElectricityX(self, header, payload):
         dt = self.epoch - self._electricityx_epoch
         self._electricityx_epoch = self.epoch
 
-        for p_channel_electricityx in self.electricityx:
+        for p_channel_electricityx in self.payload_electricityx[mc.KEY_ELECTRICITY]:
             # implementying some random walk for power
             power_prev = p_channel_electricityx[mc.KEY_POWER]
             if randint(0, 3) == 0:
@@ -176,6 +133,7 @@ class ElectricityXMixin(MerossEmulator if TYPE_CHECKING else object):
             p_channel_electricityx[mc.KEY_MCONSUME] += int(
                 (power + power_prev) * dt / 7200000
             )
+
         return mc.METHOD_GETACK, self.payload_electricityx
 
 
@@ -183,23 +141,19 @@ class ConsumptionHMixin(MerossEmulator if TYPE_CHECKING else object):
 
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
-        if mc.RefossModel.match(descriptor.type) is mc.RefossModel.em06:
-            self.update_namespace_state(
-                mn.Appliance_Control_ConsumptionH,
-                MerossEmulator.NSDefaultMode.MixOut,
-                [
-                    {
-                        "channel": channel,
-                        "total": 0,
-                        "data": [],
-                    }
-                    for channel in range(1, 7)
-                ],
-            )
-        self.payload_comsuptionh = descriptor.namespaces[
-            mn.Appliance_Control_ConsumptionH.name
-        ]
-        self.consumptionh = self.payload_comsuptionh[mc.KEY_CONSUMPTIONH]
+
+        self.update_namespace_state(
+            mn.Appliance_Control_ConsumptionH,
+            MerossEmulator.NSDefaultMode.MixOut,
+            [
+                {
+                    "channel": channel,
+                    "total": 0,
+                    "data": [],
+                }
+                for channel in descriptor.channels
+            ],
+        )
 
 
 class ConsumptionXMixin(MerossEmulator if TYPE_CHECKING else object):

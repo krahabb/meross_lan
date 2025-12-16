@@ -160,8 +160,8 @@ Appliance_Hub_Sensor_WaterLeak = mn.ns(
 )
 Appliance_Hub_SubDevice_Beep = mn.ns(
     "Appliance.Hub.SubDevice.Beep",
-    None,
-    mn.ARGS_SET | IS_HUB_ID | mn.G_EXPERIMENTAL,  # no clue yet
+    mc.KEY_ALARM,
+    mn.ARGS_GETSET | IS_HUB_ID | mn.G_EXPERIMENTAL,  # no clue yet
 )
 Appliance_Hub_SubDevice_MotorAdjust = mn.ns(
     "Appliance.Hub.SubDevice.MotorAdjust",
