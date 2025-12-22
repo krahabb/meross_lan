@@ -351,6 +351,7 @@ class MLScreenBrightnessNumber(MLConfigNumber):
     ns = mn.Appliance_Control_Screen_Brightness
 
     # HA core entity attributes:
+    _attr_native_unit_of_measurement = MLConfigNumber.hac.PERCENTAGE
     icon: str = "mdi:brightness-percent"
     native_max_value = 100
     native_min_value = 0
@@ -358,11 +359,11 @@ class MLScreenBrightnessNumber(MLConfigNumber):
 
     def __init__(self, manager: "Device", key: str, /):
         self.key_value = key
-        super().__init__(
+        MLConfigNumber.__init__(
+            self,
             manager,
             0,
             f"screenbrightness_{key}",
-            native_unit_of_measurement=MLConfigNumber.hac.PERCENTAGE,
             name=f"Screen brightness ({key})",
         )
 

@@ -605,10 +605,12 @@ class MLNumericEntity(MLEntity):
 
         # HA core entity attributes:
         native_value: int | float | None
+        _attr_native_unit_of_measurement: ClassVar[str | None]
         native_unit_of_measurement: str | None
 
     """To be init in derived classes with their DeviceClass own types."""
     _attr_device_scale = 1
+    _attr_native_unit_of_measurement = None
 
     __slots__ = (
         "device_scale",
@@ -633,9 +635,14 @@ class MLNumericEntity(MLEntity):
         else:
             self.device_value = None
             self.native_value = None
-        self.native_unit_of_measurement = kwargs.pop(
-            "native_unit_of_measurement", None
-        ) or self.DEVICECLASS_TO_UNIT_MAP.get(device_class)
+        try:
+            self.native_unit_of_measurement = kwargs["native_unit_of_measurement"]  # type: ignore
+        except KeyError:
+            self.native_unit_of_measurement = (
+                self._attr_native_unit_of_measurement
+                or self.DEVICECLASS_TO_UNIT_MAP.get(device_class)
+            )
+
         super().__init__(manager, channel, entitykey, device_class, **kwargs)
 
     def set_unavailable(self):

@@ -49,17 +49,18 @@ class Mts960Climate(MtsThermostatClimate):
         """
 
         # HA core entity attributes:
+        _attr_native_unit_of_measurement = MLEmulatedNumber.hac.UnitOfTime.MINUTES
         native_max_value = 1440  # 1 day max duration (no real info just guessing)
         native_min_value = 1
         native_step = 1
 
         def __init__(self, climate: "Mts960Climate", entitykey: str, /):
-            super().__init__(
+            MLEmulatedNumber.__init__(
+                self,
                 climate.manager,
                 climate.channel,
                 entitykey,
                 MLEmulatedNumber.DEVICE_CLASS_DURATION,
-                native_unit_of_measurement=MLEmulatedNumber.hac.UnitOfTime.MINUTES,
             )
 
     if TYPE_CHECKING:

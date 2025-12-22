@@ -1342,6 +1342,7 @@ class MST100SubDevice(SubDevice):
         key_value = "dura"
 
         # HA core entity attributes:
+        _attr_native_unit_of_measurement = MLConfigNumber.hac.UnitOfTime.SECONDS
         native_max_value = 86400  # 1 day max duration (no real info just guessing)
         native_min_value = 1
 
@@ -1353,7 +1354,6 @@ class MST100SubDevice(SubDevice):
                 mc.KEY_DURATION,
                 MLConfigNumber.DEVICE_CLASS_DURATION,
                 name="Watering duration",
-                native_unit_of_measurement=MLConfigNumber.hac.UnitOfTime.SECONDS,
             )
 
     class OnOffSwitch(HubSubIdChannelMixin, MLSwitch):

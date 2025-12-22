@@ -63,7 +63,9 @@ class PresenceConfigModeBase(PresenceConfigSelectBase):
 
     def __init__(self, manager: "Device", channel: object, key: str):
         self.key_value = key
-        super().__init__(manager, channel, f"presence_config_mode_{key}", name=key)
+        PresenceConfigSelectBase.__init__(
+            self, manager, channel, f"presence_config_mode_{key}", name=key
+        )
 
 
 class PresenceConfigNoBodyTime(PresenceConfigNumberBase):
@@ -77,7 +79,8 @@ class PresenceConfigNoBodyTime(PresenceConfigNumberBase):
     native_step = 1
 
     def __init__(self, manager: "Device", channel: object):
-        super().__init__(
+        PresenceConfigNumberBase.__init__(
+            self,
             manager,
             channel,
             f"presence_config_noBodyTime_time",
@@ -92,18 +95,19 @@ class PresenceConfigDistance(PresenceConfigNumberBase):
     key_value = mc.KEY_VALUE
 
     # HA core entity attributes:
+    _attr_native_unit_of_measurement = MLConfigNumber.hac.UnitOfLength.METERS
     native_max_value = 12
     native_min_value = 0.1
     native_step = 0.1
 
     def __init__(self, manager: "Device", channel: object):
-        super().__init__(
+        PresenceConfigNumberBase.__init__(
+            self,
             manager,
             channel,
             f"presence_config_distance_value",
             MLConfigNumber.DeviceClass.DISTANCE,
             device_scale=1000,
-            native_unit_of_measurement=MLConfigNumber.hac.UnitOfLength.METERS,
             name=mc.KEY_DISTANCE,
         )
 

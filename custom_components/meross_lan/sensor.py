@@ -390,6 +390,7 @@ class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
     ENTITY_KEY = "signal_strength"
 
     # HA core entity attributes:
+    _attr_native_unit_of_measurement = me.MLEntity.hac.PERCENTAGE
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
     icon = "mdi:wifi"
 
@@ -399,7 +400,6 @@ class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
             None,
             MLSignalStrengthSensor.ENTITY_KEY,
             None,
-            native_unit_of_measurement=me.MLEntity.hac.PERCENTAGE,
         )
         EntityNamespaceHandler(self)
 
@@ -413,15 +413,16 @@ class MLFilterMaintenanceSensor(MLNumericSensor):
     key_value = mc.KEY_LIFE
 
     # HA core entity attributes:
+    _attr_native_unit_of_measurement = me.MLEntity.hac.PERCENTAGE
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
 
     def __init__(self, manager: "Device", channel):
-        super().__init__(
+        MLNumericSensor.__init__(
+            self,
             manager,
             channel,
             mc.KEY_FILTER,
             None,
-            native_unit_of_measurement=me.MLEntity.hac.PERCENTAGE,
         )
         manager.register_parser_entity(self)
 
