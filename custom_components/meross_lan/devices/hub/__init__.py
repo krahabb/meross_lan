@@ -323,7 +323,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
     Specialized Device for smart hub(s) like MSH300
     """
 
-    NAMESPACES = mn_h.HUB_NAMESPACES
+    NAMESPACES = mn.HUB_NAMESPACES
 
     DEFAULT_PLATFORMS = Device.DEFAULT_PLATFORMS | {
         MLBinarySensor.PLATFORM: None,
@@ -337,14 +337,10 @@ class HubMixin(Device if TYPE_CHECKING else object):
     }
 
     TRACE_ABILITY_EXCLUDE = Device.TRACE_ABILITY_EXCLUDE + (
-        "Appliance.Hub.Exception",  # disconnects
-        "Appliance.Hub.Report",  # disconnects
-        "Appliance.Hub.SubdeviceList",  # disconnects
-        *(
-            name
-            for name, ns in mn_h.HUB_NAMESPACES.items()
-            if (ns.has_get is False) and (ns.has_push_query is False)
-        ),
+        mn_h.Appliance_Hub_Exception.name,
+        mn_h.Appliance_Hub_Report.name,
+        mn_h.Appliance_Hub_SubdeviceList.name,
+        *(ns.name for ns in mn.HUB_NAMESPACES.values() if not ns.can_query),
     )
 
     # interface: EntityManager
@@ -377,7 +373,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
                 ns,
                 handler=_handler,
             )
-        elif ns.is_hub_id:
+        elif ns.key_channel is mc.KEY_ID:
             # This rule states that the payload is a list of subdevices indexed by 'id'.
             # Newer devices (2024) started using namespaces/payload indexed by 'subid'
             # and 'channel'. These will be handled by the base class NamespaceHandler

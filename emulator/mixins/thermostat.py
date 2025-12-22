@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from typing import Any, ClassVar, Mapping
 
     from custom_components.meross_lan.merossclient.protocol.types import (
+        MerossPayloadType,
         thermostat as mt_t,
     )
 
@@ -195,7 +196,9 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
         # We assume only channel == 0 here.
         self._update_current_temp()
 
-    def _handler_default(self, method: str, namespace: str, payload: "Mapping"):
+    def _handler_default(
+        self, method: str, namespace: str, payload: "MerossPayloadType", /
+    ):
         if not namespace in (
             mn_t.Appliance_Control_Thermostat_Calibration.name,
             mn_t.Appliance_Control_Thermostat_Frost.name,
@@ -275,7 +278,7 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
                                 _changed = True
                         except KeyError:
                             pass
-                    if _changed and ns.has_push and self.mqtt_connected:
+                    if _changed and ns.has_psh and self.mqtt_connected:
                         self.mqtt_publish_push(namespace, {ns_key: [p_channel_state]})
 
                 return mc.METHOD_SETACK, {}

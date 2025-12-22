@@ -29,6 +29,7 @@ METHOD_ACK_MAP = {
 }
 
 # misc keys for json payloads
+KEY_ = ""
 KEY_HEADER = "header"
 KEY_MESSAGEID = "messageId"
 KEY_NAMESPACE = "namespace"
@@ -211,6 +212,7 @@ KEY_MANUALTEMP = "manualTemp"
 KEY_TARGETTEMP = "targetTemp"
 KEY_WINDOWOPENED = "windowOpened"
 KEY_TEMPUNIT = "tempUnit"
+KEY_ALERT = "alert"
 KEY_ALARM = "alarm"
 KEY_ALARMCONFIG = "alarmConfig"
 KEY_CALIBRATION = "calibration"

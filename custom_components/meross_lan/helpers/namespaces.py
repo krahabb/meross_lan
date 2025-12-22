@@ -184,33 +184,34 @@ class NamespaceHandler:
         self.polling_request_configure(None)
         device.namespace_handlers[namespace] = self
 
-    def polling_request_configure(self, request_payload_type: mn.PayloadType | None, /):
+    def polling_request_configure(self, payload_type: mn.PayloadType | None, /):
         """The structure of the polling payload is usually 'fixed' in the namespace
         grammar (see merossclient.namespaces.Namespace) but we have some exceptions
         here and there (one example is Refoss EM06) where the 'standard' is not valid.
         This method allows to refine this namespace parser behavior based off current
         device configuration/type at runtime. Needs to be called early on before
         registering any parser.
-        Passing None as request_payload_type configures the default for the namespace.
+        Passing None as payload_type configures the default for the namespace.
         """
         ns = self.ns
-        _request_payload_type = request_payload_type or ns.request_payload_type
-        if (_request_payload_type is mn.PayloadType.LIST_C) or (
-            _request_payload_type is mn.PayloadType.LIST_SX
+        _payload_type = payload_type or ns.payload_get
+        if (_payload_type is mn.PayloadType.LIST_C_STRICT) or (
+            _payload_type is mn.PayloadType.LIST_C_DATA_STRICT
         ):
             self.polling_request = (
                 ns.name,
                 mc.METHOD_GET,
                 {ns.key: self.polling_request_channels},
             )
-        elif _request_payload_type is ns.request_payload_type:
+        # TODO: articulate request building to cover defaults and unsupported types
+        elif _payload_type is ns.payload_get:
             # we'll reuse the default in the ns definition
             self.polling_request = ns.request_default
         else:
             self.polling_request = (
                 ns.name,
                 mc.METHOD_GET,
-                {ns.key: _request_payload_type.value},
+                {ns.key: _payload_type.value if _payload_type else {}},
             )
 
     def polling_request_add_channel(
@@ -634,7 +635,7 @@ class NamespaceHandler:
         if (
             device._mqtt_active
             and self.polling_epoch_next
-            and (self.ns.has_push or self.lastpush)
+            and (self.ns.payload_psh or self.lastpush)
         ):
             # on MQTT no need for updates since they're being PUSHed
             return
@@ -671,7 +672,7 @@ class NamespaceHandler:
         if (
             device._mqtt_active
             and self.polling_epoch_next
-            and (self.ns.has_push or self.lastpush)
+            and (self.ns.has_psh or self.lastpush)
         ):
             # on MQTT no need for updates since they're being PUSHed
             return
@@ -684,20 +685,23 @@ class NamespaceHandler:
         Used while tracing abilities. Depending on our 'knowledge' of this ns
         we're going a straigth route (when the ns is well-known) or experiment some
         euristics.
+        TODO: try to refine our knowledge by seeing if our PayloadType.LIST_C_STRICT GET
+        really needs to be that verbose: it looks like Meross app often uses 'plain empty' GET
+        (much like namespaces where we found PUSH working as a query method).
+        In general, current Namespace class restructure (dec 2025) tried to mantain our knowledge from
+        the 'field' but that might likely be too much for many of these namespaces.
         """
         ns = self.ns
         if ns.grammar is mn.Grammar.STABLE:
-            if (ns.has_get is False) and (ns.has_push_query is False):
-                # corresponding to _ns_no_query definitions in merossclient.namespaces
-                return
-            if (ns.request_payload_type is mn.PayloadType.LIST_C) and (
-                not self.polling_request_channels
+            if (not self.polling_request_channels) and (
+                ns.payload_get
+                in (mn.PayloadType.LIST_C_STRICT, mn.PayloadType.LIST_C_DATA_STRICT)
             ):
-                # when a 'LIST_C' namespace has no registered parsers, self.polling_request will fail
+                # when a 'LIST_C_STRICT' namespace has no registered parsers, self.polling_request will fail
                 # so we use the mocked default request
                 await async_request_func(*ns.request_default)
-                return
-            await async_request_func(*self.polling_request)
+            elif ns.can_query:
+                await async_request_func(*self.polling_request)
             return
 
         ns_name = ns.name
@@ -711,9 +715,8 @@ class NamespaceHandler:
                 # specifically implemented for GarageDoor.State. Other issues that might be due
                 # to the same 'structural querying format error' are #517 and others involving
                 # the namespaces marked as EXPERIMENTAL in our mn.grammar
-                await async_request_func(
-                    ns_name, mc.METHOD_PUSH, ns.DEFAULT_PUSH_PAYLOAD
-                )
+                await async_request_func(ns_name, mc.METHOD_PUSH, {})
+                await async_request_func(ns_name, mc.METHOD_GET, {})
 
                 if self.device.get_type() is mlc.DeviceType.DEVICE:
                     channels = self.parsers.keys() or (0,)
@@ -727,8 +730,10 @@ class NamespaceHandler:
                 # If any of these works it will candidate for this NamespaceHandler polling_request format.
                 detected_request_payload_type: mn.PayloadType | None = None
 
-                def _check_response(_response: "MerossResponse | None"):
-                    if _response:
+                async def _async_check(_payload: "mt.MerossPayloadType"):
+                    if _response := await async_request_func(
+                        ns_name, mc.METHOD_GET, _payload
+                    ):
                         try:
                             payload = _response.check()["payload"][ns_key]
                             if type(payload) is list:
@@ -739,26 +744,18 @@ class NamespaceHandler:
                             pass
                     return False
 
-                if _check_response(
-                    await async_request_func(
-                        ns_name, mc.METHOD_GET, {ns_key: channels_payload}
-                    )
-                ):
-                    detected_request_payload_type = mn.PayloadType.LIST_C
+                if await _async_check({ns_key: channels_payload}):
+                    detected_request_payload_type = mn.PayloadType.LIST_C_STRICT
 
                 # check ordered from more to less 'data heavy' payloads
                 # so that the last one working (less data) is the fallback
                 for _payload_type in (
-                    mn.PayloadType.DICT_C65535,
+                    mn.PayloadType.DICT_C_65535,
+                    mn.PayloadType.DICT_C_STRICT,
+                    mn.PayloadType.LIST_C,
                     mn.PayloadType.DICT_C,
-                    mn.PayloadType.LIST,
-                    mn.PayloadType.DICT,
                 ):
-                    if _check_response(
-                        await async_request_func(
-                            ns_name, mc.METHOD_GET, {ns_key: _payload_type.value}
-                        )
-                    ):
+                    if await _async_check({ns_key: _payload_type.value}):
                         detected_request_payload_type = _payload_type
 
                 if detected_request_payload_type:
@@ -767,7 +764,7 @@ class NamespaceHandler:
                     return
 
                 # If our 'well-known' heuristics don't work, try these exotic queries:
-                # looking for DICT_C request type
+                # looking for DICT_C_STRICT request type
                 for channel_payload in channels_payload:
                     # If this querying format works but none of the other does then we'll
                     # need to implement async_poll_digest in order to send the whole set of requests
@@ -790,47 +787,40 @@ class NamespaceHandler:
 
             case mn.Grammar.UNKNOWN:
                 # We don't know yet how to query this ns so we'll brute-force it
-                if ns.has_push_query is not False:
-                    response = await async_request_func(
-                        ns_name, mc.METHOD_PUSH, ns.DEFAULT_PUSH_PAYLOAD
-                    )
-                    if response and (
-                        response[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_PUSH
-                    ):
-                        for key in response[mc.KEY_PAYLOAD]:
-                            ns_key = key
-                            break
+                if ns.payload_psh:
+                    response = await async_request_func(ns_name, mc.METHOD_PUSH, {})
+                    if response and (response.method == mc.METHOD_PUSH):
+                        ns_key = mn.Namespace.infer_key(ns_name, response.payload)
 
-                if ns.has_get is not False:
+                if ns.payload_get:
 
-                    def _is_getack(_response: dict | None):
-                        return _response and (
-                            _response[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_GETACK
-                        )
+                    async def _async_get(_payload: "mt.MerossPayloadType"):
+                        if (
+                            _response := await async_request_func(
+                                ns_name, mc.METHOD_GET, _payload
+                            )
+                        ) and (_response.method == mc.METHOD_GETACK):
+                            return _response
+                        return None
 
-                    response = await async_request_func(
-                        ns_name, mc.METHOD_GET, {ns.key: []}
-                    )
-                    if _is_getack(response):
+                    if response := await _async_get({}):
+                        ns_key = mn.Namespace.infer_key(ns_name, response.payload)
+                    elif response := await _async_get({ns.key: []}):
                         ns_key = ns.key
                     else:
                         # ns.key might be wrong or verb GET unsupported
-                        if ns.key != ns_key:
+                        if ns_key and (ns_key != ns.key):
                             # try the namespace key from PUSH attempt
-                            response = await async_request_func(
-                                ns_name, mc.METHOD_GET, {ns_key: []}
-                            )
-                        if (not _is_getack(response)) and ns.key.endswith("x"):
+                            response = await _async_get({ns_key: []})
+                        if (not response) and ns.key.endswith("x"):
                             # euristic(!)
                             ns_key = ns.key[:-1]
-                            response = await async_request_func(
-                                ns_name, mc.METHOD_GET, {ns_key: []}
-                            )
-                        if not _is_getack(response):
+                            response = await _async_get({ns_key: []})
+                        if not response:
                             # no chance
                             return
 
-                    response_payload = response[mc.KEY_PAYLOAD].get(ns_key)  # type: ignore
+                    response_payload = response.payload.get(ns_key)  # type: ignore
                     if response_payload or (type(response_payload) is not list):
                         return
                     # the namespace might need a channel index in the request
@@ -843,39 +833,32 @@ class NamespaceHandler:
                     else:  # it is an hub
                         subdevices = self.device.subdevices
                         # typical 'legacy' devices are queried by "id"
-                        response = await async_request_func(
-                            ns_name,
-                            mc.METHOD_GET,
+
+                        if response := await _async_get(
                             {
                                 ns_key: [
                                     {mc.KEY_ID: subdevice_id}
                                     for subdevice_id in subdevices
                                 ]
                             },
-                        )
-                        if _is_getack(response):
-                            response_payload = response[mc.KEY_PAYLOAD].get(ns_key)  # type: ignore
+                        ):
+                            response_payload = response.payload.get(ns_key)
                             if response_payload:
                                 return
                         # many other new ones (ms130 for example) need a "subId"
-                        response = await async_request_func(
-                            ns_name,
-                            mc.METHOD_GET,
+                        if response := await _async_get(
                             {
                                 ns_key: [
                                     {mc.KEY_SUBID: subdevice_id}
                                     for subdevice_id in subdevices
                                 ]
                             },
-                        )
-                        if _is_getack(response):
-                            response_payload = response[mc.KEY_PAYLOAD].get(ns_key)  # type: ignore
+                        ):
+                            response_payload = response.payload.get(ns_key)
                             if response_payload:
                                 return
                         # finally: try also setting a "channel" (it is carried in messages from the subdevice)
-                        await async_request_func(
-                            ns_name,
-                            mc.METHOD_GET,
+                        await _async_get(
                             {
                                 ns_key: [
                                     {mc.KEY_SUBID: subdevice_id, mc.KEY_CHANNEL: 0}

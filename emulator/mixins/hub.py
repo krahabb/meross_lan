@@ -19,12 +19,16 @@ from custom_components.meross_lan.merossclient.protocol.namespaces import hub as
 if TYPE_CHECKING:
     from typing import Any, Mapping
 
+    from custom_components.meross_lan.merossclient.protocol.types import (
+        MerossPayloadType,
+    )
+
     from . import MerossEmulator, MerossEmulatorDescriptor
 
 
 class HubMixin(MerossEmulator if TYPE_CHECKING else object):
 
-    NAMESPACES = mn_h.HUB_NAMESPACES
+    NAMESPACES = mn.HUB_NAMESPACES
 
     MAXIMUM_RESPONSE_SIZE = 4000
 
@@ -246,10 +250,15 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
             # so we'll try to get the sensor all
             return self._get_sensor_all(subdevice_id, force_create=False)
 
-    def _handler_default(self, method: str, namespace: str, payload: "Mapping"):
+    def _handler_default(
+        self, method: str, namespace: str, payload: "MerossPayloadType", /
+    ):
+        # TODO: skip overriding _handler_default since the correct grammar parsing
+        # should now be available in base method.
+        # We should move the state randomization to _schedule or so...
         if method == mc.METHOD_GET:
             ns = self.NAMESPACES[namespace]
-            if ns.is_hub_namespace:
+            if ns.key_channel in (mc.KEY_ID, mc.KEY_SUBID):
                 ns_key = ns.key
                 ns_key_channel = ns.key_channel
                 response_payload = self.namespaces[namespace]

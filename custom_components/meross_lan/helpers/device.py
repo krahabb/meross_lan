@@ -391,17 +391,9 @@ class Device(BaseDevice, ConfigEntryManager):
         mn.Appliance_Config_Wifi.name,
         mn.Appliance_Config_WifiList.name,
         mn.Appliance_Config_WifiX.name,
-        mn.Appliance_Control_TriggerX.name,
+        mn.Appliance_Control_Bind.name,
         mn.Appliance_Control_Unbind.name,
-        mn.Appliance_Control_Sensor_HistoryX.name,  # in mts300 our brute-force querying reboots
-        mn.Appliance_Mcu_Firmware.name,  # disconnects
-        mn.Appliance_Mcu_Upgrade.name,  # disconnects
-        mn.Appliance_Mcu_Hp110_Preview.name,  # disconnects
-        *(
-            name
-            for name, ns in mn.NAMESPACES.items()
-            if (ns.has_get is False) and (ns.has_push_query is False)
-        ),
+        *(ns.name for ns in mn.NAMESPACES.values() if not ns.can_query),
     )
 
     DEFAULT_PLATFORMS = ConfigEntryManager.DEFAULT_PLATFORMS | {
@@ -799,7 +791,7 @@ class Device(BaseDevice, ConfigEntryManager):
         # config_entry update might come from DHCP or OptionsFlowHandler address update
         # so we'll eventually retry querying the device
         if not self.online:
-            self.request(mn.Appliance_System_All.request_get)
+            self.request(mn.Appliance_System_All.request_default)
 
     async def async_create_diagnostic_entities(self):
         self._diagnostics_build = True  # set a flag cause we'll lazy scan/build
@@ -1694,7 +1686,7 @@ class Device(BaseDevice, ConfigEntryManager):
         if self.id != response_uuid:
             try:
                 mismatched_payload_all = await http.async_request(
-                    *mn.Appliance_System_All.request_get
+                    *mn.Appliance_System_All.request_default
                 )
             except Exception:
                 mismatched_payload_all = None
@@ -1809,7 +1801,7 @@ class Device(BaseDevice, ConfigEntryManager):
                     and ((epoch - self._http_lastrequest) > PARAM_HEARTBEAT_PERIOD)
                 ):
                     if await self.async_http_request(
-                        *mn.Appliance_System_All.request_get
+                        *mn.Appliance_System_All.request_default
                     ):
                         namespace = mn.Appliance_System_All.name
                     # going on, should the http come online, the next
@@ -1824,7 +1816,7 @@ class Device(BaseDevice, ConfigEntryManager):
                     # be unused for quite a bit
                     if (epoch - self._mqtt_lastresponse) > PARAM_HEARTBEAT_PERIOD:
                         if not await self.async_mqtt_request(
-                            *mn.Appliance_System_All.request_get
+                            *mn.Appliance_System_All.request_default
                         ):
                             self._mqtt_active = None
                             self.device_debug = None
@@ -1939,13 +1931,7 @@ class Device(BaseDevice, ConfigEntryManager):
                         ability = next(abilities)
                         if (ability in self.TRACE_ABILITY_EXCLUDE) or (
                             (handler := self.namespace_handlers.get(ability))
-                            and (
-                                handler.polling_strategy
-                                or (
-                                    (handler.ns.has_get is False)
-                                    and (handler.ns.has_push_query is False)
-                                )
-                            )
+                            and handler.polling_strategy
                         ):
                             continue
                         await self.async_request(*self.NAMESPACES[ability].request_get)
@@ -2264,7 +2250,9 @@ class Device(BaseDevice, ConfigEntryManager):
             # so we try, in case, to build a new one with good presets
             handler = self._create_handler(
                 self.NAMESPACES.get(namespace)
-                or mn.ns_build_from_message(namespace, method, payload, self.NAMESPACES)
+                or mn.Namespace.from_message(
+                    namespace, method, payload, self.NAMESPACES
+                )
             )
 
         handler.lastresponse = self.lastresponse

@@ -99,10 +99,10 @@ async def test_device_entry(request, hass: "HomeAssistant"):
             for namespace_handler in device.namespace_handlers.values():
                 ns = namespace_handler.ns
                 assert (
-                    (ns.request_payload_type is not mn.PayloadType.LIST_C)
-                    or ns.is_sensor
-                    or namespace_handler.polling_request_channels
-                ), f"Incorrect config for {ns.name} namespace"
+                    ns.payload_get is not mn.PayloadType.LIST_C_STRICT
+                ) or namespace_handler.polling_request_channels, (
+                    f"Incorrect config for {ns.name} namespace"
+                )
 
             if entity_dnd:
                 state = hass.states.get(entity_dnd.entity_id)

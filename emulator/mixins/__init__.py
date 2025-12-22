@@ -184,6 +184,9 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
             self.namespaces[ns.name] = {ns.key: config_payload[ns.key]}
 
         for namespace, payload in pushes.items():
+            # pushes might be partial (i.e. only a single channel update)
+            # but these namesapces are just the first 'preset' and will be updated as far
+            # as the trace gets imported
             self.namespaces[namespace] = payload
 
         return version
@@ -201,14 +204,17 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         match method:
             case mc.METHOD_PUSH:
                 if rxtx == "RX" and (namespace not in self.namespaces):
+                    # TODO: merge channels
                     self.namespaces[namespace] = data
             case mc.METHOD_GETACK:
+                # TODO: merge channels
                 self.namespaces[namespace] = data
             case mc.METHOD_SETACK:
                 if namespace == mn.Appliance_Control_Multiple.name:
                     for message in data[mc.KEY_MULTIPLE]:
                         header = message[mc.KEY_HEADER]
                         if header[mc.KEY_METHOD] == mc.METHOD_GETACK:
+                            # TODO: merge channels
                             self.namespaces[header[mc.KEY_NAMESPACE]] = message[
                                 mc.KEY_PAYLOAD
                             ]
@@ -310,11 +316,10 @@ class MerossEmulator:
 
         for ability in descriptor.ability:
             ns = self.NAMESPACES.get(ability)
-            if ns and ns.grammar is not mn.Grammar.UNKNOWN:
-                if (not (ns.has_get or ns.has_push_query)) or (
-                    ns in namespaces_default_ignore
-                ):
-                    # not querable
+            if ns and (ns.grammar is not mn.Grammar.UNKNOWN):
+                # TODO: check our grammar is consistent with the trace payloads
+                # and eventually log/print warning/details
+                if (not ns.can_query) or (ns in namespaces_default_ignore):
                     continue
 
                 if ns in namespaces_default:
@@ -331,22 +336,21 @@ class MerossEmulator:
                     namespaces[ability] = p_namespace = {}
                 # Either namespace missing or malformed according to our grammar.
                 # Setup a 'default' (which will not work for hubs though...)
-                # but we cannot use copy because request_payload_type.value is immutable
-                match ns.request_payload_type:
+                # but we cannot use copy because PayloadType.value is immutable
+                match ns.payload_get:
                     case mn.PayloadType.DICT:
                         # this heuristic might be fragile since the 'dict' query type
                         # might as well return a list of dicts...
                         p_namespace[ns.key] = {}
                     case (
-                        mn.PayloadType.LIST
-                        | mn.PayloadType.LIST_C
-                        | mn.PayloadType.DICT_C
-                        | mn.PayloadType.DICT_C65535
+                        mn.PayloadType.LIST_C
+                        | mn.PayloadType.LIST_C_STRICT
+                        | mn.PayloadType.DICT_C_STRICT
+                        | mn.PayloadType.DICT_C_65535
                     ):
                         p_namespace[ns.key] = []
                     case _:
                         pass
-                # p_namespace[ns.key] = ns.request_payload_type.value.clone()
 
         self.topic_response = mc.TOPIC_RESPONSE.format(descriptor.uuid)
         self.mqtt_client: MerossMQTTDeviceClient = None  # type: ignore
@@ -524,7 +528,9 @@ class MerossEmulator:
 
         return None
 
-    def _handler_default(self, method: str, namespace: str, payload: "Mapping", /):
+    def _handler_default(
+        self, method: str, namespace: str, payload: "MerossPayloadType", /
+    ):
         """
         This is an euristhic to try parse a namespace carrying state stored in all->digest
         If the state is not stored in all->digest we'll search our namespace(s) list for
@@ -534,26 +540,39 @@ class MerossEmulator:
 
         match method:
             case mc.METHOD_GET:
-                if ns.has_get is False:
+                if not ns.payload_get:
                     raise Exception(
                         f"{method} not supported in emulator for {namespace}"
                     )
-                payload = payload[ns.key]
                 channels: list | None
-                match ns.request_payload_type:
+                match ns.payload_get:
+                    case mn.PayloadType.EMPTY | mn.PayloadType.UNKNOWN:
+                        channels = None
+                    case mn.PayloadType.DICT | mn.PayloadType.DICT_C:
+                        key_payload = payload[ns.key]
+                        assert type(key_payload) is dict
+                        channels = [key_payload] if key_payload else None
+                    case (
+                        mn.PayloadType.LIST_C_STRICT | mn.PayloadType.LIST_C_DATA_STRICT
+                    ):
+                        key_payload = payload[ns.key]
+                        assert type(key_payload) is list
+                        channels = key_payload
                     case mn.PayloadType.LIST_C:
-                        assert type(payload) is list
-                        channels = payload
-                    case mn.PayloadType.LIST:
-                        assert type(payload) is list
-                        channels = payload or None
-                    case mn.PayloadType.DICT_C:
-                        assert type(payload) is dict
-                        channels = [payload]
-                    case mn.PayloadType.DICT_C65535:
-                        assert type(payload) is dict
+                        key_payload = payload[ns.key]
+                        assert type(key_payload) is list
+                        channels = key_payload or None
+                    case mn.PayloadType.DICT_C_STRICT:
+                        key_payload = payload[ns.key]
+                        assert type(key_payload) is dict
+                        channels = [key_payload]
+                    case mn.PayloadType.DICT_C_65535:
+                        key_payload = payload[ns.key]
+                        assert type(key_payload) is dict
                         channels = (
-                            None if payload[ns.key_channel] == 65535 else [payload]
+                            None
+                            if key_payload[ns.key_channel] == 65535
+                            else [key_payload]
                         )
                     case _:
                         channels = None
@@ -579,24 +598,28 @@ class MerossEmulator:
                     }
 
             case mc.METHOD_SET:
-                payload = payload[ns.key]
+                if not ns.payload_set:
+                    raise Exception(
+                        f"{method} not supported in emulator for {namespace}"
+                    )
+                key_payload = payload[ns.key]
                 p_state = p_state[ns.key]
                 if type(p_state) is list:
-                    for p_payload_channel in extract_dict_payloads(payload):
+                    for p_payload_channel in extract_dict_payloads(key_payload):
                         update_dict_strict_by_key(
                             p_state, p_payload_channel, key=ns.key_channel
                         )
                 elif ns.key_channel in p_state:
-                    if p_state[ns.key_channel] == payload[ns.key_channel]:
-                        update_dict_strict(p_state, payload)
+                    if p_state[ns.key_channel] == key_payload[ns.key_channel]:
+                        update_dict_strict(p_state, key_payload)
                     else:
                         raise Exception(
-                            f"{payload[mc.KEY_CHANNEL]} not present in digest.{ns.key}"
+                            f"{key_payload[mc.KEY_CHANNEL]} not present in digest.{ns.key}"
                         )
                 else:
-                    update_dict_strict(p_state, payload)
+                    update_dict_strict(p_state, key_payload)
 
-                if self.mqtt_connected and ns.has_push:
+                if self.mqtt_connected and ns.payload_psh:
                     # TODO: generalize to every namespace update (also in mixins)
                     # by implementing some interception of update_dict_strict and
                     # update_dict_strict_by_key. Then, only push if the state changed
@@ -605,8 +628,11 @@ class MerossEmulator:
                 return mc.METHOD_SETACK, {}
 
             case mc.METHOD_PUSH:
-                if ns.has_push_query:
-                    return mc.METHOD_PUSH, p_state
+                if not ns.has_psq:
+                    raise Exception(
+                        f"{method} not supported in emulator for {namespace}"
+                    )
+                return mc.METHOD_PUSH, p_state
 
         raise Exception(f"{method} not supported in emulator for {namespace}")
 
@@ -819,13 +845,12 @@ class MerossEmulator:
         except KeyError:
             self.namespaces[ns.name] = p_namespace = {}
 
-        if isinstance(ns.request_payload_type.value, list) or isinstance(payload, list):
+        if key_channel := ns.key_channel:
             try:
                 p_state: list = p_namespace[ns.key]
             except KeyError:
                 p_namespace[ns.key] = p_state = []
 
-            key_channel = ns.key_channel
             for p_payload_channel in extract_dict_payloads(payload):
                 channel = p_payload_channel[key_channel]
                 try:
@@ -837,6 +862,7 @@ class MerossEmulator:
                 except KeyError:
                     p_state.append(p_payload_channel)
         else:
+            assert type(payload) is dict
             try:
                 if nsdefaultmode is MerossEmulator.NSDefaultMode.MixIn:
                     p_namespace[ns.key] |= payload
