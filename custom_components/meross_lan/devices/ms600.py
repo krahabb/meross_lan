@@ -74,6 +74,7 @@ class PresenceConfigNoBodyTime(PresenceConfigNumberBase):
     key_value = mc.KEY_TIME
 
     # HA core entity attributes:
+    _attr_device_class = MLConfigNumber.DEVICE_CLASS_DURATION
     native_max_value = 3600  # 1 hour ?
     native_min_value = 1
     native_step = 1
@@ -84,7 +85,6 @@ class PresenceConfigNoBodyTime(PresenceConfigNumberBase):
             manager,
             channel,
             f"presence_config_noBodyTime_time",
-            MLConfigNumber.DEVICE_CLASS_DURATION,  # defaults to seconds which is the native device unit
             name=mc.KEY_NOBODYTIME,
         )
 
@@ -94,20 +94,21 @@ class PresenceConfigDistance(PresenceConfigNumberBase):
     key_value_root = mc.KEY_DISTANCE
     key_value = mc.KEY_VALUE
 
+    _attr_device_scale = 1000
+
     # HA core entity attributes:
+    _attr_device_class = MLConfigNumber.DeviceClass.DISTANCE
     _attr_native_unit_of_measurement = MLConfigNumber.hac.UnitOfLength.METERS
     native_max_value = 12
     native_min_value = 0.1
     native_step = 0.1
 
-    def __init__(self, manager: "Device", channel: object):
+    def __init__(self, manager: "Device", channel, /):
         PresenceConfigNumberBase.__init__(
             self,
             manager,
             channel,
             f"presence_config_distance_value",
-            MLConfigNumber.DeviceClass.DISTANCE,
-            device_scale=1000,
             name=mc.KEY_DISTANCE,
         )
 
@@ -124,8 +125,9 @@ class PresenceConfigSensitivity(PresenceConfigSelectBase):
         2: "2",
     }
 
-    def __init__(self, manager: "Device", channel: object):
-        super().__init__(
+    def __init__(self, manager: "Device", channel, /):
+        PresenceConfigSelectBase.__init__(
+            self,
             manager,
             channel,
             f"presence_config_sensitivity_level",
@@ -140,13 +142,13 @@ class PresenceConfigMthX(PresenceConfigNumberBase):
     native_min_value = 1
     native_step = 1
 
-    def __init__(self, manager: "Device", channel: object, key: str):
+    def __init__(self, manager: "Device", channel: object, key: str, /):
         self.key_value = key
-        super().__init__(
+        PresenceConfigNumberBase.__init__(
+            self,
             manager,
             channel,
             f"presence_config_mthx_{key}",
-            None,
             name=key,
         )
 
@@ -157,8 +159,8 @@ class PresenceConfigMode(PresenceConfigModeBase):
 
     __slots__ = ("_entities",)
 
-    def __init__(self, manager: "Device", channel: object):
-        super().__init__(manager, channel, mc.KEY_WORKMODE)
+    def __init__(self, manager: "Device", channel, /):
+        PresenceConfigModeBase.__init__(self, manager, channel, mc.KEY_WORKMODE)
         self._entities = (
             self,
             PresenceConfigModeBase(manager, channel, mc.KEY_TESTMODE),
@@ -175,7 +177,7 @@ class PresenceConfigMode(PresenceConfigModeBase):
         await super().async_shutdown()
         self._entities = None  # type: ignore
 
-    def _parse_config(self, payload: dict):
+    def _parse_config(self, payload: dict, /):
         """
         {
             "channel": 0,
@@ -190,7 +192,7 @@ class PresenceConfigMode(PresenceConfigModeBase):
             entity.update_device_value(payload[entity.key_value_root][entity.key_value])
 
 
-def namespace_init_presence_config(device: "Device"):
+def namespace_init_presence_config(device: "Device", /):
     NamespaceHandler(
         device, mn.Appliance_Control_Presence_Config
     ).register_entity_class(PresenceConfigMode)
@@ -215,21 +217,22 @@ class MLPresenceSensor(MLNumericSensor):
         entitykey: str | None,
         **kwargs: "Unpack[MLNumericSensor.Args]",
     ):
-        super().__init__(
-            manager, channel, entitykey, None, **(kwargs | {"name": "Presence"})
-        )
+        super().__init__(manager, channel, entitykey, **(kwargs | {"name": "Presence"}))
         self.sensor_distance = MLNumericSensor(
             manager,
             channel,
             f"{entitykey}_distance",
-            MLNumericSensor.DeviceClass.DISTANCE,
             device_scale=1000,
+            device_class=MLNumericSensor.DeviceClass.DISTANCE,
             native_unit_of_measurement=MLNumericSensor.hac.UnitOfLength.METERS,
             suggested_display_precision=2,
             name="Presence distance",
         )
         self.binary_sensor_motion = MLBinarySensor(
-            manager, channel, f"{entitykey}_motion", MLBinarySensor.DeviceClass.MOTION
+            manager,
+            channel,
+            f"{entitykey}_motion",
+            device_class=MLBinarySensor.DeviceClass.MOTION,
         )
         self.sensor_times = MLNumericSensor(
             manager,
@@ -244,7 +247,7 @@ class MLPresenceSensor(MLNumericSensor):
         self.binary_sensor_motion: MLBinarySensor = None  # type: ignore
         self.sensor_distance: MLNumericSensor = None  # type: ignore
 
-    def _parse(self, payload: dict):
+    def _parse(self, payload: dict, /):
         """
         {"times": 0, "distance": 760, "value": 2, "timestamp": 1725907895}
         """

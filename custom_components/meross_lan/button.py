@@ -1,12 +1,12 @@
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.components import button
 
 from .helpers import entity as me
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from types import CoroutineType
-    from typing import Any, Callable, Unpack
+    from typing import Any, Callable, ClassVar, NotRequired, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -24,6 +24,13 @@ class MLButton(me.MEPartialAvailableMixin, me.MLEntity, button.ButtonEntity):
     # MEPartialAvailableMixin is needed here since this entity state is not being updated
     # by our component. This will ensure (by default) the entity is available/unavailable
     # when the device is online/offline
+    if TYPE_CHECKING:
+
+        class Args(me.MLEntity.Args):
+            device_class: NotRequired[button.ButtonDeviceClass | None]
+
+        # HA core entity attributes:
+        _attr_device_class: ClassVar[button.ButtonDeviceClass | None]
 
     PLATFORM = button.DOMAIN
     DeviceClass = button.ButtonDeviceClass
@@ -38,10 +45,9 @@ class MLButton(me.MEPartialAvailableMixin, me.MLEntity, button.ButtonEntity):
         channel: object | None,
         entitykey: str | None,
         press_func: "Callable[[], CoroutineType[Any, Any, None]]",
-        device_class: DeviceClass | None = None,
         **kwargs: "Unpack[MLButton.Args]",
     ):
-        super().__init__(manager, channel, entitykey, device_class, **kwargs)
+        super().__init__(manager, channel, entitykey, **kwargs)
         self.async_press = press_func
 
     async def async_shutdown(self):

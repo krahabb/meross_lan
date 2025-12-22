@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from typing import Final
 
     from ...helpers.device import Device
-    from ...merossclient.protocol.types import MerossPayloadType, thermostat as mt_t
+    from ...merossclient.protocol.types import thermostat as mt_t
 
 
 class Mts960Climate(MtsThermostatClimate):
@@ -49,19 +49,14 @@ class Mts960Climate(MtsThermostatClimate):
         """
 
         # HA core entity attributes:
+        _attr_device_class = MLEmulatedNumber.DEVICE_CLASS_DURATION
         _attr_native_unit_of_measurement = MLEmulatedNumber.hac.UnitOfTime.MINUTES
         native_max_value = 1440  # 1 day max duration (no real info just guessing)
         native_min_value = 1
         native_step = 1
 
         def __init__(self, climate: "Mts960Climate", entitykey: str, /):
-            MLEmulatedNumber.__init__(
-                self,
-                climate.manager,
-                climate.channel,
-                entitykey,
-                MLEmulatedNumber.DEVICE_CLASS_DURATION,
-            )
+            MLEmulatedNumber.__init__(self, climate.manager, climate.channel, entitykey)
 
     if TYPE_CHECKING:
         _mts_payload: mt_t.ModeB_C

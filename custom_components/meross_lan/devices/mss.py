@@ -89,6 +89,7 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
     }
 
     # HA core entity attributes:
+    _attr_device_class = MLNumericSensor.DeviceClass.ENERGY
     entity_registry_enabled_default = False
 
     __slots__ = (
@@ -110,7 +111,6 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
             manager,
             channel,
             ElectricitySensor.ENTITY_KEY,
-            self.DeviceClass.ENERGY,
             device_value=0,
         )
         self._schedule_reset(dt_util.now())
@@ -120,7 +120,7 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
                     manager,
                     channel,
                     key,
-                    entity_def[2],
+                    device_class=entity_def[2],
                     state_class=entity_def[3],
                     suggested_display_precision=entity_def[4],
                     device_scale=entity_def[5],
@@ -190,7 +190,7 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
                         self.manager,
                         self.channel,
                         key,
-                        entity_def[2],
+                        device_class=entity_def[2],
                         state_class=entity_def[3],
                         suggested_display_precision=entity_def[4],
                         device_scale=entity_def[5],
@@ -261,12 +261,8 @@ class ElectricityXSensor(ElectricitySensor):
     class MConsumeSensor(MLNumericSensor):
         manager: "Device"
 
-        def __init__(
-            self, manager: "Device", channel, entitykey, device_class=None, **kwargs
-        ):
-            MLNumericSensor.__init__(
-                self, manager, channel, entitykey, device_class, **kwargs
-            )
+        def __init__(self, manager: "Device", channel, entitykey, **kwargs):
+            MLNumericSensor.__init__(self, manager, channel, entitykey, **kwargs)
             if "device_value" in kwargs:
                 # This means we're being instantiated in ElecitricityX namespace message parsing
                 # so we can trigger an update of the related ConsumptionH sensor right away
@@ -345,11 +341,7 @@ class ElectricityXNamespaceHandler(NamespaceHandler):
     """
 
     def __init__(self, device: "Device", /):
-        NamespaceHandler.__init__(
-            self,
-            device,
-            mn.Appliance_Control_ElectricityX,
-        )
+        NamespaceHandler.__init__(self, device, mn.Appliance_Control_ElectricityX)
         # Current approach is to build a sensor for any appearing channel index
         # in digest. This in turn will not directly build the EM06 sensors
         # but they should come when polling.
@@ -361,21 +353,20 @@ class ConsumptionHSensor(MLNumericSensor):
     manager: "Device"
     ns = mn.Appliance_Control_ConsumptionH
 
+    _attr_device_class = MLNumericSensor.DeviceClass.ENERGY
     _attr_suggested_display_precision = 0
 
-    __slots__ = ()
-
-    def __init__(self, manager: "Device", channel: object | None):
-        super().__init__(
+    def __init__(self, manager: "Device", channel, /):
+        MLNumericSensor.__init__(
+            self,
             manager,
             channel,
             mc.KEY_CONSUMPTIONH,
-            self.DeviceClass.ENERGY,
             name="Consumption",
         )
         manager.register_parser_entity(self)
 
-    def _parse_consumptionH(self, payload: dict):
+    def _parse_consumptionH(self, payload: dict, /):
         """
         {"channel": 1, "total": 958, "data": [{"timestamp": 1721548740, "value": 0}]}
         """
@@ -398,7 +389,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
     em06: 6 channels (but the query works without setting any)
     """
 
-    def __init__(self, device: "Device"):
+    def __init__(self, device: "Device", /):
         NamespaceHandler.__init__(
             self,
             device,
@@ -433,6 +424,8 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
 
     ns = mn.Appliance_Control_ConsumptionX
 
+    _attr_device_class = MLNumericSensor.DeviceClass.ENERGY
+
     __slots__ = (
         "offset",
         "reset_ts",
@@ -462,9 +455,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         if sensor_energy_estimate:
             sensor_energy_estimate.sensor_consumptionx = self
         self.extra_state_attributes = {}
-        super().__init__(
-            manager, None, ConsumptionXSensor.ENTITY_KEY, self.DeviceClass.ENERGY
-        )
+        super().__init__(manager, None, ConsumptionXSensor.ENTITY_KEY)
         EntityNamespaceHandler(self).polling_response_size_adj(30)
 
     # interface: MLEntity
@@ -660,7 +651,9 @@ class ConsumptionConfigNamespaceHandler(VoidNamespaceHandler):
     it is already processed at the MQTTConnection message handling."""
 
     def __init__(self, device: "Device", /):
-        super().__init__(device, mn.Appliance_Control_ConsumptionConfig)
+        VoidNamespaceHandler.__init__(
+            self, device, mn.Appliance_Control_ConsumptionConfig
+        )
 
 
 class OverTempEnableSwitch(EntityNamespaceMixin, me.MENoChannelMixin, MLSwitch):
@@ -674,9 +667,7 @@ class OverTempEnableSwitch(EntityNamespaceMixin, me.MENoChannelMixin, MLSwitch):
     __slots__ = ("sensor_overtemp_type",)
 
     def __init__(self, manager: "Device", /):
-        super().__init__(
-            manager, None, "config_overtemp_enable", MLSwitch.DeviceClass.SWITCH
-        )
+        super().__init__(manager, None, "config_overtemp_enable")
         self.sensor_overtemp_type: MLEnumSensor = MLEnumSensor(
             manager, None, "config_overtemp_type"
         )

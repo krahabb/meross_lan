@@ -11,32 +11,13 @@ from ...number import MLConfigNumber
 from ...select import MLConfigSelect
 from ...sensor import MLEnumSensor, MLHumiditySensor
 from ...switch import MLEmulatedSwitch
-from .mtsthermostat import (
-    MtsThermostatClimate,
-    mc,
-    mn_t,
-)
+from .mtsthermostat import MtsThermostatClimate, mc, mn_t
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final
 
     from ...helpers.device import Device
-    from ...merossclient.protocol.types import MerossPayloadType, thermostat as mt_t
-
-    """
-    "Appliance.System.Ability",
-    {
-        "Appliance.Config.DeviceCfg": {},
-        "Appliance.Config.Sensor.Association": {},
-        "Appliance.Control.AlertConfig": {},
-        "Appliance.Control.AlertReport": {},
-        "Appliance.Control.Sensor.Association": {},
-        "Appliance.Control.Sensor.HistoryX": {},
-        "Appliance.Control.Thermostat.HoldAction": {},
-        "Appliance.Control.Thermostat.ScheduleB": {},
-        "Appliance.Control.Thermostat.System": {},
-    }
-    """
+    from ...merossclient.protocol.types import thermostat as mt_t
 
 
 class Mts300Climate(MtsThermostatClimate):
@@ -233,9 +214,9 @@ class Mts300Climate(MtsThermostatClimate):
             manager,
             channel,
             "fan_hold_time",
-            MLConfigNumber.DEVICE_CLASS_DURATION,
-            device_scale=1,
+            device_class=MLConfigNumber.DEVICE_CLASS_DURATION,
             native_unit_of_measurement=MLConfigNumber.hac.UnitOfTime.MINUTES,
+            device_scale=1,
         )
         self.number_fan_hold.async_request_value = (
             self._async_request_value_number_fan_hold

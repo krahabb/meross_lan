@@ -1,5 +1,5 @@
 from abc import abstractmethod
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.components import switch
 
@@ -7,8 +7,8 @@ from .helpers import entity as me
 from .merossclient import extract_dict_payloads
 from .merossclient.protocol import const as mc, namespaces as mn
 
-if typing.TYPE_CHECKING:
-    from typing import Unpack
+if TYPE_CHECKING:
+    from typing import ClassVar, NotRequired, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -29,9 +29,18 @@ class MLSwitchBase(me.MLBinaryEntity, switch.SwitchEntity):
     - MLConfigSwitch: switch used to configure a meross_lan feature/option
     """
 
+    if TYPE_CHECKING:
+
+        class Args(me.MLBinaryEntity.Args):
+            device_class: NotRequired[switch.SwitchDeviceClass | None]
+
+        # HA core entity attributes:
+        _attr_device_class: ClassVar[switch.SwitchDeviceClass | None]
+
     PLATFORM = switch.DOMAIN
     DeviceClass = switch.SwitchDeviceClass
 
+    _attr_device_class = switch.SwitchDeviceClass.SWITCH
 
 class MLEmulatedSwitch(me.MEPartialAvailableMixin, MLSwitchBase):
     """
@@ -48,15 +57,9 @@ class MLEmulatedSwitch(me.MEPartialAvailableMixin, MLSwitchBase):
         channel: object,
         entitykey: str | None = None,
         /,
-        **kwargs: "Unpack[MLSwitchBase.Args]",
+        **kwargs: "Unpack[MLEmulatedSwitch.Args]",
     ):
-        super().__init__(
-            manager,
-            channel,
-            entitykey,
-            MLSwitchBase.DeviceClass.SWITCH,
-            **kwargs,
-        )
+        super().__init__(manager, channel, entitykey, **kwargs)
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -82,10 +85,6 @@ class MLSwitch(MLSwitchBase):
     implementation of the protocol message payload for 'SET' commands
     """
 
-    @abstractmethod
-    async def async_request_value(self, device_value, /):
-        raise NotImplementedError("'async_request_value' needs to be overriden")
-
     async def async_turn_on(self, **kwargs):
         if await self.async_request_value(1):
             self.update_onoff(1)
@@ -104,7 +103,7 @@ class PhysicalLockSwitch(me.MEListChannelMixin, MLSwitch):
 
     def __init__(self, manager: "Device"):
         # right now we expect only 1 entity on channel == 0 (whatever)
-        super().__init__(manager, 0, mc.KEY_LOCK, self.DeviceClass.SWITCH)
+        super().__init__(manager, 0, mc.KEY_LOCK)
         manager.register_parser_entity(self)
 
 
@@ -112,11 +111,14 @@ class MLToggle(me.MENoChannelMixin, MLSwitch):
 
     ns = mn.Appliance_Control_Toggle
 
+    # HA core entity attributes:
+    _attr_device_class = MLSwitch.DeviceClass.OUTLET
+
     def __init__(self, manager: "Device", /):
         # 2024-03-13: passing entitykey="0" instead of channel in order
         # to mantain unique_id compatibility with installations but
         # updating to new toggle entity model (where channel is None for this entity type)
-        super().__init__(manager, None, "0", MLSwitch.DeviceClass.OUTLET)
+        super().__init__(manager, None, "0")
         manager.register_parser_entity(self)
 
 
@@ -131,8 +133,11 @@ class MLToggleX(me.MEDictChannelMixin, MLSwitch):
 
     ns = mn.Appliance_Control_ToggleX
 
-    def __init__(self, manager: "Device", channel: object, /):
-        super().__init__(manager, channel, None, MLSwitch.DeviceClass.OUTLET)
+    # HA core entity attributes:
+    _attr_device_class = MLSwitch.DeviceClass.OUTLET
+
+    def __init__(self, manager: "Device", channel, /):
+        super().__init__(manager, channel, None)
         manager.register_parser_entity(self)
 
 

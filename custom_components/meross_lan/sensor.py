@@ -15,7 +15,7 @@ from .helpers.namespaces import (
 from .merossclient.protocol.message import json_dumps
 
 if TYPE_CHECKING:
-    from typing import ClassVar, Final, NotRequired, Unpack
+    from typing import ClassVar, Final, Never, NotRequired, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -38,6 +38,9 @@ class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
 
         class Args(me.MLEntity.Args):
             native_value: NotRequired[sensor.StateType]
+            device_class: NotRequired[Never]
+
+        _attr_device_class: Final[sensor.SensorDeviceClass]
 
     @dataclass(slots=True)
     class SensorDef:
@@ -58,6 +61,7 @@ class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
     PLATFORM = sensor.DOMAIN
 
     # HA core entity attributes:
+    _attr_device_class = sensor.SensorDeviceClass.ENUM
     native_value: "sensor.StateType"
     native_unit_of_measurement: None = None
 
@@ -71,9 +75,7 @@ class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
         **kwargs: "Unpack[Args]",
     ):
         self.native_value = kwargs.pop("native_value", None)
-        super().__init__(
-            manager, channel, entitykey, sensor.SensorDeviceClass.ENUM, **kwargs
-        )
+        super().__init__(manager, channel, entitykey, **kwargs)
 
     def set_unavailable(self):
         self.native_value = None
@@ -91,10 +93,12 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
     if TYPE_CHECKING:
 
         class Args(me.MLNumericEntity.Args):
+            device_class: NotRequired[sensor.SensorDeviceClass | None]
             state_class: NotRequired[sensor.SensorStateClass]
             suggested_display_precision: NotRequired[int]
 
         # HA core entity attributes:
+        _attr_device_class: ClassVar[sensor.SensorDeviceClass | None]
         _attr_suggested_display_precision: ClassVar[int | None]
         suggested_display_precision: int | None
 
@@ -159,14 +163,13 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
         manager: "EntityManager",
         channel: object | None,
         entitykey: str | None,
-        device_class: DeviceClass | None = None,
         **kwargs: "Unpack[Args]",
     ):
-        assert device_class is not sensor.SensorDeviceClass.ENUM
         self.state_class = kwargs.pop(
             "state_class", None
         ) or self.DEVICECLASS_TO_STATECLASS_MAP.get(
-            device_class, MLNumericSensor.StateClass.MEASUREMENT
+            kwargs.get("device_class", self._attr_device_class),
+            MLNumericSensor.StateClass.MEASUREMENT,
         )
         self.suggested_display_precision = kwargs.pop(
             "suggested_display_precision", self._attr_suggested_display_precision
@@ -175,21 +178,6 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
             manager,
             channel,
             entitykey,
-            device_class,
-            **kwargs,
-        )
-
-    @staticmethod
-    def build_for_device(
-        device: "Device",
-        device_class: "MLNumericSensor.DeviceClass",
-        **kwargs: "Unpack[Args]",
-    ):
-        return MLNumericSensor(
-            device,
-            None,
-            str(device_class),
-            device_class,
             **kwargs,
         )
 
@@ -202,6 +190,7 @@ class MLHumiditySensor(MLNumericSensor):
 
     _attr_device_scale = 10
     # HA core entity attributes:
+    _attr_device_class = sensor.SensorDeviceClass.HUMIDITY
     _attr_suggested_display_precision = 1
 
     def __init__(
@@ -216,7 +205,6 @@ class MLHumiditySensor(MLNumericSensor):
             manager,
             channel,
             entitykey,
-            sensor.SensorDeviceClass.HUMIDITY,
             **kwargs,
         )
 
@@ -228,6 +216,7 @@ class MLTemperatureSensor(MLNumericSensor):
     """
 
     # HA core entity attributes:
+    _attr_device_class = sensor.SensorDeviceClass.TEMPERATURE
     _attr_suggested_display_precision = 1
 
     def __init__(
@@ -242,7 +231,6 @@ class MLTemperatureSensor(MLNumericSensor):
             manager,
             channel,
             entitykey,
-            sensor.SensorDeviceClass.TEMPERATURE,
             **kwargs,
         )
 
@@ -252,6 +240,7 @@ class MLLightSensor(MLNumericSensor):
 
     _attr_device_scale = 1
     # HA core entity attributes:
+    _attr_device_class = sensor.SensorDeviceClass.ILLUMINANCE
     _attr_suggested_display_precision = 0
 
     def __init__(
@@ -266,7 +255,6 @@ class MLLightSensor(MLNumericSensor):
             manager,
             channel,
             entitykey,
-            sensor.SensorDeviceClass.ILLUMINANCE,
             **kwargs,
         )
 
@@ -395,12 +383,7 @@ class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
     icon = "mdi:wifi"
 
     def __init__(self, manager: "Device"):
-        super().__init__(
-            manager,
-            None,
-            MLSignalStrengthSensor.ENTITY_KEY,
-            None,
-        )
+        super().__init__(manager, None, MLSignalStrengthSensor.ENTITY_KEY)
         EntityNamespaceHandler(self)
 
     def _handle(self, header: dict, payload: dict):
@@ -417,13 +400,7 @@ class MLFilterMaintenanceSensor(MLNumericSensor):
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
 
     def __init__(self, manager: "Device", channel):
-        MLNumericSensor.__init__(
-            self,
-            manager,
-            channel,
-            mc.KEY_FILTER,
-            None,
-        )
+        MLNumericSensor.__init__(self, manager, channel, mc.KEY_FILTER)
         manager.register_parser_entity(self)
 
 

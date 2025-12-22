@@ -532,8 +532,8 @@ class Device(BaseDevice, ConfigEntryManager):
             None,
             "button_refresh",
             self._async_button_refresh_press,
-            MLPersistentButton.DeviceClass.RESTART,
             name="Refresh",
+            device_class=MLPersistentButton.DeviceClass.RESTART,
             entity_category=MLPersistentButton.EntityCategory.DIAGNOSTIC,
         )
         MLPersistentButton(
@@ -541,8 +541,8 @@ class Device(BaseDevice, ConfigEntryManager):
             None,
             "button_reload",
             self._async_button_reload_press,
-            MLPersistentButton.DeviceClass.RESTART,
             name="Reload",
+            device_class=MLPersistentButton.DeviceClass.RESTART,
             entity_category=MLPersistentButton.EntityCategory.DIAGNOSTIC,
         )
 
@@ -601,11 +601,14 @@ class Device(BaseDevice, ConfigEntryManager):
                 except (KeyError, TypeError):
                     # KeyError: key is unknown to our code (fallback to lookup ".devices.{key_digest}")
                     # TypeError: key is a string containing the module path
+                    key_slug = slugify(key_digest)
+                    _module_path = Device.DIGEST_INIT.get(
+                        key_digest, f".devices.{key_slug}"
+                    )
+                    if not isinstance(_module_path, str):
+                        # This means we catched an error inside the digest init func
+                        raise
                     try:
-                        key_slug = slugify(key_digest)
-                        _module_path = Device.DIGEST_INIT.get(
-                            key_digest, f".devices.{key_slug}"
-                        )
                         digest_init_func: "DigestInitFunc" = getattr(
                             await self.api.async_import_module(_module_path),
                             f"digest_init_{key_slug}",
@@ -1182,39 +1185,32 @@ class Device(BaseDevice, ConfigEntryManager):
         # it is a Meross cloud one
         return True
 
-    def get_device_datetime(self, epoch):
+    def get_device_datetime(self, epoch, /):
         """
         given the epoch (utc timestamp) returns the datetime
         in device local timezone
         """
         return datetime_from_epoch(epoch, self.tz)
 
-    def get_handler(self, ns: "mn.Namespace"):
+    def get_handler(self, ns: "mn.Namespace", /):
         try:
             return self.namespace_handlers[ns.name]
         except KeyError:
             return self._create_handler(ns)
 
-    def get_handler_by_name(self, namespace: str):
+    def get_handler_by_name(self, namespace: str, /):
         try:
             return self.namespace_handlers[namespace]
         except KeyError:
             return self._create_handler(self.NAMESPACES[namespace])
 
-    def register_parser(
-        self,
-        parser: "NamespaceParser",
-        ns: "mn.Namespace",
-    ):
+    def register_parser(self, parser: "NamespaceParser", ns: "mn.Namespace", /):
         self.get_handler(ns).register_parser(parser)
 
-    def register_parser_entity(
-        self,
-        entity: "MLEntity",
-    ):
+    def register_parser_entity(self, entity: "MLEntity", /):
         self.get_handler(entity.ns).register_parser(entity)
 
-    def register_togglex_channel(self, entity: "MLEntity"):
+    def register_togglex_channel(self, entity: "MLEntity", /):
         """
         Checks if entity has an associated ToggleX behavior and eventually
         registers it
@@ -1229,7 +1225,7 @@ class Device(BaseDevice, ConfigEntryManager):
             pass
         return False
 
-    def schedule_entry_update(self, query_abilities: bool):
+    def schedule_entry_update(self, query_abilities: bool, /):
         """
         Schedule the ConfigEntry update due to self.descriptor changing.
         """
@@ -1241,7 +1237,7 @@ class Device(BaseDevice, ConfigEntryManager):
             query_abilities,
         )
 
-    async def _async_entry_update(self, query_abilities: bool):
+    async def _async_entry_update(self, query_abilities: bool, /):
         """
         Called when we detect any meaningful change in the device descriptor
         that needs to be stored in configuration.

@@ -5,7 +5,7 @@ from homeassistant.components import select
 from .helpers import entity as me, reverse_lookup
 
 if TYPE_CHECKING:
-    from typing import Any, ClassVar, Final, Unpack
+    from typing import Any, ClassVar, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -84,11 +84,11 @@ class MLConfigSelect(MLSelect):
         self.options_map = self.OPTIONS_MAP
         self.options = list(self.options_map.values())
         self.device_value = None
-        super().__init__(manager, channel, entitykey, None, **kwargs)
+        MLSelect.__init__(self, manager, channel, entitykey, **kwargs)
 
     def set_unavailable(self):
         self.device_value = None
-        return super().set_unavailable()
+        return MLSelect.set_unavailable(self)
 
     def update_device_value(self, device_value, /):
         if self.device_value != device_value:

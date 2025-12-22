@@ -76,7 +76,7 @@ class HubSensorAdjustNumber(MLConfigNumber):
             manager,
             manager.id,
             f"config_{self.ns.key}_{self.key_value}",
-            device_class,
+            device_class=device_class,
             device_scale=10,
             name=f"Adjust {device_class}",
         )
@@ -592,7 +592,10 @@ class SubDevice(NamespaceParser, BaseDevice):
         self.platforms = hub.platforms
         hub.subdevices[id] = self
         self.sensor_battery = MLNumericSensor(
-            self, self.id, mc.KEY_BATTERY, MLNumericSensor.DeviceClass.BATTERY
+            self,
+            self.id,
+            mc.KEY_BATTERY,
+            device_class=MLNumericSensor.DeviceClass.BATTERY,
         )
         # this is a generic toggle we'll setup in case the subdevice
         # 'advertises' it and no specialized implementation is in place
@@ -655,7 +658,7 @@ class SubDevice(NamespaceParser, BaseDevice):
             self,
             self.id,
             str(MLBinarySensor.DeviceClass.WINDOW),
-            MLBinarySensor.DeviceClass.WINDOW,
+            device_class=MLBinarySensor.DeviceClass.WINDOW,
         )
 
     def update_sub_device_info(self, sub_device_info: "SubDeviceInfoType"):
@@ -849,7 +852,6 @@ class SubDevice(NamespaceParser, BaseDevice):
                 self,
                 self.id,
                 mc.KEY_TOGGLEX,
-                MLSwitch.DeviceClass.SWITCH,
                 device_value=p_togglex[mc.KEY_ONOFF],
             )
 
@@ -1022,10 +1024,10 @@ class GS559SubDevice(SubDevice):
     def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_GS559)
         self.binary_sensor_alarm = MLBinarySensor(
-            self, self.id, "alarm", MLBinarySensor.DeviceClass.SAFETY
+            self, self.id, "alarm", device_class=MLBinarySensor.DeviceClass.SAFETY
         )
         self.binary_sensor_error = MLBinarySensor(
-            self, self.id, "error", MLBinarySensor.DeviceClass.PROBLEM
+            self, self.id, "error", device_class=MLBinarySensor.DeviceClass.PROBLEM
         )
         self.binary_sensor_muted = MLBinarySensor(self, self.id, "muted")
         self.button_mute = MLButton(
@@ -1316,7 +1318,10 @@ class MS400SubDevice(SubDevice):
     def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS400)
         self.binary_sensor_waterleak = MLBinarySensor(
-            self, self.id, mc.KEY_WATERLEAK, MLBinarySensor.DeviceClass.SAFETY
+            self,
+            self.id,
+            mc.KEY_WATERLEAK,
+            device_class=MLBinarySensor.DeviceClass.SAFETY,
         )
 
     async def async_shutdown(self):
@@ -1352,7 +1357,7 @@ class MST100SubDevice(SubDevice):
                 manager,
                 manager.id,
                 mc.KEY_DURATION,
-                MLConfigNumber.DEVICE_CLASS_DURATION,
+                device_class=MLConfigNumber.DEVICE_CLASS_DURATION,
                 name="Watering duration",
             )
 
@@ -1367,7 +1372,6 @@ class MST100SubDevice(SubDevice):
                 manager,
                 manager.id,
                 mc.KEY_ONOFF,
-                MLSwitch.DeviceClass.SWITCH,
                 name="Watering",
             )
 

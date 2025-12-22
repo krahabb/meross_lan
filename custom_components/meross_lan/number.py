@@ -6,12 +6,11 @@ from .helpers import entity as me, reverse_lookup
 from .merossclient.protocol import const as mc
 
 if TYPE_CHECKING:
-    from typing import Unpack
+    from typing import ClassVar, Final, NotRequired, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .climate import MtsClimate
     from .helpers.device import BaseDevice
 
 
@@ -30,8 +29,15 @@ class MLNumber(me.MLNumericEntity, number.NumberEntity):
     """
 
     if TYPE_CHECKING:
+
+        class Args(me.MLNumericEntity.Args):
+            device_class: NotRequired[number.NumberDeviceClass | None]
+
         manager: "BaseDevice"
+        DEVICE_CLASS_DURATION: Final[number.NumberDeviceClass]
+        DEVICE_CLASS_TEMPERATURE_DELTA: Final[number.NumberDeviceClass]
         # HA core entity attributes:
+        _attr_device_class: ClassVar[number.NumberDeviceClass | None]
         mode: number.NumberMode
         native_max_value: float
         native_min_value: float
@@ -41,7 +47,7 @@ class MLNumber(me.MLNumericEntity, number.NumberEntity):
     DeviceClass = number.NumberDeviceClass
 
     # HA core compatibility layer for NumberDeviceClass.DURATION (HA core 2023.7 misses that)
-    DEVICE_CLASS_DURATION = getattr(DeviceClass, "DURATION", "duration")
+    DEVICE_CLASS_DURATION = getattr(DeviceClass, "DURATION", "duration")  # type: ignore
     # HA core compatibility layer for NumberDeviceClass.TEMPERATURE_DELTA (HA core 2025.10 misses that)
     DEVICE_CLASS_TEMPERATURE_DELTA = getattr(
         DeviceClass, "TEMPERATURE_DELTA", DeviceClass.TEMPERATURE
@@ -81,7 +87,6 @@ class MLConfigNumber(me.MEListChannelMixin, MLNumber):
         manager: "BaseDevice",
         channel: object | None,
         entitykey: str | None = None,
-        device_class: MLNumber.DeviceClass | str | None = None,
         **kwargs: "Unpack[MLConfigNumber.Args]",
     ):
         self._async_request_debounce_unsub = None
@@ -89,7 +94,6 @@ class MLConfigNumber(me.MEListChannelMixin, MLNumber):
             manager,
             channel,
             entitykey,
-            device_class,
             **kwargs,
         )
 

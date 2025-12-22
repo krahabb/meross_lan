@@ -72,6 +72,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         class Args(TypedDict):
             name: NotRequired[str]
             translation_key: NotRequired[str]
+            device_class: NotRequired[str | None]
             entity_category: NotRequired[entity.EntityCategory | None]
             state_callback: NotRequired["MLEntity.StateCallback"]
 
@@ -108,6 +109,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         should_poll: Final[bool]
         # These may be customized here and there per class
         _attr_available: ClassVar[bool]
+        _attr_device_class: ClassVar[str | None]
         # These may be customized here and there per class or instance
         assumed_state: bool = False
         entity_category: entity.EntityCategory | None
@@ -132,6 +134,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
     has_entity_name = True
     should_poll = False
     _attr_available = False
+    _attr_device_class = None
     assumed_state = False
     entity_category = None
     entity_registry_enabled_default = True
@@ -168,7 +171,6 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         manager: "EntityManager",
         channel: object | None,
         entitykey: str | None = None,
-        device_class: str | None = None,
         /,
         **kwargs: "Unpack[Args]",
     ):
@@ -218,15 +220,15 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         self._context = None
         self._context_set = None
         self.available = self._attr_available or manager.online
-        self.device_class = device_class
+        self.device_class = kwargs.pop("device_class", self._attr_device_class)
         self.device_info = self.manager.deviceentry_id  # type: ignore
 
         if "name" in kwargs:
             name = kwargs.pop("name")
         elif entitykey:
             name = entitykey.replace("_", " ").capitalize()
-        elif device_class:
-            name = str(device_class).capitalize()
+        elif self.device_class:
+            name = str(self.device_class).capitalize()
         else:
             name = None
         # when channel == 0 it might be the only one so skip it
@@ -564,12 +566,11 @@ class MLBinaryEntity(MLEntity):
         manager: "BaseDevice",
         channel: object,
         entitykey: str | None = None,
-        device_class: str | None = None,
         /,
         **kwargs: "Unpack[Args]",
     ):
         self.is_on = kwargs.pop("device_value", None)
-        super().__init__(manager, channel, entitykey, device_class, **kwargs)
+        super().__init__(manager, channel, entitykey, **kwargs)
 
     def set_unavailable(self):
         self.is_on = None
@@ -624,7 +625,6 @@ class MLNumericEntity(MLEntity):
         manager: "EntityManager",
         channel: object,
         entitykey: str | None = None,
-        device_class: str | None = None,
         /,
         **kwargs: "Unpack[Args]",
     ):
@@ -640,10 +640,10 @@ class MLNumericEntity(MLEntity):
         except KeyError:
             self.native_unit_of_measurement = (
                 self._attr_native_unit_of_measurement
-                or self.DEVICECLASS_TO_UNIT_MAP.get(device_class)
+                or self.DEVICECLASS_TO_UNIT_MAP.get(kwargs.get("device_class", self._attr_device_class))
             )
 
-        super().__init__(manager, channel, entitykey, device_class, **kwargs)
+        super().__init__(manager, channel, entitykey, **kwargs)
 
     def set_unavailable(self):
         self.device_value = None

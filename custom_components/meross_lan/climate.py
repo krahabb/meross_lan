@@ -549,6 +549,8 @@ class MtsSetPointNumber(MLConfigNumber):
     AKA: Heat(comfort) - Cool(sleep) - Eco(away)
     """
 
+    _attr_device_class = MLConfigNumber.DeviceClass.TEMPERATURE
+
     __slots__ = (
         "climate",
         "icon",
@@ -561,11 +563,11 @@ class MtsSetPointNumber(MLConfigNumber):
         self.key_value = climate.MTS_MODE_TO_TEMPERATUREKEY_MAP[
             reverse_lookup(climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
         ]
-        super().__init__(
+        MLConfigNumber.__init__(
+            self,
             climate.manager,
             climate.channel,
             f"config_temperature_{self.key_value}",
-            MLConfigNumber.DeviceClass.TEMPERATURE,
             name=f"{preset_mode} temperature",
             device_scale=climate.device_scale,
         )

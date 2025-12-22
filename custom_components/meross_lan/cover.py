@@ -1,4 +1,4 @@
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.components import cover
 from homeassistant.exceptions import InvalidStateError
@@ -8,8 +8,9 @@ from .helpers import entity as me, versiontuple
 from .merossclient.protocol import const as mc, namespaces as mn
 from .number import MLConfigNumber
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     import asyncio
+    from typing import ClassVar, NotRequired
 
     from .helpers.device import Device
 
@@ -19,6 +20,22 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
 
 
 class MLCover(me.MLEntity, cover.CoverEntity):
+
+    if TYPE_CHECKING:
+
+        class Args(me.MLEntity.Args):
+            device_class: NotRequired[cover.CoverDeviceClass | None]
+
+        manager: "Device"
+
+        # HA core entity attributes:
+        _attr_device_class: ClassVar[cover.CoverDeviceClass | None]
+        is_closed: bool | None
+        is_closing: bool
+        is_opening: bool
+
+        _transition_unsub: asyncio.TimerHandle | None
+        _transition_end_unsub: asyncio.TimerHandle | None
 
     ENTITY_COMPONENT = cover
     PLATFORM = cover.DOMAIN
@@ -39,13 +56,6 @@ class MLCover(me.MLEntity, cover.CoverEntity):
     DeviceClass = cover.CoverDeviceClass
     EntityFeature = cover.CoverEntityFeature
 
-    manager: "Device"
-
-    # HA core entity attributes:
-    is_closed: bool | None
-    is_closing: bool
-    is_opening: bool
-
     __slots__ = (
         "is_closed",
         "is_closing",
@@ -58,14 +68,13 @@ class MLCover(me.MLEntity, cover.CoverEntity):
         self,
         manager: "Device",
         channel: object | None,
-        device_class: "MLCover.DeviceClass",
     ):
         self.is_closed = None
         self.is_closing = False
         self.is_opening = False
-        self._transition_unsub: "asyncio.TimerHandle | None" = None
-        self._transition_end_unsub: "asyncio.TimerHandle | None" = None
-        super().__init__(manager, channel, None, device_class)
+        self._transition_unsub = None
+        self._transition_end_unsub = None
+        super().__init__(manager, channel, None)
 
     # interface: MLEntity
     async def async_shutdown(self):
@@ -101,6 +110,7 @@ class MLRollerShutter(MLCover):
     ATTR_POSITION_NATIVE = "position_native"
 
     # HA core entity attributes:
+    _attr_device_class = cover.CoverDeviceClass.SHUTTER
     assumed_state = True
     current_cover_position: int | None
     supported_features: cover.CoverEntityFeature
@@ -146,7 +156,7 @@ class MLRollerShutter(MLCover):
 
         except Exception:
             self._position_native_isgood = False
-        super().__init__(manager, 0, MLCover.DeviceClass.SHUTTER)
+        super().__init__(manager, 0)
         self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
         self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
         if mn.Appliance_RollerShutter_Adjust.name in descriptor.ability:
@@ -504,6 +514,7 @@ class MLRollerShutterConfigNumber(me.MEDictChannelMixin, MLConfigNumber):
     _attr_device_scale = 1000
 
     # HA core entity attributes:
+    _attr_device_class = MLConfigNumber.DEVICE_CLASS_DURATION
     # these are ok for open/close durations
     # customize those when needed...
     native_max_value = 60
@@ -519,6 +530,5 @@ class MLRollerShutterConfigNumber(me.MEDictChannelMixin, MLConfigNumber):
             cover.manager,
             cover.channel,
             f"config_{key}",
-            MLConfigNumber.DEVICE_CLASS_DURATION,
             name=key,
         )

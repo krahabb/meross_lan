@@ -1,4 +1,4 @@
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.components import media_player
 from homeassistant.components.media_player.const import (
@@ -10,7 +10,9 @@ from homeassistant.components.media_player.const import (
 from .helpers import clamp, entity as me
 from .merossclient.protocol import const as mc, namespaces as mn
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
+    from typing import ClassVar, Final, NotRequired
+
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
@@ -24,13 +26,19 @@ async def async_setup_entry(
 
 
 class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
-    PLATFORM = media_player.DOMAIN
 
-    manager: "Device"
+    if TYPE_CHECKING:
+
+        manager: "Device"
+        # HA core entity attributes:
+        _attr_device_class: Final[media_player.MediaPlayerDeviceClass]
+
+    PLATFORM = media_player.DOMAIN
 
     ns = mn.Appliance_Control_Mp3
 
     # HA core entity attributes:
+    _attr_device_class = media_player.MediaPlayerDeviceClass.SPEAKER
     is_volume_muted: bool | None
     media_content_type: MediaType = MediaType.MUSIC
     media_title: str | None
@@ -64,9 +72,7 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
         self.media_track = None
         self.state = None
         self.volume_level = None
-        super().__init__(
-            manager, 0, mc.KEY_MP3, media_player.MediaPlayerDeviceClass.SPEAKER
-        )
+        super().__init__(manager, 0, mc.KEY_MP3)
         manager.register_parser_entity(self)
 
     # interface: MLEntity
