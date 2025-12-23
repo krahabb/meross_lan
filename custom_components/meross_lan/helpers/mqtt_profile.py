@@ -581,7 +581,7 @@ class MQTTConnection(Loggable):
                 await self.async_mqtt_publish(
                     device_id,
                     MerossRequest(
-                        *mn.Appliance_System_Ability.request_get,
+                        *mn.Appliance_System_Ability.request_default,
                         key,
                         self.topic_response,
                         self.__class__.__name__,
@@ -599,7 +599,7 @@ class MQTTConnection(Loggable):
                 await self.async_mqtt_publish(
                     device_id,
                     MerossRequest(
-                        *mn.Appliance_System_All.request_get,
+                        *mn.Appliance_System_All.request_default,
                         key,
                         self.topic_response,
                         self.__class__.__name__,
