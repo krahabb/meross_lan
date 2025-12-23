@@ -555,10 +555,17 @@ class MLBinaryEntity(MLEntity):
         class Args(MLEntity.Args):
             device_value: NotRequired[Any]
 
+        # These work much like key_value in MLEntity so that they're generally class attributes
+        native_on: Any
+        """The actual device value representing the 'on' state."""
+        native_off: Any
+        """The actual device value representing the 'off' state."""
         # HA core entity attributes:
-        is_on: bool | None
+        is_on: Any | None
 
     key_value = mc.KEY_ONOFF
+    native_on = 1
+    native_off = 0
 
     __slots__ = ("is_on",)
 
@@ -570,14 +577,14 @@ class MLBinaryEntity(MLEntity):
         /,
         **kwargs: "Unpack[Args]",
     ):
-        self.is_on = kwargs.pop("device_value", None)
+        self.is_on = kwargs.pop("device_value", None)  # TODO: fix
         super().__init__(manager, channel, entitykey, **kwargs)
 
     def set_unavailable(self):
         self.is_on = None
         super().set_unavailable()
 
-    def update_onoff(self, onoff):
+    def update_onoff(self, onoff, /):
         if self.is_on != onoff:
             self.is_on = onoff
             self.flush_state()
@@ -585,7 +592,13 @@ class MLBinaryEntity(MLEntity):
     def _parse(self, payload: dict, /):
         """Default parsing for toggles and binary sensors. Set the proper
         key_value in class/instance definition to make it work."""
-        self.update_onoff(payload[self.key_value])
+        match payload[self.key_value]:
+            case self.native_on:
+                self.update_onoff(True)
+            case self.native_off:
+                self.update_onoff(False)
+            case _:
+                self.update_onoff(None)
 
 
 class MLNumericEntity(MLEntity):

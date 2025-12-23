@@ -1,5 +1,4 @@
-from abc import abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from homeassistant.components import switch
 
@@ -70,11 +69,13 @@ class MLEmulatedSwitch(me.MEPartialAvailableMixin, MLSwitchBase):
             if last_state := await self.get_last_state_available():
                 self.is_on = last_state.state == self.hac.STATE_ON
 
+    @override
     async def async_turn_on(self, **kwargs):
-        self.update_onoff(1)
+        self.update_onoff(True)
 
+    @override
     async def async_turn_off(self, **kwargs):
-        self.update_onoff(0)
+        self.update_onoff(False)
 
 
 class MLSwitch(MLSwitchBase):
@@ -88,13 +89,15 @@ class MLSwitch(MLSwitchBase):
     implementation of the protocol message payload for 'SET' commands
     """
 
+    @override
     async def async_turn_on(self, **kwargs):
-        if await self.async_request_value(1):
-            self.update_onoff(1)
+        if await self.async_request_value(self.native_on):
+            self.update_onoff(True)
 
+    @override
     async def async_turn_off(self, **kwargs):
-        if await self.async_request_value(0):
-            self.update_onoff(0)
+        if await self.async_request_value(self.native_off):
+            self.update_onoff(False)
 
 
 class PhysicalLockSwitch(me.MEListChannelMixin, MLSwitch):
@@ -104,7 +107,7 @@ class PhysicalLockSwitch(me.MEListChannelMixin, MLSwitch):
     # HA core entity attributes:
     entity_category = MLSwitch.EntityCategory.CONFIG
 
-    def __init__(self, manager: "Device"):
+    def __init__(self, manager: "Device", /):
         # right now we expect only 1 entity on channel == 0 (whatever)
         super().__init__(manager, 0, mc.KEY_LOCK)
         manager.register_parser_entity(self)

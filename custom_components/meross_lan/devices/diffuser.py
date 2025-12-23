@@ -49,7 +49,7 @@ def digest_init_diffuser(device: "Device", digest: dict) -> "DigestInitReturnTyp
     )
     diffuser_light_handler.register_entity_class(MLDiffuserLight)
     for light_digest in digest.get(mc.KEY_LIGHT, []):
-        MLDiffuserLight(device, light_digest)
+        MLDiffuserLight(device, light_digest[mc.KEY_CHANNEL])
 
     diffuser_spray_handler = NamespaceHandler(
         device, mn.Appliance_Control_Diffuser_Spray
@@ -111,11 +111,11 @@ class MLDiffuserLight(MLLightBase):
 
     ns = mn.Appliance_Control_Diffuser_Light
 
-    def __init__(self, manager: "Device", digest: dict):
+    def __init__(self, manager: "Device", channel, /):
 
         self.supported_color_modes = {ColorMode.RGB}
 
-        super().__init__(manager, digest, mc.DIFFUSER_LIGHT_MODE_LIST)
+        MLLightBase.__init__(self, manager, channel, mc.DIFFUSER_LIGHT_MODE_LIST)
 
     # interface: MLLightBase
     async def async_request_light_ack(self, _light: dict):

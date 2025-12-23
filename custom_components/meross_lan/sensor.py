@@ -369,14 +369,12 @@ class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
 
     ENTITY_KEY = "signal_strength"
     ns = mn.Appliance_System_Runtime
+    key_value = mc.KEY_SIGNAL
 
     # HA core entity attributes:
     _attr_native_unit_of_measurement = me.MLEntity.hac.PERCENTAGE
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
     icon = "mdi:wifi"
-
-    def _handle(self, header: dict, payload: dict):
-        self.update_native_value(payload[mc.KEY_RUNTIME][mc.KEY_SIGNAL])
 
 
 class MLFilterMaintenanceSensor(MLNumericSensor):

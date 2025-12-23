@@ -1,4 +1,4 @@
-import typing
+from typing import TYPE_CHECKING, override
 
 from homeassistant.components import fan
 
@@ -6,7 +6,7 @@ from .helpers import entity as me
 from .helpers.namespaces import NamespaceHandler, mn
 from .merossclient.protocol import const as mc
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from .helpers.device import Device, DigestInitReturnType
 
 
@@ -14,30 +14,42 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
     me.platform_setup_entry(hass, config_entry, async_add_devices, fan.DOMAIN)
 
 
-try:
-    # HA core 2024.8.0 new flags
-    _supported_features = fan.FanEntityFeature.SET_SPEED | fan.FanEntityFeature.TURN_OFF | fan.FanEntityFeature.TURN_ON  # type: ignore
-except:
-    _supported_features = fan.FanEntityFeature.SET_SPEED
-
-
 class MLFan(me.MLBinaryEntity, fan.FanEntity):
     """
     Fan entity for map100 Air Purifier (or any device implementing Appliance.Control.Fan)
     """
 
+    if TYPE_CHECKING:
+
+        class Args(me.MLBinaryEntity.Args):
+            pass
+
+        manager: "Device"
+
+        # HA core entity attributes:
+        percentage: int | None
+        preset_mode: str | None
+        preset_modes: list[str] | None
+        speed_count: int
+        supported_features: fan.FanEntityFeature
+
     PLATFORM = fan.DOMAIN
-    manager: "Device"
 
     ns = mn.Appliance_Control_Fan
     key_value = mc.KEY_SPEED
 
     # HA core entity attributes:
-    percentage: int | None
-    preset_mode: str | None = None
-    preset_modes: list[str] | None = None
-    speed_count: int
-    supported_features: fan.FanEntityFeature = _supported_features
+    preset_mode = None
+    preset_modes = None
+    try:
+        # HA core 2024.8.0 new flags
+        supported_features = (
+            fan.FanEntityFeature.SET_SPEED
+            | fan.FanEntityFeature.TURN_OFF
+            | fan.FanEntityFeature.TURN_ON
+        )
+    except:
+        supported_features = fan.FanEntityFeature.SET_SPEED
 
     _enable_turn_on_off_backwards_compatibility = False
 
@@ -49,7 +61,7 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
         "_togglex",
     )
 
-    def __init__(self, manager: "Device", channel):
+    def __init__(self, manager: "Device", channel, /):
         self.percentage = None
         self.speed_count = 1  # safe default: auto-inc when 'fan' payload updates
         self._fan = {}
@@ -59,12 +71,14 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
         self._togglex = manager.register_togglex_channel(self)
 
     # interface: MerossToggle
+    @override
     def set_unavailable(self):
         self._fan = {}
         self.percentage = None
         super().set_unavailable()
 
-    def update_onoff(self, onoff):
+    @override
+    def update_onoff(self, onoff, /):
         if self.is_on != onoff:
             self.is_on = onoff
             if onoff:
@@ -74,9 +88,11 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
             self.flush_state()
 
     # interface: fan.FanEntity
+    @override
     async def async_set_percentage(self, percentage: int) -> None:
         await self.async_request_fan(round(percentage * self.speed_count / 100))
 
+    @override
     async def async_turn_on(
         self, percentage: int | None = None, preset_mode: str | None = None, **kwargs
     ):
@@ -87,6 +103,7 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
         else:
             await self.async_request_fan(self._saved_speed)
 
+    @override
     async def async_turn_off(self, **kwargs):
         if self._togglex:
             await self.async_request_togglex(0)
@@ -94,7 +111,7 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
             await self.async_request_fan(0)
 
     # interface: self
-    async def async_request_fan(self, speed: int):
+    async def async_request_fan(self, speed: int, /):
         payload = {mc.KEY_CHANNEL: self.channel, mc.KEY_SPEED: speed}
         if await self.manager.async_request_ack(
             self.ns.name,
@@ -103,7 +120,7 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
         ):
             self._parse_fan(payload)
 
-    async def async_request_togglex(self, onoff: int):
+    async def async_request_togglex(self, onoff: int, /):
         if await self.manager.async_request_ack(
             mn.Appliance_Control_ToggleX.name,
             mc.METHOD_SET,
@@ -116,7 +133,7 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
         ):
             self.update_onoff(onoff)
 
-    def _parse_fan(self, payload: dict):
+    def _parse_fan(self, payload: dict, /):
         """payload = {"channel": 0, "speed": 3, "maxSpeed": 4}"""
         if self._fan != payload:
             self._fan.update(payload)
@@ -133,11 +150,11 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
             self.percentage = round(speed * 100 / self.speed_count)
             self.flush_state()
 
-    def _parse_togglex(self, payload: dict):
+    def _parse_togglex(self, payload: dict, /):
         self.update_onoff(payload[mc.KEY_ONOFF])
 
 
-def digest_init_fan(device: "Device", digest) -> "DigestInitReturnType":
+def digest_init_fan(device: "Device", digest, /) -> "DigestInitReturnType":
     """[{ "channel": 2, "speed": 3, "maxSpeed": 3 }]"""
     for channel_digest in digest:
         MLFan(device, channel_digest[mc.KEY_CHANNEL])
@@ -145,7 +162,7 @@ def digest_init_fan(device: "Device", digest) -> "DigestInitReturnType":
     return handler.parse_list, (handler,)
 
 
-def namespace_init_fan(device: "Device"):
+def namespace_init_fan(device: "Device", /):
     """Special care for NS_FAN since it might have been initialized in digest_init"""
     if mc.KEY_FAN not in device.descriptor.digest:
         # actually only map100 (so far)

@@ -110,7 +110,7 @@ async def test_device_entry(request, hass: "HomeAssistant"):
 
             if sensor_signal_strength:
                 state = hass.states.get(sensor_signal_strength.entity_id)
-                assert state and state.state.isdigit()
+                assert state and float(state.state) >= 0.0
 
 
 async def test_profile_entry(request, hass: "HomeAssistant"):

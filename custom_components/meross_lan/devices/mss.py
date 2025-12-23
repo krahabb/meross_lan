@@ -675,10 +675,10 @@ class OverTempEnableSwitch(EntityNamespaceMixin, me.MENoChannelMixin, MLSwitch):
         self.sensor_overtemp_type = None  # type: ignore
 
     # interface: self
+    @override
     def _handle(self, header, payload: dict, /):
         """{"overTemp": {"enable": 1,"type": 1}}"""
         overtemp = payload[mc.KEY_OVERTEMP]
-        if mc.KEY_ENABLE in overtemp:
-            self.update_onoff(overtemp[mc.KEY_ENABLE])
+        self._parse(overtemp)
         if mc.KEY_TYPE in overtemp:
             self.sensor_overtemp_type.update_native_value(overtemp[mc.KEY_TYPE])
