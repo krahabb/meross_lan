@@ -6,10 +6,8 @@ from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.util import dt as dt_util
 
-from .. import const as mlc
 from ..helpers import entity as me
 from ..helpers.namespaces import (
-    EntityNamespaceHandler,
     EntityNamespaceMixin,
     NamespaceHandler,
     VoidNamespaceHandler,
@@ -38,7 +36,6 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
     if TYPE_CHECKING:
         manager: Device
 
-        ENTITY_KEY: Final
         SENSOR_DEFS: ClassVar[
             dict[
                 str,
@@ -408,7 +405,6 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
     if TYPE_CHECKING:
         manager: "Device"
 
-        ENTITY_KEY: Final
         ATTR_OFFSET: Final
         ATTR_RESET_TS: Final
 
@@ -455,8 +451,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         if sensor_energy_estimate:
             sensor_energy_estimate.sensor_consumptionx = self
         self.extra_state_attributes = {}
-        super().__init__(manager, None, ConsumptionXSensor.ENTITY_KEY)
-        EntityNamespaceHandler(self).polling_response_size_adj(30)
+        super().__init__(manager)
 
     # interface: MLEntity
     def set_unavailable(self):
@@ -658,6 +653,8 @@ class ConsumptionConfigNamespaceHandler(VoidNamespaceHandler):
 
 class OverTempEnableSwitch(EntityNamespaceMixin, me.MENoChannelMixin, MLSwitch):
 
+    ENTITY_KEY = "config_overtemp_enable"
+
     ns = mn.Appliance_Config_OverTemp
     key_value = mc.KEY_ENABLE
 
@@ -667,11 +664,10 @@ class OverTempEnableSwitch(EntityNamespaceMixin, me.MENoChannelMixin, MLSwitch):
     __slots__ = ("sensor_overtemp_type",)
 
     def __init__(self, manager: "Device", /):
-        super().__init__(manager, None, "config_overtemp_enable")
+        super().__init__(manager)
         self.sensor_overtemp_type: MLEnumSensor = MLEnumSensor(
             manager, None, "config_overtemp_type"
         )
-        EntityNamespaceHandler(self)
 
     # interface: MerossToggle
     async def async_shutdown(self):

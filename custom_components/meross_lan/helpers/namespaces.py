@@ -5,7 +5,7 @@ from .. import const as mlc
 from ..merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Coroutine
+    from typing import Any, Callable, Coroutine, Final
 
     from . import Loggable
     from ..merossclient.protocol import types as mt
@@ -875,38 +875,25 @@ class EntityNamespaceMixin(MLEntity if TYPE_CHECKING else object):
     should they're disabled in HA.
     """
 
-    manager: "Device"
+    if TYPE_CHECKING:
+        manager: "Device"
+        handler: Final[NamespaceHandler]
+
+    def __init__(self, manager: "Device"):
+        self.handler = NamespaceHandler(manager, self.ns, handler=self._handle)
+        self.handler.polling_strategy = None  # controlled by added/removed
+        super().__init__(manager, None, self.__class__.ENTITY_KEY)
 
     async def async_added_to_hass(self):
-        self.manager.get_handler(self.ns).polling_strategy = POLLING_STRATEGY_CONF[
-            self.ns
-        ][4]
+        self.handler.polling_strategy = POLLING_STRATEGY_CONF[self.ns][4]
         return await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
-        self.manager.get_handler(self.ns).polling_strategy = None
+        self.handler.polling_strategy = None
         return await super().async_will_remove_from_hass()
 
-
-class EntityNamespaceHandler(NamespaceHandler):
-    """
-    Utility class to manage namespaces which are mapped to a single entity.
-    This will act as an helper in initialization
-    """
-
-    def __init__(self, entity: "EntityNamespaceMixin"):
-        NamespaceHandler.__init__(
-            self,
-            entity.manager,
-            entity.ns,
-            handler=getattr(
-                entity, f"_handle_{entity.ns.name.replace('.', '_')}", entity._handle
-            ),
-        )
-        if not entity.hass_connected:
-            # if initially disabled then uninstall default strategy
-            # EntityNamespaceMixin will manage enabling/disabling
-            self.polling_strategy = None
+    def _handle(self, header, payload):
+        self._parse(payload[self.ns.key])
 
 
 class VoidNamespaceHandler(NamespaceHandler):
@@ -993,8 +980,8 @@ POLLING_STRATEGY_CONF: dict[mn.Namespace, "NamespaceConfigType"] = {
     mn.Appliance_Control_ConsumptionX: (
         mlc.PARAM_ENERGY_UPDATE_PERIOD,
         mlc.PARAM_ENERGY_UPDATE_CLOUD_PERIOD,
-        320,
-        53,
+        1800,  # assume full 30 days of data
+        0,  # single day roughly 53 bytes
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Diffuser_Sensor: (
@@ -1080,6 +1067,13 @@ POLLING_STRATEGY_CONF: dict[mn.Namespace, "NamespaceConfigType"] = {
         mlc.PARAM_HEADER_SIZE,
         220,
         NamespaceHandler.async_poll_smart,
+    ),
+    mn.Appliance_Control_Toggle: (
+        0,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        40,
+        NamespaceHandler.async_poll_default,
     ),
     mn.Appliance_GarageDoor_Config: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,

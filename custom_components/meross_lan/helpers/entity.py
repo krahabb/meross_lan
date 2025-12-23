@@ -79,6 +79,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         EntityCategory: Final
 
         PLATFORM: ClassVar[str]
+        ENTITY_KEY: ClassVar[str]
 
         is_diagnostic: ClassVar[bool]
         """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
@@ -581,7 +582,7 @@ class MLBinaryEntity(MLEntity):
             self.is_on = onoff
             self.flush_state()
 
-    def _parse(self, payload: dict):
+    def _parse(self, payload: dict, /):
         """Default parsing for toggles and binary sensors. Set the proper
         key_value in class/instance definition to make it work."""
         self.update_onoff(payload[self.key_value])
@@ -640,7 +641,9 @@ class MLNumericEntity(MLEntity):
         except KeyError:
             self.native_unit_of_measurement = (
                 self._attr_native_unit_of_measurement
-                or self.DEVICECLASS_TO_UNIT_MAP.get(kwargs.get("device_class", self._attr_device_class))
+                or self.DEVICECLASS_TO_UNIT_MAP.get(
+                    kwargs.get("device_class", self._attr_device_class)
+                )
             )
 
         super().__init__(manager, channel, entitykey, **kwargs)

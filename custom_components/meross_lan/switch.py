@@ -4,8 +4,10 @@ from typing import TYPE_CHECKING
 from homeassistant.components import switch
 
 from .helpers import entity as me
+from .helpers.namespaces import EntityNamespaceMixin, mc, mn
+
 from .merossclient import extract_dict_payloads
-from .merossclient.protocol import const as mc, namespaces as mn
+
 
 if TYPE_CHECKING:
     from typing import ClassVar, NotRequired, Unpack
@@ -41,6 +43,7 @@ class MLSwitchBase(me.MLBinaryEntity, switch.SwitchEntity):
     DeviceClass = switch.SwitchDeviceClass
 
     _attr_device_class = switch.SwitchDeviceClass.SWITCH
+
 
 class MLEmulatedSwitch(me.MEPartialAvailableMixin, MLSwitchBase):
     """
@@ -107,26 +110,27 @@ class PhysicalLockSwitch(me.MEListChannelMixin, MLSwitch):
         manager.register_parser_entity(self)
 
 
-class MLToggle(me.MENoChannelMixin, MLSwitch):
+class MLToggle(EntityNamespaceMixin, me.MENoChannelMixin, MLSwitch):
 
+    # 2024-03-13: passing entitykey="0" instead of channel in order
+    # to mantain unique_id compatibility with installations but
+    # updating to new toggle entity model (where channel is None for this entity type)
+    # 2025-12-22: restructiring MLToggle to use EntityNamespaceMixin
+    # but we still keep entitykey = "0" for compatibility with installed registry entries
+    ENTITY_KEY = "0"
     ns = mn.Appliance_Control_Toggle
 
     # HA core entity attributes:
     _attr_device_class = MLSwitch.DeviceClass.OUTLET
 
-    def __init__(self, manager: "Device", /):
-        # 2024-03-13: passing entitykey="0" instead of channel in order
-        # to mantain unique_id compatibility with installations but
-        # updating to new toggle entity model (where channel is None for this entity type)
-        super().__init__(manager, None, "0")
-        manager.register_parser_entity(self)
-
 
 def digest_init_toggle(device: "Device", digest: dict, /) -> "DigestInitReturnType":
     """{"onoff": 0, "lmTime": 1645391086}"""
-    MLToggle(device)
+    toggle = MLToggle(device)
+
+    # MLToggle will install mn.Appliance_Control_Toggle handler
     handler = device.namespace_handlers[mn.Appliance_Control_Toggle.name]
-    return handler.parse_generic, (handler,)
+    return toggle._parse, (handler,)
 
 
 class MLToggleX(me.MEDictChannelMixin, MLSwitch):

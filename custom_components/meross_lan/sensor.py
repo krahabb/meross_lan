@@ -5,13 +5,7 @@ from homeassistant.components import sensor
 
 from . import const as mlc
 from .helpers import entity as me
-from .helpers.namespaces import (
-    EntityNamespaceHandler,
-    EntityNamespaceMixin,
-    NamespaceHandler,
-    mc,
-    mn,
-)
+from .helpers.namespaces import EntityNamespaceMixin, NamespaceHandler, mc, mn
 from .merossclient.protocol.message import json_dumps
 
 if TYPE_CHECKING:
@@ -373,18 +367,13 @@ class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
 
 class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
 
-    ns = mn.Appliance_System_Runtime
-
     ENTITY_KEY = "signal_strength"
+    ns = mn.Appliance_System_Runtime
 
     # HA core entity attributes:
     _attr_native_unit_of_measurement = me.MLEntity.hac.PERCENTAGE
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
     icon = "mdi:wifi"
-
-    def __init__(self, manager: "Device"):
-        super().__init__(manager, None, MLSignalStrengthSensor.ENTITY_KEY)
-        EntityNamespaceHandler(self)
 
     def _handle(self, header: dict, payload: dict):
         self.update_native_value(payload[mc.KEY_RUNTIME][mc.KEY_SIGNAL])

@@ -17,13 +17,7 @@ import homeassistant.util.color as color_util
 
 from . import const as mlc
 from .helpers import clamp, entity as me
-from .helpers.namespaces import (
-    EntityNamespaceHandler,
-    EntityNamespaceMixin,
-    NamespaceHandler,
-    mc,
-    mn,
-)
+from .helpers.namespaces import EntityNamespaceMixin, NamespaceHandler, mc, mn
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -869,19 +863,13 @@ class MLDNDLightEntity(EntityNamespaceMixin, me.MLBinaryEntity, light.LightEntit
 
     PLATFORM = light.DOMAIN
     manager: "Device"
-
-    ns = mn.Appliance_System_DNDMode
-
     ENTITY_KEY = "dnd"
+    ns = mn.Appliance_System_DNDMode
 
     # HA core entity attributes:
     color_mode: ColorMode = ColorMode.ONOFF
     entity_category = me.MLBinaryEntity.EntityCategory.CONFIG
     supported_color_modes: set[ColorMode] = {ColorMode.ONOFF}
-
-    def __init__(self, manager: "Device"):
-        super().__init__(manager, None, MLDNDLightEntity.ENTITY_KEY)
-        EntityNamespaceHandler(self)
 
     async def async_turn_on(self, **kwargs):
         if await self.manager.async_request_ack(
@@ -899,11 +887,11 @@ class MLDNDLightEntity(EntityNamespaceMixin, me.MLBinaryEntity, light.LightEntit
         ):
             self.update_onoff(0)
 
-    def _handle(self, header: dict, payload: dict):
+    def _handle(self, header: dict, payload: dict, /):
         self.update_onoff(not payload[mc.KEY_DNDMODE][mc.KEY_MODE])
 
 
-def digest_init_light(device: "Device", digest: dict) -> "DigestInitReturnType":
+def digest_init_light(device: "Device", digest: dict, /) -> "DigestInitReturnType":
 
     ability = device.descriptor.ability
 
