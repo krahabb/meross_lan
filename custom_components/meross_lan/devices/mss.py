@@ -31,6 +31,9 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
     It also implements a trapezoidal estimator for energy consumption. Based on observations
     this estimate is falling a bit behind the consumption reported from the device at least
     when the power is very low (likely due to power readings being a bit off).
+    BEWARE: even though this could be a candidate for mixing with EntityNamespaceMixin when
+    handling *.Electricity ns, it would instead be wrong when managing *.ElectricityX ns
+    since it gets instanced once for every channel.
     """
 
     if TYPE_CHECKING:
@@ -195,11 +198,6 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
                     )
 
         power = self.sensor_power.native_value
-        if not power:
-            # might be an indication of issue #367 where the problem lies in missing
-            # device timezone configuration
-            device.check_device_timezone()
-
         # device.device_timestamp 'should be' current epoch of the message
         try:
             de = (
@@ -213,7 +211,16 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
             self._estimate += de
             self.update_native_value(int(self._estimate))
         except TypeError:
-            assert (last_power is None) or (power is None)
+            # This is only expected when either last_power or power is None.
+            # It should happen once after onlining or when the device
+            # is not providing power readings for some reason.
+            if not power:
+                # might be an indication of issue #367 where the problem lies in missing
+                # device timezone configuration. This check is mostly about (power == 0)
+                # i.e. a formally good reading but likely indication of misbehaving device
+                device.check_device_timezone()
+            if (last_power is not None) and (power is not None):
+                raise
 
         self._electricity_lastepoch = device.device_timestamp
 
