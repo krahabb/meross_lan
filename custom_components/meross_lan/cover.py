@@ -504,7 +504,7 @@ class MLRollerShutter(MLCover):
         await self.async_stop_cover()
 
 
-class MLRollerShutterConfigNumber(me.MEDictChannelMixin, MLConfigNumber):
+class MLRollerShutterConfigNumber(MLConfigNumber):
     """
     Helper entity to configure MRS open/close duration
     """
@@ -521,10 +521,7 @@ class MLRollerShutterConfigNumber(me.MEDictChannelMixin, MLConfigNumber):
     native_min_value = 1
     native_step = 1
 
-    __slots__ = ("_cover",)
-
     def __init__(self, cover: "MLRollerShutter", key: str):
-        self._cover = cover
         self.key_value = key
         super().__init__(
             cover.manager,

@@ -67,7 +67,7 @@ class MLNumber(me.MLNumericEntity, number.NumberEntity):
     native_step = 1
 
 
-class MLConfigNumber(me.MEListChannelMixin, MLNumber):
+class MLConfigNumber(MLNumber):
     """
     Base class for any configurable numeric parameter in the device. This works much-like
     MLSwitch by refining the 'async_request_value' api in order to send the command.

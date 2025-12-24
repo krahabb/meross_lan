@@ -875,9 +875,7 @@ class MLLightMp3(MLLight):
         MLLight.__init__(self, manager, channel, mc.HP110A_LIGHT_EFFECT_LIST)
 
 
-class MLDNDLightEntity(
-    EntityNamespaceMixin, me.MENoChannelMixin, me.MLBinaryEntity, light.LightEntity
-):
+class MLDNDLightEntity(EntityNamespaceMixin, me.MLBinaryEntity, light.LightEntity):
     """
     light entity representing the device DND feature usually implemented
     through a light feature (presence light or so)

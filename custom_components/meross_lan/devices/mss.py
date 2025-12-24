@@ -290,6 +290,7 @@ class ElectricityXSensor(ElectricitySensor):
                     )
                 except KeyError:
                     pass
+                return True
 
     SENSOR_DEFS = ElectricitySensor.SENSOR_DEFS | {
         mc.KEY_VOLTAGE: (
@@ -651,7 +652,7 @@ class ConsumptionConfigNamespaceHandler(VoidNamespaceHandler):
         )
 
 
-class OverTempEnableSwitch(EntityNamespaceMixin, me.MENoChannelMixin, MLSwitch):
+class OverTempEnableSwitch(EntityNamespaceMixin, MLSwitch):
 
     ENTITY_KEY = "config_overtemp_enable"
 

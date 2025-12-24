@@ -1,10 +1,9 @@
-import typing
+from typing import TYPE_CHECKING
 
-from ..helpers.entity import MEDictChannelMixin
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..select import MLConfigSelect
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from ..helpers.device import Device, DigestInitReturnType
 
 
@@ -17,7 +16,7 @@ def digest_init_spray(device: "Device", digest) -> "DigestInitReturnType":
     return handler.parse_list, (handler,)
 
 
-class MLSpray(MEDictChannelMixin, MLConfigSelect):
+class MLSpray(MLConfigSelect):
     """
     SelectEntity class for Appliance.Control.Spray namespace. This is also
     slightly customized in MLDiffuserSpray to override namespace mapping and
@@ -38,5 +37,5 @@ class MLSpray(MEDictChannelMixin, MLConfigSelect):
     entity_category = None
 
     def __init__(self, manager: "Device", channel: object):
-        super().__init__(manager, channel, mc.KEY_SPRAY)
+        MLConfigSelect.__init__(self, manager, channel, mc.KEY_SPRAY)
         manager.register_parser_entity(self)

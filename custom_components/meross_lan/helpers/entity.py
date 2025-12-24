@@ -9,7 +9,7 @@ versioning
 """
 
 from functools import partial
-from typing import TYPE_CHECKING, final
+from typing import TYPE_CHECKING, final, override
 
 try:
     from homeassistant.components.recorder import get_instance as r_get_instance
@@ -291,25 +291,11 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         self.available = False
         self.flush_state()
 
-    def update_device_value(self, device_value, /) -> bool | None:
-        """This is a stub definition. It will be called by _parse (when namespace dispatching
-        is configured so) or directly as a short path inside other parsers to forward the
-        incoming device value to the underlyinh HA entity state."""
-        raise NotImplementedError("Called 'update_device_value' on wrong entity type")
-
     def update_native_value(self, native_value, /) -> bool | None:
         """This is a stub definition. It will usually be called by update_device_value
         with the result of the conversion from the incoming device value (from Meross protocol)
         to the proper HA type/value for the entity class."""
         raise NotImplementedError("Called 'update_native_value' on wrong entity type")
-
-    async def async_request_value(self, device_value, /):
-        """Sends the actual request to the device. This needs to be overloaded in entities
-        actually supporting the method SET on their namespace. Since the syntax for the payload
-        is almost generalized we have some defaults implementations based on mixins ready to be
-        included in actual entity implementation
-        """
-        raise NotImplementedError("Called 'async_request_value' on wrong entity type")
 
     async def get_last_state_available(self):
         """
@@ -343,7 +329,62 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
     def _generate_unique_id(self):
         return self.manager.generate_unique_id(self)
 
-    # interface: NamespaceParser
+    # interface: device communication
+    def update_device_value(self, device_value, /) -> bool | None:
+        """This is a stub definition. It will be called by _parse (when namespace dispatching
+        is configured so) or directly as a short path inside other parsers to forward the
+        incoming device value to the underlyinh HA entity state."""
+        raise NotImplementedError("Called 'update_device_value' on wrong entity type")
+
+    async def async_request_value(self, device_value, /):
+        """Sends the actual request to the device. This is a simple implementation for
+        entities (binary_sensors, switches, simple sensors or so backing a 'single'
+        data point in a Namespace payload. This is 'smart' enough to handle
+        the correct namespace grammar as defined in merossclient.protocol.namespaces."""
+        match self.ns.payload_set:
+            case mn.PayloadType.LIST_C:
+                self.async_request_value = self._async_request_value_list_c
+            case mn.PayloadType.DICT_C:
+                self.async_request_value = self._async_request_value_dict_c
+            case mn.PayloadType.DICT:
+                self.async_request_value = self._async_request_value_dict
+            case mn.PayloadType.EMPTY:
+                self.async_request_value = self._async_request_value_empty
+            case _:
+                # TODO: setup an auto detection for PayloadType.UNKNOWN
+                raise ValueError(f"unsupported payload_set type: {self.ns.payload_set})")
+
+        return await self.async_request_value(device_value)
+
+    async def _async_request_value_list_c(self, device_value, /):
+        ns = self.ns
+        return await self.manager.async_request_ack(  # type: ignore
+            ns.name,
+            mc.METHOD_SET,
+            {ns.key: [{self.key_value: device_value, ns.key_channel: self.channel}]},
+        )
+
+    async def _async_request_value_dict_c(self, device_value, /):
+        ns = self.ns
+        return await self.manager.async_request_ack(  # type: ignore
+            ns.name,
+            mc.METHOD_SET,
+            {ns.key: {self.key_value: device_value, ns.key_channel: self.channel}},
+        )
+
+    async def _async_request_value_dict(self, device_value, /):
+        ns = self.ns
+        return await self.manager.async_request_ack(  # type: ignore
+            ns.name, mc.METHOD_SET, {ns.key: {self.key_value: device_value}}
+        )
+
+    async def _async_request_value_empty(self, device_value, /):
+        ns = self.ns
+        return await self.manager.async_request_ack(  # type: ignore
+            ns.name, mc.METHOD_SET, {}
+        )
+
+    @override  # NamespaceParser
     def _parse(self, payload: "Mapping[str, Any]", /):
         """Default parsing for entities. Set the proper
         key_group/key_value in class/instance definition to make it work."""
@@ -352,70 +393,6 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
             self.update_device_value(payload[self.key_value])
         except KeyError:
             self.update_device_value(payload[self.key_group][self.key_value])
-
-
-class MENoChannelMixin(MLEntity if TYPE_CHECKING else object):
-    """
-    Implementation for protocol method 'SET' on entities/namespaces not backed by a channel.
-    Actual examples: Appliance.Control.Toggle, Appliance.GarageDoor.Config, and so on..
-    """
-
-    manager: "BaseDevice"
-
-    # interface: MLEntity
-    async def async_request_value(self, device_value, /):
-        """sends the actual request to the device. this is likely to be overloaded"""
-        ns = self.ns
-        return await self.manager.async_request_ack(
-            ns.name,
-            mc.METHOD_SET,
-            {ns.key: {self.key_value: device_value}},
-        )
-
-
-class MEDictChannelMixin(MLEntity if TYPE_CHECKING else object):
-    """
-    Implementation for protocol method 'SET' on entities/namespaces backed by a channel
-    where the command payload must be enclosed in a plain dict (without enclosing list).
-    Actual examples: Appliance.Control.ToggleX, Appliance.RollerShutter.Config, and so on..
-    """
-
-    manager: "BaseDevice"
-
-    # interface: MLEntity
-    async def async_request_value(self, device_value, /):
-        """sends the actual request to the device. this is likely to be overloaded"""
-        ns = self.ns
-        return await self.manager.async_request_ack(
-            ns.name,
-            mc.METHOD_SET,
-            {
-                ns.key: {
-                    ns.key_channel: self.channel,
-                    self.key_value: device_value,
-                }
-            },
-        )
-
-
-class MEListChannelMixin(MLEntity if TYPE_CHECKING else object):
-    """
-    Implementation for protocol method 'SET' on entities/namespaces backed by a channel
-    where the command payload must be enclosed in a list
-    Actual examples: Appliance.Control.ToggleX and so on..
-    """
-
-    manager: "BaseDevice"
-
-    # interface: MLEntity
-    async def async_request_value(self, device_value, /):
-        """sends the actual request to the device. this is likely to be overloaded"""
-        ns = self.ns
-        return await self.manager.async_request_ack(
-            ns.name,
-            mc.METHOD_SET,
-            {ns.key: [{ns.key_channel: self.channel, self.key_value: device_value}]},
-        )
 
 
 class MEGroupListChannelMixin(MLEntity if TYPE_CHECKING else object):
@@ -442,76 +419,6 @@ class MEGroupListChannelMixin(MLEntity if TYPE_CHECKING else object):
                 ]
             },
         )
-
-
-class MEAutoChannelMixin(MLEntity if TYPE_CHECKING else object):
-    """
-    Implementation for protocol method 'SET' on entities/namespaces backed by a channel
-    where the command payload could be either a list or a dict. This mixin actually
-    tries to learn the correct format at runtime buy 'sensing' it
-    Actual examples: None.
-    """
-
-    if TYPE_CHECKING:
-        manager: "BaseDevice"
-        _set_format: type | None
-
-    _set_format = None
-
-    # interface: MLEntity
-    async def async_request_value(self, device_value, /):
-        """sends the actual request to the device. this is likely to be overloaded"""
-        ns = self.ns
-        if self._set_format is None:
-            # check if the list format works first
-            if response_set := await self.manager.async_request_ack(
-                ns.name,
-                mc.METHOD_SET,
-                {
-                    ns.key: [
-                        {ns.key_channel: self.channel, self.key_value: device_value}
-                    ]
-                },
-            ):
-                if response_get := await self.manager.async_request_ack(
-                    ns.name,
-                    mc.METHOD_GET,
-                    {ns.key: [{ns.key_channel: self.channel}]},
-                ):
-                    if response_get[ns.key][0][self.key_value] == device_value:
-                        self._set_format = list
-                        return response_set
-            # something didnt work: try with dict format
-            if response_set := await self.manager.async_request_ack(
-                ns.name,
-                mc.METHOD_SET,
-                {ns.key: {ns.key_channel: self.channel, self.key_value: device_value}},
-            ):
-                # even if dict was used we assume response to be in list format
-                if response_get := await self.manager.async_request_ack(
-                    ns.name,
-                    mc.METHOD_GET,
-                    {ns.key: [{ns.key_channel: self.channel}]},
-                ):
-                    if response_get[ns.key][0][self.key_value] == device_value:
-                        self._set_format = dict
-            return response_set
-        elif self._set_format is list:
-            return await self.manager.async_request_ack(
-                ns.name,
-                mc.METHOD_SET,
-                {
-                    ns.key: [
-                        {ns.key_channel: self.channel, self.key_value: device_value}
-                    ]
-                },
-            )
-        else:
-            return await self.manager.async_request_ack(
-                ns.name,
-                mc.METHOD_SET,
-                {ns.key: {ns.key_channel: self.channel, self.key_value: device_value}},
-            )
 
 
 class MEAlwaysAvailableMixin(MLEntity if TYPE_CHECKING else object):
@@ -585,20 +492,30 @@ class MLBinaryEntity(MLEntity):
         super().set_unavailable()
 
     def update_onoff(self, onoff, /):
+        # TODO: remove in favor of update_native_value/update_device_value
         if self.is_on != onoff:
             self.is_on = onoff
             self.flush_state()
+            return True
 
-    def _parse(self, payload: dict, /):
+    @override
+    def update_device_value(self, device_value, /) -> bool | None:
         """Default parsing for toggles and binary sensors. Set the proper
         key_value in class/instance definition to make it work."""
-        match payload[self.key_value]:
+        match device_value:
             case self.native_on:
-                self.update_onoff(True)
+                return self.update_native_value(True)
             case self.native_off:
-                self.update_onoff(False)
+                return self.update_native_value(False)
             case _:
-                self.update_onoff(None)
+                return self.update_native_value(None)
+
+    @override
+    def update_native_value(self, native_value, /) -> bool | None:
+        if self.is_on != native_value:
+            self.is_on = native_value
+            self.flush_state()
+            return True
 
 
 class MLNumericEntity(MLEntity):

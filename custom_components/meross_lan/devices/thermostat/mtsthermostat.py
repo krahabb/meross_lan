@@ -2,7 +2,6 @@ from typing import TYPE_CHECKING, override
 
 from ...binary_sensor import MLBinarySensor
 from ...climate import MtsClimate
-from ...helpers.entity import MEListChannelMixin
 from ...helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
 from ...merossclient.protocol.namespaces import thermostat as mn_t
 from ...number import MLConfigNumber
@@ -38,7 +37,7 @@ class MtsWarningSensor(MLEnumSensor):
         )
 
 
-class MtsConfigSwitch(MEListChannelMixin, MLSwitch):
+class MtsConfigSwitch(MLSwitch):
 
     number_temperature: "MtsCommonTemperatureExtNumber"
 
@@ -237,7 +236,7 @@ class MtsWindowOpened(MLBinarySensor):
         climate.manager.register_parser_entity(self)
 
 
-class MtsExternalSensorSwitch(MEListChannelMixin, MLSwitch):
+class MtsExternalSensorSwitch(MLSwitch):
     # External sensor mode: use internal(0) vs external(1) sensor as temperature loopback.
 
     ns = mn_t.Appliance_Control_Thermostat_Sensor
@@ -324,7 +323,7 @@ class MtsHoldAction(MLConfigSelect):
         return response
 
 
-class MtsTempUnit(MEListChannelMixin, MLConfigSelect):
+class MtsTempUnit(MLConfigSelect):
 
     ns = mn.Appliance_Control_TempUnit
     key_value = mc.KEY_TEMPUNIT

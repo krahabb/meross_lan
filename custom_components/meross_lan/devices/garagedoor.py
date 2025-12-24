@@ -63,7 +63,7 @@ class MLGarageTimeoutBinarySensor(me.MEPartialAvailableMixin, MLBinarySensor):
         self.flush_state()
 
 
-class MLGarageMultipleConfigSwitch(me.MEListChannelMixin, MLSwitch):
+class MLGarageMultipleConfigSwitch(MLSwitch):
     """
     switch entity to manage MSG configuration (buzzer, enable)
     'x channel' through mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
@@ -135,7 +135,7 @@ class MLGarageDoorEnableSwitch(MLGarageMultipleConfigSwitch):
                         registry_update_entity(entry.entity_id, disabled_by=disabler)
 
 
-class MLGarageConfigSwitch(me.MENoChannelMixin, MLGarageMultipleConfigSwitch):
+class MLGarageConfigSwitch(MLGarageMultipleConfigSwitch):
     """
     switch entity to manage MSG configuration (buzzer)
     'x device' through mc.NS_APPLIANCE_GARAGEDOOR_CONFIG
@@ -185,7 +185,7 @@ class MLGarageMultipleConfigNumber(MLConfigNumber):
         MLConfigNumber.__init__(self, manager, channel, f"config_{key}", **kwargs)
 
 
-class MLGarageConfigNumber(me.MENoChannelMixin, MLGarageMultipleConfigNumber):
+class MLGarageConfigNumber(MLGarageMultipleConfigNumber):
     """
     number entity to manage MSG configuration (open/close timeout and the likes)
     'x device' through mc.NS_APPLIANCE_GARAGEDOOR_CONFIG

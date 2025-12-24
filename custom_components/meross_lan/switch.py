@@ -100,7 +100,7 @@ class MLSwitch(MLSwitchBase):
             self.update_onoff(False)
 
 
-class PhysicalLockSwitch(me.MEListChannelMixin, MLSwitch):
+class PhysicalLockSwitch(MLSwitch):
 
     ns = mn.Appliance_Control_PhysicalLock
 
@@ -113,7 +113,7 @@ class PhysicalLockSwitch(me.MEListChannelMixin, MLSwitch):
         manager.register_parser_entity(self)
 
 
-class MLToggle(EntityNamespaceMixin, me.MENoChannelMixin, MLSwitch):
+class MLToggle(EntityNamespaceMixin, MLSwitch):
 
     # 2024-03-13: passing entitykey="0" instead of channel in order
     # to mantain unique_id compatibility with installations but
@@ -136,7 +136,7 @@ def digest_init_toggle(device: "Device", digest: dict, /) -> "DigestInitReturnTy
     return toggle._parse, (handler,)
 
 
-class MLToggleX(me.MEDictChannelMixin, MLSwitch):
+class MLToggleX(MLSwitch):
 
     ns = mn.Appliance_Control_ToggleX
 

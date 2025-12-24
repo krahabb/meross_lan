@@ -202,6 +202,7 @@ class PayloadType(enum.Enum):
     in our traces are queriable by using (GET, {}) i.e. no ns_key in request payload (
     Actually corresponding to PayloadType.EMPTY)."""
 
+
 # Semantics helpers symbols:
 INDEX_PAYLOADS = (
     PayloadType.DICT_C,
@@ -364,7 +365,6 @@ class Namespace:
                     f"Namespace {self.name} uses indexed payloads but has no key_channel defined."
                 )
 
-
         assert (
             self.payload_psh in PUSH_PAYLOADS
         ), f"Namespace {self.name} has invalid payload_psh {self.payload_psh}"
@@ -405,7 +405,6 @@ class Namespace:
 
     @property
     def request_get(self) -> "MerossRequestType":
-        # TODO: articulate request building to cover defaults and unsupported types
         match self.payload_get:
             case PayloadType.EMPTY | PayloadType.UNKNOWN:
                 return self.name, mc.METHOD_GET, PayloadType.EMPTY.value

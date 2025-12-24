@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING
 
-from ..helpers.entity import MEListChannelMixin
 from ..helpers.namespaces import NamespaceHandler, mc, mn
 from ..light import (
     ATTR_BRIGHTNESS,
@@ -189,7 +188,7 @@ class MLDiffuserLight(MLLightBase):
             self.update_onoff(0)
 
 
-class MLDiffuserSpray(MEListChannelMixin, MLSpray):
+class MLDiffuserSpray(MLSpray):
 
     ns = mn.Appliance_Control_Diffuser_Spray
 

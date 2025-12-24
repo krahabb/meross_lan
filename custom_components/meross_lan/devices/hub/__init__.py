@@ -93,7 +93,7 @@ class HubSensorAdjustNumber(MLConfigNumber):
         )
 
 
-class HubToggleX(me.MEListChannelMixin, MLSwitch):
+class HubToggleX(MLSwitch):
     """Generic switch to map Appliance.Hub.ToggleX namespace."""
 
     ns = mn_h.Appliance_Hub_ToggleX

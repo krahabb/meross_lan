@@ -602,22 +602,40 @@ class MerossEmulator:
                     raise Exception(
                         f"{method} not supported in emulator for {namespace}"
                     )
+
+                if ns.payload_set is mn.PayloadType.EMPTY:
+                    assert not payload
+                    return mc.METHOD_SETACK, {}
+
                 key_payload = payload[ns.key]
                 p_state = p_state[ns.key]
-                if type(p_state) is list:
-                    for p_payload_channel in extract_dict_payloads(key_payload):
-                        update_dict_strict_by_key(
-                            p_state, p_payload_channel, key=ns.key_channel
-                        )
-                elif ns.key_channel in p_state:
-                    if p_state[ns.key_channel] == key_payload[ns.key_channel]:
+
+                match ns.payload_set:
+                    case mn.PayloadType.LIST_C:
+                        assert type(key_payload) is list
+                        for p_payload_channel in key_payload:
+                            update_dict_strict_by_key(
+                                p_state, p_payload_channel, key=ns.key_channel
+                            )
+                    case mn.PayloadType.DICT_C:
+                        assert ns.key_channel in key_payload
+                        if type(p_state) is list:
+                            update_dict_strict_by_key(
+                                p_state, key_payload, key=ns.key_channel
+                            )
+                        elif p_state[ns.key_channel] == key_payload[ns.key_channel]:
+                            update_dict_strict(p_state, key_payload)
+                        else:
+                            raise Exception(
+                                f"'{key_payload[ns.key_channel]}' not present in digest.{ns.key}"
+                            )
+                    case mn.PayloadType.DICT:
+                        assert type(key_payload) is dict
                         update_dict_strict(p_state, key_payload)
-                    else:
+                    case _:
                         raise Exception(
-                            f"{key_payload[mc.KEY_CHANNEL]} not present in digest.{ns.key}"
+                            f"ns.payload_set({ns.payload_set}) not supported in emulator for {namespace}"
                         )
-                else:
-                    update_dict_strict(p_state, key_payload)
 
                 if self.mqtt_connected and ns.payload_psh:
                     # TODO: generalize to every namespace update (also in mixins)
