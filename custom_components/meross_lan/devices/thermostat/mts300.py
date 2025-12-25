@@ -146,24 +146,27 @@ class Mts300Climate(MtsThermostatClimate):
         (False, False, True): MtsThermostatClimate.HVACAction.FAN,
     }
     """Status flags in "more" dict mapped as: (bool(hStatus), bool(cStatus), bool(fStatus))."""
-    STATUS_SENSOR_DEF_MAP = {
-        "hdStatus": MLEnumSensor.SensorDef(
+    ENTITY_DEFS = {
+        "hdStatus": MLEnumSensor.ENTITY_DEF(
             "(de)humidifier_status",
             translation_key="mts300_hdstatus",
             entity_category=MLEnumSensor.EntityCategory.DIAGNOSTIC,
         ),
-        "hStatus": MLEnumSensor.SensorDef(
+        "hStatus": MLEnumSensor.ENTITY_DEF(
             "heating_status",
             translation_key="mts300_status",
             entity_category=MLEnumSensor.EntityCategory.DIAGNOSTIC,
         ),
-        "cStatus": MLEnumSensor.SensorDef(
+        "cStatus": MLEnumSensor.ENTITY_DEF(
             "cooling_status",
             translation_key="mts300_status",
             entity_category=MLEnumSensor.EntityCategory.DIAGNOSTIC,
         ),
-        "fStatus": MLEnumSensor.SensorDef("fan_speed", translation_key="mts300_status"),
-        "aStatus": MLEnumSensor.SensorDef(
+        "fStatus": MLEnumSensor.ENTITY_DEF(
+            "fan_speed",
+            translation_key="mts300_status",
+        ),
+        "aStatus": MLEnumSensor.ENTITY_DEF(
             "auxiliary_status",
             translation_key="mts300_status",
             entity_category=MLEnumSensor.EntityCategory.DIAGNOSTIC,
@@ -193,7 +196,7 @@ class Mts300Climate(MtsThermostatClimate):
         "number_fan_hold",
         "switch_fan_hold",
         "select_temp_association",
-    ) + tuple(f"sensor_{_key}" for _key in STATUS_SENSOR_DEF_MAP)
+    ) + tuple(f"sensor_{_key}" for _key in ENTITY_DEFS)
 
     def __init__(self, manager: "Device", channel=0, /):
         super().__init__(manager, channel)
@@ -202,7 +205,7 @@ class Mts300Climate(MtsThermostatClimate):
         self.target_temperature_high = None
         self.target_temperature_low = None
         self._mts_work = None
-        for _key, _def in Mts300Climate.STATUS_SENSOR_DEF_MAP.items():
+        for _key, _def in Mts300Climate.ENTITY_DEFS.items():
             setattr(
                 self,
                 f"sensor_{_key}",
@@ -365,7 +368,7 @@ class Mts300Climate(MtsThermostatClimate):
             more = payload["more"]
             self.sensor_current_humidity.update_device_value(more["humi"])
             self.current_humidity = self.sensor_current_humidity.native_value
-            for _key in Mts300Climate.STATUS_SENSOR_DEF_MAP:
+            for _key in Mts300Climate.ENTITY_DEFS:
                 getattr(self, f"sensor_{_key}").update_native_value(more[_key])
 
             fan = payload["fan"]

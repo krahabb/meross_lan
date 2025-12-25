@@ -65,8 +65,8 @@ class EntityTest(EntityComponentTest):
             # ElectricityXSensor,
             *(
                 [
-                    _sensor_def[0]
-                    for _sensor_def in ElectricityXSensor.SENSOR_DEFS.values()
+                    _entity_def.type
+                    for _entity_def in ElectricityXSensor.ENTITY_DEFS.values()
                 ]
             ),
         ]

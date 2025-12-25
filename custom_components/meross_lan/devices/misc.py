@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from ..merossclient.protocol import types as mt
     from ..merossclient.protocol.types import sensor as mt_s
 
+
 class SensorLatestNamespaceHandler(NamespaceHandler):
     """
     Specialized handler for Appliance.Control.Sensor.Latest actually carried in thermostats
@@ -31,17 +32,12 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
 
     VALUE_KEY_EXCLUDED = (mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
 
-    VALUE_KEY_ENTITY_DEF_DEFAULT = MLNumericSensor.SensorDef(MLNumericSensor)
-    VALUE_KEY_ENTITY_DEF_MAP = {
-        mc.KEY_HUMI: MLNumericSensor.SensorDef(
-            MLHumiditySensor
-        ),  # confirmed in MTS200 trace (2024/06)
-        mc.KEY_TEMP: MLNumericSensor.SensorDef(
-            MLTemperatureSensor, device_scale=100
+    ENTITY_DEFS = {
+        mc.KEY_HUMI: MLHumiditySensor.ENTITY_DEF(),  # confirmed in MTS200 trace (2024/06)
+        mc.KEY_TEMP: MLTemperatureSensor.ENTITY_DEF(
+            device_scale=100
         ),  # just guessed (2024/04)
-        mc.KEY_LIGHT: MLNumericSensor.SensorDef(
-            MLLightSensor
-        ),  # just guessed (2024/09)
+        mc.KEY_LIGHT: MLLightSensor.ENTITY_DEF(),  # just guessed (2024/09)
     }
 
     def __init__(self, device: "Device"):
@@ -77,16 +73,19 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                     try:
                         entity: MLNumericSensor = entities[f"{channel}_sensor_{key}"]  # type: ignore
                     except KeyError:
-                        entity_def = SensorLatestNamespaceHandler.VALUE_KEY_ENTITY_DEF_MAP.get(
-                            key,
-                            SensorLatestNamespaceHandler.VALUE_KEY_ENTITY_DEF_DEFAULT,
-                        )
-                        entity = entity_def.type(
-                            self.device,
-                            channel,
-                            f"sensor_{key}",
-                            **entity_def.kwargs,
-                        )
+                        try:
+                            entity_def = SensorLatestNamespaceHandler.ENTITY_DEFS[key]
+                        except KeyError:
+                            entity = MLNumericSensor(
+                                self.device, channel, f"sensor_{key}"
+                            )
+                        else:
+                            entity = entity_def.type(
+                                self.device,
+                                channel,
+                                f"sensor_{key}",
+                                **entity_def.kwargs,
+                            )
                         self.polling_request_add_channel(channel)
 
                     entity.update_device_value(value)
@@ -108,13 +107,12 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
     Hub(s) have a somewhat different parser.
     """
 
-    VALUE_KEY_ENTITY_DEF_DEFAULT = MLNumericSensor.SensorDef()
     # many of these defs are guesses
-    VALUE_KEY_ENTITY_DEF_MAP = {
-        mc.KEY_HUMI: MLNumericSensor.SensorDef(MLHumiditySensor),
-        mc.KEY_LIGHT: MLNumericSensor.SensorDef(MLLightSensor),
-        mc.KEY_PRESENCE: MLNumericSensor.SensorDef(MLPresenceSensor),
-        mc.KEY_TEMP: MLNumericSensor.SensorDef(MLTemperatureSensor, device_scale=100),
+    ENTITY_DEFS = {
+        mc.KEY_HUMI: MLHumiditySensor.ENTITY_DEF(),
+        mc.KEY_LIGHT: MLLightSensor.ENTITY_DEF(),
+        mc.KEY_PRESENCE: MLPresenceSensor.ENTITY_DEF(),
+        mc.KEY_TEMP: MLTemperatureSensor.ENTITY_DEF(device_scale=100),
     }
 
     __slots__ = ()
@@ -129,7 +127,9 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
         if device.descriptor.type.startswith(mc.TYPE_MS600):
             MLPresenceSensor(device, 0, "sensor_presence")
             MLLightSensor(device, 0, "sensor_light")
-            self.polling_request_add_channel(0, {mc.KEY_DATA: [mc.KEY_PRESENCE, mc.KEY_LIGHT]})
+            self.polling_request_add_channel(
+                0, {mc.KEY_DATA: [mc.KEY_PRESENCE, mc.KEY_LIGHT]}
+            )
         else:
             self.polling_request_add_channel(0, {mc.KEY_DATA: []})
 
@@ -145,18 +145,19 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
                     entity: MLNumericSensor = entities[f"{channel}_sensor_{data_key}"]  # type: ignore
                 except KeyError:
                     # new channel or data_key
-                    entity_def = (
-                        SensorLatestXNamespaceHandler.VALUE_KEY_ENTITY_DEF_MAP.get(
-                            data_key,
-                            SensorLatestXNamespaceHandler.VALUE_KEY_ENTITY_DEF_DEFAULT,
+                    try:
+                        entity_def = SensorLatestXNamespaceHandler.ENTITY_DEFS[data_key]
+                    except KeyError:
+                        entity = MLNumericSensor(
+                            self.device, channel, f"sensor_{data_key}"
                         )
-                    )
-                    entity = entity_def.type(
-                        self.device,
-                        channel,
-                        f"sensor_{data_key}",
-                        **entity_def.kwargs,
-                    )
+                    else:
+                        entity = entity_def.type(
+                            self.device,
+                            channel,
+                            f"sensor_{data_key}",
+                            **entity_def.kwargs,
+                        )
 
                     polling_request_channels = self.polling_request_channels
                     for channel_payload in polling_request_channels:
@@ -164,10 +165,13 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
                             channel_payload[mc.KEY_DATA].append(data_key)
                             break
                     else:
-                        polling_request_channels.append({key_channel: channel, mc.KEY_DATA: [data_key]})
+                        polling_request_channels.append(
+                            {key_channel: channel, mc.KEY_DATA: [data_key]}
+                        )
                         self.polling_response_size = (
                             self.polling_response_base_size
-                            + len(polling_request_channels) * self.polling_response_item_size
+                            + len(polling_request_channels)
+                            * self.polling_response_item_size
                         )
                 entity._parse(data_value[0])
 

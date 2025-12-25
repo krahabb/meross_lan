@@ -20,7 +20,7 @@ class PresenceConfigBase(me.MLEntity if typing.TYPE_CHECKING else object):
 
     ns = mn.Appliance_Control_Presence_Config
 
-    key_value_root: str
+    key_value_root: str  # TODO: migrate to MLEntity key_group
 
     # HA core entity attributes:
     entity_category = me.MLEntity.EntityCategory.CONFIG

@@ -24,13 +24,11 @@ if TYPE_CHECKING:
     from ..merossclient.protocol import types as mt
     from ..sensor import MLNumericSensor
 
-    DIFFUSER_SENSOR_CLASS_MAP: Final
+    DIFFUSER_SENSOR_ENTITY_DEFS: Final
 
-DIFFUSER_SENSOR_CLASS_MAP = {
-    mc.KEY_HUMIDITY: MLHumiditySensor.SensorDef(MLHumiditySensor),
-    mc.KEY_TEMPERATURE: MLTemperatureSensor.SensorDef(
-        MLTemperatureSensor, device_scale=10
-    ),
+DIFFUSER_SENSOR_ENTITY_DEFS = {
+    mc.KEY_HUMIDITY: MLHumiditySensor.ENTITY_DEF(None),
+    mc.KEY_TEMPERATURE: MLTemperatureSensor.ENTITY_DEF(device_scale=10),
 }
 
 
@@ -71,12 +69,12 @@ def digest_init_diffuser(device: "Device", digest: dict) -> "DigestInitReturnTyp
             }
             """
             entities = device.entities
-            for key in DIFFUSER_SENSOR_CLASS_MAP:
+            for key in DIFFUSER_SENSOR_ENTITY_DEFS:
                 if key in payload:
                     try:
                         entity: "MLNumericSensor" = entities[key]  # type: ignore
                     except KeyError:
-                        entity_def = DIFFUSER_SENSOR_CLASS_MAP[key]
+                        entity_def = DIFFUSER_SENSOR_ENTITY_DEFS[key]
                         entity = entity_def.type(device, None, key, **entity_def.kwargs)
                     entity.update_device_value(payload[key][mc.KEY_VALUE])
 

@@ -30,6 +30,7 @@ if TYPE_CHECKING:
         Final,
         Mapping,
         NotRequired,
+        Self,
         TypedDict,
         Unpack,
     )
@@ -123,6 +124,34 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         name: str | None
         suggested_object_id: str | None
         unique_id: str
+
+    class EntityDef[_T: MLEntity]:
+        """Descriptor class used when populating maps used to dynamically instantiate (sensor)
+        entities based on their appearance in a payload key."""
+
+        type: "Final[type[_T]]"
+        entitykey: str | None
+        kwargs: "Final[Any]"
+
+        __slots__ = ("type", "entitykey", "kwargs")
+
+        def __init__(
+            self,
+            type: "type[_T]",
+            entitykey: str | None,
+            **kwargs: "Unpack[MLEntity.Args]",
+        ):
+            self.type = type
+            self.entitykey = entitykey
+            self.kwargs = kwargs
+
+    @classmethod
+    def ENTITY_DEF(
+        cls,
+        entitykey: str | None = None,
+        **kwargs: "Unpack[Args]",
+    ) -> "MLEntity.EntityDef[Self]":
+        return MLEntity.EntityDef["Self"](cls, entitykey, **kwargs)
 
     EntityCategory = entity.EntityCategory
 
@@ -229,7 +258,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         elif entitykey:
             name = entitykey.replace("_", " ").capitalize()
         elif self.device_class:
-            name = str(self.device_class).capitalize()
+            name = self.device_class.capitalize()
         else:
             name = None
         # when channel == 0 it might be the only one so skip it
@@ -352,7 +381,9 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
                 self.async_request_value = self._async_request_value_empty
             case _:
                 # TODO: setup an auto detection for PayloadType.UNKNOWN
-                raise ValueError(f"unsupported payload_set type: {self.ns.payload_set})")
+                raise ValueError(
+                    f"unsupported payload_set type: {self.ns.payload_set})"
+                )
 
         return await self.async_request_value(device_value)
 

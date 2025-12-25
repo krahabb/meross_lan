@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from homeassistant.components import sensor
@@ -34,23 +33,15 @@ class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
             native_value: NotRequired[sensor.StateType]
             device_class: NotRequired[Never]
 
+        @classmethod
+        def ENTITY_DEF(
+            cls,
+            entitykey: str | None = None,
+            **kwargs: "Unpack[MLEnumSensor.Args]",
+        ) -> "MLEnumSensor.EntityDef[MLEnumSensor]":  # type: ignore[override]
+            pass
+
         _attr_device_class: Final[sensor.SensorDeviceClass]
-
-    @dataclass(slots=True)
-    class SensorDef:
-        """Descriptor class used when populating maps used to dynamically instantiate (sensor)
-        entities based on their appearance in a payload key."""
-
-        type: "Final[type[MLEnumSensor]]"
-        entitykey: str | None
-        kwargs: "Final[MLEnumSensor.Args]"
-
-        def __init__(
-            self, entitykey: str | None = None, **kwargs: "Unpack[MLEnumSensor.Args]"
-        ):
-            self.type = MLEnumSensor
-            self.entitykey = entitykey
-            self.kwargs = kwargs
 
     PLATFORM = sensor.DOMAIN
 
@@ -91,29 +82,18 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
             state_class: NotRequired[sensor.SensorStateClass]
             suggested_display_precision: NotRequired[int]
 
+        @classmethod
+        def ENTITY_DEF(
+            cls,
+            entitykey: str | None = None,
+            **kwargs: "Unpack[MLNumericSensor.Args]",
+        ) -> "MLNumericSensor.EntityDef[MLNumericSensor]":  # type: ignore[override]
+            pass
+
         # HA core entity attributes:
         _attr_device_class: ClassVar[sensor.SensorDeviceClass | None]
         _attr_suggested_display_precision: ClassVar[int | None]
         suggested_display_precision: int | None
-
-    @dataclass(slots=True)
-    class SensorDef:
-        """Descriptor class used when populating maps used to dynamically instantiate (sensor)
-        entities based on their appearance in a payload key."""
-
-        type: "Final[type[MLNumericSensor]]"
-        entitykey: str | None
-        kwargs: "Final[MLNumericSensor.Args]"
-
-        def __init__(
-            self,
-            type: "type[MLNumericSensor] | None" = None,
-            entitykey: str | None = None,
-            **kwargs: "Unpack[MLNumericSensor.Args]",
-        ):
-            self.type = type or MLNumericSensor
-            self.entitykey = entitykey
-            self.kwargs = kwargs
 
     PLATFORM = sensor.DOMAIN
     DeviceClass = sensor.SensorDeviceClass
@@ -191,14 +171,13 @@ class MLHumiditySensor(MLNumericSensor):
         self,
         manager: "EntityManager",
         channel: object | None,
-        entitykey: str = "humidity",
+        entitykey: str | None = None,
         **kwargs: "Unpack[MLNumericSensor.Args]",
     ):
-        kwargs.setdefault("name", entitykey.capitalize())
         super().__init__(
             manager,
             channel,
-            entitykey,
+            entitykey or mc.KEY_HUMIDITY,
             **kwargs,
         )
 
@@ -217,14 +196,13 @@ class MLTemperatureSensor(MLNumericSensor):
         self,
         manager: "EntityManager",
         channel: object | None,
-        entitykey: str = "temperature",
+        entitykey: str | None = None,
         **kwargs: "Unpack[MLNumericSensor.Args]",
     ):
-        kwargs.setdefault("name", entitykey.capitalize())
         super().__init__(
             manager,
             channel,
-            entitykey,
+            entitykey or mc.KEY_TEMPERATURE,
             **kwargs,
         )
 
@@ -241,14 +219,13 @@ class MLLightSensor(MLNumericSensor):
         self,
         manager: "EntityManager",
         channel: object | None,
-        entitykey: str = "light",
+        entitykey: str | None = None,
         **kwargs: "Unpack[MLNumericSensor.Args]",
     ):
-        kwargs.setdefault("name", entitykey.capitalize())
         super().__init__(
             manager,
             channel,
-            entitykey,
+            entitykey or mc.KEY_LIGHT,
             **kwargs,
         )
 

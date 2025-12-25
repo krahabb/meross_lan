@@ -39,20 +39,9 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
     if TYPE_CHECKING:
         manager: Device
 
-        SENSOR_DEFS: ClassVar[
-            dict[
-                str,
-                tuple[
-                    type[MLNumericSensor],
-                    bool,
-                    MLNumericSensor.DeviceClass,
-                    MLNumericSensor.StateClass,
-                    int,
-                    int,
-                ],
-            ]
-        ]
-
+        # Setting entitykey = None in EntityDef will mark the entity as 'not required'
+        # (see __init__)
+        ENTITY_DEFS: ClassVar[dict[str, MLNumericSensor.EntityDef["MLNumericSensor"]]]
         # HA core entity attributes:
         native_value: int
 
@@ -60,31 +49,27 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
         sensor_power: MLNumericSensor
 
     ENTITY_KEY = "energy_estimate"
-    SENSOR_DEFS = {
-        # key: (not-optional, DeviceClass, StateClass, suggested_display_precision, device_scale)
-        mc.KEY_CURRENT: (
-            MLNumericSensor,
-            True,
-            MLNumericSensor.DeviceClass.CURRENT,
-            MLNumericSensor.StateClass.MEASUREMENT,
-            1,
-            1000,
+    ENTITY_DEFS = {
+        mc.KEY_CURRENT: MLNumericSensor.ENTITY_DEF(
+            mc.KEY_CURRENT,
+            device_class=MLNumericSensor.DeviceClass.CURRENT,
+            state_class=MLNumericSensor.StateClass.MEASUREMENT,
+            suggested_display_precision=1,
+            device_scale=1000,
         ),
-        mc.KEY_POWER: (
-            MLNumericSensor,
-            True,
-            MLNumericSensor.DeviceClass.POWER,
-            MLNumericSensor.StateClass.MEASUREMENT,
-            1,
-            1000,
+        mc.KEY_POWER: MLNumericSensor.ENTITY_DEF(
+            mc.KEY_POWER,
+            device_class=MLNumericSensor.DeviceClass.POWER,
+            state_class=MLNumericSensor.StateClass.MEASUREMENT,
+            suggested_display_precision=1,
+            device_scale=1000,
         ),
-        mc.KEY_VOLTAGE: (
-            MLNumericSensor,
-            True,
-            MLNumericSensor.DeviceClass.VOLTAGE,
-            MLNumericSensor.StateClass.MEASUREMENT,
-            1,
-            10,
+        mc.KEY_VOLTAGE: MLNumericSensor.ENTITY_DEF(
+            mc.KEY_VOLTAGE,
+            device_class=MLNumericSensor.DeviceClass.VOLTAGE,
+            state_class=MLNumericSensor.StateClass.MEASUREMENT,
+            suggested_display_precision=1,
+            device_scale=10,
         ),
     }
 
@@ -107,23 +92,15 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
         # depending on init order we might not have this ready now...
         self.sensor_consumptionx = manager.entities.get(ConsumptionXSensor.ENTITY_KEY)  # type: ignore
         # here entitykey is the 'legacy' EnergyEstimateSensor one to mantain compatibility
-        super().__init__(
-            manager,
-            channel,
-            ElectricitySensor.ENTITY_KEY,
-            device_value=0,
-        )
+        super().__init__(manager, channel, ElectricitySensor.ENTITY_KEY, device_value=0)
         self._schedule_reset(dt_util.now())
-        for key, entity_def in self.SENSOR_DEFS.items():
-            if entity_def[1]:
-                entity_def[0](
+        for key, entity_def in self.ENTITY_DEFS.items():
+            if entity_def.entitykey:
+                entity_def.type(
                     manager,
                     channel,
                     key,
-                    device_class=entity_def[2],
-                    state_class=entity_def[3],
-                    suggested_display_precision=entity_def[4],
-                    device_scale=entity_def[5],
+                    **entity_def.kwargs,
                 )
         self.sensor_power = manager.entities[
             mc.KEY_POWER if channel is None else f"{channel}_{mc.KEY_POWER}"
@@ -178,23 +155,20 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
 
         last_power = self.sensor_power.native_value
 
-        for key in self.SENSOR_DEFS:
+        for key in self.ENTITY_DEFS:
             try:
                 entities[
                     key if self.channel is None else f"{self.channel}_{key}"
                 ].update_device_value(payload[key])
             except KeyError:
                 if key in payload:
-                    entity_def = self.SENSOR_DEFS[key]
-                    entity_def[0](
+                    entity_def = self.ENTITY_DEFS[key]
+                    entity_def.type(
                         self.manager,
                         self.channel,
                         key,
-                        device_class=entity_def[2],
-                        state_class=entity_def[3],
-                        suggested_display_precision=entity_def[4],
-                        device_scale=entity_def[5],
                         device_value=payload[key],
+                        **entity_def.kwargs,
                     )
 
         power = self.sensor_power.native_value
@@ -299,30 +273,27 @@ class ElectricityXSensor(ElectricitySensor):
                     pass
                 return True
 
-    SENSOR_DEFS = ElectricitySensor.SENSOR_DEFS | {
-        mc.KEY_VOLTAGE: (
-            MLNumericSensor,
-            True,
-            MLNumericSensor.DeviceClass.VOLTAGE,
-            MLNumericSensor.StateClass.MEASUREMENT,
-            1,
-            1000,
+    ENTITY_DEFS = ElectricitySensor.ENTITY_DEFS | {
+        mc.KEY_VOLTAGE: MLNumericSensor.ENTITY_DEF(
+            mc.KEY_VOLTAGE,
+            device_class=MLNumericSensor.DeviceClass.VOLTAGE,
+            state_class=MLNumericSensor.StateClass.MEASUREMENT,
+            suggested_display_precision=1,
+            device_scale=1000,
         ),
-        mc.KEY_FACTOR: (
-            MLNumericSensor,
-            False,
-            MLNumericSensor.DeviceClass.POWER_FACTOR,
-            MLNumericSensor.StateClass.MEASUREMENT,
-            2,
-            1,
+        mc.KEY_FACTOR: MLNumericSensor.ENTITY_DEF(
+            None,
+            device_class=MLNumericSensor.DeviceClass.POWER_FACTOR,
+            state_class=MLNumericSensor.StateClass.MEASUREMENT,
+            suggested_display_precision=2,
+            device_scale=1,
         ),
-        mc.KEY_MCONSUME: (
-            MConsumeSensor,
-            False,
-            MLNumericSensor.DeviceClass.ENERGY,
-            MLNumericSensor.StateClass.TOTAL,
-            0,
-            1,
+        mc.KEY_MCONSUME: MConsumeSensor.ENTITY_DEF(
+            None,
+            device_class=MLNumericSensor.DeviceClass.ENERGY,
+            state_class=MLNumericSensor.StateClass.TOTAL,
+            suggested_display_precision=0,
+            device_scale=1,
         ),
     }
 
