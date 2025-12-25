@@ -42,7 +42,6 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
 
     class TrackSensorSelect(me.MEAlwaysAvailableMixin, MLSelect):
         """
-        TODO: move to climate.py ?
         A select entity used to select among all temperature sensors in HA
         an entity to track so that the thermostat regulates T against
         that other sensor. The idea is to track changes in

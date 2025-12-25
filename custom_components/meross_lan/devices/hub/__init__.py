@@ -134,7 +134,7 @@ class HubSubIdChannelMixin(MLEntity if TYPE_CHECKING else object):
         )
 
 
-class HubSubIdDeviceCfgMixin(MLEntity if TYPE_CHECKING else object):
+class HubSubIdDeviceCfgMixin(me.MEGroupListChannelMixin):
     """
     Mixin implementation for protocol method 'SET' on 'Appliance.Config.DeviceCfg'.
     This namespace payload has this structure (example from ms130):

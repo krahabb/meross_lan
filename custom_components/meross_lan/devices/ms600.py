@@ -13,32 +13,13 @@ if typing.TYPE_CHECKING:
     from ..helpers.device import Device
 
 
-class PresenceConfigBase(me.MLEntity if typing.TYPE_CHECKING else object):
+class PresenceConfigBase(me.MEGroupListChannelMixin):
     """Mixin style base class for all of the entities managed in Appliance.Control.Presence.Config"""
-
-    manager: "Device"
 
     ns = mn.Appliance_Control_Presence_Config
 
-    key_value_root: str  # TODO: migrate to MLEntity key_group
-
     # HA core entity attributes:
     entity_category = me.MLEntity.EntityCategory.CONFIG
-
-    async def async_request_value(self, device_value):
-        ns = self.ns
-        return await self.manager.async_request_ack(
-            ns.name,
-            mc.METHOD_SET,
-            {
-                ns.key: [
-                    {
-                        ns.key_channel: self.channel,
-                        self.key_value_root: {self.key_value: device_value},
-                    }
-                ]
-            },
-        )
 
 
 class PresenceConfigNumberBase(PresenceConfigBase, MLConfigNumber):
@@ -51,7 +32,7 @@ class PresenceConfigSelectBase(PresenceConfigBase, MLConfigSelect):
 
 class PresenceConfigModeBase(PresenceConfigSelectBase):
 
-    key_value_root = mc.KEY_MODE
+    key_group = mc.KEY_MODE
 
     # TODO: configure real labels
     # This map would actually be shared between workMode and testMode though
@@ -70,7 +51,7 @@ class PresenceConfigModeBase(PresenceConfigSelectBase):
 
 class PresenceConfigNoBodyTime(PresenceConfigNumberBase):
 
-    key_value_root = mc.KEY_NOBODYTIME
+    key_group = mc.KEY_NOBODYTIME
     key_value = mc.KEY_TIME
 
     # HA core entity attributes:
@@ -91,7 +72,7 @@ class PresenceConfigNoBodyTime(PresenceConfigNumberBase):
 
 class PresenceConfigDistance(PresenceConfigNumberBase):
 
-    key_value_root = mc.KEY_DISTANCE
+    key_group = mc.KEY_DISTANCE
     key_value = mc.KEY_VALUE
 
     _attr_device_scale = 1000
@@ -115,7 +96,7 @@ class PresenceConfigDistance(PresenceConfigNumberBase):
 
 class PresenceConfigSensitivity(PresenceConfigSelectBase):
 
-    key_value_root = mc.KEY_SENSITIVITY
+    key_group = mc.KEY_SENSITIVITY
     key_value = mc.KEY_LEVEL
 
     # TODO: configure real labels
@@ -136,7 +117,7 @@ class PresenceConfigSensitivity(PresenceConfigSelectBase):
 
 
 class PresenceConfigMthX(PresenceConfigNumberBase):
-    key_value_root = mc.KEY_MTHX
+    key_group = mc.KEY_MTHX
     # HA core entity attributes:
     native_max_value = 1000
     native_min_value = 1
@@ -189,7 +170,7 @@ class PresenceConfigMode(PresenceConfigModeBase):
         }
         """
         for entity in self._entities:
-            entity.update_device_value(payload[entity.key_value_root][entity.key_value])
+            entity.update_device_value(payload[entity.key_group][entity.key_value])
 
 
 def namespace_init_presence_config(device: "Device", /):

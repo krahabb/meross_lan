@@ -96,9 +96,8 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         # These also come handy when generalizing parsing of received payloads
         # for simple enough entities (like sensors, numbers or switches)
         # Starting around 2025 some namespaces seems to enrich their payloads structure
-        # by nesting the actual 'key_value' inside 'group_key(s)' (see Appliance.Config.DeviceCfg)
+        # by nesting the actual 'key_value' inside 'key_group' (see Appliance.Config.DeviceCfg)
         ns: mn.Namespace  # no default
-        key_group: str  # no default
         key_value: str  # defaulted to 'value'
 
         # used to speed-up checks if entity is enabled and loaded
@@ -418,12 +417,8 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
     @override  # NamespaceParser
     def _parse(self, payload: "Mapping[str, Any]", /):
         """Default parsing for entities. Set the proper
-        key_group/key_value in class/instance definition to make it work."""
-        try:
-            # statistically more common case
-            self.update_device_value(payload[self.key_value])
-        except KeyError:
-            self.update_device_value(payload[self.key_group][self.key_value])
+        key_value in class/instance definition to make it work."""
+        self.update_device_value(payload[self.key_value])
 
 
 class MEGroupListChannelMixin(MLEntity if TYPE_CHECKING else object):
@@ -432,7 +427,9 @@ class MEGroupListChannelMixin(MLEntity if TYPE_CHECKING else object):
     list and the actual entity value is embedded in a 'group' key (see Appliance.Config.DeviceCfg).
     """
 
-    manager: "BaseDevice"
+    if TYPE_CHECKING:
+        manager: BaseDevice
+        key_group: str
 
     # interface: MLEntity
     async def async_request_value(self, device_value, /):
@@ -450,6 +447,10 @@ class MEGroupListChannelMixin(MLEntity if TYPE_CHECKING else object):
                 ]
             },
         )
+
+    @override  # NamespaceParser
+    def _parse(self, payload: "Mapping[str, Any]", /):
+        self.update_device_value(payload[self.key_group][self.key_value])
 
 
 class MEAlwaysAvailableMixin(MLEntity if TYPE_CHECKING else object):
