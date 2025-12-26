@@ -23,11 +23,11 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, switch.DOMAIN)
 
 
-class MLSwitchBase(me.MLBinaryEntity, switch.SwitchEntity):
+class MLSwitch(me.MLBinaryEntity, switch.SwitchEntity):
     """
     Base (almost abstract) entity for switches. This has 2 main implementations:
-    - MLSwitch: switch representing some device feature (an actual output or a config option)
-    - MLConfigSwitch: switch used to configure a meross_lan feature/option
+    - MLDeviceSwitch: switch representing some device feature (an actual output or a config option)
+    - MLEmulatedSwitch: switch used to configure a meross_lan feature/option
     """
 
     if TYPE_CHECKING:
@@ -44,14 +44,14 @@ class MLSwitchBase(me.MLBinaryEntity, switch.SwitchEntity):
     _attr_device_class = switch.SwitchDeviceClass.SWITCH
 
 
-class MLEmulatedSwitch(me.MEPartialAvailableMixin, MLSwitchBase):
+class MLEmulatedSwitch(me.MEPartialAvailableMixin, MLSwitch):
     """
     Switch entity not related to any device feature but used to configure
     behaviors for meross_lan entities.
     """
 
     # HA core entity attributes:
-    entity_category = MLSwitchBase.EntityCategory.CONFIG
+    entity_category = MLSwitch.EntityCategory.CONFIG
 
     def __init__(
         self,
@@ -78,7 +78,7 @@ class MLEmulatedSwitch(me.MEPartialAvailableMixin, MLSwitchBase):
         self.update_onoff(False)
 
 
-class MLSwitch(MLSwitchBase):
+class MLDeviceSwitch(MLSwitch):
     """
     Generic HA switch: could either be a physical outlet or another binary setting
     of the device (see various config switches)
@@ -100,12 +100,12 @@ class MLSwitch(MLSwitchBase):
             self.update_onoff(False)
 
 
-class PhysicalLockSwitch(MLSwitch):
+class PhysicalLockSwitch(MLDeviceSwitch):
 
     ns = mn.Appliance_Control_PhysicalLock
 
     # HA core entity attributes:
-    entity_category = MLSwitch.EntityCategory.CONFIG
+    entity_category = MLDeviceSwitch.EntityCategory.CONFIG
 
     def __init__(self, manager: "Device", /):
         # right now we expect only 1 entity on channel == 0 (whatever)
@@ -113,7 +113,7 @@ class PhysicalLockSwitch(MLSwitch):
         manager.register_parser_entity(self)
 
 
-class MLToggle(EntityNamespaceMixin, MLSwitch):
+class MLToggle(EntityNamespaceMixin, MLDeviceSwitch):
 
     # 2024-03-13: passing entitykey="0" instead of channel in order
     # to mantain unique_id compatibility with installations but
@@ -124,7 +124,7 @@ class MLToggle(EntityNamespaceMixin, MLSwitch):
     ns = mn.Appliance_Control_Toggle
 
     # HA core entity attributes:
-    _attr_device_class = MLSwitch.DeviceClass.OUTLET
+    _attr_device_class = MLDeviceSwitch.DeviceClass.OUTLET
 
 
 def digest_init_toggle(device: "Device", digest: dict, /) -> "DigestInitReturnType":
@@ -133,15 +133,15 @@ def digest_init_toggle(device: "Device", digest: dict, /) -> "DigestInitReturnTy
     return toggle._parse, (toggle.handler,)
 
 
-class MLToggleX(MLSwitch):
+class MLToggleX(MLDeviceSwitch):
 
     ns = mn.Appliance_Control_ToggleX
 
     # HA core entity attributes:
-    _attr_device_class = MLSwitch.DeviceClass.OUTLET
+    _attr_device_class = MLDeviceSwitch.DeviceClass.OUTLET
 
     def __init__(self, manager: "Device", channel, /):
-        MLSwitch.__init__(self, manager, channel, None)
+        MLDeviceSwitch.__init__(self, manager, channel, None)
         manager.register_parser_entity(self)
 
 

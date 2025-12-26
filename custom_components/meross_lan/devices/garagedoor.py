@@ -13,8 +13,8 @@ from ..const import (
 from ..cover import MLCover
 from ..helpers import clamp, entity as me, versiontuple
 from ..helpers.namespaces import NamespaceHandler, mc, mn
-from ..number import MLConfigNumber, MLEmulatedNumber, MLNumber
-from ..switch import MLSwitch
+from ..number import MLConfigNumber, MLEmulatedNumber
+from ..switch import MLDeviceSwitch
 
 if TYPE_CHECKING:
     from typing import Final, Unpack
@@ -63,7 +63,7 @@ class MLGarageTimeoutBinarySensor(me.MEPartialAvailableMixin, MLBinarySensor):
         self.flush_state()
 
 
-class MLGarageMultipleConfigSwitch(MLSwitch):
+class MLGarageMultipleConfigSwitch(MLDeviceSwitch):
     """
     switch entity to manage MSG configuration (buzzer, enable)
     'x channel' through mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
@@ -74,7 +74,7 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
     ns = mn.Appliance_GarageDoor_MultipleConfig
 
     # HA core entity attributes:
-    entity_category = MLSwitch.EntityCategory.CONFIG
+    entity_category = MLDeviceSwitch.EntityCategory.CONFIG
 
     def __init__(
         self,
@@ -230,8 +230,8 @@ class MLGarage(MLCover):
 
         _state_request: "mt.MerossRequestType"
         binary_sensor_timeout: MLGarageTimeoutBinarySensor
-        number_close_timeout: MLNumber | None
-        number_open_timeout: MLNumber | None
+        number_close_timeout: MLConfigNumber | MLEmulatedNumber | None
+        number_open_timeout: MLConfigNumber | MLEmulatedNumber | None
 
     ns = mn.Appliance_GarageDoor_State
 
@@ -586,8 +586,8 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
     if TYPE_CHECKING:
         number_signalDuration: MLGarageConfigNumber
         switch_buzzerEnable: MLGarageConfigSwitch
-        number_doorOpenDuration: MLNumber
-        number_doorCloseDuration: MLNumber
+        number_doorOpenDuration: MLConfigNumber | MLEmulatedNumber | None
+        number_doorCloseDuration: MLConfigNumber | MLEmulatedNumber | None
 
     __slots__ = (
         "number_signalDuration",
@@ -720,7 +720,7 @@ class GarageDoorStateNamespaceHandler(NamespaceHandler):
 
 def digest_init_garagedoor(device: "Device", digest: list, /) -> "DigestInitReturnType":
     device.platforms.setdefault(MLConfigNumber.PLATFORM, None)
-    device.platforms.setdefault(MLSwitch.PLATFORM, None)
+    device.platforms.setdefault(MLDeviceSwitch.PLATFORM, None)
 
     handler = GarageDoorStateNamespaceHandler(device)
 

@@ -1,10 +1,6 @@
 """
 Base-Common behaviour for all Meross-LAN entities
-
-actual HA custom platform entities will be derived like this:
-MLSwitch(MerossToggle, SwitchEntity)
-
-we also try to 'commonize' HA core symbols import in order to better manage
+We also try to 'commonize' HA core symbols import in order to better manage
 versioning
 """
 

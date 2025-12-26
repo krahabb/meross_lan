@@ -7,7 +7,7 @@ from ...merossclient.protocol.namespaces import thermostat as mn_t
 from ...number import MLConfigNumber
 from ...select import MLConfigSelect
 from ...sensor import MLEnumSensor, MLTemperatureSensor
-from ...switch import MLSwitch
+from ...switch import MLDeviceSwitch
 
 if TYPE_CHECKING:
     from typing import Any, Callable, ClassVar, Final, Unpack
@@ -37,12 +37,12 @@ class MtsWarningSensor(MLEnumSensor):
         )
 
 
-class MtsConfigSwitch(MLSwitch):
+class MtsConfigSwitch(MLDeviceSwitch):
 
     number_temperature: "MtsCommonTemperatureExtNumber"
 
     # HA core entity attributes:
-    entity_category = MLSwitch.EntityCategory.CONFIG
+    entity_category = MLDeviceSwitch.EntityCategory.CONFIG
 
     __slot__ = ("number_temperature",)
 
@@ -236,14 +236,14 @@ class MtsWindowOpened(MLBinarySensor):
         climate.manager.register_parser_entity(self)
 
 
-class MtsExternalSensorSwitch(MLSwitch):
+class MtsExternalSensorSwitch(MLDeviceSwitch):
     # External sensor mode: use internal(0) vs external(1) sensor as temperature loopback.
 
     ns = mn_t.Appliance_Control_Thermostat_Sensor
     key_value = mc.KEY_MODE
 
     # HA core entity attributes:
-    entity_category = MLSwitch.EntityCategory.CONFIG
+    entity_category = MLDeviceSwitch.EntityCategory.CONFIG
 
     def __init__(self, climate: "MtsThermostatClimate", /):
         super().__init__(climate.manager, climate.channel, "external sensor mode")

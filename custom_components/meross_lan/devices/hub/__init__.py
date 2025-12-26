@@ -25,7 +25,7 @@ from ...sensor import (
     MLNumericSensor,
     MLTemperatureSensor,
 )
-from ...switch import MLSwitch
+from ...switch import MLDeviceSwitch
 
 if TYPE_CHECKING:
     from typing import Any, Callable, Collection, Final, NotRequired, TypedDict
@@ -95,13 +95,13 @@ class HubSensorAdjustNumber(MLConfigNumber):
         )
 
 
-class HubToggleX(MLSwitch):
+class HubToggleX(MLDeviceSwitch):
     """Generic switch to map Appliance.Hub.ToggleX namespace."""
 
     ns = mn_h.Appliance_Hub_ToggleX
 
     # HA core entity attributes:
-    entity_category = MLSwitch.EntityCategory.CONFIG
+    entity_category = MLDeviceSwitch.EntityCategory.CONFIG
 
 
 class HubSubIdChannelMixin(MLEntity if TYPE_CHECKING else object):
@@ -308,7 +308,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
         MtsSchedule.PLATFORM: None,
         MLConfigNumber.PLATFORM: None,
         MLNumericSensor.PLATFORM: None,
-        MLSwitch.PLATFORM: None,
+        MLDeviceSwitch.PLATFORM: None,
         MtsClimate.PLATFORM: None,
         MtsClimate.TrackSensorSelect.PLATFORM: None,
     }
@@ -576,7 +576,7 @@ class SubDevice(NamespaceParser, BaseDevice):
         )
         # this is a generic toggle we'll setup in case the subdevice
         # 'advertises' it and no specialized implementation is in place
-        self.switch_togglex: MLSwitch | None = None
+        self.switch_togglex: MLDeviceSwitch | None = None
         hub.setup_simple_handlers(
             mn_h.Appliance_Hub_Battery,
             mn_h.Appliance_Hub_ToggleX,
@@ -1356,7 +1356,7 @@ class MST100SubDevice(SubDevice):
         native_max_value = 86400  # 1 day max duration (no real info just guessing)
         native_min_value = 1
 
-    class OnOffSwitch(HubSubIdChannelMixin, MLSwitch):
+    class OnOffSwitch(HubSubIdChannelMixin, MLDeviceSwitch):
         """Switch to turn on/off watering."""
 
         ns = mn_h.Appliance_Control_Water

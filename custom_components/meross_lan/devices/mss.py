@@ -15,7 +15,7 @@ from ..helpers.namespaces import (
     mn,
 )
 from ..sensor import MLEnumSensor, MLNumericSensor
-from ..switch import MLSwitch
+from ..switch import MLDeviceSwitch
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final
@@ -630,7 +630,7 @@ class ConsumptionConfigNamespaceHandler(VoidNamespaceHandler):
         )
 
 
-class OverTempEnableSwitch(EntityNamespaceMixin, MLSwitch):
+class OverTempEnableSwitch(EntityNamespaceMixin, MLDeviceSwitch):
 
     ENTITY_KEY = "config_overtemp_enable"
 
@@ -638,7 +638,7 @@ class OverTempEnableSwitch(EntityNamespaceMixin, MLSwitch):
     key_value = mc.KEY_ENABLE
 
     # HA core entity attributes:
-    entity_category = MLSwitch.EntityCategory.CONFIG
+    entity_category = MLDeviceSwitch.EntityCategory.CONFIG
 
     __slots__ = ("sensor_overtemp_type",)
 
