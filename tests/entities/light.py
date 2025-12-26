@@ -9,7 +9,6 @@ from custom_components.meross_lan.light import (
     MLLight,
     MLLightBase,
     MLLightEffect,
-    MLLightMp3,
     native_to_rgb,
     rgb_to_native,
 )
@@ -31,7 +30,7 @@ class EntityTest(EntityComponentTest):
     }
     NAMESPACES_ENTITIES = {
         mn.Appliance_Control_Light_Effect.name: [MLLightEffect],
-        mn.Appliance_Control_Mp3.name: [MLLightMp3],
+        mn.Appliance_Control_Mp3.name: [MLLight],
         mn.Appliance_System_DNDMode.name: [MLDNDLightEntity],
     }
 
@@ -58,10 +57,6 @@ class EntityTest(EntityComponentTest):
                 assert entity.effect_list == mc.DIFFUSER_LIGHT_MODE_LIST, "effect_list"
             if mn.Appliance_Control_Light.name in ability:
                 assert isinstance(entity, MLLight)
-                # need to manually remove MLLight since actual is rather polymorphic
-                # and the general code in _async_test_entities cannot handle this case
-                if type(entity) is not MLLight:
-                    EntityComponentTest.expected_entity_types.remove(MLLight)
                 capacity = ability[mn.Appliance_Control_Light.name][mc.KEY_CAPACITY]
                 if capacity & mc.LIGHT_CAPACITY_RGB:
                     assert (
@@ -78,12 +73,15 @@ class EntityTest(EntityComponentTest):
                     assert type(entity) is MLLightEffect
                     assert LightEntityFeature.EFFECT in supported_features
                     assert entity.effect_list, "effect_list"
+                    # need to manually remove MLLight instance since it's also requested in digest
+                    EntityComponentTest.expected_entity_types.remove(MLLight)
                 if mn.Appliance_Control_Mp3.name in ability:
-                    assert type(entity) is MLLightMp3
                     assert LightEntityFeature.EFFECT in supported_features
                     assert (
                         entity.effect_list == mc.HP110A_LIGHT_EFFECT_LIST
                     ), "effect_list"
+                    # need to manually remove MLLight instance since it's also requested in digest
+                    EntityComponentTest.expected_entity_types.remove(MLLight)
 
     async def async_test_enabled_callback(
         self, entity: MLLight | MLDiffuserLight | MLDNDLightEntity

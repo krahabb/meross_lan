@@ -865,16 +865,6 @@ class MLLightEffect(MLLight):
             self._light_effect_handler.polling_period = mlc.PARAM_INFINITE_TIMEOUT
 
 
-class MLLightMp3(MLLight):
-    """
-    Specialized light entity for devices supporting Appliance.Control.Mp3
-    Actually this should be an HP110.
-    """
-
-    def __init__(self, manager: "Device", channel, /):
-        MLLight.__init__(self, manager, channel, mc.HP110A_LIGHT_EFFECT_LIST)
-
-
 class MLDNDLightEntity(EntityNamespaceMixin, me.MLBinaryEntity, light.LightEntity):
     """
     light entity representing the device DND feature usually implemented
@@ -911,7 +901,7 @@ def digest_init_light(device: "Device", digest: dict, /) -> "DigestInitReturnTyp
     if mn.Appliance_Control_Light_Effect.name in ability:
         MLLightEffect(device, digest[mc.KEY_CHANNEL])
     elif mn.Appliance_Control_Mp3.name in ability:
-        MLLightMp3(device, digest[mc.KEY_CHANNEL])
+        MLLight(device, digest[mc.KEY_CHANNEL], mc.HP110A_LIGHT_EFFECT_LIST)
     else:
         MLLight(device, digest[mc.KEY_CHANNEL])
     handler = device.namespace_handlers[mn.Appliance_Control_Light.name]
