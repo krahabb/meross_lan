@@ -203,16 +203,30 @@ class NamespaceHandler:
                 mc.METHOD_GET,
                 {ns.key: self.polling_request_channels},
             )
-        # TODO: articulate request building to cover defaults and unsupported types
-        elif _payload_type is ns.payload_get:
+            return
+        if (_payload_type is ns.payload_get) and ns.can_query:
             # we'll reuse the default in the ns definition
             self.polling_request = ns.request_default
-        else:
-            self.polling_request = (
-                ns.name,
-                mc.METHOD_GET,
-                {ns.key: _payload_type.value if _payload_type else {}},
-            )
+            return
+        match _payload_type:
+            case mn.PayloadType.PUSH | mn.PayloadType.PUSH_QUERY:
+                self.polling_request = (
+                    ns.name,
+                    mc.METHOD_PUSH,
+                    mn.PayloadType.PUSH.value
+                )
+            case mn.PayloadType.EMPTY:
+                self.polling_request = (
+                    ns.name,
+                    mc.METHOD_GET,
+                    mn.PayloadType.EMPTY.value
+                )
+            case _:
+                self.polling_request = (
+                    ns.name,
+                    mc.METHOD_GET,
+                    {ns.key: _payload_type.value if _payload_type else {}},
+                )
 
     def polling_request_add_channel(
         self, channel, extra: "mt.MerossPayloadType" = {}, /
