@@ -69,13 +69,7 @@ class MLNumber(me.MLNumericEntity, number.NumberEntity):
 
 class MLConfigNumber(MLNumber):
     """
-    Base class for any configurable numeric parameter in the device. This works much-like
-    MLSwitch by refining the 'async_request_value' api in order to send the command.
-    Contrary to MLSwitch (which is abstract), this has a default implementation for
-    payloads sent in a list through me.MEListChannelMixin since this looks to be
-    widely adopted (thermostats and the likes) but some care needs to be taken for
-    some namespaces not supporting channels (i.e. Appliance.GarageDoor.Config) or
-    not understanding the list payload (likely all the RollerShutter stuff)
+    Base class for any configurable numeric parameter in the device.
     """
 
     DEBOUNCE_DELAY = 1

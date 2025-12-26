@@ -130,10 +130,7 @@ class MLToggle(EntityNamespaceMixin, MLSwitch):
 def digest_init_toggle(device: "Device", digest: dict, /) -> "DigestInitReturnType":
     """{"onoff": 0, "lmTime": 1645391086}"""
     toggle = MLToggle(device)
-
-    # MLToggle will install mn.Appliance_Control_Toggle handler
-    handler = device.namespace_handlers[mn.Appliance_Control_Toggle.name]
-    return toggle._parse, (handler,)
+    return toggle._parse, (toggle.handler,)
 
 
 class MLToggleX(MLSwitch):
@@ -144,7 +141,7 @@ class MLToggleX(MLSwitch):
     _attr_device_class = MLSwitch.DeviceClass.OUTLET
 
     def __init__(self, manager: "Device", channel, /):
-        super().__init__(manager, channel, None)
+        MLSwitch.__init__(self, manager, channel, None)
         manager.register_parser_entity(self)
 
 
@@ -178,8 +175,10 @@ def digest_init_togglex(
     if (mn.Appliance_Control_Fan.name in device.descriptor.ability) and (
         mc.KEY_FAN not in digest
     ):
-        if 0 in channels:
+        try:
             channels.remove(0)
+        except KeyError:
+            pass
 
     for channel in channels:
         MLToggleX(device, channel)
@@ -191,6 +190,6 @@ def digest_init_togglex(
         handler.polling_request = (
             ns.name,
             mc.METHOD_GET,
-            {ns.key: {mc.KEY_CHANNEL: 65535}},
+            {ns.key: mn.PayloadType.DICT_C_65535.value},
         )
     return handler.parse_list, (handler,)

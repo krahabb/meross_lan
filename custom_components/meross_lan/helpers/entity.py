@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .device import BaseDevice
+    from .device import BaseDevice, MerossResponse
     from .manager import ConfigEntryManager, EntityManager
 
 
@@ -364,20 +364,20 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         incoming device value to the underlyinh HA entity state."""
         raise NotImplementedError("Called 'update_device_value' on wrong entity type")
 
-    async def async_request_value(self, device_value, /):
+    async def async_request_value(self, device_value, /) -> "MerossResponse | None":
         """Sends the actual request to the device. This is a simple implementation for
         entities (binary_sensors, switches, simple sensors or so backing a 'single'
         data point in a Namespace payload. This is 'smart' enough to handle
         the correct namespace grammar as defined in merossclient.protocol.namespaces."""
         match self.ns.payload_set:
             case mn.PayloadType.LIST_C:
-                self.async_request_value = self._async_request_value_list_c
+                self.async_request_value = self._async_request_value_list_c  # type: ignore
             case mn.PayloadType.DICT_C:
-                self.async_request_value = self._async_request_value_dict_c
+                self.async_request_value = self._async_request_value_dict_c  # type: ignore
             case mn.PayloadType.DICT:
-                self.async_request_value = self._async_request_value_dict
+                self.async_request_value = self._async_request_value_dict  # type: ignore
             case mn.PayloadType.EMPTY:
-                self.async_request_value = self._async_request_value_empty
+                self.async_request_value = self._async_request_value_empty  # type: ignore
             case _:
                 # TODO: setup an auto detection for PayloadType.UNKNOWN
                 raise ValueError(
@@ -386,7 +386,9 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
 
         return await self.async_request_value(device_value)
 
-    async def _async_request_value_list_c(self, device_value, /):
+    async def _async_request_value_list_c(
+        self, device_value, /
+    ) -> "MerossResponse | None":
         ns = self.ns
         return await self.manager.async_request_ack(  # type: ignore
             ns.name,
@@ -394,7 +396,9 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
             {ns.key: [{self.key_value: device_value, ns.key_channel: self.channel}]},
         )
 
-    async def _async_request_value_dict_c(self, device_value, /):
+    async def _async_request_value_dict_c(
+        self, device_value, /
+    ) -> "MerossResponse | None":
         ns = self.ns
         return await self.manager.async_request_ack(  # type: ignore
             ns.name,
@@ -402,13 +406,17 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
             {ns.key: {self.key_value: device_value, ns.key_channel: self.channel}},
         )
 
-    async def _async_request_value_dict(self, device_value, /):
+    async def _async_request_value_dict(
+        self, device_value, /
+    ) -> "MerossResponse | None":
         ns = self.ns
         return await self.manager.async_request_ack(  # type: ignore
             ns.name, mc.METHOD_SET, {ns.key: {self.key_value: device_value}}
         )
 
-    async def _async_request_value_empty(self, device_value, /):
+    async def _async_request_value_empty(
+        self, device_value, /
+    ) -> "MerossResponse | None":
         ns = self.ns
         return await self.manager.async_request_ack(  # type: ignore
             ns.name, mc.METHOD_SET, {}

@@ -66,6 +66,7 @@ class HubSensorAdjustNumber(MLConfigNumber):
         min_value: float,
         max_value: float,
         step: float,
+        /,
     ):
         self.key_value = key
         self.native_min_value = min_value
@@ -81,14 +82,15 @@ class HubSensorAdjustNumber(MLConfigNumber):
             name=f"Adjust {device_class}",
         )
 
-    async def async_request_value(self, device_value):
+    @override
+    async def async_request_value(self, device_value, /):
         # the SET command on NS_APPLIANCE_HUB_SENSOR_ADJUST works by applying
         # the issued value as a 'delta' to the current configured value i.e.
         # 'new adjust value' = 'current adjust value' + 'issued adjust value'
         # Since the native HA interface async_set_native_value wants to set
         # the 'new adjust value' we have to issue the difference against the
         # currently configured one
-        return await MLConfigNumber.async_request_value(
+        return await MLConfigNumber._async_request_value_list_c(
             self, device_value - self.device_value
         )
 
@@ -1189,7 +1191,7 @@ class MS130SubDevice(SubDevice):
 
     @override
     def _parse_deviceCfg(self, p_devicecfg: "mt.HubSubIdPayload"):
-        """ TODO: implement entities
+        """TODO: implement entities
         {
             "calibrateCfg": {
             "temp": 0,

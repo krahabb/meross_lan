@@ -52,8 +52,6 @@ class MLSelect(me.MLEntity, select.SelectEntity):
 class MLConfigSelect(MLSelect):
     """
     Base class for any configurable 'list-like' parameter in the device.
-    This works much-like MLConfigNumber but does not provide a default
-    async_request_value so this needs to be defined in actual implementations.
     The mapping between HA entity select.options (string representation) and
     the native (likely int) device value is carried in a dedicated map
     (which also auto-updates should the device provide an unmapped value).

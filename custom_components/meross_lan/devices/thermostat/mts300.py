@@ -443,7 +443,7 @@ class Mts300Climate(MtsThermostatClimate):
     async def _async_request_value_number_fan_hold(self, device_value, /):
         # this method (ovverriding MLConfig.Number.async_request_value) should
         # return Success/Failure but we just return None (feailure) since the
-        # number entity stata has already been updated/flushed in our _parse_modeC in case
+        # number entity state has already been updated/flushed in our _parse_modeC in case
         await self._async_request_modeC({"fan": {"hTime": device_value}})
 
     async def _async_turn_on_switch_fan_hold(self, **kwargs):

@@ -584,14 +584,16 @@ class MtsSetPointNumber(MLConfigNumber):
         return self.climate.target_temperature_step
 
     async def async_request_value(self, device_value, /):
-        if response := await super().async_request_value(device_value):
+        if response := await MLConfigNumber._async_request_value_list_c(
+            self, device_value
+        ):
             # mts100(s) reply to the setack with the 'full' (or anyway richer) payload
             # so we'll use the _parse_temperature logic (a bit overkill sometimes) to
             # make sure the climate state is consistent and all the correct roundings
             # are processed when changing any of the presets
             # not sure about mts200 replies..but we're optimist
             ns_slug_end = self.ns.slug_end
-            payload = response[mc.KEY_PAYLOAD]
+            payload = response.payload
             if ns_slug_end in payload:
                 # by design ns_slug is either "temperature" (mts100) or "mode" (mts200)
                 getattr(self.climate, f"_parse_{ns_slug_end}")(payload[ns_slug_end][0])
