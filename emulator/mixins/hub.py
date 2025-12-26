@@ -195,6 +195,24 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
                         ns_state[subnamespace].append(p_subdevice_substate)
                     p_subdevice_all[subnamespace.key] = p_subdevice_substate
 
+    def _scheduler(self):
+        super()._scheduler()
+        for subdevice_digest in self.descriptor.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE]:
+            # we randomly change the status of subdevices to emulate
+            # motion/smoke/doorwindow triggers
+            if mc.KEY_DOORWINDOW in subdevice_digest:
+                if randint(0, 4) == 0:
+                    subdevice_digest[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 1
+                else:
+                    subdevice_digest[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 0
+            elif mc.KEY_SMOKEALARM in subdevice_digest:
+                a = randint(0, 2)
+                if a == 0:
+                    subdevice_digest[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = randint(17, 27)
+                elif a == 1:
+                    subdevice_digest[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = 170
+            # TODO: add randomization for other subdevices payloads
+
     def _get_subdevice_digest(self, subdevice_id: str):
         """returns the subdevice dict from the hub digest key"""
         return get_element_by_key(
@@ -249,56 +267,6 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
             # this is a sensor like subdevice
             # so we'll try to get the sensor all
             return self._get_sensor_all(subdevice_id, force_create=False)
-
-    def _handler_default(
-        self, method: str, namespace: str, payload: "MerossPayloadType", /
-    ):
-        # TODO: skip overriding _handler_default since the correct grammar parsing
-        # should now be available in base method.
-        # We should move the state randomization to _schedule or so...
-        if method == mc.METHOD_GET:
-            ns = self.NAMESPACES[namespace]
-            if ns.key_channel in (mc.KEY_ID, mc.KEY_SUBID):
-                ns_key = ns.key
-                ns_key_channel = ns.key_channel
-                response_payload = self.namespaces[namespace]
-                request_subdevices = payload[ns_key]
-                if request_subdevices:
-                    # client asked for defined set of ids
-                    current_subdevices = response_payload[ns_key]
-                    response_subdevices = []
-                    for p_subdevice_id in request_subdevices:
-                        if p_subdevice := get_element_by_key_safe(
-                            current_subdevices,
-                            ns_key_channel,
-                            p_subdevice_id[ns_key_channel],
-                        ):
-                            response_subdevices.append(p_subdevice)
-                    response_payload = {ns_key: response_subdevices}
-                else:
-                    # client request empty list -> device responds with full set
-                    response_subdevices = response_payload[ns_key]
-
-                # response_subdevices contains the list of subdevices state being returned.
-                # we'll apply some randomization to the state to emulate signals
-                for p_subdevice in response_subdevices:
-                    if mc.KEY_DOORWINDOW in p_subdevice:
-                        if randint(0, 4) == 0:
-                            p_subdevice[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 1
-                        else:
-                            p_subdevice[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 0
-                    elif mc.KEY_SMOKEALARM in p_subdevice:
-                        a = randint(0, 2)
-                        if a == 0:
-                            p_subdevice[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = randint(
-                                17, 27
-                            )
-                        elif a == 1:
-                            p_subdevice[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = 170
-
-                return mc.METHOD_GETACK, response_payload
-
-        return super()._handler_default(method, namespace, payload)
 
     def _SET_Appliance_Hub_Mts100_Adjust(self, header, payload):
         for p_subdevice in payload[mc.KEY_ADJUST]:

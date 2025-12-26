@@ -512,7 +512,11 @@ class MerossEmulator:
             response_payload = {
                 mc.KEY_ERROR: {
                     mc.KEY_CODE: -1,
-                    "message": f"{e.__class__.__name__}({e})",
+                    "message": (
+                        str(e)
+                        if type(e) is Exception
+                        else f"{e.__class__.__name__}({e})"
+                    ),
                 }
             }
 
@@ -541,67 +545,72 @@ class MerossEmulator:
         match method:
             case mc.METHOD_GET:
                 if not ns.payload_get:
-                    raise Exception(
-                        f"{method} not supported in emulator for {namespace}"
-                    )
+                    raise Exception(f"{method} not supported for {namespace}")
                 channels: list | None
-                match ns.payload_get:
-                    case mn.PayloadType.EMPTY | mn.PayloadType.UNKNOWN:
-                        channels = None
-                    case mn.PayloadType.DICT | mn.PayloadType.DICT_C:
-                        key_payload = payload[ns.key]
-                        assert type(key_payload) is dict
-                        channels = [key_payload] if key_payload else None
-                    case (
-                        mn.PayloadType.LIST_C_STRICT | mn.PayloadType.LIST_C_DATA_STRICT
-                    ):
-                        key_payload = payload[ns.key]
-                        assert type(key_payload) is list
-                        channels = key_payload
-                    case mn.PayloadType.LIST_C:
-                        key_payload = payload[ns.key]
-                        assert type(key_payload) is list
-                        channels = key_payload or None
-                    case mn.PayloadType.DICT_C_STRICT:
-                        key_payload = payload[ns.key]
-                        assert type(key_payload) is dict
-                        channels = [key_payload]
-                    case mn.PayloadType.DICT_C_65535:
-                        key_payload = payload[ns.key]
-                        assert type(key_payload) is dict
-                        channels = (
-                            None
-                            if key_payload[ns.key_channel] == 65535
-                            else [key_payload]
-                        )
-                    case _:
-                        channels = None
-
-                if channels is None:
-                    # TODO: this is wrong when p_state comes from all->digest
-                    # we should globally link namespace states to their digest counterparts if any
-                    return mc.METHOD_GETACK, p_state
-                else:
-                    p_state = p_state[ns.key]
-                    assert type(p_state) is list
-                    return mc.METHOD_GETACK, {
-                        ns.key: [
-                            p_channelstate
-                            for p_channelstate in (
-                                get_element_by_key_safe(
-                                    p_state, ns.key_channel, p_channel[ns.key_channel]
-                                )
-                                for p_channel in channels
+                try:
+                    match ns.payload_get:
+                        case mn.PayloadType.EMPTY | mn.PayloadType.UNKNOWN:
+                            channels = None
+                        case mn.PayloadType.DICT | mn.PayloadType.DICT_C:
+                            key_payload = payload[ns.key]
+                            assert type(key_payload) is dict
+                            channels = [key_payload] if key_payload else None
+                        case (
+                            mn.PayloadType.LIST_C_STRICT
+                            | mn.PayloadType.LIST_C_DATA_STRICT
+                        ):
+                            key_payload = payload[ns.key]
+                            assert type(key_payload) is list
+                            channels = key_payload
+                        case mn.PayloadType.LIST_C:
+                            key_payload = payload[ns.key]
+                            assert type(key_payload) is list
+                            channels = key_payload or None
+                        case mn.PayloadType.DICT_C_STRICT:
+                            key_payload = payload[ns.key]
+                            assert type(key_payload) is dict
+                            channels = [key_payload]
+                        case mn.PayloadType.DICT_C_65535:
+                            key_payload = payload[ns.key]
+                            assert type(key_payload) is dict
+                            channels = (
+                                None
+                                if key_payload[ns.key_channel] == 65535
+                                else [key_payload]
                             )
-                            if p_channelstate is not None
-                        ]
-                    }
+                        case _:
+                            channels = None
+
+                    if channels is None:
+                        # TODO: this is wrong when p_state comes from all->digest
+                        # we should globally link namespace states to their digest counterparts if any
+                        return mc.METHOD_GETACK, p_state
+                    else:
+                        p_state = p_state[ns.key]
+                        assert type(p_state) is list
+                        return mc.METHOD_GETACK, {
+                            ns.key: [
+                                p_channelstate
+                                for p_channelstate in (
+                                    get_element_by_key_safe(
+                                        p_state,
+                                        ns.key_channel,
+                                        p_channel[ns.key_channel],
+                                    )
+                                    for p_channel in channels
+                                )
+                                if p_channelstate is not None
+                            ]
+                        }
+
+                except (KeyError, AssertionError, TypeError):
+                    raise Exception(
+                        f"malformed request payload({payload}) for {method} {namespace}"
+                    )
 
             case mc.METHOD_SET:
                 if not ns.payload_set:
-                    raise Exception(
-                        f"{method} not supported in emulator for {namespace}"
-                    )
+                    raise Exception(f"{method} not supported for {namespace}")
 
                 if ns.payload_set is mn.PayloadType.EMPTY:
                     assert not payload
@@ -634,7 +643,7 @@ class MerossEmulator:
                         update_dict_strict(p_state, key_payload)
                     case _:
                         raise Exception(
-                            f"ns.payload_set({ns.payload_set}) not supported in emulator for {namespace}"
+                            f"ns.payload_set({ns.payload_set}) not supported  for {namespace}"
                         )
 
                 if self.mqtt_connected and ns.payload_psh:
@@ -647,9 +656,7 @@ class MerossEmulator:
 
             case mc.METHOD_PUSH:
                 if not ns.has_psq:
-                    raise Exception(
-                        f"{method} not supported in emulator for {namespace}"
-                    )
+                    raise Exception(f"{method} not supported for {namespace}")
                 return mc.METHOD_PUSH, p_state
 
         raise Exception(f"{method} not supported in emulator for {namespace}")
@@ -800,26 +807,35 @@ class MerossEmulator:
         """
         ns = self.NAMESPACES[namespace]
 
-        match namespace.split("."):
-            case (_, "Control", _):
-                p_digest = self.descriptor.digest
-            case (_, "Control", ns_2, _):
-                # e.g. Appliance.Control.Thermostat.*
-                p_digest = self.descriptor.digest
-                try:
-                    p_digest = p_digest["".join((ns_2[0].lower(), ns_2[1:]))]
-                except KeyError:
-                    pass
-            case _:
-                return ns, self.namespaces[namespace]
-
         try:
-            if type(p_digest[ns.key]) in (dict, list):
-                return ns, p_digest
-        except KeyError:
-            pass
+            match namespace.split("."):
+                case (_, "Control", _):
+                    p_digest = self.descriptor.digest
+                case (_, "Control", ns_2, _):
+                    # e.g. Appliance.Control.Thermostat.*
+                    # Appliance.Control.Diffuser.*
+                    # Appliance.Control.Light.*
+                    # Appliance.Control.Fan.*
+                    p_digest = self.descriptor.digest
+                    try:
+                        p_digest = p_digest["".join((ns_2[0].lower(), ns_2[1:]))]
+                    except KeyError:
+                        pass
+                case _:
+                    return ns, self.namespaces[namespace]
 
-        return ns, self.namespaces[namespace]
+            try:
+                if type(p_digest[ns.key]) in (dict, list):
+                    return ns, p_digest
+            except (KeyError, TypeError):
+                # KeyError: ns.key not in digest
+                # TypeError: p_digest is not a dict
+                pass
+
+            return ns, self.namespaces[namespace]
+
+        except KeyError:
+            raise Exception(f"{namespace} not defined in emulator trace")
 
     def _get_control_key(self, key, /):
         """Extracts the legacy 'control' key from NS_ALL (previous to 'digest' introduction)."""
