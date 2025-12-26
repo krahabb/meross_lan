@@ -137,31 +137,6 @@ class HubSubIdChannelMixin(MLEntity if TYPE_CHECKING else object):
 class HubSubIdDeviceCfgMixin(me.MEGroupListChannelMixin):
     """
     Mixin implementation for protocol method 'SET' on 'Appliance.Config.DeviceCfg'.
-    This namespace payload has this structure (example from ms130):
-    "config": [
-    {
-        "calibrateCfg": {
-        "temp": 0,
-        "humi": 0
-        },
-        "timeCfg": {
-        "am": 2
-        },
-        "ms130Cfg": {
-        "bl": {
-            "bri": 2,
-            "lv": 4,
-            "sleep": 10
-        }
-        },
-        "channel": 0,
-        "subId": "1A00694ACBC7",
-        "unitCfg": {
-        "tempUnit": 1
-        }
-    }
-    ]
-
     """
 
     if TYPE_CHECKING:
@@ -1197,7 +1172,7 @@ class MS130SubDevice(SubDevice):
 
     def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS130)
-        self.sensor_humidity = MLHumiditySensor(self, self.id)
+        self.sensor_humidity = MLHumiditySensor(self, self.id, device_scale=100)
         self.sensor_temperature = MLTemperatureSensor(self, self.id, device_scale=100)
         self.sensor_light = MLLightSensor(self, self.id)
         hub.setup_subid_handlers(
@@ -1211,6 +1186,33 @@ class MS130SubDevice(SubDevice):
         self.sensor_light: MLNumericSensor = None  # type: ignore
         self.sensor_temperature: MLNumericSensor = None  # type: ignore
         self.sensor_humidity: MLNumericSensor = None  # type: ignore
+
+    @override
+    def _parse_deviceCfg(self, p_devicecfg: "mt.HubSubIdPayload"):
+        """ TODO: implement entities
+        {
+            "calibrateCfg": {
+            "temp": 0,
+            "humi": 0
+            },
+            "timeCfg": {
+            "am": 2
+            },
+            "ms130Cfg": {
+            "bl": {
+                "bri": 2,
+                "lv": 4,
+                "sleep": 10
+            }
+            },
+            "channel": 0,
+            "subId": "1A00694ACBC7",
+            "unitCfg": {
+            "tempUnit": 1
+            }
+        }
+        """
+        pass
 
     def _parse_humidity(self, p_humidity: dict):
         """parser for Appliance.Hub.Sensor.All:
@@ -1347,44 +1349,17 @@ class MST100SubDevice(SubDevice):
         key_value = "dura"
 
         # HA core entity attributes:
+        _attr_device_class = MLConfigNumber.DEVICE_CLASS_DURATION
         _attr_native_unit_of_measurement = MLConfigNumber.hac.UnitOfTime.SECONDS
         native_max_value = 86400  # 1 day max duration (no real info just guessing)
         native_min_value = 1
-
-        def __init__(self, manager: "MST100SubDevice"):
-            MLConfigNumber.__init__(
-                self,
-                manager,
-                manager.id,
-                mc.KEY_DURATION,
-                device_class=MLConfigNumber.DEVICE_CLASS_DURATION,
-                name="Watering duration",
-            )
 
     class OnOffSwitch(HubSubIdChannelMixin, MLSwitch):
         """Switch to turn on/off watering."""
 
         ns = mn_h.Appliance_Control_Water
-
-        def __init__(self, manager: "MST100SubDevice"):
-            MLSwitch.__init__(
-                self,
-                manager,
-                manager.id,
-                mc.KEY_ONOFF,
-                name="Watering",
-            )
-
-        @override
-        async def async_turn_on(self, **kwargs):
-            # setting 'dura' in payload will override the default configured duration (from DeviceCfg)
-            if await self.async_request_value(1):
-                self.update_onoff(True)
-
-        @override
-        async def async_turn_off(self, **kwargs):
-            if await self.async_request_value(2):
-                self.update_onoff(False)
+        native_on = 1
+        native_off = 2
 
     if TYPE_CHECKING:
         number_duration: WateringDurationNumber
@@ -1416,8 +1391,18 @@ class MST100SubDevice(SubDevice):
 
     def __init__(self, hub: HubMixin, p_digest: dict):
         SubDevice.__init__(self, hub, p_digest, mc.TYPE_MST100)
-        self.number_duration = MST100SubDevice.WateringDurationNumber(self)
-        self.switch_water_onoff = MST100SubDevice.OnOffSwitch(self)
+        self.number_duration = MST100SubDevice.WateringDurationNumber(
+            self,
+            self.id,
+            mc.KEY_DURATION,
+            name="Watering duration",
+        )
+        self.switch_water_onoff = MST100SubDevice.OnOffSwitch(
+            self,
+            self.id,
+            mc.KEY_ONOFF,
+            name="Watering",
+        )
         hub.setup_subid_handlers(self, mn_h.Appliance_Control_Water)
 
     async def async_shutdown(self):
@@ -1425,11 +1410,12 @@ class MST100SubDevice(SubDevice):
         self.number_duration = None  # type: ignore
         self.switch_water_onoff = None  # type: ignore
 
+    @override
     def _parse_deviceCfg(self, p_devicecfg: "DeviceCfg"):
         self.number_duration._parse(p_devicecfg)
 
     def _parse_water(self, p_water: "Water"):
-        self.switch_water_onoff.update_onoff(p_water[mc.KEY_ONOFF] == 1)
+        self.switch_water_onoff.update_device_value(p_water[mc.KEY_ONOFF])
 
     @override
     def _parse_togglex(self, p_togglex: dict):
