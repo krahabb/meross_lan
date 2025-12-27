@@ -518,7 +518,14 @@ class MLBinaryEntity(MLEntity):
         /,
         **kwargs: "Unpack[Args]",
     ):
-        self.is_on = kwargs.pop("device_value", None)  # TODO: fix
+        match kwargs.pop("device_value", None):
+            case self.native_on:
+                self.is_on = True
+            case self.native_off:
+                self.is_on = False
+            case _:
+                self.is_on = None
+        self.update_native_value = self.update_onoff
         super().__init__(manager, channel, entitykey, **kwargs)
 
     def set_unavailable(self):
@@ -538,19 +545,11 @@ class MLBinaryEntity(MLEntity):
         key_value in class/instance definition to make it work."""
         match device_value:
             case self.native_on:
-                return self.update_native_value(True)
+                return self.update_onoff(True)
             case self.native_off:
-                return self.update_native_value(False)
+                return self.update_onoff(False)
             case _:
-                return self.update_native_value(None)
-
-    @override
-    def update_native_value(self, native_value, /) -> bool | None:
-        if self.is_on != native_value:
-            self.is_on = native_value
-            self.flush_state()
-            return True
-
+                return self.update_onoff(None)
 
 class MLNumericEntity(MLEntity):
     """Common base class for (numeric) sensors and numbers."""
