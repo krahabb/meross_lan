@@ -45,20 +45,20 @@ class EntityTest(EntityComponentTest):
     }
 
     NAMESPACES_ENTITIES = {
-        mn.Appliance_Config_OverTemp.name: [MLEnumSensor],
-        mn.Appliance_Control_ConsumptionH.name: [ConsumptionHSensor],
-        mn.Appliance_Control_ConsumptionX.name: [ConsumptionXSensor],
-        mn.Appliance_Control_Diffuser_Sensor.name: [
+        mn.Appliance_Config_OverTemp: [MLEnumSensor],
+        mn.Appliance_Control_ConsumptionH: [ConsumptionHSensor],
+        mn.Appliance_Control_ConsumptionX: [ConsumptionXSensor],
+        mn.Appliance_Control_Diffuser_Sensor: [
             MLHumiditySensor,
             MLTemperatureSensor,
         ],
-        mn.Appliance_Control_Electricity.name: [
+        mn.Appliance_Control_Electricity: [
             ElectricitySensor,
             MLNumericSensor,
             MLNumericSensor,
             MLNumericSensor,
         ],
-        mn.Appliance_Control_ElectricityX.name: [
+        mn.Appliance_Control_ElectricityX: [
             # There's an issue in removing 'ElectricityXSensor' when
             # the code in '_async_test_entities' should remove
             # this class from 'expected_entities'
@@ -71,8 +71,8 @@ class EntityTest(EntityComponentTest):
             ),
         ]
         * 6,  # em06 has 6 channels but we might need a better approach for other supporting devices
-        mn.Appliance_Control_FilterMaintenance.name: [MLFilterMaintenanceSensor],
-        mn_t.Appliance_Control_Thermostat_ModeC.name: [  # mts300
+        mn.Appliance_Control_FilterMaintenance: [MLFilterMaintenanceSensor],
+        mn_t.Appliance_Control_Thermostat_ModeC: [  # mts300
             MLEnumSensor,  # output status sensors
             MLEnumSensor,
             MLEnumSensor,
@@ -81,11 +81,9 @@ class EntityTest(EntityComponentTest):
             MLTemperatureSensor,  # additional (disabled) current temperature sensor
             MLHumiditySensor,  # additional (disabled) current humidity sensor
         ],
-        mn_t.Appliance_Control_Thermostat_Overheat.name: [MLTemperatureSensor],
-        mn.Appliance_Control_Sensor_Latest.name: [
-            MLHumiditySensor
-        ],  # mts200 (some models)
-        mn.Appliance_System_Runtime.name: [MLSignalStrengthSensor],  # Signal strength
+        mn_t.Appliance_Control_Thermostat_Overheat: [MLTemperatureSensor],
+        mn.Appliance_Control_Sensor_Latest: [MLHumiditySensor],  # mts200 (some models)
+        mn.Appliance_System_Runtime: [MLSignalStrengthSensor],  # Signal strength
     }
 
     HUB_SUBDEVICES_ENTITIES = {

@@ -60,28 +60,28 @@ class EntityTest(EntityComponentTest):
         },
     }
     NAMESPACES_ENTITIES = {
-        mn.Appliance_GarageDoor_Config.name: [MLGarageConfigNumber],
-        mn.Appliance_GarageDoor_MultipleConfig.name: [MLGarageMultipleConfigNumber],
-        mn.Appliance_RollerShutter_Config.name: [
+        mn.Appliance_GarageDoor_Config: [MLGarageConfigNumber],
+        mn.Appliance_GarageDoor_MultipleConfig: [MLGarageMultipleConfigNumber],
+        mn.Appliance_RollerShutter_Config: [
             MLRollerShutterConfigNumber,
             MLRollerShutterConfigNumber,
         ],
-        mn.Appliance_Control_Screen_Brightness.name: [
+        mn.Appliance_Control_Screen_Brightness: [
             MLScreenBrightnessNumber,
             MLScreenBrightnessNumber,
         ],
-        mn_t.Appliance_Control_Thermostat_Calibration.name: [
+        mn_t.Appliance_Control_Thermostat_Calibration: [
             MtsThermostatClimate.AdjustNumber
         ],
-        mn_t.Appliance_Control_Thermostat_DeadZone.name: [MtsDeadZoneNumber],
-        mn_t.Appliance_Control_Thermostat_Frost.name: [MtsFrostNumber],
-        mn_t.Appliance_Control_Thermostat_HoldAction.name: [MLConfigNumber],
-        mn_t.Appliance_Control_Thermostat_ModeC.name: [
+        mn_t.Appliance_Control_Thermostat_DeadZone: [MtsDeadZoneNumber],
+        mn_t.Appliance_Control_Thermostat_Frost: [MtsFrostNumber],
+        mn_t.Appliance_Control_Thermostat_HoldAction: [MLConfigNumber],
+        mn_t.Appliance_Control_Thermostat_ModeC: [
             Mts300Climate.AdjustNumber,
             MLConfigNumber,  # humidity_calibration
             MLConfigNumber,  # fan_hold_time
         ],
-        mn_t.Appliance_Control_Thermostat_Overheat.name: [MtsOverheatNumber],
+        mn_t.Appliance_Control_Thermostat_Overheat: [MtsOverheatNumber],
     }
     HUB_SUBDEVICES_ENTITIES = {
         mc.TYPE_MS100: [HubSensorAdjustNumber, HubSensorAdjustNumber],

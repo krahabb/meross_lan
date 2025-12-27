@@ -321,10 +321,10 @@ class HAMQTTConnection(MQTTConnection):
 
 
 HAMQTTConnection.SESSION_HANDLERS = {
-    mn.Appliance_Control_Bind.name: HAMQTTConnection._handle_Appliance_Control_Bind,
-    mn.Appliance_Control_ConsumptionConfig.name: HAMQTTConnection._handle_Appliance_Control_ConsumptionConfig,
-    mn.Appliance_System_Clock.name: HAMQTTConnection._handle_Appliance_System_Clock,
-    mn.Appliance_System_Online.name: MQTTConnection._handle_Appliance_System_Online,
+    mn.Appliance_Control_Bind: HAMQTTConnection._handle_Appliance_Control_Bind,
+    mn.Appliance_Control_ConsumptionConfig: HAMQTTConnection._handle_Appliance_Control_ConsumptionConfig,
+    mn.Appliance_System_Clock: HAMQTTConnection._handle_Appliance_System_Clock,
+    mn.Appliance_System_Online: MQTTConnection._handle_Appliance_System_Online,
 }
 
 

@@ -147,7 +147,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
 
 
 MerossMQTTConnection.SESSION_HANDLERS = {
-    mn.Appliance_System_Online.name: MQTTConnection._handle_Appliance_System_Online,
+    mn.Appliance_System_Online: MQTTConnection._handle_Appliance_System_Online,
 }
 
 

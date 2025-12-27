@@ -29,9 +29,9 @@ class EntityTest(EntityComponentTest):
         mc.KEY_DIFFUSER: {mc.KEY_LIGHT: [MLDiffuserLight]},
     }
     NAMESPACES_ENTITIES = {
-        mn.Appliance_Control_Light_Effect.name: [MLLightEffect],
-        mn.Appliance_Control_Mp3.name: [MLLight],
-        mn.Appliance_System_DNDMode.name: [MLDNDLightEntity],
+        mn.Appliance_Control_Light_Effect: [MLLightEffect],
+        mn.Appliance_Control_Mp3: [MLLight],
+        mn.Appliance_System_DNDMode: [MLDNDLightEntity],
     }
 
     async def async_test_each_callback(
@@ -50,14 +50,14 @@ class EntityTest(EntityComponentTest):
             ability = self.ability
             self._check_remove_togglex(entity)
             # check the other specialized implementations
-            if mn.Appliance_Control_Diffuser_Light.name in ability:
+            if mn.Appliance_Control_Diffuser_Light in ability:
                 assert isinstance(entity, MLDiffuserLight)
                 assert ColorMode.RGB in supported_color_modes, "supported_color_modes"
                 assert LightEntityFeature.EFFECT in supported_features
                 assert entity.effect_list == mc.DIFFUSER_LIGHT_MODE_LIST, "effect_list"
-            if mn.Appliance_Control_Light.name in ability:
+            if mn.Appliance_Control_Light in ability:
                 assert isinstance(entity, MLLight)
-                capacity = ability[mn.Appliance_Control_Light.name][mc.KEY_CAPACITY]
+                capacity = ability[mn.Appliance_Control_Light][mc.KEY_CAPACITY]
                 if capacity & mc.LIGHT_CAPACITY_RGB:
                     assert (
                         ColorMode.RGB in supported_color_modes
@@ -69,13 +69,13 @@ class EntityTest(EntityComponentTest):
                 if capacity & mc.LIGHT_CAPACITY_EFFECT:
                     assert LightEntityFeature.EFFECT in supported_features
                     assert entity.effect_list, "effect_list"
-                if mn.Appliance_Control_Light_Effect.name in ability:
+                if mn.Appliance_Control_Light_Effect in ability:
                     assert type(entity) is MLLightEffect
                     assert LightEntityFeature.EFFECT in supported_features
                     assert entity.effect_list, "effect_list"
                     # need to manually remove MLLight instance since it's also requested in digest
                     EntityComponentTest.expected_entity_types.remove(MLLight)
-                if mn.Appliance_Control_Mp3.name in ability:
+                if mn.Appliance_Control_Mp3 in ability:
                     assert LightEntityFeature.EFFECT in supported_features
                     assert (
                         entity.effect_list == mc.HP110A_LIGHT_EFFECT_LIST

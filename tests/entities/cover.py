@@ -21,7 +21,7 @@ class EntityTest(EntityComponentTest):
     }
 
     NAMESPACES_ENTITIES = {
-        mn.Appliance_RollerShutter_State.name: [MLRollerShutter],
+        mn.Appliance_RollerShutter_State: [MLRollerShutter],
     }
 
     COVER_TRANSITIONS = {

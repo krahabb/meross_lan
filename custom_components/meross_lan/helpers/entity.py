@@ -387,7 +387,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
     ) -> "MerossResponse | None":
         ns = self.ns
         return await self.manager.async_request_ack(  # type: ignore
-            ns.name,
+            ns,
             mc.METHOD_SET,
             {ns.key: [{self.key_value: device_value, ns.key_channel: self.channel}]},
         )
@@ -397,7 +397,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
     ) -> "MerossResponse | None":
         ns = self.ns
         return await self.manager.async_request_ack(  # type: ignore
-            ns.name,
+            ns,
             mc.METHOD_SET,
             {ns.key: {self.key_value: device_value, ns.key_channel: self.channel}},
         )
@@ -405,17 +405,15 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
     async def _async_request_value_dict(
         self, device_value, /
     ) -> "MerossResponse | None":
-        ns = self.ns
         return await self.manager.async_request_ack(  # type: ignore
-            ns.name, mc.METHOD_SET, {ns.key: {self.key_value: device_value}}
+            self.ns, mc.METHOD_SET, {self.ns.key: {self.key_value: device_value}}
         )
 
     async def _async_request_value_empty(
         self, device_value, /
     ) -> "MerossResponse | None":
-        ns = self.ns
         return await self.manager.async_request_ack(  # type: ignore
-            ns.name, mc.METHOD_SET, {}
+            self.ns, mc.METHOD_SET, {}
         )
 
     @override  # NamespaceParser
@@ -440,7 +438,7 @@ class MEGroupListChannelMixin(MLEntity if TYPE_CHECKING else object):
         """sends the actual request to the device. this is likely to be overloaded"""
         ns = self.ns
         return await self.manager.async_request_ack(
-            ns.name,
+            ns,
             mc.METHOD_SET,
             {
                 ns.key: [

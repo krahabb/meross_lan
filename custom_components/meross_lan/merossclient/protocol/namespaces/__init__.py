@@ -225,7 +225,7 @@ class Grammar(enum.StrEnum):
     """Used to mark namespaces for which our normalization is about 100% correct and complete."""
 
 
-class Namespace:
+class Namespace(str):
     """
     Namespace descriptor helper class. This is used to build a definition
     of namespace behaviors and syntax.
@@ -247,27 +247,24 @@ class Namespace:
             payload_psh: NotRequired[PayloadType | None]
             is_thermostat: NotRequired[bool]
 
-        name: Final[str]
-        """The namespace name"""
-        key: Final[str]
+        key: Final[str]  # type: ignore
         """The root key of the payload"""
-        key_channel: Final[str]
+        key_channel: Final[str]  # type: ignore
         """The key used to index items in list payloads. If None/empty no indexing is used."""
         # These indicate support and format for the corresponding verb. None means no support.
-        payload_get: Final[PayloadType | None]
+        payload_get: Final[PayloadType | None]  # type: ignore
         """If not None Namespace supports GET verb with this payload type."""
-        payload_set: Final[PayloadType | None]
+        payload_set: Final[PayloadType | None]  # type: ignore
         """If not None Namespace supports SET verb with this payload type."""
-        payload_del: Final[PayloadType | None]
+        payload_del: Final[PayloadType | None]  # type: ignore
         """If not None Namespace supports DELETE verb with this payload type."""
-        payload_psh: Final[PayloadType | None]
+        payload_psh: Final[PayloadType | None]  # type: ignore
         """If not None Namespace supports PUSH verb with this payload type."""
         is_thermostat: Final[bool]  # type: ignore
-        grammar: Final[Grammar]
+        grammar: Final[Grammar]  # type: ignore
         """The grammar stability level for this namespace."""
 
     __slots__ = (
-        "name",
         "key",
         "key_channel",
         "payload_get",
@@ -324,12 +321,13 @@ class Namespace:
             _heuristic_args(name, {"map": map}),
         )
 
-    def __init__(
-        self,
+    def __new__(
+        cls,
         name: str,
         key: str,
         *args: "Args",
     ):
+        self = str.__new__(cls, name)
         # We accept multiple args dicts so that we can build complex definitions
         # by composing small 'chunks' like ARGS_GET, ARGS_NO_GET, etc.
         # This also allows us to centralize here the defaults for parameters
@@ -342,19 +340,18 @@ class Namespace:
         for _extra in args:
             kwargs.update(_extra)
 
-        self.name = name
-        self.key = key
-        self.grammar = kwargs["grammar"]
+        self.key = key  # type: ignore
+        self.grammar = kwargs["grammar"]  # type: ignore
 
         # TODO: remove (maybe) some of these flags in favor of just 'key_channel' presence
         for _attr in ("is_thermostat",):
             setattr(self, _attr, kwargs[_attr])
 
-        self.key_channel = kwargs["key_channel"]
-        self.payload_get = kwargs.get("payload_get")
-        self.payload_set = kwargs.get("payload_set")
-        self.payload_del = kwargs.get("payload_del")
-        self.payload_psh = kwargs.get("payload_psh")
+        self.key_channel = kwargs["key_channel"]  # type: ignore
+        self.payload_get = kwargs.get("payload_get")  # type: ignore
+        self.payload_set = kwargs.get("payload_set")  # type: ignore
+        self.payload_del = kwargs.get("payload_del")  # type: ignore
+        self.payload_psh = kwargs.get("payload_psh")  # type: ignore
 
         # TODO: check consistencies:
         # for example key_channel must be set if payload_get is any of DICT_C DICT_C_STRICT LIST_C or LIST_C_STRICT
@@ -362,22 +359,23 @@ class Namespace:
         if self.payload_get in INDEX_PAYLOADS or self.payload_set in INDEX_PAYLOADS:
             if not self.key_channel:
                 raise ValueError(
-                    f"Namespace {self.name} uses indexed payloads but has no key_channel defined."
+                    f"Namespace {self} uses indexed payloads but has no key_channel defined."
                 )
 
         assert (
             self.payload_psh in PUSH_PAYLOADS
-        ), f"Namespace {self.name} has invalid payload_psh {self.payload_psh}"
+        ), f"Namespace {self} has invalid payload_psh {self.payload_psh}"
 
         kwargs["map"][name] = self  # type: ignore
+        return self
 
     @property
     def slug(self) -> str:
-        return self.name.lower().replace(".", "_")
+        return self.lower().replace(".", "_")
 
     @cached_property
     def slug_end(self) -> str:
-        return _slug_split(self.name.split(".")[-1])
+        return _slug_split(self.split(".")[-1])
 
     @cached_property
     def has_psh(self) -> bool:
@@ -395,7 +393,7 @@ class Namespace:
             return self.request_push
         else:
             raise ValueError(
-                f"Namespace {self.name} has no default request (no GET nor PUSH supported)."
+                f"Namespace {self} has no default request (no GET nor PUSH supported)."
             )
 
     @property
@@ -407,29 +405,29 @@ class Namespace:
     def request_get(self) -> "MerossRequestType":
         match self.payload_get:
             case PayloadType.EMPTY | PayloadType.UNKNOWN:
-                return self.name, mc.METHOD_GET, PayloadType.EMPTY.value
+                return self, mc.METHOD_GET, PayloadType.EMPTY.value
             case PayloadType.DICT | PayloadType.DICT_C:
-                return self.name, mc.METHOD_GET, {self.key: PayloadType.DICT.value}
+                return self, mc.METHOD_GET, {self.key: PayloadType.DICT.value}
             case PayloadType.DICT_C_STRICT:
-                return self.name, mc.METHOD_GET, {self.key: {self.key_channel: 0}}
+                return self, mc.METHOD_GET, {self.key: {self.key_channel: 0}}
             case PayloadType.DICT_C_65535:
-                return self.name, mc.METHOD_GET, {self.key: {self.key_channel: 65535}}
+                return self, mc.METHOD_GET, {self.key: {self.key_channel: 65535}}
             case PayloadType.LIST_C:
-                return self.name, mc.METHOD_GET, {self.key: PayloadType.LIST_C.value}
+                return self, mc.METHOD_GET, {self.key: PayloadType.LIST_C.value}
             case PayloadType.LIST_C_STRICT:
-                return self.name, mc.METHOD_GET, {self.key: [{self.key_channel: 0}]}
+                return self, mc.METHOD_GET, {self.key: [{self.key_channel: 0}]}
             case PayloadType.LIST_C_DATA_STRICT:
                 return (
-                    self.name,
+                    self,
                     mc.METHOD_GET,
                     {self.key: [{self.key_channel: 0, mc.KEY_DATA: []}]},
                 )
             case _:
-                return self.name, mc.METHOD_GET, PayloadType.EMPTY.value
+                return self, mc.METHOD_GET, PayloadType.EMPTY.value
 
     @property
     def request_push(self) -> "MerossRequestType":
-        return self.name, mc.METHOD_PUSH, PayloadType.EMPTY.value
+        return self, mc.METHOD_PUSH, PayloadType.EMPTY.value
 
     @cached_property
     def request_set(self) -> "Callable[[MerossPayloadType, object], MerossRequestType]":
@@ -446,14 +444,14 @@ class Namespace:
     def request_set_default(
         self, payload: "MerossPayloadType", channel
     ) -> "MerossRequestType":
-        return self.name, mc.METHOD_SET, {self.key: payload}
+        return self, mc.METHOD_SET, {self.key: payload}
 
     def request_set_channel(
         self, payload: "MerossPayloadType", channel, /
     ) -> "MerossRequestType":
         payload[self.key_channel] = channel
         return (
-            self.name,
+            self,
             mc.METHOD_SET,
             {self.key: payload},
         )
@@ -463,16 +461,10 @@ class Namespace:
     ) -> "MerossRequestType":
         payload[self.key_channel] = channel
         return (
-            self.name,
+            self,
             mc.METHOD_SET,
             {self.key: [payload]},
         )
-
-    def __hash__(self):
-        return hash(self.name)
-
-    def __eq__(self, value):
-        return self is value
 
 
 ns = Namespace  # shortcut for declarations

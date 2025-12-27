@@ -53,7 +53,7 @@ class LightMixin(MerossEmulator if TYPE_CHECKING else object):
                     p_digest_togglex[mc.KEY_ONOFF] = p_digest_light[mc.KEY_ONOFF]
                     if self.mqtt_connected:
                         self.mqtt_publish_push(
-                            mn.Appliance_Control_ToggleX.name,
+                            mn.Appliance_Control_ToggleX,
                             {mn.Appliance_Control_ToggleX.key: p_digest_togglex},
                         )
             else:
@@ -63,13 +63,13 @@ class LightMixin(MerossEmulator if TYPE_CHECKING else object):
                         p_digest_togglex[mc.KEY_ONOFF] = 1
                         if self.mqtt_connected:
                             self.mqtt_publish_push(
-                                mn.Appliance_Control_ToggleX.name,
+                                mn.Appliance_Control_ToggleX,
                                 {mn.Appliance_Control_ToggleX.key: p_digest_togglex},
                             )
 
         if self.mqtt_connected and (p_digest_light != p_digest_light_saved):
             self.mqtt_publish_push(
-                mn.Appliance_Control_Light.name, {mc.KEY_LIGHT: p_digest_light}
+                mn.Appliance_Control_Light, {mc.KEY_LIGHT: p_digest_light}
             )
 
         return mc.METHOD_SETACK, {}
@@ -77,7 +77,7 @@ class LightMixin(MerossEmulator if TYPE_CHECKING else object):
     def _SET_Appliance_Control_Light_Effect(self, header, payload):
 
         p_state_effect_list: list[dict] = self.namespaces[
-            mn.Appliance_Control_Light_Effect.name
+            mn.Appliance_Control_Light_Effect
         ][mc.KEY_EFFECT]
         effect_id_enabled = None
 
@@ -118,8 +118,6 @@ class LightMixin(MerossEmulator if TYPE_CHECKING else object):
                 p_light[mc.KEY_CAPACITY] | mc.LIGHT_CAPACITY_EFFECT
             )
         if self.mqtt_connected and (p_light != p_light_saved):
-            self.mqtt_publish_push(
-                mn.Appliance_Control_Light.name, {mc.KEY_LIGHT: p_light}
-            )
+            self.mqtt_publish_push(mn.Appliance_Control_Light, {mc.KEY_LIGHT: p_light})
 
         return mc.METHOD_SETACK, {}

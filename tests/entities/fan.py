@@ -16,7 +16,7 @@ class EntityTest(EntityComponentTest):
     DIGEST_ENTITIES = {}
 
     NAMESPACES_ENTITIES = {
-        mn.Appliance_Control_Fan.name: [MLFan],
+        mn.Appliance_Control_Fan: [MLFan],
     }
 
     async def async_test_each_callback(self, entity: MLFan):

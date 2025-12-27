@@ -57,7 +57,7 @@ class Mts200Climate(MtsThermostatClimate):
         super().__init__(manager, channel)
         self._mts_summermode = None
         self._mts_summermode_supported = (
-            mn_t.Appliance_Control_Thermostat_SummerMode.name
+            mn_t.Appliance_Control_Thermostat_SummerMode
             in manager.descriptor.ability
         )
         if self._mts_summermode_supported:
@@ -135,7 +135,7 @@ class Mts200Climate(MtsThermostatClimate):
     async def async_request_summermode(self, summermode: int, /):
         ns = mn_t.Appliance_Control_Thermostat_SummerMode
         if await self.manager.async_request_ack(
-            ns.name,
+            ns,
             mc.METHOD_SET,
             {ns.key: [{ns.key_channel: self.channel, mc.KEY_MODE: summermode}]},
         ):
@@ -146,7 +146,7 @@ class Mts200Climate(MtsThermostatClimate):
 
     async def _async_request_mode(self, p_mode: dict, /):
         if response := await self.manager.async_request_ack(
-            self.ns.name,
+            self.ns,
             mc.METHOD_SET,
             {self.ns.key: [p_mode]},
         ):

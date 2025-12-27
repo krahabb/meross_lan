@@ -55,7 +55,7 @@ class Mts100Climate(MtsClimate):
         def __init__(self, climate: "Mts100Climate", /):
             super().__init__(climate)
             self._schedule_unit_time = climate.manager.hub.descriptor.ability.get(
-                mn_h.Appliance_Hub_Mts100_ScheduleB.name, {}
+                mn_h.Appliance_Hub_Mts100_ScheduleB, {}
             ).get(mc.KEY_SCHEDULEUNITTIME, 15)
 
     MTS_MODE_TO_PRESET_MAP = {
@@ -153,7 +153,7 @@ class Mts100Climate(MtsClimate):
             # the setpoint without implying the device switch on.
             # Turning on/off the device must be an explicit action on HVACMode.
             if await self.manager.async_request_ack(
-                mn_h.Appliance_Hub_Mts100_Mode.name,
+                mn_h.Appliance_Hub_Mts100_Mode,
                 mc.METHOD_SET,
                 {
                     mn_h.Appliance_Hub_Mts100_Mode.key: [
@@ -165,7 +165,7 @@ class Mts100Climate(MtsClimate):
 
         key = mc.MTS100_MODE_TO_CURRENTSET_MAP.get(self._mts_mode) or mc.KEY_CUSTOM
         if response := await self.manager.async_request_ack(
-            mn_h.Appliance_Hub_Mts100_Temperature.name,
+            mn_h.Appliance_Hub_Mts100_Temperature,
             mc.METHOD_SET,
             {
                 mn_h.Appliance_Hub_Mts100_Temperature.key: [
@@ -183,7 +183,7 @@ class Mts100Climate(MtsClimate):
     async def async_request_preset(self, mode: int, /):
         """Requests an mts mode and (ensure) turn-on"""
         if await self.manager.async_request_ack(
-            mn_h.Appliance_Hub_Mts100_Mode.name,
+            mn_h.Appliance_Hub_Mts100_Mode,
             mc.METHOD_SET,
             {
                 mn_h.Appliance_Hub_Mts100_Mode.key: [
@@ -194,7 +194,7 @@ class Mts100Climate(MtsClimate):
             self._mts_mode = mode
             if not self._mts_onoff:
                 if await self.manager.async_request_ack(
-                    mn_h.Appliance_Hub_ToggleX.name,
+                    mn_h.Appliance_Hub_ToggleX,
                     mc.METHOD_SET,
                     {
                         mn_h.Appliance_Hub_ToggleX.key: [
@@ -212,7 +212,7 @@ class Mts100Climate(MtsClimate):
 
     async def async_request_onoff(self, onoff: int, /):
         if await self.manager.async_request_ack(
-            mn_h.Appliance_Hub_ToggleX.name,
+            mn_h.Appliance_Hub_ToggleX,
             mc.METHOD_SET,
             {
                 mn_h.Appliance_Hub_ToggleX.key: [
@@ -228,7 +228,7 @@ class Mts100Climate(MtsClimate):
 
     def get_ns_adjust(self, /):
         return self.manager.hub.namespace_handlers[
-            mn_h.Appliance_Hub_Mts100_Adjust.name
+            mn_h.Appliance_Hub_Mts100_Adjust
         ]
 
     # message handlers

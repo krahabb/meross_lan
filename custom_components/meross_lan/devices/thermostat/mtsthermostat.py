@@ -302,7 +302,7 @@ class MtsHoldAction(MLConfigSelect):
     async def _async_request_holdAction(self, mode, time, /):
         ns = self.ns
         return await self.manager.async_request_ack(
-            ns.name,
+            ns,
             mc.METHOD_SET,
             {
                 ns.key: [
@@ -381,13 +381,13 @@ OPTIONAL_NAMESPACES_INITIALIZERS: set["mn.Namespace"] = {
 """These namespaces handlers will forward message parsing to the climate entity"""
 
 OPTIONAL_ENTITIES_INITIALIZERS: dict[str, "Callable[[MtsThermostatClimate], Any]"] = {
-    mn.Appliance_Control_TempUnit.name: MtsTempUnit,
-    mn_t.Appliance_Control_Thermostat_DeadZone.name: MtsDeadZoneNumber,
-    mn_t.Appliance_Control_Thermostat_Frost.name: MtsFrostNumber,
-    mn_t.Appliance_Control_Thermostat_HoldAction.name: MtsHoldAction,
-    mn_t.Appliance_Control_Thermostat_Overheat.name: MtsOverheatNumber,
-    mn_t.Appliance_Control_Thermostat_Sensor.name: MtsExternalSensorSwitch,
-    mn_t.Appliance_Control_Thermostat_WindowOpened.name: MtsWindowOpened,
+    mn.Appliance_Control_TempUnit: MtsTempUnit,
+    mn_t.Appliance_Control_Thermostat_DeadZone: MtsDeadZoneNumber,
+    mn_t.Appliance_Control_Thermostat_Frost: MtsFrostNumber,
+    mn_t.Appliance_Control_Thermostat_HoldAction: MtsHoldAction,
+    mn_t.Appliance_Control_Thermostat_Overheat: MtsOverheatNumber,
+    mn_t.Appliance_Control_Thermostat_Sensor: MtsExternalSensorSwitch,
+    mn_t.Appliance_Control_Thermostat_WindowOpened: MtsWindowOpened,
 }
 """Additional entities (linked to the climate one) in case their ns is supported/available"""
 
@@ -427,7 +427,7 @@ class MtsThermostatClimate(MtsClimate):
         manager.register_parser_entity(self.schedule)
         ability = manager.descriptor.ability
         for optional_ns in OPTIONAL_NAMESPACES_INITIALIZERS:
-            if optional_ns.name in ability:
+            if optional_ns in ability:
                 manager.register_parser(self, optional_ns)
 
         for namespace, entity_class in OPTIONAL_ENTITIES_INITIALIZERS.items():
@@ -436,7 +436,7 @@ class MtsThermostatClimate(MtsClimate):
 
     def get_ns_adjust(self, /):
         return self.manager.namespace_handlers[
-            mn_t.Appliance_Control_Thermostat_Calibration.name
+            mn_t.Appliance_Control_Thermostat_Calibration
         ]
 
     def _parse_ctlRange(self, payload: dict, /):

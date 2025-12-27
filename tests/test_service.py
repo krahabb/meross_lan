@@ -30,7 +30,7 @@ async def test_request_on_mqtt(
             mlc.SERVICE_REQUEST,
             service_data={
                 mlc.CONF_DEVICE_ID: tc.MOCK_DEVICE_UUID,
-                mc.KEY_NAMESPACE: mn.Appliance_System_All.name,
+                mc.KEY_NAMESPACE: mn.Appliance_System_All,
                 mc.KEY_METHOD: mc.METHOD_GET,
             },
             blocking=True,
@@ -63,7 +63,7 @@ async def test_request_on_device(
             mlc.SERVICE_REQUEST,
             service_data={
                 mlc.CONF_DEVICE_ID: context.device_id,
-                mc.KEY_NAMESPACE: mn.Appliance_Control_ToggleX.name,
+                mc.KEY_NAMESPACE: mn.Appliance_Control_ToggleX,
                 mc.KEY_METHOD: mc.METHOD_SET,
                 mc.KEY_PAYLOAD: json_dumps(
                     {
@@ -103,7 +103,7 @@ async def test_request_notification(
             mlc.SERVICE_REQUEST,
             service_data={
                 mlc.CONF_DEVICE_ID: context.device_id,
-                mc.KEY_NAMESPACE: mn.Appliance_System_All.name,
+                mc.KEY_NAMESPACE: mn.Appliance_System_All,
                 mlc.CONF_NOTIFYRESPONSE: True,
             },
             blocking=True,

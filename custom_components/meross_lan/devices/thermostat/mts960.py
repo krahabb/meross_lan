@@ -365,7 +365,7 @@ class Mts960Climate(MtsThermostatClimate):
     # interface: self
     async def _async_request_modeB(self, payload: "mt_t.ModeBRequest_C", /):
         if response := await self.manager.async_request_ack(
-            self.ns.name,
+            self.ns,
             mc.METHOD_SET,
             {self.ns.key: [payload]},
         ):
@@ -384,7 +384,7 @@ class Mts960Climate(MtsThermostatClimate):
             Mts960Climate.TIMER_TYPE_KEY[timer_type]: payload,
         }
         if response := await self.manager.async_request_ack(
-            ns.name,
+            ns,
             mc.METHOD_SET,
             {ns.key: [p_timer]},
         ):

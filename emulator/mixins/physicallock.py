@@ -21,12 +21,10 @@ class PhysicalLockMixin(MerossEmulator if TYPE_CHECKING else object):
 
     def _scheduler(self):
         super()._scheduler()
-        p_payload = self.namespaces[mn.Appliance_Control_PhysicalLock.name]
+        p_payload = self.namespaces[mn.Appliance_Control_PhysicalLock]
         if 0 == randint(0, 10):
             p_payload_channel = p_payload[mc.KEY_LOCK][0]
             onoff = p_payload_channel[mc.KEY_ONOFF]
             p_payload_channel[mc.KEY_ONOFF] = 1 - onoff
             if self.mqtt_connected:
-                self.mqtt_publish_push(
-                    mn.Appliance_Control_PhysicalLock.name, p_payload
-                )
+                self.mqtt_publish_push(mn.Appliance_Control_PhysicalLock, p_payload)

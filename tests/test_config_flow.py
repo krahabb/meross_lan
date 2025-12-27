@@ -237,7 +237,7 @@ async def test_mqtt_discovery_config_flow(hass: "HomeAssistant", hamqtt_mock):
     key = ""
     topic = mc.TOPIC_RESPONSE.format(device_id)
     payload = MerossMessage.build(
-        mn.Appliance_Control_ToggleX.name,
+        mn.Appliance_Control_ToggleX,
         mc.METHOD_PUSH,
         {mn.Appliance_Control_ToggleX.key: {mc.KEY_CHANNEL: 0, mc.KEY_ONOFF: 0}},
         key,

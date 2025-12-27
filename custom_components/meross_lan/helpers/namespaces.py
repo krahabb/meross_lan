@@ -145,15 +145,14 @@ class NamespaceHandler:
         ) = None,
         config: "NamespaceConfigType | None" = None,
     ):
-        namespace = ns.name
-        assert namespace not in device.namespace_handlers, (
+        assert ns not in device.namespace_handlers, (
             "Namespace already registered",
-            namespace,
+            ns,
         )
         self.device = device
         self.ns = ns
         self.handler = handler or getattr(
-            device, f"_handle_{namespace.replace('.', '_')}", self._handle_undefined
+            device, f"_handle_{ns.replace('.', '_')}", self._handle_undefined
         )
         self.parsers = {}
         self.entity_class = None
@@ -182,7 +181,7 @@ class NamespaceHandler:
         )
         self.polling_request_channels = []
         self.polling_request_configure(None)
-        device.namespace_handlers[namespace] = self
+        device.namespace_handlers[ns] = self
 
     def polling_request_configure(self, payload_type: mn.PayloadType | None, /):
         """The structure of the polling payload is usually 'fixed' in the namespace
@@ -199,7 +198,7 @@ class NamespaceHandler:
             _payload_type is mn.PayloadType.LIST_C_DATA_STRICT
         ):
             self.polling_request = (
-                ns.name,
+                ns,
                 mc.METHOD_GET,
                 {ns.key: self.polling_request_channels},
             )
@@ -211,19 +210,19 @@ class NamespaceHandler:
         match _payload_type:
             case mn.PayloadType.PUSH | mn.PayloadType.PUSH_QUERY:
                 self.polling_request = (
-                    ns.name,
+                    ns,
                     mc.METHOD_PUSH,
-                    mn.PayloadType.PUSH.value
+                    mn.PayloadType.PUSH.value,
                 )
             case mn.PayloadType.EMPTY:
                 self.polling_request = (
-                    ns.name,
+                    ns,
                     mc.METHOD_GET,
-                    mn.PayloadType.EMPTY.value
+                    mn.PayloadType.EMPTY.value,
                 )
             case _:
                 self.polling_request = (
-                    ns.name,
+                    ns,
                     mc.METHOD_GET,
                     {ns.key: _payload_type.value if _payload_type else {}},
                 )
@@ -252,7 +251,7 @@ class NamespaceHandler:
 
     def polling_request_set(self, payload: list | dict, /):
         self.polling_request = (
-            self.ns.name,
+            self.ns,
             mc.METHOD_GET,
             {self.ns.key: payload},
         )
@@ -337,7 +336,7 @@ class NamespaceHandler:
             exception,
             "%s(%s).%s: payload=%s",
             self.__class__.__name__,
-            self.ns.name,
+            self.ns,
             function_name,
             str(device.loggable_any(payload)),
             timeout=604800,
@@ -514,7 +513,7 @@ class NamespaceHandler:
         device.log(
             device.DEBUG,
             "Parser stub called on namespace:%s payload:%s",
-            self.ns.name,
+            self.ns,
             str(device.loggable_dict(payload)),
             timeout=14400,
         )
@@ -563,13 +562,13 @@ class NamespaceHandler:
         payload_type = self.polling_request[2][ns.key]
         if isinstance(payload_type, list):
             return await self.device.async_request(
-                ns.name,
+                ns,
                 mc.METHOD_GET,
                 {ns.key: [{ns.key_channel: channel}]},
             )
         assert isinstance(payload_type, dict)
         return await self.device.async_request(
-            ns.name,
+            ns,
             mc.METHOD_GET,
             {ns.key: {ns.key_channel: channel}},
         )
@@ -718,7 +717,7 @@ class NamespaceHandler:
                 await async_request_func(*self.polling_request)
             return
 
-        ns_name = ns.name
+        ns_name = ns
         ns_key = ns.key
         ns_key_channel = ns.key_channel
         match ns.grammar:

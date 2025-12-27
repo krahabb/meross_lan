@@ -74,7 +74,7 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
         ability = descriptor.ability
 
         ns_state: dict[mn.Namespace, list[dict]] = {
-            ns: namespaces[ns.name].setdefault(ns.key, [])
+            ns: namespaces[ns].setdefault(ns.key, [])
             for ns in (
                 mn_h.Appliance_Hub_Mts100_Adjust,
                 mn_h.Appliance_Hub_Mts100_All,
@@ -91,7 +91,7 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
                 mn_h.Appliance_Control_Sensor_HistoryX,
                 mn_h.Appliance_Control_Sensor_LatestX,
             )
-            if ns.name in ability
+            if ns in ability
         }
 
         # these maps help in generalizing the rules for
@@ -129,7 +129,7 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
                 )
                 assert (
                     subdevice_ns in ns_state
-                ), f"Hub emulator init: missing {subdevice_ns.name}"
+                ), f"Hub emulator init: missing {subdevice_ns}"
                 p_subdevice_all = get_element_by_key_safe(
                     ns_state[subdevice_ns],
                     mc.KEY_ID,
@@ -227,7 +227,7 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
         """returns the subdevice namespace dict. It will create a default entry if not present
         and the device abilities supports the namespace."""
         try:
-            subdevices_namespace: list = self.namespaces[ns.name][ns.key]
+            subdevices_namespace: list = self.namespaces[ns][ns.key]
             try:
                 return get_element_by_key(
                     subdevices_namespace,
@@ -242,11 +242,9 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
         except KeyError:
             if not force_create:
                 raise
-            assert (
-                ns.name in self.descriptor.ability
-            ), f"{ns.name} not available in Hub abilities"
+            assert ns in self.descriptor.ability, f"{ns} not available in Hub abilities"
             p_subdevice = {ns.key_channel: subdevice_id}
-            self.namespaces[ns.name] = {ns.key: [p_subdevice]}
+            self.namespaces[ns] = {ns.key: [p_subdevice]}
         return p_subdevice
 
     def _get_mts100_all(self, subdevice_id: str, *, force_create: bool = True):

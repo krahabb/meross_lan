@@ -621,7 +621,7 @@ class _BaseClient:
         **kwargs: "Unpack[RequestArgs]",
     ):
         return await self.async_request(
-            mn.Appliance_Config_Key.name,
+            mn.Appliance_Config_Key,
             mc.METHOD_SET,
             {
                 mn.Appliance_Config_Key.key: (
@@ -655,9 +655,9 @@ class _BaseClient:
         descriptor = self.descriptor
         assert descriptor, "Device descriptor is not set"
         ns_wifix = mn.Appliance_Config_WifiX
-        if ns_wifix.name in descriptor.ability:
+        if ns_wifix in descriptor.ability:
             return await self.async_request(
-                ns_wifix.name,
+                ns_wifix,
                 mc.METHOD_SET,
                 {
                     ns_wifix.key: {
@@ -673,7 +673,7 @@ class _BaseClient:
             )
         else:
             return await self.async_request(
-                mn.Appliance_Config_Wifi.name,
+                mn.Appliance_Config_Wifi,
                 mc.METHOD_SET,
                 {
                     mn.Appliance_Config_Wifi.key: {

@@ -1464,11 +1464,11 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
             )
         ] = cv.positive_int
         ability = device_descriptor.ability
-        if mn.Appliance_Control_Multiple.name in ability:
+        if mn.Appliance_Control_Multiple in ability:
             config_schema[
                 _optional(mlc.CONF_DISABLE_MULTIPLE, device_config, False)
             ] = bool
-        if mn.Appliance_System_Time.name in ability:
+        if mn.Appliance_System_Time in ability:
             config_schema[
                 _optional(mc.KEY_TIMEZONE, None, device_descriptor.timezone)
             ] = vol.In(await api.async_available_timezones())

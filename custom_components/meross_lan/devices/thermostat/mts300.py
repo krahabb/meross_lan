@@ -328,7 +328,7 @@ class Mts300Climate(MtsThermostatClimate):
         ns = self.ns
         payload |= {"channel": self.channel}
         if response := await self.manager.async_request_ack(
-            ns.name,
+            ns,
             mc.METHOD_SET,
             {ns.key: [payload]},
         ):

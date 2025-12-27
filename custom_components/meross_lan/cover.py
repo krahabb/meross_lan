@@ -158,13 +158,13 @@ class MLRollerShutter(MLCover):
         MLCover.__init__(self, manager, 0)
         self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
         self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
-        if mn.Appliance_RollerShutter_Adjust.name in descriptor.ability:
+        if mn.Appliance_RollerShutter_Adjust in descriptor.ability:
             # unknown use: actually the polling period is set on a very high timeout
             manager.register_parser(self, mn.Appliance_RollerShutter_Adjust)
         manager.register_parser(self, mn.Appliance_RollerShutter_Config)
         manager.register_parser(self, mn.Appliance_RollerShutter_Position)
         manager.register_parser(self, mn.Appliance_RollerShutter_State)
-        if mn.Appliance_Control_ToggleX.name in descriptor.ability:
+        if mn.Appliance_Control_ToggleX in descriptor.ability:
             # This is still to be understood. This call will do nothing
             # since the digest seen so far carries an empty list of channels
             # even though the abilities show ToggleX support.
@@ -244,7 +244,7 @@ class MLRollerShutter(MLCover):
     async def async_request_position(self, position: int):
         self._transition_cancel()
         if await self.manager.async_request_ack(
-            mn.Appliance_RollerShutter_Position.name,
+            mn.Appliance_RollerShutter_Position,
             mc.METHOD_SET,
             {
                 mn.Appliance_RollerShutter_Position.key: {
@@ -410,12 +410,12 @@ class MLRollerShutter(MLCover):
                 await manager.async_multiple_requests_ack(
                     (
                         (
-                            mn.Appliance_RollerShutter_State.name,
+                            mn.Appliance_RollerShutter_State,
                             mc.METHOD_GET,
                             {mn.Appliance_RollerShutter_State.key: p_channel_payload},
                         ),
                         (
-                            mn.Appliance_RollerShutter_Position.name,
+                            mn.Appliance_RollerShutter_Position,
                             mc.METHOD_GET,
                             {
                                 mn.Appliance_RollerShutter_Position.key: p_channel_payload
@@ -425,13 +425,13 @@ class MLRollerShutter(MLCover):
                 )
             else:
                 await manager.async_request(
-                    mn.Appliance_RollerShutter_State.name,
+                    mn.Appliance_RollerShutter_State,
                     mc.METHOD_GET,
                     {mn.Appliance_RollerShutter_State.key: p_channel_payload},
                 )
                 if self._position_native_isgood:
                     await manager.async_request(
-                        mn.Appliance_RollerShutter_Position.name,
+                        mn.Appliance_RollerShutter_Position,
                         mc.METHOD_GET,
                         {mn.Appliance_RollerShutter_Position.key: p_channel_payload},
                     )

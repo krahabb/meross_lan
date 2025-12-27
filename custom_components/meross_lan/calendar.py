@@ -262,14 +262,14 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
             ns = self.ns
             payload[ns.key_channel] = self.channel
             if not await self.manager.async_request_ack(
-                ns.name,
+                ns,
                 mc.METHOD_SET,
                 {ns.key: [payload]},
             ):
                 # there was an error so we request the actual device state again
                 if self.manager.online:
                     await self.manager.async_request(
-                        ns.name,
+                        ns,
                         mc.METHOD_GET,
                         {ns.key: [{ns.key_channel: self.channel}]},
                     )

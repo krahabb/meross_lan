@@ -79,14 +79,14 @@ async def test_device_entry(request, hass: "HomeAssistant"):
             device = context.device
 
             entity_dnd = None
-            if mn.Appliance_System_DNDMode.name in ability:
+            if mn.Appliance_System_DNDMode in ability:
                 entity_dnd = device.entities[MLDNDLightEntity.ENTITY_KEY]
                 assert isinstance(entity_dnd, MLDNDLightEntity)
                 state = hass.states.get(entity_dnd.entity_id)
                 assert state and state.state == hac.STATE_UNAVAILABLE
 
             sensor_signal_strength = None
-            if mn.Appliance_System_Runtime.name in ability:
+            if mn.Appliance_System_Runtime in ability:
                 sensor_signal_strength = device.entities[
                     MLSignalStrengthSensor.ENTITY_KEY
                 ]
@@ -101,7 +101,7 @@ async def test_device_entry(request, hass: "HomeAssistant"):
                 assert (
                     ns.payload_get is not mn.PayloadType.LIST_C_STRICT
                 ) or namespace_handler.polling_request_channels, (
-                    f"Incorrect config for {ns.name} namespace"
+                    f"Incorrect config for {ns} namespace"
                 )
 
             if entity_dnd:

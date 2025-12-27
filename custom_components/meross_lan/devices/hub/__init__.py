@@ -122,7 +122,7 @@ class HubSubIdChannelMixin(MLEntity if TYPE_CHECKING else object):
     async def async_request_value(self, device_value, /):
         ns = self.ns
         return await self.manager.async_request_ack(
-            ns.name,
+            ns,
             mc.METHOD_SET,
             {
                 ns.key: [
@@ -151,7 +151,7 @@ class HubSubIdDeviceCfgMixin(me.MEGroupListChannelMixin):
     async def async_request_value(self, device_value, /):
         ns = self.ns
         return await self.manager.async_request_ack(
-            ns.name,
+            ns,
             mc.METHOD_SET,
             {
                 ns.key: [
@@ -198,7 +198,7 @@ class HubNamespaceHandler(NamespaceHandler):
                     except KeyError:
                         # force a rescan since we discovered a new subdevice
                         hub.namespace_handlers[
-                            mn.Appliance_System_All.name
+                            mn.Appliance_System_All
                         ].polling_epoch_next = 0.0
                     subdevices_parsed.add(subdevice_id)
             except TypeError:
@@ -314,10 +314,10 @@ class HubMixin(Device if TYPE_CHECKING else object):
     }
 
     TRACE_ABILITY_EXCLUDE = Device.TRACE_ABILITY_EXCLUDE + (
-        mn_h.Appliance_Hub_Exception.name,
-        mn_h.Appliance_Hub_Report.name,
-        mn_h.Appliance_Hub_SubdeviceList.name,
-        *(ns.name for ns in mn.HUB_NAMESPACES.values() if not ns.can_query),
+        mn_h.Appliance_Hub_Exception,
+        mn_h.Appliance_Hub_Report,
+        mn_h.Appliance_Hub_SubdeviceList,
+        *(ns for ns in mn.HUB_NAMESPACES.values() if not ns.can_query),
     )
 
     # interface: EntityManager
@@ -343,7 +343,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
         return mlc.DeviceType.HUB
 
     def _create_handler(self, ns: "Namespace"):
-        _handler = getattr(self, f"_handle_{ns.name.replace('.', '_')}", None)
+        _handler = getattr(self, f"_handle_{ns.replace('.', '_')}", None)
         if _handler:
             return NamespaceHandler(
                 self,
@@ -417,9 +417,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
         )
 
     def setup_chunked_handler(self, ns: "Namespace", is_mts100: bool, count: int, /):
-        if (ns.name not in self.namespace_handlers) and (
-            ns.name in self.descriptor.ability
-        ):
+        if (ns not in self.namespace_handlers) and (ns in self.descriptor.ability):
             HubChunkedNamespaceHandler(
                 self, ns, mc.MTS100_ALL_TYPESET, is_mts100, count
             )
@@ -428,9 +426,9 @@ class HubMixin(Device if TYPE_CHECKING else object):
         ability = self.descriptor.ability
         for ns in nss:
             try:
-                self.namespace_handlers[ns.name].polling_response_size_inc()
+                self.namespace_handlers[ns].polling_response_size_inc()
             except KeyError:
-                if ns.name in ability:
+                if ns in ability:
                     HubNamespaceHandler(self, ns)
 
     def setup_subid_handlers(
@@ -441,7 +439,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
     ):
         ability = self.descriptor.ability
         for ns in nss:
-            if ns.name not in ability:
+            if ns not in ability:
                 continue
             handler = self.get_handler(ns)
             handler.register_parser(subdevice)
@@ -623,9 +621,9 @@ class SubDevice(NamespaceParser, BaseDevice):
         # force a re-poll even on MQTT
         self.hub.namespace_handlers[
             (
-                mn_h.Appliance_Hub_Mts100_All.name
+                mn_h.Appliance_Hub_Mts100_All
                 if self.model in mc.MTS100_ALL_TYPESET
-                else mn_h.Appliance_Hub_Sensor_All.name
+                else mn_h.Appliance_Hub_Sensor_All
             )
         ].polling_epoch_next = 0.0
 
@@ -1051,7 +1049,7 @@ class GS559SubDevice(SubDevice):
         ns = mn_h.Appliance_Hub_Sensor_Smoke
         try:
             await self.async_request_ack(
-                ns.name,
+                ns,
                 mc.METHOD_SET,
                 {
                     ns.key: [
@@ -1071,7 +1069,7 @@ class GS559SubDevice(SubDevice):
     async def _async_button_test_press(self):
         ns = mn_h.Appliance_Hub_Sensor_Smoke
         await self.async_request_ack(
-            ns.name,
+            ns,
             mc.METHOD_SET,
             {ns.key: [{ns.key_channel: self.id, mc.KEY_STATUS: 23}]},
         )
@@ -1152,7 +1150,7 @@ class MS100SubDevice(SubDevice):
         # was due to an adjustment
         if sensor.update_device_value(device_value):
             strategy = self.hub.namespace_handlers[
-                mn_h.Appliance_Hub_Sensor_Adjust.name
+                mn_h.Appliance_Hub_Sensor_Adjust
             ]
             if strategy.lastrequest < (self.hub.lastresponse - 30):
                 strategy.polling_epoch_next = 0.0

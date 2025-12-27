@@ -172,7 +172,7 @@ def digest_init_togglex(
                     channels.remove(channel)
 
     # the fan controller 'map100' doesn't expose a fan in digest but it has one at channel 0
-    if (mn.Appliance_Control_Fan.name in device.descriptor.ability) and (
+    if (mn.Appliance_Control_Fan in device.descriptor.ability) and (
         mc.KEY_FAN not in digest
     ):
         try:
@@ -188,7 +188,7 @@ def digest_init_togglex(
     handler.register_entity_class(MLToggleX)
     if device.descriptor.is_refoss:
         handler.polling_request = (
-            ns.name,
+            ns,
             mc.METHOD_GET,
             {ns.key: mn.PayloadType.DICT_C_65535.value},
         )

@@ -34,15 +34,15 @@ class EntityTest(EntityComponentTest):
         mc.KEY_TOGGLEX: [MLToggleX],
     }
     NAMESPACES_ENTITIES = {
-        mn.Appliance_Config_OverTemp.name: [OverTempEnableSwitch],
-        mn.Appliance_Control_PhysicalLock.name: [PhysicalLockSwitch],
-        mn_t.Appliance_Control_Thermostat_ModeC.name: [
+        mn.Appliance_Config_OverTemp: [OverTempEnableSwitch],
+        mn.Appliance_Control_PhysicalLock: [PhysicalLockSwitch],
+        mn_t.Appliance_Control_Thermostat_ModeC: [
             MLEmulatedSwitch,  # fan_hold_enable
         ],
-        mn_t.Appliance_Control_Thermostat_Frost.name: [MtsConfigSwitch],
-        mn_t.Appliance_Control_Thermostat_Sensor.name: [MtsExternalSensorSwitch],
-        mn_t.Appliance_Control_Thermostat_Overheat.name: [MtsConfigSwitch],
-        mn.Appliance_Control_Toggle.name: [MLToggle],
+        mn_t.Appliance_Control_Thermostat_Frost: [MtsConfigSwitch],
+        mn_t.Appliance_Control_Thermostat_Sensor: [MtsExternalSensorSwitch],
+        mn_t.Appliance_Control_Thermostat_Overheat: [MtsConfigSwitch],
+        mn.Appliance_Control_Toggle: [MLToggle],
     }
     HUB_SUBDEVICES_ENTITIES = {
         mc.TYPE_MTS100: [MLEmulatedSwitch],  # patch hvacaction

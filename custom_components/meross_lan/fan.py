@@ -114,7 +114,7 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
     async def async_request_fan(self, speed: int, /):
         payload = {mc.KEY_CHANNEL: self.channel, mc.KEY_SPEED: speed}
         if await self.manager.async_request_ack(
-            self.ns.name,
+            self.ns,
             mc.METHOD_SET,
             {self.ns.key: [payload]},
         ):
@@ -122,7 +122,7 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
 
     async def async_request_togglex(self, onoff: int, /):
         if await self.manager.async_request_ack(
-            mn.Appliance_Control_ToggleX.name,
+            mn.Appliance_Control_ToggleX,
             mc.METHOD_SET,
             {
                 mn.Appliance_Control_ToggleX.key: {

@@ -306,7 +306,7 @@ class MLLightBase(me.MLBinaryEntity, light.LightEntity):
     # interface: self
     async def async_request_light_ack(self, payload: dict, /):
         return await self.manager.async_request_ack(
-            self.ns.name,
+            self.ns,
             mc.METHOD_SET,
             {self.ns.key: payload},
         )
@@ -491,7 +491,7 @@ class MLLight(MLLightBase):
         descriptor = manager.descriptor
         ability = descriptor.ability
 
-        capacity = ability[mn.Appliance_Control_Light.name].get(
+        capacity = ability[mn.Appliance_Control_Light].get(
             mc.KEY_CAPACITY, mc.LIGHT_CAPACITY_LUMINANCE
         )
         self.supported_color_modes = supported_color_modes = set()
@@ -625,7 +625,7 @@ class MLLight(MLLightBase):
     async def async_request_onoff(self, onoff: int):
         if self._togglex:
             if await self.manager.async_request_ack(
-                mn.Appliance_Control_ToggleX.name,
+                mn.Appliance_Control_ToggleX,
                 mc.METHOD_SET,
                 {
                     mn.Appliance_Control_ToggleX.key: {
@@ -650,7 +650,7 @@ class MLLight(MLLightBase):
             _light[mc.KEY_ONOFF] = 1
 
         if await self.manager.async_request_ack(
-            mn.Appliance_Control_Light.name,
+            mn.Appliance_Control_Light,
             mc.METHOD_SET,
             {mc.KEY_LIGHT: _light},
         ):
@@ -672,7 +672,7 @@ class MLLight(MLLightBase):
                         self.extra_state_attributes = {MLLight.ATTR_TOGGLEX_AUTO: True}
                         return
                     elif await self.manager.async_request_ack(
-                        mn.Appliance_Control_ToggleX.name,
+                        mn.Appliance_Control_ToggleX,
                         mc.METHOD_GET,
                         {
                             mn.Appliance_Control_ToggleX.key: [
@@ -778,7 +778,7 @@ class MLLightEffect(MLLight):
                 _light_effect = self._light_effect_list[effect_index]
                 _light_effect[mc.KEY_ENABLE] = 1
                 if await self.manager.async_request_ack(
-                    mn.Appliance_Control_Light_Effect.name,
+                    mn.Appliance_Control_Light_Effect,
                     mc.METHOD_SET,
                     {mc.KEY_EFFECT: [_light_effect]},
                 ):
@@ -805,7 +805,7 @@ class MLLightEffect(MLLight):
                     for m in member:
                         m[mc.KEY_LUMINANCE] = luminance
                     if await self.manager.async_request_ack(
-                        mn.Appliance_Control_Light_Effect.name,
+                        mn.Appliance_Control_Light_Effect,
                         mc.METHOD_SET,
                         {mc.KEY_EFFECT: [_light_effect]},
                     ):
@@ -898,13 +898,13 @@ def digest_init_light(device: "Device", digest: dict, /) -> "DigestInitReturnTyp
 
     ability = device.descriptor.ability
 
-    if mn.Appliance_Control_Light_Effect.name in ability:
+    if mn.Appliance_Control_Light_Effect in ability:
         MLLightEffect(device, digest[mc.KEY_CHANNEL])
-    elif mn.Appliance_Control_Mp3.name in ability:
+    elif mn.Appliance_Control_Mp3 in ability:
         MLLight(device, digest[mc.KEY_CHANNEL], mc.HP110A_LIGHT_EFFECT_LIST)
     else:
         MLLight(device, digest[mc.KEY_CHANNEL])
-    handler = device.namespace_handlers[mn.Appliance_Control_Light.name]
+    handler = device.namespace_handlers[mn.Appliance_Control_Light]
     return handler.parse_generic, (handler,)
 
 
@@ -926,7 +926,7 @@ def digest_init_light_effect(
                 _light_effect[mc.KEY_EFFECTNAME] for _light_effect in digest
             ] + [MLLightBase.EFFECT_OFF]
 
-            handler = device.namespace_handlers[mn.Appliance_Control_Light_Effect.name]
+            handler = device.namespace_handlers[mn.Appliance_Control_Light_Effect]
 
             # custom parser for the case
             def _parse(digest: list):

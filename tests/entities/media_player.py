@@ -16,7 +16,7 @@ class EntityTest(EntityComponentTest):
     DIGEST_ENTITIES = {}
 
     NAMESPACES_ENTITIES = {
-        mn.Appliance_Control_Mp3.name: [MLMp3Player],
+        mn.Appliance_Control_Mp3: [MLMp3Player],
     }
 
     SERVICE_STATE_MAP = {

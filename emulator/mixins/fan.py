@@ -24,7 +24,7 @@ class FanMixin(MerossEmulator if TYPE_CHECKING else object):
 
     def _scheduler(self):
         super()._scheduler()
-        ns_name = mn.Appliance_Control_FilterMaintenance.name
+        ns_name = mn.Appliance_Control_FilterMaintenance
         if ns_name in self.descriptor.ability:
             if lifedec := randint(0, 1):
                 p_payload = self.namespaces[ns_name]

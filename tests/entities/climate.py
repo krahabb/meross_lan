@@ -56,7 +56,7 @@ class EntityTest(EntityComponentTest):
         },
     }
     NAMESPACES_ENTITIES = {
-        mn_t.Appliance_Control_Thermostat_ModeC.name: [Mts300Climate],
+        mn_t.Appliance_Control_Thermostat_ModeC: [Mts300Climate],
     }
     HUB_SUBDEVICES_ENTITIES = {
         mc.TYPE_MTS100: [Mts100Climate],
@@ -69,7 +69,7 @@ class EntityTest(EntityComponentTest):
         entity_hvac_modes = set(entity.hvac_modes)
         expected_hvac_modes = HVAC_MODES[entity.__class__]
         assert expected_hvac_modes.issubset(entity_hvac_modes)
-        if mn_t.Appliance_Control_Thermostat_SummerMode.name in self.ability:
+        if mn_t.Appliance_Control_Thermostat_SummerMode in self.ability:
             assert HVACMode.COOL in entity_hvac_modes
 
         try:
@@ -87,7 +87,7 @@ class EntityTest(EntityComponentTest):
             ), f"Class: <>{entity.__class__} is not Mts960Climate"
             # TODO custom checking here..
 
-        if mn.Appliance_Control_Sensor_Latest.name in self.ability:
+        if mn.Appliance_Control_Sensor_Latest in self.ability:
             # this is prone to false checks depending on the
             # emulator trace consistency. Right now (2024-09) it works
             assert entity.current_humidity is not None

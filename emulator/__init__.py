@@ -92,7 +92,7 @@ def build_emulator(
         mixin_classes.append(HubMixin)
     if (
         mc.KEY_THERMOSTAT in digest
-        or mn_t.Appliance_Control_Thermostat_ModeC.name in ability
+        or mn_t.Appliance_Control_Thermostat_ModeC in ability
     ):
         from .mixins.thermostat import ThermostatMixin
 
@@ -101,40 +101,40 @@ def build_emulator(
         from .mixins.garagedoor import GarageDoorMixin
 
         mixin_classes.append(GarageDoorMixin)
-    if mn.Appliance_Control_Electricity.name in ability:
+    if mn.Appliance_Control_Electricity in ability:
         from .mixins.electricity import ElectricityMixin
 
         mixin_classes.append(ElectricityMixin)
-    if mn.Appliance_Control_ElectricityX.name in ability:
+    if mn.Appliance_Control_ElectricityX in ability:
         from .mixins.electricity import ElectricityXMixin
 
         mixin_classes.append(ElectricityXMixin)
-    if mn.Appliance_Control_ConsumptionH.name in ability:
+    if mn.Appliance_Control_ConsumptionH in ability:
         from .mixins.electricity import ConsumptionHMixin
 
         mixin_classes.append(ConsumptionHMixin)
 
-    if mn.Appliance_Control_ConsumptionX.name in ability:
+    if mn.Appliance_Control_ConsumptionX in ability:
         from .mixins.electricity import ConsumptionXMixin
 
         mixin_classes.append(ConsumptionXMixin)
 
-    if mn.Appliance_Control_Light.name in ability:
+    if mn.Appliance_Control_Light in ability:
         from .mixins.light import LightMixin
 
         mixin_classes.append(LightMixin)
 
-    if mn.Appliance_Control_Fan.name in ability:
+    if mn.Appliance_Control_Fan in ability:
         from .mixins.fan import FanMixin
 
         mixin_classes.append(FanMixin)
 
-    if mn.Appliance_RollerShutter_State.name in ability:
+    if mn.Appliance_RollerShutter_State in ability:
         from .mixins.rollershutter import RollerShutterMixin
 
         mixin_classes.append(RollerShutterMixin)
 
-    if mn.Appliance_Control_PhysicalLock.name in ability:
+    if mn.Appliance_Control_PhysicalLock in ability:
         from .mixins.physicallock import PhysicalLockMixin
 
         mixin_classes.append(PhysicalLockMixin)

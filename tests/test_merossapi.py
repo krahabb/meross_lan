@@ -39,7 +39,7 @@ async def test_hamqtt_device_session(
         # check the mc.NS_APPLIANCE_CONTROL_BIND is replied
         #
         message_bind_set = MerossMessage.build(
-            mn.Appliance_Control_Bind.name,
+            mn.Appliance_Control_Bind,
             mc.METHOD_SET,
             {mn.Appliance_Control_Bind.key: {}},  # actual payload actually doesn't care
             key,
@@ -61,7 +61,7 @@ async def test_hamqtt_device_session(
                         mc.KEY_MESSAGEID: message_bind_set[mc.KEY_HEADER][
                             mc.KEY_MESSAGEID
                         ],
-                        mc.KEY_NAMESPACE: mn.Appliance_Control_Bind.name,
+                        mc.KEY_NAMESPACE: mn.Appliance_Control_Bind,
                         mc.KEY_METHOD: mc.METHOD_SETACK,
                         mc.KEY_TRIGGERSRC: mc.HEADER_TRIGGERSRC_CLOUDCONTROL,
                         mc.KEY_FROM: topic_publish,
@@ -73,7 +73,7 @@ async def test_hamqtt_device_session(
         # check the NS_APPLIANCE_SYSTEM_CLOCK
         #
         message_clock_push = MerossMessage.build(
-            mn.Appliance_System_Clock.name,
+            mn.Appliance_System_Clock,
             mc.METHOD_PUSH,
             {"clock": {"timestamp": int(time())}},
             key,
@@ -95,7 +95,7 @@ async def test_hamqtt_device_session(
         # check the NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG
         #
         message_consumption_push = MerossMessage.build(
-            mn.Appliance_Control_ConsumptionConfig.name,
+            mn.Appliance_Control_ConsumptionConfig,
             mc.METHOD_PUSH,
             {
                 mn.Appliance_Control_ConsumptionConfig.key: {

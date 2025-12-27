@@ -29,12 +29,10 @@ class EntityTest(EntityComponentTest):
         mc.KEY_DIFFUSER: {mc.KEY_SPRAY: [MLDiffuserSpray]},
     }
     NAMESPACES_ENTITIES = {
-        mn.Appliance_Config_Sensor_Association.name: [
-            Mts300Climate.SensorAssociationSelect
-        ],
-        mn.Appliance_Control_TempUnit.name: [MtsTempUnit],
-        mn_t.Appliance_Control_Thermostat_HoldAction.name: [MtsHoldAction],
-        mn_t.Appliance_Control_Thermostat_ModeC.name: [MtsClimate.TrackSensorSelect],
+        mn.Appliance_Config_Sensor_Association: [Mts300Climate.SensorAssociationSelect],
+        mn.Appliance_Control_TempUnit: [MtsTempUnit],
+        mn_t.Appliance_Control_Thermostat_HoldAction: [MtsHoldAction],
+        mn_t.Appliance_Control_Thermostat_ModeC: [MtsClimate.TrackSensorSelect],
     }
     HUB_SUBDEVICES_ENTITIES = {
         mc.TYPE_MTS100: [MtsClimate.TrackSensorSelect],

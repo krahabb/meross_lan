@@ -276,7 +276,7 @@ class MLGarage(MLCover):
         MLCover.__init__(self, manager, channel)
         if channel:
             self._state_request = (
-                mn.Appliance_GarageDoor_State.name,
+                mn.Appliance_GarageDoor_State,
                 mc.METHOD_GET,
                 {
                     mn.Appliance_GarageDoor_State.key: {
@@ -290,7 +290,7 @@ class MLGarage(MLCover):
         manager.register_parser_entity(self)
         manager.register_togglex_channel(self)
         self.binary_sensor_timeout = MLGarageTimeoutBinarySensor(self)
-        if mn.Appliance_GarageDoor_MultipleConfig.name in ability:
+        if mn.Appliance_GarageDoor_MultipleConfig in ability:
             # historically, when MultipleConfig appeared, these used to be
             # the available timeouts while recent fw (4.2.8) shows presence
             # of more 'natural' doorOpenDuration/doorCloseDuration keys.
@@ -346,7 +346,7 @@ class MLGarage(MLCover):
     async def async_request_position(self, open_request: int, /):
         manager = self.manager
         if response := await manager.async_request_ack(
-            self.ns.name,
+            self.ns,
             mc.METHOD_SET,
             {self.ns.key: {mc.KEY_CHANNEL: self.channel, mc.KEY_OPEN: open_request}},
         ):
@@ -715,7 +715,7 @@ class GarageDoorStateNamespaceHandler(NamespaceHandler):
             # - single channel in a DICT_C_STRICT
             # - all channels in an empty dict (only confirmed in 4.0.0+ fw)
             # TODO: we might check if dict with {"channel": -1 or 65535} works too...(like refoss queries)
-            device.namespace_handlers[mn.Appliance_System_All.name].polling_period = 0
+            device.namespace_handlers[mn.Appliance_System_All].polling_period = 0
 
 
 def digest_init_garagedoor(device: "Device", digest: list, /) -> "DigestInitReturnType":
@@ -727,7 +727,7 @@ def digest_init_garagedoor(device: "Device", digest: list, /) -> "DigestInitRetu
     for channel_digest in digest:
         MLGarage(device, channel_digest[mc.KEY_CHANNEL])
 
-    if mn.Appliance_GarageDoor_Config.name in device.descriptor.ability:
+    if mn.Appliance_GarageDoor_Config in device.descriptor.ability:
         GarageDoorConfigNamespaceHandler(device)
 
     return handler.parse_list, (handler,)

@@ -31,7 +31,7 @@ class ElectricityMixin(MerossEmulator if TYPE_CHECKING else object):
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
         self.payload_electricity = descriptor.namespaces[
-            mn.Appliance_Control_Electricity.name
+            mn.Appliance_Control_Electricity
         ]
         self.electricity = self.payload_electricity[mc.KEY_ELECTRICITY]
         self.voltage_average: int = self.electricity[mc.KEY_VOLTAGE] or 2280
@@ -166,7 +166,7 @@ class ConsumptionXMixin(MerossEmulator if TYPE_CHECKING else object):
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
         self.payload_consumptionx = descriptor.namespaces[
-            mn.Appliance_Control_ConsumptionX.name
+            mn.Appliance_Control_ConsumptionX
         ]
         p_consumptionx: list = self.payload_consumptionx[mc.KEY_CONSUMPTIONX]
         if not p_consumptionx:
@@ -200,7 +200,7 @@ class ConsumptionXMixin(MerossEmulator if TYPE_CHECKING else object):
         # the server code in meross_lan (it doesn't really check this
         # payload)
         self.mqtt_publish_push(
-            mn.Appliance_Control_ConsumptionConfig.name,
+            mn.Appliance_Control_ConsumptionConfig,
             {
                 mn.Appliance_Control_ConsumptionConfig.key: {
                     "voltageRatio": 188,

@@ -61,6 +61,12 @@ class ChannelPayload(TypedDict):
     channel: Any
 
 
+class ChannelOnOff(ChannelPayload):
+    """Common channel payload including an onoff field (various namespaces)."""
+
+    onoff: int
+
+
 class HubIdPayload(TypedDict):
     id: str
 

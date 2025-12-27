@@ -67,8 +67,8 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
                 self._import_tsv(f)
 
         super().__init__(
-            self.namespaces[mn.Appliance_System_All.name]
-            | self.namespaces[mn.Appliance_System_Ability.name]
+            self.namespaces[mn.Appliance_System_All]
+            | self.namespaces[mn.Appliance_System_Ability]
         )
         # patch system payload with fake ids
         if uuid:
@@ -93,10 +93,10 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
 
         def _import_legacy_config(_row):
             ns = mn.Appliance_System_All
-            self.namespaces[ns.name] = {ns.key: json_loads(_row[-1])}
+            self.namespaces[ns] = {ns.key: json_loads(_row[-1])}
             _row = next(f).split("\t")
             ns = mn.Appliance_System_Ability
-            self.namespaces[ns.name] = {ns.key: json_loads(_row[-1])}
+            self.namespaces[ns] = {ns.key: json_loads(_row[-1])}
 
         # detect version: lot of heuristic since the structure was not so smart
         if len(row) == 5:
@@ -181,7 +181,7 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
                     pushes = {}
 
         for ns in (mn.Appliance_System_All, mn.Appliance_System_Ability):
-            self.namespaces[ns.name] = {ns.key: config_payload[ns.key]}
+            self.namespaces[ns] = {ns.key: config_payload[ns.key]}
 
         for namespace, payload in pushes.items():
             # pushes might be partial (i.e. only a single channel update)
@@ -210,7 +210,7 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
                 # TODO: merge channels
                 self.namespaces[namespace] = data
             case mc.METHOD_SETACK:
-                if namespace == mn.Appliance_Control_Multiple.name:
+                if namespace == mn.Appliance_Control_Multiple:
                     for message in data[mc.KEY_MULTIPLE]:
                         header = message[mc.KEY_HEADER]
                         if header[mc.KEY_METHOD] == mc.METHOD_GETACK:
@@ -359,7 +359,7 @@ class MerossEmulator:
         self._tzinfo: ZoneInfo | None = None
         self._cipher = (
             MerossHttpClient.Cipher(descriptor.uuid, key, descriptor.macAddress)
-            if mn.Appliance_Encrypt_ECDHE.name in descriptor.ability
+            if mn.Appliance_Encrypt_ECDHE in descriptor.ability
             else None
         )
         self.update_epoch()
@@ -437,9 +437,7 @@ class MerossEmulator:
                 # when a non encrypted requested is received the device
                 # actually resets the TCP connection..here we're just raising an
                 # exception in the hope we can emulate a broken connection
-                if self._cipher and (
-                    request.namespace != mn.Appliance_System_Ability.name
-                ):
+                if self._cipher and (request.namespace != mn.Appliance_System_Ability):
                     raise Exception("Encryption required")
 
         self._log_message("RX", request.json)
@@ -485,7 +483,7 @@ class MerossEmulator:
             if namespace not in self.descriptor.ability:
                 raise Exception(f"{namespace} not supported in ability")
 
-            if namespace == mn.Appliance_Control_Multiple.name:
+            if namespace == mn.Appliance_Control_Multiple:
                 if method != mc.METHOD_SET:
                     raise Exception(f"{method} not supported for {namespace}")
                 multiple = []
@@ -720,7 +718,7 @@ class MerossEmulator:
 
     def _SETACK_Appliance_Control_Bind(self, header, payload, /):
         self.mqtt_publish_push(
-            mn.Appliance_System_Report.name,
+            mn.Appliance_System_Report,
             {
                 mn.Appliance_System_Report.key: [
                     {mc.KEY_TYPE: 1, mc.KEY_VALUE: 0, mc.KEY_TIMESTAMP: self.epoch}
@@ -728,7 +726,7 @@ class MerossEmulator:
             },
         )
         self.mqtt_publish_push(
-            mn.Appliance_System_Time.name,
+            mn.Appliance_System_Time,
             {mn.Appliance_System_Time.key: self.descriptor.time},
         )
         return None, None
@@ -861,7 +859,7 @@ class MerossEmulator:
 
     def get_namespace_state(self, ns: "Namespace", channel, /):
         return get_element_by_key(
-            self.namespaces[ns.name][ns.key], ns.key_channel, channel
+            self.namespaces[ns][ns.key], ns.key_channel, channel
         )
 
     def update_namespace_state(
@@ -875,9 +873,9 @@ class MerossEmulator:
         Useful when sanitizing mixin state during init should the trace miss some well-known namespaces info
         """
         try:
-            p_namespace = self.namespaces[ns.name]
+            p_namespace = self.namespaces[ns]
         except KeyError:
-            self.namespaces[ns.name] = p_namespace = {}
+            self.namespaces[ns] = p_namespace = {}
 
         if key_channel := ns.key_channel:
             try:
@@ -955,7 +953,7 @@ class MerossEmulator:
             # This is to start a kind of session establishment with
             # Meross brokers. Check the SETACK reply to follow the state machine
             message = MerossRequest(
-                mn.Appliance_Control_Bind.name,
+                mn.Appliance_Control_Bind,
                 mc.METHOD_SET,
                 {
                     mn.Appliance_Control_Bind.key: {

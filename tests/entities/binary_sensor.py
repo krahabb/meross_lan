@@ -30,9 +30,9 @@ class EntityTest(EntityComponentTest):
     }
 
     NAMESPACES_ENTITIES = {
-        mn_t.Appliance_Control_Thermostat_Frost.name: [MtsWarningSensor],
-        mn_t.Appliance_Control_Thermostat_Overheat.name: [MtsWarningSensor],
-        mn_t.Appliance_Control_Thermostat_WindowOpened.name: [MtsWindowOpened],
+        mn_t.Appliance_Control_Thermostat_Frost: [MtsWarningSensor],
+        mn_t.Appliance_Control_Thermostat_Overheat: [MtsWarningSensor],
+        mn_t.Appliance_Control_Thermostat_WindowOpened: [MtsWindowOpened],
     }
 
     HUB_SUBDEVICES_ENTITIES = {

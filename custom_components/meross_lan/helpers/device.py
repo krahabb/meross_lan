@@ -328,44 +328,44 @@ class Device(BaseDevice, ConfigEntryManager):
     }
 
     NAMESPACE_INIT = {
-        mn.Appliance_Config_OverTemp.name: (".devices.mss", "OverTempEnableSwitch"),
-        mn.Appliance_Control_ConsumptionConfig.name: (
+        mn.Appliance_Config_OverTemp: (".devices.mss", "OverTempEnableSwitch"),
+        mn.Appliance_Control_ConsumptionConfig: (
             ".devices.mss",
             "ConsumptionConfigNamespaceHandler",
         ),
-        mn.Appliance_Control_Electricity.name: (
+        mn.Appliance_Control_Electricity: (
             ".devices.mss",
             "namespace_init_electricity",
         ),
-        mn.Appliance_Control_ElectricityX.name: (
+        mn.Appliance_Control_ElectricityX: (
             ".devices.mss",
             "ElectricityXNamespaceHandler",
         ),
-        mn.Appliance_Control_ConsumptionH.name: (
+        mn.Appliance_Control_ConsumptionH: (
             ".devices.mss",
             "ConsumptionHNamespaceHandler",
         ),
-        mn.Appliance_Control_ConsumptionX.name: (".devices.mss", "ConsumptionXSensor"),
-        mn.Appliance_Control_Fan.name: (".fan", "namespace_init_fan"),
-        mn.Appliance_Control_FilterMaintenance.name: (
+        mn.Appliance_Control_ConsumptionX: (".devices.mss", "ConsumptionXSensor"),
+        mn.Appliance_Control_Fan: (".fan", "namespace_init_fan"),
+        mn.Appliance_Control_FilterMaintenance: (
             ".sensor",
             "FilterMaintenanceNamespaceHandler",
         ),
-        mn.Appliance_Control_Mp3.name: (".media_player", "MLMp3Player"),
-        mn.Appliance_Control_PhysicalLock.name: (".switch", "PhysicalLockSwitch"),
-        mn.Appliance_Control_Presence_Config.name: (
+        mn.Appliance_Control_Mp3: (".media_player", "MLMp3Player"),
+        mn.Appliance_Control_PhysicalLock: (".switch", "PhysicalLockSwitch"),
+        mn.Appliance_Control_Presence_Config: (
             ".devices.ms600",
             "namespace_init_presence_config",
         ),
-        mn.Appliance_Control_Screen_Brightness.name: (
+        mn.Appliance_Control_Screen_Brightness: (
             ".devices.thermostat",
             "ScreenBrightnessNamespaceHandler",
         ),
-        mn.Appliance_Control_Sensor_Latest.name: (
+        mn.Appliance_Control_Sensor_Latest: (
             ".devices.misc",
             "SensorLatestNamespaceHandler",
         ),
-        mn.Appliance_Control_Sensor_LatestX.name: (
+        mn.Appliance_Control_Sensor_LatestX: (
             ".devices.misc",
             "namespace_init_sensor_latestx",
         ),
@@ -373,27 +373,27 @@ class Device(BaseDevice, ConfigEntryManager):
             ".devices.thermostat.mts300",
             "Mts300Climate",
         ),
-        mn.Appliance_RollerShutter_State.name: (".cover", "MLRollerShutter"),
-        mn.Appliance_System_DNDMode.name: (".light", "MLDNDLightEntity"),
-        mn.Appliance_System_Runtime.name: (".sensor", "MLSignalStrengthSensor"),
+        mn.Appliance_RollerShutter_State: (".cover", "MLRollerShutter"),
+        mn.Appliance_System_DNDMode: (".light", "MLDNDLightEntity"),
+        mn.Appliance_System_Runtime: (".sensor", "MLSignalStrengthSensor"),
     }
 
     TRACE_ABILITY_EXCLUDE = (
-        mn.Appliance_System_Ability.name,
-        mn.Appliance_System_All.name,
-        mn.Appliance_System_Clock.name,
-        mn.Appliance_System_DNDMode.name,
-        mn.Appliance_System_Firmware.name,
-        mn.Appliance_System_Hardware.name,
-        mn.Appliance_System_Online.name,
-        mn.Appliance_System_Position.name,
-        mn.Appliance_System_Time.name,
-        mn.Appliance_Config_Wifi.name,
-        mn.Appliance_Config_WifiList.name,
-        mn.Appliance_Config_WifiX.name,
-        mn.Appliance_Control_Bind.name,
-        mn.Appliance_Control_Unbind.name,
-        *(ns.name for ns in mn.NAMESPACES.values() if not ns.can_query),
+        mn.Appliance_System_Ability,
+        mn.Appliance_System_All,
+        mn.Appliance_System_Clock,
+        mn.Appliance_System_DNDMode,
+        mn.Appliance_System_Firmware,
+        mn.Appliance_System_Hardware,
+        mn.Appliance_System_Online,
+        mn.Appliance_System_Position,
+        mn.Appliance_System_Time,
+        mn.Appliance_Config_Wifi,
+        mn.Appliance_Config_WifiList,
+        mn.Appliance_Config_WifiX,
+        mn.Appliance_Control_Bind,
+        mn.Appliance_Control_Unbind,
+        *(ns for ns in mn.NAMESPACES.values() if not ns.can_query),
     )
 
     DEFAULT_PLATFORMS = ConfigEntryManager.DEFAULT_PLATFORMS | {
@@ -470,7 +470,7 @@ class Device(BaseDevice, ConfigEntryManager):
         self.device_timedelta_config_epoch = 0
         self.device_response_size_min = 1000
         self.device_response_size_max = (
-            descriptor.ability.get(mn.Appliance_Control_Multiple.name, {}).get(
+            descriptor.ability.get(mn.Appliance_Control_Multiple, {}).get(
                 "maxCmdNum", 0
             )
             * 800
@@ -507,7 +507,7 @@ class Device(BaseDevice, ConfigEntryManager):
         self._multiple_response_size = PARAM_HEADER_SIZE
         self._timezone_next_check = (
             0
-            if mn.Appliance_System_Time.name in descriptor.ability
+            if mn.Appliance_System_Time in descriptor.ability
             else mlc.PARAM_INFINITE_TIMEOUT
         )
         self._trace_ability_callback_unsub = None
@@ -704,7 +704,7 @@ class Device(BaseDevice, ConfigEntryManager):
                     loop=self.hass.loop,
                 )
 
-            if mn.Appliance_Encrypt_ECDHE.name in self.descriptor.ability:
+            if mn.Appliance_Encrypt_ECDHE in self.descriptor.ability:
                 self._http.enable_encryption(
                     self.id, self.key, self.descriptor.macAddress
                 )
@@ -986,7 +986,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 "http_active": bool(self._http_active),
             },
             "namespace_handlers": {
-                handler.ns.name: {
+                handler.ns: {
                     "lastrequest": handler.lastrequest,
                     "lastresponse": handler.lastresponse,
                     "lastpush": (
@@ -1194,7 +1194,7 @@ class Device(BaseDevice, ConfigEntryManager):
 
     def get_handler(self, ns: "mn.Namespace", /):
         try:
-            return self.namespace_handlers[ns.name]
+            return self.namespace_handlers[ns]
         except KeyError:
             return self._create_handler(ns)
 
@@ -1283,7 +1283,7 @@ class Device(BaseDevice, ConfigEntryManager):
         self, broker: HostAddress, *, key: str | None = None, userid: str | None = None
     ):
         return await self.async_request(
-            mn.Appliance_Config_Key.name,
+            mn.Appliance_Config_Key,
             mc.METHOD_SET,
             {
                 mn.Appliance_Config_Key.key: {
@@ -1318,7 +1318,7 @@ class Device(BaseDevice, ConfigEntryManager):
 
     def enable_multiple(self, enable: bool, /):
         self.multiple_max = (
-            self.descriptor.ability.get(mn.Appliance_Control_Multiple.name, {}).get(
+            self.descriptor.ability.get(mn.Appliance_Control_Multiple, {}).get(
                 "maxCmdNum", 0
             )
             if enable
@@ -1340,7 +1340,7 @@ class Device(BaseDevice, ConfigEntryManager):
         partial message responses so it doesn't resend missed requests/responses
         """
         if multiple_response := await self.async_request_ack(
-            mn.Appliance_Control_Multiple.name,
+            mn.Appliance_Control_Multiple,
             mc.METHOD_SET,
             {
                 mn.Appliance_Control_Multiple.key: [
@@ -1404,7 +1404,7 @@ class Device(BaseDevice, ConfigEntryManager):
 
             if not (
                 response := await self.async_request_ack(
-                    mn.Appliance_Control_Multiple.name,
+                    mn.Appliance_Control_Multiple,
                     mc.METHOD_SET,
                     {
                         mn.Appliance_Control_Multiple.key: [
@@ -1630,7 +1630,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 self.device_response_size_min,
                 self.device_response_size_max,
             )
-            if request.namespace is not mn.Appliance_Control_Multiple.name:
+            if request.namespace is not mn.Appliance_Control_Multiple:
                 return None
             # try to recover NS_MULTIPLE by discarding the incomplete
             # message at the end
@@ -1654,11 +1654,11 @@ class Device(BaseDevice, ConfigEntryManager):
             if not self.online:
                 return None
 
-            if namespace is mn.Appliance_System_All.name:
+            if namespace is mn.Appliance_System_All:
                 if self._http_active:
                     self._http_active = None
                     self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_HTTP)
-            elif namespace is mn.Appliance_Control_Unbind.name:
+            elif namespace is mn.Appliance_Control_Unbind:
                 if isinstance(exception, aiohttp.ServerDisconnectedError):
                     # this is expected when issuing the UNBIND
                     # so this is an indication we're dead
@@ -1799,7 +1799,7 @@ class Device(BaseDevice, ConfigEntryManager):
                     if await self.async_http_request(
                         *mn.Appliance_System_All.request_default
                     ):
-                        namespace = mn.Appliance_System_All.name
+                        namespace = mn.Appliance_System_All
                     # going on, should the http come online, the next
                     # async_request_updates will be 'smart' again, skipping
                     # state updates coming through mqtt (since we're still
@@ -1843,7 +1843,7 @@ class Device(BaseDevice, ConfigEntryManager):
                                     )
 
             else:  # offline or 'likely' offline (failed last request)
-                ns_all_handler = self.namespace_handlers[mn.Appliance_System_All.name]
+                ns_all_handler = self.namespace_handlers[mn.Appliance_System_All]
                 ns_all_response = None
                 if self.conf_protocol is CONF_PROTOCOL_AUTO:
                     if self._http:
@@ -1884,7 +1884,7 @@ class Device(BaseDevice, ConfigEntryManager):
                     epoch + ns_all_handler.polling_period
                 )
                 ns_all_handler.polling_response_size = len(ns_all_response.json)
-                namespace = ns_all_handler.ns.name
+                namespace = ns_all_handler.ns
 
             """
             When 'namespace' is not 'None' it represents the device coming online
@@ -1904,7 +1904,7 @@ class Device(BaseDevice, ConfigEntryManager):
             for handler in [
                 handler
                 for handler in self.namespace_handlers.values()
-                if (handler.ns.name != namespace)
+                if (handler.ns != namespace)
             ]:
                 if handler.polling_strategy:
                     await handler.polling_strategy(handler)
@@ -2369,7 +2369,7 @@ class Device(BaseDevice, ConfigEntryManager):
 
     def _config_device_timestamp(self, epoch: float, /):
         if self.mqtt_locallyactive and (
-            mn.Appliance_System_Clock.name in self.descriptor.ability
+            mn.Appliance_System_Clock in self.descriptor.ability
         ):
             # only deal with time related settings when devices are un-paired
             # from the meross cloud
@@ -2557,7 +2557,7 @@ class Device(BaseDevice, ConfigEntryManager):
                     exception,
                     "building timezone(%s) info for %s",
                     tzname,
-                    mn.Appliance_System_Time.name,
+                    mn.Appliance_System_Time,
                 )
                 timerules = [
                     [0, 0, 0],
@@ -2575,7 +2575,7 @@ class Device(BaseDevice, ConfigEntryManager):
             }
 
         if await self.async_request_ack(
-            mn.Appliance_System_Time.name,
+            mn.Appliance_System_Time,
             mc.METHOD_SET,
             payload={mn.Appliance_System_Time.key: p_time},
         ):

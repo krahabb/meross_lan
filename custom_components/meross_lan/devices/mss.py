@@ -248,7 +248,7 @@ class ElectricityXSensor(ElectricitySensor):
                 try:
                     manager.async_create_task(
                         manager.namespace_handlers[
-                            mn.Appliance_Control_ConsumptionH.name
+                            mn.Appliance_Control_ConsumptionH
                         ].async_request_get_channel(channel),
                         "ConsumptionH triggered update",
                     )
@@ -265,7 +265,7 @@ class ElectricityXSensor(ElectricitySensor):
                 try:
                     self.manager.async_create_task(
                         self.manager.namespace_handlers[
-                            mn.Appliance_Control_ConsumptionH.name
+                            mn.Appliance_Control_ConsumptionH
                         ].async_request_get_channel(self.channel),
                         "ConsumptionH triggered update",
                     )
@@ -504,7 +504,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
             # goes wrong, the Device multiple payload managment
             # is smart enough to adapt to wrong estimates
             device.namespace_handlers[
-                mn.Appliance_Control_ConsumptionX.name
+                mn.Appliance_Control_ConsumptionX
             ].polling_response_size_adj(len(days))
             # catch the device starting a new day since our last update (yesterday)
             devtime = device.get_device_datetime(device.device_timestamp)

@@ -127,7 +127,7 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
     async def async_request_mp3(self, key: str, value: int):
         payload = {mc.KEY_CHANNEL: self.channel, key: value}
         if await self.manager.async_request_ack(
-            self.ns.name,
+            self.ns,
             mc.METHOD_SET,
             {self.ns.key: payload},
         ):

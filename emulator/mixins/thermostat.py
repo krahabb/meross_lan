@@ -110,31 +110,31 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
         # sanityze
         ability = descriptor.ability
         ns = mn_t.Appliance_Control_Thermostat_Calibration
-        if ns.name in ability:
+        if ns in ability:
             self.update_namespace_state(
                 ns,
                 MerossEmulator.NSDefaultMode.MixOut,
                 self.MAP_DEVICE[_type][1],
             )
         ns = mn_t.Appliance_Control_Thermostat_DeadZone
-        if ns.name in ability:
+        if ns in ability:
             self.update_namespace_state(
                 ns,
                 MerossEmulator.NSDefaultMode.MixOut,
                 {
-                    mc.KEY_CHANNEL: 0,
+                    ns.key_channel: 0,
                     "value": 0.5 * self.device_scale,
                     "max": 3.5 * self.device_scale,
                     "min": 0.5 * self.device_scale,
                 },
             )
         ns = mn_t.Appliance_Control_Thermostat_Frost
-        if ns.name in ability:
+        if ns in ability:
             self.update_namespace_state(
                 ns,
                 MerossEmulator.NSDefaultMode.MixOut,
                 {
-                    mc.KEY_CHANNEL: 0,
+                    ns.key_channel: 0,
                     "value": 0.5 * self.device_scale,
                     "max": 3.5 * self.device_scale,
                     "min": 0.5 * self.device_scale,
@@ -143,12 +143,12 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
                 },
             )
         ns = mn_t.Appliance_Control_Thermostat_Overheat
-        if ns.name in ability:
+        if ns in ability:
             self.update_namespace_state(
                 ns,
                 MerossEmulator.NSDefaultMode.MixOut,
                 {
-                    mc.KEY_CHANNEL: 0,
+                    ns.key_channel: 0,
                     "value": 32 * self.device_scale,
                     "max": 70 * self.device_scale,
                     "min": 20 * self.device_scale,
@@ -158,14 +158,14 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
                 },
             )
 
-        if mn_t.Appliance_Control_Thermostat_Mode.name in ability:
+        if mn_t.Appliance_Control_Thermostat_Mode in ability:
             self.mode_ns = mn_t.Appliance_Control_Thermostat_Mode
             p_mode: "mt_t.Mode_C" = descriptor.digest[mc.KEY_THERMOSTAT][mc.KEY_MODE][0]
             self.p_mode = p_mode
             self.temp_min = p_mode[mc.KEY_MIN]
             self.temp_max = p_mode[mc.KEY_MAX]
             self.update_state_func = lambda: self._update_Mode(p_mode)
-        elif mn_t.Appliance_Control_Thermostat_ModeB.name in ability:
+        elif mn_t.Appliance_Control_Thermostat_ModeB in ability:
             self.mode_ns = mn_t.Appliance_Control_Thermostat_ModeB
             p_modeb: "mt_t.ModeB_C" = descriptor.digest[mc.KEY_THERMOSTAT][
                 mc.KEY_MODEB
@@ -177,10 +177,10 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
             self.temp_min = p_ctlrange[mc.KEY_MIN]
             self.temp_max = p_ctlrange[mc.KEY_MAX]
             self.update_state_func = lambda: self._update_ModeB(p_modeb)
-        elif mn_t.Appliance_Control_Thermostat_ModeC.name in ability:
+        elif mn_t.Appliance_Control_Thermostat_ModeC in ability:
             self.mode_ns = mn_t.Appliance_Control_Thermostat_ModeC
             p_modec: "mt_t.ModeC_C" = self.namespaces[
-                mn_t.Appliance_Control_Thermostat_ModeC.name
+                mn_t.Appliance_Control_Thermostat_ModeC
             ][mn_t.Appliance_Control_Thermostat_ModeC.key][0]
             self.p_mode = p_modec
             self.temp_min = 5 * self.device_scale
@@ -200,10 +200,10 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
         self, method: str, namespace: str, payload: "MerossPayloadType", /
     ):
         if not namespace in (
-            mn_t.Appliance_Control_Thermostat_Calibration.name,
-            mn_t.Appliance_Control_Thermostat_Frost.name,
-            mn_t.Appliance_Control_Thermostat_DeadZone.name,
-            mn_t.Appliance_Control_Thermostat_Overheat.name,
+            mn_t.Appliance_Control_Thermostat_Calibration,
+            mn_t.Appliance_Control_Thermostat_Frost,
+            mn_t.Appliance_Control_Thermostat_DeadZone,
+            mn_t.Appliance_Control_Thermostat_Overheat,
         ):
             return super()._handler_default(method, namespace, payload)
 
@@ -287,7 +287,7 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
 
     def _SET_Appliance_Control_TempUnit(self, header, payload):
         ns = mn.Appliance_Control_TempUnit
-        p_channel_state_list = self.namespaces[ns.name][ns.key]
+        p_channel_state_list = self.namespaces[ns][ns.key]
         for p_channel in payload[ns.key]:
             p_channel_state = update_dict_strict_by_key(p_channel_state_list, p_channel)
         return mc.METHOD_SETACK, {ns.key: p_channel_state_list}
@@ -311,7 +311,7 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
 
     def _SET_Appliance_Control_Thermostat_ModeC(self, header, payload):
         ns = mn_t.Appliance_Control_Thermostat_ModeC
-        p_digest_modec_list = self.namespaces[ns.name][ns.key]
+        p_digest_modec_list = self.namespaces[ns][ns.key]
         for p_modec in payload[ns.key]:
             p_digest_modec: "mt_t.ModeC_C" = update_dict_strict_by_key(
                 p_digest_modec_list, p_modec
@@ -436,6 +436,4 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
             self.p_mode[mc.KEY_CURRENTTEMP] = _current_temp
             self.update_state_func()
             if self.mqtt_connected:
-                self.mqtt_publish_push(
-                    self.mode_ns.name, {self.mode_ns.key: [self.p_mode]}
-                )
+                self.mqtt_publish_push(self.mode_ns, {self.mode_ns.key: [self.p_mode]})

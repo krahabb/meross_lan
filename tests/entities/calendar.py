@@ -18,8 +18,8 @@ class EntityTest(EntityComponentTest):
     ENTITY_TYPE = CalendarEntity
 
     NAMESPACES_ENTITIES = {
-        mn_t.Appliance_Control_Thermostat_Schedule.name: [Mts200Climate.Schedule],
-        mn_t.Appliance_Control_Thermostat_ScheduleB.name: [
+        mn_t.Appliance_Control_Thermostat_Schedule: [Mts200Climate.Schedule],
+        mn_t.Appliance_Control_Thermostat_ScheduleB: [
             Mts960Climate.Schedule,
             Mts300Climate.Schedule,
         ],
