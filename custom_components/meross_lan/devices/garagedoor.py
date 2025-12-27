@@ -309,13 +309,13 @@ class MLGarage(MLCover):
 
     # interface: MLEntity
     async def async_shutdown(self):
-        await super().async_shutdown()
+        await MLCover.async_shutdown(self)
         self.binary_sensor_timeout = None  # type: ignore
         self.number_close_timeout = None
         self.number_open_timeout = None
 
     async def async_added_to_hass(self):
-        await super().async_added_to_hass()
+        await MLCover.async_added_to_hass(self)
         """
         we're trying to recover the '_transition_duration' from previous state
         """
@@ -333,7 +333,7 @@ class MLGarage(MLCover):
 
     def set_unavailable(self):
         self._config = {}
-        super().set_unavailable()
+        MLCover.set_unavailable(self)
 
     # interface: cover.CoverEntity
     async def async_open_cover(self, **kwargs):
@@ -527,7 +527,7 @@ class MLGarage(MLCover):
         self.is_closing = False
         self.is_opening = False
         self._transition_start = 0.0
-        super()._transition_cancel()
+        MLCover._transition_cancel(self)
 
     async def _async_transition_callback(self, /):
         self._transition_unsub = None

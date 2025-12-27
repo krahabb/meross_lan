@@ -37,7 +37,6 @@ class MLCover(me.MLEntity, cover.CoverEntity):
         _transition_unsub: asyncio.TimerHandle | None
         _transition_end_unsub: asyncio.TimerHandle | None
 
-    ENTITY_COMPONENT = cover
     PLATFORM = cover.DOMAIN
 
     try:
@@ -156,7 +155,7 @@ class MLRollerShutter(MLCover):
 
         except Exception:
             self._position_native_isgood = False
-        super().__init__(manager, 0)
+        MLCover.__init__(self, manager, 0)
         self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
         self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
         if mn.Appliance_RollerShutter_Adjust.name in descriptor.ability:
@@ -172,7 +171,7 @@ class MLRollerShutter(MLCover):
             manager.register_togglex_channel(self)
 
     async def async_added_to_hass(self):
-        await super().async_added_to_hass()
+        await MLCover.async_added_to_hass(self)
         """
         we're trying to recover the 'timed' position from previous state
         if it happens it wasn't updated too far in time
@@ -244,71 +243,6 @@ class MLRollerShutter(MLCover):
 
     async def async_request_position(self, position: int):
         self._transition_cancel()
-        """
-        TODO: looks like the mrs100 doesn't love set_position in multiple req.
-        update 16-05-2024: it might be the problem lies in the payloads sent as
-        lists. The mrs100 is under investigation following #419 and #321.
-
-        manager = self.manager
-        channel = self.channel
-        if (manager.multiple_max >= 3) and (
-            responses := await manager.async_multiple_requests_ack(
-                (
-                    (
-                        mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
-                        mc.METHOD_SET,
-                        {
-                            mc.KEY_POSITION: [
-                                {
-                                    mc.KEY_CHANNEL: channel,
-                                    mc.KEY_POSITION: position,
-                                }
-                            ]
-                        },
-                    ),
-                    (
-                        mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
-                        mc.METHOD_GET,
-                        {mc.KEY_STATE: [{mc.KEY_CHANNEL: channel}]},
-                    ),
-                    (
-                        mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
-                        mc.METHOD_GET,
-                        {mc.KEY_POSITION: [{mc.KEY_CHANNEL: channel}]},
-                    ),
-                )
-            )
-        ):
-            # we expect a full success (3 responses) 99% of the times
-            # since the only reason for failing is the device not supporting
-            # ns_multiple (unlikely) or the response being truncated due to
-            # overflow (unlikely too)
-            # At this stage the responses are already processed by the Device
-            # interface and we should already be 'in transition'
-            if responses[0][mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_SETACK:
-                if (
-                    (len(responses) == 3)
-                    and (responses[1][mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_GETACK)
-                    and (responses[2][mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_GETACK)
-                ):
-                    # our state machine is already updated since the STATE and POSITION
-                    # messages were correctly processed
-                    return True
-
-                if (
-                    not self._transition_unsub
-                    and position != mc.ROLLERSHUTTER_POSITION_STOP
-                ):
-                    # this could happen if the shutter was already 'at position'
-                    # so that it didn't start an internal transition (guessing)
-                    # or if the 2nd message in our requests failed somehow
-                    # at any rate, we'll monitor the state
-                    await self._async_transition_callback()
-                return True
-        """
-
-        # in case the ns_multiple didn't succesfully kick-in we'll
-        # fallback to the legacy procedure
         if await self.manager.async_request_ack(
             mn.Appliance_RollerShutter_Position.name,
             mc.METHOD_SET,
@@ -326,7 +260,7 @@ class MLRollerShutter(MLCover):
 
     def set_unavailable(self):
         self._mrs_state = None
-        super().set_unavailable()
+        MLCover.set_unavailable(self)
 
     def _parse_adjust(self, payload: dict):
         # payload = {"channel": 0, "status": 0}
@@ -336,10 +270,14 @@ class MLRollerShutter(MLCover):
 
     def _parse_config(self, payload: dict):
         # payload = {"channel": 0, "signalOpen": 50000, "signalClose": 50000}
-        if mc.KEY_SIGNALOPEN in payload:
+        try:
             self.number_signalOpen.update_device_value(payload[mc.KEY_SIGNALOPEN])
-        if mc.KEY_SIGNALCLOSE in payload:
+        except KeyError:
+            pass
+        try:
             self.number_signalClose.update_device_value(payload[mc.KEY_SIGNALCLOSE])
+        except KeyError:
+            pass
 
     def _parse_position(self, payload: dict):
         """
@@ -523,7 +461,8 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
 
     def __init__(self, cover: "MLRollerShutter", key: str):
         self.key_value = key
-        super().__init__(
+        MLConfigNumber.__init__(
+            self,
             cover.manager,
             cover.channel,
             f"config_{key}",
