@@ -16,6 +16,10 @@ from . import MerossEmulator
 if TYPE_CHECKING:
     from typing import Final
 
+    from custom_components.meross_lan.merossclient.protocol.types import (
+        rollershutter as mt_rs,
+    )
+
     from . import MerossEmulatorDescriptor
 
 
@@ -164,8 +168,23 @@ class RollerShutterMixin(MerossEmulator if TYPE_CHECKING else object):
         # return mc.METHOD_GETACK, {"channel": 0}  # debug testing'strange' format response in #447
         return mc.METHOD_GETACK, {"togglex": []}
 
+    def _SET_Appliance_RollerShutter_Adjust(self, header, payload):
+        p_request: "mt_rs.AdjustRequest_C"
+        for p_request in extract_dict_payloads(payload[mc.KEY_ADJUST]):
+
+            channel: int = p_request[mc.KEY_CHANNEL]
+            value: int = p_request[mc.KEY_VALUE]
+
+            p_adjust = self.get_namespace_state(
+                mn.Appliance_RollerShutter_Adjust, channel
+            )
+            p_adjust[mc.KEY_STATUS] = 1 if value == 1 else 0
+
+        return mc.METHOD_SETACK, {}
+
     def _SET_Appliance_RollerShutter_Position(self, header, payload):
         """payload = { "postion": {"channel": 0, "position": 100}}"""
+        p_request: "mt_rs.Position_C"
         for p_request in extract_dict_payloads(payload[mc.KEY_POSITION]):
 
             channel: int = p_request[mc.KEY_CHANNEL]

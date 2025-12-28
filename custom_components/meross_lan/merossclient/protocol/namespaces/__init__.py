@@ -681,7 +681,7 @@ Appliance_Mcu_Hp110_Preview = ns("Appliance.Mcu.Hp110.Preview", "preview", S_D)
 
 
 Appliance_RollerShutter_Adjust = ns(
-    "Appliance.RollerShutter.Adjust", mc.KEY_ADJUST, PSQ, IDX_C
+    "Appliance.RollerShutter.Adjust", mc.KEY_ADJUST, S_DC, PSQ, IDX_C
 )  # maybe SET supported too and/or GET with EMPTY
 Appliance_RollerShutter_Config = ns(
     "Appliance.RollerShutter.Config", mc.KEY_CONFIG, G_LC, S_DC, IDX_C

@@ -41,9 +41,6 @@ class MtsConfigSwitch(MLDeviceSwitch):
 
     number_temperature: "MtsCommonTemperatureExtNumber"
 
-    # HA core entity attributes:
-    entity_category = MLDeviceSwitch.EntityCategory.CONFIG
-
     __slot__ = ("number_temperature",)
 
     def __init__(
@@ -51,7 +48,8 @@ class MtsConfigSwitch(MLDeviceSwitch):
     ):
         self.number_temperature = number_temperature
         self.ns = number_temperature.ns
-        super().__init__(
+        MLDeviceSwitch.__init__(
+            self,
             number_temperature.manager,
             number_temperature.channel,
             f"{number_temperature.entitykey}_switch",
@@ -60,7 +58,7 @@ class MtsConfigSwitch(MLDeviceSwitch):
         )
 
     async def async_shutdown(self):
-        await super().async_shutdown()
+        await MLDeviceSwitch.async_shutdown(self)
         self.number_temperature = None  # type: ignore
 
     def update_onoff(self, onoff: bool, /):
@@ -71,6 +69,7 @@ class MtsConfigSwitch(MLDeviceSwitch):
             if number_temperature.available != onoff:
                 number_temperature.available = onoff
                 number_temperature.flush_state()
+            return True
 
 
 class MtsCommonTemperatureNumber(MLConfigNumber):
@@ -242,11 +241,10 @@ class MtsExternalSensorSwitch(MLDeviceSwitch):
     ns = mn_t.Appliance_Control_Thermostat_Sensor
     key_value = mc.KEY_MODE
 
-    # HA core entity attributes:
-    entity_category = MLDeviceSwitch.EntityCategory.CONFIG
-
     def __init__(self, climate: "MtsThermostatClimate", /):
-        super().__init__(climate.manager, climate.channel, "external sensor mode")
+        MLDeviceSwitch.__init__(
+            self, climate.manager, climate.channel, "external sensor mode"
+        )
         climate.manager.register_parser_entity(self)
 
 

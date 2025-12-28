@@ -1,6 +1,5 @@
 from homeassistant.components import number as haec
 
-from custom_components.meross_lan.cover import MLRollerShutterConfigNumber
 from custom_components.meross_lan.devices.garagedoor import (
     MLGarageConfigNumber,
     MLGarageMultipleConfigNumber,
@@ -10,6 +9,9 @@ from custom_components.meross_lan.devices.hub import (
     MST100SubDevice,
 )
 from custom_components.meross_lan.devices.hub.mts100 import Mts100Climate
+from custom_components.meross_lan.devices.rollershutter import (
+    MLRollerShutterConfigNumber,
+)
 from custom_components.meross_lan.devices.thermostat.mts200 import Mts200Climate
 from custom_components.meross_lan.devices.thermostat.mts300 import Mts300Climate
 from custom_components.meross_lan.devices.thermostat.mts960 import Mts960Climate

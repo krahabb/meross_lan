@@ -100,9 +100,6 @@ class HubToggleX(MLDeviceSwitch):
 
     ns = mn_h.Appliance_Hub_ToggleX
 
-    # HA core entity attributes:
-    entity_category = MLDeviceSwitch.EntityCategory.CONFIG
-
 
 class HubSubIdChannelMixin(MLEntity if TYPE_CHECKING else object):
     """
@@ -1149,9 +1146,7 @@ class MS100SubDevice(SubDevice):
         # the adjust sooner than scheduled in case the change
         # was due to an adjustment
         if sensor.update_device_value(device_value):
-            strategy = self.hub.namespace_handlers[
-                mn_h.Appliance_Hub_Sensor_Adjust
-            ]
+            strategy = self.hub.namespace_handlers[mn_h.Appliance_Hub_Sensor_Adjust]
             if strategy.lastrequest < (self.hub.lastresponse - 30):
                 strategy.polling_epoch_next = 0.0
 

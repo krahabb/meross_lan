@@ -637,9 +637,6 @@ class OverTempEnableSwitch(EntityNamespaceMixin, MLDeviceSwitch):
     ns = mn.Appliance_Config_OverTemp
     key_value = mc.KEY_ENABLE
 
-    # HA core entity attributes:
-    entity_category = MLDeviceSwitch.EntityCategory.CONFIG
-
     __slots__ = ("sensor_overtemp_type",)
 
     def __init__(self, manager: "Device", /):

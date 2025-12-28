@@ -373,7 +373,7 @@ class Device(BaseDevice, ConfigEntryManager):
             ".devices.thermostat.mts300",
             "Mts300Climate",
         ),
-        mn.Appliance_RollerShutter_State: (".cover", "MLRollerShutter"),
+        mn.Appliance_RollerShutter_State: (".devices.rollershutter", "MLRollerShutter"),
         mn.Appliance_System_DNDMode: (".light", "MLDNDLightEntity"),
         mn.Appliance_System_Runtime: (".sensor", "MLSignalStrengthSensor"),
     }

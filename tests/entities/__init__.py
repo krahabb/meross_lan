@@ -82,7 +82,7 @@ class EntityComponentTest:
         state = await self.async_service_call(service, service_data)
         assert (
             state.state == expected_state
-        ), f"service:{service} expected_state:{expected_state}"
+        ), f"service:{service} - result:{state.state} - expected:{expected_state}"
         await self.device_context.async_poll_single()
         assert (state := self.hass_states.get(self.entity_id)), (
             "missing state",
@@ -90,7 +90,7 @@ class EntityComponentTest:
         )
         assert (
             state.state == expected_state
-        ), f"service:{service} expected_state:{expected_state}"
+        ), f"service:{service} - result:{state.state} - expected:{expected_state}"
         return state
 
     async def async_test_each_callback(self, entity: "MLEntity"):

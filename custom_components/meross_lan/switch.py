@@ -4,9 +4,7 @@ from homeassistant.components import switch
 
 from .helpers import entity as me
 from .helpers.namespaces import EntityNamespaceMixin, mc, mn
-
 from .merossclient import extract_dict_payloads
-
 
 if TYPE_CHECKING:
     from typing import ClassVar, NotRequired, Unpack
@@ -41,7 +39,9 @@ class MLSwitch(me.MLBinaryEntity, switch.SwitchEntity):
     PLATFORM = switch.DOMAIN
     DeviceClass = switch.SwitchDeviceClass
 
+    # HA core entity attributes:
     _attr_device_class = switch.SwitchDeviceClass.SWITCH
+    entity_category = me.MLBinaryEntity.EntityCategory.CONFIG
 
 
 class MLEmulatedSwitch(me.MEPartialAvailableMixin, MLSwitch):
@@ -49,9 +49,6 @@ class MLEmulatedSwitch(me.MEPartialAvailableMixin, MLSwitch):
     Switch entity not related to any device feature but used to configure
     behaviors for meross_lan entities.
     """
-
-    # HA core entity attributes:
-    entity_category = MLSwitch.EntityCategory.CONFIG
 
     def __init__(
         self,
@@ -104,12 +101,9 @@ class PhysicalLockSwitch(MLDeviceSwitch):
 
     ns = mn.Appliance_Control_PhysicalLock
 
-    # HA core entity attributes:
-    entity_category = MLDeviceSwitch.EntityCategory.CONFIG
-
     def __init__(self, manager: "Device", /):
         # right now we expect only 1 entity on channel == 0 (whatever)
-        super().__init__(manager, 0, mc.KEY_LOCK)
+        MLDeviceSwitch.__init__(self, manager, 0, mc.KEY_LOCK)
         manager.register_parser_entity(self)
 
 
@@ -125,6 +119,7 @@ class MLToggle(EntityNamespaceMixin, MLDeviceSwitch):
 
     # HA core entity attributes:
     _attr_device_class = MLDeviceSwitch.DeviceClass.OUTLET
+    entity_category = None
 
 
 def digest_init_toggle(device: "Device", digest: dict, /) -> "DigestInitReturnType":
@@ -139,6 +134,7 @@ class MLToggleX(MLDeviceSwitch):
 
     # HA core entity attributes:
     _attr_device_class = MLDeviceSwitch.DeviceClass.OUTLET
+    entity_category = None
 
     def __init__(self, manager: "Device", channel, /):
         MLDeviceSwitch.__init__(self, manager, channel, None)
