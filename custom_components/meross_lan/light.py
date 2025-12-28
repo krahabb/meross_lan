@@ -736,6 +736,7 @@ class MLLightEffect(MLLight):
             if onoff and (mc.KEY_EFFECT in self._light):
                 self._light_effect_handler.polling_period = 0
             self.flush_state()
+            return True
 
     # interface: MLLight
     @override

@@ -86,6 +86,7 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
             else:
                 self.percentage = 0
             self.flush_state()
+            return True
 
     # interface: fan.FanEntity
     @override
