@@ -7,7 +7,6 @@ from custom_components.meross_lan.merossclient import (
     delete_element_by_key,
     get_element_by_key,
     get_element_by_key_safe,
-    get_mts_digest,
     update_dict_strict,
 )
 from custom_components.meross_lan.merossclient.protocol import (
@@ -19,11 +18,20 @@ from custom_components.meross_lan.merossclient.protocol.namespaces import hub as
 if TYPE_CHECKING:
     from typing import Any, Mapping
 
-    from custom_components.meross_lan.merossclient.protocol.types import (
-        MerossPayloadType,
-    )
+    from custom_components.meross_lan.merossclient.protocol.types import JsonDict
 
     from . import MerossEmulator, MerossEmulatorDescriptor
+
+
+def get_mts_digest(p_subdevice_digest: "JsonDict") -> "JsonDict | None":
+    """Parses the subdevice dict from the hub digest to identify if it's
+    an mts-like (and so queried through 'Hub.Mts100.All')."""
+    for digest_mts_key in mc.MTS100_ALL_TYPESET:
+        # digest for mts valves has the usual fields plus a (sub)dict
+        # named according to the model. Here we should find the mode
+        if digest_mts_key in p_subdevice_digest:
+            return p_subdevice_digest[digest_mts_key]
+    return None
 
 
 class HubMixin(MerossEmulator if TYPE_CHECKING else object):
