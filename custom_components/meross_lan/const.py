@@ -242,8 +242,6 @@ PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT = 5
 """(mimimum) timeout before querying cloud api after loading the profile"""
 PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT = 86400  # 1 day
 """timeout for querying cloud api deviceInfo endpoint"""
-PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT = 604800  # 1 week
-"""timeout for querying cloud api latestVersion endpoint"""
 PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT = 30
 """used to delay updated profile data to storage"""
 PARAM_HEADER_SIZE = 300

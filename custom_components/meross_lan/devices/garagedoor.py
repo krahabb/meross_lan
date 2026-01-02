@@ -11,7 +11,7 @@ from ..const import (
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
 )
 from ..cover import MLCover
-from ..helpers import clamp, entity as me, versiontuple
+from ..helpers import clamp, entity as me
 from ..helpers.namespaces import NamespaceHandler, mc, mn
 from ..number import MLConfigNumber, MLEmulatedNumber
 from ..switch import MLDeviceSwitch
@@ -682,7 +682,7 @@ class GarageDoorStateNamespaceHandler(NamespaceHandler):
         NamespaceHandler.__init__(self, device, mn.Appliance_GarageDoor_State)
         descriptor = device.descriptor
         if descriptor.type.startswith(mc.TYPE_MSG200) and (
-            versiontuple(descriptor.firmwareVersion) <= (4, 2, 1)
+            descriptor.firmware_version <= (4, 2, 1)
         ):
             # trying to patch lacking of state polling (#538)
             # It's not sure querying with the list of channels works.

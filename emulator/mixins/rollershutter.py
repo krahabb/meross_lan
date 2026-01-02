@@ -4,7 +4,7 @@ import asyncio
 from time import time
 from typing import TYPE_CHECKING
 
-from custom_components.meross_lan.helpers import clamp, versiontuple
+from custom_components.meross_lan.helpers import clamp
 from custom_components.meross_lan.merossclient import extract_dict_payloads
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
@@ -153,9 +153,7 @@ class RollerShutterMixin(MerossEmulator if TYPE_CHECKING else object):
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key: str):
         super().__init__(descriptor, key)
         self._transitions: dict[int, _Transition] = {}
-        self.has_native_position = versiontuple(
-            descriptor.firmwareVersion
-        ) >= versiontuple("6.6.6")
+        self.has_native_position = descriptor.firmware_version >= (6, 6, 6)
 
     def shutdown(self):
         for transition in tuple(self._transitions.values()):

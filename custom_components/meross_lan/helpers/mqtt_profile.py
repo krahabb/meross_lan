@@ -28,7 +28,16 @@ from .obfuscate import obfuscated_dict
 
 if TYPE_CHECKING:
     import asyncio
-    from typing import Awaitable, Callable, ClassVar, Final, Mapping, TypedDict, Unpack
+    from typing import (
+        Awaitable,
+        Callable,
+        ClassVar,
+        Final,
+        Iterable,
+        Mapping,
+        TypedDict,
+        Unpack,
+    )
 
     from homeassistant.components import mqtt as ha_mqtt
     from homeassistant.config_entries import ConfigEntry
@@ -789,8 +798,11 @@ class MQTTProfile(ConfigEntryManager):
         return None
 
     def get_latest_version(
-        self, descriptor: "MerossDeviceDescriptor"
+        self, type: str, subtype: str, /
     ) -> "LatestVersionType | None":
+        return None
+
+    def get_latest_versions(self, /) -> dict | None:
         return None
 
     def link(self, device: "Device"):

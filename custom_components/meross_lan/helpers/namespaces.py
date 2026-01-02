@@ -922,6 +922,29 @@ class VoidNamespaceHandler(NamespaceHandler):
         pass
 
 
+class McuFirmwareNamespaceHandler(NamespaceHandler):
+
+    # TODO: refactor namespace_init_func to provide the namespace arg so that we can better generalize this
+    def __init__(self, device: "Device"):
+        NamespaceHandler.__init__(
+            self,
+            device,
+            mn.Appliance_Mcu_Firmware,
+            handler=device._handle_Appliance_Mcu_Firmware,
+        )
+
+
+class McuHp110FirmwareNamespaceHandler(NamespaceHandler):
+
+    def __init__(self, device: "Device"):
+        NamespaceHandler.__init__(
+            self,
+            device,
+            mn.Appliance_Mcu_Hp110_Firmware,
+            handler=device._handle_Appliance_Mcu_Firmware,
+        )
+
+
 """
 Default timeouts and config parameters for polled namespaces.
 The configuration is set in the tuple as:
@@ -1101,6 +1124,20 @@ POLLING_STRATEGY_CONF: dict[mn.Namespace, "NamespaceConfigType"] = {
         mlc.PARAM_HEADER_SIZE,
         140,
         NamespaceHandler.async_poll_smart,
+    ),
+    mn.Appliance_Mcu_Firmware: (
+        0,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        80,
+        NamespaceHandler.async_poll_once,
+    ),
+    mn.Appliance_Mcu_Hp110_Firmware: (
+        0,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        80,
+        NamespaceHandler.async_poll_once,
     ),
     mn.Appliance_RollerShutter_Adjust: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,

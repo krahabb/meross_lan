@@ -60,13 +60,6 @@ def reverse_lookup(_dict: dict, value):
     return None
 
 
-def versiontuple(version: str):
-    """
-    helper for version checking, comparisons, etc
-    """
-    return tuple(map(int, (version.split("."))))
-
-
 def datetime_from_epoch(epoch, tz: "tzinfo | None"):
     """
     converts an epoch (UTC seconds) in a datetime.

@@ -45,6 +45,7 @@ class MerossMessageType(TypedDict):
 
 type MerossRequestType = tuple[MerossNamespaceType, MerossMethodType, MerossPayloadType]
 type KeyType = Union[MerossHeaderType, str, None]
+type VersionTupleType = tuple[int, ...]
 
 
 class ChannelPayload(TypedDict):
@@ -84,4 +85,4 @@ class HistoryData(TypedDict):
     timestamp: int
 
 
-from . import config, control, sensor, system, thermostat
+from . import config, control, mcu, rollershutter, sensor, system, thermostat

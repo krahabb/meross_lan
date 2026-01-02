@@ -42,13 +42,12 @@ class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
             pass
 
         _attr_device_class: Final[sensor.SensorDeviceClass]
+        native_value: sensor.StateType
 
     PLATFORM = sensor.DOMAIN
 
     # HA core entity attributes:
     _attr_device_class = sensor.SensorDeviceClass.ENUM
-    native_value: "sensor.StateType"
-    native_unit_of_measurement: None = None
 
     __slots__ = ("native_value",)
 
@@ -66,11 +65,13 @@ class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
         self.native_value = None
         super().set_unavailable()
 
-    def update_native_value(self, native_value: sensor.StateType):
-        if self.native_value != native_value:
-            self.native_value = native_value
+    def update_device_value(self, device_value):
+        if self.native_value != device_value:
+            self.native_value = device_value
             self.flush_state()
             return True
+
+    update_native_value = update_device_value
 
 
 class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):

@@ -31,10 +31,19 @@ if TYPE_CHECKING:
         Unpack,
     )
 
+    from cloudapi import LatestVersionType
+
     from .protocol.message import MerossResponse
     from .protocol.namespaces import Namespace
-    from .protocol.types import JsonDict, JsonList, MerossRequestType
-    from .protocol.types.config import WifiList
+    from .protocol.types import (
+        JsonDict,
+        JsonList,
+        MerossRequestType,
+        VersionTupleType,
+        config as mt_cf,
+        control as mt_c,
+        mcu as mt_m,
+    )
 
     class LoggerT(Protocol):
         """Protocol definition for logger-like instances used in the library."""
@@ -204,10 +213,18 @@ def extract_dict_payloads[_T](payload: _T | list[_T]) -> "Iterable[_T]":
         yield payload  # type: ignore
 
 
+def versiontuple(version: str) -> "VersionTupleType":
+    """
+    Splits a version string like "1.2.3" into a tuple of integers (1,2,3)
+    """
+    return tuple(map(int, version.split(".")))
+
+
 class HostAddress:
     """
     Helper class to build an host:port representation for broker addresses
-    carried in Meross payloads
+    carried in Meross payloads. TODO: add helper to build from firmware dicts
+    in device descriptors.
     """
 
     host: str
@@ -305,7 +322,7 @@ def get_productnametype(producttype: str) -> str:
 
 class MerossDeviceDescriptor:
     """
-    Utility class to extract various info from Appliance.System.All
+    Utility class to extract various info from Appliance.System.All/Ability
     device descriptor
     """
 
@@ -315,6 +332,7 @@ class MerossDeviceDescriptor:
 
         payload: Final[JsonDict]
         channels: Final[frozenset[int]]
+        # cached accessors to native keys in Appliance.System.All payload
         all: JsonDict
         ability: JsonDict
         digest: JsonDict
@@ -334,10 +352,16 @@ class MerossDeviceDescriptor:
         firmwareVersion: str
         time: dict
         timezone: str | None
+        # computed cached helpers
         productname: str
         productnametype: str
         productmodel: str
+        type_subtype: tuple[str, str]
         is_refoss: bool
+        firmware_version: VersionTupleType
+
+        # devices with additional mcu firmware
+        mcu: mt_m.Firmware | JsonDict | None
 
     NO_CHANNEL = frozenset()
     SINGLE_CHANNEL = frozenset({0})
@@ -370,7 +394,9 @@ class MerossDeviceDescriptor:
         "productname": lambda _self: get_productnameuuid(_self.type, _self.uuid),
         "productnametype": lambda _self: get_productnametype(_self.type),
         "productmodel": lambda _self: f"{_self.type} {_self.hardware.get(mc.KEY_VERSION, '')}",
+        "type_subtype": lambda _self: (_self.type, _self.subType),
         "is_refoss": lambda _self: mc.RefossModel.match(_self.type),
+        "firmware_version": lambda _self: versiontuple(_self.firmwareVersion),
     }
 
     __slots__ = (
@@ -378,6 +404,7 @@ class MerossDeviceDescriptor:
         "channels",
         "all",
         "ability",
+        "mcu",
         "digest",
         "__dict__",
     )
@@ -413,6 +440,16 @@ class MerossDeviceDescriptor:
             self.channels = (
                 frozenset(_channels) if _channels else MerossDeviceDescriptor.NO_CHANNEL
             )
+
+        # mcu firmware info need to be filled at runtime when/if needed by querying
+        # firmware namespaces. When 'None' it means we have no mcu upgrade needs while
+        # an empty dict means the device has mcu firmware but we don't know its version yet.
+        if (mn.Appliance_Mcu_Firmware in self.ability) or (
+            mn.Appliance_Mcu_Hp110_Firmware in self.ability
+        ):
+            self.mcu = {}
+        else:
+            self.mcu = None
 
     def __getattr__(self, name):
         value = MerossDeviceDescriptor.DYNAMIC_ATTRS[name](self)
@@ -467,6 +504,32 @@ class MerossDeviceDescriptor:
                     HostAddress(second_server, get_port_safe(fw, mc.KEY_SECONDPORT))
                 )
         return _brokers
+
+    def build_upgrade_payload(
+        self,
+        latest_version: "LatestVersionType",
+        /,
+    ) -> "mt_c.Upgrade":
+        assert (
+            self.type == latest_version[mc.KEY_TYPE]
+            and self.subType == latest_version[mc.KEY_SUBTYPE]
+        )
+        upgrade_payload: "mt_c.Upgrade" = {}
+        if versiontuple(latest_version[mc.KEY_VERSION]) > self.firmware_version:
+            upgrade_payload[mc.KEY_URL] = latest_version[mc.KEY_URL]
+            upgrade_payload[mc.KEY_MD5] = latest_version[mc.KEY_MD5]
+        if self.mcu is not None:
+            mcu_latest_version = latest_version[mc.KEY_MCU][0]
+            if versiontuple(mcu_latest_version[mc.KEY_VERSION]) > versiontuple(self.mcu[mc.KEY_VERSION]):  # type: ignore
+                upgrade_payload[mc.KEY_MCU] = [
+                    {
+                        mc.KEY_TYPE: mcu_latest_version[mc.KEY_TYPE],
+                        mc.KEY_URL: mcu_latest_version[mc.KEY_URL],
+                        mc.KEY_MD5: mcu_latest_version[mc.KEY_MD5],
+                    }
+                ]
+
+        return upgrade_payload
 
 
 class _BaseClient:
@@ -572,7 +635,7 @@ class _BaseClient:
         sort_key must be a valid dict key available in the native payload
         (see protocol.types.config.Wifi)."""
 
-        p_wifilist: "WifiList" = await self.async_request_ns_payload(
+        p_wifilist: "mt_cf.WifiList" = await self.async_request_ns_payload(
             mn.Appliance_Config_WifiList
         )
         if sort_key:

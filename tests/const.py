@@ -10,6 +10,8 @@ if TYPE_CHECKING:
     from typing import TypedDict
 
     from custom_components.meross_lan.helpers.meross_profile import (
+        DeviceInfoExtType,
+        DeviceInfoStorageType,
         MerossProfileStoreType,
     )
 
@@ -164,7 +166,7 @@ MOCK_PROFILE_MSH300_DEVNAME = "Cloud smart hub"
 MOCK_PROFILE_MSH300_DOMAIN = "mqtt-2.meross_lan.local"
 MOCK_PROFILE_MSH300_RESERVEDDOMAIN = "mqtt-1.meross_lan.local"
 # cloudapi mocked responses
-MOCK_CLOUDAPI_DEVICE_DEVLIST: dict[str, cloudapi.DeviceInfoType] = {
+MOCK_CLOUDAPI_DEVICE_DEVLIST: "DeviceInfoStorageType" = {
     MOCK_PROFILE_MSS310_UUID: {
         "uuid": MOCK_PROFILE_MSS310_UUID,
         "onlineStatus": 1,
@@ -235,7 +237,7 @@ MOCK_CLOUDAPI_HUB_GETSUBDEVICES: dict[str, list[cloudapi.SubDeviceInfoType]] = {
 }
 # MerossProfile storage
 MOCK_PROFILE_STORE_KEY = f"{mlc.DOMAIN}.profile.{MOCK_PROFILE_ID}"
-MOCK_PROFILE_STORE_DEVICEINFO_DICT: dict[str, cloudapi.DeviceInfoType] = {
+MOCK_PROFILE_STORE_DEVICEINFO: "DeviceInfoStorageType" = {
     MOCK_PROFILE_MSS310_UUID: {
         "uuid": MOCK_PROFILE_MSS310_UUID,
         "onlineStatus": 1,
@@ -269,10 +271,10 @@ MOCK_PROFILE_STORE = {
     "version": 1,
     "data": {
         "appId": "0",
-        "deviceInfo": MOCK_PROFILE_STORE_DEVICEINFO_DICT,
+        "deviceInfo": MOCK_PROFILE_STORE_DEVICEINFO,
         "deviceInfoTime": 0.0,
         "latestVersion": [],
-        "latestVersionTime": 0.0,
+        "latestVersionHistory": {},
         "tokenRequestTime": 0.0,
         mc.KEY_TOKEN: MOCK_PROFILE_TOKEN,
     },

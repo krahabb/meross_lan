@@ -14,7 +14,7 @@ from ...helpers.namespaces import (
     mc,
     mn,
 )
-from ...merossclient import get_productnameuuid
+from ...merossclient import get_productnameuuid, versiontuple
 from ...merossclient.protocol.namespaces import hub as mn_h
 from ...number import MLConfigNumber
 from ...sensor import (
@@ -41,10 +41,20 @@ if TYPE_CHECKING:
 
     from ...helpers.device import AsyncRequestFunc, DigestInitReturnType
     from ...helpers.entity import MLEntity
+    from ...helpers.meross_profile import (
+        DeviceInfoExtType,
+        LatestVersionType,
+        MQTTProfile,
+    )
     from ...merossclient.cloudapi import SubDeviceInfoType
     from ...merossclient.protocol import types as mt
     from ...merossclient.protocol.namespaces import Namespace
-    from ...merossclient.protocol.types import JsonDict, JsonList, sensor as mt_s
+    from ...merossclient.protocol.types import (
+        JsonDict,
+        JsonList,
+        control as mt_c,
+        sensor as mt_s,
+    )
 
     WELL_KNOWN_TYPE_MAP: Final[dict[str, Callable]]
 
@@ -325,28 +335,31 @@ class HubMixin(Device if TYPE_CHECKING else object):
         *(ns for ns in mn.HUB_NAMESPACES.values() if not ns.can_query),
     )
 
-    # interface: EntityManager
-    def managed_entities(self, platform):
-        entities = super().managed_entities(platform)
-        for subdevice in self.subdevices.values():
-            entities.extend(subdevice.managed_entities(platform))
-        return entities
-
-    # interface: Device
+    @override
     async def async_shutdown(self):
         await super().async_shutdown()
         for subdevice in self.subdevices.values():
             await subdevice.async_shutdown()
         self.subdevices.clear()
 
+    @override
+    def get_type(self) -> mlc.DeviceType:
+        return mlc.DeviceType.HUB
+
+    @override
+    def managed_entities(self, platform):
+        entities = super().managed_entities(platform)
+        for subdevice in self.subdevices.values():
+            entities.extend(subdevice.managed_entities(platform))
+        return entities
+
+    @override
     def _set_offline(self):
         for subdevice in self.subdevices.values():
             subdevice._set_offline()
         super()._set_offline()
 
-    def get_type(self) -> mlc.DeviceType:
-        return mlc.DeviceType.HUB
-
+    @override
     def _create_handler(self, ns: "Namespace"):
         _handler = getattr(self, f"_handle_{ns.replace('.', '_')}", None)
         if _handler:
@@ -410,6 +423,20 @@ class HubMixin(Device if TYPE_CHECKING else object):
                     severity=self.IssueSeverity.WARNING,
                     translation_placeholders={"device_name": subdevice.name},
                 )
+
+    @override
+    def update_device_info(
+        self, device_info: "DeviceInfoExtType", profile: "MQTTProfile"
+    ):
+        super().update_device_info(device_info, profile)
+        # propagate device info to subdevices
+        for sub_device_info in device_info.get("__subDeviceInfo", []):
+            try:
+                self.subdevices[sub_device_info["subDeviceId"]].update_sub_device_info(
+                    sub_device_info
+                )
+            except KeyError:
+                continue
 
     # interface: self
     def log_duplicated_subdevice(self, subdevice_id: str, /):
@@ -521,7 +548,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
             return WELL_KNOWN_TYPE_MAP[model](self, p_subdevice)
         except:
             # build something anyway...
-            return SubDevice(self, p_subdevice, model)  # type: ignore
+            return SubDevice(self, p_subdevice, model)
 
 
 class SubDevice(NamespaceParser, BaseDevice):
@@ -622,6 +649,31 @@ class SubDevice(NamespaceParser, BaseDevice):
         self.hub = None  # type: ignore
         self.sensor_battery = None  # type: ignore
         self.switch_togglex = None
+
+    @override
+    def get_upgrade_payload(self, /) -> "mt_c.Upgrade":
+        # start from hub upgrade payload (eventually)
+        upgrade_payload = self.hub.get_upgrade_payload()
+        latest_version = self.latest_version
+        if versiontuple(latest_version[mc.KEY_VERSION]) > versiontuple(
+            self.device_registry_entry.sw_version or latest_version[mc.KEY_VERSION]
+        ):
+            upgrade_payload["subdev"] = [
+                {
+                    "devid": self.subId,
+                    mc.KEY_URL: latest_version[mc.KEY_URL],
+                    mc.KEY_MD5: latest_version[mc.KEY_MD5],
+                }
+            ]
+        return upgrade_payload
+
+    @override
+    def get_upgrade_info(self, /):
+        return (
+            self.device_registry_entry.sw_version,
+            self.latest_version.get(mc.KEY_VERSION),
+            self.latest_version.get(mc.KEY_DESCRIPTION),
+        )
 
     @property
     @override

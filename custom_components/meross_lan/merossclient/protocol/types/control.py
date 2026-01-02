@@ -3,13 +3,18 @@ A collection of typing definitions for payloads in Appliance.Control.*
 (excluding Appliance.Control.Sensor.* and Appliance.Control.Thermostat.*)
 """
 
-from . import ChannelOnOff, ChannelPayload, HistoryData, TypedDict, _MerossPayloadType
+from . import (
+    ChannelOnOff,
+    ChannelPayload,
+    HistoryData,
+    NotRequired,
+    TypedDict,
+    _MerossPayloadType,
+)
 
 
-class Beep_C(ChannelPayload):
+class Beep_C(ChannelOnOff):
     """Appliance.Control.Beep"""
-
-    onoff: int
 
 
 class ConsumptionH_C(ChannelPayload):
@@ -59,3 +64,27 @@ class PhysicalLock(_MerossPayloadType):
     """Appliance.Control.PhysicalLock payload containing a list of channel payloads."""
 
     lock: list[PhysicalLock_C]
+
+
+class Upgrade_Mcu(TypedDict):
+    type: NotRequired[str]
+    url: str
+    md5: str
+
+
+class Upgrade_SubDev(TypedDict):
+    devid: str
+    url: str
+    md5: str
+
+
+class Upgrade(TypedDict):
+    """Appliance.Control.Upgrade payload definition."""
+
+    # common fields for generic core device upgrade
+    url: NotRequired[str]
+    md5: NotRequired[str]
+    # some devices expose an 'mcu' with its own fw upgrade info
+    mcu: NotRequired[list[Upgrade_Mcu]]
+    # hub subdevice upgrade info
+    subdev: NotRequired[list[Upgrade_SubDev]]

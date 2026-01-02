@@ -261,6 +261,7 @@ class MerossEmulator:
     MAXIMUM_RESPONSE_SIZE = 3000
 
     NAMESPACES_DEFAULT = {
+        mn.Appliance_Mcu_Firmware: (NSDefaultMode.MixOut, {mc.KEY_VERSION: "1.0.0"}),
         mn.Appliance_System_DNDMode: (NSDefaultMode.MixOut, {mc.KEY_MODE: 0}),
     }
 
@@ -858,9 +859,7 @@ class MerossEmulator:
         self.update_epoch()
 
     def get_namespace_state(self, ns: "Namespace", channel, /):
-        return get_element_by_key(
-            self.namespaces[ns][ns.key], ns.key_channel, channel
-        )
+        return get_element_by_key(self.namespaces[ns][ns.key], ns.key_channel, channel)
 
     def update_namespace_state(
         self,

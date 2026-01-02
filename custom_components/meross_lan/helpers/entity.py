@@ -67,7 +67,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         type StateCallback = Callable[[], Any]
 
         class Args(TypedDict):
-            name: NotRequired[str]
+            name: NotRequired[str | None]
             translation_key: NotRequired[str]
             device_class: NotRequired[str | None]
             entity_category: NotRequired[entity.EntityCategory | None]
@@ -482,10 +482,6 @@ class MEPartialAvailableMixin(MLEntity if TYPE_CHECKING else object):
         self.available = True
         self.flush_state()
 
-    def set_unavailable(self):
-        self.available = False
-        self.flush_state()
-
 
 class MLBinaryEntity(MLEntity):
     """Partially abstract common base class for ToggleEntity and BinarySensor.
@@ -550,6 +546,7 @@ class MLBinaryEntity(MLEntity):
                 return self.update_onoff(False)
             case _:
                 return self.update_onoff(None)
+
 
 class MLNumericEntity(MLEntity):
     """Common base class for (numeric) sensors and numbers."""

@@ -4,8 +4,7 @@ import bisect
 from datetime import UTC, tzinfo
 from json import JSONDecodeError
 from time import time
-from typing import TYPE_CHECKING
-import zoneinfo
+from typing import TYPE_CHECKING, override
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntryState
@@ -62,23 +61,26 @@ if TYPE_CHECKING:
 
     from ..devices.hub import SubDevice
     from ..merossclient import MerossDeviceDescriptor
-    from ..merossclient.cloudapi import DeviceInfoType, LatestVersionType
     from ..merossclient.protocol.message import MerossMessage
     from ..merossclient.protocol.types import (
+        JsonDict,
+        JsonList,
         MerossHeaderType,
         MerossMessageType,
         MerossPayloadType,
         MerossRequestType,
+        control as mt_c,
     )
     from .component_api import ComponentApi
     from .entity import MLEntity
+    from .meross_profile import DeviceInfoType, LatestVersionType
     from .mqtt_profile import MQTTConnection, MQTTProfile
     from .namespaces import NamespaceParser
 
-    type DigestParseFunc = Callable[[dict], None] | Callable[[list], None]
+    type DigestParseFunc = Callable[[JsonDict], None] | Callable[[JsonList], None]
     type DigestInitReturnType = tuple[DigestParseFunc, Iterable[NamespaceHandler]]
-    type DigestInitFunc = Callable[["Device", Any], DigestInitReturnType]
-    type NamespaceInitFunc = Callable[["Device"], None]
+    type DigestInitFunc = Callable[[Device, Any], DigestInitReturnType]
+    type NamespaceInitFunc = Callable[[Device], None]
     type AsyncRequestFunc = Callable[
         [str, str, MerossPayloadType], CoroutineType[Any, Any, MerossResponse | None]
     ]
@@ -97,6 +99,8 @@ class BaseDevice(EntityManager):
 
         online: Final[bool]
         device_registry_entry: Final[dr.DeviceEntry]
+        latest_version: LatestVersionType
+        update_firmware: MLUpdate | None
 
         class Args(EntityManager.Args):
             config_entry: ConfigEntry
@@ -110,6 +114,8 @@ class BaseDevice(EntityManager):
     __slots__ = (
         "online",
         "device_registry_entry",
+        "latest_version",
+        "update_firmware",
     )
 
     def __init__(self, id: str, **kwargs: "Unpack[Args]"):
@@ -131,6 +137,11 @@ class BaseDevice(EntityManager):
             via_device=kwargs.get("via_device"),
             identifiers=identifiers,
         )
+        self.update_firmware = None
+
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self.update_firmware = None
 
     # interface: EntityManager
     @property
@@ -153,6 +164,13 @@ class BaseDevice(EntityManager):
             self.api.device_registry.async_update_device(
                 device_registry_entry.id, new_connections=connections
             )
+
+    def update_latest_version(self, latest_version: "LatestVersionType"):
+        self.latest_version = latest_version
+        if self.update_firmware:
+            self.update_firmware.update_info()
+        else:
+            self.update_firmware = MLUpdate(self)
 
     async def async_request(
         self,
@@ -180,9 +198,6 @@ class BaseDevice(EntityManager):
             self.async_request(*request_tuple), f".request({request_tuple})"
         )
 
-    def check_device_timezone(self):
-        raise NotImplementedError("check_device_timezone")
-
     def _set_online(self):
         self.log(self.DEBUG, "Back online!")
         self.online = True  # type: ignore
@@ -195,17 +210,31 @@ class BaseDevice(EntityManager):
         for entity in self.entities.values():
             entity.set_unavailable()
 
+    @abc.abstractmethod
+    def check_device_timezone(self):
+        raise NotImplementedError("check_device_timezone")
+
+    @abc.abstractmethod
+    def get_upgrade_payload(self, /) -> "mt_c.Upgrade":
+        """Builds and returns the correct upgrade payload if an upgrade is available, otherwise returns None/empty dict."""
+        raise NotImplementedError("get_upgrade_payload")
+
+    @abc.abstractmethod
+    def get_upgrade_info(self, /) -> tuple[str | None, ...]:
+        """If an update is available returns a tuple of (installed_version, latest_version, release_summary)"""
+        raise NotImplementedError("get_upgrade_info")
+
     @property
     @abc.abstractmethod
-    def tz(self) -> tzinfo:
+    def tz(self, /) -> tzinfo:
         raise NotImplementedError("tz")
 
     @abc.abstractmethod
-    def get_type(self) -> mlc.DeviceType:
+    def get_type(self, /) -> mlc.DeviceType:
         raise NotImplementedError("get_type")
 
     @abc.abstractmethod
-    def _get_internal_name(self) -> str:
+    def _get_internal_name(self, /) -> str:
         raise NotImplementedError("_get_internal_name")
 
 
@@ -293,7 +322,6 @@ class Device(BaseDevice, ConfigEntryManager):
 
         # entities
         sensor_protocol: ProtocolSensor
-        update_firmware: MLUpdate | None
 
         # HubMixin attributes: beware these are only
         # initialized in HubMixin(s) and not set/available in standard Device(s)
@@ -373,6 +401,14 @@ class Device(BaseDevice, ConfigEntryManager):
             ".devices.thermostat.mts300",
             "Mts300Climate",
         ),
+        mn.Appliance_Mcu_Firmware: (
+            ".helpers.namespaces",
+            "McuFirmwareNamespaceHandler",
+        ),
+        mn.Appliance_Mcu_Hp110_Firmware: (
+            ".helpers.namespaces",
+            "McuHp110FirmwareNamespaceHandler",
+        ),
         mn.Appliance_RollerShutter_State: (".devices.rollershutter", "MLRollerShutter"),
         mn.Appliance_System_DNDMode: (".light", "MLDNDLightEntity"),
         mn.Appliance_System_Runtime: (".sensor", "MLSignalStrengthSensor"),
@@ -448,7 +484,6 @@ class Device(BaseDevice, ConfigEntryManager):
         "_trace_ability_callback_unsub",
         "_diagnostics_build",
         "sensor_protocol",
-        "update_firmware",
         # Hub slots
         "subdevices",
     )
@@ -526,7 +561,6 @@ class Device(BaseDevice, ConfigEntryManager):
         )
 
         self.sensor_protocol = ProtocolSensor(self)
-        self.update_firmware = None
         MLPersistentButton(
             self,
             None,
@@ -723,10 +757,9 @@ class Device(BaseDevice, ConfigEntryManager):
                 profile = api
         except KeyError:
             profile = api
-        _profile = self._profile
-        if _profile != profile:
-            if _profile:
-                _profile.unlink(self)
+        if self._profile != profile:
+            if self._profile:
+                self._profile.unlink(self)
             if profile:
                 profile.link(self)
                 # _check_protocol already called
@@ -810,9 +843,11 @@ class Device(BaseDevice, ConfigEntryManager):
                 namespace_handler.polling_strategy = None
         await super().async_destroy_diagnostic_entities(remove)
 
+    @override
     def get_logger_name(self) -> str:
         return f"{self.descriptor.type}_{self.loggable_device_id(self.id)}"
 
+    @override
     def _trace_opened(self, epoch: float):
         self._trace_ability_callback_unsub = self.schedule_async_callback(
             mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
@@ -957,10 +992,26 @@ class Device(BaseDevice, ConfigEntryManager):
         await self.async_trace_open()
         return await future
 
+    @override
     def loggable_diagnostic_state(self):
         """Return a 'loggable' version of the entry state (for diagnostic/logging purposes)"""
         profile = self._profile
-        device_info = profile.get_device_info(self.id) if profile else None
+        if profile:
+            device_info = profile.get_device_info(self.id)
+            latest_version = profile.get_latest_version(*self.descriptor.type_subtype)
+            latest_versions = profile.get_latest_versions()
+        else:
+            device_info = None
+            latest_version = None
+            latest_versions = None
+        if not latest_version:
+            for _profile in self.api.active_profiles():
+                if _profile is profile:
+                    continue
+                if latest_version := _profile.get_latest_version(
+                    *self.descriptor.type_subtype
+                ):
+                    break
         return {
             "class": type(self).__name__,
             "conf_protocol": self.conf_protocol,
@@ -1008,12 +1059,17 @@ class Device(BaseDevice, ConfigEntryManager):
                 if self.obfuscate and device_info
                 else device_info
             ),
+            "latest_version": latest_version,
+            "latest_versions": latest_versions,
         }
 
     async def async_get_diagnostics(self):
-        data = await super().async_get_diagnostics()
-        data["trace"] = await self._async_get_diagnostics_trace()
-        return data
+        if self.online:
+            data = await super().async_get_diagnostics()
+            data["trace"] = await self._async_get_diagnostics_trace()
+            return data
+        else:
+            return await super().async_get_diagnostics()
 
     # interface: BaseDevice
     async def async_shutdown(self):
@@ -1034,7 +1090,6 @@ class Device(BaseDevice, ConfigEntryManager):
         self.digest_pollers = None  # type: ignore
         self._lazypoll_requests = None  # type: ignore
         self.sensor_protocol = None  # type: ignore
-        self.update_firmware = None
         self.api.devices[self.id] = None
 
     async def async_request_raw(
@@ -1076,6 +1131,7 @@ class Device(BaseDevice, ConfigEntryManager):
 
         return None
 
+    @override
     async def async_request(
         self,
         namespace: str,
@@ -1116,6 +1172,15 @@ class Device(BaseDevice, ConfigEntryManager):
 
         return None
 
+    def _set_offline(self):
+        super()._set_offline()
+        self._polling_delay = self.polling_period
+        self._bluetooth_active = self._http_active = self._mqtt_active = None
+        self.device_debug = None
+        for handler in self.namespace_handlers.values():
+            handler.polling_epoch_next = 0.0
+
+    @override
     def check_device_timezone(self):
         """
         Verifies the device timezone has the same utc offset as HA local timezone.
@@ -1135,17 +1200,45 @@ class Device(BaseDevice, ConfigEntryManager):
             translation_placeholders={"device_name": self.name},
         )
 
-    def _set_offline(self):
-        super()._set_offline()
-        self._polling_delay = self.polling_period
-        self._bluetooth_active = self._http_active = self._mqtt_active = None
-        self.device_debug = None
-        for handler in self.namespace_handlers.values():
-            handler.polling_epoch_next = 0.0
+    @override
+    def get_upgrade_payload(self, /) -> "mt_c.Upgrade":
+        return self.descriptor.build_upgrade_payload(self.latest_version)
 
+    @override
+    def get_upgrade_info(self, /):
+        # assert self.latest_version
+        latest_version = self.latest_version
+        try:
+            descriptor = self.descriptor
+            upgrade_payload = descriptor.build_upgrade_payload(latest_version)
+            if upgrade_payload and mc.KEY_MCU in upgrade_payload:
+                assert descriptor.mcu
+                return (
+                    descriptor.mcu[mc.KEY_VERSION],
+                    latest_version[mc.KEY_MCU][0][mc.KEY_VERSION],
+                    latest_version.get(mc.KEY_DESCRIPTION),
+                )
+            else:
+                return (
+                    descriptor.firmwareVersion,
+                    latest_version[mc.KEY_VERSION],
+                    latest_version.get(mc.KEY_DESCRIPTION),
+                )
+        except Exception as e:
+            self.log_exception(
+                self.WARNING,
+                e,
+                "get_upgrade_info (latest_version:%s mcu:%s)",
+                str(latest_version),
+                str(descriptor.mcu),
+            )
+            return None, None, None
+
+    @override
     def get_type(self) -> mlc.DeviceType:
         return mlc.DeviceType.DEVICE
 
+    @override
     def _get_internal_name(self) -> str:
         return self.descriptor.productname
 
@@ -2120,16 +2213,18 @@ class Device(BaseDevice, ConfigEntryManager):
         )
 
     def profile_linked(self, profile: "MQTTProfile", /):
-        if self._profile is not profile:
-            if self._profile:
-                self._profile.unlink(self)
-            self._profile = profile
-            self.log(
-                self.DEBUG,
-                "linked to profile:%s",
-                self.loggable_profile_id(profile.id),
-            )
-            self._check_protocol()
+        assert self._profile is not profile
+        if self._profile:
+            self._profile.unlink(self)
+        self._profile = profile
+        self.log(
+            self.DEBUG,
+            "linked to profile:%s",
+            self.loggable_profile_id(profile.id),
+        )
+        self._check_protocol()
+        if device_info := profile.get_device_info(self.id):
+            self.update_device_info(device_info, profile)
 
     def profile_unlinked(self):
         assert self._profile
@@ -2276,6 +2371,11 @@ class Device(BaseDevice, ConfigEntryManager):
         # already processed by the MQTTConnection session manager
         pass
 
+    def _handle_Appliance_Mcu_Firmware(self, header, payload):
+        self.descriptor.mcu = payload[mc.KEY_FIRMWARE]
+        if self.update_firmware:
+            self.update_firmware.update_info()
+
     def _handle_Appliance_System_Ability(self, header, payload, /):
         pass
 
@@ -2305,11 +2405,8 @@ class Device(BaseDevice, ConfigEntryManager):
         if oldfirmware != descr.firmware:
             needsave = True
             query_abilities = True
-            if update_firmware := self.update_firmware:
-                # self.update_firmware is dynamically created only when the cloud api
-                # reports a newer fw
-                update_firmware.installed_version = descr.firmwareVersion
-                update_firmware.flush_state()
+            if self.update_firmware:
+                self.update_firmware.update_info()
             if not self.config.get(CONF_HOST):
                 self._update_host()
         else:
@@ -2620,15 +2717,15 @@ class Device(BaseDevice, ConfigEntryManager):
             translation_placeholders={"device_name": self.name},
         )
 
-    def update_device_info(self, device_info: "DeviceInfoType"):
-        api = self.api
+    def update_device_info(self, device_info: "DeviceInfoType", profile: "MQTTProfile"):
+        """Called when linked to a (cloud) profile and device info is available or whenever updated."""
         name = device_info.get(mc.KEY_DEVNAME) or self._get_internal_name()
         if name != self.device_registry_entry.name:
-            api.device_registry.async_update_device(
+            self.api.device_registry.async_update_device(
                 self.device_registry_entry.id, name=name
             )
         channel = -1
-        async_update_entity = api.entity_registry.async_update_entity
+        async_update_entity = self.api.entity_registry.async_update_entity
         for device_info_channel in device_info.get("channels", []):
             # we assume the device_info.channels struct are mapped
             # to what we consider 'default' entities for the device
@@ -2649,14 +2746,9 @@ class Device(BaseDevice, ConfigEntryManager):
             except Exception:
                 pass
 
-    def update_latest_version(self, latest_version: "LatestVersionType"):
-        if update_firmware := self.update_firmware:
-            update_firmware.installed_version = self.descriptor.firmwareVersion
-            update_firmware.latest_version = latest_version.get(mc.KEY_VERSION)
-            update_firmware.release_summary = latest_version.get(mc.KEY_DESCRIPTION)
-            update_firmware.flush_state()
-        else:
-            self.update_firmware = MLUpdate(self, latest_version)
+        # check for firmware updates too
+        if latest_version := profile.get_latest_version(*self.descriptor.type_subtype):
+            self.update_latest_version(latest_version)
 
     async def _async_button_refresh_press(self):
         """Forces a full poll."""

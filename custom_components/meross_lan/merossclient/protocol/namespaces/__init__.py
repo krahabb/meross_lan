@@ -430,24 +430,25 @@ class Namespace(str):
         return self, mc.METHOD_PUSH, PayloadType.EMPTY.value
 
     @cached_property
-    def request_set(self) -> "Callable[[MerossPayloadType, object], MerossRequestType]":
+    def request_set(self) -> "Callable[[Any, Any], MerossRequestType]":
         # TODO: articulate request building to cover defaults and unsupported types
         """
         Returns a callable generating a proper SET request for this namespace.
         The callable accepts the payload dict as argument.
         """
+        raise NotImplementedError
         if self.key_channel:
             return self.request_set_default
         else:
             return self.request_set_default
 
     def request_set_default(
-        self, payload: "MerossPayloadType", channel
+        self, payload, channel
     ) -> "MerossRequestType":
         return self, mc.METHOD_SET, {self.key: payload}
 
     def request_set_channel(
-        self, payload: "MerossPayloadType", channel, /
+        self, payload, channel, /
     ) -> "MerossRequestType":
         payload[self.key_channel] = channel
         return (
@@ -457,7 +458,7 @@ class Namespace(str):
         )
 
     def request_set_channel_list(
-        self, payload: "MerossPayloadType", channel, /
+        self, payload, channel, /
     ) -> "MerossRequestType":
         payload[self.key_channel] = channel
         return (
@@ -666,14 +667,14 @@ Appliance_GarageDoor_State = ns(
 )
 
 
-Appliance_Mcu_Firmware = ns("Appliance.Mcu.Firmware", mc.KEY_, G_E)
-Appliance_Mcu_Upgrade = ns("Appliance.Mcu.Upgrade", mc.KEY_)
+Appliance_Mcu_Firmware = ns("Appliance.Mcu.Firmware", mc.KEY_FIRMWARE, G_E)
+Appliance_Mcu_Upgrade = ns("Appliance.Mcu.Upgrade", mc.KEY_UPGRADE, S_D)
 
 # Smart cherub HP110A TODO: try implement features for these namespaces
 Appliance_Mcu_Hp110_Favorite = ns(
     "Appliance.Mcu.Hp110.Favorite", "favorite", G_DCS, S_DC, IDX_ID
 )
-Appliance_Mcu_Hp110_Firmware = ns("Appliance.Mcu.Hp110.Firmware", mc.KEY_, G_E)
+Appliance_Mcu_Hp110_Firmware = ns("Appliance.Mcu.Hp110.Firmware", mc.KEY_FIRMWARE, G_E)
 Appliance_Mcu_Hp110_Lock = ns(
     "Appliance.Mcu.Hp110.Lock", mc.KEY_LOCK, G_E, S_D  # TODO: easy implement
 )

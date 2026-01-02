@@ -4,7 +4,6 @@ from homeassistant.exceptions import InvalidStateError
 
 from ..const import CONF_PROTOCOL_HTTP, PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT
 from ..cover import MLCover, cover
-from ..helpers import versiontuple
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..number import MLConfigNumber
 from ..switch import MLDeviceSwitch
@@ -62,7 +61,7 @@ class MLRollerShutter(MLCover):
         # flag indicating the device position is reliable (#227)
         # this will anyway be set in case we 'decode' a meaningful device position
         try:
-            fw_version = versiontuple(descriptor.firmwareVersion)
+            fw_version = descriptor.firmware_version
             if fw_version >= (6, 6, 6):
                 self._position_native_isgood = True
                 self.supported_features |= MLCover.EntityFeature.SET_POSITION

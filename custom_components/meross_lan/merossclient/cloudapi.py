@@ -108,6 +108,18 @@ class DeviceInfoChannelType(typing.TypedDict):
     devIconId: typing.NotRequired[str]
 
 
+class SubDeviceInfoType(typing.TypedDict):
+    """
+    (Hub) SubDevice info as recovered from meross cloud api "/Hub/getSubDevices"
+    """
+
+    subDeviceId: str
+    subDeviceType: str
+    subDeviceVendor: str
+    subDeviceName: str
+    subDeviceIconId: str
+
+
 class DeviceInfoType(typing.TypedDict):
     """
     Device info as recovered from meross cloud api "/Device/devList"
@@ -131,12 +143,22 @@ class DeviceInfoType(typing.TypedDict):
     domain: str  # optionally formatted as host:port
     reservedDomain: str  # optionally formatted as host:port
     hardwareCapabilities: list
-    __subDeviceInfo: typing.NotRequired[
-        dict[str, "SubDeviceInfoType"]
-    ]  # this key is not from meross api
 
 
-class LatestVersionType(typing.TypedDict, total=False):
+class LatestVersionMcuType(typing.TypedDict):
+    """Mcu firmware update details. Available for devices exposing an mcu.
+    Actually related to devices exposing
+    - Appliance.Mcu.Firmware (mts200/300 series...maybe more)
+    - Appliance.Mcu.Hp110.Firmware (smart cherub)
+    """
+
+    md5: str
+    type: str
+    url: str
+    version: str
+
+
+class LatestVersionType(typing.TypedDict):
     """
     firmware latest version(s) as recovered from meross cloud api "/Device/latestVersion"
     """
@@ -147,21 +169,9 @@ class LatestVersionType(typing.TypedDict, total=False):
     url: str
     version: str
     alias: str
-    mcu: list
+    mcu: list[LatestVersionMcuType]
     upgradeType: str
     description: str
-
-
-class SubDeviceInfoType(typing.TypedDict):
-    """
-    (Hub) SubDevice info as recovered from meross cloud api "/Hub/getSubDevices"
-    """
-
-    subDeviceId: str
-    subDeviceType: str
-    subDeviceVendor: str
-    subDeviceName: str
-    subDeviceIconId: str
 
 
 class CloudApiError(MerossProtocolError):
