@@ -821,26 +821,24 @@ class MQTTProfile(ConfigEntryManager):
         rxtx: str,
     ):
         if self.is_tracing:
-            header = message[mc.KEY_HEADER]
             self.trace(
                 time(),
-                message[mc.KEY_PAYLOAD],
-                header[mc.KEY_NAMESPACE],
-                header[mc.KEY_METHOD],
+                message.payload,
+                message.namespace,
+                message.method,
                 mlc.CONF_PROTOCOL_MQTT,
                 rxtx,
             )
         if self.isEnabledFor(self.VERBOSE):
-            header = message[mc.KEY_HEADER]
             connection.log(
                 self.VERBOSE,
                 "%s(%s) %s %s (uuid:%s messageId:%s) %s",
                 rxtx,
                 mlc.CONF_PROTOCOL_MQTT,
-                header[mc.KEY_METHOD],
-                header[mc.KEY_NAMESPACE],
+                message.method,
+                message.namespace,
                 self.loggable_device_id(device_id),
-                header[mc.KEY_MESSAGEID],
+                message.header[mc.KEY_MESSAGEID],
                 (
                     json_dumps(obfuscated_dict(message))
                     if self.obfuscate
@@ -848,14 +846,13 @@ class MQTTProfile(ConfigEntryManager):
                 ),
             )
         elif self.isEnabledFor(self.DEBUG):
-            header = message[mc.KEY_HEADER]
             connection.log(
                 self.DEBUG,
                 "%s(%s) %s %s (uuid:%s messageId:%s)",
                 rxtx,
                 mlc.CONF_PROTOCOL_MQTT,
-                header[mc.KEY_METHOD],
-                header[mc.KEY_NAMESPACE],
+                message.method,
+                message.namespace,
                 self.loggable_device_id(device_id),
-                header[mc.KEY_MESSAGEID],
+                message.header[mc.KEY_MESSAGEID],
             )

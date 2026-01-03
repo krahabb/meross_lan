@@ -58,9 +58,7 @@ async def test_hamqtt_device_session(
             helpers.MessageMatcher(
                 header=helpers.DictMatcher(
                     {
-                        mc.KEY_MESSAGEID: message_bind_set[mc.KEY_HEADER][
-                            mc.KEY_MESSAGEID
-                        ],
+                        mc.KEY_MESSAGEID: message_bind_set.header[mc.KEY_MESSAGEID],
                         mc.KEY_NAMESPACE: mn.Appliance_Control_Bind,
                         mc.KEY_METHOD: mc.METHOD_SETACK,
                         mc.KEY_TRIGGERSRC: mc.HEADER_TRIGGERSRC_CLOUDCONTROL,
@@ -112,9 +110,7 @@ async def test_hamqtt_device_session(
         async_fire_mqtt_message(hass, topic_publish, message_consumption_push.json)
         await hass.async_block_till_done()
         # check the PUSH was replied
-        header_consumption_reply = helpers.DictMatcher(
-            message_consumption_push[mc.KEY_HEADER]
-        )
+        header_consumption_reply = helpers.DictMatcher(message_consumption_push.header)
         header_consumption_reply[mc.KEY_TRIGGERSRC] = mc.HEADER_TRIGGERSRC_CLOUDCONTROL
         header_consumption_reply[mc.KEY_FROM] = topic_publish
         hamqtt_mock.async_publish_mock.assert_any_call(

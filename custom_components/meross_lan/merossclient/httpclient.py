@@ -233,36 +233,37 @@ class MerossHttpClient(_BaseClient):
             else MerossMessage.build(*args, key)
         )
         response = await self.async_request_raw(request, **kwargs)
-        if (
-            response.get(mc.KEY_PAYLOAD, {}).get(mc.KEY_ERROR, {}).get(mc.KEY_CODE)
-            == mc.ERROR_INVALIDKEY
-        ):
-            if key is not None:
-                raise MerossKeyError(response)
-            # sign error... hack and fool
-            if self.logger:
-                self.logger.log(
-                    logging.WARNING,
-                    "MerossHttpClient(%s): Key error on %s %s -> retrying with key-reply hack",
-                    self._host,
-                    args[1],
-                    args[0],
-                )
-            req_header = request[mc.KEY_HEADER]
-            resp_header = response[mc.KEY_HEADER]
-            req_header[mc.KEY_MESSAGEID] = resp_header[mc.KEY_MESSAGEID]
-            req_header[mc.KEY_TIMESTAMP] = resp_header[mc.KEY_TIMESTAMP]
-            req_header[mc.KEY_SIGN] = resp_header[mc.KEY_SIGN]
-            delattr(request, "json")  # force re-compute of json
-            try:
-                response = await self.async_request_raw(request, **kwargs)
-            except TerminatedException:
-                raise
-            except Exception:
-                # any error here is likely consequence of key-reply hack
-                # so we'll rethrow that (see #83 lacking invalid key message when configuring)
-                raise MerossKeyError(response)
+        try:
+            if response.payload[mc.KEY_ERROR][mc.KEY_CODE] == mc.ERROR_INVALIDKEY:
+                if key is not None:
+                    raise MerossKeyError(response)
+                # sign error... hack and fool
+                if self.logger:
+                    self.logger.log(
+                        logging.WARNING,
+                        "MerossHttpClient(%s): Key error on %s %s -> retrying with key-reply hack",
+                        self._host,
+                        args[1],
+                        args[0],
+                    )
+                req_header = request.header
+                resp_header = response.header
+                req_header[mc.KEY_MESSAGEID] = resp_header[mc.KEY_MESSAGEID]
+                req_header[mc.KEY_TIMESTAMP] = resp_header[mc.KEY_TIMESTAMP]
+                req_header[mc.KEY_SIGN] = resp_header[mc.KEY_SIGN]
+                delattr(request, "json")  # force re-compute of json
+                try:
+                    response = await self.async_request_raw(request, **kwargs)
+                except TerminatedException:
+                    raise
+                except Exception:
+                    # any error here is likely consequence of key-reply hack
+                    # so we'll rethrow that (see #83 lacking invalid key message when configuring)
+                    raise MerossKeyError(response)
+
+        except KeyError:
+            pass
 
         if key is None:
-            self._key_header = response[mc.KEY_HEADER]
+            self._key_header = response.header
         return response

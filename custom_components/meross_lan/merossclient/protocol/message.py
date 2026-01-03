@@ -175,10 +175,9 @@ class MerossMessage(dict):
         typed exception if formally correct but carrying a protocol error
         """
         try:
-            payload = self[mc.KEY_PAYLOAD]
-            header = self[mc.KEY_HEADER]
-            header[mc.KEY_NAMESPACE]
-            if header[mc.KEY_METHOD] == mc.METHOD_ERROR:
+            payload = self.payload
+            self.namespace  # just to trigger possible KeyError for namespace and/or header
+            if self.method == mc.METHOD_ERROR:
                 if payload[mc.KEY_ERROR].get(mc.KEY_CODE) == mc.ERROR_INVALIDKEY:
                     raise MerossKeyError(self)
                 else:
@@ -189,9 +188,9 @@ class MerossMessage(dict):
 
     def compute_signature(self, key: str, /):
         return compute_message_signature(
-            self[mc.KEY_HEADER][mc.KEY_MESSAGEID],
+            self.header[mc.KEY_MESSAGEID],
             key,
-            self[mc.KEY_HEADER][mc.KEY_TIMESTAMP],
+            self.header[mc.KEY_TIMESTAMP],
         )
 
     def get_uuid(self, /):

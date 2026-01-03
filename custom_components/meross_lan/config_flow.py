@@ -733,7 +733,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                     response = await device_client.async_configure_mqtt(
                         **configure_mqtt_args
                     )
-                    if response[mc.KEY_HEADER][mc.KEY_METHOD] != mc.METHOD_SETACK:
+                    if response.method != mc.METHOD_SETACK:
                         raise Exception("Failed MQTT binding configuration")
                     api.log(api.DEBUG, "MQTT binding to %s was succesfull", api.loggable_broker(server))  # type: ignore
                     device_config[mlc.CONF_KEY] = key  # type: ignore

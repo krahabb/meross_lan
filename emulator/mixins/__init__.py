@@ -978,4 +978,4 @@ class MerossEmulator:
     def _mqttc_message(self, client: "mqtt.Client", userdata, msg: "mqtt.MQTTMessage"):
         request = MerossMessage.decode(msg.payload.decode("utf-8"))
         if response := self.handle(request):
-            client.publish(request[mc.KEY_HEADER][mc.KEY_FROM], response)
+            client.publish(request.header[mc.KEY_FROM], response)

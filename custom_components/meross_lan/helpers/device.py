@@ -190,11 +190,7 @@ class BaseDevice(EntityManager):
         payload: "MerossPayloadType",
     ) -> MerossResponse | None:
         response = await self.async_request(namespace, method, payload)
-        return (
-            response
-            if response and response[mc.KEY_HEADER][mc.KEY_METHOD] != mc.METHOD_ERROR
-            else None
-        )
+        return response if response and response.method != mc.METHOD_ERROR else None
 
     def request(self, request_tuple: "MerossRequestType"):
         return self.async_create_task(
@@ -912,12 +908,11 @@ class Device(BaseDevice, ConfigEntryManager):
         rxtx: str,
     ):
         if self.is_tracing:
-            header = message[mc.KEY_HEADER]
             self.trace(
                 epoch,
-                message[mc.KEY_PAYLOAD],
-                header[mc.KEY_NAMESPACE],
-                header[mc.KEY_METHOD],
+                message.payload,
+                message.namespace,
+                message.method,
                 protocol,
                 rxtx,
             )
@@ -926,30 +921,28 @@ class Device(BaseDevice, ConfigEntryManager):
         # message if that's the case
         logger = self.logger
         if logger.isEnabledFor(self.VERBOSE):
-            header = message[mc.KEY_HEADER]
             logger._log(
                 self.VERBOSE,
                 "%s(%s) %s %s (messageId:%s) %s",
                 (
                     rxtx,
                     protocol,
-                    header[mc.KEY_METHOD],
-                    header[mc.KEY_NAMESPACE],
-                    header[mc.KEY_MESSAGEID],
+                    message.method,
+                    message.namespace,
+                    message.header[mc.KEY_MESSAGEID],
                     json_dumps(self.loggable_dict(message)),
                 ),
             )
         elif logger.isEnabledFor(self.DEBUG):
-            header = message[mc.KEY_HEADER]
             logger._log(
                 self.DEBUG,
                 "%s(%s) %s %s (messageId:%s)",
                 (
                     rxtx,
                     protocol,
-                    header[mc.KEY_METHOD],
-                    header[mc.KEY_NAMESPACE],
-                    header[mc.KEY_MESSAGEID],
+                    message.method,
+                    message.namespace,
+                    message.header[mc.KEY_MESSAGEID],
                 ),
             )
 
@@ -2251,7 +2244,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 self.device_response_size_max = message_size
 
         # TODO: use attributes instead of dict keys for MerossMessage objects
-        header = message[mc.KEY_HEADER]
+        header = message.header
         # we'll use the device timestamp to 'align' our time to the device one
         # this is useful for metered plugs reporting timestamped energy consumption
         # and we want to 'translate' this timings in our (local) time.
@@ -2293,10 +2286,10 @@ class Device(BaseDevice, ConfigEntryManager):
             if self._polling_unsub:
                 self._polling_unsub.cancel()
                 self._polling_unsub = self.schedule_callback(
-                    0, self._poll, header[mc.KEY_NAMESPACE]
+                    0, self._poll, message.namespace
                 )
 
-        return self._handle(header, message[mc.KEY_PAYLOAD])
+        return self._handle(header, message.payload)
 
     def _handle(self, header: "MerossHeaderType", payload: "MerossPayloadType", /):
         namespace = header[mc.KEY_NAMESPACE]
