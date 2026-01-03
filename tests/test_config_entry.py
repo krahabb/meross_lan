@@ -96,12 +96,11 @@ async def test_device_entry(request, hass: "HomeAssistant"):
             await context.perform_coldstart()
 
             # try to ensure some 'formal' consistency in ns configuration
-            for namespace_handler in device.namespace_handlers.values():
-                ns = namespace_handler.ns
+            for handler in device.ns_handlers.values():
                 assert (
-                    ns.payload_get is not mn.PayloadType.LIST_C_STRICT
-                ) or namespace_handler.polling_request_channels, (
-                    f"Incorrect config for {ns} namespace"
+                    handler.ns.payload_get is not mn.PayloadType.LIST_C_STRICT
+                ) or handler.polling_request_channels, (
+                    f"Incorrect config for {handler.ns} namespace"
                 )
 
             if entity_dnd:

@@ -83,7 +83,7 @@ class EntityTest(EntityComponentTest):
         ],
         mn_t.Appliance_Control_Thermostat_Overheat: [MLTemperatureSensor],
         mn.Appliance_Control_Sensor_Latest: [MLHumiditySensor],  # mts200 (some models)
-        mn.Appliance_System_Runtime: [MLSignalStrengthSensor],  # Signal strength
+        mn.Appliance_System_Runtime: [MLSignalStrengthSensor],
     }
 
     HUB_SUBDEVICES_ENTITIES = {

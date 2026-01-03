@@ -28,16 +28,7 @@ from .obfuscate import obfuscated_dict
 
 if TYPE_CHECKING:
     import asyncio
-    from typing import (
-        Awaitable,
-        Callable,
-        ClassVar,
-        Final,
-        Iterable,
-        Mapping,
-        TypedDict,
-        Unpack,
-    )
+    from typing import Awaitable, Callable, ClassVar, Final, Mapping, TypedDict, Unpack
 
     from homeassistant.components import mqtt as ha_mqtt
     from homeassistant.config_entries import ConfigEntry
@@ -66,6 +57,7 @@ class ConnectionSensor(me.MEAlwaysAvailableMixin, MLDiagnosticSensor):
         ATTR_DROPPED: Final
 
         manager: "MQTTProfile"
+        connection: "MQTTConnection"
 
         # HA core entity attributes:
         class AttrDictType(TypedDict):
@@ -138,7 +130,7 @@ class ConnectionSensor(me.MEAlwaysAvailableMixin, MLDiagnosticSensor):
     async def async_shutdown(self):
         await super().async_shutdown()
         self.connection.sensor_connection = None
-        self.connection: MQTTConnection = None  # type: ignore
+        del self.connection
 
     # interface: self
     def update_devices(self):
@@ -272,7 +264,7 @@ class MQTTConnection(Loggable):
         topic_response: Final[str]
         mqttdevices: Final[dict[str, "Device"]]
         mqttdiscovering: Final[set[str]]
-        namespace_handlers: SessionHandlersType
+        session_handlers: SessionHandlersType
         sensor_connection: ConnectionSensor | None
 
         _mqtt_transactions: Final[dict[str, _MQTTTransaction]]
@@ -292,7 +284,7 @@ class MQTTConnection(Loggable):
         "topic_response",
         "mqttdevices",
         "mqttdiscovering",
-        "namespace_handlers",
+        "session_handlers",
         "is_cloud_connection",
         "sensor_connection",
         "_mqtt_transactions",
@@ -310,7 +302,7 @@ class MQTTConnection(Loggable):
         self.topic_response = topic_response
         self.mqttdevices = {}
         self.mqttdiscovering = set()
-        self.namespace_handlers = self.__class__.SESSION_HANDLERS
+        self.session_handlers = self.__class__.SESSION_HANDLERS
         self.sensor_connection = None
         # self.is_cloud_connection = False to be fixed in derived
         self._mqtt_transactions = {}
@@ -337,7 +329,7 @@ class MQTTConnection(Loggable):
         for device in self.mqttdevices.values():
             device.mqtt_detached()
         self.mqttdevices.clear()
-        self.sensor_connection = None
+        del self.sensor_connection
 
     async def async_create_diagnostic_entities(self):
         if not self.sensor_connection:
@@ -470,8 +462,8 @@ class MQTTConnection(Loggable):
                 # behave differently than the local MQTT. Their behavior
                 # will definitely be set in the dynamic/custom message handlers
                 # implemented in the derived MQTTConnections
-                if message.namespace in self.namespace_handlers:
-                    if await self.namespace_handlers[message.namespace](
+                if message.namespace in self.session_handlers:
+                    if await self.session_handlers[message.namespace](
                         self, device_id, message.header, message.payload
                     ):
                         # session management has already taken care of everything

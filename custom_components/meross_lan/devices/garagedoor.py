@@ -1,5 +1,5 @@
 from time import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util.dt import now
@@ -52,7 +52,7 @@ class MLGarageTimeoutBinarySensor(me.MEPartialAvailableMixin, MLBinarySensor):
         ):
             extra_state_attributes.pop(self.ATTR_TRANSITION_TIMEOUT, None)
             extra_state_attributes.pop(self.ATTR_TRANSITION_TARGET, None)
-        self.update_onoff(False)
+        self.update_native_value(False)
 
     def update_timeout(self, was_closing, /):
         self.extra_state_attributes[self.ATTR_TRANSITION_TARGET] = (
@@ -105,7 +105,8 @@ class MLGarageDoorEnableSwitch(MLGarageMultipleConfigSwitch):
         )
         self._channel_enable(device_value)
 
-    def update_onoff(self, onoff, /):
+    @override
+    def update_native_value(self, onoff, /):
         if self.is_on != onoff:
             self.is_on = onoff
             self.flush_state()
@@ -285,12 +286,6 @@ class MLGarage(MLCover):
             self.number_open_timeout = None
 
     # interface: MLEntity
-    async def async_shutdown(self):
-        await MLCover.async_shutdown(self)
-        self.binary_sensor_timeout = None  # type: ignore
-        self.number_close_timeout = None
-        self.number_open_timeout = None
-
     async def async_added_to_hass(self):
         await MLCover.async_added_to_hass(self)
         with self.exception_warning("restoring previous state"):
@@ -605,7 +600,9 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
 
         if mc.KEY_BUZZERENABLE in payload:
             try:
-                self.switch_buzzerEnable.update_onoff(payload[mc.KEY_BUZZERENABLE])
+                self.switch_buzzerEnable.update_native_value(
+                    payload[mc.KEY_BUZZERENABLE]
+                )
             except AttributeError:
                 self.switch_buzzerEnable = MLGarageConfigSwitch(
                     self.device,
@@ -696,7 +693,7 @@ class GarageDoorStateNamespaceHandler(NamespaceHandler):
             # - single channel in a DICT_C_STRICT
             # - all channels in an empty dict (only confirmed in 4.0.0+ fw)
             # TODO: we might check if dict with {"channel": -1 or 65535} works too...(like refoss queries)
-            device.namespace_handlers[mn.Appliance_System_All].polling_period = 0
+            device.ns_handlers[mn.Appliance_System_All].polling_period = 0
 
 
 def digest_init_garagedoor(device: "Device", digest: list, /) -> "DigestInitReturnType":

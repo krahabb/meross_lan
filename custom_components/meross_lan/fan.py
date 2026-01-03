@@ -78,7 +78,7 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
         super().set_unavailable()
 
     @override
-    def update_onoff(self, onoff, /):
+    def update_native_value(self, onoff, /):
         if self.is_on != onoff:
             self.is_on = onoff
             if onoff:
@@ -132,7 +132,7 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
                 }
             },
         ):
-            self.update_onoff(onoff)
+            self.update_native_value(onoff)
 
     def _parse_fan(self, payload: dict, /):
         """payload = {"channel": 0, "speed": 3, "maxSpeed": 4}"""
@@ -152,7 +152,7 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
             self.flush_state()
 
     def _parse_togglex(self, payload: dict, /):
-        self.update_onoff(payload[mc.KEY_ONOFF])
+        self.update_native_value(payload[mc.KEY_ONOFF])
 
 
 def digest_init_fan(device: "Device", digest, /) -> "DigestInitReturnType":

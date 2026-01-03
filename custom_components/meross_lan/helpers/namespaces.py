@@ -48,15 +48,18 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
         channel: object
         subId: object
 
-        namespace_handlers: set["NamespaceHandler"]
+        _namespace_handlers: set["NamespaceHandler"]
 
     # This set will be created x instance when linking the parser to the handler
-    namespace_handlers = None  # type: ignore
+    _namespace_handlers = None  # type: ignore
 
     async def async_shutdown(self):
-        if self.namespace_handlers:
-            for handler in tuple(self.namespace_handlers):
-                handler.unregister(self)
+        try:
+            for handler in self._namespace_handlers:
+                del handler.parsers[getattr(self, handler.ns.key_channel)]
+            del self._namespace_handlers
+        except TypeError:
+            assert self._namespace_handlers is None
 
     def _parse(self, payload: dict, /):
         """Default payload message parser. This is invoked automatically
@@ -95,7 +98,7 @@ class NamespaceHandler:
     This is the root class for somewhat dynamic namespace handlers.
     Every device keeps its own list of method handlers indexed through
     the message namespace in order to speed up parsing/routing when receiving
-    a message from the device see Device.namespace_handlers and
+    a message from the device see Device.ns_handlers and
     Device._handle to get the basic behavior.
 
     - handler: specify a custom handler method for this namespace. By default
@@ -132,6 +135,7 @@ class NamespaceHandler:
         "polling_response_size",
         "polling_request",
         "polling_request_channels",
+        "__weakref__",  # REMOVE
     )
 
     def __init__(
@@ -145,7 +149,7 @@ class NamespaceHandler:
         ) = None,
         config: "NamespaceConfigType | None" = None,
     ):
-        assert ns not in device.namespace_handlers, (
+        assert ns not in device.ns_handlers, (
             "Namespace already registered",
             ns,
         )
@@ -181,7 +185,15 @@ class NamespaceHandler:
         )
         self.polling_request_channels = []
         self.polling_request_configure(None)
-        device.namespace_handlers[ns] = self
+        device.ns_handlers[ns] = self
+
+    def shutdown(self):
+        """Cleanup possible circular references."""
+        self.device.objects.add(self)  # REMOVE
+        del self.handler  # especially this one
+        del self.polling_strategy
+        del self.device
+        assert not self.parsers, "parsers should have been cleared before shutdown"
 
     def polling_request_configure(self, payload_type: mn.PayloadType | None, /):
         """The structure of the polling payload is usually 'fixed' in the namespace
@@ -319,15 +331,11 @@ class NamespaceHandler:
         channel = getattr(parser, ns.key_channel)
         assert channel not in self.parsers, "parser already registered"
         self.parsers[channel] = getattr(parser, f"_parse_{ns.slug_end}", parser._parse)
-        if not parser.namespace_handlers:
-            parser.namespace_handlers = set()
-        parser.namespace_handlers.add(self)
+        if not parser._namespace_handlers:
+            parser._namespace_handlers = set()
+        parser._namespace_handlers.add(self)
         self.polling_request_add_channel(channel)
         self.handler = self._handle_list
-
-    def unregister(self, parser: "NamespaceParser", /):
-        if self.parsers.pop(getattr(parser, self.ns.key_channel), None):
-            parser.namespace_handlers.remove(self)
 
     def handle_exception(self, exception: Exception, function_name: str, payload, /):
         device = self.device
@@ -890,20 +898,21 @@ class EntityNamespaceMixin(MLEntity if TYPE_CHECKING else object):
 
     if TYPE_CHECKING:
         manager: "Device"
-        handler: Final[NamespaceHandler]
 
     def __init__(self, manager: "Device", ns: mn.Namespace, /):
-        self.handler = NamespaceHandler(manager, ns, handler=self._handle)
-        self.handler.polling_strategy = None  # controlled by added/removed
+        # polling_strategy controlled by added/removed
+        NamespaceHandler(manager, ns, handler=self._handle).polling_strategy = None
         self.ns = ns  # TODO: generalize ns x Entity instance by passing through kwargs
         super().__init__(manager, None, self.__class__.ENTITY_KEY)
 
     async def async_added_to_hass(self):
-        self.handler.polling_strategy = POLLING_STRATEGY_CONF[self.ns][4]
+        self.manager.ns_handlers[self.ns].polling_strategy = POLLING_STRATEGY_CONF[
+            self.ns
+        ][4]
         return await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
-        self.handler.polling_strategy = None
+        self.manager.ns_handlers[self.ns].polling_strategy = None
         return await super().async_will_remove_from_hass()
 
     def _handle(self, header, payload):

@@ -634,7 +634,7 @@ class MLLight(MLLightBase):
                     }
                 },
             ):
-                self.update_onoff(onoff)
+                self.update_native_value(onoff)
         else:
             if await self.async_request_light_ack(
                 {
@@ -643,7 +643,7 @@ class MLLight(MLLightBase):
                 }
             ):
                 self._light[mc.KEY_ONOFF] = onoff
-                self.update_onoff(onoff)
+                self.update_native_value(onoff)
 
     async def async_request_light_on_flush(self, _light: dict):
         if mc.KEY_ONOFF in _light:
@@ -730,7 +730,7 @@ class MLLightEffect(MLLight):
 
     # interface: MLBinaryEntity
     @override
-    def update_onoff(self, onoff, /):
+    def update_native_value(self, onoff, /):
         if self.is_on != onoff:
             self.is_on = onoff
             if onoff and (mc.KEY_EFFECT in self._light):
@@ -887,12 +887,12 @@ class MLDNDLightEntity(EntityNamespaceMixin, me.MLBinaryEntity, light.LightEntit
     @override
     async def async_turn_on(self, **kwargs):
         if await self.async_request_value(self.native_on):
-            self.update_onoff(True)
+            self.update_native_value(True)
 
     @override
     async def async_turn_off(self, **kwargs):
         if await self.async_request_value(self.native_off):
-            self.update_onoff(False)
+            self.update_native_value(False)
 
 
 def digest_init_light(device: "Device", digest: dict, /) -> "DigestInitReturnType":
@@ -905,7 +905,7 @@ def digest_init_light(device: "Device", digest: dict, /) -> "DigestInitReturnTyp
         MLLight(device, digest[mc.KEY_CHANNEL], mc.HP110A_LIGHT_EFFECT_LIST)
     else:
         MLLight(device, digest[mc.KEY_CHANNEL])
-    handler = device.namespace_handlers[mn.Appliance_Control_Light]
+    handler = device.ns_handlers[mn.Appliance_Control_Light]
     return handler.parse_generic, (handler,)
 
 
@@ -927,7 +927,7 @@ def digest_init_light_effect(
                 _light_effect[mc.KEY_EFFECTNAME] for _light_effect in digest
             ] + [MLLightBase.EFFECT_OFF]
 
-            handler = device.namespace_handlers[mn.Appliance_Control_Light_Effect]
+            handler = device.ns_handlers[mn.Appliance_Control_Light_Effect]
 
             # custom parser for the case
             def _parse(digest: list):

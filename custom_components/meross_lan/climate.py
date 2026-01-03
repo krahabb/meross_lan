@@ -88,7 +88,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         async def async_shutdown(self):
             self._tracking_stop()
             await super().async_shutdown()
-            self.climate = None  # type: ignore
+            del self.climate
 
         def set_unavailable(self):
             if self._track_unsub:
@@ -341,7 +341,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         """Determines the behavior of async_set_temperature."""
         manager: BaseDevice
         number_adjust_temperature: Final["MLConfigNumber"]
-        number_preset_temperature: dict[str, "MtsSetPointNumber"]
+        number_preset_temperature: Final[dict[str, "MtsSetPointNumber"]]
         schedule: Final[MtsSchedule]
         select_track_sensor: Final[TrackSensorSelect]
         sensor_current_temperature: Final[MLTemperatureSensor]
@@ -465,11 +465,11 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
     # interface: MLEntity
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.sensor_current_temperature = None  # type: ignore
-        self.select_track_sensor = None  # type: ignore
-        self.schedule = None  # type: ignore
-        self.number_adjust_temperature = None  # type: ignore
-        self.number_preset_temperature = None  # type: ignore
+        del self.sensor_current_temperature  # type: ignore
+        del self.select_track_sensor  # type: ignore
+        del self.schedule  # type: ignore
+        del self.number_adjust_temperature  # type: ignore
+        self.number_preset_temperature.clear()
 
     def set_unavailable(self):
         self._mts_payload.clear()

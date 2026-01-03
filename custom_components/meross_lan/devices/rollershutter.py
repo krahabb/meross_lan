@@ -361,7 +361,7 @@ class MLRollerShutterAdjustSwitch(MLDeviceSwitch):
 
     def _parse_adjust(self, payload: "mt_rs.AdjustResponse_C"):
         # payload = {"channel": 0, "status": 0}
-        self.update_onoff(payload[mc.KEY_STATUS] != 0)
+        self.update_native_value(payload[mc.KEY_STATUS] != 0)
 
 
 class MLRollerShutterConfigNumber(MLConfigNumber):

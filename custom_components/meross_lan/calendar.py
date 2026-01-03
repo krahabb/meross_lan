@@ -148,8 +148,8 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
 
     # interface: MLEntity
     async def async_shutdown(self):
-        self.climate = None  # type: ignore
         await super().async_shutdown()
+        del self.climate  # type: ignore
 
     async def async_added_to_hass(self):
         self.manager.check_device_timezone()

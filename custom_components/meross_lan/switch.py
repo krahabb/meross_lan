@@ -68,11 +68,11 @@ class MLEmulatedSwitch(me.MEPartialAvailableMixin, MLSwitch):
 
     @override
     async def async_turn_on(self, **kwargs):
-        self.update_onoff(True)
+        self.update_native_value(True)
 
     @override
     async def async_turn_off(self, **kwargs):
-        self.update_onoff(False)
+        self.update_native_value(False)
 
 
 class MLDeviceSwitch(MLSwitch):
@@ -89,12 +89,12 @@ class MLDeviceSwitch(MLSwitch):
     @override
     async def async_turn_on(self, **kwargs):
         if await self.async_request_value(self.native_on):
-            self.update_onoff(True)
+            self.update_native_value(True)
 
     @override
     async def async_turn_off(self, **kwargs):
         if await self.async_request_value(self.native_off):
-            self.update_onoff(False)
+            self.update_native_value(False)
 
 
 class PhysicalLockSwitch(MLDeviceSwitch):
@@ -125,7 +125,7 @@ class MLToggle(EntityNamespaceMixin, MLDeviceSwitch):
 def digest_init_toggle(device: "Device", digest: dict, /) -> "DigestInitReturnType":
     """{"onoff": 0, "lmTime": 1645391086}"""
     toggle = MLToggle(device, mn.Appliance_Control_Toggle)
-    return toggle._parse, (toggle.handler,)
+    return toggle._parse, (device.ns_handlers[mn.Appliance_Control_Toggle],)
 
 
 class MLToggleX(MLDeviceSwitch):

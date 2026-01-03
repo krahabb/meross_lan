@@ -121,10 +121,10 @@ class Mts960Climate(MtsThermostatClimate):
     # interface: MLEntity
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.binary_sensor_plug_state = None  # type: ignore
-        self.number_timer_down_duration = None  # type: ignore
-        self.number_timer_cycle_off_duration = None  # type: ignore
-        self.number_timer_cycle_on_duration = None  # type: ignore
+        del self.binary_sensor_plug_state
+        del self.number_timer_down_duration
+        del self.number_timer_cycle_off_duration
+        del self.number_timer_cycle_on_duration
 
     def set_unavailable(self):
         self._mts_working = None
@@ -419,7 +419,7 @@ class Mts960Climate(MtsThermostatClimate):
             self._mts_onoff = payload[mc.KEY_ONOFF] == mc.MTS960_ONOFF_ON
         if mc.KEY_STATE in payload:
             self._mts_active = payload[mc.KEY_STATE] == mc.MTS960_STATE_ON
-            self.binary_sensor_plug_state.update_onoff(self._mts_active)
+            self.binary_sensor_plug_state.update_native_value(self._mts_active)
         if mc.KEY_WORKING in payload:
             self._mts_working = payload[mc.KEY_WORKING]
         if mc.KEY_CURRENTTEMP in payload:

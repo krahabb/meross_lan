@@ -142,7 +142,7 @@ class BaseDevice(EntityManager):
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.update_firmware = None
+        del self.update_firmware
 
     # interface: EntityManager
     @property
@@ -306,9 +306,9 @@ class Device(BaseDevice, ConfigEntryManager):
         _mqtt_lastrequest: float
         _mqtt_lastresponse: float
         _profile: MQTTProfile | None
-        namespace_handlers: dict[str, NamespaceHandler]
-        digest_handlers: dict[str, DigestParseFunc]
-        digest_pollers: set[NamespaceHandler]
+        ns_handlers: Final[dict[str, NamespaceHandler]]
+        digest_handlers: Final[dict[str, DigestParseFunc]]
+        digest_pollers: Final[set[NamespaceHandler]]
         _lazypoll_requests: list[NamespaceHandler]
         _polling_epoch: float
         _polling_unsub: TimerHandle | None
@@ -404,11 +404,11 @@ class Device(BaseDevice, ConfigEntryManager):
         ),
         mn.Appliance_Mcu_Firmware: (
             ".helpers.namespaces",
-            "NamespaceHandler", # handler in Device._handle_XXX
+            "NamespaceHandler",  # handler in Device._handle_XXX
         ),
         mn.Appliance_Mcu_Hp110_Firmware: (
             ".helpers.namespaces",
-            "NamespaceHandler", # handler in Device._handle_XXX
+            "NamespaceHandler",  # handler in Device._handle_XXX
         ),
         mn.Appliance_RollerShutter_State: (".devices.rollershutter", "MLRollerShutter"),
         mn.Appliance_System_DNDMode: (".light", "MLDNDLightEntity"),
@@ -470,7 +470,7 @@ class Device(BaseDevice, ConfigEntryManager):
         "_mqtt_lastrequest",
         "_mqtt_lastresponse",
         "_profile",
-        "namespace_handlers",
+        "ns_handlers",
         "digest_handlers",
         "digest_pollers",
         "_lazypoll_requests",
@@ -529,7 +529,7 @@ class Device(BaseDevice, ConfigEntryManager):
         self._mqtt_lastrequest = 0
         self._mqtt_lastresponse = 0
         self._profile = None
-        self.namespace_handlers = {}
+        self.ns_handlers = {}
         self.digest_handlers = {}
         self.digest_pollers = set()
         self._lazypoll_requests = []
@@ -837,7 +837,7 @@ class Device(BaseDevice, ConfigEntryManager):
 
     async def async_destroy_diagnostic_entities(self, remove: bool = False):
         self._diagnostics_build = False
-        for namespace_handler in self.namespace_handlers.values():
+        for namespace_handler in self.ns_handlers.values():
             if (
                 namespace_handler.polling_strategy
                 is NamespaceHandler.async_poll_diagnostic
@@ -1054,7 +1054,7 @@ class Device(BaseDevice, ConfigEntryManager):
                         else None
                     ),
                 }
-                for handler in self.namespace_handlers.values()
+                for handler in self.ns_handlers.values()
             },
             "device_info": (
                 obfuscated_dict(device_info)
@@ -1087,12 +1087,17 @@ class Device(BaseDevice, ConfigEntryManager):
             self._bluetooth.detach()
         await self.async_poll_stop()
         await super().async_shutdown()
-        self.namespace_handlers = None  # type: ignore
-        self.digest_handlers = None  # type: ignore
-        self.digest_pollers = None  # type: ignore
-        self._lazypoll_requests = None  # type: ignore
-        self.sensor_protocol = None  # type: ignore
+        for handler in self.ns_handlers.values():
+            handler.shutdown()
+        del self.ns_handlers  # type: ignore
+        del self.digest_handlers  # type: ignore
+        del self.digest_pollers  # type: ignore
+        del self._lazypoll_requests
+        del self.sensor_protocol
         self.api.devices[self.id] = None
+        self.log(  # REMOVE
+            self.DEBUG, "Device.async_shutdown complete (object: %s)", self.objects
+        )
 
     async def async_request_raw(
         self,
@@ -1179,7 +1184,7 @@ class Device(BaseDevice, ConfigEntryManager):
         self._polling_delay = self.polling_period
         self._bluetooth_active = self._http_active = self._mqtt_active = None
         self.device_debug = None
-        for handler in self.namespace_handlers.values():
+        for handler in self.ns_handlers.values():
             handler.polling_epoch_next = 0.0
 
     @override
@@ -1289,13 +1294,13 @@ class Device(BaseDevice, ConfigEntryManager):
 
     def get_handler(self, ns: "mn.Namespace", /):
         try:
-            return self.namespace_handlers[ns]
+            return self.ns_handlers[ns]
         except KeyError:
             return self._create_handler(ns)
 
     def get_handler_by_name(self, namespace: str, /):
         try:
-            return self.namespace_handlers[namespace]
+            return self.ns_handlers[namespace]
         except KeyError:
             return self._create_handler(self.NAMESPACES[namespace])
 
@@ -1938,7 +1943,7 @@ class Device(BaseDevice, ConfigEntryManager):
                                     )
 
             else:  # offline or 'likely' offline (failed last request)
-                ns_all_handler = self.namespace_handlers[mn.Appliance_System_All]
+                ns_all_handler = self.ns_handlers[mn.Appliance_System_All]
                 ns_all_response = None
                 if self.conf_protocol is CONF_PROTOCOL_AUTO:
                     if self._http:
@@ -1994,11 +1999,11 @@ class Device(BaseDevice, ConfigEntryManager):
             """
             self._lazypoll_requests.clear()
             self._queued_cloudpoll_requests = 0
-            # self.namespace_handlers could change at any time due to async
+            # self.ns_handlers could change at any time due to async
             # message parsing (handlers might be dynamically created by then)
             for handler in [
                 handler
-                for handler in self.namespace_handlers.values()
+                for handler in self.ns_handlers.values()
                 if (handler.ns != namespace)
             ]:
                 if handler.polling_strategy:
@@ -2021,7 +2026,7 @@ class Device(BaseDevice, ConfigEntryManager):
                     while self.online:
                         ability = next(abilities)
                         if (ability in self.TRACE_ABILITY_EXCLUDE) or (
-                            (handler := self.namespace_handlers.get(ability))
+                            (handler := self.ns_handlers.get(ability))
                             and handler.polling_strategy
                         ):
                             continue
@@ -2062,7 +2067,7 @@ class Device(BaseDevice, ConfigEntryManager):
         # before retriggering ensure we're not overlapping with device shutdown
         if self.config_entry.state is ConfigEntryState.LOADED:
             self.device_debug = None
-            for handler in self.namespace_handlers.values():
+            for handler in self.ns_handlers.values():
                 handler.polling_epoch_next = 0.0
             # this will also restart/schedule the cycle
             await self._poll()
@@ -2250,6 +2255,7 @@ class Device(BaseDevice, ConfigEntryManager):
             if message_size > self.device_response_size_max:
                 self.device_response_size_max = message_size
 
+        # TODO: use attributes instead of dict keys for MerossMessage objects
         header = message[mc.KEY_HEADER]
         # we'll use the device timestamp to 'align' our time to the device one
         # this is useful for metered plugs reporting timestamped energy consumption
@@ -2325,7 +2331,7 @@ class Device(BaseDevice, ConfigEntryManager):
             return
 
         try:
-            handler = self.namespace_handlers[namespace]
+            handler = self.ns_handlers[namespace]
         except KeyError:
             # we don't have an handler in place and this is typically due to
             # PUSHES of unknown/unmanaged namespaces

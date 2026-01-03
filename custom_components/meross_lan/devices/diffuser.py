@@ -183,7 +183,7 @@ class MLDiffuserLight(MLLightBase):
             {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: 0}
         ):
             self._light[mc.KEY_ONOFF] = 0
-            self.update_onoff(0)
+            self.update_native_value(0)
 
 
 class MLDiffuserSpray(MLSpray):

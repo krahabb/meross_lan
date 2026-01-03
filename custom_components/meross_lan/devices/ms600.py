@@ -156,7 +156,7 @@ class PresenceConfigMode(PresenceConfigModeBase):
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self._entities = None  # type: ignore
+        del self._entities
 
     def _parse_config(self, payload: dict, /):
         """
@@ -222,17 +222,11 @@ class MLPresenceSensor(MLNumericSensor):
             name="Presence times",
         )
 
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        self.sensor_times: MLNumericSensor = None  # type: ignore
-        self.binary_sensor_motion: MLBinarySensor = None  # type: ignore
-        self.sensor_distance: MLNumericSensor = None  # type: ignore
-
     def _parse(self, payload: dict, /):
         """
         {"times": 0, "distance": 760, "value": 2, "timestamp": 1725907895}
         """
         self.update_device_value(payload[mc.KEY_VALUE])
         self.sensor_distance.update_device_value(payload[mc.KEY_DISTANCE])
-        self.binary_sensor_motion.update_onoff(payload[mc.KEY_VALUE] == 2)
+        self.binary_sensor_motion.update_native_value(payload[mc.KEY_VALUE] == 2)
         self.sensor_times.update_device_value(payload[mc.KEY_TIMES])

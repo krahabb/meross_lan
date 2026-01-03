@@ -111,8 +111,8 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
             self._reset_unsub()
             self._reset_unsub = None
         await super().async_shutdown()
-        self.sensor_consumptionx = None
-        self.sensor_power = None  # type: ignore
+        del self.sensor_consumptionx
+        del self.sensor_power
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -247,7 +247,7 @@ class ElectricityXSensor(ElectricitySensor):
                 # exactly as in update_device_value below.
                 try:
                     manager.async_create_task(
-                        manager.namespace_handlers[
+                        manager.ns_handlers[
                             mn.Appliance_Control_ConsumptionH
                         ].async_request_get_channel(channel),
                         "ConsumptionH triggered update",
@@ -264,7 +264,7 @@ class ElectricityXSensor(ElectricitySensor):
                 # by any other means for these devices.
                 try:
                     self.manager.async_create_task(
-                        self.manager.namespace_handlers[
+                        self.manager.ns_handlers[
                             mn.Appliance_Control_ConsumptionH
                         ].async_request_get_channel(self.channel),
                         "ConsumptionH triggered update",
@@ -494,7 +494,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
             # so our multiple requests are more reliable. If anything
             # goes wrong, the Device multiple payload managment
             # is smart enough to adapt to wrong estimates
-            device.namespace_handlers[
+            device.ns_handlers[
                 mn.Appliance_Control_ConsumptionX
             ].polling_response_size_adj(len(days))
             # catch the device starting a new day since our last update (yesterday)
@@ -622,14 +622,7 @@ class OverTempEnableSwitch(EntityNamespaceMixin, MLDeviceSwitch):
 
     def __init__(self, manager: "Device", ns: mn.Namespace, /):
         super().__init__(manager, ns)
-        self.sensor_overtemp_type: MLEnumSensor = MLEnumSensor(
-            manager, None, "config_overtemp_type"
-        )
-
-    # interface: MerossToggle
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        self.sensor_overtemp_type = None  # type: ignore
+        self.sensor_overtemp_type = MLEnumSensor(manager, None, "config_overtemp_type")
 
     # interface: self
     @override

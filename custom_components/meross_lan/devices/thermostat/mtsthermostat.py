@@ -22,13 +22,11 @@ class MtsWarningSensor(MLEnumSensor):
     __slots__ = ("translation_key",)
 
     def __init__(
-        self,
-        number_temperature: "MtsCommonTemperatureExtNumber",
-        native_value: str | int | float | None,
-        /,
+        self, number_temperature: "MtsCommonTemperatureExtNumber", native_value, /
     ):
         entitykey = f"{number_temperature.entitykey}_warning"
-        super().__init__(
+        MLEnumSensor.__init__(
+            self,
             number_temperature.manager,
             number_temperature.channel,
             entitykey,
@@ -39,14 +37,9 @@ class MtsWarningSensor(MLEnumSensor):
 
 class MtsConfigSwitch(MLDeviceSwitch):
 
-    number_temperature: "MtsCommonTemperatureExtNumber"
-
-    __slot__ = ("number_temperature",)
-
     def __init__(
         self, number_temperature: "MtsCommonTemperatureExtNumber", device_value, /
     ):
-        self.number_temperature = number_temperature
         self.ns = number_temperature.ns
         MLDeviceSwitch.__init__(
             self,
@@ -55,28 +48,14 @@ class MtsConfigSwitch(MLDeviceSwitch):
             f"{number_temperature.entitykey}_switch",
             device_value=device_value,
             name=(f"{number_temperature.entitykey} Alarm").capitalize(),
+            state_callback=number_temperature._switch_state_callback,
         )
-
-    async def async_shutdown(self):
-        await MLDeviceSwitch.async_shutdown(self)
-        self.number_temperature = None  # type: ignore
-
-    def update_onoff(self, onoff: bool, /):
-        if self.is_on != onoff:
-            self.is_on = onoff
-            self.flush_state()
-            number_temperature = self.number_temperature
-            if number_temperature.available != onoff:
-                number_temperature.available = onoff
-                number_temperature.flush_state()
-            return True
 
 
 class MtsCommonTemperatureNumber(MLConfigNumber):
 
     if TYPE_CHECKING:
         manager: Device
-        entitykey: str
 
     key_value = mc.KEY_VALUE
 
@@ -88,11 +67,7 @@ class MtsCommonTemperatureNumber(MLConfigNumber):
         "native_step",
     )
 
-    def __init__(
-        self,
-        climate: "MtsThermostatClimate",
-        /,
-    ):
+    def __init__(self, climate: "MtsThermostatClimate", /):
         MLConfigNumber.__init__(
             self,
             climate.manager,
@@ -127,31 +102,29 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
         manager = self.manager
         # preset entity platforms since these might be instantiated later
         manager.platforms.setdefault(MtsConfigSwitch.PLATFORM)
-        manager.platforms.setdefault(MLEnumSensor.PLATFORM)
-        self.sensor_warning = None  # type: ignore
-        self.switch = None  # type: ignore
-
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        self.switch = None  # type: ignore
-        self.sensor_warning = None  # type: ignore
+        manager.platforms.setdefault(MtsWarningSensor.PLATFORM)
 
     def _parse(self, payload: "mt_t.CommonTemperatureExt_C", /):
         try:
-            warning = payload[mc.KEY_WARNING]
-            self.sensor_warning.update_native_value(warning)
+            self.sensor_warning.update_native_value(payload[mc.KEY_WARNING])
         except AttributeError:
-            self.sensor_warning = MtsWarningSensor(self, warning)
+            self.sensor_warning = MtsWarningSensor(self, payload[mc.KEY_WARNING])
         except KeyError:
             pass
         try:
             self.available = bool(payload[mc.KEY_ONOFF])
-            self.switch.update_onoff(self.available)
+            self.switch.update_native_value(self.available)
         except AttributeError:
             self.switch = MtsConfigSwitch(self, self.available)
         except KeyError:
             pass
-        super()._parse(payload)
+        MtsCommonTemperatureNumber._parse(self, payload)
+
+    def _switch_state_callback(self):
+        available = bool(self.switch.is_on)
+        if self.available != available:
+            self.available = available
+            self.flush_state()
 
 
 class MtsDeadZoneNumber(MtsCommonTemperatureNumber):
@@ -199,10 +172,6 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
         self.native_step = climate.target_temperature_step
         MtsCommonTemperatureExtNumber.__init__(self, climate)
 
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        self.sensor_external_temperature = None  # type: ignore
-
     def _parse(self, payload: "mt_t.Overheat_C", /):
         try:
             current_temp = payload[mc.KEY_CURRENTTEMP]
@@ -217,7 +186,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
             )
         except KeyError:
             pass
-        super()._parse(payload)
+        MtsCommonTemperatureExtNumber._parse(self, payload)
 
 
 class MtsWindowOpened(MLBinarySensor):
@@ -279,8 +248,8 @@ class MtsHoldAction(MLConfigSelect):
         self.number_time.async_request_value = self._async_request_value_number_time
 
     async def async_shutdown(self):
-        await super().async_shutdown()
-        self.number_time = None  # type: ignore
+        await MLConfigSelect.async_shutdown(self)
+        del self.number_time
 
     @override
     async def async_request_value(self, device_value, /):
@@ -292,8 +261,7 @@ class MtsHoldAction(MLConfigSelect):
     def _parse_holdAction(self, payload: "mt_t.HoldAction_C", /):
         self.update_device_value(payload[mc.KEY_MODE])
         try:
-            _time = payload[mc.KEY_TIME]  # type: ignore
-            self.number_time.update_device_value(_time)
+            self.number_time.update_device_value(payload[mc.KEY_TIME])  # type: ignore
         except KeyError:
             pass
 
@@ -420,7 +388,7 @@ class MtsThermostatClimate(MtsClimate):
             MtsCommonTemperatureNumber.__init__(self, climate)
 
     def __init__(self, manager: "Device", channel, /):
-        super().__init__(manager, channel)
+        MtsClimate.__init__(self, manager, channel)
         manager.register_parser_entity(self)
         manager.register_parser_entity(self.schedule)
         ability = manager.descriptor.ability
@@ -433,9 +401,7 @@ class MtsThermostatClimate(MtsClimate):
                 entity_class(self)
 
     def get_ns_adjust(self, /):
-        return self.manager.namespace_handlers[
-            mn_t.Appliance_Control_Thermostat_Calibration
-        ]
+        return self.manager.ns_handlers[mn_t.Appliance_Control_Thermostat_Calibration]
 
     def _parse_ctlRange(self, payload: dict, /):
         """

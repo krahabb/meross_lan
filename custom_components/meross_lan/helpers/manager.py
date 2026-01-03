@@ -4,6 +4,7 @@ import logging
 import os
 from time import localtime, strftime, time
 from typing import TYPE_CHECKING
+import weakref
 
 from homeassistant.components import persistent_notification as pn
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
@@ -79,6 +80,8 @@ class EntityManager(Loggable):
         deviceentry_id: Final[DeviceEntryIdType | None]
         platforms: PlatformsType  # init in derived
         entities: Final[dict[object, MLEntity]]
+        objects: Final[weakref.WeakSet]
+        """Keeps track of some object instances (for debugging) built and managed by this EntityManager."""
         _tasks: set[asyncio.Future]
         _issues: set[str]  # BEWARE: on demand attribute
 
@@ -98,6 +101,7 @@ class EntityManager(Loggable):
         "config_entry",
         "deviceentry_id",
         "entities",
+        "objects",
         "platforms",
         "config",
         "key",
@@ -118,6 +122,7 @@ class EntityManager(Loggable):
         self.config_entry = kwargs.get("config_entry")
         self.deviceentry_id = kwargs.get("deviceentry_id")
         self.entities = {}
+        self.objects = weakref.WeakSet()
         self._tasks = set()
         super().__init__(id, **kwargs)
 
@@ -149,6 +154,11 @@ class EntityManager(Loggable):
             await entity.async_shutdown()
         if self._tasks:
             self.log(self.DEBUG, "Some tasks were not shutdown %s", self._tasks)
+        self.log(
+            self.DEBUG,
+            "EntityManager.async_shutdown complete (objects: %s)",
+            self.objects,
+        )
 
     @property
     def name(self) -> str:
@@ -159,11 +169,11 @@ class EntityManager(Loggable):
     def online(self) -> bool:
         return True
 
-    def managed_entities(self, platform):
+    def managed_entities(self, platform, /):
         """entities list for platform setup"""
-        return [
+        return (
             entity for entity in self.entities.values() if entity.PLATFORM is platform
-        ]
+        )
 
     def generate_unique_id(self, entity: "MLEntity"):
         """
@@ -179,10 +189,10 @@ class EntityManager(Loggable):
         self, delay: float, target: "Callable[..., Coroutine]", *args
     ) -> "asyncio.TimerHandle":
         @callback
-        def _callback(_target, *_args):
-            self.async_create_task(_target(*_args), "._callback")
+        def _callback(*_args):
+            self.async_create_task(target(*_args), "._callback")
 
-        return self.hass.loop.call_later(delay, _callback, target, *args)
+        return self.hass.loop.call_later(delay, _callback, *args)
 
     def schedule_callback(
         self, delay: float, target: "Callable", *args

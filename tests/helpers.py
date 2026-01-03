@@ -1060,7 +1060,7 @@ class MQTTConnectionMocker(contextlib.AbstractContextManager):
                 device_info = tc.MOCK_CLOUDAPI_DEVICE_DEVLIST[device_id]
                 emulator = build_emulator_for_profile(
                     tc.MOCK_PROFILE_CONFIG,
-                    model=device_info.get(mc.KEY_DEVICETYPE),
+                    model=device_info[mc.KEY_DEVICETYPE],
                     device_id=device_id,
                 )
                 device_config = build_emulator_config_entry(emulator)

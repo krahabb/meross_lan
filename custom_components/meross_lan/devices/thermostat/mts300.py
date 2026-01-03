@@ -234,8 +234,8 @@ class Mts300Climate(MtsThermostatClimate):
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.switch_fan_hold = None  # type:ignore
-        self.number_fan_hold = None  # type:ignore
+        del self.switch_fan_hold
+        del self.number_fan_hold
 
     # interface: MtsClimate
     def set_unavailable(self):
@@ -378,12 +378,12 @@ class Mts300Climate(MtsThermostatClimate):
                 # this doesn't update device_value so that it is saved and
                 # eventually reused when switch_fan_hold toggles on
                 self.number_fan_hold.update_native_value(None)
-                self.switch_fan_hold.update_onoff(0)
+                self.switch_fan_hold.update_native_value(0)
             else:
                 if not self.number_fan_hold.update_device_value(fan_hold_time):
                     # might happen when we toggle-on switch_fan_hold
                     self.number_fan_hold.update_native_value(fan_hold_time)
-                self.switch_fan_hold.update_onoff(1)
+                self.switch_fan_hold.update_native_value(1)
 
             match mode := payload["mode"]:
                 case mc.MTS300_MODE_OFF:

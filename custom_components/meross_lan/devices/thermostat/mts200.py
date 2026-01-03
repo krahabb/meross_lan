@@ -57,8 +57,7 @@ class Mts200Climate(MtsThermostatClimate):
         super().__init__(manager, channel)
         self._mts_summermode = None
         self._mts_summermode_supported = (
-            mn_t.Appliance_Control_Thermostat_SummerMode
-            in manager.descriptor.ability
+            mn_t.Appliance_Control_Thermostat_SummerMode in manager.descriptor.ability
         )
         if self._mts_summermode_supported:
             self.hvac_modes = [
@@ -201,9 +200,10 @@ class Mts200Climate(MtsThermostatClimate):
             key_temp,
             number_preset_temperature,
         ) in self.number_preset_temperature.items():
-            if key_temp in payload:
+            try:
                 number_preset_temperature.update_device_value(payload[key_temp])
-
+            except KeyError:
+                pass
         self.flush_state()
 
     def _parse_summerMode(self, payload: dict, /):

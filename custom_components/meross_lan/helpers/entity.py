@@ -50,7 +50,7 @@ def platform_setup_entry(
     manager = config_entry.runtime_data
     manager.log(manager.DEBUG, "platform_setup_entry { platform: %s }", platform)
     manager.platforms[platform] = async_add_devices
-    async_add_devices(manager.managed_entities(platform))
+    async_add_devices(list(manager.managed_entities(platform)))
 
 
 class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else object):
@@ -96,6 +96,9 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         ns: mn.Namespace  # no default
         key_value: str  # defaulted to 'value'
 
+        manager: EntityManager  # Final
+        channel: Final[object | None]
+        entitykey: Final[str | None]
         # used to speed-up checks if entity is enabled and loaded
         hass_connected: Final[bool]  # public ReadOnly attribute
 
@@ -211,6 +214,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         """
         # init these first since Loggable init could call configure_logger which 'sometimes'
         # could rely on these
+        manager.objects.add(self)
         self.manager = manager
         self.channel = channel
         self.entitykey = entitykey
@@ -288,10 +292,10 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
 
     # interface: self
     async def async_shutdown(self):
-        await NamespaceParser.async_shutdown(self)
-        self.state_callbacks = None
-        self.manager.entities.pop(self.id)
-        self.manager: "EntityManager" = None  # type: ignore
+        await super().async_shutdown()
+        del self.manager.entities[self.id]
+        del self.state_callbacks
+        del self.manager
 
     @final
     def register_state_callback(self, state_callback: "StateCallback", /):
@@ -521,19 +525,11 @@ class MLBinaryEntity(MLEntity):
                 self.is_on = False
             case _:
                 self.is_on = None
-        self.update_native_value = self.update_onoff
         super().__init__(manager, channel, entitykey, **kwargs)
 
     def set_unavailable(self):
         self.is_on = None
         super().set_unavailable()
-
-    def update_onoff(self, onoff, /):
-        # TODO: remove in favor of update_native_value/update_device_value
-        if self.is_on != onoff:
-            self.is_on = onoff
-            self.flush_state()
-            return True
 
     @override
     def update_device_value(self, device_value, /) -> bool | None:
@@ -541,11 +537,18 @@ class MLBinaryEntity(MLEntity):
         key_value in class/instance definition to make it work."""
         match device_value:
             case self.native_on:
-                return self.update_onoff(True)
+                return self.update_native_value(True)
             case self.native_off:
-                return self.update_onoff(False)
+                return self.update_native_value(False)
             case _:
-                return self.update_onoff(None)
+                return self.update_native_value(None)
+
+    @override
+    def update_native_value(self, onoff, /):
+        if self.is_on != onoff:
+            self.is_on = onoff
+            self.flush_state()
+            return True
 
 
 class MLNumericEntity(MLEntity):
@@ -613,6 +616,7 @@ class MLNumericEntity(MLEntity):
         self.native_value = None
         super().set_unavailable()
 
+    @override
     def update_device_value(self, device_value: int | float, /):
         if self.device_value != device_value:
             self.device_value = device_value
@@ -620,6 +624,7 @@ class MLNumericEntity(MLEntity):
             self.flush_state()
             return True
 
+    @override
     def update_native_value(self, native_value: int | float | None, /):
         if self.native_value != native_value:
             self.native_value = native_value
