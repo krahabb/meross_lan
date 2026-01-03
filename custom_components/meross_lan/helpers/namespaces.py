@@ -892,9 +892,10 @@ class EntityNamespaceMixin(MLEntity if TYPE_CHECKING else object):
         manager: "Device"
         handler: Final[NamespaceHandler]
 
-    def __init__(self, manager: "Device"):
-        self.handler = NamespaceHandler(manager, self.ns, handler=self._handle)
+    def __init__(self, manager: "Device", ns: mn.Namespace, /):
+        self.handler = NamespaceHandler(manager, ns, handler=self._handle)
         self.handler.polling_strategy = None  # controlled by added/removed
+        self.ns = ns  # TODO: generalize ns x Entity instance by passing through kwargs
         super().__init__(manager, None, self.__class__.ENTITY_KEY)
 
     async def async_added_to_hass(self):
@@ -915,34 +916,11 @@ class VoidNamespaceHandler(NamespaceHandler):
     just provides an empty handler and so suppresses any log too (for unknown namespaces)
     done by the base default handling."""
 
-    def __init__(self, device: "Device", namespace: "mn.Namespace"):
-        NamespaceHandler.__init__(self, device, namespace, handler=self._handle_void)
+    def __init__(self, device: "Device", ns: mn.Namespace, /):
+        NamespaceHandler.__init__(self, device, ns, handler=self._handle_void)
 
     def _handle_void(self, header, payload, /):
         pass
-
-
-class McuFirmwareNamespaceHandler(NamespaceHandler):
-
-    # TODO: refactor namespace_init_func to provide the namespace arg so that we can better generalize this
-    def __init__(self, device: "Device"):
-        NamespaceHandler.__init__(
-            self,
-            device,
-            mn.Appliance_Mcu_Firmware,
-            handler=device._handle_Appliance_Mcu_Firmware,
-        )
-
-
-class McuHp110FirmwareNamespaceHandler(NamespaceHandler):
-
-    def __init__(self, device: "Device"):
-        NamespaceHandler.__init__(
-            self,
-            device,
-            mn.Appliance_Mcu_Hp110_Firmware,
-            handler=device._handle_Appliance_Mcu_Firmware,
-        )
 
 
 """

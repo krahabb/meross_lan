@@ -35,6 +35,7 @@ from ..merossclient.protocol.message import (
     MerossResponse,
     json_dumps,
 )
+from ..merossclient.protocol.namespaces import thermostat as mn_t
 from ..sensor import ProtocolSensor
 from ..update import MLUpdate
 from .manager import ConfigEntryManager, EntityManager
@@ -80,7 +81,7 @@ if TYPE_CHECKING:
     type DigestParseFunc = Callable[[JsonDict], None] | Callable[[JsonList], None]
     type DigestInitReturnType = tuple[DigestParseFunc, Iterable[NamespaceHandler]]
     type DigestInitFunc = Callable[[Device, Any], DigestInitReturnType]
-    type NamespaceInitFunc = Callable[[Device], None]
+    type NamespaceInitFunc = Callable[[Device, mn.Namespace], None]
     type AsyncRequestFunc = Callable[
         [str, str, MerossPayloadType], CoroutineType[Any, Any, MerossResponse | None]
     ]
@@ -265,7 +266,7 @@ class Device(BaseDevice, ConfigEntryManager):
         - if any is not found we'll set a 'digest_init_empty' function in order to not
         repeat the lookup process. That function will just pass so that the key
         init/parsing will not harm."""
-        NAMESPACE_INIT: Final[dict[str, Any]]
+        NAMESPACE_INIT: Final[dict[mn.Namespace, Any]]
         """ Static dict of namespace initialization functions. This will be looked up
         and matched against the current device abilities (at device init time) and
         usually setups a dedicated namespace handler and/or a dedicated entity.
@@ -338,7 +339,7 @@ class Device(BaseDevice, ConfigEntryManager):
         return Device.digest_parse_empty, ()
 
     @staticmethod
-    def namespace_init_empty(device: "Device"):
+    def namespace_init_empty(device: "Device", namespace: mn.Namespace):
         pass
 
     NAMESPACES = mn.NAMESPACES
@@ -359,7 +360,7 @@ class Device(BaseDevice, ConfigEntryManager):
         mn.Appliance_Config_OverTemp: (".devices.mss", "OverTempEnableSwitch"),
         mn.Appliance_Control_ConsumptionConfig: (
             ".devices.mss",
-            "ConsumptionConfigNamespaceHandler",
+            "VoidNamespaceHandler",
         ),
         mn.Appliance_Control_Electricity: (
             ".devices.mss",
@@ -367,17 +368,17 @@ class Device(BaseDevice, ConfigEntryManager):
         ),
         mn.Appliance_Control_ElectricityX: (
             ".devices.mss",
-            "ElectricityXNamespaceHandler",
+            "namespace_init_electricityx",
         ),
         mn.Appliance_Control_ConsumptionH: (
             ".devices.mss",
-            "ConsumptionHNamespaceHandler",
+            "namespace_init_consumptionh",
         ),
         mn.Appliance_Control_ConsumptionX: (".devices.mss", "ConsumptionXSensor"),
         mn.Appliance_Control_Fan: (".fan", "namespace_init_fan"),
         mn.Appliance_Control_FilterMaintenance: (
             ".sensor",
-            "FilterMaintenanceNamespaceHandler",
+            "namespace_init_filtermaintenance",
         ),
         mn.Appliance_Control_Mp3: (".media_player", "MLMp3Player"),
         mn.Appliance_Control_PhysicalLock: (".switch", "PhysicalLockSwitch"),
@@ -397,17 +398,17 @@ class Device(BaseDevice, ConfigEntryManager):
             ".devices.misc",
             "namespace_init_sensor_latestx",
         ),
-        "Appliance.Control.Thermostat.ModeC": (
+        mn_t.Appliance_Control_Thermostat_ModeC: (
             ".devices.thermostat.mts300",
             "Mts300Climate",
         ),
         mn.Appliance_Mcu_Firmware: (
             ".helpers.namespaces",
-            "McuFirmwareNamespaceHandler",
+            "NamespaceHandler", # handler in Device._handle_XXX
         ),
         mn.Appliance_Mcu_Hp110_Firmware: (
             ".helpers.namespaces",
-            "McuHp110FirmwareNamespaceHandler",
+            "NamespaceHandler", # handler in Device._handle_XXX
         ),
         mn.Appliance_RollerShutter_State: (".devices.rollershutter", "MLRollerShutter"),
         mn.Appliance_System_DNDMode: (".light", "MLDNDLightEntity"),
@@ -594,12 +595,13 @@ class Device(BaseDevice, ConfigEntryManager):
             ):
                 self.tz = await self.api.async_load_zoneinfo(tzname)
 
-        for namespace, ns_init_func in Device.NAMESPACE_INIT.items():
-            if namespace not in descriptor.ability:
+        ability = descriptor.ability
+        for ns, ns_init_func in Device.NAMESPACE_INIT.items():
+            if ns not in ability:
                 continue
             try:
                 try:
-                    ns_init_func(self)
+                    ns_init_func(self, ns)
                 except TypeError:
                     try:
                         ns_init_func = getattr(
@@ -611,15 +613,15 @@ class Device(BaseDevice, ConfigEntryManager):
                             self.WARNING,
                             exception,
                             "loading namespace initializer for %s",
-                            namespace,
+                            ns,
                         )
                         ns_init_func = Device.namespace_init_empty
-                    Device.NAMESPACE_INIT[namespace] = ns_init_func
-                    ns_init_func(self)
+                    Device.NAMESPACE_INIT[ns] = ns_init_func
+                    ns_init_func(self, ns)
 
             except Exception as exception:
                 self.log_exception(
-                    self.WARNING, exception, "initializing namespace %s", namespace
+                    self.WARNING, exception, "initializing namespace %s", ns
                 )
 
         for key_digest, _digest in (
@@ -2375,6 +2377,8 @@ class Device(BaseDevice, ConfigEntryManager):
         self.descriptor.mcu = payload[mc.KEY_FIRMWARE]
         if self.update_firmware:
             self.update_firmware.update_info()
+
+    _handle_Appliance_Mcu_Hp110_Firmware = _handle_Appliance_Mcu_Firmware
 
     def _handle_Appliance_System_Ability(self, header, payload, /):
         pass

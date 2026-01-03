@@ -45,7 +45,7 @@ class MLRollerShutter(MLCover):
         "_position_starttime",
     )
 
-    def __init__(self, manager: "Device"):
+    def __init__(self, manager: "Device", ns, /):
         self.current_cover_position = None
         self.supported_features = (
             MLCover.EntityFeature.OPEN

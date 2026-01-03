@@ -369,12 +369,8 @@ class MLFilterMaintenanceSensor(MLNumericSensor):
         manager.register_parser_entity(self)
 
 
-class FilterMaintenanceNamespaceHandler(NamespaceHandler):
-
-    def __init__(self, device: "Device"):
-        NamespaceHandler.__init__(
-            self,
-            device,
-            mn.Appliance_Control_FilterMaintenance,
-        )
-        MLFilterMaintenanceSensor(device, 0)
+def namespace_init_filtermaintenance(
+    device: "Device", ns: mn.Namespace = mn.Appliance_Control_FilterMaintenance, /
+):
+    # TODO: similar to PhysicalLockSwitch we may want to better generalize these setups
+    MLFilterMaintenanceSensor(device, 0)

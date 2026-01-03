@@ -40,11 +40,11 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
         mc.KEY_LIGHT: MLLightSensor.ENTITY_DEF(),  # just guessed (2024/09)
     }
 
-    def __init__(self, device: "Device"):
+    def __init__(self, device: "Device", ns=mn.Appliance_Control_Sensor_Latest, /):
         NamespaceHandler.__init__(
             self,
             device,
-            mn.Appliance_Control_Sensor_Latest,
+            ns,
             handler=self._handle_Appliance_Control_Sensor_Latest,
         )
         self.polling_request_add_channel(0)
@@ -117,11 +117,11 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
 
     __slots__ = ()
 
-    def __init__(self, device: "Device"):
+    def __init__(self, device: "Device", ns=mn.Appliance_Control_Sensor_LatestX, /):
         NamespaceHandler.__init__(
             self,
             device,
-            mn.Appliance_Control_Sensor_LatestX,
+            ns,
             handler=self._handle_Appliance_Control_Sensor_LatestX,
         )
         if device.descriptor.type.startswith(mc.TYPE_MS600):
@@ -176,8 +176,10 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
                 entity._parse(data_value[0])
 
 
-def namespace_init_sensor_latestx(device: "Device"):
+def namespace_init_sensor_latestx(
+    device: "Device", ns=mn.Appliance_Control_Sensor_LatestX, /
+):
     # Hub(s) have a different ns handler so far
     # TODO: try to reconcile in a single handler
     if device.get_type() is mlc.DeviceType.DEVICE:
-        SensorLatestXNamespaceHandler(device)
+        SensorLatestXNamespaceHandler(device, ns)

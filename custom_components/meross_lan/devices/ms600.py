@@ -173,10 +173,10 @@ class PresenceConfigMode(PresenceConfigModeBase):
             entity.update_device_value(payload[entity.key_group][entity.key_value])
 
 
-def namespace_init_presence_config(device: "Device", /):
-    NamespaceHandler(
-        device, mn.Appliance_Control_Presence_Config
-    ).register_entity_class(PresenceConfigMode)
+def namespace_init_presence_config(
+    device: "Device", ns=mn.Appliance_Control_Presence_Config, /
+):
+    NamespaceHandler(device, ns).register_entity_class(PresenceConfigMode)
     PresenceConfigMode(device, 0)  # this will auto register itself in handler
 
 

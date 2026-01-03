@@ -101,7 +101,7 @@ class PhysicalLockSwitch(MLDeviceSwitch):
 
     ns = mn.Appliance_Control_PhysicalLock
 
-    def __init__(self, manager: "Device", /):
+    def __init__(self, manager: "Device", ns, /):
         # right now we expect only 1 entity on channel == 0 (whatever)
         MLDeviceSwitch.__init__(self, manager, 0, mc.KEY_LOCK)
         manager.register_parser_entity(self)
@@ -124,7 +124,7 @@ class MLToggle(EntityNamespaceMixin, MLDeviceSwitch):
 
 def digest_init_toggle(device: "Device", digest: dict, /) -> "DigestInitReturnType":
     """{"onoff": 0, "lmTime": 1645391086}"""
-    toggle = MLToggle(device)
+    toggle = MLToggle(device, mn.Appliance_Control_Toggle)
     return toggle._parse, (toggle.handler,)
 
 

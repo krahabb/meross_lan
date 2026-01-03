@@ -163,12 +163,10 @@ def digest_init_fan(device: "Device", digest, /) -> "DigestInitReturnType":
     return handler.parse_list, (handler,)
 
 
-def namespace_init_fan(device: "Device", /):
+def namespace_init_fan(device: "Device", ns=mn.Appliance_Control_Fan, /):
     """Special care for NS_FAN since it might have been initialized in digest_init"""
     if mc.KEY_FAN not in device.descriptor.digest:
         # actually only map100 (so far)
         MLFan(device, 0)
         # setup a polling strategy since state is not carried in digest
-        device.get_handler(mn.Appliance_Control_Fan).polling_strategy = (
-            NamespaceHandler.async_poll_default
-        )
+        device.get_handler(ns).polling_strategy = NamespaceHandler.async_poll_default

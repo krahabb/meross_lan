@@ -65,7 +65,7 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
         "_mp3",
     )
 
-    def __init__(self, manager: "Device"):
+    def __init__(self, manager: "Device", ns, /):
         self._mp3 = {}
         self.is_volume_muted = None
         self.media_title = None

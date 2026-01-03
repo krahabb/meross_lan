@@ -226,10 +226,10 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
         self._schedule_reset(_now)
 
 
-def namespace_init_electricity(device: "Device", /):
+def namespace_init_electricity(device: "Device", ns: mn.Namespace, /):
     NamespaceHandler(
         device,
-        mn.Appliance_Control_Electricity,
+        ns,
         handler=ElectricitySensor(device, None)._handle_Appliance_Control_Electricity,
     )
 
@@ -304,7 +304,7 @@ class ElectricityXSensor(ElectricitySensor):
         manager.register_parser(self, mn.Appliance_Control_ElectricityX)
 
 
-class ElectricityXNamespaceHandler(NamespaceHandler):
+def namespace_init_electricityx(device: "Device", ns: mn.Namespace, /):
     """
     This namespace is still pretty unknown.
     Looks like an upgraded version of Appliance.Control.Electricity and currently appears in:
@@ -313,15 +313,15 @@ class ElectricityXNamespaceHandler(NamespaceHandler):
     The em06 parsing looks established (not sure it really works..no updates from users so far)
     while the mop is still obscure. While the em06 query is a plain empty dict it might be
     the mop320 needs a 'channel indexed' request payload so we're now (2024-10-11) trying
-    the same approach as in ConsumptionH namespace
-    """
+    the same approach as in ConsumptionH namespace.
 
-    def __init__(self, device: "Device", /):
-        NamespaceHandler.__init__(self, device, mn.Appliance_Control_ElectricityX)
-        # Current approach is to build a sensor for any appearing channel index
-        # in digest. This in turn will not directly build the EM06 sensors
-        # but they should come when polling.
-        self.register_entity_class(ElectricityXSensor, build_from_digest=True)
+    Current approach is to build a sensor for any appearing channel index
+    in digest. This in turn will not directly build the EM06 sensors
+    but they should come when polling.
+    """
+    NamespaceHandler(device, ns).register_entity_class(
+        ElectricityXSensor, build_from_digest=True
+    )
 
 
 class ConsumptionHSensor(MLNumericSensor):
@@ -349,7 +349,7 @@ class ConsumptionHSensor(MLNumericSensor):
         self.update_device_value(payload[mc.KEY_TOTAL])
 
 
-class ConsumptionHNamespaceHandler(NamespaceHandler):
+def namespace_init_consumptionh(device: "Device", ns: mn.Namespace, /):
     """
     This namespace carries hourly statistics (over last 24 ours?) of energy consumption
     Appearing in: mts200 - em06 (Refoss) - mop320
@@ -365,18 +365,9 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
     em06: 6 channels (but the query works without setting any)
     """
 
-    def __init__(self, device: "Device", /):
-        NamespaceHandler.__init__(
-            self,
-            device,
-            mn.Appliance_Control_ConsumptionH,
-        )
-        # Current approach is to build a sensor for any appearing channel index
-        # in digest. This in turns will not directly build the EM06 sensors
-        # but they should come when polling.
-        self.register_entity_class(
-            ConsumptionHSensor, initially_disabled=False, build_from_digest=True
-        )
+    NamespaceHandler(device, ns).register_entity_class(
+        ConsumptionHSensor, initially_disabled=False, build_from_digest=True
+    )
 
 
 class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
@@ -412,7 +403,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         "_tomorrow_midnight_epoch",
     )
 
-    def __init__(self, manager: "Device", /):
+    def __init__(self, manager: "Device", ns: mn.Namespace, /):
         self.offset = 0
         self.reset_ts = 0
         self.energy_estimate = 0.0
@@ -430,7 +421,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         if sensor_energy_estimate:
             sensor_energy_estimate.sensor_consumptionx = self
         self.extra_state_attributes = {}
-        super().__init__(manager)
+        super().__init__(manager, ns)
 
     # interface: MLEntity
     def set_unavailable(self):
@@ -620,16 +611,6 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         self.log(self.DEBUG, "updating consumption=%d", day_last_value)
 
 
-class ConsumptionConfigNamespaceHandler(VoidNamespaceHandler):
-    """Suppress processing Appliance.Control.ConsumptionConfig since
-    it is already processed at the MQTTConnection message handling."""
-
-    def __init__(self, device: "Device", /):
-        VoidNamespaceHandler.__init__(
-            self, device, mn.Appliance_Control_ConsumptionConfig
-        )
-
-
 class OverTempEnableSwitch(EntityNamespaceMixin, MLDeviceSwitch):
 
     ENTITY_KEY = "config_overtemp_enable"
@@ -639,8 +620,8 @@ class OverTempEnableSwitch(EntityNamespaceMixin, MLDeviceSwitch):
 
     __slots__ = ("sensor_overtemp_type",)
 
-    def __init__(self, manager: "Device", /):
-        super().__init__(manager)
+    def __init__(self, manager: "Device", ns: mn.Namespace, /):
+        super().__init__(manager, ns)
         self.sensor_overtemp_type: MLEnumSensor = MLEnumSensor(
             manager, None, "config_overtemp_type"
         )
