@@ -94,6 +94,8 @@ class BaseDevice(EntityManager):
     """
 
     if TYPE_CHECKING:
+        DEVICE_TYPE: ClassVar[mlc.DeviceType]
+
         # override some nullable since we're pretty sure they're none
         config_entry: Final[ConfigEntry]  # type: ignore
         deviceentry_id: Final[EntityManager.DeviceEntryIdType]  # type: ignore
@@ -231,10 +233,6 @@ class BaseDevice(EntityManager):
         raise NotImplementedError("tz")
 
     @abc.abstractmethod
-    def get_type(self, /) -> mlc.DeviceType:
-        raise NotImplementedError("get_type")
-
-    @abc.abstractmethod
     def _get_internal_name(self, /) -> str:
         raise NotImplementedError("_get_internal_name")
 
@@ -342,6 +340,7 @@ class Device(BaseDevice, ConfigEntryManager):
     def namespace_init_empty(device: "Device", namespace: mn.Namespace):
         pass
 
+    DEVICE_TYPE = mlc.DeviceType.DEVICE
     NAMESPACES = mn.NAMESPACES
 
     DIGEST_INIT = {
@@ -1240,10 +1239,6 @@ class Device(BaseDevice, ConfigEntryManager):
                 str(descriptor.mcu),
             )
             return None, None, None
-
-    @override
-    def get_type(self) -> mlc.DeviceType:
-        return mlc.DeviceType.DEVICE
 
     @override
     def _get_internal_name(self) -> str:

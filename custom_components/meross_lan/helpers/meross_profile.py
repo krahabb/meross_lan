@@ -653,7 +653,7 @@ class MerossProfile(MQTTProfile):
                     continue
                 if not device:  # device unloaded
                     continue
-                if device.get_type() is mlc.DeviceType.HUB:
+                if device.DEVICE_TYPE is mlc.DeviceType.HUB:
                     async with self._async_credentials_manager(
                         "_async_query_subdevices"
                     ) as credentials:

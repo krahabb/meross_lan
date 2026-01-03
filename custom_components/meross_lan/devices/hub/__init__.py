@@ -316,6 +316,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
     Specialized Device for smart hub(s) like MSH300
     """
 
+    DEVICE_TYPE = mlc.DeviceType.HUB
     NAMESPACES = mn.HUB_NAMESPACES
 
     DEFAULT_PLATFORMS = Device.DEFAULT_PLATFORMS | {
@@ -342,10 +343,6 @@ class HubMixin(Device if TYPE_CHECKING else object):
             await subdevice.async_shutdown()
         self.subdevices.clear()
         await super().async_shutdown()
-
-    @override
-    def get_type(self) -> mlc.DeviceType:
-        return mlc.DeviceType.HUB
 
     @override
     def managed_entities(self, platform, /):
@@ -580,6 +577,8 @@ class SubDevice(NamespaceParser, BaseDevice):
         sensor_battery: Final[MLNumericSensor]
         switch_togglex: MLDeviceSwitch | None
 
+    DEVICE_TYPE = mlc.DeviceType.SUBDEVICE
+
     __slots__ = (
         "async_request",
         "check_device_timezone",
@@ -607,10 +606,10 @@ class SubDevice(NamespaceParser, BaseDevice):
             api=hub.api,
             hass=hub.hass,
             config_entry=hub.config_entry,
-            logger=hub,
             name=get_productnameuuid(model, id),
             model=model,
             via_device=next(iter(hub.deviceentry_id["identifiers"])),
+            logger=hub,
         )
         self.platforms = hub.platforms
         hub.subdevices[id] = self
@@ -687,10 +686,6 @@ class SubDevice(NamespaceParser, BaseDevice):
     @override
     def tz(self):
         return self.hub.tz
-
-    @override
-    def get_type(self) -> mlc.DeviceType:
-        return mlc.DeviceType.SUBDEVICE
 
     @override
     def _get_internal_name(self) -> str:

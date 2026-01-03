@@ -739,7 +739,7 @@ class NamespaceHandler:
                 await async_request_func(ns_name, mc.METHOD_PUSH, {})
                 await async_request_func(ns_name, mc.METHOD_GET, {})
 
-                if self.device.get_type() is mlc.DeviceType.DEVICE:
+                if self.device.DEVICE_TYPE is mlc.DeviceType.DEVICE:
                     channels = self.parsers.keys() or (0,)
                 else:  # it is an hub
                     channels = self.device.subdevices
@@ -845,7 +845,7 @@ class NamespaceHandler:
                     if response_payload or (type(response_payload) is not list):
                         return
                     # the namespace might need a channel index in the request
-                    if self.device.get_type() is mlc.DeviceType.DEVICE:
+                    if self.device.DEVICE_TYPE is mlc.DeviceType.DEVICE:
                         await async_request_func(
                             ns_name,
                             mc.METHOD_GET,

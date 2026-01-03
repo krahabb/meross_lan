@@ -181,5 +181,5 @@ def namespace_init_sensor_latestx(
 ):
     # Hub(s) have a different ns handler so far
     # TODO: try to reconcile in a single handler
-    if device.get_type() is mlc.DeviceType.DEVICE:
+    if device.DEVICE_TYPE is mlc.DeviceType.DEVICE:
         SensorLatestXNamespaceHandler(device, ns)
