@@ -1598,6 +1598,8 @@ class Device(BaseDevice, ConfigEntryManager):
                 return
 
     async def async_bluetooth_request(self, *request_args: "Unpack[MerossRequestType]"):
+        # TODO: migrate to exception handling system so that we don't need to check
+        # results for errors, unify also timeouts management among requests
         request = MerossRequest(*request_args, "", mlc.DOMAIN, self.__class__.__name__)
         self._trace_or_log(
             time(),
@@ -1626,7 +1628,8 @@ class Device(BaseDevice, ConfigEntryManager):
     async def async_mqtt_request_raw(
         self, request: "MerossMessage", /
     ) -> MerossResponse | None:
-
+        # TODO: migrate to exception handling system so that we don't need to check
+        # results for errors, unify also timeouts management among requests
         if not (_mqtt_publish := self._mqtt_publish):
             # even if we're smart enough to not call async_mqtt_request when no mqtt
             # available, it could happen we loose that when asynchronously coming here
@@ -1671,6 +1674,8 @@ class Device(BaseDevice, ConfigEntryManager):
     async def async_http_request_raw(
         self, request: MerossRequest, /
     ) -> MerossResponse | None:
+        # TODO: migrate to exception handling system so that we don't need to check
+        # results for errors, unify also timeouts management among requests
         if not (http := self._http):
             # even if we're smart enough to not call async_http_request_raw when no http
             # available, it could happen we loose that when asynchronously coming here
@@ -1932,41 +1937,43 @@ class Device(BaseDevice, ConfigEntryManager):
 
             else:  # offline or 'likely' offline (failed last request)
                 ns_all_handler = self.ns_handlers[mn.Appliance_System_All]
-                ns_all_response = None
-                if self.conf_protocol is CONF_PROTOCOL_AUTO:
-                    if self._http:
-                        ns_all_response = await self.async_http_request(
-                            *ns_all_handler.polling_request
+                coro_func: list["AsyncRequestFunc"] = []
+                if self._http:
+                    coro_func.append(self.async_http_request)
+                if self._mqtt_publish:
+                    coro_func.append(self.async_mqtt_request)
+                if self._bluetooth:
+                    coro_func.append(self.async_bluetooth_request)
+
+                if len(coro_func) > 1:
+                    tasks = {
+                        self.async_create_task(
+                            coro(*ns_all_handler.polling_request),
+                            f".async_poll_{coro.__name__}_task",
                         )
-                    if not ns_all_response and self._mqtt_publish:
-                        ns_all_response = await self.async_mqtt_request(
-                            *ns_all_handler.polling_request
-                        )
-                elif self.conf_protocol is CONF_PROTOCOL_MQTT:
-                    if self._mqtt_publish:
-                        ns_all_response = await self.async_mqtt_request(
-                            *ns_all_handler.polling_request
-                        )
-                elif self.conf_protocol is CONF_PROTOCOL_HTTP:
-                    if self._http:
-                        ns_all_response = await self.async_http_request(
-                            *ns_all_handler.polling_request
-                        )
-                elif self.conf_protocol is CONF_PROTOCOL_BLUETOOTH:
-                    if self._bluetooth:
-                        ns_all_response = await self.async_bluetooth_request(
-                            *ns_all_handler.polling_request
-                        )
+                        for coro in coro_func
+                    }
+                    # use pre 3.13 compatible syntax/semantics
+                    for earliest_connect in asyncio.as_completed(tasks, timeout=5):
+                        ns_all_response = await earliest_connect
+                        if ns_all_response:
+                            # got a response: we could cancel all other tasks
+                            # but we leave'em so that transports can come online later
+                            # for task in tasks:
+                            #     task.cancel()
+                            break
+                    else:  # shouldnt be needed: just silences type-checker
+                        ns_all_response = None
+                elif coro_func:
+                    ns_all_response = await coro_func[0](
+                        *ns_all_handler.polling_request
+                    )
+                else:
+                    raise asyncio.TimeoutError("No transport available for polling")
 
                 if not ns_all_response:
-                    if self.online:
-                        self._set_offline()
-                    else:
-                        if self._polling_delay < PARAM_HEARTBEAT_PERIOD:
-                            self._polling_delay += self.polling_period
-                        else:
-                            self._polling_delay = PARAM_HEARTBEAT_PERIOD
-                    return
+                    raise asyncio.TimeoutError("No response for NS_ALL polling")
+
                 ns_all_handler.lastrequest = epoch
                 ns_all_handler.polling_epoch_next = (
                     epoch + ns_all_handler.polling_period
@@ -2027,6 +2034,13 @@ class Device(BaseDevice, ConfigEntryManager):
         except asyncio.CancelledError:
             self.log(self.DEBUG, "Polling cancelled")
             raise
+        except asyncio.TimeoutError:
+            if self.online:
+                self._set_offline()
+            elif self._polling_delay < PARAM_HEARTBEAT_PERIOD:
+                self._polling_delay += self.polling_period
+            else:
+                self._polling_delay = PARAM_HEARTBEAT_PERIOD
         except Exception as e:
             self.log_exception(self.WARNING, e, "_async_poll")
         finally:
@@ -2102,11 +2116,9 @@ class Device(BaseDevice, ConfigEntryManager):
             _bluetooth.address,
         )
         self._bluetooth_active = _bluetooth
-        if not self.online and self._polling_unsub:
-            # reschedule immediately
-            self._polling_unsub.cancel()
-            self._polling_unsub = self.schedule_callback(0, self._poll, None)
         self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_BLUETOOTH)
+        if not self.online:
+            self.async_create_task(self.async_poll_full(), "bt_connected", False)
 
     def bt_disconnected(self):
         assert self._bluetooth
@@ -2169,21 +2181,17 @@ class Device(BaseDevice, ConfigEntryManager):
             self.loggable_broker(_mqtt_connection.broker),
         )
         self._mqtt_connected = _mqtt_connection
+        self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT_BROKER)
         if _mqtt_connection.profile.allow_mqtt_publish:
             self._mqtt_publish = _mqtt_connection
-            if not self.online and self._polling_unsub:
-                # reschedule immediately
-                # TODO: this is not actually triggering when device is only
-                # reachable over cloud MQTT (at config entry load time/boot)
-                self._polling_unsub.cancel()
-                self._polling_unsub = self.schedule_callback(0, self._poll, None)
+            if not self.online:
+                self.async_create_task(self.async_poll_full(), "mqtt_connected", False)
         elif self.conf_protocol is CONF_PROTOCOL_MQTT:
             self.log(
                 self.WARNING,
                 "MQTT connection doesn't allow publishing - device will not be able send commands",
                 timeout=14400,
             )
-        self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT_BROKER)
 
     def mqtt_disconnected(self):
         assert self._mqtt_connection

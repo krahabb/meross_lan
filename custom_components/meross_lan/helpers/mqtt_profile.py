@@ -378,9 +378,11 @@ class MQTTConnection(Loggable):
         self,
         device_id: str,
         request: "MerossMessage",
+        timeout: float | None = DEFAULT_RESPONSE_TIMEOUT,
     ):
         return self.profile.async_create_task(
-            self.async_mqtt_publish(device_id, request), f".mqtt_publish({device_id})"
+            self.async_mqtt_publish(device_id, request, timeout),
+            f".mqtt_publish({device_id})",
         )
 
     @final
