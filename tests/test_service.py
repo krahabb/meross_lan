@@ -43,16 +43,14 @@ async def test_request_on_mqtt(
 
 
 async def test_request_on_device(
-    request,
-    hass: "HomeAssistant",
-    hamqtt_mock: helpers.HAMQTTMocker,
+    request, hass: "HomeAssistant", hamqtt_mock: helpers.HAMQTTMocker
 ):
     """
     Test service calls routed through a device
     """
-    async with helpers.DeviceContext(request, hass, mc.TYPE_MSS310) as context:
-        # let the device perform it's poll and come online
-        await context.perform_coldstart()
+    async with helpers.DeviceContext(
+        request, hass, mc.TYPE_MSS310, auto_poll=True
+    ) as context:
 
         # get the actual state of the emulator
         digest = context.emulator.descriptor.digest
@@ -87,16 +85,14 @@ async def test_request_on_device(
 
 
 async def test_request_notification(
-    request,
-    hass: "HomeAssistant",
-    hamqtt_mock: helpers.HAMQTTMocker,
+    request, hass: "HomeAssistant", hamqtt_mock: helpers.HAMQTTMocker
 ):
     """
     Test service calls routed through a device
     """
-    async with helpers.DeviceContext(request, hass, mc.TYPE_MSS310) as context:
-        # let the device perform it's poll and come online
-        await context.perform_coldstart()
+    async with helpers.DeviceContext(
+        request, hass, mc.TYPE_MSS310, auto_poll=True
+    ) as context:
         # when routing the call through a device the service data 'key' is not used
         await hass.services.async_call(
             mlc.DOMAIN,

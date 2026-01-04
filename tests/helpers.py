@@ -473,7 +473,6 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
 
         class Args(TypedDict):
             data: NotRequired[Mapping[str, Any]]
-            auto_add: NotRequired[bool]
             auto_setup: NotRequired[bool]
 
         hass: Final[HomeAssistant]
@@ -510,8 +509,7 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
         self.config_entry = MockConfigEntry(**config_entry_kwargs)
         self.config_entry_id = self.config_entry.entry_id
         self.auto_setup = kwargs.get("auto_setup", True)
-        if kwargs.get("auto_add", True):
-            self.config_entry.add_to_hass(hass)
+        self.config_entry.add_to_hass(hass)
 
     @property
     def api_loaded(self):
@@ -778,6 +776,8 @@ class DeviceContext(ConfigEntryMocker):
 
         class Args(ConfigEntryMocker.Args):
             time: NotRequired[datetime]
+            auto_poll: NotRequired[bool]
+            """Performs a full initialization with polling"""
 
         time_mock: Final[TimeMocker]  # type: ignore
         aioclient_mock: Final[AiohttpClientMocker]  # type: ignore
@@ -796,6 +796,7 @@ class DeviceContext(ConfigEntryMocker):
     __slots__ = (
         "emulator",
         "emulator_context",
+        "auto_poll",
         "device_id",
     )
 
@@ -808,21 +809,20 @@ class DeviceContext(ConfigEntryMocker):
     ):
         if isinstance(emulator, str):
             emulator = build_emulator(emulator)
+        self.emulator = emulator
+        self.device_id = emulator.uuid
+        self.auto_poll = kwargs.get("auto_poll", False)
         kwargs["data"] = build_emulator_config_entry(
             emulator, config_data=kwargs.get("data")
         )
-        descriptor = emulator.descriptor
-        kwargs["auto_add"] = True
-        kwargs["auto_setup"] = False
+        kwargs.setdefault("auto_setup", False)
         super().__init__(
             request,
             hass,
             emulator.uuid,
-            f"{descriptor.productname}-{descriptor.productmodel}",
+            f"{emulator.descriptor.productname}-{emulator.descriptor.productmodel}",
             **kwargs,
         )
-        self.emulator = emulator
-        self.device_id = emulator.uuid
         try:
             self.time_mock.time.move_to(kwargs["time"])  # type: ignore
         except KeyError:
@@ -837,7 +837,10 @@ class DeviceContext(ConfigEntryMocker):
             self.emulator, self.aioclient_mock, frozen_time=self.time_mock.time
         )
         self.emulator_context.__enter__()
-        return await super().__aenter__()
+        await super().__aenter__()
+        if self.auto_poll:
+            await self.perform_coldstart()
+        return self
 
     async def __aexit__(self, exc_type, exc_value: BaseException | None, traceback):
         try:
@@ -856,18 +859,19 @@ class DeviceContext(ConfigEntryMocker):
         """
         if not self.config_entry_loaded:
             await self.async_setup()
-        assert (device := self.device) and not device.online
-        await self.time_mock.async_tick(
-            timedelta(seconds=mlc.PARAM_COLDSTARTPOLL_DELAY)
-        )
-        assert device.online
+        assert (device := self.device)
+        if not device.online:
+            await self.time_mock.async_tick(
+                timedelta(seconds=mlc.PARAM_COLDSTARTPOLL_DELAY)
+            )
+            assert device.online
         return device
 
     async def async_setup(self):
         assert not self.config_entry_loaded
         assert not (self.api_loaded and self.api.devices.get(self.device_id))
         result = await super().async_setup()
-        assert (device := self.device) and not device.online
+        assert self.device
         return result
 
     async def async_unload(self):

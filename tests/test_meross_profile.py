@@ -168,6 +168,7 @@ async def test_meross_profile_with_device(
     hass_storage.update(tc.MOCK_PROFILE_STORAGE)
 
     async with (
+        helpers.ProfileEntryMocker(request, hass, auto_setup=True) as profile_context,
         helpers.DeviceContext(
             request,
             hass,
@@ -177,14 +178,13 @@ async def test_meross_profile_with_device(
             data={
                 mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_AUTO,
             },
+            auto_poll=True,
         ) as device_context,
-        helpers.ProfileEntryMocker(request, hass, auto_setup=False) as profile_context,
     ):
         # the loading order of the config entries might
         # have side-effects because of device<->profile binding
         # beware: we cannot selectively load config_entries here
         # since component initialization load them all
-        assert await device_context.async_setup()
 
         assert (api := device_context.api)
         assert (device := device_context.device)
@@ -197,8 +197,6 @@ async def test_meross_profile_with_device(
         # so we cannot reliably validate this condition. Later on it should
         # be connected for sure
         # assert device._mqtt_connected is device._mqtt_connection
-
-        device = await device_context.perform_coldstart()
 
         # check the device registry has the device name from the cloud (stored)
         assert (

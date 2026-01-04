@@ -27,9 +27,9 @@ async def test_hamqtt_device_session(
 
     # We need to provide a configured device so that our
     # api HAMQTTConnection doesn't spawn discoveries
-    async with helpers.DeviceContext(request, hass, mc.TYPE_MSS310) as context:
-        # let the device perform it's poll and come online
-        await context.perform_coldstart()
+    async with helpers.DeviceContext(
+        request, hass, mc.TYPE_MSS310, auto_poll=True
+    ) as context:
 
         device_id = context.device_id
         key = context.device.key

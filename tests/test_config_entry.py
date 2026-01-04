@@ -71,45 +71,24 @@ async def test_device_entry(request, hass: "HomeAssistant"):
     i.e. we're testing something close to http connected devices
     """
     for emulator in helpers.build_emulators():
-        async with helpers.DeviceContext(request, hass, emulator) as context:
-            assert await context.async_setup()
+        async with helpers.DeviceContext(
+            request, hass, emulator, auto_poll=True
+        ) as context:
 
             descriptor = emulator.descriptor
             ability = descriptor.ability
             device = context.device
 
-            entity_dnd = None
-            if mn.Appliance_System_DNDMode in ability:
-                entity_dnd = device.entities[MLDNDLightEntity.ENTITY_KEY]
-                assert isinstance(entity_dnd, MLDNDLightEntity)
-                state = hass.states.get(entity_dnd.entity_id)
-                assert state and state.state == hac.STATE_UNAVAILABLE
-
-            sensor_signal_strength = None
-            if mn.Appliance_System_Runtime in ability:
-                sensor_signal_strength = device.entities[
-                    MLSignalStrengthSensor.ENTITY_KEY
-                ]
-                state = hass.states.get(sensor_signal_strength.entity_id)
-                assert state and state.state == hac.STATE_UNAVAILABLE
-
-            await context.perform_coldstart()
-
             # try to ensure some 'formal' consistency in ns configuration
             for handler in device.ns_handlers.values():
+                assert (
+                    handler.ns in ability
+                ), f"Namespace {handler.ns} has no ability declared"
                 assert (
                     handler.ns.payload_get is not mn.PayloadType.LIST_C_STRICT
                 ) or handler.polling_request_channels, (
                     f"Incorrect config for {handler.ns} namespace"
                 )
-
-            if entity_dnd:
-                state = hass.states.get(entity_dnd.entity_id)
-                assert state and state.state in (hac.STATE_OFF, hac.STATE_ON)
-
-            if sensor_signal_strength:
-                state = hass.states.get(sensor_signal_strength.entity_id)
-                assert state and float(state.state) >= 0.0
 
 
 async def test_profile_entry(request, hass: "HomeAssistant"):

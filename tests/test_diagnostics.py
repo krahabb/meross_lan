@@ -91,8 +91,10 @@ async def test_profile_tracing(request, hass: "HomeAssistant"):
 async def test_device_diagnostics(request, hass: "HomeAssistant"):
 
     for emulator in helpers.build_emulators():
-        async with helpers.DeviceContext(request, hass, emulator) as context:
-            await context.perform_coldstart()
+        async with helpers.DeviceContext(
+            request, hass, emulator, auto_poll=True
+        ) as context:
+
             context.time_mock.warp(tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT)
             try:
                 diagnostic = await async_get_device_diagnostics(
@@ -110,8 +112,9 @@ async def test_device_diagnostics(request, hass: "HomeAssistant"):
 async def test_device_tracing(request, hass: "HomeAssistant"):
 
     for emulator in helpers.build_emulators():
-        async with helpers.DeviceContext(request, hass, emulator) as context:
-            await context.perform_coldstart()
+        async with helpers.DeviceContext(
+            request, hass, emulator, auto_poll=True
+        ) as context:
             await _async_configure_options_tracing(context)
             # We now need to 'coldstart' again the device
             await context.perform_coldstart()

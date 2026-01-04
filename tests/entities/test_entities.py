@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.helpers.entity import STATE_UNAVAILABLE
 
-from custom_components.meross_lan.devices.hub import HubMixin
+from custom_components.meross_lan.devices.hub import HubMixin, mlc
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
@@ -112,8 +112,8 @@ async def test_entities(
     EntityComponentTest.hass_states = hass.states
     EntityComponentTest.hass_service_call = hass.services.async_call
 
-    unexpected_entities_summary: dict[str, list[str]] = {}
-    unavailable_entities_summary: dict[str, list[str]] = {}
+    unexpected_summary: dict[str, list[str]] = {}
+    unavailable_summary: dict[str, list[str]] = {}
 
     try:
         for emulator in helpers.build_emulators():
@@ -123,10 +123,12 @@ async def test_entities(
             EntityComponentTest.digest = digest = descriptor.digest
             ishub = mc.KEY_HUB in digest
 
-            EntityComponentTest.expected_entity_types = expected_entities = (
+            unexpected: list[str] = []
+            unavailable: list[str] = []
+            EntityComponentTest.expected_entity_types = expected = (
                 DEVICE_ENTITIES.copy()
             )
-            _add_func = expected_entities.extend
+            _add_func = expected.extend
             for digest_key, entity_types in DIGEST_ENTITIES.items():
                 if digest_key in digest:
                     sub_digest = digest[digest_key]
@@ -168,42 +170,39 @@ async def test_entities(
                                 _add_func(HUB_SUBDEVICES_ENTITIES[p_key])
                             break
 
-            async with helpers.DeviceContext(request, hass, emulator) as device_context:
+            async with helpers.DeviceContext(
+                request, hass, emulator, auto_poll=True
+            ) as device_context:
                 EntityComponentTest.device_context = device_context
                 try:
                     device_name = device_context.config_entry.title
                     with capsys.disabled():
                         print(f"\nTesting {device_name}")
                         print(
-                            f"Expected entities: {[_entity_type.__name__ for _entity_type in expected_entities]}"
+                            f"Expected entities: {[_entity_type.__name__ for _entity_type in expected]}"
                         )
-                    unexpected_entities: list[str] = []
-                    unavailable_entities: list[str] = []
-                    device = await device_context.perform_coldstart()
+                    device = device_context.device
                     await _async_test_entities(
-                        device,
-                        expected_entities,
-                        unexpected_entities,
-                        unavailable_entities,
+                        device, expected, unexpected, unavailable
                     )
                     if ishub:
-                        assert isinstance(device, HubMixin)
+                        assert isinstance(device, HubMixin) and (
+                            device.DEVICE_TYPE is mlc.DeviceType.HUB
+                        )
                         for subdevice in device.subdevices.values():
+                            assert subdevice.DEVICE_TYPE is mlc.DeviceType.SUBDEVICE
                             await _async_test_entities(
-                                subdevice,
-                                expected_entities,
-                                unexpected_entities,
-                                unavailable_entities,
+                                subdevice, expected, unexpected, unavailable
                             )
+                    else:
+                        assert device.DEVICE_TYPE is mlc.DeviceType.DEVICE
 
-                    if unexpected_entities:
-                        unexpected_entities_summary[device_name] = unexpected_entities
-                    if unavailable_entities:
-                        unavailable_entities_summary[device_name] = unavailable_entities
+                    if unexpected:
+                        unexpected_summary[device_name] = unexpected
+                    if unavailable:
+                        unavailable_summary[device_name] = unavailable
 
-                    assert (
-                        not expected_entities
-                    ), f"{device_name} does not generate {expected_entities}"
+                    assert not expected, f"{device_name} does not generate {expected}"
 
                 except BaseException as e:
                     e.args = (*e.args, EntityComponentTest.entity_id)
@@ -218,24 +217,20 @@ async def test_entities(
 
     with capsys.disabled():
         print("\nUnexpected entities:")
-        for device_name, unexpected_entities in unexpected_entities_summary.items():
-            if unexpected_entities:
-                print(
-                    f"- {device_name}:\n{[_entity for _entity in unexpected_entities]}\n"
-                )
+        for device_name, unexpected in unexpected_summary.items():
+            if unexpected:
+                print(f"- {device_name}:\n{[_entity for _entity in unexpected]}\n")
         print("\nUnavailable entities:")
-        for device_name, unavailable_entities in unavailable_entities_summary.items():
-            if unavailable_entities:
-                print(
-                    f"- {device_name}:\n{[_entity for _entity in unavailable_entities]}\n"
-                )
+        for device_name, unavailable in unavailable_summary.items():
+            if unavailable:
+                print(f"- {device_name}:\n{[_entity for _entity in unavailable]}\n")
 
 
 async def _async_test_entities(
     manager: "BaseDevice",
-    expected_entities: "MerossEntityTypesList",
-    unexpected_entities: list[str],
-    unavailable_entities: list[str],
+    expected: "MerossEntityTypesList",
+    unexpected: list[str],
+    unavailable: list[str],
 ):
     for entity in manager.entities.values():
 
@@ -244,7 +239,7 @@ async def _async_test_entities(
         if entity.PLATFORM not in COMPONENTS_TESTS:
             # TODO: add missing platform tests
             helpers.LOGGER.warning("Missing testing for platform %s", entity.PLATFORM)
-            unexpected_entities.append(entity.logtag)
+            unexpected.append(entity.logtag)
             continue
 
         EntityComponentTest.entity_id = entity_id = entity.entity_id
@@ -255,10 +250,10 @@ async def _async_test_entities(
         # This will ensure the entity is 'available' as per an online device
         await entity_component_test.async_test_each_callback(entity)
 
-        if entity_class in expected_entities:
-            expected_entities.remove(entity_class)
+        if entity_class in expected:
+            expected.remove(entity_class)
         else:
-            unexpected_entities.append(entity.logtag)
+            unexpected.append(entity.logtag)
 
         state = EntityComponentTest.hass_states.get(entity_id)
         if state:
@@ -268,7 +263,7 @@ async def _async_test_entities(
                 # since it's an indication of failure in polling
                 # device state. Right now we have issues in parsing ms600
                 # so we have to demote this to a warning in our test logs
-                unavailable_entities.append(entity.logtag)
+                unavailable.append(entity.logtag)
             await entity_component_test.async_test_enabled_callback(entity)
         else:
             # entity not loaded in HA

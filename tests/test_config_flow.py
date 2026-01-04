@@ -387,12 +387,14 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
     device_type = mc.TYPE_MTS200
     flow = hass.config_entries.flow
 
-    async with helpers.DeviceContext(request, hass, device_type) as device_context:
-        emulator = device_context.emulator
-        device = await device_context.perform_coldstart()
+    async with helpers.DeviceContext(
+        request, hass, device_type, auto_poll=True
+    ) as device_context:
+
+        device = device_context.device
 
         # better be sure our context is consistent with expectations!
-        assert device.host == str(id(emulator))
+        assert device.host == str(id(device_context.emulator))
         assert device.id == device.descriptor.uuid
         device_macaddress = device.descriptor.macAddress
         # since we check the DHCP renewal comes form a legit device we need to setup
@@ -475,8 +477,10 @@ async def test_device_options_flow(request, hass: "HomeAssistant"):
     they behave as expected.
     TODO: check device bind and reset
     """
-    async with helpers.DeviceContext(request, hass, mc.TYPE_MTS200) as context:
-        device = await context.perform_coldstart()
+    async with helpers.DeviceContext(
+        request, hass, mc.TYPE_MTS200, auto_poll=True
+    ) as context:
+        device = context.device
 
         options_flow = hass.config_entries.options
         result = await options_flow.async_init(context.config_entry_id)
@@ -504,8 +508,9 @@ async def test_device_options_flow(request, hass: "HomeAssistant"):
 
 async def test_device_unbind_options_flow(request, hass: "HomeAssistant"):
 
-    async with helpers.DeviceContext(request, hass, mc.TYPE_MTS200) as context:
-        await context.perform_coldstart()
+    async with helpers.DeviceContext(
+        request, hass, mc.TYPE_MTS200, auto_poll=True
+    ) as context:
 
         options_flow = hass.config_entries.options
         result = await options_flow.async_init(context.config_entry_id)
