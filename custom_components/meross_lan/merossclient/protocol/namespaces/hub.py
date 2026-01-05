@@ -126,10 +126,12 @@ Appliance_Hub_Sensor_WaterLeak = mn.ns(
     "Appliance.Hub.Sensor.WaterLeak", mc.KEY_WATERLEAK, GETPSH_ID
 )
 Appliance_Hub_SubDevice_Beep = mn.ns(
-    "Appliance.Hub.SubDevice.Beep", mc.KEY_ALARM, GETSET_ID | mn.EXP  # no clue yet
+    "Appliance.Hub.SubDevice.Beep", mc.KEY_ALARM, GETSET_ID
 )
 Appliance_Hub_SubDevice_MotorAdjust = mn.ns(
-    "Appliance.Hub.SubDevice.MotorAdjust", mc.KEY_ADJUST, SET_ID, mn.EXP  # no clue yet
+    "Appliance.Hub.SubDevice.MotorAdjust",
+    mc.KEY_ADJUST,
+    SET_ID | mn.G_LCS,  # this appears also with "motor_adjust" key in SET
 )
 Appliance_Hub_SubDevice_Version = mn.ns(
     "Appliance.Hub.SubDevice.Version", mc.KEY_VERSION, GETPSH_ID

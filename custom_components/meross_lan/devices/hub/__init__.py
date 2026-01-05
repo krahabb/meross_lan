@@ -36,6 +36,7 @@ if TYPE_CHECKING:
         ClassVar,
         Collection,
         Final,
+        Mapping,
         NotRequired,
         TypedDict,
     )
@@ -53,6 +54,7 @@ if TYPE_CHECKING:
     from ...merossclient.protocol.types import (
         JsonDict,
         JsonList,
+        hub as mt_h,
         control as mt_c,
         sensor as mt_s,
     )
@@ -117,7 +119,15 @@ class HubSensorAdjustNumber(MLConfigNumber):
 class HubToggleX(MLDeviceSwitch):
     """Generic switch to map Appliance.Hub.ToggleX namespace."""
 
+    ENTITY_KEY = mc.KEY_TOGGLEX
     ns = mn_h.Appliance_Hub_ToggleX
+
+
+class HubBeep(MLDeviceSwitch):
+    """Generic switch to map Appliance.Hub.SubDevice.Beep namespace."""
+
+    ns = mn_h.Appliance_Hub_SubDevice_Beep
+    ENTITY_KEY = f"{ns.slug}__{MLDeviceSwitch.key_value}"
 
 
 class HubSubIdChannelMixin(MLEntity if TYPE_CHECKING else object):
@@ -565,7 +575,13 @@ class SubDevice(NamespaceParser, BaseDevice):
     over the key "id" (typical for hub namespaces - even though these namespaces
     are actually already custom handled in HubNamespaceHandler). This added
     flexibility is now necessary to allow for some new 'exotic' design (see
-    ms130-Appliance.Control.Sensor.LatestX)
+    ms130-Appliance.Control.Sensor.LatestX).
+    TODO:
+    - some ns are only handled acorss a subset of devices. For example *.ToggleX
+    is not meaningful everywhere and so does *.Beep.
+    We could think of a map between hub ns and subdevice type in order to
+    fix what works where. This map could also be dynamic if we wish to
+    update it along the way...
     """
 
     if TYPE_CHECKING:
@@ -575,7 +591,6 @@ class SubDevice(NamespaceParser, BaseDevice):
         model: Final[str]
         p_digest: JsonDict
         sensor_battery: Final[MLNumericSensor]
-        switch_togglex: MLDeviceSwitch | None
 
     DEVICE_TYPE = mlc.DeviceType.SUBDEVICE
 
@@ -587,7 +602,6 @@ class SubDevice(NamespaceParser, BaseDevice):
         "model",
         "p_digest",
         "sensor_battery",
-        "switch_togglex",
     )
 
     def __init__(self, hub: HubMixin, p_digest: dict, model: str, /):
@@ -619,12 +633,10 @@ class SubDevice(NamespaceParser, BaseDevice):
             mc.KEY_BATTERY,
             device_class=MLNumericSensor.DeviceClass.BATTERY,
         )
-        # this is a generic toggle we'll setup in case the subdevice
-        # 'advertises' it and no specialized implementation is in place
-        self.switch_togglex: MLDeviceSwitch | None = None
         hub.setup_simple_handlers(
             mn_h.Appliance_Hub_Battery,
             mn_h.Appliance_Hub_ToggleX,
+            mn_h.Appliance_Hub_SubDevice_Beep,
             mn_h.Appliance_Hub_SubDevice_Version,
         )
         hub.setup_subid_handlers(self, mn_h.Appliance_Config_DeviceCfg)
@@ -651,9 +663,8 @@ class SubDevice(NamespaceParser, BaseDevice):
         del self.async_request
         del self.hub  # type: ignore
         del self.sensor_battery  # type: ignore
-        del self.switch_togglex
         # brutal trick to remove references to sensors _parse methods
-        # should they exist (being installed in subclasses)
+        # should they exist (being installed at runtime)
         for _parse_method in [k for k in self.__dict__ if k.startswith("_parse_")]:
             delattr(self, _parse_method)
 
@@ -764,7 +775,7 @@ class SubDevice(NamespaceParser, BaseDevice):
                 timeout=14400,
             )
 
-    def parse_digest(self, payload: dict, /):
+    def parse_digest(self, payload, /):
         """
         digest payload (from NS_ALL or HUB digest)
         {
@@ -848,11 +859,11 @@ class SubDevice(NamespaceParser, BaseDevice):
             ):
                 pass
 
-    def _parse_battery(self, payload, /):
+    def _parse_battery(self, payload: "mt_h.Battery", /):
         if self.online:
             self.sensor_battery.update_native_value(payload[mc.KEY_VALUE])
 
-    def _parse_deviceCfg(self, payload: "mt.HubSubIdPayload", /):
+    def _parse_deviceCfg(self, payload: "mt_h.SubIdPayload", /):
         pass
 
     def _parse_exception(self, payload, /):
@@ -869,22 +880,23 @@ class SubDevice(NamespaceParser, BaseDevice):
             if self.online:
                 self._set_offline()
 
-    def _parse_togglex(self, payload, /):
-        """{"id": "00000000", "onoff": 0, ...}"""
-        # might come from parse_digest or from Appliance.Hub.ToggleX
-        # in any case we're just interested to the "onoff" key
-        try:
-            self.switch_togglex.update_native_value(payload[mc.KEY_ONOFF])  # type: ignore
-        except AttributeError:
-            self.switch_togglex = HubToggleX(
-                self,
-                self.id,
-                mc.KEY_TOGGLEX,
-                device_value=payload[mc.KEY_ONOFF],
-            )
+    def _parse_togglex(self, payload: "mt_h.ToggleX", /):
+        self._parse_togglex = HubToggleX(
+            self,
+            self.id,
+            device_value=payload[mc.KEY_ONOFF],
+        )._parse
 
-    def _parse_version(self, payload, /):
-        """{"id": "00000000", "hardware": "1.1.5", "firmware": "5.1.8"}"""
+    def _parse_alarm(self, payload: "mt_h.Beep", /):
+        # likely working in mts150 and/or GS559
+        self._parse_alarm = HubBeep(
+            self,
+            self.id,
+            name="Beep alarm",
+            device_value=payload[mc.KEY_ONOFF],
+        )._parse
+
+    def _parse_version(self, payload: "mt_h.Version", /):
         device_registry_entry = self.device_registry_entry
         kwargs = {}
         hw_version = payload[mc.KEY_HARDWARE]
@@ -1161,7 +1173,7 @@ class MS130SubDevice(SensorSubDevice):
         del self.sensor_humidity
 
     @override
-    def _parse_deviceCfg(self, payload: "mt.HubSubIdPayload", /):
+    def _parse_deviceCfg(self, payload: "mt_h.SubIdPayload", /):
         """TODO: implement entities
         {
             "calibrateCfg": {
@@ -1343,11 +1355,11 @@ class MST100SubDevice(SensorSubDevice):
             wfm: int  # water flow measurement
             calibration: "MST100SubDevice.DeviceCfg_mstCfg_calibration"
 
-        class DeviceCfg(mt.HubSubIdPayload):
+        class DeviceCfg(mt_h.SubIdPayload):
             mstCfg: "MST100SubDevice.DeviceCfg_mstCfg"
 
         # Appliance.Control.Water payload structure
-        class Water(mt.HubSubIdPayload):
+        class Water(mt_h.SubIdPayload):
             dura: NotRequired[int]  # duration in seconds
             onoff: int  # 1: on, 2: off
 
@@ -1506,6 +1518,13 @@ POLLING_STRATEGY_CONF |= {
         mlc.PARAM_HEADER_SIZE,
         250,
         None,  # HubChunkedNamespaceHandler.async_poll_chunked
+    ),
+    mn_h.Appliance_Hub_SubDevice_Beep: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        35,
+        NamespaceHandler.async_poll_default,
     ),
     mn_h.Appliance_Hub_SubDevice_Version: (
         0,

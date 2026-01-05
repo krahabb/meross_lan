@@ -68,14 +68,6 @@ class ChannelOnOff(ChannelPayload):
     onoff: int
 
 
-class HubIdPayload(TypedDict):
-    id: str
-
-
-class HubSubIdPayload(ChannelPayload):
-    subId: str
-
-
 class HistoryData(TypedDict):
     """
     A common struct usually appearing in a list of historical data points (LatestX, ConsumptionH).
@@ -85,4 +77,4 @@ class HistoryData(TypedDict):
     timestamp: int
 
 
-from . import config, control, mcu, rollershutter, sensor, system, thermostat
+from . import config, control, hub, mcu, rollershutter, sensor, system, thermostat

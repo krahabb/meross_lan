@@ -23,15 +23,20 @@ if TYPE_CHECKING:
     from . import MerossEmulator, MerossEmulatorDescriptor
 
 
-def get_mts_digest(p_subdevice_digest: "JsonDict") -> "JsonDict | None":
+# TODO: wrap-up these helpers in a SubDeviceDescriptor-like class
+# to manage type/version and common info (like id/online maybe more)
+def get_subdevice_typekey(digest: "JsonDict") -> str:
+    """Parses the subdevice dict from the hub digest to identify it's 'type'."""
+    return (
+        p_key for p_key, p_value in digest.items() if type(p_value) is dict
+    ).__next__()
+
+
+def get_mts_digest(digest: "JsonDict") -> "JsonDict | None":
     """Parses the subdevice dict from the hub digest to identify if it's
     an mts-like (and so queried through 'Hub.Mts100.All')."""
-    for digest_mts_key in mc.MTS100_ALL_TYPESET:
-        # digest for mts valves has the usual fields plus a (sub)dict
-        # named according to the model. Here we should find the mode
-        if digest_mts_key in p_subdevice_digest:
-            return p_subdevice_digest[digest_mts_key]
-    return None
+    subdevtype = get_subdevice_typekey(digest)
+    return digest[subdevtype] if subdevtype.startswith("mts") else None
 
 
 class HubMixin(MerossEmulator if TYPE_CHECKING else object):
@@ -127,6 +132,16 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
 
         for p_subdevice_digest in digest_subdevices:
             subdevice_id = p_subdevice_digest[mc.KEY_ID]
+            subdevice_type = get_subdevice_typekey(p_subdevice_digest)
+            # TODO: setup a 'map' to generalize to all those ns behaving like this
+            # (i.e. no data in digest but still needing setup)
+            match subdevice_type:
+                case mc.TYPE_MTS150 | mc.TYPE_MTS150P:
+                    self.update_namespace_state(
+                        mn_h.Appliance_Hub_SubDevice_Beep,
+                        self.NSDefaultMode.MixOut,
+                        [{mc.KEY_ID: subdevice_id, mc.KEY_ONOFF: 0}],
+                    )
             # detect first if it's an mts like or a sensor like
             if p_subdevice_digest[mc.KEY_STATUS] == mc.STATUS_ONLINE:
                 p_mts_digest = get_mts_digest(p_subdevice_digest)
