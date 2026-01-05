@@ -137,7 +137,7 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
         self,
         manager: "EntityManager",
         channel: object | None,
-        entitykey: str | None,
+        entitykey: str | None = None,
         **kwargs: "Unpack[Args]",
     ):
         self.state_class = kwargs.pop(
@@ -262,8 +262,8 @@ class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
     manager: "Device"
 
     # HA core entity attributes:
+    _attr_entity_registry_enabled_default = False
     entity_category = MLEnumSensor.EntityCategory.DIAGNOSTIC
-    entity_registry_enabled_default = False
     native_value: str
     options: list[str] = [
         STATE_DISCONNECTED,
@@ -357,7 +357,9 @@ class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
 
 class MLFilterMaintenanceSensor(MLNumericSensor):
 
+    ENTITY_KEY = mc.KEY_FILTER
     ns = mn.Appliance_Control_FilterMaintenance
+    NS_CHANNELS = (0,)
     key_value = mc.KEY_LIFE
 
     # HA core entity attributes:
@@ -365,12 +367,5 @@ class MLFilterMaintenanceSensor(MLNumericSensor):
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
 
     def __init__(self, manager: "Device", channel):
-        MLNumericSensor.__init__(self, manager, channel, mc.KEY_FILTER)
+        MLNumericSensor.__init__(self, manager, channel)
         manager.register_parser_entity(self)
-
-
-def namespace_init_filtermaintenance(
-    device: "Device", ns: mn.Namespace = mn.Appliance_Control_FilterMaintenance, /
-):
-    # TODO: similar to PhysicalLockSwitch we may want to better generalize these setups
-    MLFilterMaintenanceSensor(device, 0)

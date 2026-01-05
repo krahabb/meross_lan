@@ -354,7 +354,7 @@ class Device(BaseDevice, ConfigEntryManager):
     NAMESPACE_INIT = {
         mn.Appliance_Config_OverTemp: (".devices.mss", "OverTempEnableSwitch"),
         mn.Appliance_Control_ConsumptionConfig: (
-            ".devices.mss",
+            ".helpers.namespaces",
             "VoidNamespaceHandler",
         ),
         mn.Appliance_Control_Electricity: (
@@ -363,23 +363,26 @@ class Device(BaseDevice, ConfigEntryManager):
         ),
         mn.Appliance_Control_ElectricityX: (
             ".devices.mss",
-            "namespace_init_electricityx",
+            "ElectricityXSensor",
         ),
         mn.Appliance_Control_ConsumptionH: (
             ".devices.mss",
-            "namespace_init_consumptionh",
+            "ConsumptionHSensor",
         ),
         mn.Appliance_Control_ConsumptionX: (".devices.mss", "ConsumptionXSensor"),
         mn.Appliance_Control_Fan: (".fan", "namespace_init_fan"),
         mn.Appliance_Control_FilterMaintenance: (
             ".sensor",
-            "namespace_init_filtermaintenance",
+            "MLFilterMaintenanceSensor",
         ),
-        mn.Appliance_Control_Mp3: (".media_player", "MLMp3Player"),
+        mn.Appliance_Control_Mp3: (
+            ".media_player",
+            "MLMp3Player",
+        ),
         mn.Appliance_Control_PhysicalLock: (".switch", "PhysicalLockSwitch"),
         mn.Appliance_Control_Presence_Config: (
             ".devices.ms600",
-            "namespace_init_presence_config",
+            "PresenceConfigMode",
         ),
         mn.Appliance_Control_Screen_Brightness: (
             ".devices.thermostat",
@@ -405,7 +408,10 @@ class Device(BaseDevice, ConfigEntryManager):
             ".helpers.namespaces",
             "NamespaceHandler",  # handler in Device._handle_XXX
         ),
-        mn.Appliance_RollerShutter_State: (".devices.rollershutter", "MLRollerShutter"),
+        mn.Appliance_RollerShutter_Position: (
+            ".devices.rollershutter",
+            "MLRollerShutter",
+        ),
         mn.Appliance_System_DNDMode: (".light", "MLDNDLightEntity"),
         mn.Appliance_System_Runtime: (".sensor", "MLSignalStrengthSensor"),
     }
@@ -610,9 +616,14 @@ class Device(BaseDevice, ConfigEntryManager):
                             "loading namespace initializer for %s",
                             ns,
                         )
-                        ns_init_func = Device.namespace_init_empty
-                    Device.NAMESPACE_INIT[ns] = ns_init_func
-                    ns_init_func(self, ns)
+                        Device.NAMESPACE_INIT[ns] = Device.namespace_init_empty
+                    else:
+                        try:
+                            ns_init_func = ns_init_func.namespace_init
+                        except AttributeError:
+                            pass
+                        Device.NAMESPACE_INIT[ns] = ns_init_func
+                        ns_init_func(self, ns)
 
             except Exception as exception:
                 self.log_exception(

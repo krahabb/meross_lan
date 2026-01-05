@@ -25,6 +25,7 @@ class MLRollerShutter(MLCover):
         supported_features: MLCover.EntityFeature
 
     ns = mn.Appliance_RollerShutter_Position
+    NS_CHANNELS = (0,)
     key_value = mc.KEY_POSITION
 
     ATTR_POSITION_NATIVE = "position_native"
@@ -45,7 +46,7 @@ class MLRollerShutter(MLCover):
         "_position_starttime",
     )
 
-    def __init__(self, manager: "Device", ns, /):
+    def __init__(self, manager: "Device", channel: int, /):
         self.current_cover_position = None
         self.supported_features = (
             MLCover.EntityFeature.OPEN
@@ -74,12 +75,14 @@ class MLRollerShutter(MLCover):
 
         except Exception:
             self._position_native_isgood = False
-        MLCover.__init__(self, manager, 0)
+        MLCover.__init__(self, manager, channel)
         self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
         self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
         if mn.Appliance_RollerShutter_Adjust in descriptor.ability:
             # unknown use: actually the polling period is set on a very high timeout
-            manager.register_parser_entity(MLRollerShutterAdjustSwitch(self.manager, 0))
+            manager.register_parser_entity(
+                MLRollerShutterAdjustSwitch(self.manager, channel)
+            )
 
         manager.register_parser(self, mn.Appliance_RollerShutter_Config)
         manager.register_parser(self, mn.Appliance_RollerShutter_Position)

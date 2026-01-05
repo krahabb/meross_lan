@@ -37,7 +37,7 @@ class Mts960Climate(MtsThermostatClimate):
     class PlugState(MLBinarySensor):
 
         # HA core entity attributes:
-        entity_registry_enabled_default = False
+        _attr_entity_registry_enabled_default = False
 
         @property
         def icon(self):

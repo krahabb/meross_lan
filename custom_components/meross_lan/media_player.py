@@ -34,9 +34,9 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
         _attr_device_class: Final[media_player.MediaPlayerDeviceClass]
 
     PLATFORM = media_player.DOMAIN
-
+    ENTITY_KEY = mc.KEY_MP3
     ns = mn.Appliance_Control_Mp3
-
+    NS_CHANNELS = (0,)
     # HA core entity attributes:
     _attr_device_class = media_player.MediaPlayerDeviceClass.SPEAKER
     is_volume_muted: bool | None
@@ -65,14 +65,14 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
         "_mp3",
     )
 
-    def __init__(self, manager: "Device", ns, /):
+    def __init__(self, manager: "Device", channel, /, **kwargs):
         self._mp3 = {}
         self.is_volume_muted = None
         self.media_title = None
         self.media_track = None
         self.state = None
         self.volume_level = None
-        super().__init__(manager, 0, mc.KEY_MP3)
+        super().__init__(manager, channel, **kwargs)
         manager.register_parser_entity(self)
 
     # interface: MLEntity
@@ -124,16 +124,16 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
         await self.async_request_mp3(mc.KEY_SONG, song)
 
     # interface: self
-    async def async_request_mp3(self, key: str, value: int):
+    async def async_request_mp3(self, key: str, value: int, /):
         payload = {mc.KEY_CHANNEL: self.channel, key: value}
         if await self.manager.async_request_ack(
             self.ns,
             mc.METHOD_SET,
             {self.ns.key: payload},
         ):
-            self._parse_mp3(payload)
+            self._parse(payload)
 
-    def _parse_mp3(self, payload: dict):
+    def _parse(self, payload: dict, /):
         """
         {"channel": 0, "lmTime": 1630691532, "song": 9, "mute": 1, "volume": 11}
         """

@@ -61,7 +61,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         TRACKING_DEADTIME = 60
 
         # HA core entity attributes:
-        entity_registry_enabled_default = False
+        _attr_entity_registry_enabled_default = False
 
         __slots__ = (
             "climate",
@@ -459,8 +459,9 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
                 )
         self.schedule = self.__class__.Schedule(self)
         self.select_track_sensor = MtsClimate.TrackSensorSelect(self)
-        self.sensor_current_temperature = MLTemperatureSensor(manager, channel)
-        self.sensor_current_temperature.entity_registry_enabled_default = False
+        self.sensor_current_temperature = MLTemperatureSensor(
+            manager, channel, entity_registry_enabled_default=False
+        )
 
     # interface: MLEntity
     async def async_shutdown(self):

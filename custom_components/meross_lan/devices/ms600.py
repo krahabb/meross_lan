@@ -21,6 +21,8 @@ class PresenceConfigBase(me.MEGroupListChannelMixin):
     # HA core entity attributes:
     entity_category = me.MLEntity.EntityCategory.CONFIG
 
+    # TODO: generalize entitykey generation
+
 
 class PresenceConfigNumberBase(PresenceConfigBase, MLConfigNumber):
     """Base class for config values represented as Number entities in HA."""
@@ -136,6 +138,9 @@ class PresenceConfigMthX(PresenceConfigNumberBase):
 
 class PresenceConfigMode(PresenceConfigModeBase):
 
+    ns = mn.Appliance_Control_Presence_Config
+    NS_CHANNELS = (0,)
+
     _entities: tuple[PresenceConfigBase, ...]
 
     __slots__ = ("_entities",)
@@ -158,7 +163,7 @@ class PresenceConfigMode(PresenceConfigModeBase):
         await super().async_shutdown()
         del self._entities
 
-    def _parse_config(self, payload: dict, /):
+    def _parse(self, payload: dict, /):
         """
         {
             "channel": 0,
@@ -171,13 +176,6 @@ class PresenceConfigMode(PresenceConfigModeBase):
         """
         for entity in self._entities:
             entity.update_device_value(payload[entity.key_group][entity.key_value])
-
-
-def namespace_init_presence_config(
-    device: "Device", ns=mn.Appliance_Control_Presence_Config, /
-):
-    NamespaceHandler(device, ns).register_entity_class(PresenceConfigMode)
-    PresenceConfigMode(device, 0)  # this will auto register itself in handler
 
 
 class MLPresenceSensor(MLNumericSensor):

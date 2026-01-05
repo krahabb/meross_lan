@@ -5,7 +5,7 @@ from .. import const as mlc
 from ..merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Coroutine, Final
+    from typing import Any, Callable, Coroutine, Final, Iterable
 
     from . import Loggable
     from ..merossclient.protocol import types as mt
@@ -15,17 +15,6 @@ if TYPE_CHECKING:
 
     type PollingStrategyFunc = Callable[["NamespaceHandler"], Coroutine]
     type NamespaceConfigType = tuple[int, int, int, int, PollingStrategyFunc | None]
-
-
-class EntityDisablerMixin:
-    """
-    Special 'disabler' mixin used when the device pushes a message for a 'not yet'
-    known entity/channel. The namespace handler will then dynamically mixin this
-    disabler into the entity instance class initialization
-    """
-
-    # HA core entity attributes:
-    entity_registry_enabled_default = False
 
 
 class NamespaceParser(Loggable if TYPE_CHECKING else object):
@@ -283,27 +272,18 @@ class NamespaceHandler:
         self.polling_response_size += self.polling_response_item_size
 
     def register_entity_class(
-        self,
-        entity_class: type["MLEntity"],
-        /,
-        *,
-        initially_disabled: bool = True,
-        build_from_digest: bool = False,
+        self, entity_class: type["MLEntity"], channels: "Iterable[int] | None", /
     ):
-        self.entity_class = (
-            type(entity_class.__name__, (EntityDisablerMixin, entity_class), {})
-            if initially_disabled
-            else entity_class
-        )
+        self.entity_class = entity_class
         self.handler = self._handle_list
         self.device.platforms.setdefault(entity_class.PLATFORM)
-        if build_from_digest:
+        if channels is None:
             channels = set()
 
             def _scan_digest(digest: dict):
-                if mc.KEY_CHANNEL in digest:
+                try:
                     channels.add(digest[mc.KEY_CHANNEL])
-                else:
+                except KeyError:
                     for value in digest.values():
                         if type(value) is dict:
                             _scan_digest(value)
@@ -313,8 +293,9 @@ class NamespaceHandler:
                                     _scan_digest(value_item)
 
             _scan_digest(self.device.descriptor.digest)
-            for channel in channels:
-                entity_class(self.device, channel)
+
+        for channel in channels:
+            entity_class(self.device, channel)
 
     def register_parser(self, parser: "NamespaceParser", /):
         # when setting up the entity-dispatching we'll substitute the legacy handler
@@ -542,7 +523,9 @@ class NamespaceHandler:
             raise key_error
 
         if self.entity_class:
-            self.entity_class(self.device, channel)
+            self.entity_class(
+                self.device, channel, entity_registry_enabled_default=True
+            )
         elif self.device.create_diagnostic_entities:
             from ..sensor import MLDiagnosticSensor
 
@@ -899,11 +882,12 @@ class EntityNamespaceMixin(MLEntity if TYPE_CHECKING else object):
     if TYPE_CHECKING:
         manager: "Device"
 
-    def __init__(self, manager: "Device", ns: mn.Namespace, /):
-        # polling_strategy controlled by added/removed
-        NamespaceHandler(manager, ns, handler=self._handle).polling_strategy = None
-        self.ns = ns  # TODO: generalize ns x Entity instance by passing through kwargs
-        super().__init__(manager, None, self.__class__.ENTITY_KEY)
+    @classmethod
+    def namespace_init(cls, device: "Device", ns: mn.Namespace, /):
+        assert ns is cls.ns
+        entity = cls(device, None)
+        NamespaceHandler(device, ns, handler=entity._handle).polling_strategy = None
+        return entity
 
     async def async_added_to_hass(self):
         self.manager.ns_handlers[self.ns].polling_strategy = POLLING_STRATEGY_CONF[

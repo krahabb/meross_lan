@@ -112,6 +112,7 @@ class Mts300Climate(MtsThermostatClimate):
 
     # MtsClimate class attributes
     ns = mn_t.Appliance_Control_Thermostat_ModeC
+    NS_CHANNELS = (0,)
     device_scale = mc.MTS300_TEMP_SCALE
 
     MTS_MODE_TO_PRESET_MAP = {
@@ -198,8 +199,8 @@ class Mts300Climate(MtsThermostatClimate):
         "select_temp_association",
     ) + tuple(f"sensor_{_key}" for _key in ENTITY_DEFS)
 
-    def __init__(self, manager: "Device", ns, /):
-        super().__init__(manager, 0)
+    def __init__(self, manager: "Device", channel, /, **kwargs):
+        super().__init__(manager, channel)
         self.fan_mode = None
         self.fan_modes = self._attr_fan_modes
         self.target_temperature_high = None
@@ -209,13 +210,14 @@ class Mts300Climate(MtsThermostatClimate):
             setattr(
                 self,
                 f"sensor_{_key}",
-                _def.type(manager, self.channel, _def.entitykey, **_def.kwargs),
+                _def.type(manager, channel, _def.entitykey, **_def.kwargs),
             )
-        self.sensor_current_humidity = MLHumiditySensor(manager, self.channel)
-        self.sensor_current_humidity.entity_registry_enabled_default = False
+        self.sensor_current_humidity = MLHumiditySensor(
+            manager, channel, entity_registry_enabled_default=False
+        )
         self.number_fan_hold = MLConfigNumber(
             manager,
-            self.channel,
+            channel,
             "fan_hold_time",
             device_class=MLConfigNumber.DEVICE_CLASS_DURATION,
             native_unit_of_measurement=MLConfigNumber.hac.UnitOfTime.MINUTES,
@@ -226,7 +228,7 @@ class Mts300Climate(MtsThermostatClimate):
         )
         self.switch_fan_hold = MLEmulatedSwitch(
             manager,
-            self.channel,
+            channel,
             "fan_hold_enable",
         )
         self.switch_fan_hold.async_turn_on = self._async_turn_on_switch_fan_hold

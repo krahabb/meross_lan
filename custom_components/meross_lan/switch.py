@@ -99,11 +99,12 @@ class MLDeviceSwitch(MLSwitch):
 
 class PhysicalLockSwitch(MLDeviceSwitch):
 
+    ENTITY_KEY = mc.KEY_LOCK
     ns = mn.Appliance_Control_PhysicalLock
+    NS_CHANNELS = (0,)
 
-    def __init__(self, manager: "Device", ns, /):
-        # right now we expect only 1 entity on channel == 0 (whatever)
-        MLDeviceSwitch.__init__(self, manager, 0, mc.KEY_LOCK)
+    def __init__(self, manager: "Device", channel, /):
+        MLDeviceSwitch.__init__(self, manager, channel)
         manager.register_parser_entity(self)
 
 
@@ -124,7 +125,7 @@ class MLToggle(EntityNamespaceMixin, MLDeviceSwitch):
 
 def digest_init_toggle(device: "Device", digest: dict, /) -> "DigestInitReturnType":
     """{"onoff": 0, "lmTime": 1645391086}"""
-    toggle = MLToggle(device, mn.Appliance_Control_Toggle)
+    toggle = MLToggle.namespace_init(device, mn.Appliance_Control_Toggle)
     return toggle._parse, (device.ns_handlers[mn.Appliance_Control_Toggle],)
 
 
@@ -156,14 +157,14 @@ def digest_init_togglex(
     # we'll setup proper MLToggleX (this is detected by the fact no specialized entity exists in
     # device definition)
 
-    channels = {digest[mc.KEY_CHANNEL] for digest in togglex_digest}
+    channels = {togglex[mc.KEY_CHANNEL] for togglex in togglex_digest}
 
     digest = device.descriptor.digest
 
-    for key_digest in (mc.KEY_FAN, mc.KEY_GARAGEDOOR, mc.KEY_LIGHT):
-        if key_digest in digest:
-            for digest_channel in extract_dict_payloads(digest[key_digest]):
-                channel = digest_channel.get(mc.KEY_CHANNEL)
+    for _key in (mc.KEY_FAN, mc.KEY_GARAGEDOOR, mc.KEY_LIGHT):
+        if _key in digest:
+            for _key_digest in extract_dict_payloads(digest[_key]):
+                channel = _key_digest.get(mc.KEY_CHANNEL)
                 if channel in channels:
                     channels.remove(channel)
 
@@ -176,12 +177,9 @@ def digest_init_togglex(
         except KeyError:
             pass
 
-    for channel in channels:
-        MLToggleX(device, channel)
-
     ns = mn.Appliance_Control_ToggleX
     handler = device.get_handler(ns)
-    handler.register_entity_class(MLToggleX)
+    handler.register_entity_class(MLToggleX, channels)
     if device.descriptor.is_refoss:
         handler.polling_request = (
             ns,

@@ -44,16 +44,16 @@ def digest_init_diffuser(device: "Device", digest: dict) -> "DigestInitReturnTyp
     diffuser_light_handler = NamespaceHandler(
         device, mn.Appliance_Control_Diffuser_Light
     )
-    diffuser_light_handler.register_entity_class(MLDiffuserLight)
-    for light_digest in digest.get(mc.KEY_LIGHT, []):
-        MLDiffuserLight(device, light_digest[mc.KEY_CHANNEL])
+    diffuser_light_handler.register_entity_class(
+        MLDiffuserLight, (light[mc.KEY_CHANNEL] for light in digest[mc.KEY_LIGHT])
+    )
 
     diffuser_spray_handler = NamespaceHandler(
         device, mn.Appliance_Control_Diffuser_Spray
     )
-    diffuser_spray_handler.register_entity_class(MLDiffuserSpray)
-    for spray_digest in digest.get(mc.KEY_SPRAY, []):
-        MLDiffuserSpray(device, spray_digest[mc.KEY_CHANNEL])
+    diffuser_spray_handler.register_entity_class(
+        MLDiffuserSpray, (spray[mc.KEY_CHANNEL] for spray in digest[mc.KEY_SPRAY])
+    )
 
     if mn.Appliance_Control_Diffuser_Sensor in device.descriptor.ability:
         # former mod100 devices reported fake values for sensors, maybe the mod150 and/or a new firmware
@@ -95,8 +95,8 @@ def digest_init_diffuser(device: "Device", digest: dict) -> "DigestInitReturnTyp
             "spray": [{"channel": 0, "mode": 2, "lmTime": 1644353195}]
         }
         """
-        diffuser_light_parser(digest.get(mc.KEY_LIGHT, []))
-        diffuser_spray_parser(digest.get(mc.KEY_SPRAY, []))
+        diffuser_light_parser(digest[mc.KEY_LIGHT])
+        diffuser_spray_parser(digest[mc.KEY_SPRAY])
 
     return digest_parse, (diffuser_light_handler, diffuser_spray_handler)
 

@@ -16,7 +16,7 @@ except ImportError:
 from homeassistant.helpers import entity
 
 from . import Loggable
-from .namespaces import NamespaceParser, mc, mn
+from .namespaces import NamespaceHandler, NamespaceParser, mc, mn
 
 if TYPE_CHECKING:
     from typing import (
@@ -24,6 +24,7 @@ if TYPE_CHECKING:
         Callable,
         ClassVar,
         Final,
+        Iterable,
         Mapping,
         NotRequired,
         Self,
@@ -34,7 +35,7 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .device import BaseDevice, MerossResponse
+    from .device import BaseDevice, Device, MerossResponse
     from .manager import ConfigEntryManager, EntityManager
 
 
@@ -71,17 +72,17 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
             translation_key: NotRequired[str]
             device_class: NotRequired[str | None]
             entity_category: NotRequired[entity.EntityCategory | None]
+            entity_registry_enabled_default: NotRequired[bool]
             state_callback: NotRequired["MLEntity.StateCallback"]
 
         EntityCategory: Final
 
         PLATFORM: ClassVar[str]
-        ENTITY_KEY: ClassVar[str]
+        ENTITY_KEY: ClassVar[str | None]
 
         is_diagnostic: ClassVar[bool]
         """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
 
-        state_callbacks: set[StateCallback] | None
         # These 'placeholder' definitions support generalization of
         # Meross protocol message build/parsing when related to the
         # current entity. These are usually relevant when this entity
@@ -95,10 +96,18 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         # by nesting the actual 'key_value' inside 'key_group' (see Appliance.Config.DeviceCfg)
         ns: mn.Namespace  # no default
         key_value: str  # defaulted to 'value'
+        # This is related to NamespaceHandler registration. For entity classes where we know
+        # the ns exposes fixed channel layouts (i.e. PhysicalLock) which are not exposed in any digest key
+        # we can set this to (0,) or more funny presets so that namespace initialization will also
+        # automatically build the needed entity(ies).
+        # Setting to None means 'scan digests for channels'.
+        # This is actually not mandatory though since only used for NamespaceHandler.register_entity_class.
+        NS_CHANNELS: ClassVar[Iterable[int] | None]
 
         manager: EntityManager  # Final
         channel: Final[object | None]
         entitykey: Final[str | None]
+        state_callbacks: set[StateCallback] | None
         # used to speed-up checks if entity is enabled and loaded
         hass_connected: Final[bool]  # public ReadOnly attribute
 
@@ -109,16 +118,17 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         should_poll: Final[bool]
         # These may be customized here and there per class
         _attr_available: ClassVar[bool]
+        _attr_entity_registry_enabled_default: ClassVar[bool]
         _attr_device_class: ClassVar[str | None]
         # These may be customized here and there per class or instance
         assumed_state: bool = False
         entity_category: entity.EntityCategory | None
-        entity_registry_enabled_default: bool
         extra_state_attributes: dict[str, object]
         icon: str | None
         translation_key: str | None
         # These are actually per instance
         available: bool
+        entity_registry_enabled_default: bool
         name: str | None
         suggested_object_id: str | None
         unique_id: str
@@ -153,6 +163,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
 
     EntityCategory = entity.EntityCategory
 
+    ENTITY_KEY = None
     is_diagnostic = False
 
     key_value = mc.KEY_VALUE
@@ -163,9 +174,9 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
     should_poll = False
     _attr_available = False
     _attr_device_class = None
+    _attr_entity_registry_enabled_default = True
     assumed_state = False
     entity_category = None
-    entity_registry_enabled_default = True
     extra_state_attributes = {}
     icon = None
     translation_key = None
@@ -189,6 +200,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         "available",
         "device_class",
         "device_info",
+        "entity_registry_enabled_default",
         "name",
         "suggested_object_id",
         "unique_id",
@@ -217,6 +229,8 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         manager.objects.add(self)
         self.manager = manager
         self.channel = channel
+        if entitykey is None:
+            entitykey = self.__class__.ENTITY_KEY
         self.entitykey = entitykey
         id = (
             channel
@@ -251,6 +265,10 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         self.available = self._attr_available or manager.online
         self.device_class = kwargs.pop("device_class", self._attr_device_class)
         self.device_info = self.manager.deviceentry_id  # type: ignore
+        self.entity_registry_enabled_default = kwargs.pop(
+            "entity_registry_enabled_default",
+            self._attr_entity_registry_enabled_default,
+        )
 
         if "name" in kwargs:
             name = kwargs.pop("name")
@@ -271,6 +289,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         # by default all of our entities have unique_id so they're registered
         # there could be some exceptions though (MLUpdate)
         self.unique_id = self._generate_unique_id()
+        # some attributes can be set via kwargs
         for _attr_name, _attr_value in kwargs.items():
             setattr(self, _attr_name, _attr_value)
 
@@ -425,6 +444,14 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         """Default parsing for entities. Set the proper
         key_value in class/instance definition to make it work."""
         self.update_device_value(payload[self.key_value])
+
+    @classmethod
+    def namespace_init(cls, device: "Device", ns: mn.Namespace, /):
+        """Helper to register a specialized entity class to the proper namespace.
+        This is going to be used on Device initialization fo various entities sharing
+        common semantics in namespace parsing/handling."""
+        assert ns is cls.ns
+        NamespaceHandler(device, ns).register_entity_class(cls, cls.NS_CHANNELS)
 
 
 class MEGroupListChannelMixin(MLEntity if TYPE_CHECKING else object):

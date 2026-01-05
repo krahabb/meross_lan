@@ -10,7 +10,6 @@ from ..helpers import entity as me
 from ..helpers.namespaces import (
     EntityNamespaceMixin,
     NamespaceHandler,
-    VoidNamespaceHandler,
     mc,
     mn,
 )
@@ -18,7 +17,7 @@ from ..sensor import MLEnumSensor, MLNumericSensor
 from ..switch import MLDeviceSwitch
 
 if TYPE_CHECKING:
-    from typing import ClassVar, Final
+    from typing import ClassVar, Final, Unpack
 
     from ..helpers.device import Device
     from ..merossclient.protocol import types as mt
@@ -48,6 +47,7 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
         sensor_consumptionx: "ConsumptionXSensor | None"
         sensor_power: MLNumericSensor
 
+    ns = mn.Appliance_Control_Electricity
     ENTITY_KEY = "energy_estimate"
     ENTITY_DEFS = {
         mc.KEY_CURRENT: MLNumericSensor.ENTITY_DEF(
@@ -75,7 +75,7 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
 
     # HA core entity attributes:
     _attr_device_class = MLNumericSensor.DeviceClass.ENERGY
-    entity_registry_enabled_default = False
+    _attr_entity_registry_enabled_default = False
 
     __slots__ = (
         "_estimate",
@@ -85,14 +85,21 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
         "sensor_power",
     )
 
-    def __init__(self, manager: "Device", channel: object | None, /):
+    def __init__(
+        self,
+        manager: "Device",
+        channel: object | None,
+        /,
+        **kwargs: "Unpack[ElectricitySensor.Args]",
+    ):
         self._estimate = 0.0
         self._electricity_lastepoch = 0.0
         self._reset_unsub = None
         # depending on init order we might not have this ready now...
         self.sensor_consumptionx = manager.entities.get(ConsumptionXSensor.ENTITY_KEY)  # type: ignore
         # here entitykey is the 'legacy' EnergyEstimateSensor one to mantain compatibility
-        super().__init__(manager, channel, ElectricitySensor.ENTITY_KEY, device_value=0)
+        kwargs["device_value"] = 0
+        super().__init__(manager, channel, ElectricitySensor.ENTITY_KEY, **kwargs)
         self._schedule_reset(dt_util.now())
         for key, entity_def in self.ENTITY_DEFS.items():
             if entity_def.entitykey:
@@ -226,7 +233,9 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
         self._schedule_reset(_now)
 
 
-def namespace_init_electricity(device: "Device", ns: mn.Namespace, /):
+def namespace_init_electricity(
+    device: "Device", ns=mn.Appliance_Control_Electricity, /
+):
     NamespaceHandler(
         device,
         ns,
@@ -235,6 +244,9 @@ def namespace_init_electricity(device: "Device", ns: mn.Namespace, /):
 
 
 class ElectricityXSensor(ElectricitySensor):
+
+    ns = mn.Appliance_Control_ElectricityX
+    NS_CHANNELS = None  # scan digests for channels
 
     class MConsumeSensor(MLNumericSensor):
         manager: "Device"
@@ -297,77 +309,33 @@ class ElectricityXSensor(ElectricitySensor):
         ),
     }
 
-    __slots__ = ()
-
-    def __init__(self, manager: "Device", channel: object, /):
-        super().__init__(manager, channel)
-        manager.register_parser(self, mn.Appliance_Control_ElectricityX)
-
-
-def namespace_init_electricityx(device: "Device", ns: mn.Namespace, /):
-    """
-    This namespace is still pretty unknown.
-    Looks like an upgraded version of Appliance.Control.Electricity and currently appears in:
-    - em06(Refoss)
-    - mop320
-    The em06 parsing looks established (not sure it really works..no updates from users so far)
-    while the mop is still obscure. While the em06 query is a plain empty dict it might be
-    the mop320 needs a 'channel indexed' request payload so we're now (2024-10-11) trying
-    the same approach as in ConsumptionH namespace.
-
-    Current approach is to build a sensor for any appearing channel index
-    in digest. This in turn will not directly build the EM06 sensors
-    but they should come when polling.
-    """
-    NamespaceHandler(device, ns).register_entity_class(
-        ElectricityXSensor, build_from_digest=True
-    )
+    def __init__(
+        self,
+        manager: "Device",
+        channel: object,
+        /,
+        **kwargs: "Unpack[ElectricityXSensor.Args]",
+    ):
+        ElectricitySensor.__init__(self, manager, channel, **kwargs)
+        manager.register_parser_entity(self)
 
 
 class ConsumptionHSensor(MLNumericSensor):
 
-    manager: "Device"
+    ENTITY_KEY = mc.KEY_CONSUMPTIONH
     ns = mn.Appliance_Control_ConsumptionH
+    NS_CHANNELS = None  # scan digests for channels
+    key_value = mc.KEY_TOTAL
 
     _attr_device_class = MLNumericSensor.DeviceClass.ENERGY
     _attr_suggested_display_precision = 0
 
-    def __init__(self, manager: "Device", channel, /):
-        MLNumericSensor.__init__(
-            self,
-            manager,
-            channel,
-            mc.KEY_CONSUMPTIONH,
-            name="Consumption",
-        )
+    def __init__(
+        self, manager: "Device", channel, /, **kwargs: "Unpack[ConsumptionHSensor.Args]"
+    ):
+        kwargs["name"] = "Consumption"
+        MLNumericSensor.__init__(self, manager, channel, **kwargs)
         manager.register_parser_entity(self)
-
-    def _parse_consumptionH(self, payload: dict, /):
-        """
-        {"channel": 1, "total": 958, "data": [{"timestamp": 1721548740, "value": 0}]}
-        """
-        self.update_device_value(payload[mc.KEY_TOTAL])
-
-
-def namespace_init_consumptionh(device: "Device", ns: mn.Namespace, /):
-    """
-    This namespace carries hourly statistics (over last 24 ours?) of energy consumption
-    Appearing in: mts200 - em06 (Refoss) - mop320
-    This ns looks tricky since for mts200, the query (payload GET) needs the channel
-    index while for em06 this doesn't look necessary (empty query replies full sensor set statistics).
-    At any rate, querying the whole em06 ConsumptionH set might be cumbersome (also risking response
-    overflow - maybe leading to https://github.com/krahabb/meross_lan/issues/611)
-    so we're going to use some 'smart tricks' linked to ElectricityX sensors to
-    infer which channels are available on the device and smart-query them.
-    Also, we need to come up with a reasonable euristic on which channels are available
-    mts200: 1 (channel 0)
-    mop320: 3 (channel 0 - 1 - 2) even tho it only has 2 metering channels (0 looks toggling both)
-    em06: 6 channels (but the query works without setting any)
-    """
-
-    NamespaceHandler(device, ns).register_entity_class(
-        ConsumptionHSensor, initially_disabled=False, build_from_digest=True
-    )
 
 
 class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
@@ -385,10 +353,10 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         _consumption_last_time: int | None
 
     ENTITY_KEY = "energy"
+    ns = mn.Appliance_Control_ConsumptionX
+
     ATTR_OFFSET = "offset"
     ATTR_RESET_TS = "reset_ts"
-
-    ns = mn.Appliance_Control_ConsumptionX
 
     _attr_device_class = MLNumericSensor.DeviceClass.ENERGY
 
@@ -403,7 +371,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         "_tomorrow_midnight_epoch",
     )
 
-    def __init__(self, manager: "Device", ns: mn.Namespace, /):
+    def __init__(self, manager: "Device", channel, /):
         self.offset = 0
         self.reset_ts = 0
         self.energy_estimate = 0.0
@@ -421,7 +389,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         if sensor_energy_estimate:
             sensor_energy_estimate.sensor_consumptionx = self
         self.extra_state_attributes = {}
-        super().__init__(manager, ns)
+        super().__init__(manager, channel)
 
     # interface: MLEntity
     def set_unavailable(self):
@@ -614,15 +582,10 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
 class OverTempEnableSwitch(EntityNamespaceMixin, MLDeviceSwitch):
 
     ENTITY_KEY = "config_overtemp_enable"
-
     ns = mn.Appliance_Config_OverTemp
     key_value = mc.KEY_ENABLE
 
     __slots__ = ("sensor_overtemp_type",)
-
-    def __init__(self, manager: "Device", ns: mn.Namespace, /):
-        super().__init__(manager, ns)
-        self.sensor_overtemp_type = MLEnumSensor(manager, None, "config_overtemp_type")
 
     # interface: self
     @override
@@ -630,5 +593,14 @@ class OverTempEnableSwitch(EntityNamespaceMixin, MLDeviceSwitch):
         """{"overTemp": {"enable": 1,"type": 1}}"""
         overtemp = payload[mc.KEY_OVERTEMP]
         self._parse(overtemp)
-        if mc.KEY_TYPE in overtemp:
+        try:
             self.sensor_overtemp_type.update_native_value(overtemp[mc.KEY_TYPE])
+        except AttributeError:
+            self.sensor_overtemp_type = MLEnumSensor(
+                self.manager,
+                self.channel,
+                "config_overtemp_type",
+                native_value=overtemp[mc.KEY_TYPE],
+            )
+        except KeyError:
+            pass
