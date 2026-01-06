@@ -303,7 +303,7 @@ class ElectricityXSensor(ElectricitySensor):
         mc.KEY_MCONSUME: MConsumeSensor.ENTITY_DEF(
             None,
             device_class=MLNumericSensor.DeviceClass.ENERGY,
-            state_class=MLNumericSensor.StateClass.TOTAL,
+            state_class=MLNumericSensor.StateClass.TOTAL_INCREASING,  # quick patch for #621 (will be fixed in v6.x.x)
             suggested_display_precision=0,
             device_scale=1,
         ),
