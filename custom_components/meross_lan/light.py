@@ -184,7 +184,7 @@ class MLLightBase(me.MLBinaryEntity, light.LightEntity):
 
         manager: "Device"
 
-        _light: JsonDict  # internal copy of the actual meross light state
+        _light: JsonDict
         _t_unsub: asyncio.TimerHandle | None
         _t_begin: float
         _t_end: float
@@ -275,7 +275,7 @@ class MLLightBase(me.MLBinaryEntity, light.LightEntity):
         super().__init__(manager, channel)
         manager.register_parser_entity(self)
 
-    # interface: MerossToggle
+    # interface: MLBinaryEntity
     async def async_shutdown(self):
         if self._t_unsub:
             self._transition_cancel()
@@ -284,7 +284,7 @@ class MLLightBase(me.MLBinaryEntity, light.LightEntity):
     def set_unavailable(self):
         if self._t_unsub:
             self._transition_cancel()
-        self._light = {}
+        self._light.clear()
         self.brightness = None
         self.color_mode = ColorMode.UNKNOWN
         self.color_temp_kelvin = None
@@ -292,33 +292,7 @@ class MLLightBase(me.MLBinaryEntity, light.LightEntity):
         self.rgb_color = None
         super().set_unavailable()
 
-    # interface: light.LightEntity
-    @override
-    async def async_turn_on(self, **kwargs):
-        # this is an error since we're not using me.MerossToggle api
-        raise NotImplementedError("'async_turn_on' needs to be overriden")
-
-    @override
-    async def async_turn_off(self, **kwargs):
-        # this is an error since we're not using me.MerossToggle api
-        raise NotImplementedError("'async_turn_off' needs to be overriden")
-
     # interface: self
-    async def async_request_light_ack(self, payload: dict, /):
-        return await self.manager.async_request_ack(
-            self.ns,
-            mc.METHOD_SET,
-            {self.ns.key: payload},
-        )
-
-    def _flush_light(self, _light: dict, /):
-        # pretty virtual
-        pass
-
-    def _parse_light(self, payload: dict, /):
-        if self._light != payload:
-            self._flush_light(payload)
-
     def _transition_setup(self, _light: dict, kwargs: dict, /) -> float | None:
         self._t_duration = _t_duration = kwargs[ATTR_TRANSITION]
         self._t_begin = monotonic()
@@ -431,8 +405,7 @@ class MLLightBase(me.MLBinaryEntity, light.LightEntity):
             # sending redundant light commands
             return
 
-        if await self.async_request_light_ack(_light):
-            self._flush_light(_light)
+        await self.handler_ns.async_set(_light, self)
 
 
 class MLLight(MLLightBase):
@@ -449,7 +422,7 @@ class MLLight(MLLightBase):
 
         ATTR_TOGGLEX_AUTO: Final[str]
 
-        _togglex: bool
+        handler_togglex: Final[NamespaceHandler | None]
         _togglex_auto: bool | None
         """
         - False: the device needs to use TOGGLEX
@@ -470,7 +443,7 @@ class MLLight(MLLightBase):
     )
 
     __slots__ = (
-        "_togglex",
+        "handler_togglex",
         "_togglex_auto",
     )
 
@@ -506,62 +479,38 @@ class MLLight(MLLightBase):
                 supported_color_modes.add(ColorMode.ONOFF)
 
         MLLightBase.__init__(self, manager, channel, effect_list)
-
-        self._togglex = manager.register_togglex_channel(self)
-        self._togglex_auto = None if self._togglex else False
+        self.handler_togglex = manager.register_togglex_channel(self, True)
+        self._togglex_auto = None if self.handler_togglex else False
 
     # interface: MLLightBase
-    @override
-    def _flush_light(self, _light: dict, /):
-        try:
-            if mc.KEY_ONOFF in _light:
-                self.is_on = _light[mc.KEY_ONOFF]
-
-            capacity = _light[mc.KEY_CAPACITY]
+    def _parse_light(self, payload: dict, /):
+        if self._light != payload:
+            self._light = payload
+            if mc.KEY_ONOFF in payload:
+                self.is_on = payload[mc.KEY_ONOFF]
+            capacity = payload[mc.KEY_CAPACITY]
             if capacity & mc.LIGHT_CAPACITY_EFFECT:
-                self._flush_light_effect(_light)
-                return
-
+                self._flush_light_effect(payload)
             else:
                 self.effect = None
-
-                if mc.KEY_LUMINANCE in _light:
-                    self.brightness = native_to_brightness(_light[mc.KEY_LUMINANCE])
-
+                if mc.KEY_LUMINANCE in payload:
+                    self.brightness = native_to_brightness(payload[mc.KEY_LUMINANCE])
                 if capacity & mc.LIGHT_CAPACITY_RGB:
-                    self.rgb_color = self._native_to_rgb(_light[mc.KEY_RGB])
+                    self.rgb_color = self._native_to_rgb(payload[mc.KEY_RGB])
                     self.color_mode = ColorMode.RGB
-                    return
-
-                if capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
+                elif capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
                     self.color_temp_kelvin = native_to_kelvin(
-                        _light[mc.KEY_TEMPERATURE]
+                        payload[mc.KEY_TEMPERATURE]
                     )
                     self.color_mode = ColorMode.COLOR_TEMP
-                    return
-
-                if ColorMode.BRIGHTNESS in self.supported_color_modes:
+                elif ColorMode.BRIGHTNESS in self.supported_color_modes:
                     self.color_mode = ColorMode.BRIGHTNESS
-                    return
-
                 # Here we should set ColorMode.UNKNOWN since capacity is inconsistent
                 # with HA ColorMode(s). This shouldnt happen though in real life
                 # since devices supporting either rgb or color_temp should never
                 # report only luminance capacity. For better behavior (also in our testing)
                 # we'll leave the color_mode unchanged
                 # self.color_mode = ColorMode.UNKNOWN
-
-        except Exception as exception:
-            self.color_mode = ColorMode.UNKNOWN
-            self.log_exception(
-                self.WARNING,
-                exception,
-                "parsing light (%s)",
-                str(_light),
-                timeout=86400,
-            )
-        finally:
-            self._light = _light
             self.flush_state()
 
     def _flush_light_effect(self, _light: dict, /):
@@ -609,13 +558,12 @@ class MLLight(MLLightBase):
                 _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_LUMINANCE
 
         if await self.async_request_light_on_flush(_light):
+            # 87: @nao-pon bulbs need a 'double' send when setting Temp
+            if ATTR_COLOR_TEMP_KELVIN in kwargs:
+                if self.manager.descriptor.firmwareVersion == "2.1.2":
+                    await self.handler_ns.async_set(_light, self)
             if _t_duration:
                 self._transition_schedule(_t_duration)
-
-        # 87: @nao-pon bulbs need a 'double' send when setting Temp
-        if ATTR_COLOR_TEMP_KELVIN in kwargs:
-            if self.manager.descriptor.firmwareVersion == "2.1.2":
-                await self.async_request_light_ack(_light)
 
     @override
     async def async_turn_off(self, **kwargs):
@@ -623,39 +571,18 @@ class MLLight(MLLightBase):
 
     # interface: self
     async def async_request_onoff(self, onoff: int):
-        if self._togglex:
-            if await self.manager.async_request_ack(
-                mn.Appliance_Control_ToggleX,
-                mc.METHOD_SET,
-                {
-                    mn.Appliance_Control_ToggleX.key: {
-                        mc.KEY_CHANNEL: self.channel,
-                        mc.KEY_ONOFF: onoff,
-                    }
-                },
-            ):
-                self.update_native_value(onoff)
+        if self.handler_togglex:
+            await self.handler_togglex.async_set({mc.KEY_ONOFF: onoff}, self)
         else:
-            if await self.async_request_light_ack(
-                {
-                    mc.KEY_CHANNEL: self.channel,
-                    mc.KEY_ONOFF: onoff,
-                }
-            ):
-                self._light[mc.KEY_ONOFF] = onoff
-                self.update_native_value(onoff)
+            await self.handler_ns.async_set({mc.KEY_ONOFF: onoff}, self, self._light)
 
     async def async_request_light_on_flush(self, _light: dict):
         if mc.KEY_ONOFF in _light:
             _light[mc.KEY_ONOFF] = 1
-
-        if await self.manager.async_request_ack(
-            mn.Appliance_Control_Light,
-            mc.METHOD_SET,
-            {mc.KEY_LIGHT: _light},
-        ):
+        else:
             self.is_on = self.is_on or self._togglex_auto
-            self._flush_light(_light)
+
+        if await self.handler_ns.async_set(_light, self):
             if not self.is_on:
                 # In general, the LIGHT payload with LUMINANCE set should rightly
                 # turn on the light, but this is not true for every model/fw.
@@ -666,20 +593,12 @@ class MLLight(MLLightBase):
                     # wait a bit since this query would report off
                     # if the device has not had the time to internally update
                     await asyncio.sleep(1)
-                    if self.is_on:
+                    if self.is_on or not self.handler_togglex:
                         # in case MQTT pushed the togglex -> on
                         self._togglex_auto = True
                         self.extra_state_attributes = {MLLight.ATTR_TOGGLEX_AUTO: True}
                         return
-                    elif await self.manager.async_request_ack(
-                        mn.Appliance_Control_ToggleX,
-                        mc.METHOD_GET,
-                        {
-                            mn.Appliance_Control_ToggleX.key: [
-                                {mc.KEY_CHANNEL: self.channel}
-                            ]
-                        },
-                    ):
+                    elif await self.handler_togglex.async_get(self.channel):
                         # various kind of lights here might respond with either an array or a
                         # simple dict since the "togglex" namespace used to be hybrid and still is.
                         # This led to #357 but the resolution is to just bypass parsing since
@@ -712,13 +631,13 @@ class MLLightEffect(MLLight):
 
     __slots__ = (
         "_light_effect_list",
-        "_light_effect_handler",
+        "handler_light_effect",
     )
 
     def __init__(self, manager: "Device", channel, /):
         self._light_effect_list: list[dict] = []
         MLLight.__init__(self, manager, channel, [])
-        self._light_effect_handler = NamespaceHandler(
+        self.handler_light_effect = NamespaceHandler(
             manager,
             mn.Appliance_Control_Light_Effect,
             handler=self._handle_Appliance_Control_Light_Effect,
@@ -734,7 +653,7 @@ class MLLightEffect(MLLight):
         if self.is_on != onoff:
             self.is_on = onoff
             if onoff and (mc.KEY_EFFECT in self._light):
-                self._light_effect_handler.polling_period = 0
+                self.handler_light_effect.polling_period = 0
             self.flush_state()
             return True
 
@@ -742,7 +661,7 @@ class MLLightEffect(MLLight):
     @override
     def _flush_light_effect(self, _light: dict):
         effect_index = _light[mc.KEY_EFFECT]
-        self._light_effect_handler.polling_period = 0
+        self.handler_light_effect.polling_period = 0
         try:
             _light_effect = self._light_effect_list[effect_index]
         except IndexError:
@@ -778,14 +697,10 @@ class MLLightEffect(MLLight):
             else:
                 _light_effect = self._light_effect_list[effect_index]
                 _light_effect[mc.KEY_ENABLE] = 1
-                if await self.manager.async_request_ack(
-                    mn.Appliance_Control_Light_Effect,
-                    mc.METHOD_SET,
-                    {mc.KEY_EFFECT: [_light_effect]},
-                ):
+                if await self.handler_light_effect.async_set(_light_effect):
                     _light[mc.KEY_EFFECT] = effect_index
                     _light[mc.KEY_CAPACITY] = _capacity | mc.LIGHT_CAPACITY_EFFECT
-                    self._flush_light(_light)
+                    self._parse_light(_light)
                     if not self.is_on:
                         await self.async_request_onoff(1)
                     return
@@ -805,11 +720,7 @@ class MLLightEffect(MLLight):
                     luminance = brightness_to_native(brightness)
                     for m in member:
                         m[mc.KEY_LUMINANCE] = luminance
-                    if await self.manager.async_request_ack(
-                        mn.Appliance_Control_Light_Effect,
-                        mc.METHOD_SET,
-                        {mc.KEY_EFFECT: [_light_effect]},
-                    ):
+                    if await self.handler_light_effect.async_set(_light_effect):
                         self.brightness = brightness
                         self.flush_state()
                         if not self.is_on:
@@ -860,10 +771,10 @@ class MLLightEffect(MLLight):
             ] + [MLLightBase.EFFECT_OFF]
             # add a 'fake' key so the next update will force-flush
             self._light["_"] = None
-            self.manager.request(mn.Appliance_Control_Light.request_default)
+            self.handler_ns.schedule_get()
 
         if not (self.is_on and (mc.KEY_EFFECT in self._light)):
-            self._light_effect_handler.polling_period = mlc.PARAM_INFINITE_TIMEOUT
+            self.handler_light_effect.polling_period = mlc.PARAM_INFINITE_TIMEOUT
 
 
 class MLDNDLightEntity(EntityNamespaceMixin, me.MLBinaryEntity, light.LightEntity):
@@ -883,16 +794,6 @@ class MLDNDLightEntity(EntityNamespaceMixin, me.MLBinaryEntity, light.LightEntit
     color_mode: ColorMode = ColorMode.ONOFF
     entity_category = me.MLBinaryEntity.EntityCategory.CONFIG
     supported_color_modes: set[ColorMode] = {ColorMode.ONOFF}
-
-    @override
-    async def async_turn_on(self, **kwargs):
-        if await self.async_request_value(self.native_on):
-            self.update_native_value(True)
-
-    @override
-    async def async_turn_off(self, **kwargs):
-        if await self.async_request_value(self.native_off):
-            self.update_native_value(False)
 
 
 def digest_init_light(device: "Device", digest: dict, /) -> "DigestInitReturnType":

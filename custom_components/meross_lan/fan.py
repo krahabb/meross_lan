@@ -7,6 +7,8 @@ from .helpers.namespaces import NamespaceHandler, mn
 from .merossclient.protocol import const as mc
 
 if TYPE_CHECKING:
+    from typing import Final
+
     from .helpers.device import Device, DigestInitReturnType
 
 
@@ -25,6 +27,7 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
             pass
 
         manager: "Device"
+        handler_togglex: Final[NamespaceHandler | None]
 
         # HA core entity attributes:
         percentage: int | None
@@ -58,22 +61,21 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
         "speed_count",
         "_fan",
         "_saved_speed",  # used to restore previous speed when turning on/off
-        "_togglex",
+        "handler_togglex",
     )
 
     def __init__(self, manager: "Device", channel, /):
         self.percentage = None
         self.speed_count = 1  # safe default: auto-inc when 'fan' payload updates
-        self._fan = {}
+        self._fan = None
         self._saved_speed = 1
         super().__init__(manager, channel)
         manager.register_parser_entity(self)
-        self._togglex = manager.register_togglex_channel(self)
+        self.handler_togglex = manager.register_togglex_channel(self, True)
 
-    # interface: MerossToggle
     @override
     def set_unavailable(self):
-        self._fan = {}
+        self._fan = None
         self.percentage = None
         super().set_unavailable()
 
@@ -81,64 +83,52 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
     def update_native_value(self, onoff, /):
         if self.is_on != onoff:
             self.is_on = onoff
-            if onoff:
-                self.percentage = round(self._saved_speed * 100 / self.speed_count)
-            else:
-                self.percentage = 0
+            # self.percentage = (
+            #    round(self._saved_speed * 100 / self.speed_count) if onoff else 0
+            # )
             self.flush_state()
             return True
 
     # interface: fan.FanEntity
     @override
     async def async_set_percentage(self, percentage: int) -> None:
-        await self.async_request_fan(round(percentage * self.speed_count / 100))
+        await self.handler_ns.async_set(
+            {mc.KEY_SPEED: round(percentage * self.speed_count / 100)}, self, self._fan
+        )
 
     @override
     async def async_turn_on(
         self, percentage: int | None = None, preset_mode: str | None = None, **kwargs
     ):
-        if self._togglex and not self.is_on:
-            await self.async_request_togglex(1)
-        if percentage:
-            await self.async_request_fan(round(percentage * self.speed_count / 100))
-        else:
-            await self.async_request_fan(self._saved_speed)
+        if self.handler_togglex and not self.is_on:
+            # don't propagate callback confirmation
+            await self.handler_togglex.async_set(
+                {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: 1}
+            )
+        await self.handler_ns.async_set(
+            {
+                mc.KEY_SPEED: (
+                    round(percentage * self.speed_count / 100)
+                    if percentage
+                    else self._saved_speed
+                )
+            },
+            self,
+            self._fan,
+        )
 
     @override
     async def async_turn_off(self, **kwargs):
-        if self._togglex:
-            await self.async_request_togglex(0)
+        if self.handler_togglex:
+            await self.handler_togglex.async_set({mc.KEY_ONOFF: 0}, self)
         else:
-            await self.async_request_fan(0)
+            await self.handler_ns.async_set({mc.KEY_SPEED: 0}, self, self._fan)
 
     # interface: self
-    async def async_request_fan(self, speed: int, /):
-        payload = {mc.KEY_CHANNEL: self.channel, mc.KEY_SPEED: speed}
-        if await self.manager.async_request_ack(
-            self.ns,
-            mc.METHOD_SET,
-            {self.ns.key: [payload]},
-        ):
-            self._parse_fan(payload)
-
-    async def async_request_togglex(self, onoff: int, /):
-        if await self.manager.async_request_ack(
-            mn.Appliance_Control_ToggleX,
-            mc.METHOD_SET,
-            {
-                mn.Appliance_Control_ToggleX.key: {
-                    mc.KEY_CHANNEL: self.channel,
-                    mc.KEY_ONOFF: onoff,
-                }
-            },
-        ):
-            self.update_native_value(onoff)
-
     def _parse_fan(self, payload: dict, /):
         """payload = {"channel": 0, "speed": 3, "maxSpeed": 4}"""
         if self._fan != payload:
-            self._fan.update(payload)
-            payload = self._fan
+            self._fan = payload
             speed = payload[mc.KEY_SPEED]
             if speed:
                 self.is_on = True
@@ -150,9 +140,6 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
             )
             self.percentage = round(speed * 100 / self.speed_count)
             self.flush_state()
-
-    def _parse_togglex(self, payload: dict, /):
-        self.update_native_value(payload[mc.KEY_ONOFF])
 
 
 def digest_init_fan(device: "Device", digest, /) -> "DigestInitReturnType":

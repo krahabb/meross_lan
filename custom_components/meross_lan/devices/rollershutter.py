@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 class MLRollerShutter(MLCover):
     """
-    MRS100 SHUTTER ENTITY
+    Meross Roller Shutter cover device implementation.
     """
 
     if TYPE_CHECKING:
@@ -76,22 +76,21 @@ class MLRollerShutter(MLCover):
         except Exception:
             self._position_native_isgood = False
         MLCover.__init__(self, manager, channel)
-        self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
-        self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
-        if mn.Appliance_RollerShutter_Adjust in descriptor.ability:
-            # unknown use: actually the polling period is set on a very high timeout
-            manager.register_parser_entity(
-                MLRollerShutterAdjustSwitch(self.manager, channel)
-            )
-
+        manager.register_parser_entity(self)
         manager.register_parser(self, mn.Appliance_RollerShutter_Config)
-        manager.register_parser(self, mn.Appliance_RollerShutter_Position)
         manager.register_parser(self, mn.Appliance_RollerShutter_State)
         if mn.Appliance_Control_ToggleX in descriptor.ability:
             # This is still to be understood. This call will do nothing
             # since the digest seen so far carries an empty list of channels
             # even though the abilities show ToggleX support.
-            manager.register_togglex_channel(self)
+            manager.register_togglex_channel(self, False)
+        if mn.Appliance_RollerShutter_Adjust in descriptor.ability:
+            # unknown use: actually the polling period is set on a very high timeout
+            manager.register_parser_entity(
+                MLRollerShutterAdjustSwitch(self.manager, channel)
+            )
+        self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
+        self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
 
     async def async_added_to_hass(self):
         await MLCover.async_added_to_hass(self)
@@ -169,7 +168,13 @@ class MLRollerShutter(MLCover):
 
     async def async_request_position(self, position: int):
         self._transition_cancel()
-        if await self.async_request_value(position):
+        # TODO: this is a case where we don't want the async_set to callback
+        # the _parse_position with the request payload since we're the ones requesting it.
+        # That's why we're not forwarding self as parser to the call.
+        # As a note, consider the device replies an empty dict on SETACK
+        if await self.handler_ns.async_set(
+            {mc.KEY_CHANNEL: self.channel, self.key_value: position}
+        ):
             # re-ensure current transitions are clean after await
             self._transition_cancel()
             await self._async_transition_callback()
@@ -298,9 +303,6 @@ class MLRollerShutter(MLCover):
         if self._transition_unsub and (state == mc.ROLLERSHUTTER_STATE_IDLE):
             self._transition_cancel()
 
-    def _parse_togglex(self, payload: dict):
-        pass
-
     async def _async_transition_callback(self):
         """Schedule a repetitive callback when we detect or suspect shutter movement.
         It will be invalidated only when a successful state message is parsed stating
@@ -317,6 +319,7 @@ class MLRollerShutter(MLCover):
             manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active
         ) or (self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE):
             if manager.multiple_max >= 2:
+                # TODO: migrate call
                 await manager.async_multiple_requests_ack(
                     (
                         mn.Appliance_RollerShutter_State.request_default,
@@ -324,13 +327,11 @@ class MLRollerShutter(MLCover):
                     )
                 )
             else:
-                await manager.async_request(
-                    *mn.Appliance_RollerShutter_State.request_default
+                await manager.ns_handlers[mn.Appliance_RollerShutter_State].async_get(
+                    self.channel
                 )
                 if self._position_native_isgood:
-                    await manager.async_request(
-                        *mn.Appliance_RollerShutter_Position.request_default
-                    )
+                    await self.handler_ns.async_get(self.channel)
 
     async def _async_transition_end_callback(self):
         self._transition_end_unsub = None

@@ -83,18 +83,9 @@ class MLDeviceSwitch(MLSwitch):
     since the status updates are likely managed in higher level implementations or so.
     This class needs to be mixed in with any of the me.MENoChannelMixin,
     me.MEDictChannelMixin, MEListChannelMixin in order to actually define the
-    implementation of the protocol message payload for 'SET' commands
+    implementation of the protocol message payload for 'SET' commands.
+    TODO: remove this class and use directly MLSwitch with proper mixins
     """
-
-    @override
-    async def async_turn_on(self, **kwargs):
-        if await self.async_request_value(self.native_on):
-            self.update_native_value(True)
-
-    @override
-    async def async_turn_off(self, **kwargs):
-        if await self.async_request_value(self.native_off):
-            self.update_native_value(False)
 
 
 class PhysicalLockSwitch(MLDeviceSwitch):

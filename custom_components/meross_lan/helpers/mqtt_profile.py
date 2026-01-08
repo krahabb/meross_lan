@@ -457,6 +457,7 @@ class MQTTConnection(Loggable):
                 _mqtt_transaction = self._mqtt_transactions.pop(message.messageid)
                 if _mqtt_transaction.device_id == device_id:
                     _mqtt_transaction.response_future.set_result(message)
+                    return
                 else:  # this is unlikely to happen
                     self._mqtt_transactions[message.messageid] = _mqtt_transaction
             except KeyError:

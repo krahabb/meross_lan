@@ -175,6 +175,7 @@ class BaseDevice(EntityManager):
         else:
             self.update_firmware = MLUpdate(self)
 
+    # DEPRECATED
     async def async_request(
         self,
         namespace: str,
@@ -183,6 +184,7 @@ class BaseDevice(EntityManager):
     ) -> MerossResponse | None:
         raise NotImplementedError("async_request")
 
+    # DEPRECATED
     async def async_request_ack(
         self,
         namespace: str,
@@ -192,10 +194,15 @@ class BaseDevice(EntityManager):
         response = await self.async_request(namespace, method, payload)
         return response if response and response.method != mc.METHOD_ERROR else None
 
-    def request(self, request_tuple: "MerossRequestType"):
-        return self.async_create_task(
-            self.async_request(*request_tuple), f".request({request_tuple})"
-        )
+    async def async_request2(
+        self, *args: "Unpack[MerossRequestType]"
+    ) -> MerossResponse:
+        raise NotImplementedError("async_request")
+
+    async def async_request_ack2(
+        self, *args: "Unpack[MerossRequestType]"
+    ) -> MerossResponse:
+        return (await self.async_request2(*args)).check()
 
     def _set_online(self):
         self.log(self.DEBUG, "Back online!")
@@ -292,12 +299,10 @@ class Device(BaseDevice, ConfigEntryManager):
         _http: MerossHttpClient | None
         _http_active: MerossHttpClient | None
         _http_lastrequest: float
-        _http_lastresponse: float
         _mqtt_connection: MQTTConnection | None
         _mqtt_connected: MQTTConnection | None
         _mqtt_publish: MQTTConnection | None
         _mqtt_active: MQTTConnection | None
-        _mqtt_lastrequest: float
         _mqtt_lastresponse: float
         _profile: MQTTProfile | None
         ns_handlers: Final[dict[str, NamespaceHandler]]
@@ -463,12 +468,10 @@ class Device(BaseDevice, ConfigEntryManager):
         "_http",
         "_http_active",  # HTTP is 'online' i.e. reachable
         "_http_lastrequest",
-        "_http_lastresponse",
         "_mqtt_connection",  # we're binded to an MQTT profile/broker
         "_mqtt_connected",  # the broker is online/connected
         "_mqtt_publish",  # the broker accepts 'publish' (cloud broker conf might disable publishing)
         "_mqtt_active",  # the broker receives valid traffic i.e. the device is 'mqtt' reachable
-        "_mqtt_lastrequest",
         "_mqtt_lastresponse",
         "_profile",
         "ns_handlers",
@@ -522,12 +525,10 @@ class Device(BaseDevice, ConfigEntryManager):
         self._http = None
         self._http_active = None
         self._http_lastrequest = 0
-        self._http_lastresponse = 0
         self._mqtt_connection = None
         self._mqtt_connected = None
         self._mqtt_publish = None
         self._mqtt_active = None
-        self._mqtt_lastrequest = 0
         self._mqtt_lastresponse = 0
         self._profile = None
         self.ns_handlers = {}
@@ -835,7 +836,7 @@ class Device(BaseDevice, ConfigEntryManager):
         # config_entry update might come from DHCP or OptionsFlowHandler address update
         # so we'll eventually retry querying the device
         if not self.online:
-            self.request(mn.Appliance_System_All.request_default)
+            self.schedule_poll("entry_update_listener")
 
     async def async_create_diagnostic_entities(self):
         self._diagnostics_build = True  # set a flag cause we'll lazy scan/build
@@ -980,7 +981,7 @@ class Device(BaseDevice, ConfigEntryManager):
                     ability = next(abilities)
                     if ability not in self.TRACE_ABILITY_EXCLUDE:
                         await self.get_handler_by_name(ability).async_trace(
-                            self.async_http_request
+                            self.async_http_request2  # TODO: pass in the raw method and build the MerossRequest inside
                         )
                 self._trace_data = None
                 return trace_data  # might be truncated because offlining or async shutting trace
@@ -1182,6 +1183,44 @@ class Device(BaseDevice, ConfigEntryManager):
 
         return None
 
+    @override
+    async def async_request2(
+        self, *args: "Unpack[MerossRequestType]"
+    ) -> MerossResponse:
+        """
+        route the request through MQTT or HTTP to the physical device according to
+        current protocol. When switching transport the message is recomputed to
+        avoid reusing the same (old) timestamps and messageids.
+        TODO: move to Exception based response handling
+        """
+        self.lastrequest = time()
+        if self._bluetooth:
+            # BL should be active alone when the device is unbound so no other transport is available
+            return await self.async_bluetooth_request2(*args)
+
+        mqttfailed = False
+        if self.curr_protocol is CONF_PROTOCOL_MQTT:
+            if self._mqtt_publish:
+                if response := await self.async_mqtt_request2(*args):
+                    return response
+                mqttfailed = True
+            # MQTT not connected or not allowing publishing
+            if self.conf_protocol is CONF_PROTOCOL_MQTT:
+                return None
+
+        if response := await self.async_http_request2(*args):
+            return response
+
+        if (
+            self._mqtt_active  # device is connected to broker
+            and self._mqtt_publish  # profile allows publishing
+            and not mqttfailed  # we've already tried mqtt
+        ):
+            return await self.async_mqtt_request2(*args)
+
+        return None
+
+    @override
     def _set_offline(self):
         super()._set_offline()
         self._polling_delay = self.polling_period
@@ -1309,7 +1348,7 @@ class Device(BaseDevice, ConfigEntryManager):
     def register_parser_entity(self, entity: "MLEntity", /):
         self.get_handler(entity.ns).register_parser(entity)
 
-    def register_togglex_channel(self, entity: "MLEntity", /):
+    def register_togglex_channel(self, entity: "MLEntity", active: bool, /):
         """
         Checks if entity has an associated ToggleX behavior and eventually
         registers it
@@ -1317,12 +1356,24 @@ class Device(BaseDevice, ConfigEntryManager):
         try:
             for togglex_digest in self.descriptor.digest[mc.KEY_TOGGLEX]:
                 if togglex_digest[mc.KEY_CHANNEL] == entity.channel:
-                    self.register_parser(entity, mn.Appliance_Control_ToggleX)
-                    return True
+                    # TODO: _parse_togglex need to be automatically bound
+                    # here but this code might be improved in some way
+                    # without needing to allocate new lambdas for each entity
+                    if active:
+                        entity._parse_togglex = (
+                            lambda payload: entity.update_native_value(
+                                payload[mc.KEY_ONOFF]
+                            )
+                        )
+                    else:
+                        entity._parse_togglex = lambda payload: None
+                    ns_handler = self.get_handler(mn.Appliance_Control_ToggleX)
+                    ns_handler.register_parser(entity)
+                    return ns_handler
         except KeyError:
             # no "togglex" in digest ?
             pass
-        return False
+        return None
 
     def schedule_entry_update(self, query_abilities: bool, /):
         """
@@ -1649,9 +1700,9 @@ class Device(BaseDevice, ConfigEntryManager):
                 "Attempting to use async_mqtt_request with no publishing profile",
             )
             return None
-        self._mqtt_lastrequest = time()
+        epoch = time()
         self._trace_or_log(
-            self._mqtt_lastrequest,
+            epoch,
             request,
             CONF_PROTOCOL_MQTT,
             ConfigEntryManager.TRACE_TX,
@@ -1743,7 +1794,218 @@ class Device(BaseDevice, ConfigEntryManager):
                 return None
             response_text = response_text[0:trunc_pos] + "]}}"
             response = MerossResponse(response_text)
+        except Exception as exception:
+            namespace = request.namespace
+            self.log(
+                self.DEBUG,
+                "HTTP ERROR %s %s (messageId:%s %s:%s)",
+                request.method,
+                namespace,
+                request.messageid,
+                exception.__class__.__name__,
+                str(exception),
+            )
+            if not self.online:
+                return None
+            if namespace is mn.Appliance_System_All:
+                if self._http_active:
+                    self._http_active = None
+                    self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_HTTP)
+            elif namespace is mn.Appliance_Control_Unbind:
+                if isinstance(exception, aiohttp.ServerDisconnectedError):
+                    # this is expected when issuing the UNBIND
+                    # so this is an indication we're dead
+                    self._set_offline()
+            return None
 
+        epoch = time()
+        self._trace_or_log(epoch, response, CONF_PROTOCOL_HTTP, self.TRACE_RX)
+        # add a sanity check here since we have some issues (#341)
+        # that might be related to misconfigured devices where the
+        # host address points to a different device than configured.
+        # Our current device.id in fact points (or should) to the uuid discovered
+        # in configuration but if by chance the device changes ip and we miss
+        # the dynamic change (eitehr dhcp not working or HA down while dhcp updating)
+        # we might end up with our configured host pointing to a different device
+        # and this might (unluckily) be another Meross with the same key
+        # so it could rightly respond here. This shouldnt happen over MQTT
+        # since the device.id is being taken care of by the routing mechanism
+        response_uuid = response.get_uuid()
+        if self.id != response_uuid:
+            try:
+                mismatched_payload_all = await http.async_request(
+                    *mn.Appliance_System_All.request_default
+                )
+            except Exception:
+                mismatched_payload_all = None
+            self._process_uuid_mismatch(response_uuid, mismatched_payload_all)
+            return None
+
+        if not self._http_active:
+            self._http_active = http
+            self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_HTTP)
+        if self.curr_protocol is not CONF_PROTOCOL_HTTP:
+            if (self.pref_protocol is CONF_PROTOCOL_HTTP) or (not self._mqtt_active):
+                self._switch_protocol(CONF_PROTOCOL_HTTP)
+        self._receive(epoch, response)
+        return response
+
+    async def async_http_request(
+        self, namespace: str, method: str, payload: "MerossPayloadType", /
+    ):
+        return await self.async_http_request_raw(
+            MerossRequest(
+                namespace,
+                method,
+                payload,
+                self.key,
+                self._topic_response,
+                self.__class__.__name__,
+            )
+        )
+
+    async def async_bluetooth_request2(
+        self, *request_args: "Unpack[MerossRequestType]"
+    ):
+        # TODO: migrate to exception handling system so that we don't need to check
+        # results for errors, unify also timeouts management among requests
+        request = MerossRequest(*request_args, "", mlc.DOMAIN, self.__class__.__name__)
+        self._trace_or_log(time(), request, CONF_PROTOCOL_BLUETOOTH, Device.TRACE_TX)
+        try:
+            response = await self._bluetooth.async_request_raw(request)  # type: ignore
+            epoch = time()
+            self._trace_or_log(epoch, response, CONF_PROTOCOL_BLUETOOTH, self.TRACE_RX)
+            if self.curr_protocol is not CONF_PROTOCOL_BLUETOOTH:
+                self._switch_protocol(CONF_PROTOCOL_BLUETOOTH)
+            self._receive2(epoch, response)
+            return response
+        except Exception as e:
+            if self._bluetooth:
+                self.log_exception(self.WARNING, e, "async_bluetooth_request")
+                await self._bluetooth.disconnect()
+            else:
+                self.log(
+                    self.DEBUG,
+                    "Attempting to use async_bluetooth_request with no bluetooth client",
+                )
+
+    async def async_mqtt_request_raw2(
+        self, request: "MerossMessage", /
+    ) -> MerossResponse | None:
+        # TODO: migrate to exception handling system so that we don't need to check
+        # results for errors, unify also timeouts management among requests
+        self._trace_or_log(time(), request, CONF_PROTOCOL_MQTT, Device.TRACE_TX)
+        try:
+            assert self._mqtt_publish
+            if self._mqtt_publish.is_cloud_connection:
+                self._queued_cloudpoll_requests += 1
+            response = await self._mqtt_publish.async_mqtt_publish(self.id, request)
+            self._mqtt_lastresponse = epoch = time()
+            self._trace_or_log(epoch, response, CONF_PROTOCOL_MQTT, self.TRACE_RX)
+            if not self._mqtt_active:
+                self._mqtt_active = self._mqtt_connected
+                if self.online:
+                    self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
+            if self.curr_protocol is not CONF_PROTOCOL_MQTT:
+                if (self.pref_protocol is CONF_PROTOCOL_MQTT) or (
+                    not self._http_active
+                ):
+                    self._switch_protocol(CONF_PROTOCOL_MQTT)
+            self._receive2(epoch, response)
+            return response
+        except Exception as e:
+            if self._mqtt_publish:
+                self.log_exception(self.WARNING, e, "async_mqtt_request_raw")
+            else:
+                self.log(
+                    self.DEBUG,
+                    "Attempting to use async_mqtt_request with no mqtt connection",
+                )
+
+    async def async_mqtt_request2(
+        self, namespace: str, method: str, payload: "MerossPayloadType", /
+    ):
+        return await self.async_mqtt_request_raw2(
+            MerossRequest(
+                namespace,
+                method,
+                payload,
+                self.key,
+                self._topic_response,
+                self.__class__.__name__,
+            )
+        )
+
+    def mqtt_request2(
+        self, namespace: str, method: str, payload: "MerossPayloadType", /
+    ):
+        return self.async_create_task(
+            self.async_mqtt_request2(namespace, method, payload),
+            f".mqtt_request({namespace},{method},{type(payload)})",
+        )
+
+    async def async_http_request_raw2(
+        self, request: MerossRequest, /
+    ) -> MerossResponse | None:
+        # TODO: migrate to exception handling system so that we don't need to check
+        # results for errors, unify also timeouts management among requests
+        if not (http := self._http):
+            # TODO likely redundant to remove
+            # even if we're smart enough to not call async_http_request_raw when no http
+            # available, it could happen we loose that when asynchronously coming here
+            self.log(
+                self.DEBUG,
+                "Attempting to use async_http_request_raw with no http connection",
+            )
+            return None
+
+        self._http_lastrequest = time()
+        self._trace_or_log(
+            self._http_lastrequest,
+            request,
+            CONF_PROTOCOL_HTTP,
+            ConfigEntryManager.TRACE_TX,
+        )
+        try:
+            response = await http.async_request_raw(request)
+        except TerminatedException:
+            return None
+        except JSONDecodeError as jsonerror:
+            # this could happen when the response carries a truncated payload
+            # and might be due to an 'hard' limit in the capacity of the
+            # device http output buffer (when the response is too long)
+            self.log(
+                self.DEBUG,
+                "HTTP ERROR %s %s (messageId:%s JSONDecodeError:%s)",
+                request.method,
+                request.namespace,
+                request.messageid,
+                str(jsonerror),
+            )
+            response_text = jsonerror.doc
+            response_text_len_safe = int(len(response_text) * 0.9)
+            if jsonerror.pos < response_text_len_safe:
+                # if the error is too early in the payload...
+                return None
+            # the error happened because of truncated json payload
+            self.device_response_size_max = response_text_len_safe
+            if self.device_response_size_min > response_text_len_safe:
+                self.device_response_size_min = response_text_len_safe
+            self.log(
+                self.DEBUG,
+                "Updating device_response_size_min:%d device_response_size_max:%d",
+                self.device_response_size_min,
+                self.device_response_size_max,
+            )
+            if request.namespace is not mn.Appliance_Control_Multiple:
+                return None
+            # try to recover NS_MULTIPLE by discarding the incomplete
+            # message at the end
+            trunc_pos = response_text.rfind(',{"header":')
+            if trunc_pos == -1:
+                return None
+            response_text = response_text[0:trunc_pos] + "]}}"
+            response = MerossResponse(response_text)
         except Exception as exception:
             namespace = request.namespace
             self.log(
@@ -1793,20 +2055,19 @@ class Device(BaseDevice, ConfigEntryManager):
             self._process_uuid_mismatch(response_uuid, mismatched_payload_all)
             return None
 
-        self._http_lastresponse = epoch
-        if not self._http_active:
+        if not self._http_active and self._http:
             self._http_active = http
             self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_HTTP)
         if self.curr_protocol is not CONF_PROTOCOL_HTTP:
             if (self.pref_protocol is CONF_PROTOCOL_HTTP) or (not self._mqtt_active):
                 self._switch_protocol(CONF_PROTOCOL_HTTP)
-        self._receive(epoch, response)
+        self._receive2(epoch, response)
         return response
 
-    async def async_http_request(
+    async def async_http_request2(
         self, namespace: str, method: str, payload: "MerossPayloadType", /
     ):
-        return await self.async_http_request_raw(
+        return await self.async_http_request_raw2(
             MerossRequest(
                 namespace,
                 method,
@@ -2085,6 +2346,9 @@ class Device(BaseDevice, ConfigEntryManager):
             # this will also restart/schedule the cycle
             await self._poll()
 
+    def schedule_poll(self, task_name: str):
+        self.async_create_task(self.async_poll_full(), task_name, False)
+
     def bt_attached(self, bt_device: "ComponentApi.BTDevice", /):
         if _bluetooth := self._bluetooth:
             if _bluetooth is bt_device:
@@ -2129,7 +2393,7 @@ class Device(BaseDevice, ConfigEntryManager):
         self._bluetooth_active = _bluetooth
         self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_BLUETOOTH)
         if not self.online:
-            self.async_create_task(self.async_poll_full(), "bt_connected", False)
+            self.schedule_poll("bt_connected")
 
     def bt_disconnected(self):
         assert self._bluetooth
@@ -2139,7 +2403,6 @@ class Device(BaseDevice, ConfigEntryManager):
             self._bluetooth.address,
         )
         self._bluetooth_active = None
-        self.device_debug = None
         if self.online:
             self._set_offline()
             return
@@ -2196,7 +2459,7 @@ class Device(BaseDevice, ConfigEntryManager):
         if _mqtt_connection.profile.allow_mqtt_publish:
             self._mqtt_publish = _mqtt_connection
             if not self.online:
-                self.async_create_task(self.async_poll_full(), "mqtt_connected", False)
+                self.schedule_poll("mqtt_connected")
         elif self.conf_protocol is CONF_PROTOCOL_MQTT:
             self.log(
                 self.WARNING,
@@ -2309,6 +2572,62 @@ class Device(BaseDevice, ConfigEntryManager):
                 )
 
         return self._handle(header, message.payload)
+
+    def _receive2(self, epoch: float, message: MerossResponse, /):
+        """
+        default (received) message handling entry point
+        """
+        self.lastresponse = epoch
+        message_size = len(message.json)
+        if message_size > self.device_response_size_min:
+            self.device_response_size_min = message_size
+            if message_size > self.device_response_size_max:
+                self.device_response_size_max = message_size
+
+        header = message.header
+        # we'll use the device timestamp to 'align' our time to the device one
+        # this is useful for metered plugs reporting timestamped energy consumption
+        # and we want to 'translate' this timings in our (local) time.
+        # We ignore delays below PARAM_TIMESTAMP_TOLERANCE since
+        # we'll always be a bit late in processing
+        self.device_timestamp = header[mc.KEY_TIMESTAMP]
+        self.device_timedelta = (
+            9 * self.device_timedelta + (epoch - self.device_timestamp)
+        ) / 10
+        if abs(self.device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
+            if not self._config_device_timestamp(epoch):
+                if (epoch - self.device_timedelta_log_epoch) > 604800:  # 1 week lockout
+                    self.device_timedelta_log_epoch = epoch
+                    self.log(
+                        self.WARNING,
+                        "Incorrect timestamp: %d seconds behind HA (%d on average)",
+                        int(epoch - self.device_timestamp),
+                        int(self.device_timedelta),
+                    )
+
+        if self.isEnabledFor(self.DEBUG):
+            # it appears sometimes the devices
+            # send an incorrect signature hash
+            # but at the moment this is unlikely to be critical
+            sign = message.compute_signature(self.key)
+            if sign != header[mc.KEY_SIGN]:
+                self.log(
+                    self.DEBUG,
+                    "Received signature error: computed=%s, header=%s",
+                    sign,
+                    str(self.loggable_dict(header)),
+                )
+
+        if not self.online:
+            self._set_online()
+            self._polling_delay = self.polling_period
+            # retrigger the polling loop in case it is scheduled/pending.
+            # This could happen when we receive an MQTT message
+            if self._polling_unsub:
+                self._polling_unsub.cancel()
+                self._polling_unsub = self.schedule_callback(
+                    0, self._poll, message.namespace
+                )
 
     def _handle(self, header: "MerossHeaderType", payload: "MerossPayloadType", /):
         namespace = header[mc.KEY_NAMESPACE]
@@ -2437,7 +2756,7 @@ class Device(BaseDevice, ConfigEntryManager):
                     self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_MQTT)
             elif is_device_online(descr.system):
                 if not self.device_debug:
-                    self.request(mn.Appliance_System_Debug.request_default)
+                    self.get_handler(mn.Appliance_System_Debug).schedule_get()
             else:
                 self.device_debug = None
 
@@ -2695,6 +3014,7 @@ class Device(BaseDevice, ConfigEntryManager):
         ):
             self.descriptor.update_time(p_time)
             self.schedule_entry_update(False)
+            self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
             return True
 
         return False

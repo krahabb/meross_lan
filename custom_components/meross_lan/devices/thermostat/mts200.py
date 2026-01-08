@@ -2,11 +2,11 @@ from typing import TYPE_CHECKING
 
 from ...calendar import MtsSchedule
 from ...climate import MtsSetPointNumber
-from ...merossclient import merge_dicts
 from .mtsthermostat import MtsThermostatClimate, mc, mn_t
 
 if TYPE_CHECKING:
     from ...helpers.device import Device
+    from ...merossclient.protocol.types import thermostat as mt_t
 
 
 class Mts200Climate(MtsThermostatClimate):
@@ -22,6 +22,9 @@ class Mts200Climate(MtsThermostatClimate):
 
     class Schedule(MtsSchedule):
         ns = mn_t.Appliance_Control_Thermostat_Schedule
+
+    if TYPE_CHECKING:
+        _mts_payload: mt_t.Mode_C
 
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS200_MODE_MANUAL: MtsThermostatClimate.Preset.CUSTOM,
@@ -79,7 +82,6 @@ class Mts200Climate(MtsThermostatClimate):
         else:
             self.hvac_mode = MtsThermostatClimate.HVACMode.OFF
             self.hvac_action = MtsThermostatClimate.HVACAction.OFF
-
         super().flush_state()
 
     async def async_set_hvac_mode(self, hvac_mode: MtsThermostatClimate.HVACMode, /):
@@ -91,7 +93,9 @@ class Mts200Climate(MtsThermostatClimate):
             # this is an indicator the device supports it
             summermode = self.HVAC_MODE_TO_MTS_SUMMERMODE[hvac_mode]
             if self._mts_summermode != summermode:
-                await self.async_request_summermode(summermode)
+                await self.manager.ns_handlers[
+                    mn_t.Appliance_Control_Thermostat_SummerMode
+                ].async_set_c_ex({mc.KEY_MODE: summermode}, self, None)
 
         await self.async_request_onoff(1)
 
@@ -105,79 +109,28 @@ class Mts200Climate(MtsThermostatClimate):
             key = mc.MTS200_MODE_TO_TARGETTEMP_MAP.get(mode) or mc.KEY_MANUALTEMP
             if key is mc.KEY_MANUALTEMP:
                 mode = mc.MTS200_MODE_MANUAL
-        await self._async_request_mode(
-            {
-                mc.KEY_CHANNEL: self.channel,
-                mc.KEY_MODE: mode,
-                key: round(kwargs[self.ATTR_TEMPERATURE] * self.device_scale),
-            }
+
+        target_temp = round(kwargs[self.ATTR_TEMPERATURE] * self.device_scale)
+        self._mts_payload[mc.KEY_TARGETTEMP] = target_temp  # optimistic update
+        await self.handler_ns.async_set_c_ex(
+            {mc.KEY_MODE: mode, key: target_temp}, self, self._mts_payload
         )
 
     async def async_request_preset(self, mode: int, /):
-        await self._async_request_mode(
-            {
-                mc.KEY_CHANNEL: self.channel,
-                mc.KEY_MODE: mode,
-                mc.KEY_ONOFF: 1,
-            }
+        await self.handler_ns.async_set_c_ex(
+            {mc.KEY_MODE: mode, mc.KEY_ONOFF: 1}, self, self._mts_payload
         )
 
     async def async_request_onoff(self, onoff: int, /):
-        await self._async_request_mode(
-            {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}
+        await self.handler_ns.async_set_c_ex(
+            {mc.KEY_ONOFF: onoff}, self, self._mts_payload
         )
 
     def is_mts_scheduled(self, /):
         return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
 
     # interface: self
-    async def async_request_summermode(self, summermode: int, /):
-        ns = mn_t.Appliance_Control_Thermostat_SummerMode
-        if await self.manager.async_request_ack(
-            ns,
-            mc.METHOD_SET,
-            {ns.key: [{ns.key_channel: self.channel, mc.KEY_MODE: summermode}]},
-        ):
-            # it looks that (at least when sending '0') even
-            # if acknowledged the mts doesnt really update it
-            self._mts_summermode = summermode
-            self.flush_state()
-
-    async def _async_request_mode(self, p_mode: dict, /):
-        if response := await self.manager.async_request_ack(
-            self.ns,
-            mc.METHOD_SET,
-            {self.ns.key: [p_mode]},
-        ):
-            try:
-                payload = response[mc.KEY_PAYLOAD][mc.KEY_MODE][0]
-            except (KeyError, IndexError):
-                # optimistic update
-                payload = merge_dicts(self._mts_payload, p_mode)
-                if mc.KEY_MODE in p_mode:
-                    key_temp = mc.MTS200_MODE_TO_TARGETTEMP_MAP.get(p_mode[mc.KEY_MODE])
-                    if key_temp in payload:
-                        payload[mc.KEY_TARGETTEMP] = payload[key_temp]
-            self._parse_mode(payload)
-
-    # message handlers
-    def _parse_mode(self, payload: dict, /):
-        """{
-            "channel": 0,
-            "onoff": 1,
-            "mode": 3,
-            "state": 0,
-            "currentTemp": 210,
-            "heatTemp": 240,
-            "coolTemp": 210,
-            "ecoTemp": 120,
-            "manualTemp": 230,
-            "warning": 0,
-            "targetTemp": 205,
-            "min": 50,
-            "max": 350,
-            "lmTime": 1642425303
-        }"""
+    def _parse_mode(self, payload: "mt_t.Mode_C", /):
         if self._mts_payload == payload:
             return
         self._mts_payload = payload

@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .helpers.device import Device
+    from .merossclient.protocol.types import JsonDict
 
 
 async def async_setup_entry(
@@ -30,6 +31,7 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
     if TYPE_CHECKING:
 
         manager: "Device"
+        _mp3: JsonDict | None
         # HA core entity attributes:
         _attr_device_class: Final[media_player.MediaPlayerDeviceClass]
 
@@ -66,7 +68,7 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
     )
 
     def __init__(self, manager: "Device", channel, /, **kwargs):
-        self._mp3 = {}
+        self._mp3 = None
         self.is_volume_muted = None
         self.media_title = None
         self.media_track = None
@@ -77,7 +79,7 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
 
     # interface: MLEntity
     def set_unavailable(self):
-        self._mp3 = {}
+        self._mp3 = None
         self.is_volume_muted = None
         self.media_title = None
         self.media_track = None
@@ -87,58 +89,63 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
 
     # interface: MediaPlayerEntity
     async def async_mute_volume(self, mute):
-        await self.async_request_mp3(mc.KEY_MUTE, 1 if mute else 0)
+        await self.handler_ns.async_set(
+            {mc.KEY_MUTE: 1 if mute else 0}, self, self._mp3
+        )
 
     async def async_set_volume_level(self, volume):
-        await self.async_request_mp3(
-            mc.KEY_VOLUME,
-            clamp(
-                round(volume * mc.HP110A_MP3_VOLUME_MAX), 0, mc.HP110A_MP3_VOLUME_MAX
-            ),
+        await self.handler_ns.async_set(
+            {
+                mc.KEY_VOLUME: clamp(
+                    round(volume * mc.HP110A_MP3_VOLUME_MAX),
+                    0,
+                    mc.HP110A_MP3_VOLUME_MAX,
+                ),
+            },
+            self,
+            self._mp3,
         )
 
     async def async_media_play(self):
-        await self.async_request_mp3(mc.KEY_MUTE, 0)
+        await self.handler_ns.async_set({mc.KEY_MUTE: 0}, self, self._mp3)
 
     async def async_media_stop(self):
-        await self.async_request_mp3(mc.KEY_MUTE, 1)
+        await self.handler_ns.async_set({mc.KEY_MUTE: 1}, self, self._mp3)
 
     async def async_media_previous_track(self):
         song = self.media_track
-        if song is None:
-            song = mc.HP110A_MP3_SONG_MIN
-        elif song <= mc.HP110A_MP3_SONG_MIN:
-            song = mc.HP110A_MP3_SONG_MAX
-        else:
-            song = song - 1
-        await self.async_request_mp3(mc.KEY_SONG, song)
+        await self.handler_ns.async_set(
+            {
+                mc.KEY_SONG: (
+                    mc.HP110A_MP3_SONG_MAX
+                    if (song is None) or (song <= mc.HP110A_MP3_SONG_MIN)
+                    else song - 1
+                ),
+            },
+            self,
+            self._mp3,
+        )
 
     async def async_media_next_track(self):
         song = self.media_track
-        if song is None:
-            song = mc.HP110A_MP3_SONG_MIN
-        elif song >= mc.HP110A_MP3_SONG_MAX:
-            song = mc.HP110A_MP3_SONG_MIN
-        else:
-            song = song + 1
-        await self.async_request_mp3(mc.KEY_SONG, song)
+        await self.handler_ns.async_set(
+            {
+                mc.KEY_SONG: (
+                    mc.HP110A_MP3_SONG_MIN
+                    if (song is None) or (song >= mc.HP110A_MP3_SONG_MAX)
+                    else song + 1
+                ),
+            },
+            self,
+            self._mp3,
+        )
 
-    # interface: self
-    async def async_request_mp3(self, key: str, value: int, /):
-        payload = {mc.KEY_CHANNEL: self.channel, key: value}
-        if await self.manager.async_request_ack(
-            self.ns,
-            mc.METHOD_SET,
-            {self.ns.key: payload},
-        ):
-            self._parse(payload)
-
-    def _parse(self, payload: dict, /):
+    def _parse_mp3(self, payload: dict, /):
         """
         {"channel": 0, "lmTime": 1630691532, "song": 9, "mute": 1, "volume": 11}
         """
         if self._mp3 != payload:
-            self._mp3.update(payload)
+            self._mp3 = payload
             if mc.KEY_MUTE in payload:
                 self.is_volume_muted = mute = payload[mc.KEY_MUTE]
                 self.state = MediaPlayerState.IDLE if mute else MediaPlayerState.PLAYING

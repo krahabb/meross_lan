@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from ..merossclient.protocol.types import JsonDict
     from .device import BaseDevice, Device, MerossResponse
     from .manager import ConfigEntryManager, EntityManager
 
@@ -96,6 +97,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         # by nesting the actual 'key_value' inside 'key_group' (see Appliance.Config.DeviceCfg)
         ns: mn.Namespace  # no default
         key_value: str  # defaulted to 'value'
+        _parse_togglex: Callable[[JsonDict], Any]
         # This is related to NamespaceHandler registration. For entity classes where we know
         # the ns exposes fixed channel layouts (i.e. PhysicalLock) which are not exposed in any digest key
         # we can set this to (0,) or more funny presets so that namespace initialization will also
@@ -387,7 +389,8 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         """Sends the actual request to the device. This is a simple implementation for
         entities (binary_sensors, switches, simple sensors or so backing a 'single'
         data point in a Namespace payload. This is 'smart' enough to handle
-        the correct namespace grammar as defined in merossclient.protocol.namespaces."""
+        the correct namespace grammar as defined in merossclient.protocol.namespaces.
+        TODO: move/use NamespaceHandler.async_set here?"""
         match self.ns.payload_set:
             case mn.PayloadType.LIST_C:
                 self.async_request_value = self._async_request_value_list_c  # type: ignore
@@ -576,6 +579,15 @@ class MLBinaryEntity(MLEntity):
             self.is_on = onoff
             self.flush_state()
             return True
+
+    # provide a generalized toggle behavior for binary entities
+    async def async_turn_on(self, **kwargs):
+        if await self.async_request_value(self.native_on):
+            self.update_native_value(True)
+
+    async def async_turn_off(self, **kwargs):
+        if await self.async_request_value(self.native_off):
+            self.update_native_value(False)
 
 
 class MLNumericEntity(MLEntity):

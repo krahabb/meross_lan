@@ -1,7 +1,10 @@
 import bisect
+from functools import cached_property
+from time import time
 from typing import TYPE_CHECKING
 
 from .. import const as mlc
+from ..merossclient import merge_dicts
 from ..merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
@@ -9,7 +12,8 @@ if TYPE_CHECKING:
 
     from . import Loggable
     from ..merossclient.protocol import types as mt
-    from ..merossclient.protocol.message import MerossResponse
+    from ..merossclient.protocol.message import MerossMessage, MerossResponse
+    from ..merossclient.protocol.types import JsonDict
     from .device import AsyncRequestFunc, Device
     from .entity import MLEntity
 
@@ -34,9 +38,14 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
         # These properties must be implemented in derived classes according to the
         # namespace payload syntax. NamespaceHandler will lookup any of these when
         # establishing the link between the handler and the parser
-        channel: object
-        subId: object
+        channel: int
+        # id: str
+        subId: str
 
+        """Reference to the NamespaceHandler this parser is registered to. If this parser
+        is registered to multiple handlers, this will point to the first of them only.
+        As a rough formal rule, this should point to the handler managing the 'ns' member defined in the
+        derived class (MLEntity actually)."""
         _namespace_handlers: set["NamespaceHandler"]
 
     # This set will be created x instance when linking the parser to the handler
@@ -47,8 +56,20 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
             for handler in self._namespace_handlers:
                 del handler.parsers[getattr(self, handler.ns.key_channel)]
             del self._namespace_handlers
-        except TypeError:
+            del self.handler_ns  # type: ignore
+        except TypeError:  # never registered
             assert self._namespace_handlers is None
+
+    @cached_property
+    def handler_ns(self) -> "NamespaceHandler":
+        # TODO: define a more consistent interface
+        # This is right now a brutal hack to automagically provide ns_handler property
+        # to entities which might not need to be registered parsers but still need to access
+        # the NamespaceHandler to issue device requests. Most of the times these are entities
+        # where ns parsing is delegated to a container object/handler which is then dispatching
+        # updates without using the NamespaceHandler inner mechanisms.
+        assert not self._namespace_handlers
+        return self.manager.ns_handlers[self.ns]  # type: ignore
 
     def _parse(self, payload: dict, /):
         """Default payload message parser. This is invoked automatically
@@ -101,7 +122,7 @@ class NamespaceHandler:
 
     if TYPE_CHECKING:
         parsers: dict[object, Callable[[dict], None]]
-        lastpush: dict | None
+        lastpush: JsonDict | None  # TODO: implement caching of all methods responses
         polling_strategy: PollingStrategyFunc | None
         polling_request: mt.MerossRequestType
         polling_request_channels: list[dict[str, Any]]
@@ -314,6 +335,7 @@ class NamespaceHandler:
         self.parsers[channel] = getattr(parser, f"_parse_{ns.slug_end}", parser._parse)
         if not parser._namespace_handlers:
             parser._namespace_handlers = set()
+            parser.handler_ns = self
         parser._namespace_handlers.add(self)
         self.polling_request_add_channel(channel)
         self.handler = self._handle_list
@@ -541,28 +563,135 @@ class NamespaceHandler:
 
         return self.parsers[channel]
 
-    async def async_request_get_channel(self, channel: object, /):
+    async def async_get(self, channel: object = None, /):
         """
-        Helper to execute a straigth query to get a single channel out of a set.
-        This is rather generic and adapts the query format to the current polling grammar
-        which, in some cases, could differ from what's been set in ns definition
-        (see polling_request_configure). Also, it shouldnt be used for namespaces that
-        don't support GET.
+        Helper to execute a straigth query to get the whole namespace payload
+        or a single item/channel and dispatch the response to the internal
+        handler bypassing the Device message routing.
+        if channel is None the whole namespace is requested.
+        """
+        response = None
+        try:
+            if channel is None:
+                response = await self.device.async_request2(*self.polling_request)
+            else:
+                ns = self.ns
+                payload_type = self.polling_request[2][ns.key]
+                if isinstance(payload_type, list):
+                    response = await self.device.async_request2(
+                        ns,
+                        mc.METHOD_GET,
+                        {ns.key: [{ns.key_channel: channel}]},
+                    )
+                elif isinstance(payload_type, dict):
+                    response = await self.device.async_request2(
+                        ns,
+                        mc.METHOD_GET,
+                        {ns.key: {ns.key_channel: channel}},
+                    )
+                else:
+                    raise Exception("Cannot GET single channel for this namespace")
+
+            # TODO: save all of the last sent/received payloads for a ns_handler
+            # for diagnostics (GET/ACK/SET/PUSH/DEL)
+            response = response.check()
+            self.lastresponse = self.device.lastresponse
+            self.polling_epoch_next = self.lastresponse + self.polling_period
+            self.handler(response.header, response.payload)
+            return response
+        except Exception as e:
+            self.handle_exception(e, "async_get", response)
+
+    def schedule_get(self, channel: object = None, task_name: str = "", /):
+        """
+        Helper to schedule a straigth query to get the whole namespace payload.
+        This shouldnt be used for namespaces that don't support GET.
+        """
+        self.device.async_create_task(
+            self.async_get(channel), task_name or self.ns, False
+        )
+
+    async def async_set(
+        self, payload: "JsonDict", parser: NamespaceParser | None = None, state=None, /
+    ):
+        """
+        Helper to request method SET and eventually dispatch the response to the parser
+        bypassing the Device and the NamespaceHandler message routing.
+        the payload will be wrapped according to the namespace grammar.
         """
         ns = self.ns
-        payload_type = self.polling_request[2][ns.key]
-        if isinstance(payload_type, list):
-            return await self.device.async_request(
-                ns,
-                mc.METHOD_GET,
-                {ns.key: [{ns.key_channel: channel}]},
-            )
-        assert isinstance(payload_type, dict)
-        return await self.device.async_request(
-            ns,
-            mc.METHOD_GET,
-            {ns.key: {ns.key_channel: channel}},
-        )
+        response = None
+        try:
+            match ns.payload_set:
+                case mn.PayloadType.LIST_C:
+                    if parser:
+                        payload[ns.key_channel] = getattr(parser, ns.key_channel)
+                    set_payload = {ns.key: [payload]}
+                case mn.PayloadType.DICT_C:
+                    if parser:
+                        payload[ns.key_channel] = getattr(parser, ns.key_channel)
+                    set_payload = {ns.key: payload}
+                case mn.PayloadType.DICT:
+                    set_payload = {ns.key: payload}
+                case _:  # could be EMPTY or others..allow custom payloads
+                    set_payload = payload
+
+            response = (
+                await self.device.async_request2(
+                    ns,
+                    mc.METHOD_SET,
+                    set_payload,
+                )
+            ).check()
+            if parser:
+                # TODO: consider maybe a dedicated _parse_set_xxxx method?
+                # also, most namespaces SETACK replies are empty dicts
+                # so we just dispatch the request payload (which might be a
+                # subset of the whole GET payload).
+                # Some namespaces though might return different payloads on SETACK
+                # GarageDoor.State or mts100.Temperature
+                getattr(parser, f"_parse_{ns.slug_end}", parser._parse)(
+                    merge_dicts(state, payload) if state else payload
+                )
+            return response
+        except Exception as e:
+            self.handle_exception(e, "async_set", response)
+
+    async def async_set_c_ex(self, payload, parser: NamespaceParser, state, /):
+        """
+        Helper to request method SET (only for LIST_C payload types)and eventually dispatch the response to the parser
+        bypassing the Device and the NamespaceHandler message routing.
+        Thsi is an extended version of async_set which allows to pass a 'state' dict
+        which will be merged into the payload before sending.
+        TODO: this is a temporary workaround for some namespaces.
+        Examples are the Thermostat namespaces (see module devices.thermostat).
+        But we could reorganize all together through implementation of a NamespaceHandler
+        cache of the device state received through queries. This cache is now implemented
+        'per entity' everywhere needed but there are a lot of entities needing it.
+        (MLLight._light for instance or various thermostats)
+        An idea would be to put a 'generic JSONDict' attribute in NamespaceParser so that
+        it would be easy to update it (when invoking NamespaceHandler.handler) in get requests
+        and use it when issuing set requests.
+        """
+        _T: JsonDict
+        ns = self.ns
+        assert ns.payload_set is mn.PayloadType.LIST_C, "Only LIST_C supported here"
+        response = None
+        try:
+            payload[ns.key_channel] = getattr(parser, ns.key_channel)
+            response = (
+                await self.device.async_request2(ns, mc.METHOD_SET, {ns.key: [payload]})
+            ).check()
+            try:
+                payload = response.payload[ns.key][0]
+            except (KeyError, IndexError):
+                # optimistic update
+                if state:
+                    payload = merge_dicts(state, payload)
+            getattr(parser, f"_parse_{ns.slug_end}", parser._parse)(payload)
+            return response
+        except Exception as e:
+            self.handle_exception(e, "async_set_c_ex", response)
 
     # Polling Strategies:
     # These are configured at initialization time by setting the 'polling_strategy' attribute
@@ -886,17 +1015,16 @@ class EntityNamespaceMixin(MLEntity if TYPE_CHECKING else object):
     def namespace_init(cls, device: "Device", ns: mn.Namespace, /):
         assert ns is cls.ns
         entity = cls(device, None)
-        NamespaceHandler(device, ns, handler=entity._handle).polling_strategy = None
+        entity.handler_ns = NamespaceHandler(device, ns, handler=entity._handle)
+        entity.handler_ns.polling_strategy = None
         return entity
 
     async def async_added_to_hass(self):
-        self.manager.ns_handlers[self.ns].polling_strategy = POLLING_STRATEGY_CONF[
-            self.ns
-        ][4]
+        self.handler_ns.polling_strategy = POLLING_STRATEGY_CONF[self.ns][4]
         return await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
-        self.manager.ns_handlers[self.ns].polling_strategy = None
+        self.handler_ns.polling_strategy = None
         return await super().async_will_remove_from_hass()
 
     def _handle(self, header, payload):

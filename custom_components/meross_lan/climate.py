@@ -345,7 +345,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         schedule: Final[MtsSchedule]
         select_track_sensor: Final[TrackSensorSelect]
         sensor_current_temperature: Final[MLTemperatureSensor]
-        _mts_active: bool
+        _mts_active: bool | int
         _mts_mode: int
         _mts_onoff: int
         _mts_payload: dict

@@ -266,7 +266,7 @@ class MLGarage(MLCover):
         MLCover.__init__(self, manager, channel)
         ability = manager.descriptor.ability
         manager.register_parser_entity(self)
-        manager.register_togglex_channel(self)
+        manager.register_togglex_channel(self, False)
         self.binary_sensor_timeout = MLGarageTimeoutBinarySensor(self)
         if mn.Appliance_GarageDoor_MultipleConfig in ability:
             # historically, when MultipleConfig appeared, these used to be
@@ -314,7 +314,12 @@ class MLGarage(MLCover):
 
     # interface: self
     async def async_request_position(self, open_request: int, /):
-        if response := await self.async_request_value(open_request):
+        # TODO: another case like for rollershutter where we don't want the async_set to callback
+        # the _parse with the request payload since we're the ones requesting it.
+        # In this case though we do expect a proper SETACK payload with acknowledgment info
+        if response := await self.handler_ns.async_set(
+            {mc.KEY_CHANNEL: self.channel, self.key_value: open_request}
+        ):
             """
             example (historical) payload in SETACK:
             {"state": {"channel": 0, "open": 0, "lmTime": 0, "execute": 1}}
@@ -480,15 +485,6 @@ class MLGarage(MLCover):
                     str(self.manager.loggable_dict(payload)),
                 )
 
-    def _parse_togglex(self, payload: dict, /):
-        """
-        MSG100 exposes a 'togglex' interface so my code interprets that as a switch state
-        Here we'll intercept that behaviour and right now the guess is:
-        The toggle state represents the contact of the garagedoor which is likely a short
-        pulse so we'll use it to guess state transitions in our cover (disabled this until further knowledge)
-        """
-        pass
-
     def _transition_cancel(self, /):
         self.is_closing = False
         self.is_opening = False
@@ -499,10 +495,7 @@ class MLGarage(MLCover):
         self._transition_unsub = None
         manager = self.manager
         if manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active:
-            ns = MLGarage.ns
-            await manager.async_http_request(
-                ns, mc.METHOD_GET, {ns.key: {ns.key_channel: self.channel}}
-            )
+            self.handler_ns.schedule_get(self.channel)
 
     async def _async_transition_end_callback(self, /):
         """
@@ -526,10 +519,7 @@ class MLGarage(MLCover):
 
         if was_closing != self.is_closed:
             # looks like on MQTT we don't receive a PUSHed state update? (#415)
-            ns = MLGarage.ns
-            if await self.manager.async_request_ack(
-                ns, mc.METHOD_GET, {ns.key: {ns.key_channel: self.channel}}
-            ):
+            if await self.handler_ns.async_get(self.channel):
                 # the request/response parse already flushed the state
                 if was_closing == self.is_closed:
                     self.binary_sensor_timeout.update_ok(was_closing)

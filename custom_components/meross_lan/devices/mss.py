@@ -258,13 +258,12 @@ class ElectricityXSensor(ElectricitySensor):
                 # so we can trigger an update of the related ConsumptionH sensor right away
                 # exactly as in update_device_value below.
                 try:
-                    manager.async_create_task(
-                        manager.ns_handlers[
-                            mn.Appliance_Control_ConsumptionH
-                        ].async_request_get_channel(channel),
-                        "ConsumptionH triggered update",
+                    manager.ns_handlers[mn.Appliance_Control_ConsumptionH].schedule_get(
+                        channel, "ConsumptionH triggered update"
                     )
                 except KeyError:
+                    # we expect ConsumptionH ns handler to be registered when ElextricityX
+                    # is used since they go hand in hand. However, better be safe than sorry
                     pass
 
         @override
@@ -275,13 +274,12 @@ class ElectricityXSensor(ElectricitySensor):
                 # are effectively instantiated since their list cannot be inferred
                 # by any other means for these devices.
                 try:
-                    self.manager.async_create_task(
-                        self.manager.ns_handlers[
-                            mn.Appliance_Control_ConsumptionH
-                        ].async_request_get_channel(self.channel),
-                        "ConsumptionH triggered update",
-                    )
+                    self.manager.ns_handlers[
+                        mn.Appliance_Control_ConsumptionH
+                    ].schedule_get(self.channel, "ConsumptionH triggered update")
                 except KeyError:
+                    # we expect ConsumptionH ns handler to be registered when ElextricityX
+                    # is used since they go hand in hand. However, better be safe than sorry
                     pass
                 return True
 
