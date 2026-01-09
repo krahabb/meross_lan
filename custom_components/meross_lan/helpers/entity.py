@@ -516,6 +516,10 @@ class MEPartialAvailableMixin(MLEntity if TYPE_CHECKING else object):
         self.available = True
         self.flush_state()
 
+    def set_unavailable(self):
+        self.available = False
+        self.flush_state()
+
 
 class MLBinaryEntity(MLEntity):
     """Partially abstract common base class for ToggleEntity and BinarySensor.
