@@ -1,4 +1,6 @@
+from homeassistant.components import calendar as haec
 from homeassistant.components.calendar import CalendarEntity
+from homeassistant.util import dt as dt_util
 
 from custom_components.meross_lan.calendar import MtsSchedule
 from custom_components.meross_lan.devices.hub.mts100 import Mts100Climate
@@ -45,7 +47,34 @@ class EntityTest(EntityComponentTest):
             EntityComponentTest.expected_entity_types.remove(Mts300Climate.Schedule)
 
     async def async_test_enabled_callback(self, entity: MtsSchedule):
-        pass
+        # TODO: refine test for calendar platform(s)
+        # Right now this is useful to just add code coverage for the calendar entities
+        service_response = await self.async_service_response(
+            haec.SERVICE_GET_EVENTS,
+            {
+                haec.EVENT_START_DATETIME: dt_util.start_of_local_day(),
+                haec.EVENT_END_DATETIME: dt_util.now(),
+            },
+        )
+        assert service_response is not None, "no service response"
+
+        if service_response[self.entity_id]["events"]:
+            # since the emulator state is not yet sanitized we cannot
+            # ensure the state is available and or consistent.
+            # We'll then just create events for entities where a state is avaialble
+            try:
+                await self.async_service_call(
+                    haec.CREATE_EVENT_SERVICE,
+                    {
+                        haec.EVENT_SUMMARY: "21",
+                        haec.EVENT_START_DATETIME: dt_util.start_of_local_day(),
+                        haec.EVENT_END_DATETIME: dt_util.now(),
+                    },
+                )
+            except Exception as ex:
+                if str(ex) != 'Exception Too many elements in the schedule':
+                    # this is acceptable since the schedule may be full
+                    raise ex
 
     async def async_test_disabled_callback(self, entity: MtsSchedule):
         pass

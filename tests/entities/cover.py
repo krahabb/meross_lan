@@ -83,7 +83,7 @@ class EntityTest(EntityComponentTest):
             await self._async_test_set_position(entity, 30)
 
             # now we'll interrupt a transition
-            state = await self.async_service_call(
+            await self.async_service_call(
                 haec.SERVICE_SET_COVER_POSITION, {haec.ATTR_POSITION: 60}
             )
             # advance the time a bit
@@ -129,7 +129,6 @@ class EntityTest(EntityComponentTest):
     async def _async_test_set_position(
         self, entity: MLRollerShutter, target_position: int
     ):
-
         state = await self.async_service_call(
             haec.SERVICE_SET_COVER_POSITION, {haec.ATTR_POSITION: target_position}
         )

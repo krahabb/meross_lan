@@ -76,6 +76,15 @@ class EntityComponentTest:
         )
         return state
 
+    async def async_service_response(self, service: str, service_data: dict = {}):
+        return await self.hass_service_call(
+            self.DOMAIN,
+            service,
+            service_data=service_data | {"entity_id": self.entity_id},
+            blocking=True,
+            return_response=True,
+        )
+
     async def async_service_call_check(
         self, service: str, expected_state: str, service_data: dict = {}
     ):

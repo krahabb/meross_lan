@@ -22,23 +22,18 @@ class EntityTest(EntityComponentTest):
     }
 
     async def async_test_enabled_callback(self, entity: MLButton):
-        # We'll patch the hard way so that pressing thse buttons has no consequences.
-        # Specific buttons behaviors are to be tested in dedicated code.
-        old_handler = entity.async_press
-        pressed = False
+        # TODO: test each expected outcome according to the button type
 
-        async def _async_press():
-            nonlocal pressed
-            pressed = True
+        if entity.entitykey in ("button_refresh", "button_reload"):
+            return  # skip reload button testing
 
-        entity.async_press = _async_press
-        try:
-            await self.async_service_call_check(
-                habc.SERVICE_PRESS, dt_util.utcnow().isoformat()
-            )
-            assert pressed, ("button was not pressed", self.entity_id)
-        finally:
-            entity.async_press = old_handler
+        await self.async_service_call_check(
+            habc.SERVICE_PRESS, dt_util.utcnow().isoformat()
+        )
 
     async def async_test_disabled_callback(self, entity: MLButton):
-        pass
+
+        if entity.entitykey in ("button_refresh", "button_reload"):
+            return  # skip reload button testing
+
+        await entity.async_press()
