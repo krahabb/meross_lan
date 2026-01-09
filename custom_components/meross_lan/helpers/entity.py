@@ -52,7 +52,7 @@ def platform_setup_entry(
     manager = config_entry.runtime_data
     manager.log(manager.DEBUG, "platform_setup_entry { platform: %s }", platform)
     manager.platforms[platform] = async_add_devices
-    async_add_devices(list(manager.managed_entities(platform)))
+    async_add_devices(manager.managed_entities(platform))
 
 
 class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else object):

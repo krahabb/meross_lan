@@ -171,9 +171,9 @@ class EntityManager(Loggable):
 
     def managed_entities(self, platform, /):
         """entities list for platform setup"""
-        return (
+        return [
             entity for entity in self.entities.values() if entity.PLATFORM is platform
-        )
+        ]
 
     def generate_unique_id(self, entity: "MLEntity"):
         """
