@@ -84,18 +84,6 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         is_diagnostic: ClassVar[bool]
         """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
 
-        # These 'placeholder' definitions support generalization of
-        # Meross protocol message build/parsing when related to the
-        # current entity. These are usually relevant when this entity
-        # is strictly related to a namespace payload key value.
-        # See MLConfigNumber or MerossToggle as basic implementations
-        # supporting this semantic. They're generally set as class definitions
-        # in inherited entities but could nonetheless be set 'per instance'.
-        # These also come handy when generalizing parsing of received payloads
-        # for simple enough entities (like sensors, numbers or switches)
-        # Starting around 2025 some namespaces seems to enrich their payloads structure
-        # by nesting the actual 'key_value' inside 'key_group' (see Appliance.Config.DeviceCfg)
-        ns: mn.Namespace  # no default
         key_value: str  # defaulted to 'value'
         _parse_togglex: Callable[[JsonDict], Any]
         # This is related to NamespaceHandler registration. For entity classes where we know
@@ -385,62 +373,17 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         incoming device value to the underlyinh HA entity state."""
         raise NotImplementedError("Called 'update_device_value' on wrong entity type")
 
-    async def async_request_value(self, device_value, /) -> "MerossResponse | None":
-        """Sends the actual request to the device. This is a simple implementation for
-        entities (binary_sensors, switches, simple sensors or so backing a 'single'
-        data point in a Namespace payload. This is 'smart' enough to handle
-        the correct namespace grammar as defined in merossclient.protocol.namespaces.
-        TODO: move/use NamespaceHandler.async_set here?"""
-        match self.ns.payload_set:
-            case mn.PayloadType.LIST_C:
-                self.async_request_value = self._async_request_value_list_c  # type: ignore
-            case mn.PayloadType.DICT_C:
-                self.async_request_value = self._async_request_value_dict_c  # type: ignore
-            case mn.PayloadType.DICT:
-                self.async_request_value = self._async_request_value_dict  # type: ignore
-            case mn.PayloadType.EMPTY:
-                self.async_request_value = self._async_request_value_empty  # type: ignore
-            case _:
-                # TODO: setup an auto detection for PayloadType.UNKNOWN
-                raise ValueError(
-                    f"unsupported payload_set type: {self.ns.payload_set})"
-                )
-
-        return await self.async_request_value(device_value)
-
-    async def _async_request_value_list_c(
-        self, device_value, /
-    ) -> "MerossResponse | None":
-        ns = self.ns
-        return await self.manager.async_request_ack(  # type: ignore
-            ns,
-            mc.METHOD_SET,
-            {ns.key: [{self.key_value: device_value, ns.key_channel: self.channel}]},
-        )
-
-    async def _async_request_value_dict_c(
-        self, device_value, /
-    ) -> "MerossResponse | None":
-        ns = self.ns
-        return await self.manager.async_request_ack(  # type: ignore
-            ns,
-            mc.METHOD_SET,
-            {ns.key: {self.key_value: device_value, ns.key_channel: self.channel}},
-        )
-
-    async def _async_request_value_dict(
-        self, device_value, /
-    ) -> "MerossResponse | None":
-        return await self.manager.async_request_ack(  # type: ignore
-            self.ns, mc.METHOD_SET, {self.ns.key: {self.key_value: device_value}}
-        )
-
-    async def _async_request_value_empty(
-        self, device_value, /
-    ) -> "MerossResponse | None":
-        return await self.manager.async_request_ack(  # type: ignore
-            self.ns, mc.METHOD_SET, {}
-        )
+    async def async_request_value(self, device_value, /) -> None:
+        """Issues a command SET to update the device and also updates
+        the entity state if the command was acknowledged by the device.
+        Raises exception on connection/protocol errors."""
+        manager: "BaseDevice" = self.manager  # type: ignore
+        (
+            await manager.async_request2(
+                *self.ns.request_set({self.key_value: device_value}, self.channel)
+            )
+        ).check()
+        self.update_device_value(device_value)
 
     @override  # NamespaceParser
     def _parse(self, payload: "Mapping[str, Any]", /):
@@ -468,21 +411,16 @@ class MEGroupListChannelMixin(MLEntity if TYPE_CHECKING else object):
         key_group: str
 
     # interface: MLEntity
+    @override
     async def async_request_value(self, device_value, /):
-        """sends the actual request to the device. this is likely to be overloaded"""
-        ns = self.ns
-        return await self.manager.async_request_ack(
-            ns,
-            mc.METHOD_SET,
-            {
-                ns.key: [
-                    {
-                        ns.key_channel: self.channel,
-                        self.key_group: {self.key_value: device_value},
-                    }
-                ]
-            },
-        )
+        (
+            await self.manager.async_request2(
+                *self.ns.request_set(
+                    {self.key_group: {self.key_value: device_value}}, self.channel
+                )
+            )
+        ).check()
+        self.update_device_value(device_value)
 
     @override  # NamespaceParser
     def _parse(self, payload: "Mapping[str, Any]", /):
@@ -586,12 +524,10 @@ class MLBinaryEntity(MLEntity):
 
     # provide a generalized toggle behavior for binary entities
     async def async_turn_on(self, **kwargs):
-        if await self.async_request_value(self.native_on):
-            self.update_native_value(True)
+        await self.async_request_value(self.native_on)
 
     async def async_turn_off(self, **kwargs):
-        if await self.async_request_value(self.native_off):
-            self.update_native_value(False)
+        await self.async_request_value(self.native_off)
 
 
 class MLNumericEntity(MLEntity):

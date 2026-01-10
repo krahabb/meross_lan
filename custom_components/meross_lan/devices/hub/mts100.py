@@ -207,7 +207,7 @@ class Mts100Climate(MtsClimate):
 
     @override
     def get_ns_adjust(self, /):
-        return self.manager.hub.ns_handlers[mn_h.Appliance_Hub_Mts100_Adjust]
+        return self.manager.ns_handlers[mn_h.Appliance_Hub_Mts100_Adjust]
 
     # message handlers
     def _parse_all(self, payload: dict, /):
@@ -242,11 +242,10 @@ class Mts100Climate(MtsClimate):
                 len(payload) == 2
             ):  # { "id: "...", "room": ...} or { "id: "...", "currentSet": ...}
                 # only room temperature/setpoint updated -> this is 99.9% a PUSH
-                # whenever the temp or mode or adjustment changes
+                # whenever the target temp or mode changes
                 self.flush_state()
-                ns = mn_h.Appliance_Hub_Mts100_Mode
-                self.manager.hub.request(
-                    (ns, mc.METHOD_GET, {ns.key: [{ns.key_channel: self.id}]})
+                self.manager.ns_handlers[mn_h.Appliance_Hub_Mts100_Mode].schedule_get(
+                    self.id
                 )
                 return
         if mc.KEY_MIN in payload:
@@ -282,6 +281,6 @@ class Mts100Climate(MtsClimate):
         self.flush_state()
 
     async def _async_request_set(self, ns: "Namespace", key: str, value, /):
-        return await self.manager.async_request_ack(
-            *ns.request_set_channel_list({key: value}, self.id)
+        return await self.manager.async_request_ack2(
+            *ns.request_set({key: value}, self.id)
         )

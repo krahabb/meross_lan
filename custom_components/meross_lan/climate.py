@@ -8,7 +8,6 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util.unit_conversion import TemperatureConverter
 
 from .helpers import entity as me, reverse_lookup
-from .merossclient.protocol import const as mc
 from .number import MLConfigNumber
 from .select import MLSelect
 from .sensor import MLTemperatureSensor
@@ -585,18 +584,11 @@ class MtsSetPointNumber(MLConfigNumber):
         return self.climate.target_temperature_step
 
     async def async_request_value(self, device_value, /):
-        if response := await MLConfigNumber._async_request_value_list_c(
-            self, device_value
-        ):
-            # mts100(s) reply to the setack with the 'full' (or anyway richer) payload
-            # so we'll use the _parse_temperature logic (a bit overkill sometimes) to
-            # make sure the climate state is consistent and all the correct roundings
-            # are processed when changing any of the presets
-            # not sure about mts200 replies..but we're optimist
-            ns_slug_end = self.ns.slug_end
-            payload = response.payload
-            if ns_slug_end in payload:
-                # by design ns_slug is either "temperature" (mts100) or "mode" (mts200)
-                getattr(self.climate, f"_parse_{ns_slug_end}")(payload[ns_slug_end][0])
-
-        return response
+        # This implementation is only valid for mts100/mts200 where
+        # the this entity state is actually parsed in the related MtsClimate.
+        # We'll then forward the callback to the climate entity in order to
+        # ensure the climate state is consistent after a setpoint change.
+        # Consider both ns reply with the full state in the SETACK response.
+        return await self.handler_ns.async_set_c_ex(
+            {self.key_value: device_value}, self.climate, self.climate._mts_payload
+        )

@@ -434,9 +434,6 @@ class Mts300Climate(MtsThermostatClimate):
             self.select_temp_association._parse(payload)
 
     async def _async_request_value_number_fan_hold(self, device_value, /):
-        # this method (ovverriding MLConfig.Number.async_request_value) should
-        # return Success/Failure but we just return None (feailure) since the
-        # number entity state has already been updated/flushed in our _parse_modeC in case
         await self.handler_ns.async_set_c_ex(
             {mc.KEY_FAN: {"hTime": device_value}}, self, self._mts_payload
         )

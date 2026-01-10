@@ -74,6 +74,6 @@ class MLUpdate(me.MEPartialAvailableMixin, me.MLEntity, update.UpdateEntity):
         upgrade_payload = basedevice.get_upgrade_payload()
         if not upgrade_payload:
             raise HomeAssistantError("No upgrade available")
-        await basedevice.async_request(
-            *mn.Appliance_Control_Upgrade.request_set_default(upgrade_payload, None),
+        await basedevice.async_request_ack2(
+            *mn.Appliance_Control_Upgrade.request_set(upgrade_payload),
         )

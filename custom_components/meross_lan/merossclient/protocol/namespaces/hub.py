@@ -117,7 +117,7 @@ Appliance_Hub_Sensor_Latest = mn.ns(
 )
 Appliance_Hub_Sensor_Motion = mn.ns("Appliance.Hub.Sensor.Motion", "motion", GETPSH_ID)
 Appliance_Hub_Sensor_Smoke = mn.ns(
-    "Appliance.Hub.Sensor.Smoke", mc.KEY_SMOKEALARM, GETPSH_ID
+    "Appliance.Hub.Sensor.Smoke", mc.KEY_SMOKEALARM, GETSET_ID
 )
 Appliance_Hub_Sensor_TempHum = mn.ns(
     "Appliance.Hub.Sensor.TempHum", mc.KEY_TEMPHUM, GETPSH_ID

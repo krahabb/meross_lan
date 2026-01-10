@@ -38,6 +38,7 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
         # These properties must be implemented in derived classes according to the
         # namespace payload syntax. NamespaceHandler will lookup any of these when
         # establishing the link between the handler and the parser
+        ns: mn.Namespace
         channel: int
         # id: str
         subId: str
@@ -68,7 +69,6 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
         # the NamespaceHandler to issue device requests. Most of the times these are entities
         # where ns parsing is delegated to a container object/handler which is then dispatching
         # updates without using the NamespaceHandler inner mechanisms.
-        assert not self._namespace_handlers
         return self.manager.ns_handlers[self.ns]  # type: ignore
 
     def _parse(self, payload: dict, /):
@@ -444,7 +444,7 @@ class NamespaceHandler:
                     for __payload in _payload:
                         # not having a "channel" in the list payloads is unexpected so far
                         self._parse_undefined_dict(
-                            _key, __payload, __payload[ns.key_channel]
+                            _key, __payload, __payload.get(ns.key_channel)
                         )
 
     def parse_list(self, digest: list, /):
@@ -625,16 +625,20 @@ class NamespaceHandler:
             match ns.payload_set:
                 case mn.PayloadType.LIST_C:
                     if parser:
-                        payload[ns.key_channel] = getattr(parser, ns.key_channel)
+                        payload[ns.key_channel] = parser.channel
                     set_payload = {ns.key: [payload]}
                 case mn.PayloadType.DICT_C:
                     if parser:
-                        payload[ns.key_channel] = getattr(parser, ns.key_channel)
+                        payload[ns.key_channel] = parser.channel
                     set_payload = {ns.key: payload}
                 case mn.PayloadType.DICT:
                     set_payload = {ns.key: payload}
-                case _:  # could be EMPTY or others..allow custom payloads
+                case mn.PayloadType.EMPTY:
+                    if payload:
+                        raise Exception("Namespace expects empty payload on SET")
                     set_payload = payload
+                case _:
+                    raise Exception("Namespace does not support SET method")
 
             response = (
                 await self.device.async_request2(
@@ -673,7 +677,6 @@ class NamespaceHandler:
         it would be easy to update it (when invoking NamespaceHandler.handler) in get requests
         and use it when issuing set requests.
         """
-        _T: JsonDict
         ns = self.ns
         assert ns.payload_set is mn.PayloadType.LIST_C, "Only LIST_C supported here"
         response = None

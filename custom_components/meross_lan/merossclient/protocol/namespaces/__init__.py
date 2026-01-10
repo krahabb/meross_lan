@@ -430,26 +430,31 @@ class Namespace(str):
         return self, mc.METHOD_PUSH, PayloadType.EMPTY.value
 
     @cached_property
-    def request_set(self) -> "Callable[[Any, Any], MerossRequestType]":
+    def request_set(self) -> "Callable[..., MerossRequestType]":
         # TODO: articulate request building to cover defaults and unsupported types
         """
         Returns a callable generating a proper SET request for this namespace.
         The callable accepts the payload dict as argument.
         """
-        raise NotImplementedError
-        if self.key_channel:
-            return self.request_set_default
-        else:
-            return self.request_set_default
+        match self.payload_set:
+            case PayloadType.LIST_C:
+                return self.request_set_list_c
+            case PayloadType.DICT_C:
+                return self.request_set_dict_c
+            case PayloadType.DICT:
+                return self.request_set_dict
+            case PayloadType.EMPTY:
+                return self.request_set_empty
+            case _:
+                raise Exception("Namespace does not support SET method")
 
-    def request_set_default(
-        self, payload, channel
-    ) -> "MerossRequestType":
+    def request_set_empty(self, *args) -> "MerossRequestType":
+        return self, mc.METHOD_SET, PayloadType.EMPTY.value
+
+    def request_set_dict(self, payload, *args) -> "MerossRequestType":
         return self, mc.METHOD_SET, {self.key: payload}
 
-    def request_set_channel(
-        self, payload, channel, /
-    ) -> "MerossRequestType":
+    def request_set_dict_c(self, payload, channel, /) -> "MerossRequestType":
         payload[self.key_channel] = channel
         return (
             self,
@@ -457,9 +462,7 @@ class Namespace(str):
             {self.key: payload},
         )
 
-    def request_set_channel_list(
-        self, payload, channel, /
-    ) -> "MerossRequestType":
+    def request_set_list_c(self, payload, channel, /) -> "MerossRequestType":
         payload[self.key_channel] = channel
         return (
             self,
@@ -545,6 +548,9 @@ Appliance_Control_Beep = ns("Appliance.Control.Beep", mc.KEY_ALARM, G_LCS, S_LC,
 Appliance_Control_Bind = ns("Appliance.Control.Bind", mc.KEY_BIND)
 Appliance_Control_ChangeWifi = ns(
     "Appliance.Control.ChangeWiFi", mc.KEY_
+)  # unknown payload
+Appliance_Control_CloudEvent = ns(
+    "Appliance.Control.CloudEvent", mc.KEY_
 )  # unknown payload
 Appliance_Control_ConsumptionConfig = ns(
     "Appliance.Control.ConsumptionConfig", mc.KEY_CONFIG, G_E, PSH
@@ -702,6 +708,7 @@ Appliance_System_DNDMode = ns("Appliance.System.DNDMode", mc.KEY_DNDMODE, G_E, S
 Appliance_System_Factory = ns("Appliance.System.Factory", "factory", G_D, S_D)
 Appliance_System_Firmware = ns("Appliance.System.Firmware", mc.KEY_FIRMWARE, G_E)
 Appliance_System_Hardware = ns("Appliance.System.Hardware", mc.KEY_HARDWARE, G_E)
+Appliance_System_Log = ns("Appliance.System.Log", mc.KEY_)  # unknown payload
 Appliance_System_Online = ns("Appliance.System.Online", mc.KEY_ONLINE, G_E, PSH)
 Appliance_System_Report = ns("Appliance.System.Report", mc.KEY_REPORT, PSH)
 Appliance_System_Runtime = ns("Appliance.System.Runtime", mc.KEY_RUNTIME, G_E)

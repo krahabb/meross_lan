@@ -28,8 +28,9 @@ from ..const import (
     PARAM_TIMESTAMP_TOLERANCE,
 )
 from ..helpers.obfuscate import obfuscated_dict
-from ..merossclient import HostAddress, get_active_broker, is_device_online
+from ..merossclient import get_active_broker, is_device_online
 from ..merossclient.httpclient import MerossHttpClient, TerminatedException
+from ..merossclient.protocol import MerossError
 from ..merossclient.protocol.message import (
     MerossRequest,
     MerossResponse,
@@ -175,29 +176,10 @@ class BaseDevice(EntityManager):
         else:
             self.update_firmware = MLUpdate(self)
 
-    # DEPRECATED
-    async def async_request(
-        self,
-        namespace: str,
-        method: str,
-        payload: "MerossPayloadType",
-    ) -> MerossResponse | None:
-        raise NotImplementedError("async_request")
-
-    # DEPRECATED
-    async def async_request_ack(
-        self,
-        namespace: str,
-        method: str,
-        payload: "MerossPayloadType",
-    ) -> MerossResponse | None:
-        response = await self.async_request(namespace, method, payload)
-        return response if response and response.method != mc.METHOD_ERROR else None
-
     async def async_request2(
         self, *args: "Unpack[MerossRequestType]"
     ) -> MerossResponse:
-        raise NotImplementedError("async_request")
+        raise NotImplementedError("async_request2")
 
     async def async_request_ack2(
         self, *args: "Unpack[MerossRequestType]"
@@ -886,7 +868,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 ) in self.TRACE_ABILITY_EXCLUDE:
                     continue
                 self.log(self.DEBUG, "Tracing %s ability", ability)
-                await self.get_handler_by_name(ability).async_trace(self.async_request)
+                await self.get_handler_by_name(ability).async_trace(self.async_request2)
         except StopIteration:
             self.log(self.DEBUG, "Tracing abilities end")
             return
@@ -1142,7 +1124,6 @@ class Device(BaseDevice, ConfigEntryManager):
 
         return None
 
-    @override
     async def async_request(
         self,
         namespace: str,
@@ -1218,7 +1199,8 @@ class Device(BaseDevice, ConfigEntryManager):
         ):
             return await self.async_mqtt_request2(*args)
 
-        return None
+        # TODO: normalize exceptions
+        raise MerossError("No transport available to send the request")
 
     @override
     def _set_offline(self):
@@ -1405,16 +1387,14 @@ class Device(BaseDevice, ConfigEntryManager):
             data = dict(self.config_entry.data)
             data[mlc.CONF_TIMESTAMP] = time()  # force ConfigEntry update..
             data[CONF_PAYLOAD][mc.KEY_ALL] = self.descriptor.all
-            if query_abilities and (
-                response := await self.async_request(
-                    *mn.Appliance_System_Ability.request_default
-                )
-            ):
+            if query_abilities:
                 # fw update or whatever might have modified the device abilities.
                 # we refresh the abilities list before saving the new config_entry
-                data[CONF_PAYLOAD][mc.KEY_ABILITY] = response[mc.KEY_PAYLOAD][
-                    mc.KEY_ABILITY
-                ]
+                data[CONF_PAYLOAD][mc.KEY_ABILITY] = (
+                    await self.async_request_ack2(
+                        *mn.Appliance_System_Ability.request_default
+                    )
+                ).payload[mc.KEY_ABILITY]
             self.hass.config_entries.async_update_entry(self.config_entry, data=data)
 
         # we also take the time to sync our tz to the device timezone
@@ -1429,27 +1409,6 @@ class Device(BaseDevice, ConfigEntryManager):
         else:
             self.tz = UTC
 
-    async def async_bind(
-        self, broker: HostAddress, *, key: str | None = None, userid: str | None = None
-    ):
-        return await self.async_request(
-            mn.Appliance_Config_Key,
-            mc.METHOD_SET,
-            {
-                mn.Appliance_Config_Key.key: {
-                    mc.KEY_GATEWAY: {
-                        mc.KEY_HOST: broker.host,
-                        mc.KEY_PORT: broker.port,
-                        mc.KEY_SECONDHOST: broker.host,
-                        mc.KEY_SECONDPORT: broker.port,
-                        mc.KEY_REDIRECT: 1,
-                    },
-                    mc.KEY_KEY: self.key if key is None else key,
-                    mc.KEY_USERID: self.descriptor.userId if userid is None else userid,
-                }
-            },
-        )
-
     async def async_unbind(self):
         """
         WARNING!!!
@@ -1460,11 +1419,11 @@ class Device(BaseDevice, ConfigEntryManager):
         # it appears the broker session level will take care of also removing
         # the device from its list, thus totally cancelling it from the Meross account
         if self._mqtt_publish and self._mqtt_publish.is_cloud_connection:
-            return await self.async_mqtt_request(
+            return await self.async_mqtt_request2(
                 *mn.Appliance_Control_Unbind.request_default
             )
         # else go with whatever transport: the device will reset it's configuration
-        return await self.async_request(*mn.Appliance_Control_Unbind.request_default)
+        return await self.async_request2(*mn.Appliance_Control_Unbind.request_default)
 
     def enable_multiple(self, enable: bool, /):
         self.multiple_max = (
@@ -1489,7 +1448,7 @@ class Device(BaseDevice, ConfigEntryManager):
         Contrary to async_multiple_requests_flush this doesn't recover from
         partial message responses so it doesn't resend missed requests/responses
         """
-        if multiple_response := await self.async_request_ack(
+        if multiple_response := await self.async_request_ack2(
             mn.Appliance_Control_Multiple,
             mc.METHOD_SET,
             {
@@ -1553,7 +1512,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 return
 
             if not (
-                response := await self.async_request_ack(
+                response := await self.async_request_ack2(
                     mn.Appliance_Control_Multiple,
                     mc.METHOD_SET,
                     {
@@ -1921,6 +1880,9 @@ class Device(BaseDevice, ConfigEntryManager):
                     self.DEBUG,
                     "Attempting to use async_mqtt_request with no mqtt connection",
                 )
+
+        # TODO: normalize exceptions
+        raise MerossError("No transport available to send the request")
 
     async def async_mqtt_request2(
         self, namespace: str, method: str, payload: "MerossPayloadType", /
@@ -2292,12 +2254,12 @@ class Device(BaseDevice, ConfigEntryManager):
                     abilities = iter(self.descriptor.ability)
                     while self.online:
                         ability = next(abilities)
-                        if (ability in self.TRACE_ABILITY_EXCLUDE) or (
-                            (handler := self.ns_handlers.get(ability))
-                            and handler.polling_strategy
-                        ):
+                        if ability in self.TRACE_ABILITY_EXCLUDE:
                             continue
-                        await self.async_request(*self.NAMESPACES[ability].request_get)
+                        ns_handler = self.get_handler_by_name(ability)
+                        if ns_handler.polling_strategy:
+                            continue
+                        await ns_handler.async_get()
                 except StopIteration:
                     self.log(self.DEBUG, "Diagnostic scan end")
                 except Exception as e:
@@ -2712,9 +2674,6 @@ class Device(BaseDevice, ConfigEntryManager):
 
     _handle_Appliance_Mcu_Hp110_Firmware = _handle_Appliance_Mcu_Firmware
 
-    def _handle_Appliance_System_Ability(self, header, payload, /):
-        pass
-
     def _handle_Appliance_System_All(self, header, payload: dict, /):
         # see issue #341. In case we receive a formally correct response from a
         # mismatched device we should stop everything and obviously don't update our
@@ -3007,10 +2966,10 @@ class Device(BaseDevice, ConfigEntryManager):
                 mc.KEY_TIMERULE: [],
             }
 
-        if await self.async_request_ack(
+        if await self.async_request_ack2(
             mn.Appliance_System_Time,
             mc.METHOD_SET,
-            payload={mn.Appliance_System_Time.key: p_time},
+            {mn.Appliance_System_Time.key: p_time},
         ):
             self.descriptor.update_time(p_time)
             self.schedule_entry_update(False)

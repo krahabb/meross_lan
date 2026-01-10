@@ -105,6 +105,4 @@ class MLConfigSelect(MLSelect):
 
     # interface: select.SelectEntity
     async def async_select_option(self, option: str):
-        device_value = reverse_lookup(self.options_map, option)
-        if await self.async_request_value(device_value):
-            self.update_device_value(device_value)
+        await self.async_request_value(reverse_lookup(self.options_map, option))

@@ -119,9 +119,9 @@ class MLConfigNumber(MLNumber):
     # interface: self
     async def _async_request_debounce(self, device_value):
         self._async_request_debounce_unsub = None
-        if await self.async_request_value(device_value):
-            self.update_device_value(device_value)
-        else:
+        try:
+            await self.async_request_value(device_value)
+        except Exception:
             # restore the last good known device value
             device_value = self.device_value
             if device_value is not None:

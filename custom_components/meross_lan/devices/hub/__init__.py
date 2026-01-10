@@ -1,4 +1,4 @@
-import itertools
+from functools import cached_property
 from typing import TYPE_CHECKING, override
 
 from ... import const as mlc
@@ -54,8 +54,8 @@ if TYPE_CHECKING:
     from ...merossclient.protocol.types import (
         JsonDict,
         JsonList,
-        hub as mt_h,
         control as mt_c,
+        hub as mt_h,
         sensor as mt_s,
     )
 
@@ -111,9 +111,14 @@ class HubSensorAdjustNumber(MLConfigNumber):
         # Since the native HA interface async_set_native_value wants to set
         # the 'new adjust value' we have to issue the difference against the
         # currently configured one
-        return await MLConfigNumber._async_request_value_list_c(
-            self, device_value - self.device_value
-        )
+        (
+            await self.manager.async_request2(
+                *self.ns.request_set(
+                    {self.key_value: device_value - self.device_value}, self.channel
+                )
+            )
+        ).check()
+        self.update_device_value(device_value)
 
 
 class HubToggleX(MLDeviceSwitch):
@@ -133,7 +138,7 @@ class HubBeep(MLDeviceSwitch):
 class HubSubIdChannelMixin(MLEntity if TYPE_CHECKING else object):
     """
     Mixin implementation for protocol method 'SET' on hub entities/namespaces backed by a
-    subId/channel indexing key pair (see legacy implementations like 'me.MEListChannelMixin').
+    subId/channel indexing key pair.
     TODO: migrate subdevice entities channel indexing (needs registry migration).
     Right now we're fixing channel to 0 since hub subdevices seems to not discriminate channels.
     Implementing full support for varying channels per subdevice would need some rework on subdevice
@@ -143,23 +148,16 @@ class HubSubIdChannelMixin(MLEntity if TYPE_CHECKING else object):
     if TYPE_CHECKING:
         manager: "SubDevice"
 
-    # interface: MLEntity
     @override
     async def async_request_value(self, device_value, /):
-        ns = self.ns
-        return await self.manager.async_request_ack(
-            ns,
-            mc.METHOD_SET,
-            {
-                ns.key: [
-                    {
-                        ns.key_channel: self.manager.subId,
-                        mc.KEY_CHANNEL: 0,
-                        self.key_value: device_value,
-                    }
-                ]
-            },
-        )
+        (
+            await self.manager.async_request2(
+                *self.ns.request_set(
+                    {mc.KEY_CHANNEL: 0, self.key_value: device_value}, self.channel
+                )
+            )
+        ).check()
+        self.update_device_value(device_value)
 
 
 class HubSubIdDeviceCfgMixin(me.MEGroupListChannelMixin):
@@ -172,25 +170,17 @@ class HubSubIdDeviceCfgMixin(me.MEGroupListChannelMixin):
 
     ns = mn_h.Appliance_Config_DeviceCfg
 
-    # interface: MLEntity
     @override
     async def async_request_value(self, device_value, /):
-        ns = self.ns
-        return await self.manager.async_request_ack(
-            ns,
-            mc.METHOD_SET,
-            {
-                ns.key: [
-                    {
-                        ns.key_channel: self.manager.subId,
-                        mc.KEY_CHANNEL: 0,
-                        self.key_group: {
-                            self.key_value: device_value,
-                        },
-                    }
-                ]
-            },
-        )
+        (
+            await self.manager.async_request2(
+                *self.ns.request_set(
+                    {mc.KEY_CHANNEL: 0, self.key_group: {self.key_value: device_value}},
+                    self.channel,
+                )
+            )
+        ).check()
+        self.update_device_value(device_value)
 
 
 class HubNamespaceHandler(NamespaceHandler):
@@ -356,13 +346,10 @@ class HubMixin(Device if TYPE_CHECKING else object):
 
     @override
     def managed_entities(self, platform, /):
-        return itertools.chain(
-            super().managed_entities(platform),
-            *(
-                subdevice.managed_entities(platform)
-                for subdevice in self.subdevices.values()
-            ),
-        )
+        entities = super().managed_entities(platform)
+        for subdevice in self.subdevices.values():
+            entities.extend(subdevice.managed_entities(platform))
+        return entities
 
     @override
     def _set_offline(self):
@@ -595,8 +582,9 @@ class SubDevice(NamespaceParser, BaseDevice):
     DEVICE_TYPE = mlc.DeviceType.SUBDEVICE
 
     __slots__ = (
-        "async_request",
+        "async_request2",
         "check_device_timezone",
+        "ns_handlers",
         "hub",
         "subId",
         "model",
@@ -608,8 +596,9 @@ class SubDevice(NamespaceParser, BaseDevice):
         # this is a very dirty trick/optimization to override some BaseDevice
         # properties/methods that just needs to be forwarded to the hub
         # this way we're short-circuiting that indirection
-        self.async_request = hub.async_request
+        self.async_request2 = hub.async_request2
         self.check_device_timezone = hub.check_device_timezone
+        self.ns_handlers = hub.ns_handlers
         # these properties are needed to be in place before base class init
         self.hub = hub
         self.subId = id = p_digest[mc.KEY_ID]
@@ -642,6 +631,12 @@ class SubDevice(NamespaceParser, BaseDevice):
         hub.setup_subid_handlers(self, mn_h.Appliance_Config_DeviceCfg)
         hub.remove_issue(mlc.ISSUE_HUB_SUBDEVICE_REMOVED, id)
 
+    # interface: NamespaceParser
+    @cached_property
+    def handler_ns(self) -> "NamespaceHandler":
+        # TODO: define a more consistent interface
+        return self.hub.get_handler(self.ns)
+
     # interface: EntityManager
     @override
     def generate_unique_id(self, entity: "MLEntity", /):
@@ -660,7 +655,8 @@ class SubDevice(NamespaceParser, BaseDevice):
         await NamespaceParser.async_shutdown(self)
         await BaseDevice.async_shutdown(self)
         del self.check_device_timezone
-        del self.async_request
+        del self.async_request2
+        del self.ns_handlers
         del self.hub  # type: ignore
         del self.sensor_battery  # type: ignore
         # brutal trick to remove references to sensors _parse methods
@@ -706,7 +702,7 @@ class SubDevice(NamespaceParser, BaseDevice):
     def _set_online(self):
         BaseDevice._set_online(self)
         # force a re-poll even on MQTT
-        self.hub.ns_handlers[self.NS_ALL].polling_epoch_next = 0.0
+        self.ns_handlers[self.NS_ALL].polling_epoch_next = 0.0
 
     # interface: self
     def update_sub_device_info(self, sub_device_info: "SubDeviceInfoType", /):
@@ -920,14 +916,17 @@ class MTSSubDevice(SubDevice):
         SubDevice.__init__(self, hub, p_digest, model)
         hub.setup_chunked_handler(mn_h.Appliance_Hub_Mts100_All, True, 8)
         hub.setup_chunked_handler(mn_h.Appliance_Hub_Mts100_ScheduleB, True, 4)
-        hub.setup_simple_handlers(mn_h.Appliance_Hub_Mts100_Adjust)
-
+        hub.setup_simple_handlers(
+            mn_h.Appliance_Hub_Mts100_Adjust,
+            mn_h.Appliance_Hub_Mts100_Mode,
+            mn_h.Appliance_Hub_Mts100_Temperature,
+        )
         climate = Mts100Climate(self)
         self._parse_all = climate._parse_all
         self._parse_adjust = climate.number_adjust_temperature._parse
+        self._parse_mode = climate._parse_mode
         self._parse_schedule = climate.schedule._parse
         self._parse_temperature = climate._parse_temperature
-        self._parse_mode = climate._parse_mode
         self._parse_togglex = climate._parse_togglex
 
 
@@ -952,6 +951,8 @@ class GS559SubDevice(SensorSubDevice):
         sensor_status: MLEnumSensor
         sensor_interConn: MLEnumSensor
         _smokealarm_status: int | None
+
+    ns = mn_h.Appliance_Hub_Sensor_Smoke
 
     STATUS_MAP = {
         17: "error_temperature",
@@ -1038,27 +1039,20 @@ class GS559SubDevice(SensorSubDevice):
 
     async def _async_button_mute_press(self, /):
         try:
-            await self.async_request_ack(
-                *mn_h.Appliance_Hub_Sensor_Smoke.request_set_channel_list(
-                    {
-                        mc.KEY_STATUS: GS559SubDevice.MUTE_MAP.get(
-                            self._smokealarm_status, 170
-                        ),
-                    },
-                    self.id,
-                )
+            await self.handler_ns.async_set(
+                {
+                    mc.KEY_ID: self.id,
+                    mc.KEY_STATUS: GS559SubDevice.MUTE_MAP.get(
+                        self._smokealarm_status, 170
+                    ),
+                }
             )
         except KeyError as e:
             # in case the state is not present in the MUTE_MAP (i.e. not mutable)
             self.log_exception(self.DEBUG, e, "trying to send mute command")
 
     async def _async_button_test_press(self, /):
-        await self.async_request_ack(
-            *mn_h.Appliance_Hub_Sensor_Smoke.request_set_channel_list(
-                {mc.KEY_STATUS: 23},
-                self.id,
-            )
-        )
+        await self.handler_ns.async_set({mc.KEY_ID: self.id, mc.KEY_STATUS: 23})
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_GS559] = GS559SubDevice
@@ -1136,7 +1130,7 @@ class MS100SubDevice(SensorSubDevice):
         # the adjust sooner than scheduled in case the change
         # was due to an adjustment
         if sensor.update_device_value(device_value):
-            handler = self.hub.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust]
+            handler = self.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust]
             if handler.lastrequest < (self.hub.lastresponse - 30):
                 handler.polling_epoch_next = 0.0
 

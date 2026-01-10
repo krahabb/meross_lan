@@ -240,7 +240,7 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
     # interface: self
     async def _async_request_schedule(self):
         if schedule := self._schedule:
-            payload = {}
+            payload = {self.ns.key_channel: self.channel}
             # unpack our schedule struct to be compliant with the device payload:
             # the weekday_schedule must contain between _schedule_entry_count_min and
             # _schedule_entry_count_max
@@ -259,20 +259,12 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
                     )
                 payload[weekday] = weekday_schedule
 
-            ns = self.ns
-            payload[ns.key_channel] = self.channel
-            if not await self.manager.async_request_ack(
-                ns,
-                mc.METHOD_SET,
-                {ns.key: [payload]},
-            ):
+            # TODO: this is preliminary and should work.. but needs testing with
+            # hub subdevices and likely some refinement
+            if not await self.handler_ns.async_set(payload):
                 # there was an error so we request the actual device state again
                 if self.manager.online:
-                    await self.manager.async_request(
-                        ns,
-                        mc.METHOD_GET,
-                        {ns.key: [{ns.key_channel: self.channel}]},
-                    )
+                    await self.handler_ns.async_get(self.channel)
 
     def _get_event_entry(self, event_time: datetime) -> MtsScheduleEntry | None:
         """Search for and return an entry description (MtsScheduleEntry) matching the internal

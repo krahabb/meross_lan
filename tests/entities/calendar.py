@@ -68,11 +68,12 @@ class EntityTest(EntityComponentTest):
                     {
                         haec.EVENT_SUMMARY: "21",
                         haec.EVENT_START_DATETIME: dt_util.start_of_local_day(),
-                        haec.EVENT_END_DATETIME: dt_util.now(),
+                        haec.EVENT_END_DATETIME: dt_util.start_of_local_day()
+                        + dt_util.dt.timedelta(hours=1),
                     },
                 )
             except Exception as ex:
-                if str(ex) != 'Exception Too many elements in the schedule':
+                if str(ex) != "Exception Too many elements in the schedule":
                     # this is acceptable since the schedule may be full
                     raise ex
 

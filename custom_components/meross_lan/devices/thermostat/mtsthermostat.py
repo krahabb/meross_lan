@@ -251,12 +251,6 @@ class MtsHoldAction(MLConfigSelect):
         await MLConfigSelect.async_shutdown(self)
         del self.number_time
 
-    @override
-    async def async_request_value(self, device_value, /):
-        return await self._async_request_holdAction(
-            device_value, self.number_time.device_value or 0
-        )
-
     # interface: self
     def _parse_holdAction(self, payload: "mt_t.HoldAction_C", /):
         self.update_device_value(payload[mc.KEY_MODE])
@@ -265,28 +259,14 @@ class MtsHoldAction(MLConfigSelect):
         except KeyError:
             pass
 
-    async def _async_request_holdAction(self, mode, time, /):
-        ns = self.ns
-        return await self.manager.async_request_ack(
-            ns,
-            mc.METHOD_SET,
-            {
-                ns.key: [
-                    {
-                        ns.key_channel: self.channel,
-                        mc.KEY_MODE: mode,
-                        mc.KEY_TIME: time,
-                    }
-                ]
-            },
-        )
-
     async def _async_request_value_number_time(self, device_value, /):
-        if response := await self._async_request_holdAction(
-            mc.MTS_HOLDACTION_TIMER, device_value
-        ):
-            self.update_device_value(mc.MTS_HOLDACTION_TIMER)
-        return response
+        await self.handler_ns.async_set(
+            {
+                self.key_value: mc.MTS_HOLDACTION_TIMER,
+                mc.KEY_TIME: device_value,
+            },
+            self,
+        )
 
 
 class MtsTempUnit(MLConfigSelect):
@@ -333,8 +313,7 @@ class MLScreenBrightnessNumber(MLConfigNumber):
     async def async_set_native_value(self, value: float, /):
         """Override base async_set_native_value since it would round
         the value to an int (common device native type)."""
-        if await self.async_request_value(value):
-            self.update_device_value(value)
+        await self.async_request_value(value)
 
 
 OPTIONAL_NAMESPACES_INITIALIZERS: set["mn.Namespace"] = {

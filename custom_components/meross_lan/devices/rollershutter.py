@@ -365,7 +365,15 @@ class MLRollerShutterAdjustSwitch(MLDeviceSwitch):
 
     def _parse_adjust(self, payload: "mt_rs.AdjustResponse_C"):
         # payload = {"channel": 0, "status": 0}
-        self.update_native_value(payload[mc.KEY_STATUS] != 0)
+        try:
+            # As noted in the docstring, meaning of status is unknown
+            # also, this method is called both when parsing a push update
+            # and when parsing a response to our SET command.
+            # The 2 payloads are thus different so we're just handling
+            # these scenarios with a try/except conditional
+            self.update_device_value(payload[self.key_value])
+        except KeyError:
+            self.update_native_value(payload[mc.KEY_STATUS] != 0)
 
 
 class MLRollerShutterConfigNumber(MLConfigNumber):
