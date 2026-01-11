@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, override
 
 from ...binary_sensor import MLBinarySensor
 from ...calendar import MtsSchedule
-from ...climate import MtsClimate, MtsSetPointNumber
+from ...climate import MtsClimate, MtsSetPointNumber, cached_property
 from ...merossclient.protocol import const as mc
 from ...merossclient.protocol.namespaces import hub as mn_h
 from ...number import MLConfigNumber
@@ -159,55 +159,55 @@ class Mts100Climate(MtsClimate):
             # This is intended (right now) to allow the user change
             # the setpoint without implying the device switch on.
             # Turning on/off the device must be an explicit action on HVACMode.
-            if await self._async_request_set(
-                mn_h.Appliance_Hub_Mts100_Mode, mc.KEY_STATE, mc.MTS100_MODE_CUSTOM
-            ):
-                self._mts_mode = mc.MTS100_MODE_CUSTOM
+            await self.manager.async_request_ack(
+                *mn_h.Appliance_Hub_Mts100_Mode.request_set(
+                    {mc.KEY_STATE: mc.MTS100_MODE_CUSTOM}, self.id
+                )
+            )
+            self._mts_mode = mc.MTS100_MODE_CUSTOM
 
         key = mc.MTS100_MODE_TO_CURRENTSET_MAP.get(self._mts_mode) or mc.KEY_CUSTOM
-        ns = mn_h.Appliance_Hub_Mts100_Temperature
-        if response := await self._async_request_set(
-            ns,
-            key,
-            round(kwargs[Mts100Climate.ATTR_TEMPERATURE] * self.device_scale),
-        ):
-            self._parse_temperature(response.payload[ns.key][0])
-            return
+        await self.handler_ns.async_set_c_ex(
+            {key: round(kwargs[Mts100Climate.ATTR_TEMPERATURE] * self.device_scale)},
+            self,
+            self._mts_payload,
+        )
+
+    # interface: MtsClimate
+    @cached_property
+    def handler_adjust(self):
+        return self.manager.ns_handlers[mn_h.Appliance_Hub_Mts100_Adjust]
 
     @override
     async def async_request_preset(self, mode: int, /):
         """Requests an mts mode and (ensure) turn-on"""
-        if await self._async_request_set(
-            mn_h.Appliance_Hub_Mts100_Mode, mc.KEY_STATE, mode
-        ):
-            self._mts_mode = mode
-            if not self._mts_onoff:
-                if await self._async_request_set(
-                    mn_h.Appliance_Hub_ToggleX, mc.KEY_ONOFF, 1
-                ):
-                    self._mts_onoff = 1
-            key_temp = mc.MTS100_MODE_TO_CURRENTSET_MAP.get(mode)
-            if key_temp in self._mts_payload:
-                target_temperature = self._mts_payload[key_temp]
-                self._mts_payload[mc.KEY_CURRENTSET] = target_temperature
-                self.target_temperature = target_temperature / self.device_scale
-            self.flush_state()
+        await self.manager.async_request_ack(
+            *mn_h.Appliance_Hub_Mts100_Mode.request_set({mc.KEY_STATE: mode}, self.id)
+        )
+        self._mts_mode = mode
+        if not self._mts_onoff:
+            await self.manager.async_request_ack(
+                *mn_h.Appliance_Hub_ToggleX.request_set({mc.KEY_ONOFF: 1}, self.id)
+            )
+            self._mts_onoff = 1
+        key_temp = mc.MTS100_MODE_TO_CURRENTSET_MAP.get(mode)
+        if key_temp in self._mts_payload:
+            target_temperature = self._mts_payload[key_temp]
+            self._mts_payload[mc.KEY_CURRENTSET] = target_temperature
+            self.target_temperature = target_temperature / self.device_scale
+        self.flush_state()
 
     @override
     async def async_request_onoff(self, onoff: int, /):
-        if await self._async_request_set(
-            mn_h.Appliance_Hub_ToggleX, mc.KEY_ONOFF, onoff
-        ):
-            self._mts_onoff = onoff
-            self.flush_state()
+        await self.manager.async_request_ack(
+            *mn_h.Appliance_Hub_ToggleX.request_set({mc.KEY_ONOFF: onoff}, self.id)
+        )
+        self._mts_onoff = onoff
+        self.flush_state()
 
     @override
     def is_mts_scheduled(self, /):
         return self._mts_onoff and self._mts_mode == mc.MTS100_MODE_AUTO
-
-    @override
-    def get_ns_adjust(self, /):
-        return self.manager.ns_handlers[mn_h.Appliance_Hub_Mts100_Adjust]
 
     # message handlers
     def _parse_all(self, payload: dict, /):
@@ -279,8 +279,3 @@ class Mts100Climate(MtsClimate):
 
     def _switch_emulate_hvacaction_state_callback(self, /):
         self.flush_state()
-
-    async def _async_request_set(self, ns: "Namespace", key: str, value, /):
-        return await self.manager.async_request_ack2(
-            *ns.request_set({key: value}, self.id)
-        )

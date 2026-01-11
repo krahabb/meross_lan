@@ -271,18 +271,6 @@ class NamespaceHandler:
             + len(polling_request_channels) * self.polling_response_item_size
         )
 
-    def polling_request_set(self, payload: list | dict, /):
-        self.polling_request = (
-            self.ns,
-            mc.METHOD_GET,
-            {self.ns.key: payload},
-        )
-        self.polling_response_size = (
-            self.polling_response_base_size
-            + self.polling_response_item_size
-            * (len(payload) if type(payload) is list else 1)
-        )
-
     def polling_response_size_adj(self, item_count: int, /):
         self.polling_response_size = (
             self.polling_response_base_size
@@ -339,6 +327,18 @@ class NamespaceHandler:
         parser._namespace_handlers.add(self)
         self.polling_request_add_channel(channel)
         self.handler = self._handle_list
+
+    def handle_response(self, header, payload, /):
+        """Entry point for handling a received message for this namespace.
+        This is invoked by Device._handle after routing the message to
+        the proper NamespaceHandler based off the namespace in the header.
+        """
+        self.lastresponse = self.device.lastresponse
+        self.polling_epoch_next = self.lastresponse + self.polling_period
+        try:
+            self.handler(header, payload)
+        except Exception as exception:
+            self.handle_exception(exception, self.handler.__name__, payload)
 
     def handle_exception(self, exception: Exception, function_name: str, payload, /):
         device = self.device
@@ -573,18 +573,18 @@ class NamespaceHandler:
         response = None
         try:
             if channel is None:
-                response = await self.device.async_request2(*self.polling_request)
+                response = await self.device.async_request_ack(*self.polling_request)
             else:
                 ns = self.ns
                 payload_type = self.polling_request[2][ns.key]
                 if isinstance(payload_type, list):
-                    response = await self.device.async_request2(
+                    response = await self.device.async_request_ack(
                         ns,
                         mc.METHOD_GET,
                         {ns.key: [{ns.key_channel: channel}]},
                     )
                 elif isinstance(payload_type, dict):
-                    response = await self.device.async_request2(
+                    response = await self.device.async_request_ack(
                         ns,
                         mc.METHOD_GET,
                         {ns.key: {ns.key_channel: channel}},
@@ -594,10 +594,7 @@ class NamespaceHandler:
 
             # TODO: save all of the last sent/received payloads for a ns_handler
             # for diagnostics (GET/ACK/SET/PUSH/DEL)
-            response = response.check()
-            self.lastresponse = self.device.lastresponse
-            self.polling_epoch_next = self.lastresponse + self.polling_period
-            self.handler(response.header, response.payload)
+            self.handle_response(response.header, response.payload)
             return response
         except Exception as e:
             self.handle_exception(e, "async_get", response)
@@ -640,13 +637,11 @@ class NamespaceHandler:
                 case _:
                     raise Exception("Namespace does not support SET method")
 
-            response = (
-                await self.device.async_request2(
-                    ns,
-                    mc.METHOD_SET,
-                    set_payload,
-                )
-            ).check()
+            response = await self.device.async_request_ack(
+                ns,
+                mc.METHOD_SET,
+                set_payload,
+            )
             if parser:
                 # TODO: consider maybe a dedicated _parse_set_xxxx method?
                 # also, most namespaces SETACK replies are empty dicts
@@ -682,9 +677,9 @@ class NamespaceHandler:
         response = None
         try:
             payload[ns.key_channel] = getattr(parser, ns.key_channel)
-            response = (
-                await self.device.async_request2(ns, mc.METHOD_SET, {ns.key: [payload]})
-            ).check()
+            response = await self.device.async_request_ack(
+                ns, mc.METHOD_SET, {ns.key: [payload]}
+            )
             try:
                 payload = response.payload[ns.key][0]
             except (KeyError, IndexError):

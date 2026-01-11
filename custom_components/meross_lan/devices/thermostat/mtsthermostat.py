@@ -1,7 +1,7 @@
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING
 
 from ...binary_sensor import MLBinarySensor
-from ...climate import MtsClimate
+from ...climate import MtsClimate, cached_property
 from ...helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
 from ...merossclient.protocol.namespaces import thermostat as mn_t
 from ...number import MLConfigNumber
@@ -379,9 +379,12 @@ class MtsThermostatClimate(MtsClimate):
             if namespace in ability:
                 entity_class(self)
 
-    def get_ns_adjust(self, /):
+    # interface: MtsClimate
+    @cached_property
+    def handler_adjust(self):
         return self.manager.ns_handlers[mn_t.Appliance_Control_Thermostat_Calibration]
 
+    # interface: self
     def _parse_ctlRange(self, payload: dict, /):
         """
         {

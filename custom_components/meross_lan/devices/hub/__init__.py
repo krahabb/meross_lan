@@ -112,12 +112,12 @@ class HubSensorAdjustNumber(MLConfigNumber):
         # the 'new adjust value' we have to issue the difference against the
         # currently configured one
         (
-            await self.manager.async_request2(
+            await self.manager.async_request_ack(
                 *self.ns.request_set(
                     {self.key_value: device_value - self.device_value}, self.channel
                 )
             )
-        ).check()
+        )
         self.update_device_value(device_value)
 
 
@@ -151,12 +151,12 @@ class HubSubIdChannelMixin(MLEntity if TYPE_CHECKING else object):
     @override
     async def async_request_value(self, device_value, /):
         (
-            await self.manager.async_request2(
+            await self.manager.async_request_ack(
                 *self.ns.request_set(
                     {mc.KEY_CHANNEL: 0, self.key_value: device_value}, self.channel
                 )
             )
-        ).check()
+        )
         self.update_device_value(device_value)
 
 
@@ -173,13 +173,13 @@ class HubSubIdDeviceCfgMixin(me.MEGroupListChannelMixin):
     @override
     async def async_request_value(self, device_value, /):
         (
-            await self.manager.async_request2(
+            await self.manager.async_request_ack(
                 *self.ns.request_set(
                     {mc.KEY_CHANNEL: 0, self.key_group: {self.key_value: device_value}},
                     self.channel,
                 )
             )
-        ).check()
+        )
         self.update_device_value(device_value)
 
 
@@ -233,7 +233,14 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
     possibly generating huge payloads (see #244).
     The strategy itself will poll the namespace on every cycle if no MQTT active
     When MQTT active we rely on states PUSHES in general but we'll also poll
-    from time to time (see POLLING_STRATEGY_CONF for the relevant namespaces)
+    from time to time (see POLLING_STRATEGY_CONF for the relevant namespaces).
+    TODO# refactor this code to take care of multiple requests size limits (or in
+    general device buffer estimated sizes) so that we can adapt the chunking size
+    to the available buffers and not use a fixed preset. Also,
+    since we're refactoring the message handling routing in NamespaceHandler/Device
+    the current way of building the payloads doesnt work anymore since the device
+    is maintaining a list of namespaces to query and not a list of actual payloads
+    like it was before.
     """
 
     __slots__ = (
@@ -277,16 +284,20 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
                 # if we're good to go on the first iteration,
                 # we don't want to break this cycle else it
                 # would restart (stateless) at the next polling cycle
-                self.polling_request_set(p)
+                self._polling_request_set(p)
                 if await device.async_request_smartpoll(
                     self,
                     cloud_queue_max=max_queuable,
                 ):
                     max_queuable += 1
+                    # TODO# refactor this code to take care of new async_pol/request semantics
+                    # Right now, this 'flush' should do the job but is strongly inefficient.
+                    if device._multiple_requests:
+                        await device._async_multiple_requests_flush()
 
     async def async_trace(self, async_request_func: "AsyncRequestFunc"):
         for p in self._build_subdevices_payload():
-            self.polling_request_set(p)
+            self._polling_request_set(p)
             await HubNamespaceHandler.async_trace(self, async_request_func)
 
     def _build_subdevices_payload(self):
@@ -309,6 +320,18 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
                     payload = []
         if payload:
             yield payload
+
+    def _polling_request_set(self, payload: list | dict, /):
+        self.polling_request = (
+            self.ns,
+            mc.METHOD_GET,
+            {self.ns.key: payload},
+        )
+        self.polling_response_size = (
+            self.polling_response_base_size
+            + self.polling_response_item_size
+            * (len(payload) if type(payload) is list else 1)
+        )
 
 
 class HubMixin(Device if TYPE_CHECKING else object):
@@ -564,11 +587,21 @@ class SubDevice(NamespaceParser, BaseDevice):
     flexibility is now necessary to allow for some new 'exotic' design (see
     ms130-Appliance.Control.Sensor.LatestX).
     TODO:
-    - some ns are only handled acorss a subset of devices. For example *.ToggleX
+    - some ns are only handled across a subset of devices. For example *.ToggleX
     is not meaningful everywhere and so does *.Beep.
     We could think of a map between hub ns and subdevice type in order to
     fix what works where. This map could also be dynamic if we wish to
     update it along the way...
+    TODO# re-implement SubDevice as a Mixin MLEntity with dedidated overrides for
+    hub interaction.
+    This is particularly helpful for those subdevices implementing a single 'main entity'
+    feature like Mts which are already centered around a single entity (climate).
+    This refactor could be done in steps where start with those subdevices which clearly
+    expose a single entity (Mts, smoke detector, water leak sensor) and later move to
+    more complex ones.
+    This refactor would also streamline moving the custom ns handling in HubMixin/SubDevice
+    to a more natural NamespaceHandler implementation and also remove the need for
+    BaseDevice inheritance here.
     """
 
     if TYPE_CHECKING:
@@ -582,7 +615,7 @@ class SubDevice(NamespaceParser, BaseDevice):
     DEVICE_TYPE = mlc.DeviceType.SUBDEVICE
 
     __slots__ = (
-        "async_request2",
+        "async_request",
         "check_device_timezone",
         "ns_handlers",
         "hub",
@@ -596,7 +629,7 @@ class SubDevice(NamespaceParser, BaseDevice):
         # this is a very dirty trick/optimization to override some BaseDevice
         # properties/methods that just needs to be forwarded to the hub
         # this way we're short-circuiting that indirection
-        self.async_request2 = hub.async_request2
+        self.async_request = hub.async_request
         self.check_device_timezone = hub.check_device_timezone
         self.ns_handlers = hub.ns_handlers
         # these properties are needed to be in place before base class init
@@ -655,7 +688,7 @@ class SubDevice(NamespaceParser, BaseDevice):
         await NamespaceParser.async_shutdown(self)
         await BaseDevice.async_shutdown(self)
         del self.check_device_timezone
-        del self.async_request2
+        del self.async_request
         del self.ns_handlers
         del self.hub  # type: ignore
         del self.sensor_battery  # type: ignore

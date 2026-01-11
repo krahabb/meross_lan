@@ -237,12 +237,9 @@ class MQTTConnection(Loggable):
         async def async_request_raw(
             self, request: MerossRequest, /, **kwargs: "Unpack[RequestArgs]"
         ):
-            response = await self.mqtt_connection.async_mqtt_publish(
+            return await self.mqtt_connection.async_mqtt_request(
                 self.device_id, request, self.timeout
             )
-            if response:
-                return response
-            raise asyncio.TimeoutError()
 
     if TYPE_CHECKING:
         _MQTT_DROP: Final
@@ -374,38 +371,18 @@ class MQTTConnection(Loggable):
             sensor_connection.update_devices()
 
     @final
-    def mqtt_publish(
+    async def async_mqtt_request(
         self,
         device_id: str,
         request: "MerossMessage",
         timeout: float | None = DEFAULT_RESPONSE_TIMEOUT,
-    ):
-        return self.profile.async_create_task(
-            self.async_mqtt_publish(device_id, request, timeout),
-            f".mqtt_publish({device_id})",
-        )
-
-    @final
-    async def async_mqtt_publish(
-        self,
-        device_id: str,
-        request: "MerossMessage",
-        timeout: float | None = DEFAULT_RESPONSE_TIMEOUT,
-    ) -> MerossResponse | None:
+    ) -> MerossResponse:
+        transaction = _MQTTTransaction(self, device_id, request)
         self.profile.trace_or_log(self, device_id, request, MQTTProfile.TRACE_TX)
         try:
-            if timeout and (request.method in mc.METHOD_ACK_MAP):
-                transaction = _MQTTTransaction(self, device_id, request)
-                await self._async_mqtt_publish(device_id, request)
-                async with asyncio.timeout(timeout):
-                    response = await transaction.response_future
-                    transaction = None
-                    return response
-            else:
-                transaction = None
-                await self._async_mqtt_publish(device_id, request)
-                return None
-
+            await self._async_mqtt_publish(device_id, request)
+            async with asyncio.timeout(timeout):
+                return await transaction.response_future
         except MerossMQTTRateLimitException:
             if self.sensor_connection:
                 self.sensor_connection.inc_counter_with_state(
@@ -417,7 +394,47 @@ class MQTTConnection(Loggable):
                 "MQTT publish rate-limit exceeded for device uuid:%s",
                 self.profile.loggable_device_id(device_id),
             )
-            return None
+            transaction.cancel()
+            raise
+        except Exception as exception:
+            self.log_exception(
+                self.DEBUG,
+                exception,
+                "async_mqtt_request %s %s (uuid:%s messageId:%s)",
+                request.method,
+                request.namespace,
+                self.profile.loggable_device_id(device_id),
+                request.messageid,
+                timeout=14400,
+            )
+            transaction.cancel()
+            raise
+        except BaseException:
+            transaction.cancel()
+            raise
+
+    @final
+    async def async_mqtt_publish(
+        self,
+        device_id: str,
+        request: "MerossMessage",
+    ) -> None:
+        # TODO#: embed device_id in meross message as header["uuid"] so we
+        # can avoid the extra parameter here
+        self.profile.trace_or_log(self, device_id, request, MQTTProfile.TRACE_TX)
+        try:
+            await self._async_mqtt_publish(device_id, request)
+        except MerossMQTTRateLimitException:
+            if self.sensor_connection:
+                self.sensor_connection.inc_counter_with_state(
+                    ConnectionSensor.ATTR_DROPPED,
+                    ConnectionSensor.STATE_DROPPING,
+                )
+            self.log(
+                self.WARNING,
+                "MQTT publish rate-limit exceeded for device uuid:%s",
+                self.profile.loggable_device_id(device_id),
+            )
         except Exception as exception:
             self.log_exception(
                 self.DEBUG,
@@ -429,10 +446,6 @@ class MQTTConnection(Loggable):
                 request.messageid,
                 timeout=14400,
             )
-            return None
-        finally:
-            if transaction:
-                transaction.cancel()
 
     @final
     async def async_mqtt_message(
@@ -440,8 +453,8 @@ class MQTTConnection(Loggable):
         mqtt_msg: "ha_mqtt.ReceiveMessage | paho_mqtt.MQTTMessage | MqttServiceInfo",
     ):
         with self.exception_warning("async_mqtt_message"):
-            if sensor_connection := self.sensor_connection:
-                sensor_connection.inc_counter(ConnectionSensor.ATTR_RECEIVED)
+            if self.sensor_connection:
+                self.sensor_connection.inc_counter(ConnectionSensor.ATTR_RECEIVED)
             mqtt_payload = mqtt_msg.payload
             message = MerossResponse(
                 mqtt_payload
@@ -581,36 +594,42 @@ class MQTTConnection(Loggable):
         to speed up things. Raises exception in case of error
         """
         try:
-            response = MerossResponse.check_(
-                await self.async_mqtt_publish(
-                    device_id,
-                    MerossRequest(
-                        *mn.Appliance_System_Ability.request_default,
-                        key,
-                        self.topic_response,
-                        self.__class__.__name__,
-                    ),
+            ability = (
+                (
+                    await self.async_mqtt_request(
+                        device_id,
+                        MerossRequest(
+                            *mn.Appliance_System_Ability.request_default,
+                            key,
+                            self.topic_response,
+                            self.__class__.__name__,
+                        ),
+                    )
                 )
+                .check()
+                .payload[mc.KEY_ABILITY]
             )
-            ability = response[mc.KEY_PAYLOAD][mc.KEY_ABILITY]
         except MerossKeyError as error:
             raise error
         except Exception as exception:
             raise Exception("Unable to identify abilities") from exception
 
         try:
-            response = MerossResponse.check_(
-                await self.async_mqtt_publish(
-                    device_id,
-                    MerossRequest(
-                        *mn.Appliance_System_All.request_default,
-                        key,
-                        self.topic_response,
-                        self.__class__.__name__,
-                    ),
+            all = (
+                (
+                    await self.async_mqtt_request(
+                        device_id,
+                        MerossRequest(
+                            *mn.Appliance_System_All.request_default,
+                            key,
+                            self.topic_response,
+                            self.__class__.__name__,
+                        ),
+                    )
                 )
+                .check()
+                .payload[mc.KEY_ALL]
             )
-            all = response[mc.KEY_PAYLOAD][mc.KEY_ALL]
         except MerossKeyError as error:
             raise error
         except Exception as exception:

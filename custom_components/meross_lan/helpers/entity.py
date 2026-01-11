@@ -379,10 +379,10 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         Raises exception on connection/protocol errors."""
         manager: "BaseDevice" = self.manager  # type: ignore
         (
-            await manager.async_request2(
+            await manager.async_request_ack(
                 *self.ns.request_set({self.key_value: device_value}, self.channel)
             )
-        ).check()
+        )
         self.update_device_value(device_value)
 
     @override  # NamespaceParser
@@ -414,12 +414,12 @@ class MEGroupListChannelMixin(MLEntity if TYPE_CHECKING else object):
     @override
     async def async_request_value(self, device_value, /):
         (
-            await self.manager.async_request2(
+            await self.manager.async_request_ack(
                 *self.ns.request_set(
                     {self.key_group: {self.key_value: device_value}}, self.channel
                 )
             )
-        ).check()
+        )
         self.update_device_value(device_value)
 
     @override  # NamespaceParser

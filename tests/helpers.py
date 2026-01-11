@@ -861,9 +861,7 @@ class DeviceContext(ConfigEntryMocker):
             await self.async_setup()
         assert (device := self.device)
         if not device.online:
-            await self.time_mock.async_tick(
-                timedelta(seconds=mlc.PARAM_COLDSTARTPOLL_DELAY)
-            )
+            await self.time_mock.async_tick(timedelta(seconds=10))
             assert device.online
         return device
 
@@ -1045,16 +1043,18 @@ class CloudApiMocker(contextlib.AbstractContextManager):
 class MQTTConnectionMocker(contextlib.AbstractContextManager):
     def __init__(self, hass: "HomeAssistant"):
 
-        async def _async_mqtt_publish(
-            _self: MQTTConnection, device_id: str, request: "MerossMessage"
-        ) -> "MerossResponse | None":
-            return None
-
         self.async_mqtt_publish_patcher = patch.object(
             MQTTConnection,
             "async_mqtt_publish",
             autospec=True,
-            side_effect=_async_mqtt_publish,
+            side_effect=self.async_mqtt_publish,
+        )
+
+        self.async_mqtt_request_patcher = patch.object(
+            MQTTConnection,
+            "async_mqtt_request",
+            autospec=True,
+            side_effect=self.async_mqtt_request,
         )
 
         async def _async_identify_device(
@@ -1081,16 +1081,26 @@ class MQTTConnectionMocker(contextlib.AbstractContextManager):
             side_effect=_async_identify_device,
         )
 
+    async def async_mqtt_request(
+        self, mqttconnection: MQTTConnection, device_id: str, request: "MerossMessage"
+    ) -> "MerossResponse":
+        raise asyncio.TimeoutError()
+
+    async def async_mqtt_publish(
+        self, mqttconnection: MQTTConnection, device_id: str, request: "MerossMessage"
+    ) -> None:
+        return None
+
     def __enter__(self):
         self.async_mqtt_publish_mock = self.async_mqtt_publish_patcher.start()
+        self.async_mqtt_request_mock = self.async_mqtt_request_patcher.start()
         self.async_identify_device_mock = self.async_identify_device_patcher.start()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        if self.async_mqtt_publish_mock:
-            self.async_mqtt_publish_patcher.stop()
-        if self.async_identify_device_mock:
-            self.async_identify_device_patcher.stop()
+        self.async_identify_device_patcher.stop()
+        self.async_mqtt_request_patcher.stop()
+        self.async_mqtt_publish_patcher.stop()
         return None
 
 

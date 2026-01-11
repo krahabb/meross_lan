@@ -1,4 +1,5 @@
 import enum
+from functools import cached_property
 from time import time
 from typing import TYPE_CHECKING
 
@@ -503,6 +504,15 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         raise NotImplementedError()
 
     # interface: self
+    @cached_property
+    def handler_adjust(self) -> "NamespaceHandler":
+        """
+        Returns the correct ns handler for the adjust namespace.
+        Used to trigger a poll and the ns which is by default polled
+        on a long timeout.
+        """
+        raise NotImplementedError()
+
     async def async_request_preset(self, mode: int, /):
         """Implements the protocol to set the Meross thermostat mode"""
         raise NotImplementedError()
@@ -512,14 +522,6 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         raise NotImplementedError()
 
     def is_mts_scheduled(self, /):
-        raise NotImplementedError()
-
-    def get_ns_adjust(self, /) -> "NamespaceHandler":
-        """
-        Returns the correct ns handler for the adjust namespace.
-        Used to trigger a poll and the ns which is by default polled
-        on a long timeout.
-        """
         raise NotImplementedError()
 
     def _update_current_temperature(self, current_temperature: float | int, /):
@@ -534,9 +536,9 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
             # temp change might be an indication of a calibration so
             # we'll speed up polling for the adjust/calibration ns
             try:
-                ns_adjust = self.get_ns_adjust()
-                if ns_adjust.polling_epoch_next > (ns_adjust.device.lastresponse + 30):
-                    ns_adjust.polling_epoch_next = 0.0
+                handler = self.handler_adjust
+                if handler.polling_epoch_next > (handler.device.lastresponse + 30):
+                    handler.polling_epoch_next = 0.0
             except:
                 # in case the ns is not available for this device
                 pass

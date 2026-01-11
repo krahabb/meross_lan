@@ -638,45 +638,49 @@ class ComponentApi(MQTTProfile):
             from_ = mlc.DOMAIN
             trigger_src = "service_request"
 
-            async def _async_bluetooth_request(bt_device: ComponentApi.BTDevice):
-                service_response["request"] = request = MerossRequest(
-                    namespace,
-                    method,
-                    payload,
-                    "",
-                    from_,
-                    trigger_src,
-                )
+            async def _wrap_response(request: MerossRequest, coro):
+                service_response["request"] = request
                 try:
-                    service_response["response"] = await bt_device.async_request_raw(
-                        request
-                    )
+                    service_response["response"] = await coro(request)
                 except Exception as exception:
                     service_response["exception"] = (
                         f"{exception.__class__.__name__}({str(exception)})"
                     )
-
                 return service_response
+
+            async def _async_bluetooth_request(bt_device: ComponentApi.BTDevice):
+                return await _wrap_response(
+                    MerossRequest(
+                        namespace,
+                        method,
+                        payload,
+                        "",
+                        from_,
+                        trigger_src,
+                    ),
+                    bt_device.async_request_raw,
+                )
 
             async def _async_device_request(device: "Device"):
-                service_response["request"] = request = MerossRequest(
-                    namespace,
-                    method,
-                    payload,
-                    device.key if key is None else key,
-                    device._topic_response,
-                    trigger_src,
+                return await _wrap_response(
+                    MerossRequest(
+                        namespace,
+                        method,
+                        payload,
+                        device.key if key is None else key,
+                        device._topic_response,
+                        trigger_src,
+                    ),
+                    (
+                        device.async_mqtt_request_raw
+                        if protocol == mlc.CONF_PROTOCOL_MQTT
+                        else (
+                            device.async_http_request_raw
+                            if protocol == mlc.CONF_PROTOCOL_HTTP
+                            else device.async_request_raw
+                        )
+                    ),
                 )
-                service_response["response"] = (
-                    await device.async_mqtt_request_raw(request)
-                    if protocol == mlc.CONF_PROTOCOL_MQTT
-                    else (
-                        await device.async_http_request_raw(request)
-                        if protocol == mlc.CONF_PROTOCOL_HTTP
-                        else await device.async_request_raw(request)
-                    )
-                ) or {}
-                return service_response
 
             if device_id:
                 if (
@@ -699,10 +703,15 @@ class ComponentApi(MQTTProfile):
                         mqtt_connection.topic_response,
                         trigger_src,
                     )
-                    service_response["response"] = (
-                        await mqtt_connection.async_mqtt_publish(device_id, request)
-                        or {}
-                    )
+                    try:
+
+                        service_response["response"] = (
+                            await mqtt_connection.async_mqtt_request(device_id, request)
+                        )
+                    except Exception as exception:
+                        service_response["exception"] = (
+                            f"{exception.__class__.__name__}({str(exception)})"
+                        )
                     return service_response
 
             if host:
@@ -715,29 +724,21 @@ class ComponentApi(MQTTProfile):
                     return await _async_bluetooth_request(_bt_device)
 
                 if protocol in (mlc.CONF_PROTOCOL_AUTO, mlc.CONF_PROTOCOL_HTTP):
-                    service_response["request"] = request = MerossRequest(
-                        namespace,
-                        method,
-                        payload,
-                        self.key if key is None else key,
-                        from_,
-                        trigger_src,
+                    return await _wrap_response(
+                        MerossRequest(
+                            namespace,
+                            method,
+                            payload,
+                            self.key if key is None else key,
+                            from_,
+                            trigger_src,
+                        ),
+                        MerossHttpClient(
+                            host,
+                            loop=self.hass.loop,
+                            logger=self,
+                        ).async_request_raw,
                     )
-                    try:
-                        service_response["response"] = (
-                            await MerossHttpClient(
-                                host,
-                                loop=self.hass.loop,
-                                logger=self,
-                            ).async_request_raw(request)
-                            or {}
-                        )
-                    except Exception as exception:
-                        service_response["exception"] = (
-                            f"{exception.__class__.__name__}({str(exception)})"
-                        )
-
-                    return service_response
 
             raise HomeAssistantError(
                 f"Unable to find a route to {device_id or host} using {protocol} protocol"

@@ -833,12 +833,7 @@ def digest_init_light_effect(
             # custom parser for the case
             def _parse(digest: list):
                 # This is called inside ns_all parsing at the device handler
-                handler.lastresponse = handler.device.lastresponse
-                handler.polling_epoch_next = (
-                    handler.lastresponse + handler.polling_period
-                )
-                # this is redirecting to light._handle_Appliance_Control_Light_Effect
-                handler.handler({}, {mc.KEY_EFFECT: digest})  # type: ignore (header not used)
+                handler.handle_response({}, {mc.KEY_EFFECT: digest})
 
             return _parse, ()
     except KeyError:
