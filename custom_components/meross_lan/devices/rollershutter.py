@@ -157,10 +157,10 @@ class MLRollerShutter(MLCover):
                 position = mc.ROLLERSHUTTER_POSITION_CLOSED
             else:
                 return  # No-Op
-            if await self.async_request_position(position):
-                self._transition_end_unsub = self.manager.schedule_async_callback(
-                    timeout, self._async_transition_end_callback
-                )
+            await self.async_request_position(position)
+            self._transition_end_unsub = self.manager.schedule_async_callback(
+                timeout, self._async_transition_end_callback
+            )
 
     @override
     async def async_stop_cover(self, **kwargs):
@@ -168,17 +168,11 @@ class MLRollerShutter(MLCover):
 
     async def async_request_position(self, position: int):
         self._transition_cancel()
-        # TODO: this is a case where we don't want the async_set to callback
-        # the _parse_position with the request payload since we're the ones requesting it.
-        # That's why we're not forwarding self as parser to the call.
-        # As a note, consider the device replies an empty dict on SETACK
-        if await self.handler_ns.async_set(
+        await self.handler_ns.async_set(
             {mc.KEY_CHANNEL: self.channel, self.key_value: position}
-        ):
-            # re-ensure current transitions are clean after await
-            self._transition_cancel()
-            await self._async_transition_callback()
-            return True
+        )
+        self._transition_cancel()
+        await self._async_transition_callback()
 
     def set_unavailable(self):
         self._mrs_state = None
@@ -318,20 +312,22 @@ class MLRollerShutter(MLCover):
         if (
             manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active
         ) or (self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE):
-            if manager.multiple_max >= 2:
-                # TODO: migrate call
-                await manager.async_multiple_requests_ack(
-                    (
-                        mn.Appliance_RollerShutter_State.request_default,
-                        mn.Appliance_RollerShutter_Position.request_default,
+            try:
+                if manager.multiple_max >= 2:
+                    await manager.async_multiple_requests_ack(
+                        (
+                            mn.Appliance_RollerShutter_State.request_default,
+                            mn.Appliance_RollerShutter_Position.request_default,
+                        )
                     )
-                )
-            else:
-                await manager.ns_handlers[mn.Appliance_RollerShutter_State].async_get(
-                    self.channel
-                )
-                if self._position_native_isgood:
-                    await self.handler_ns.async_get(self.channel)
+                else:
+                    await manager.ns_handlers[
+                        mn.Appliance_RollerShutter_State
+                    ].async_get(self.channel)
+                    if self._position_native_isgood:
+                        await self.handler_ns.async_get(self.channel)
+            except Exception as e:
+                self.log_exception(self.WARNING, e, "_async_transition_callback")
 
     async def _async_transition_end_callback(self):
         self._transition_end_unsub = None

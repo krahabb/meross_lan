@@ -239,32 +239,29 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
 
     # interface: self
     async def _async_request_schedule(self):
-        if schedule := self._schedule:
-            payload = {self.ns.key_channel: self.channel}
-            # unpack our schedule struct to be compliant with the device payload:
-            # the weekday_schedule must contain between _schedule_entry_count_min and
-            # _schedule_entry_count_max
-            for weekday, weekday_schedule in schedule.items():
-                schedule_entry_count = len(weekday_schedule)
-                if schedule_entry_count > self._schedule_entry_count_max:
-                    raise Exception("Too many elements in the schedule")
-                schedule_items_missing = (
-                    self._schedule_entry_count_min - schedule_entry_count
-                )
-                if schedule_items_missing > 0:
-                    # our working schedule contains less entries than requested by MTS
-                    weekday_schedule = list(weekday_schedule)
-                    weekday_schedule.extend(
-                        [[0, weekday_schedule[0][1]]] * schedule_items_missing
-                    )
-                payload[weekday] = weekday_schedule
+        if not self._schedule:
+            return
 
-            # TODO: this is preliminary and should work.. but needs testing with
-            # hub subdevices and likely some refinement
-            if not await self.handler_ns.async_set(payload):
-                # there was an error so we request the actual device state again
-                if self.manager.online:
-                    await self.handler_ns.async_get(self.channel)
+        payload = {self.ns.key_channel: self.channel}
+        # unpack our schedule struct to be compliant with the device payload:
+        # the weekday_schedule must contain between _schedule_entry_count_min and
+        # _schedule_entry_count_max
+        for weekday, weekday_schedule in self._schedule.items():
+            schedule_entry_count = len(weekday_schedule)
+            if schedule_entry_count > self._schedule_entry_count_max:
+                raise Exception("Too many elements in the schedule")
+            schedule_items_missing = (
+                self._schedule_entry_count_min - schedule_entry_count
+            )
+            if schedule_items_missing > 0:
+                # our working schedule contains less entries than requested by MTS
+                weekday_schedule = list(weekday_schedule)
+                weekday_schedule.extend(
+                    [[0, weekday_schedule[0][1]]] * schedule_items_missing
+                )
+            payload[weekday] = weekday_schedule
+
+        await self.handler_ns.async_set(payload)
 
     def _get_event_entry(self, event_time: datetime) -> MtsScheduleEntry | None:
         """Search for and return an entry description (MtsScheduleEntry) matching the internal

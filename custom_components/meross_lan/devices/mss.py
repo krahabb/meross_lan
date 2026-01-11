@@ -19,7 +19,7 @@ from ..switch import MLDeviceSwitch
 if TYPE_CHECKING:
     from typing import ClassVar, Final, Unpack
 
-    from ..helpers.device import Device
+    from ..helpers.device import Device, MerossMessage
     from ..merossclient.protocol import types as mt
 
 
@@ -149,11 +149,9 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
             self.native_value = int(self._estimate)
 
     # interface: self
-    def _handle_Appliance_Control_Electricity(
-        self, header, payload: "mt.MerossPayloadType", /
-    ):
+    def _handle_Appliance_Control_Electricity(self, message: "MerossMessage", /):
         # BEWARE: this indirection is needed since _parse is also used in ElectricityX
-        self._parse(payload[mc.KEY_ELECTRICITY])
+        self._parse(message.payload[mc.KEY_ELECTRICITY])
 
     def _parse(self, payload: dict, /):
         """{"channel": 0, "power": 11000, ...}"""
@@ -451,9 +449,9 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
             self.flush_state()
             self.log(self.DEBUG, "no readings available for new day - resetting")
 
-    def _handle(self, header, payload: dict, /):
+    def _handle(self, message: "MerossMessage", /):
         device = self.manager
-        days = payload[mc.KEY_CONSUMPTIONX]
+        days = message.payload[mc.KEY_CONSUMPTIONX]
 
         if device.device_timestamp > self._tomorrow_midnight_epoch:
             # we're optimizing the payload response_size calculation
@@ -587,9 +585,9 @@ class OverTempEnableSwitch(EntityNamespaceMixin, MLDeviceSwitch):
 
     # interface: self
     @override
-    def _handle(self, header, payload: dict, /):
+    def _handle(self, message: "MerossMessage", /):
         """{"overTemp": {"enable": 1,"type": 1}}"""
-        overtemp = payload[mc.KEY_OVERTEMP]
+        overtemp = message.payload[mc.KEY_OVERTEMP]
         self._parse(overtemp)
         try:
             self.sensor_overtemp_type.update_native_value(overtemp[mc.KEY_TYPE])

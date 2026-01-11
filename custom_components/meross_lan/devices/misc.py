@@ -19,7 +19,7 @@ from ..sensor import (
 from .ms600 import MLPresenceSensor
 
 if TYPE_CHECKING:
-    from ..helpers.device import Device
+    from ..helpers.device import Device, MerossMessage
     from ..merossclient.protocol import types as mt
     from ..merossclient.protocol.types import sensor as mt_s
 
@@ -49,7 +49,7 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
         )
         self.polling_request_add_channel(0)
 
-    def _handle_Appliance_Control_Sensor_Latest(self, header, payload):
+    def _handle_Appliance_Control_Sensor_Latest(self, message: "MerossMessage", /):
         """
         {
             "latest": [
@@ -62,7 +62,7 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
         }
         """
         entities = self.device.entities
-        for p_channel in payload[mc.KEY_LATEST]:
+        for p_channel in message.payload[mc.KEY_LATEST]:
             channel = p_channel[mc.KEY_CHANNEL]
             for p_value in p_channel[mc.KEY_VALUE]:
                 # I guess 'value' carries a list of sensors values
@@ -133,12 +133,12 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
         else:
             self.polling_request_add_channel(0, {mc.KEY_DATA: []})
 
-    def _handle_Appliance_Control_Sensor_LatestX(self, header, payload, /):
+    def _handle_Appliance_Control_Sensor_LatestX(self, message: "MerossMessage", /):
         ns = self.ns
         key_channel = ns.key_channel
         entities = self.device.entities
         p_channel: "mt_s.LatestXResponse_C"
-        for p_channel in payload[ns.key]:
+        for p_channel in message.payload[ns.key]:
             channel: int = p_channel[key_channel]
             for data_key, data_value in p_channel[mc.KEY_DATA].items():
                 try:

@@ -41,11 +41,10 @@ if TYPE_CHECKING:
         TypedDict,
     )
 
-    from ...helpers.device import AsyncRequestFunc, DigestInitReturnType
+    from ...helpers.device import AsyncRequestFunc, DigestInitReturnType, MerossMessage
     from ...helpers.entity import MLEntity
     from ...helpers.meross_profile import (
         DeviceInfoExtType,
-        LatestVersionType,
         MQTTProfile,
     )
     from ...merossclient.cloudapi import SubDeviceInfoType
@@ -196,14 +195,14 @@ class HubNamespaceHandler(NamespaceHandler):
     def __init__(self, device: "HubMixin", ns: "Namespace"):
         NamespaceHandler.__init__(self, device, ns, handler=self._handle_subdevice)
 
-    def _handle_subdevice(self, header, payload):
+    def _handle_subdevice(self, message: "MerossMessage"):
         """Generalized Hub namespace dispatcher to subdevices"""
         hub = self.device
         subdevices = hub.subdevices
         subdevices_parsed = set()
         key_namespace = self.ns.key
         key_channel = self.ns.key_channel
-        for p_subdevice in payload[key_namespace]:
+        for p_subdevice in message.payload[key_namespace]:
             try:
                 subdevice_id = p_subdevice[key_channel]
                 if subdevice_id in subdevices_parsed:
@@ -222,7 +221,7 @@ class HubNamespaceHandler(NamespaceHandler):
                 # and might indicate this namespace is likely devoted to general hub
                 # commands/info (something like Appliance.Hub.*)
                 self.handler = self._handle_undefined
-                self._handle_undefined(header, payload)
+                self._handle_undefined(message)
             except Exception as exception:
                 self.handle_exception(exception, "_handle_subdevice", p_subdevice)
 

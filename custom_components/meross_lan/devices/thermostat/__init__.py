@@ -6,17 +6,17 @@ from .mts200 import Mts200Climate
 from .mts960 import Mts960Climate
 from .mtsthermostat import (
     MLScreenBrightnessNumber,
-    MtsDeadZoneNumber,
-    MtsExternalSensorSwitch,
-    MtsFrostNumber,
-    MtsOverheatNumber,
-    MtsWindowOpened,
 )
 
 if typing.TYPE_CHECKING:
     from typing import Any, Callable, Unpack
 
-    from ...helpers.device import Device, DigestInitReturnType, DigestParseFunc
+    from ...helpers.device import (
+        Device,
+        DigestInitReturnType,
+        DigestParseFunc,
+        MerossMessage,
+    )
     from ...merossclient.protocol import types as mt
     from ...merossclient.protocol.namespaces import Namespace
     from .mtsthermostat import MtsThermostatClimate
@@ -119,10 +119,8 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
             device, mc.KEY_STANDBY
         )
 
-    def _handle_Appliance_Control_Screen_Brightness(
-        self, header: "mt.MerossHeaderType", payload: "mt.MerossPayloadType", /
-    ):
-        for p_channel in payload[mc.KEY_BRIGHTNESS]:
+    def _handle_Appliance_Control_Screen_Brightness(self, message: "MerossMessage", /):
+        for p_channel in message.payload[mc.KEY_BRIGHTNESS]:
             if p_channel[mc.KEY_CHANNEL] == 0:
                 self.number_brightness_operation.update_device_value(
                     p_channel[mc.KEY_OPERATION]

@@ -20,7 +20,7 @@ from .spray import MLSpray
 if TYPE_CHECKING:
     from typing import Final
 
-    from ..helpers.device import Device, DigestInitReturnType
+    from ..helpers.device import Device, DigestInitReturnType, MerossMessage
     from ..merossclient.protocol import types as mt
     from ..sensor import MLNumericSensor
 
@@ -58,9 +58,7 @@ def digest_init_diffuser(device: "Device", digest: dict) -> "DigestInitReturnTyp
     if mn.Appliance_Control_Diffuser_Sensor in device.descriptor.ability:
         # former mod100 devices reported fake values for sensors, maybe the mod150 and/or a new firmware
         # are supporting correct values so we implement them (#243)
-        def _handle_Appliance_Control_Diffuser_Sensor(
-            header, payload: "mt.MerossPayloadType", /
-        ):
+        def _handle_Appliance_Control_Diffuser_Sensor(message: "MerossMessage", /):
             """
             {
                 "type": "mod100",
@@ -70,13 +68,16 @@ def digest_init_diffuser(device: "Device", digest: dict) -> "DigestInitReturnTyp
             """
             entities = device.entities
             for key in DIFFUSER_SENSOR_ENTITY_DEFS:
-                if key in payload:
+                try:
+                    value = message.payload[key][mc.KEY_VALUE]
                     try:
-                        entity: "MLNumericSensor" = entities[key]  # type: ignore
+                        entity = entities[key]
                     except KeyError:
                         entity_def = DIFFUSER_SENSOR_ENTITY_DEFS[key]
                         entity = entity_def.type(device, None, key, **entity_def.kwargs)
-                    entity.update_device_value(payload[key][mc.KEY_VALUE])
+                    entity.update_device_value(value)
+                except KeyError:
+                    continue
 
         NamespaceHandler(
             device,

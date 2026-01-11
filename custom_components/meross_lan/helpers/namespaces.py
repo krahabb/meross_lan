@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from .device import AsyncRequestFunc, Device
     from .entity import MLEntity
 
+    type NamespaceHandlerFunc = Callable[[MerossMessage], None]
     type PollingStrategyFunc = Callable[["NamespaceHandler"], Coroutine]
     type NamespaceConfigType = tuple[int, int, int, int, PollingStrategyFunc | None]
 
@@ -87,7 +88,7 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
             timeout=14400,
         )
 
-    def _handle(self, header, payload, /):
+    def _handle(self, message: "MerossMessage", /):
         """
         Raw handler to be used as a direct callback for NamespaceHandler.
         Contrary to _parse which is invoked after splitting (x channel) the payload,
@@ -98,7 +99,7 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
         self.log(
             self.WARNING,
             "Handler undefined for payload:(%s)",
-            str(payload),
+            str(message.payload),
             timeout=14400,
         )
 
@@ -123,6 +124,7 @@ class NamespaceHandler:
     if TYPE_CHECKING:
         parsers: dict[object, Callable[[dict], None]]
         lastpush: JsonDict | None  # TODO: implement caching of all methods responses
+        handler: NamespaceHandlerFunc
         polling_strategy: PollingStrategyFunc | None
         polling_request: mt.MerossRequestType
         polling_request_channels: list[dict[str, Any]]
@@ -154,9 +156,7 @@ class NamespaceHandler:
         ns: "mn.Namespace",
         /,
         *,
-        handler: (
-            "Callable[[mt.MerossHeaderType, mt.MerossPayloadType], None] | None"
-        ) = None,
+        handler: "NamespaceHandlerFunc | None" = None,
         config: "NamespaceConfigType | None" = None,
     ):
         assert ns not in device.ns_handlers, (
@@ -328,7 +328,7 @@ class NamespaceHandler:
         self.polling_request_add_channel(channel)
         self.handler = self._handle_list
 
-    def handle_response(self, header, payload, /):
+    def handle_response(self, response: "MerossMessage", /):
         """Entry point for handling a received message for this namespace.
         This is invoked by Device._handle after routing the message to
         the proper NamespaceHandler based off the namespace in the header.
@@ -336,9 +336,9 @@ class NamespaceHandler:
         self.lastresponse = self.device.lastresponse
         self.polling_epoch_next = self.lastresponse + self.polling_period
         try:
-            self.handler(header, payload)
+            self.handler(response)
         except Exception as exception:
-            self.handle_exception(exception, self.handler.__name__, payload)
+            self.handle_exception(exception, self.handler.__name__, response.payload)
 
     def handle_exception(self, exception: Exception, function_name: str, payload, /):
         device = self.device
@@ -353,7 +353,7 @@ class NamespaceHandler:
             timeout=604800,
         )
 
-    def _handle_list(self, header, payload, /):
+    def _handle_list(self, message: "MerossMessage", /):
         """
         splits and forwards the received NS payload to
         the registered entity(es).
@@ -361,7 +361,7 @@ class NamespaceHandler:
         "payload": { "key_namespace": [{"channel":...., ...}] }
         """
         try:
-            for p_channel in payload[self.ns.key]:
+            for p_channel in message.payload[self.ns.key]:
                 try:
                     _parse = self.parsers[p_channel[self.ns.key_channel]]
                 except KeyError as key_error:
@@ -370,16 +370,16 @@ class NamespaceHandler:
         except TypeError:
             # this might be expected: the payload is not a list
             self.handler = self._handle_dict
-            self._handle_dict(header, payload)
+            self._handle_dict(message)
 
-    def _handle_dict(self, header, payload, /):
+    def _handle_dict(self, message: "MerossMessage", /):
         """
         splits and forwards the received NS payload to
         the registered entity(es).
         This handler si optimized for dict payloads:
         "payload": { "key_namespace": {"channel":...., ...} }
         """
-        p_channel = payload[self.ns.key]
+        p_channel = message.payload[self.ns.key]
         try:
             _parse = self.parsers[p_channel.get(self.ns.key_channel)]
         except KeyError as key_error:
@@ -388,11 +388,11 @@ class NamespaceHandler:
             # this might be expected: the payload is not a dict
             # final fallback to the safe _handle_generic
             self.handler = self._handle_generic
-            self._handle_generic(header, payload)
+            self._handle_generic(message)
             return
         _parse(p_channel)
 
-    def _handle_generic(self, header, payload, /):
+    def _handle_generic(self, message: "MerossMessage", /):
         """
         splits and forwards the received NS payload to
         the registered entity(es)
@@ -400,7 +400,7 @@ class NamespaceHandler:
         payloads without the "channel" key (see namespace Toggle)
         which will default forwarding to channel == None
         """
-        p_channel = payload[self.ns.key]
+        p_channel = message.payload[self.ns.key]
         if type(p_channel) is dict:
             try:
                 _parse = self.parsers[p_channel.get(self.ns.key_channel)]
@@ -416,23 +416,21 @@ class NamespaceHandler:
                     _parse = self._try_create_entity(key_error)
                 _parse(p_channel)
 
-    def _handle_undefined(
-        self, header: "mt.MerossHeaderType", payload: "mt.MerossPayloadType", /
-    ):
+    def _handle_undefined(self, message: "MerossMessage", /):
         device = self.device
         device.log(
             device.DEBUG,
             "Handler undefined for method:%s namespace:%s payload:%s",
-            header[mc.KEY_METHOD],
-            header[mc.KEY_NAMESPACE],
-            str(device.loggable_dict(payload)),
+            message.method,
+            message.namespace,
+            str(device.loggable_dict(message.payload)),
             timeout=14400,
         )
         if device.create_diagnostic_entities:
             # since we're parsing an unknown namespace, our euristic about
             # the key_namespace might be wrong so we use another euristic
             ns = self.ns
-            for _key, _payload in payload.items():
+            for _key, _payload in message.payload.items():
                 # since the ns_key might be often the same across different namespaces
                 # we add the last split of the namespace to the extracted payload key
                 if type(_payload) is dict:
@@ -570,34 +568,42 @@ class NamespaceHandler:
         handler bypassing the Device message routing.
         if channel is None the whole namespace is requested.
         """
-        response = None
-        try:
-            if channel is None:
-                response = await self.device.async_request_ack(*self.polling_request)
+        if channel is None:
+            response = await self.device.async_request_ack(*self.polling_request)
+        else:
+            ns = self.ns
+            payload_type = self.polling_request[2][ns.key]
+            if isinstance(payload_type, list):
+                response = await self.device.async_request_ack(
+                    ns,
+                    mc.METHOD_GET,
+                    {ns.key: [{ns.key_channel: channel}]},
+                )
+            elif isinstance(payload_type, dict):
+                response = await self.device.async_request_ack(
+                    ns,
+                    mc.METHOD_GET,
+                    {ns.key: {ns.key_channel: channel}},
+                )
             else:
-                ns = self.ns
-                payload_type = self.polling_request[2][ns.key]
-                if isinstance(payload_type, list):
-                    response = await self.device.async_request_ack(
-                        ns,
-                        mc.METHOD_GET,
-                        {ns.key: [{ns.key_channel: channel}]},
-                    )
-                elif isinstance(payload_type, dict):
-                    response = await self.device.async_request_ack(
-                        ns,
-                        mc.METHOD_GET,
-                        {ns.key: {ns.key_channel: channel}},
-                    )
-                else:
-                    raise Exception("Cannot GET single channel for this namespace")
+                raise Exception(f"Cannot GET single channel for {ns} namespace")
 
-            # TODO: save all of the last sent/received payloads for a ns_handler
-            # for diagnostics (GET/ACK/SET/PUSH/DEL)
-            self.handle_response(response.header, response.payload)
-            return response
+        # TODO: save all of the last sent/received payloads for a ns_handler
+        # for diagnostics (GET/ACK/SET/PUSH/DEL)
+        self.handle_response(response)
+        return response
+
+    async def async_get_safe(self, channel: object = None, /):
+        """
+        Helper to execute a straigth query to get the whole namespace payload
+        or a single item/channel and dispatch the response to the internal
+        handler bypassing the Device message routing.
+        if channel is None the whole namespace is requested.
+        """
+        try:
+            return await self.async_get(channel)
         except Exception as e:
-            self.handle_exception(e, "async_get", response)
+            self.handle_exception(e, "async_get", None)
 
     def schedule_get(self, channel: object = None, task_name: str = "", /):
         """
@@ -605,7 +611,7 @@ class NamespaceHandler:
         This shouldnt be used for namespaces that don't support GET.
         """
         self.device.async_create_task(
-            self.async_get(channel), task_name or self.ns, False
+            self.async_get_safe(channel), task_name or self.ns, False
         )
 
     async def async_set(
@@ -615,46 +621,53 @@ class NamespaceHandler:
         Helper to request method SET and eventually dispatch the response to the parser
         bypassing the Device and the NamespaceHandler message routing.
         the payload will be wrapped according to the namespace grammar.
+        If parser is provided, it will be called back on its _parse method and
+        the SET command payload will be automatically set to the parser's channel.
         """
         ns = self.ns
-        response = None
-        try:
-            match ns.payload_set:
-                case mn.PayloadType.LIST_C:
-                    if parser:
-                        payload[ns.key_channel] = parser.channel
-                    set_payload = {ns.key: [payload]}
-                case mn.PayloadType.DICT_C:
-                    if parser:
-                        payload[ns.key_channel] = parser.channel
-                    set_payload = {ns.key: payload}
-                case mn.PayloadType.DICT:
-                    set_payload = {ns.key: payload}
-                case mn.PayloadType.EMPTY:
-                    if payload:
-                        raise Exception("Namespace expects empty payload on SET")
-                    set_payload = payload
-                case _:
-                    raise Exception("Namespace does not support SET method")
+        match ns.payload_set:
+            case mn.PayloadType.LIST_C:
+                if parser:
+                    payload[ns.key_channel] = parser.channel
+                set_payload = {ns.key: [payload]}
+            case mn.PayloadType.DICT_C:
+                if parser:
+                    payload[ns.key_channel] = parser.channel
+                set_payload = {ns.key: payload}
+            case mn.PayloadType.DICT:
+                set_payload = {ns.key: payload}
+            case mn.PayloadType.EMPTY:
+                if payload:
+                    raise Exception(f"{ns} namespace expects empty payload on SET")
+                set_payload = payload
+            case _:
+                raise Exception(f"{ns} namespace does not support SET method")
 
-            response = await self.device.async_request_ack(
-                ns,
-                mc.METHOD_SET,
-                set_payload,
+        response = await self.device.async_request_ack(
+            ns,
+            mc.METHOD_SET,
+            set_payload,
+        )
+        if parser:
+            # TODO: consider maybe a dedicated _parse_set_xxxx method?
+            # also, most namespaces SETACK replies are empty dicts
+            # so we just dispatch the request payload (which might be a
+            # subset of the whole GET payload).
+            # Some namespaces though might return different payloads on SETACK
+            # GarageDoor.State or mts100.Temperature
+            getattr(parser, f"_parse_{ns.slug_end}", parser._parse)(
+                merge_dicts(state, payload) if state else payload
             )
-            if parser:
-                # TODO: consider maybe a dedicated _parse_set_xxxx method?
-                # also, most namespaces SETACK replies are empty dicts
-                # so we just dispatch the request payload (which might be a
-                # subset of the whole GET payload).
-                # Some namespaces though might return different payloads on SETACK
-                # GarageDoor.State or mts100.Temperature
-                getattr(parser, f"_parse_{ns.slug_end}", parser._parse)(
-                    merge_dicts(state, payload) if state else payload
-                )
-            return response
+        return response
+
+    async def async_set_safe(
+        self, payload: "JsonDict", parser: NamespaceParser | None = None, state=None, /
+    ):
+        try:
+            return await self.async_set(payload, parser, state)
         except Exception as e:
-            self.handle_exception(e, "async_set", response)
+            # TODO: try to recover the received payload if the exception was raised after
+            self.handle_exception(e, "async_set", None)
 
     async def async_set_c_ex(self, payload, parser: NamespaceParser, state, /):
         """
@@ -1025,8 +1038,8 @@ class EntityNamespaceMixin(MLEntity if TYPE_CHECKING else object):
         self.handler_ns.polling_strategy = None
         return await super().async_will_remove_from_hass()
 
-    def _handle(self, header, payload):
-        self._parse(payload[self.ns.key])
+    def _handle(self, message: "MerossMessage", /):
+        self._parse(message.payload[self.ns.key])
 
 
 class VoidNamespaceHandler(NamespaceHandler):
@@ -1038,7 +1051,7 @@ class VoidNamespaceHandler(NamespaceHandler):
     def __init__(self, device: "Device", ns: mn.Namespace, /):
         NamespaceHandler.__init__(self, device, ns, handler=self._handle_void)
 
-    def _handle_void(self, header, payload, /):
+    def _handle_void(self, message: "MerossMessage", /):
         pass
 
 

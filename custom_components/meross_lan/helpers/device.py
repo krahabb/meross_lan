@@ -32,6 +32,7 @@ from ..merossclient import get_active_broker, is_device_online
 from ..merossclient.httpclient import MerossHttpClient, TerminatedException
 from ..merossclient.protocol import MerossError
 from ..merossclient.protocol.message import (
+    MerossMessage,
     MerossRequest,
     MerossResponse,
     json_dumps,
@@ -63,7 +64,6 @@ if TYPE_CHECKING:
 
     from ..devices.hub import SubDevice
     from ..merossclient import MerossDeviceDescriptor
-    from ..merossclient.protocol.message import MerossMessage
     from ..merossclient.protocol.types import (
         JsonDict,
         JsonList,
@@ -896,7 +896,7 @@ class Device(BaseDevice, ConfigEntryManager):
     def _trace_or_log(
         self,
         epoch: float,
-        message: "MerossMessage",
+        message: MerossMessage,
         protocol: str,
         rxtx: str,
     ):
@@ -1397,8 +1397,8 @@ class Device(BaseDevice, ConfigEntryManager):
         self._multiple_response_size = PARAM_HEADER_SIZE
 
     async def async_multiple_requests_ack(
-        self, requests: "Collection[MerossRequestType]", auto_handle: bool = True
-    ) -> list["MerossMessageType"] | None:
+        self, requests: "Iterable[MerossRequestType]", auto_handle: bool = True
+    ) -> MerossResponse:
         """Send requests in a single NS_APPLIANCE_CONTROL_MULTIPLE message.
         If the whole request is succesful (might be partial if the device response
         overflown somehow (see JSON patching in HTTP request api)
@@ -1408,7 +1408,7 @@ class Device(BaseDevice, ConfigEntryManager):
         Contrary to async_multiple_requests_flush this doesn't recover from
         partial message responses so it doesn't resend missed requests/responses
         """
-        if multiple_response := await self.async_request_ack(
+        response = await self.async_request_ack(
             mn.Appliance_Control_Multiple,
             mc.METHOD_SET,
             {
@@ -1424,16 +1424,12 @@ class Device(BaseDevice, ConfigEntryManager):
                     for request in requests
                 ]
             },
-        ):
-            if auto_handle:
-                multiple_responses = multiple_response[mc.KEY_PAYLOAD][mc.KEY_MULTIPLE]
-                for message in multiple_responses:
-                    self._handle(
-                        message[mc.KEY_HEADER],
-                        message[mc.KEY_PAYLOAD],
-                    )
-                return multiple_responses
-            return multiple_response[mc.KEY_PAYLOAD][mc.KEY_MULTIPLE]
+        )
+        if auto_handle:
+            for message in response.payload[mc.KEY_MULTIPLE]:
+                self._handle(MerossMessage(message))
+
+        return response
 
     async def _async_multiple_requests_flush(self):
         multiple_requests = self._multiple_requests
@@ -1468,26 +1464,13 @@ class Device(BaseDevice, ConfigEntryManager):
                     break  # while
 
             if requests_len == 1:
-                await multiple_requests[0].async_get()
+                await multiple_requests[0].async_get_safe()
                 return
 
             try:
-                response = await self.async_request_ack(
-                    mn.Appliance_Control_Multiple,
-                    mc.METHOD_SET,
-                    {
-                        mn.Appliance_Control_Multiple.key: [
-                            {
-                                mc.KEY_HEADER: {
-                                    mc.KEY_MESSAGEID: MerossRequest.generate_id(),
-                                    mc.KEY_METHOD: handler.polling_request[1],
-                                    mc.KEY_NAMESPACE: handler.ns,
-                                },
-                                mc.KEY_PAYLOAD: handler.polling_request[2],
-                            }
-                            for handler in multiple_requests
-                        ]
-                    },
+                response = await self.async_multiple_requests_ack(
+                    (handler.polling_request for handler in multiple_requests),
+                    auto_handle=False,
                 )
             except Exception as e:
                 # the ns_multiple failed but the reason could be the device
@@ -1519,9 +1502,9 @@ class Device(BaseDevice, ConfigEntryManager):
                         self.device_response_size_max,
                     )
                     for handler in multiple_requests:
-                        if not self.online:
+                        if not self.online:  # TODO: remove these online checks
                             break
-                        await handler.async_get()
+                        await handler.async_get_safe()
                 return
 
             multiple_responses = response[mc.KEY_PAYLOAD][mc.KEY_MULTIPLE]
@@ -1538,7 +1521,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 for handler in multiple_requests:
                     if not self.online:
                         break
-                    await handler.async_get()
+                    await handler.async_get_safe()
                 return
 
             responses_len = len(multiple_responses)
@@ -1554,13 +1537,12 @@ class Device(BaseDevice, ConfigEntryManager):
 
             message: "MerossMessageType"
             for message in multiple_responses:
-                header = message[mc.KEY_HEADER]
-                namespace = header[mc.KEY_NAMESPACE]
+                _response = MerossMessage(message)
                 for handler in multiple_requests:
-                    if handler.ns != namespace:
+                    if handler.ns != _response.namespace:
                         continue
                     multiple_requests.remove(handler)
-                    handler.handle_response(header, message[mc.KEY_PAYLOAD])
+                    handler.handle_response(_response)
                     break
                 else:
                     # not found..something is wrong!! TODO: log a DEBUG/WARNING here?
@@ -1596,9 +1578,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 )
             raise
 
-    async def async_mqtt_request_raw(
-        self, request: "MerossMessage", /
-    ) -> MerossResponse:
+    async def async_mqtt_request_raw(self, request: MerossMessage, /) -> MerossResponse:
         self._trace_or_log(time(), request, CONF_PROTOCOL_MQTT, Device.TRACE_TX)
         try:
             assert self._mqtt_publish
@@ -1783,7 +1763,7 @@ class Device(BaseDevice, ConfigEntryManager):
         ):
             # multiple requests are disabled
             # or this request alone would overflow the device response size limit
-            await handler.async_get()
+            await handler.async_get_safe()
             return
         # estimate the size of the multiple response
         multiple_response_size = (
@@ -1794,7 +1774,7 @@ class Device(BaseDevice, ConfigEntryManager):
             # would overflow the device response size limit
             if not self._multiple_requests:
                 # again this request alone would overflow the device response size limit
-                await handler.async_get()
+                await handler.async_get_safe()
                 return
             # flush the pending multiple requests
             await self._async_multiple_requests_flush()
@@ -1859,11 +1839,10 @@ class Device(BaseDevice, ConfigEntryManager):
                     and ((epoch - self._http_lastrequest) > PARAM_HEARTBEAT_PERIOD)
                 ):
                     try:
-                        response = await self.async_http_request(
-                            *self.handler_all.polling_request
-                        )
                         self.handler_all.handle_response(
-                            response.header, response.payload
+                            await self.async_http_request(
+                                *self.handler_all.polling_request
+                            )
                         )
                         namespace = self.handler_all.ns
                         # going on, should the http come online, the next
@@ -1880,11 +1859,10 @@ class Device(BaseDevice, ConfigEntryManager):
                     # be unused for quite a bit
                     if (epoch - self._mqtt_lastresponse) > PARAM_HEARTBEAT_PERIOD:
                         try:
-                            response = await self.async_mqtt_request(
-                                *self.handler_all.polling_request
-                            )
                             self.handler_all.handle_response(
-                                response.header, response.payload
+                                await self.async_mqtt_request(
+                                    *self.handler_all.polling_request
+                                )
                             )
                             namespace = self.handler_all.ns
                         except Exception:
@@ -1962,9 +1940,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 if not ns_all_response:
                     raise asyncio.TimeoutError("No response for NS_ALL polling")
 
-                handler_all.handle_response(
-                    ns_all_response.header, ns_all_response.payload
-                )
+                handler_all.handle_response(ns_all_response)
                 handler_all.polling_response_size = len(ns_all_response.json)
                 namespace = handler_all.ns
 
@@ -2012,7 +1988,7 @@ class Device(BaseDevice, ConfigEntryManager):
                         ns_handler = self.get_handler_by_name(ability)
                         if ns_handler.polling_strategy:
                             continue
-                        await ns_handler.async_get()
+                        await ns_handler.async_get_safe()
                 except StopIteration:
                     self.log(self.DEBUG, "Diagnostic scan end")
                 except Exception as e:
@@ -2136,7 +2112,7 @@ class Device(BaseDevice, ConfigEntryManager):
             if (self.pref_protocol is CONF_PROTOCOL_MQTT) or (not self._http_active):
                 self._switch_protocol(CONF_PROTOCOL_MQTT)
         self._receive(epoch, message)
-        self._handle(message.header, message.payload)
+        self._handle(message)
 
     def mqtt_attached(self, mqtt_connection: "MQTTConnection", /):
         if self._mqtt_connection:
@@ -2286,9 +2262,8 @@ class Device(BaseDevice, ConfigEntryManager):
                     0, self._poll, message.namespace
                 )
 
-    def _handle(self, header: "MerossHeaderType", payload: "MerossPayloadType", /):
-        namespace = header[mc.KEY_NAMESPACE]
-        method = header[mc.KEY_METHOD]
+    def _handle(self, message: MerossMessage, /):
+        method = message.method
         if method == mc.METHOD_GETACK:
             pass
         elif method == mc.METHOD_SETACK:
@@ -2297,7 +2272,7 @@ class Device(BaseDevice, ConfigEntryManager):
             # in place so we have no need to further process
             return
         elif method == mc.METHOD_ERROR:
-            if payload.get(mc.KEY_ERROR) == mc.ERROR_INVALIDKEY:
+            if message.payload.get(mc.KEY_ERROR) == mc.ERROR_INVALIDKEY:
                 self.log(
                     self.WARNING,
                     "Key error: the configured device key is wrong",
@@ -2307,15 +2282,16 @@ class Device(BaseDevice, ConfigEntryManager):
                 self.log(
                     self.WARNING,
                     "Protocol error: namespace:%s payload:%s",
-                    namespace,
-                    str(self.loggable_dict(payload)),
+                    message.namespace,
+                    str(self.loggable_dict(message.payload)),
                     timeout=14400,
                 )
             return
 
         try:
-            handler = self.ns_handlers[namespace]
-        except KeyError:
+            handler = self.ns_handlers[message.namespace]
+        except KeyError as key_error:
+            namespace = key_error.args[0]
             # we don't have an handler in place and this is typically due to
             # PUSHES of unknown/unmanaged namespaces
             if not namespace:
@@ -2323,8 +2299,8 @@ class Device(BaseDevice, ConfigEntryManager):
                 # the expected namespace key for "Appliance.Control.Runtime"
                 self.log(
                     self.WARNING,
-                    "Protocol error: received empty namespace for payload:%s",
-                    str(self.loggable_dict(payload)),
+                    "Protocol error: received empty namespace (message: %s)",
+                    str(self.loggable_dict(message)),
                     timeout=14400,
                 )
                 return
@@ -2333,16 +2309,16 @@ class Device(BaseDevice, ConfigEntryManager):
             handler = self._create_handler(
                 self.NAMESPACES.get(namespace)
                 or mn.Namespace.from_message(
-                    namespace, method, payload, self.NAMESPACES
+                    namespace, method, message.payload, self.NAMESPACES
                 )
             )
 
         if method == mc.METHOD_PUSH:
             # we're saving for diagnostic purposes so we have knowledge of
             # which data the device pushes asynchronously
-            handler.lastpush = payload
+            handler.lastpush = message.payload
 
-        handler.handle_response(header, payload)
+        handler.handle_response(message)
 
     def _create_handler(self, ns: "mn.Namespace", /):
         """Called by the base device message parsing chain when a new
@@ -2350,31 +2326,33 @@ class Device(BaseDevice, ConfigEntryManager):
         the namespace enters the message handling flow)"""
         return NamespaceHandler(self, ns)
 
-    def _handle_Appliance_Config_Info(self, header, payload, /):
+    def _handle_Appliance_Config_Info(self, message: MerossMessage, /):
         """{"info":{"homekit":{"model":"MSH300HK","sn":"#","category":2,"setupId":"#","setupCode":"#","uuid":"#","token":"#"}}}"""
         pass
 
-    def _handle_Appliance_Control_Bind(self, header, payload, /):
+    def _handle_Appliance_Control_Bind(self, message: MerossMessage, /):
         # already processed by the MQTTConnection session manager
         pass
 
-    def _handle_Appliance_Mcu_Firmware(self, header, payload):
-        self.descriptor.mcu = payload[mc.KEY_FIRMWARE]
+    def _handle_Appliance_Mcu_Firmware(self, message: MerossMessage, /):
+        self.descriptor.mcu = message.payload[mc.KEY_FIRMWARE]
         if self.update_firmware:
             self.update_firmware.update_info()
 
     _handle_Appliance_Mcu_Hp110_Firmware = _handle_Appliance_Mcu_Firmware
 
-    def _handle_Appliance_System_All(self, header, payload: dict, /):
+    def _handle_Appliance_System_All(self, message: MerossMessage, /):
         # see issue #341. In case we receive a formally correct response from a
         # mismatched device we should stop everything and obviously don't update our
         # ConfigEntry. Here we check first the identity of the device sending this payload
         # in order to not mess our configuration. All in all this check should be not
         # needed since the only reasonable source of 'device mismatch' is the HTTP protocol
         # which is already guarded in our async_http_request
-        response_uuid = payload[mc.KEY_ALL][mc.KEY_SYSTEM][mc.KEY_HARDWARE][mc.KEY_UUID]
+        response_uuid = message.payload[mc.KEY_ALL][mc.KEY_SYSTEM][mc.KEY_HARDWARE][
+            mc.KEY_UUID
+        ]
         if self.id != response_uuid:
-            self._process_uuid_mismatch(response_uuid, payload)
+            self._process_uuid_mismatch(response_uuid, message.payload)
             return
 
         self.remove_issue(mlc.ISSUE_DEVICE_ID_MISMATCH)
@@ -2383,7 +2361,7 @@ class Device(BaseDevice, ConfigEntryManager):
         descr = self.descriptor
         oldfirmware = descr.firmware
         oldtimezone = descr.timezone
-        descr.update(payload)
+        descr.update(message.payload)
 
         if oldtimezone != descr.timezone:
             needsave = True
@@ -2416,16 +2394,16 @@ class Device(BaseDevice, ConfigEntryManager):
         if needsave:
             self.schedule_entry_update(query_abilities)
 
-    def _handle_Appliance_System_Clock(self, header, payload, /):
+    def _handle_Appliance_System_Clock(self, message: MerossMessage, /):
         # already processed by the MQTTConnection session manager
         pass
 
-    def _handle_Appliance_System_Debug(self, header, payload: dict, /):
+    def _handle_Appliance_System_Debug(self, message: MerossMessage, /):
         # this ns is queried when we're HTTP connected and the device reports it is
         # also MQTT connected but meross_lan has no confirmation (_mqtt_active == None)
         # we're then going to inspect the device reported broker and see if
         # our config allow to connect
-        self.device_debug = p_debug = payload[mc.KEY_DEBUG]
+        self.device_debug = p_debug = message.payload[mc.KEY_DEBUG]
         broker = get_active_broker(p_debug)
         mqtt_connection = self._mqtt_connection
         if mqtt_connection:
@@ -2438,16 +2416,16 @@ class Device(BaseDevice, ConfigEntryManager):
             elif mqtt_connection.is_cloud_connection:
                 mqtt_connection.detach(self)
 
-    def _handle_Appliance_System_Online(self, header, payload, /):
+    def _handle_Appliance_System_Online(self, message: MerossMessage, /):
         # already processed by the MQTTConnection session manager
         pass
 
-    def _handle_Appliance_System_Report(self, header, payload, /):
+    def _handle_Appliance_System_Report(self, message: MerossMessage, /):
         # No clue: sent (MQTT PUSH) by the device on initial connection
         pass
 
-    def _handle_Appliance_System_Time(self, header, payload: dict, /):
-        self.descriptor.update_time(payload[mc.KEY_TIME])
+    def _handle_Appliance_System_Time(self, message: MerossMessage, /):
+        self.descriptor.update_time(message.payload[mc.KEY_TIME])
         self.schedule_entry_update(False)
 
     def _config_device_timestamp(self, epoch: float, /):
@@ -2657,17 +2635,14 @@ class Device(BaseDevice, ConfigEntryManager):
                 mc.KEY_TIMERULE: [],
             }
 
-        if await self.async_request_ack(
+        await self.async_request_ack(
             mn.Appliance_System_Time,
             mc.METHOD_SET,
             {mn.Appliance_System_Time.key: p_time},
-        ):
-            self.descriptor.update_time(p_time)
-            self.schedule_entry_update(False)
-            self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
-            return True
-
-        return False
+        )
+        self.descriptor.update_time(p_time)
+        self.schedule_entry_update(False)
+        self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
 
     def _switch_protocol(self, protocol):
         self.log(

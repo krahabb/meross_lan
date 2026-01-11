@@ -16,6 +16,7 @@ import homeassistant.util.color as color_util
 
 from . import const as mlc
 from .helpers import clamp, entity as me
+from .helpers.device import MerossMessage
 from .helpers.namespaces import EntityNamespaceMixin, NamespaceHandler, mc, mn
 
 if TYPE_CHECKING:
@@ -405,7 +406,7 @@ class MLLightBase(me.MLBinaryEntity, light.LightEntity):
             # sending redundant light commands
             return
 
-        await self.handler_ns.async_set(_light, self)
+        await self.handler_ns.async_set_safe(_light, self)
 
 
 class MLLight(MLLightBase):
@@ -557,13 +558,13 @@ class MLLight(MLLightBase):
             else:
                 _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_LUMINANCE
 
-        if await self.async_request_light_on_flush(_light):
-            # 87: @nao-pon bulbs need a 'double' send when setting Temp
-            if ATTR_COLOR_TEMP_KELVIN in kwargs:
-                if self.manager.descriptor.firmwareVersion == "2.1.2":
-                    await self.handler_ns.async_set(_light, self)
-            if _t_duration:
-                self._transition_schedule(_t_duration)
+        await self.async_request_light_on_flush(_light)
+        # 87: @nao-pon bulbs need a 'double' send when setting Temp
+        if ATTR_COLOR_TEMP_KELVIN in kwargs:
+            if self.manager.descriptor.firmwareVersion == "2.1.2":
+                await self.handler_ns.async_set_safe(_light, self)
+        if _t_duration:
+            self._transition_schedule(_t_duration)
 
     @override
     async def async_turn_off(self, **kwargs):
@@ -582,42 +583,42 @@ class MLLight(MLLightBase):
         else:
             self.is_on = self.is_on or self._togglex_auto
 
-        if await self.handler_ns.async_set(_light, self):
-            if not self.is_on:
-                # In general, the LIGHT payload with LUMINANCE set should rightly
-                # turn on the light, but this is not true for every model/fw.
-                # Since devices exposing TOGGLEX have different behaviors we'll
-                # try to learn this at runtime.
-                if self._togglex_auto is None:
-                    # we need to learn the device behavior...
-                    # wait a bit since this query would report off
-                    # if the device has not had the time to internally update
-                    await asyncio.sleep(1)
-                    if self.is_on or not self.handler_togglex:
-                        # in case MQTT pushed the togglex -> on
-                        self._togglex_auto = True
-                        self.extra_state_attributes = {MLLight.ATTR_TOGGLEX_AUTO: True}
-                        return
-                    elif await self.handler_togglex.async_get(self.channel):
-                        # various kind of lights here might respond with either an array or a
-                        # simple dict since the "togglex" namespace used to be hybrid and still is.
-                        # This led to #357 but the resolution is to just bypass parsing since
-                        # our device message pipe has already processed the response with
-                        # all its (working) euristics after returning from async_request_ack
-                        self._togglex_auto = self.is_on
-                        self.extra_state_attributes = {
-                            MLLight.ATTR_TOGGLEX_AUTO: self._togglex_auto
-                        }
-                        if self.is_on:
-                            return
-                    else:
-                        # no way
-                        return
-                # previous test showed that we need TOGGLEX
-                await self.async_request_onoff(1)
-            return True
+        await self.handler_ns.async_set(_light, self)
+        if self.is_on:
+            return
+        # In general, the LIGHT payload with LUMINANCE set should rightly
+        # turn on the light, but this is not true for every model/fw.
+        # Since devices exposing TOGGLEX have different behaviors we'll
+        # try to learn this at runtime.
+        if self._togglex_auto is None:
+            # we need to learn the device behavior...
+            # wait a bit since this query would report off
+            # if the device has not had the time to internally update
+            await asyncio.sleep(1)
+            if self.is_on or not self.handler_togglex:
+                # in case MQTT pushed the togglex -> on
+                self._togglex_auto = True
+                self.extra_state_attributes = {MLLight.ATTR_TOGGLEX_AUTO: True}
+                return
 
-        return False
+            try:
+                await self.handler_togglex.async_get(self.channel)
+                # various kind of lights here might respond with either an array or a
+                # simple dict since the "togglex" namespace used to be hybrid and still is.
+                # This led to #357 but the resolution is to just bypass parsing since
+                # our device message pipe has already processed the response with
+                # all its (working) euristics after returning from async_request_ack
+                self._togglex_auto = self.is_on
+                self.extra_state_attributes = {
+                    MLLight.ATTR_TOGGLEX_AUTO: self._togglex_auto
+                }
+                if self.is_on:
+                    return
+            except Exception:
+                # no way
+                return
+        # previous test showed that we need TOGGLEX
+        await self.async_request_onoff(1)
 
 
 class MLLightEffect(MLLight):
@@ -692,21 +693,17 @@ class MLLightEffect(MLLight):
                 _light = dict(_light)
                 _light.pop(mc.KEY_EFFECT, None)
                 _light[mc.KEY_CAPACITY] = _capacity & ~mc.LIGHT_CAPACITY_EFFECT
-                if await self.async_request_light_on_flush(_light):
-                    return
+                await self.async_request_light_on_flush(_light)
             else:
                 _light_effect = self._light_effect_list[effect_index]
                 _light_effect[mc.KEY_ENABLE] = 1
-                if await self.handler_light_effect.async_set(_light_effect):
-                    _light[mc.KEY_EFFECT] = effect_index
-                    _light[mc.KEY_CAPACITY] = _capacity | mc.LIGHT_CAPACITY_EFFECT
-                    self._parse_light(_light)
-                    if not self.is_on:
-                        await self.async_request_onoff(1)
-                    return
-                else:
-                    _light_effect[mc.KEY_ENABLE] = 0
-            return  # TODO: report an HomeAssistantError maybe
+                await self.handler_light_effect.async_set(_light_effect)
+                _light[mc.KEY_EFFECT] = effect_index
+                _light[mc.KEY_CAPACITY] = _capacity | mc.LIGHT_CAPACITY_EFFECT
+                self._parse_light(_light)
+                if not self.is_on:
+                    await self.async_request_onoff(1)
+            return
 
         if ATTR_BRIGHTNESS in kwargs:
             if _capacity & mc.LIGHT_CAPACITY_EFFECT:
@@ -720,16 +717,11 @@ class MLLightEffect(MLLight):
                     luminance = brightness_to_native(brightness)
                     for m in member:
                         m[mc.KEY_LUMINANCE] = luminance
-                    if await self.handler_light_effect.async_set(_light_effect):
-                        self.brightness = brightness
-                        self.flush_state()
-                        if not self.is_on:
-                            await self.async_request_onoff(1)
-                        return
-                    else:
-                        # the _light_effect is now dirty..it'll get reset at
-                        # the next effect list query
-                        return  # TODO: report an HomeAssistantError maybe
+                    await self.handler_light_effect.async_set(_light_effect)
+                    self.brightness = brightness
+                    self.flush_state()
+                    if not self.is_on:
+                        await self.async_request_onoff(1)
                 except Exception as exception:
                     self.log_exception(
                         self.WARNING,
@@ -738,16 +730,14 @@ class MLLightEffect(MLLight):
                         str(_light),
                         str(_light_effect),
                     )
-                    return  # TODO: report an HomeAssistantError maybe
+                return
 
         # nothing related to effects in this service call so
         # we'll proceed to 'standard' light commands
         await super().async_turn_on(**kwargs)
 
     # interface: self
-    def _handle_Appliance_Control_Light_Effect(
-        self, header, payload: "mt.MerossPayloadType", /
-    ):
+    def _handle_Appliance_Control_Light_Effect(self, message: MerossMessage, /):
         """
         {
             "effect": [
@@ -763,7 +753,7 @@ class MLLightEffect(MLLight):
             ]
         }
         """
-        _light_effect_list = payload[mc.KEY_EFFECT]
+        _light_effect_list = message.payload[mc.KEY_EFFECT]
         if self._light_effect_list != _light_effect_list:
             self._light_effect_list = _light_effect_list
             self.effect_list = [
@@ -830,10 +820,21 @@ def digest_init_light_effect(
 
             handler = device.ns_handlers[mn.Appliance_Control_Light_Effect]
 
+            stub_message = MerossMessage(
+                {
+                    mc.KEY_HEADER: {
+                        mc.KEY_NAMESPACE: mn.Appliance_Control_Light_Effect,
+                        mc.KEY_METHOD: mc.METHOD_GETACK,
+                    },
+                    mc.KEY_PAYLOAD: {mc.KEY_EFFECT: digest},
+                }
+            )
+
             # custom parser for the case
             def _parse(digest: list):
                 # This is called inside ns_all parsing at the device handler
-                handler.handle_response({}, {mc.KEY_EFFECT: digest})
+                stub_message.payload[mc.KEY_EFFECT] = digest
+                handler.handle_response(stub_message)
 
             return _parse, ()
     except KeyError:

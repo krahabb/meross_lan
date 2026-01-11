@@ -1428,11 +1428,7 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                     and device
                     and (timezone != descriptor_update.timezone)
                 ):
-                    if await device.async_config_device_timezone(timezone):
-                        # if there's a pending issue, the user might still
-                        # use the OptionsFlow to fix stuff so we'll
-                        # shut this down anyway..it will reappear in case
-                        device.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
+                    await device.async_config_device_timezone(timezone)
 
                 # cleanup keys which might wrongly have been persisted
                 device_config.pop(mlc.CONF_CLOUD_KEY, None)

@@ -41,15 +41,13 @@ class DeviceTimeZoneRepairFlow(SimpleRepairFlow):
             config_entry = ComponentApi.get(self.hass).get_config_entry(
                 self.issue_id.split(".")[1]
             )
-            device: "Device | None" = getattr(config_entry, "runtime_data", None)
-            if (
-                device
-                and (tzname := getattr(dt_util.DEFAULT_TIME_ZONE, "key", None))
-                and await device.async_config_device_timezone(tzname)
-            ):
-                device.remove_issue_id(self.issue_id)
+            try:
+                device: "Device" = getattr(config_entry, "runtime_data")
+                await device.async_config_device_timezone(
+                    getattr(dt_util.DEFAULT_TIME_ZONE, "key")
+                )
                 return self.async_create_entry(data={})
-            else:
+            except Exception:
                 return self.async_abort(reason="cannot_connect")
 
         return await super().async_step_confirm(user_input)
