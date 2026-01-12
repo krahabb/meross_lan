@@ -326,7 +326,7 @@ class MQTTConnection(Loggable):
         for device in self.mqttdevices.values():
             device.mqtt_detached()
         self.mqttdevices.clear()
-        del self.sensor_connection
+        self.sensor_connection = None
 
     async def async_create_diagnostic_entities(self):
         if not self.sensor_connection:
@@ -353,8 +353,8 @@ class MQTTConnection(Loggable):
         )
         device.mqtt_attached(self)
         self.mqttdevices[device.id] = device
-        if sensor_connection := self.sensor_connection:
-            sensor_connection.update_devices()
+        if self.sensor_connection:
+            self.sensor_connection.update_devices()
 
     def detach(self, device: "Device"):
         device_id = device.id
@@ -367,8 +367,8 @@ class MQTTConnection(Loggable):
                 mqtt_transaction.cancel()
         device.mqtt_detached()
         self.mqttdevices.pop(device_id)
-        if sensor_connection := self.sensor_connection:
-            sensor_connection.update_devices()
+        if self.sensor_connection:
+            self.sensor_connection.update_devices()
 
     @final
     async def async_mqtt_request(
@@ -696,8 +696,8 @@ class MQTTConnection(Loggable):
         for device in self.mqttdevices.values():
             device.mqtt_connected()
         self._mqtt_is_connected = True
-        if sensor_connection := self.sensor_connection:
-            sensor_connection.update_native_value(ConnectionSensor.STATE_CONNECTED)
+        if self.sensor_connection:
+            self.sensor_connection.update_native_value(ConnectionSensor.STATE_CONNECTED)
 
     @callback
     def _mqtt_disconnected(self):
@@ -705,14 +705,16 @@ class MQTTConnection(Loggable):
         for device in self.mqttdevices.values():
             device.mqtt_disconnected()
         self._mqtt_is_connected = False
-        if sensor_connection := self.sensor_connection:
-            sensor_connection.update_native_value(ConnectionSensor.STATE_DISCONNECTED)
+        if self.sensor_connection:
+            self.sensor_connection.update_native_value(
+                ConnectionSensor.STATE_DISCONNECTED
+            )
 
     @callback
     def _mqtt_published(self):
         """called when the underlying mqtt.Client successfully publishes a message"""
-        if sensor_connection := self.sensor_connection:
-            sensor_connection.inc_counter(ConnectionSensor.ATTR_PUBLISHED)
+        if self.sensor_connection:
+            self.sensor_connection.inc_counter(ConnectionSensor.ATTR_PUBLISHED)
 
     async def _handle_Appliance_System_Online(
         self, device_id: str, header: "MerossHeaderType", payload: "MerossPayloadType"
