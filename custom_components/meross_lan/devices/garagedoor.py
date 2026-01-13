@@ -315,9 +315,7 @@ class MLGarage(MLCover):
     # interface: self
     async def async_request_position(self, open_request: int, /):
         self._transition_cancel()
-        response = await self.handler_ns.async_set(
-            {mc.KEY_CHANNEL: self.channel, self.key_value: open_request}
-        )
+        response = await self.async_request_payload({self.key_value: open_request})
         """
         example (historical) payload in SETACK:
         {"state": {"channel": 0, "open": 0, "lmTime": 0, "execute": 1}}

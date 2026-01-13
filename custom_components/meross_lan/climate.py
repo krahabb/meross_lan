@@ -339,6 +339,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         """Used in Number entities for temperatues setpoint."""
         SET_TEMP_FORCE_MANUAL_MODE: Final[bool]
         """Determines the behavior of async_set_temperature."""
+
         manager: BaseDevice
         number_adjust_temperature: Final["MLConfigNumber"]
         number_preset_temperature: Final[dict[str, "MtsSetPointNumber"]]
@@ -348,7 +349,6 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         _mts_active: bool | int
         _mts_mode: int
         _mts_onoff: int
-        _mts_payload: dict
 
         # HA core entity attributes override:
         _attr_preset_modes: list[str]
@@ -422,7 +422,6 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         "_mts_active",
         "_mts_mode",
         "_mts_onoff",
-        "_mts_payload",
         "number_adjust_temperature",
         "number_preset_temperature",
         "schedule",
@@ -447,7 +446,6 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         self._mts_active = False
         self._mts_mode = 0
         self._mts_onoff = 0
-        self._mts_payload = {}
         super().__init__(manager, channel)
         self.number_adjust_temperature = self.__class__.AdjustNumber(self)  # type: ignore
         self.number_preset_temperature = {}
@@ -473,7 +471,6 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         self.number_preset_temperature.clear()
 
     def set_unavailable(self):
-        self._mts_payload.clear()
         self.current_humidity = None
         self.current_temperature = None
         self.preset_mode = None
@@ -543,6 +540,17 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
                 # in case the ns is not available for this device
                 pass
 
+    async def async_request_parse_ex(self, payload: dict, /):
+        """
+        Issues a command to the main NS for this climate entity.
+        This is typically the NS controlling the setpoints/modes.
+        """
+        return await self.handler_ns.async_set_c_ex(
+            payload,
+            self,
+            self._payload_ns,
+        )
+
 
 class MtsSetPointNumber(MLConfigNumber):
     """
@@ -587,10 +595,8 @@ class MtsSetPointNumber(MLConfigNumber):
 
     async def async_request_value(self, device_value, /):
         # This implementation is only valid for mts100/mts200 where
-        # the this entity state is actually parsed in the related MtsClimate.
+        # this entity state is actually parsed in the related MtsClimate.
         # We'll then forward the callback to the climate entity in order to
         # ensure the climate state is consistent after a setpoint change.
         # Consider both ns reply with the full state in the SETACK response.
-        return await self.handler_ns.async_set_c_ex(
-            {self.key_value: device_value}, self.climate, self.climate._mts_payload
-        )
+        return await self.climate.async_request_parse_ex({self.key_value: device_value})

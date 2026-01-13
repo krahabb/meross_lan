@@ -159,7 +159,7 @@ class Mts100Climate(MtsClimate):
             # This is intended (right now) to allow the user change
             # the setpoint without implying the device switch on.
             # Turning on/off the device must be an explicit action on HVACMode.
-            await self.manager.async_request_ack(
+            await self.manager.async_request(
                 *mn_h.Appliance_Hub_Mts100_Mode.request_set(
                     {mc.KEY_STATE: mc.MTS100_MODE_CUSTOM}, self.id
                 )
@@ -167,10 +167,8 @@ class Mts100Climate(MtsClimate):
             self._mts_mode = mc.MTS100_MODE_CUSTOM
 
         key = mc.MTS100_MODE_TO_CURRENTSET_MAP.get(self._mts_mode) or mc.KEY_CUSTOM
-        await self.handler_ns.async_set_c_ex(
-            {key: round(kwargs[Mts100Climate.ATTR_TEMPERATURE] * self.device_scale)},
-            self,
-            self._mts_payload,
+        await self.async_request_parse_ex(
+            {key: round(kwargs[Mts100Climate.ATTR_TEMPERATURE] * self.device_scale)}
         )
 
     # interface: MtsClimate
@@ -181,25 +179,25 @@ class Mts100Climate(MtsClimate):
     @override
     async def async_request_preset(self, mode: int, /):
         """Requests an mts mode and (ensure) turn-on"""
-        await self.manager.async_request_ack(
+        await self.manager.async_request(
             *mn_h.Appliance_Hub_Mts100_Mode.request_set({mc.KEY_STATE: mode}, self.id)
         )
         self._mts_mode = mode
         if not self._mts_onoff:
-            await self.manager.async_request_ack(
+            await self.manager.async_request(
                 *mn_h.Appliance_Hub_ToggleX.request_set({mc.KEY_ONOFF: 1}, self.id)
             )
             self._mts_onoff = 1
         key_temp = mc.MTS100_MODE_TO_CURRENTSET_MAP.get(mode)
-        if key_temp in self._mts_payload:
-            target_temperature = self._mts_payload[key_temp]
-            self._mts_payload[mc.KEY_CURRENTSET] = target_temperature
+        if key_temp in self._payload_ns:
+            target_temperature = self._payload_ns[key_temp]
+            self._payload_ns[mc.KEY_CURRENTSET] = target_temperature
             self.target_temperature = target_temperature / self.device_scale
         self.flush_state()
 
     @override
     async def async_request_onoff(self, onoff: int, /):
-        await self.manager.async_request_ack(
+        await self.manager.async_request(
             *mn_h.Appliance_Hub_ToggleX.request_set({mc.KEY_ONOFF: onoff}, self.id)
         )
         self._mts_onoff = onoff
@@ -231,9 +229,9 @@ class Mts100Climate(MtsClimate):
         self.flush_state()
 
     def _parse_temperature(self, payload, /):
-        if self._mts_payload == payload:
+        if self._payload_ns == payload:
             return
-        self._mts_payload = payload
+        self._payload_ns = payload
         if mc.KEY_ROOM in payload:
             self._update_current_temperature(payload[mc.KEY_ROOM])
         if mc.KEY_CURRENTSET in payload:

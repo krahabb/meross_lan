@@ -631,7 +631,10 @@ class ComponentApi(MQTTProfile):
                 elif type(payload) is not dict:
                     raise HomeAssistantError("Payload is not a valid dictionary")
             elif method == mc.METHOD_GET:
-                payload = mn.NAMESPACES[namespace].request_get[2]
+                try:
+                    payload = mn.NAMESPACES[namespace].request_default[2]
+                except Exception:  # whatever
+                    payload = {}
             else:
                 payload = {}  # likely failing the request...
 

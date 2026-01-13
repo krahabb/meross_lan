@@ -81,18 +81,21 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         PLATFORM: ClassVar[str]
         ENTITY_KEY: ClassVar[str | None]
 
+        NS_CHANNELS: ClassVar[Iterable[int] | None]
+        """
+        This is related to NamespaceHandler registration. For entity classes where we know
+        the ns exposes fixed channel layouts (i.e. PhysicalLock) which are not exposed in any digest key
+        we can set this to (0,) or more funny presets so that namespace initialization will also
+        automatically build the needed entity(ies).
+        Setting to None means 'scan digests for channels'.
+        This is actually not mandatory though since only used for NamespaceHandler.register_entity_class.
+        """
+
         is_diagnostic: ClassVar[bool]
         """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
 
         key_value: str  # defaulted to 'value'
         _parse_togglex: Callable[[JsonDict], Any]
-        # This is related to NamespaceHandler registration. For entity classes where we know
-        # the ns exposes fixed channel layouts (i.e. PhysicalLock) which are not exposed in any digest key
-        # we can set this to (0,) or more funny presets so that namespace initialization will also
-        # automatically build the needed entity(ies).
-        # Setting to None means 'scan digests for channels'.
-        # This is actually not mandatory though since only used for NamespaceHandler.register_entity_class.
-        NS_CHANNELS: ClassVar[Iterable[int] | None]
 
         manager: EntityManager  # Final
         channel: Final[object | None]
@@ -186,6 +189,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         "entitykey",
         "state_callbacks",
         "hass_connected",
+        "_payload_ns",  # inherited from NamespaceParser
         # HA core
         "available",
         "device_class",
@@ -222,6 +226,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         if entitykey is None:
             entitykey = self.__class__.ENTITY_KEY
         self.entitykey = entitykey
+        self._payload_ns = mn.EMPTY_DICT
         id = (
             channel
             if entitykey is None
@@ -326,6 +331,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
 
     def set_unavailable(self):
         self.available = False
+        self._payload_ns = mn.EMPTY_DICT
         self.flush_state()
 
     def update_native_value(self, native_value, /) -> bool | None:
@@ -366,6 +372,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
     def _generate_unique_id(self):
         return self.manager.generate_unique_id(self)
 
+    # TODO: move to a subclass kind of MLDeviceEntity
     # interface: device communication
     def update_device_value(self, device_value, /) -> bool | None:
         """This is a stub definition. It will be called by _parse (when namespace dispatching
@@ -377,12 +384,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         """Issues a command SET to update the device and also updates
         the entity state if the command was acknowledged by the device.
         Raises exception on connection/protocol errors."""
-        manager: "BaseDevice" = self.manager  # type: ignore
-        (
-            await manager.async_request_ack(
-                *self.ns.request_set({self.key_value: device_value}, self.channel)
-            )
-        )
+        await self.async_request_payload({self.key_value: device_value})
         self.update_device_value(device_value)
 
     @override  # NamespaceParser
@@ -414,7 +416,7 @@ class MEGroupListChannelMixin(MLEntity if TYPE_CHECKING else object):
     @override
     async def async_request_value(self, device_value, /):
         (
-            await self.manager.async_request_ack(
+            await self.manager.async_request(
                 *self.ns.request_set(
                     {self.key_group: {self.key_value: device_value}}, self.channel
                 )

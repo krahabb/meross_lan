@@ -94,7 +94,7 @@ class Mts300Climate(MtsThermostatClimate):
 
     if TYPE_CHECKING:
         # overrides
-        _mts_payload: mt_t.ModeC_C
+        _payload_ns: mt_t.ModeC_C
 
         HVAC_MODE_TO_MODE_MAP: ClassVar
         _mts_work: int | None
@@ -248,10 +248,8 @@ class Mts300Climate(MtsThermostatClimate):
 
     @override
     async def async_set_hvac_mode(self, hvac_mode: MtsThermostatClimate.HVACMode):
-        await self.handler_ns.async_set_c_ex(
-            {mc.KEY_MODE: self.HVAC_MODE_TO_MODE_MAP[hvac_mode]},
-            self,
-            self._mts_payload,
+        await self.async_request_parse_ex(
+            {mc.KEY_MODE: self.HVAC_MODE_TO_MODE_MAP[hvac_mode]}
         )
 
     @override
@@ -288,13 +286,13 @@ class Mts300Climate(MtsThermostatClimate):
         if target_temp_low:
             modeC_args["targetTemp"]["heat"] = format_temp(target_temp_low)
 
-        await self.handler_ns.async_set_c_ex(modeC_args, self, self._mts_payload)
+        await self.async_request_parse_ex(modeC_args)
 
     @override
     async def async_set_fan_mode(self, fan_mode: str, /):
         fan_speed = self.FAN_MODE_TO_FAN_SPEED_MAP[fan_mode]
         # actually we assume: (fan_speed != 0) <-> (fMode == mc.MTS300_FAN_MODE_ON)
-        await self.handler_ns.async_set_c_ex(
+        await self.async_request_parse_ex(
             {
                 mc.KEY_FAN: {
                     "fMode": (
@@ -304,28 +302,24 @@ class Mts300Climate(MtsThermostatClimate):
                     ),
                     "speed": fan_speed,
                 }
-            },
-            self,
-            self._mts_payload,
+            }
         )
 
     @override
     async def async_request_preset(self, mode: int, /):
         # in Mts300 we'll map 'presets' to the 'work' parameter
-        await self.handler_ns.async_set_c_ex({"work": mode}, self, self._mts_payload)
+        await self.async_request_parse_ex({"work": mode})
 
     @override
     async def async_request_onoff(self, onoff: int, /):
-        await self.handler_ns.async_set_c_ex(
+        await self.async_request_parse_ex(
             {
                 mc.KEY_MODE: (
                     (self._mts_mode or mc.MTS300_MODE_AUTO)
                     if onoff
                     else mc.MTS300_MODE_OFF
                 )
-            },
-            self,
-            self._mts_payload,
+            }
         )
 
     @override
@@ -334,9 +328,9 @@ class Mts300Climate(MtsThermostatClimate):
 
     # interface: self
     def _parse_modeC(self, payload: "mt_t.ModeC_C", /):
-        if self._mts_payload == payload:
+        if self._payload_ns == payload:
             return
-        self._mts_payload = payload
+        self._payload_ns = payload
         try:
             self._mts_work = payload["work"]
             self.preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_work)
@@ -434,21 +428,15 @@ class Mts300Climate(MtsThermostatClimate):
             self.select_temp_association._parse(payload)
 
     async def _async_request_value_number_fan_hold(self, device_value, /):
-        await self.handler_ns.async_set_c_ex(
-            {mc.KEY_FAN: {"hTime": device_value}}, self, self._mts_payload
-        )
+        await self.async_request_parse_ex({mc.KEY_FAN: {"hTime": device_value}})
 
     async def _async_turn_on_switch_fan_hold(self, **kwargs):
         h_time = self.number_fan_hold.device_value
-        await self.handler_ns.async_set_c_ex(
-            {mc.KEY_FAN: {"hTime": 60 if h_time is None else h_time}},
-            self,
-            self._mts_payload,
+        await self.async_request_parse_ex(
+            {mc.KEY_FAN: {"hTime": 60 if h_time is None else h_time}}
         )
 
     async def _async_turn_off_switch_fan_hold(self, **kwargs):
-        await self.handler_ns.async_set_c_ex(
-            {mc.KEY_FAN: {"hTime": mc.MTS300_FAN_HOLD_DISABLED}},
-            self,
-            self._mts_payload,
+        await self.async_request_parse_ex(
+            {mc.KEY_FAN: {"hTime": mc.MTS300_FAN_HOLD_DISABLED}}
         )

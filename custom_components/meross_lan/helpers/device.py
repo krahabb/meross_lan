@@ -84,7 +84,7 @@ if TYPE_CHECKING:
     type DigestInitFunc = Callable[[Device, Any], DigestInitReturnType]
     type NamespaceInitFunc = Callable[[Device, mn.Namespace], None]
     type AsyncRequestFunc = Callable[
-        [str, str, MerossPayloadType], CoroutineType[Any, Any, MerossResponse | None]
+        [str, str, MerossPayloadType], CoroutineType[Any, Any, MerossResponse]
     ]
 
 
@@ -178,11 +178,6 @@ class BaseDevice(EntityManager):
 
     async def async_request(self, *args: "Unpack[MerossRequestType]") -> MerossResponse:
         raise NotImplementedError("async_request")
-
-    async def async_request_ack(
-        self, *args: "Unpack[MerossRequestType]"
-    ) -> MerossResponse:
-        return (await self.async_request(*args)).check()
 
     def _set_online(self):
         self.log(self.DEBUG, "Back online!")
@@ -962,7 +957,7 @@ class Device(BaseDevice, ConfigEntryManager):
                     ability = next(abilities)
                     if ability not in self.TRACE_ABILITY_EXCLUDE:
                         await self.get_handler_by_name(ability).async_trace(
-                            self.async_http_request  # TODO: pass in the raw method and build the MerossRequest inside
+                            self.async_http_request
                         )
                 self._trace_data = None
                 return trace_data  # might be truncated because offlining or async shutting trace
@@ -1351,7 +1346,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 # fw update or whatever might have modified the device abilities.
                 # we refresh the abilities list before saving the new config_entry
                 data[CONF_PAYLOAD][mc.KEY_ABILITY] = (
-                    await self.async_request_ack(
+                    await self.async_request(
                         *mn.Appliance_System_Ability.request_default
                     )
                 ).payload[mc.KEY_ABILITY]
@@ -1408,7 +1403,7 @@ class Device(BaseDevice, ConfigEntryManager):
         Contrary to async_multiple_requests_flush this doesn't recover from
         partial message responses so it doesn't resend missed requests/responses
         """
-        response = await self.async_request_ack(
+        response = await self.async_request(
             mn.Appliance_Control_Multiple,
             mc.METHOD_SET,
             {
@@ -2211,6 +2206,10 @@ class Device(BaseDevice, ConfigEntryManager):
         default (received) message handling entry point
         """
         self.lastresponse = epoch
+        # TODO: check if this is ok at this level: we want to early detect malformed messages
+        # but some operations like protocol switching might need further attention
+        # As of now, they're performed before the check in the calling functions
+        message.check()
         message_size = len(message.json)
         if message_size > self.device_response_size_min:
             self.device_response_size_min = message_size
@@ -2263,6 +2262,9 @@ class Device(BaseDevice, ConfigEntryManager):
                 )
 
     def _handle(self, message: MerossMessage, /):
+        # This is almost superseeded by direct NamespaceHandler request/dispatching
+        # it is left mainly for unsolicited MQTT received messages (mainly PUSH but
+        # sometimes others) handling and for NS_MULTIPLE dispatching
         method = message.method
         if method == mc.METHOD_GETACK:
             pass
@@ -2635,11 +2637,7 @@ class Device(BaseDevice, ConfigEntryManager):
                 mc.KEY_TIMERULE: [],
             }
 
-        await self.async_request_ack(
-            mn.Appliance_System_Time,
-            mc.METHOD_SET,
-            {mn.Appliance_System_Time.key: p_time},
-        )
+        await self.async_request(*mn.Appliance_System_Time.request_set(p_time))
         self.descriptor.update_time(p_time)
         self.schedule_entry_update(False)
         self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)

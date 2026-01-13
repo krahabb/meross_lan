@@ -488,7 +488,9 @@ class MQTTConnection(Loggable):
             try:
                 self.mqttdevices[device_id].mqtt_receive(message)
                 return
-            except KeyError:
+            except KeyError as key_error:
+                if key_error.args[0] != device_id:
+                    raise
                 # device is not binded to this MQTTConnection
                 if device := api.devices.get(device_id):
                     # check among current loaded devices if they could be re-binded

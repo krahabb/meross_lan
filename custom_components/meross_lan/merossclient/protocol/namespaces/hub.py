@@ -49,13 +49,13 @@ Appliance_Control_Water = mn.ns(
     "Appliance.Control.Water", mc.KEY_CONTROL, GETSETPSH_SUBID
 )  # mst100
 Appliance_Control_WaterEvent = mn.ns(
-    "Appliance.Control.WaterEvent", mc.KEY_CONTROL, SUBID, mn.EXP
+    "Appliance.Control.WaterEvent", mc.KEY_CONTROL, SUBID, mn.PSH, mn.EXP
 )  # mst100 (used to report events after each watering cycle is completed)
 Appliance_Control_WaterEvent_Skip = mn.ns(
     "Appliance.Control.WaterEvent.Skip", mc.KEY_CONTROL, GETSET_SUBID, mn.EXP
 )  # mst100 (used in the app to skip watering on specific days according to the schedule)
 Appliance_Control_WaterPlan_Skip = mn.ns(
-    "Appliance.Control.WaterPlan.Skip", mc.KEY_CONTROL, SUBID, mn.EXP
+    "Appliance.Control.WaterPlan.Skip", mc.KEY_CONTROL, GETSET_SUBID, mn.EXP
 )  # mst100 (allows the device to query cloud server about whether to skip execution on a specific day based on weather conditions)
 
 Appliance_Digest_Hub = mn.ns("Appliance.Digest.Hub", mc.KEY_HUB, mn.G_D, H)

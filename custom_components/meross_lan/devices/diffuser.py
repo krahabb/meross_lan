@@ -118,8 +118,8 @@ class MLDiffuserLight(MLLightBase):
 
     def _parse_light(self, payload, /):
         # taken from https://github.com/bwp91/homebridge-meross/blob/latest/lib/device/diffuser.js
-        if self._light != payload:
-            self._light = payload
+        if self._payload_ns != payload:
+            self._payload_ns = payload
             self.is_on = payload[mc.KEY_ONOFF]
             self.brightness = native_to_brightness(payload[mc.KEY_LUMINANCE])
             self.rgb_color = native_to_rgb(payload[mc.KEY_RGB])
@@ -138,7 +138,7 @@ class MLDiffuserLight(MLLightBase):
         if self._t_unsub:
             self._transition_cancel()
 
-        _light = dict(self._light)
+        _light = dict(self._payload_ns)
         _light[mc.KEY_ONOFF] = 1
         if ATTR_TRANSITION in kwargs:
             _t_duration = self._transition_setup(_light, kwargs)
@@ -158,7 +158,7 @@ class MLDiffuserLight(MLLightBase):
                 _light[mc.KEY_RGB] = rgb_to_native(kwargs[ATTR_RGB_COLOR])
                 _light[mc.KEY_MODE] = mc.DIFFUSER_LIGHT_MODE_COLOR
 
-        await self.handler_ns.async_set(_light, self)
+        await self.async_request_parse(_light)
         if _t_duration:
             self._transition_schedule(_t_duration)
 

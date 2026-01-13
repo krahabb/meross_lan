@@ -111,7 +111,7 @@ class HubSensorAdjustNumber(MLConfigNumber):
         # the 'new adjust value' we have to issue the difference against the
         # currently configured one
         (
-            await self.manager.async_request_ack(
+            await self.manager.async_request(
                 *self.ns.request_set(
                     {self.key_value: device_value - self.device_value}, self.channel
                 )
@@ -150,7 +150,7 @@ class HubSubIdChannelMixin(MLEntity if TYPE_CHECKING else object):
     @override
     async def async_request_value(self, device_value, /):
         (
-            await self.manager.async_request_ack(
+            await self.manager.async_request(
                 *self.ns.request_set(
                     {mc.KEY_CHANNEL: 0, self.key_value: device_value}, self.channel
                 )
@@ -172,7 +172,7 @@ class HubSubIdDeviceCfgMixin(me.MEGroupListChannelMixin):
     @override
     async def async_request_value(self, device_value, /):
         (
-            await self.manager.async_request_ack(
+            await self.manager.async_request(
                 *self.ns.request_set(
                     {mc.KEY_CHANNEL: 0, self.key_group: {self.key_value: device_value}},
                     self.channel,
@@ -495,12 +495,12 @@ class HubMixin(Device if TYPE_CHECKING else object):
                 continue
             handler = self.get_handler(ns)
             handler.register_parser(subdevice)
-            handler.polling_request_add_channel(subdevice.subId, extra)
+            handler.polling_request_add_channel(subdevice.channel, extra)
 
-    def _handle_Appliance_Digest_Hub(self, header: dict, payload: dict, /):
-        self._parse_hub(payload[mc.KEY_HUB])
+    def _handle_Appliance_Digest_Hub(self, message: "MerossMessage", /):
+        self._parse_hub(message.payload[mc.KEY_HUB])
 
-    def _handle_Appliance_Hub_ExtraInfo(self, header: dict, payload: dict, /):
+    def _handle_Appliance_Hub_ExtraInfo(self, message: "MerossMessage", /):
         """TODO: decode
         {
           "extraInfo": {
@@ -523,7 +523,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
         """
         pass
 
-    def _handle_Appliance_Hub_SubdeviceList(self, header: dict, payload: dict, /):
+    def _handle_Appliance_Hub_SubdeviceList(self, message: "MerossMessage", /):
         """TODO: decode
         {
             'subdeviceList': {
@@ -606,7 +606,7 @@ class SubDevice(NamespaceParser, BaseDevice):
     if TYPE_CHECKING:
         NS_ALL: ClassVar[Namespace]  # to be set in subclasses
         hub: Final[HubMixin]
-        subId: Final[str]
+        channel: Final[str]
         model: Final[str]
         p_digest: JsonDict
         sensor_battery: Final[MLNumericSensor]
@@ -618,7 +618,7 @@ class SubDevice(NamespaceParser, BaseDevice):
         "check_device_timezone",
         "ns_handlers",
         "hub",
-        "subId",
+        "channel",
         "model",
         "p_digest",
         "sensor_battery",
@@ -633,7 +633,7 @@ class SubDevice(NamespaceParser, BaseDevice):
         self.ns_handlers = hub.ns_handlers
         # these properties are needed to be in place before base class init
         self.hub = hub
-        self.subId = id = p_digest[mc.KEY_ID]
+        self.channel = id = p_digest[mc.KEY_ID]
         self.model = model
         self.p_digest = p_digest
         super().__init__(
@@ -706,7 +706,7 @@ class SubDevice(NamespaceParser, BaseDevice):
         ):
             upgrade_payload["subdev"] = [
                 {
-                    "devid": self.subId,
+                    "devid": self.id,
                     mc.KEY_URL: latest_version[mc.KEY_URL],
                     mc.KEY_MD5: latest_version[mc.KEY_MD5],
                 }
@@ -1071,9 +1071,8 @@ class GS559SubDevice(SensorSubDevice):
 
     async def _async_button_mute_press(self, /):
         try:
-            await self.handler_ns.async_set(
+            await self.async_request_payload(
                 {
-                    mc.KEY_ID: self.id,
                     mc.KEY_STATUS: GS559SubDevice.MUTE_MAP.get(
                         self._smokealarm_status, 170
                     ),
@@ -1084,7 +1083,7 @@ class GS559SubDevice(SensorSubDevice):
             self.log_exception(self.DEBUG, e, "trying to send mute command")
 
     async def _async_button_test_press(self, /):
-        await self.handler_ns.async_set({mc.KEY_ID: self.id, mc.KEY_STATUS: 23})
+        await self.async_request_payload({mc.KEY_STATUS: 23})
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_GS559] = GS559SubDevice

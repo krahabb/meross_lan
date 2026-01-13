@@ -260,12 +260,11 @@ class MtsHoldAction(MLConfigSelect):
             pass
 
     async def _async_request_value_number_time(self, device_value, /):
-        await self.handler_ns.async_set(
+        await self.async_request_parse(
             {
                 self.key_value: mc.MTS_HOLDACTION_TIMER,
                 mc.KEY_TIME: device_value,
-            },
-            self,
+            }
         )
 
 

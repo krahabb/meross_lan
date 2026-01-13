@@ -24,7 +24,7 @@ class Mts200Climate(MtsThermostatClimate):
         ns = mn_t.Appliance_Control_Thermostat_Schedule
 
     if TYPE_CHECKING:
-        _mts_payload: mt_t.Mode_C
+        _payload_ns: mt_t.Mode_C
 
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS200_MODE_MANUAL: MtsThermostatClimate.Preset.CUSTOM,
@@ -95,7 +95,7 @@ class Mts200Climate(MtsThermostatClimate):
             if self._mts_summermode != summermode:
                 await self.manager.ns_handlers[
                     mn_t.Appliance_Control_Thermostat_SummerMode
-                ].async_set_c_ex({mc.KEY_MODE: summermode}, self, None)
+                ].async_set_c_ex({mc.KEY_MODE: summermode}, self)
 
         await self.async_request_onoff(1)
 
@@ -111,29 +111,23 @@ class Mts200Climate(MtsThermostatClimate):
                 mode = mc.MTS200_MODE_MANUAL
 
         target_temp = round(kwargs[self.ATTR_TEMPERATURE] * self.device_scale)
-        self._mts_payload[mc.KEY_TARGETTEMP] = target_temp  # optimistic update
-        await self.handler_ns.async_set_c_ex(
-            {mc.KEY_MODE: mode, key: target_temp}, self, self._mts_payload
-        )
+        self._payload_ns[mc.KEY_TARGETTEMP] = target_temp  # optimistic update
+        await self.async_request_parse_ex({mc.KEY_MODE: mode, key: target_temp})
 
     async def async_request_preset(self, mode: int, /):
-        await self.handler_ns.async_set_c_ex(
-            {mc.KEY_MODE: mode, mc.KEY_ONOFF: 1}, self, self._mts_payload
-        )
+        await self.async_request_parse_ex({mc.KEY_MODE: mode, mc.KEY_ONOFF: 1})
 
     async def async_request_onoff(self, onoff: int, /):
-        await self.handler_ns.async_set_c_ex(
-            {mc.KEY_ONOFF: onoff}, self, self._mts_payload
-        )
+        await self.async_request_parse_ex({mc.KEY_ONOFF: onoff})
 
     def is_mts_scheduled(self, /):
         return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
 
     # interface: self
     def _parse_mode(self, payload: "mt_t.Mode_C", /):
-        if self._mts_payload == payload:
+        if self._payload_ns == payload:
             return
-        self._mts_payload = payload
+        self._payload_ns = payload
         if mc.KEY_MODE in payload:
             self._mts_mode = payload[mc.KEY_MODE]
         if mc.KEY_ONOFF in payload:

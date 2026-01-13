@@ -185,7 +185,6 @@ class MLLightBase(me.MLBinaryEntity, light.LightEntity):
 
         manager: "Device"
 
-        _light: JsonDict
         _t_unsub: asyncio.TimerHandle | None
         _t_begin: float
         _t_end: float
@@ -226,7 +225,6 @@ class MLLightBase(me.MLBinaryEntity, light.LightEntity):
     min_color_temp_kelvin = MSL_KELVIN_MIN
 
     __slots__ = (
-        "_light",
         "_rgb_to_native",
         "_native_to_rgb",
         "_t_unsub",
@@ -256,7 +254,6 @@ class MLLightBase(me.MLBinaryEntity, light.LightEntity):
     def __init__(
         self, manager: "Device", channel, effect_list: list[str] | None = None, /
     ):
-        self._light = {}
         self._rgb_to_native = rgb_to_native
         self._native_to_rgb = native_to_rgb
         self._t_unsub = None
@@ -285,7 +282,6 @@ class MLLightBase(me.MLBinaryEntity, light.LightEntity):
     def set_unavailable(self):
         if self._t_unsub:
             self._transition_cancel()
-        self._light.clear()
         self.brightness = None
         self.color_mode = ColorMode.UNKNOWN
         self.color_temp_kelvin = None
@@ -372,7 +368,7 @@ class MLLightBase(me.MLBinaryEntity, light.LightEntity):
         if not self.is_on:
             return
         t_now = monotonic()
-        _light = dict(self._light)
+        _light = dict(self._payload_ns)
         if t_now >= (self._t_end - self._t_resolution):
             _light[mc.KEY_LUMINANCE] = self._t_luminance_end
             if self._t_rgb_end:
@@ -400,13 +396,14 @@ class MLLightBase(me.MLBinaryEntity, light.LightEntity):
                 )
             self._transition_schedule(self._t_end - t_now)
 
-        if _light == self._light:
+        if _light == self._payload_ns:
             # Our time resolution might be too fast to produce
             # visible effects in light payload so we're skipping
             # sending redundant light commands
             return
 
-        await self.handler_ns.async_set_safe(_light, self)
+        with self.exception_warning("_async_transition"):
+            await self.async_request_parse(_light)
 
 
 class MLLight(MLLightBase):
@@ -485,8 +482,8 @@ class MLLight(MLLightBase):
 
     # interface: MLLightBase
     def _parse_light(self, payload: dict, /):
-        if self._light != payload:
-            self._light = payload
+        if self._payload_ns != payload:
+            self._payload_ns = payload
             if mc.KEY_ONOFF in payload:
                 self.is_on = payload[mc.KEY_ONOFF]
             capacity = payload[mc.KEY_CAPACITY]
@@ -528,7 +525,7 @@ class MLLight(MLLightBase):
             await self.async_request_onoff(1)
             return
 
-        _light = dict(self._light)
+        _light = dict(self._payload_ns)
 
         if ATTR_TRANSITION in kwargs and kwargs[ATTR_TRANSITION] != 0:
             _t_duration = self._transition_setup(_light, kwargs)
@@ -562,7 +559,8 @@ class MLLight(MLLightBase):
         # 87: @nao-pon bulbs need a 'double' send when setting Temp
         if ATTR_COLOR_TEMP_KELVIN in kwargs:
             if self.manager.descriptor.firmwareVersion == "2.1.2":
-                await self.handler_ns.async_set_safe(_light, self)
+                with self.exception_warning("async_turn_on fw 2.1.2 patch"):
+                    await self.async_request_parse(_light)
         if _t_duration:
             self._transition_schedule(_t_duration)
 
@@ -575,7 +573,7 @@ class MLLight(MLLightBase):
         if self.handler_togglex:
             await self.handler_togglex.async_set({mc.KEY_ONOFF: onoff}, self)
         else:
-            await self.handler_ns.async_set({mc.KEY_ONOFF: onoff}, self, self._light)
+            await self.async_request_parse_ex({mc.KEY_ONOFF: onoff})
 
     async def async_request_light_on_flush(self, _light: dict):
         if mc.KEY_ONOFF in _light:
@@ -583,7 +581,7 @@ class MLLight(MLLightBase):
         else:
             self.is_on = self.is_on or self._togglex_auto
 
-        await self.handler_ns.async_set(_light, self)
+        await self.async_request_parse(_light)
         if self.is_on:
             return
         # In general, the LIGHT payload with LUMINANCE set should rightly
@@ -607,7 +605,7 @@ class MLLight(MLLightBase):
                 # simple dict since the "togglex" namespace used to be hybrid and still is.
                 # This led to #357 but the resolution is to just bypass parsing since
                 # our device message pipe has already processed the response with
-                # all its (working) euristics after returning from async_request_ack
+                # all its (working) euristics after returning from async_request
                 self._togglex_auto = self.is_on
                 self.extra_state_attributes = {
                     MLLight.ATTR_TOGGLEX_AUTO: self._togglex_auto
@@ -653,7 +651,7 @@ class MLLightEffect(MLLight):
     def update_native_value(self, onoff, /):
         if self.is_on != onoff:
             self.is_on = onoff
-            if onoff and (mc.KEY_EFFECT in self._light):
+            if onoff and (mc.KEY_EFFECT in self._payload_ns):
                 self.handler_light_effect.polling_period = 0
             self.flush_state()
             return True
@@ -684,7 +682,7 @@ class MLLightEffect(MLLight):
     async def async_turn_on(self, **kwargs):
         if self._t_unsub:
             self._transition_cancel()
-        _light = self._light
+        _light = self._payload_ns
         _capacity = _light.get(mc.KEY_CAPACITY, 0)
         # intercept light command if it is related to effects (on/off/change of luminance)
         if ATTR_EFFECT in kwargs:
@@ -760,10 +758,10 @@ class MLLightEffect(MLLight):
                 _light_effect[mc.KEY_EFFECTNAME] for _light_effect in _light_effect_list
             ] + [MLLightBase.EFFECT_OFF]
             # add a 'fake' key so the next update will force-flush
-            self._light["_"] = None
+            self._payload_ns["_"] = None
             self.handler_ns.schedule_get()
 
-        if not (self.is_on and (mc.KEY_EFFECT in self._light)):
+        if not (self.is_on and (mc.KEY_EFFECT in self._payload_ns)):
             self.handler_light_effect.polling_period = mlc.PARAM_INFINITE_TIMEOUT
 
 

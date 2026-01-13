@@ -59,7 +59,6 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
     __slots__ = (
         "percentage",
         "speed_count",
-        "_fan",
         "_saved_speed",  # used to restore previous speed when turning on/off
         "handler_togglex",
     )
@@ -67,7 +66,6 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
     def __init__(self, manager: "Device", channel, /):
         self.percentage = None
         self.speed_count = 1  # safe default: auto-inc when 'fan' payload updates
-        self._fan = None
         self._saved_speed = 1
         super().__init__(manager, channel)
         manager.register_parser_entity(self)
@@ -75,7 +73,6 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
 
     @override
     def set_unavailable(self):
-        self._fan = None
         self.percentage = None
         super().set_unavailable()
 
@@ -92,8 +89,8 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
     # interface: fan.FanEntity
     @override
     async def async_set_percentage(self, percentage: int) -> None:
-        await self.handler_ns.async_set(
-            {mc.KEY_SPEED: round(percentage * self.speed_count / 100)}, self, self._fan
+        await self.async_request_parse_ex(
+            {mc.KEY_SPEED: round(percentage * self.speed_count / 100)}
         )
 
     @override
@@ -105,16 +102,14 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
             await self.handler_togglex.async_set(
                 {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: 1}
             )
-        await self.handler_ns.async_set(
+        await self.async_request_parse_ex(
             {
                 mc.KEY_SPEED: (
                     round(percentage * self.speed_count / 100)
                     if percentage
                     else self._saved_speed
                 )
-            },
-            self,
-            self._fan,
+            }
         )
 
     @override
@@ -122,13 +117,13 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
         if self.handler_togglex:
             await self.handler_togglex.async_set({mc.KEY_ONOFF: 0}, self)
         else:
-            await self.handler_ns.async_set({mc.KEY_SPEED: 0}, self, self._fan)
+            await self.async_request_parse_ex({mc.KEY_SPEED: 0})
 
     # interface: self
     def _parse_fan(self, payload: dict, /):
         """payload = {"channel": 0, "speed": 3, "maxSpeed": 4}"""
-        if self._fan != payload:
-            self._fan = payload
+        if self._payload_ns != payload:
+            self._payload_ns = payload
             speed = payload[mc.KEY_SPEED]
             if speed:
                 self.is_on = True

@@ -172,9 +172,5 @@ def digest_init_togglex(
     handler = device.get_handler(ns)
     handler.register_entity_class(MLToggleX, channels)
     if device.descriptor.is_refoss:
-        handler.polling_request = (
-            ns,
-            mc.METHOD_GET,
-            {ns.key: mn.PayloadType.DICT_C_65535.value},
-        )
+        handler.polling_request = mn.PayloadType.DICT_C_65535.build_get(ns)
     return handler.parse_list, (handler,)

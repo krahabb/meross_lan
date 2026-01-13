@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 # Custom Exceptions
 #
 class MerossError(Exception):
-    """Base class for any exception reised by the library."""
+    """Base class for any exception raised by the library."""
 
     pass
 

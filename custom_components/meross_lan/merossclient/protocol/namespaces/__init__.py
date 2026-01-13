@@ -11,7 +11,16 @@ from typing import TYPE_CHECKING
 from .. import const as mc
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Final, Mapping, NotRequired, TypedDict, Unpack
+    from typing import (
+        Any,
+        Callable,
+        Final,
+        Mapping,
+        NotRequired,
+        Protocol,
+        TypedDict,
+        Unpack,
+    )
 
     from ..types import MerossPayloadType, MerossRequestType
 
@@ -132,6 +141,9 @@ class _immutable:
     def __hash__(self):
         return id(self)
 
+    def __eq__(self, other):
+        return self is other
+
     def _raise(self, *args, **kws):
         raise TypeError(f"object of type <{type(self)}> is immutable")
 
@@ -165,38 +177,159 @@ class _immutablelist(_immutable, list[_immutabledict]):
         return [value.clone() for value in self]
 
 
-class PayloadType(enum.Enum):
-    """Depicts the payload structure in method queries (defaults to EMPTY in case)."""
+EMPTY_DICT: "Final" = _immutabledict()
+EMPTY_LIST: "Final" = _immutablelist()
 
-    UNKNOWN = _immutabledict({})
+
+class _PayloadType:
+
+    if TYPE_CHECKING:
+
+        class BuildType(Protocol):
+            def __call__(
+                self, ns: "Namespace", /, *channels
+            ) -> "MerossPayloadType": ...
+
+        build: Final[BuildType]
+        prototype: Final[_immutabledict | _immutablelist]  # REMOVE: useless
+        indexed: Final[bool]
+
+    __slots__ = (
+        "prototype",
+        "build",
+        "indexed",
+        "__dict__",
+    )
+
+    def __init__(
+        self,
+        prototype: dict | list | _immutabledict | _immutablelist,
+        build: "BuildType",
+        indexed: bool,
+        /,
+    ):
+        if type(prototype) is dict:
+            prototype = _immutabledict(prototype)
+            self.prototype = prototype
+            self.prototype.__class__ = _immutabledict
+        elif type(prototype) is list:
+            prototype = _immutablelist(prototype)
+            self.prototype = prototype
+            self.prototype.__class__ = _immutablelist
+        else:
+            self.prototype = prototype  # type: ignore
+        self.build = build
+        self.indexed = indexed
+
+    @property
+    def value(self):
+        return self.prototype
+
+    def build_get(self, ns: "Namespace", /, *channels) -> "MerossRequestType":
+        return ns, mc.METHOD_GET, self.build(ns, *channels)
+
+
+class PayloadType(_PayloadType, enum.Enum):
+    """Depicts the payload structure in method queries."""
+
+    @staticmethod
+    def _build_unsupported(ns: "Namespace", /, *channels) -> "MerossPayloadType":
+        raise NotImplementedError("Unsupported payload type")
+
+    UNSUPPORTED = (
+        EMPTY_DICT,
+        _build_unsupported,
+        False,
+    )
+    """Method is not supported."""
+    UNKNOWN = EMPTY_DICT, lambda *args: EMPTY_DICT, False
     """Method is supported but payload type is unknown."""
-    EMPTY = _immutabledict({})
+    EMPTY = EMPTY_DICT, lambda *args: EMPTY_DICT, False
     """Payload for assigned method is an empty dict."""
-    DICT = _immutabledict({})
+    DICT = EMPTY_DICT, lambda ns, *channels: {ns.key: EMPTY_DICT}, False
     """Command GET with {ns_key: {}} returns the state requested."""
     # Payload types for channel based namespaces
     # TODO: manage the 'key_channel' concept better in Namespace class
-    DICT_C = _immutabledict({})
+    DICT_C = (
+        EMPTY_DICT,
+        lambda ns, *channels: {
+            ns.key: (
+                {ns.key_channel: channel for channel in channels}
+                if channels
+                else EMPTY_DICT
+            )
+        },
+        True,
+    )
     """Command GET with {ns_key: {}} returns all the (channels) state (key_channel must be defined)."""
-    DICT_C_STRICT = _immutabledict({mc.KEY_CHANNEL: 0})
-    """Command GET with channel index in dict returns the channel state requested."""
-    DICT_C_65535 = _immutabledict({mc.KEY_CHANNEL: 65535})
+    DICT_C_65535 = (
+        {mc.KEY_CHANNEL: 65535},
+        lambda ns, *channels: {
+            ns.key: (
+                {ns.key_channel: channel for channel in channels}
+                if channels
+                else {ns.key_channel: 65535}
+            )
+        },
+        True,
+    )
     """Command GET with channel 65535 in dict returns all the channels (only refoss devices ?). Else DICT_C_STRICT."""
-    LIST_C = _immutablelist([])
+    DICT_C_STRICT = (
+        {mc.KEY_CHANNEL: 0},
+        lambda ns, *channels: {
+            ns.key: (
+                {ns.key_channel: channel for channel in channels}
+                if channels
+                else {ns.key_channel: 0}
+            )
+        },
+        True,
+    )
+    """Command GET with channel index in dict returns the channel state requested."""
+    LIST_C = (
+        EMPTY_LIST,
+        lambda ns, *channels: {
+            ns.key: (
+                [{ns.key_channel: channel} for channel in channels]
+                if channels
+                else EMPTY_LIST
+            )
+        },
+        True,
+    )
     """Command GET with an empty list returns all the (channels) state (key_channel must be defined)."""
-    LIST_C_STRICT = _immutablelist([DICT_C_STRICT])
+    LIST_C_STRICT = (
+        [{mc.KEY_CHANNEL: 0}],
+        lambda ns, *channels: {
+            ns.key: (
+                [{ns.key_channel: channel} for channel in channels]
+                if channels
+                else [{mc.KEY_CHANNEL: 0}]
+            )
+        },
+        True,
+    )
     """Command GET with channel index dicts in a list returns the states requested.
     TODO: it might be feasible that also (empty i.e. no ns_key) EMPTY payload type would work to retrieve the full set
       especially if PUSH_QUERY appeared to work in our traces."""
-    LIST_C_DATA_STRICT = _immutablelist(
-        [_immutabledict({mc.KEY_CHANNEL: 0, mc.KEY_DATA: []})]
+    LIST_C_DATA_STRICT = (
+        [_immutabledict({mc.KEY_CHANNEL: 0, mc.KEY_DATA: []})],
+        lambda ns, *channels: {
+            ns.key: (
+                [{ns.key_channel: channel, mc.KEY_DATA: []} for channel in channels]
+                if channels
+                else [_immutabledict({mc.KEY_CHANNEL: 0, mc.KEY_DATA: []})]
+            )
+        },
+        True,
     )
+
     """Command GET for *.LatestX (and maybe *.HistoryX) ns."""
 
     # Payload types for PUSH verb
-    PUSH = _immutabledict({})
+    PUSH = EMPTY_DICT, lambda *args: EMPTY_DICT, False
     """Namespace supports async PUSH of the state."""
-    PUSH_QUERY = _immutabledict({})
+    PUSH_QUERY = EMPTY_DICT, lambda *args: EMPTY_DICT, False
     """Namespace supports PUSH by client triggering (i.e. client query with method PUSH and EMPTY payload).
     TODO: This might not be a real query feature, instead it might be that ns looking like supporting this
     in our traces are queriable by using (GET, {}) i.e. no ns_key in request payload (
@@ -204,15 +337,12 @@ class PayloadType(enum.Enum):
 
 
 # Semantics helpers symbols:
-INDEX_PAYLOADS = (
-    PayloadType.DICT_C,
-    PayloadType.DICT_C_STRICT,
-    PayloadType.DICT_C_65535,
-    PayloadType.LIST_C,
-    PayloadType.LIST_C_STRICT,
-    PayloadType.LIST_C_DATA_STRICT,
+PUSH_PAYLOADS = (
+    PayloadType.UNSUPPORTED,
+    PayloadType.UNKNOWN,
+    PayloadType.PUSH,
+    PayloadType.PUSH_QUERY,
 )
-PUSH_PAYLOADS = (None, PayloadType.UNKNOWN, PayloadType.PUSH, PayloadType.PUSH_QUERY)
 
 
 class Grammar(enum.StrEnum):
@@ -252,13 +382,13 @@ class Namespace(str):
         key_channel: Final[str]  # type: ignore
         """The key used to index items in list payloads. If None/empty no indexing is used."""
         # These indicate support and format for the corresponding verb. None means no support.
-        payload_get: Final[PayloadType | None]  # type: ignore
+        payload_get: Final[PayloadType]  # type: ignore
         """If not None Namespace supports GET verb with this payload type."""
-        payload_set: Final[PayloadType | None]  # type: ignore
+        payload_set: Final[PayloadType]  # type: ignore
         """If not None Namespace supports SET verb with this payload type."""
-        payload_del: Final[PayloadType | None]  # type: ignore
+        payload_del: Final[PayloadType]  # type: ignore
         """If not None Namespace supports DELETE verb with this payload type."""
-        payload_psh: Final[PayloadType | None]  # type: ignore
+        payload_psh: Final[PayloadType]  # type: ignore
         """If not None Namespace supports PUSH verb with this payload type."""
         is_thermostat: Final[bool]  # type: ignore
         grammar: Final[Grammar]  # type: ignore
@@ -327,7 +457,9 @@ class Namespace(str):
         key: str,
         *args: "Args",
     ):
-        self = str.__new__(cls, name)
+        return str.__new__(cls, name)
+
+    def __init__(self, name: str, key: str, *args: "Namespace.Args"):
         # We accept multiple args dicts so that we can build complex definitions
         # by composing small 'chunks' like ARGS_GET, ARGS_NO_GET, etc.
         # This also allows us to centralize here the defaults for parameters
@@ -347,16 +479,15 @@ class Namespace(str):
         for _attr in ("is_thermostat",):
             setattr(self, _attr, kwargs[_attr])
 
-        self.key_channel = kwargs["key_channel"]  # type: ignore
-        self.payload_get = kwargs.get("payload_get")  # type: ignore
-        self.payload_set = kwargs.get("payload_set")  # type: ignore
-        self.payload_del = kwargs.get("payload_del")  # type: ignore
-        self.payload_psh = kwargs.get("payload_psh")  # type: ignore
+        self.key_channel = kwargs["key_channel"]
+        self.payload_get = kwargs.get("payload_get") or PayloadType.UNSUPPORTED
+        self.payload_set = kwargs.get("payload_set") or PayloadType.UNSUPPORTED
+        self.payload_del = kwargs.get("payload_del") or PayloadType.UNSUPPORTED
+        self.payload_psh = kwargs.get("payload_psh") or PayloadType.UNSUPPORTED
 
         # TODO: check consistencies:
         # for example key_channel must be set if payload_get is any of DICT_C DICT_C_STRICT LIST_C or LIST_C_STRICT
-
-        if self.payload_get in INDEX_PAYLOADS or self.payload_set in INDEX_PAYLOADS:
+        if self.payload_get.indexed or self.payload_set.indexed:
             if not self.key_channel:
                 raise ValueError(
                     f"Namespace {self} uses indexed payloads but has no key_channel defined."
@@ -367,7 +498,6 @@ class Namespace(str):
         ), f"Namespace {self} has invalid payload_psh {self.payload_psh}"
 
         kwargs["map"][name] = self  # type: ignore
-        return self
 
     @property
     def slug(self) -> str:
@@ -378,8 +508,16 @@ class Namespace(str):
         return _slug_split(self.split(".")[-1])
 
     @cached_property
+    def has_get(self) -> bool:
+        return self.payload_get is not PayloadType.UNSUPPORTED
+
+    @cached_property
+    def has_set(self) -> bool:
+        return self.payload_set is not PayloadType.UNSUPPORTED
+
+    @cached_property
     def has_psh(self) -> bool:
-        return self.payload_psh is not None
+        return self.payload_psh is not PayloadType.UNSUPPORTED
 
     @cached_property
     def has_psq(self) -> bool:
@@ -387,10 +525,10 @@ class Namespace(str):
 
     @cached_property
     def request_default(self) -> "MerossRequestType":
-        if self.payload_get:
-            return self.request_get
+        if self.has_get:
+            return self.payload_get.build_get(self)
         elif self.has_psq:
-            return self.request_push
+            return self, mc.METHOD_PUSH, EMPTY_DICT
         else:
             raise ValueError(
                 f"Namespace {self} has no default request (no GET nor PUSH supported)."
@@ -399,35 +537,7 @@ class Namespace(str):
     @property
     def can_query(self) -> bool:
         """Indicates if the namespace supports querying (GET or PUSH_QUERY)."""
-        return bool(self.payload_get or self.has_psq)
-
-    @property
-    def request_get(self) -> "MerossRequestType":
-        match self.payload_get:
-            case PayloadType.EMPTY | PayloadType.UNKNOWN:
-                return self, mc.METHOD_GET, PayloadType.EMPTY.value
-            case PayloadType.DICT | PayloadType.DICT_C:
-                return self, mc.METHOD_GET, {self.key: PayloadType.DICT.value}
-            case PayloadType.DICT_C_STRICT:
-                return self, mc.METHOD_GET, {self.key: {self.key_channel: 0}}
-            case PayloadType.DICT_C_65535:
-                return self, mc.METHOD_GET, {self.key: {self.key_channel: 65535}}
-            case PayloadType.LIST_C:
-                return self, mc.METHOD_GET, {self.key: PayloadType.LIST_C.value}
-            case PayloadType.LIST_C_STRICT:
-                return self, mc.METHOD_GET, {self.key: [{self.key_channel: 0}]}
-            case PayloadType.LIST_C_DATA_STRICT:
-                return (
-                    self,
-                    mc.METHOD_GET,
-                    {self.key: [{self.key_channel: 0, mc.KEY_DATA: []}]},
-                )
-            case _:
-                return self, mc.METHOD_GET, PayloadType.EMPTY.value
-
-    @property
-    def request_push(self) -> "MerossRequestType":
-        return self, mc.METHOD_PUSH, PayloadType.EMPTY.value
+        return self.has_get or self.has_psq
 
     @cached_property
     def request_set(self) -> "Callable[..., MerossRequestType]":
@@ -446,10 +556,10 @@ class Namespace(str):
             case PayloadType.EMPTY:
                 return self.request_set_empty
             case _:
-                raise Exception("Namespace does not support SET method")
+                raise Exception(f"{self} namespace does not support SET method")
 
     def request_set_empty(self, *args) -> "MerossRequestType":
-        return self, mc.METHOD_SET, PayloadType.EMPTY.value
+        return self, mc.METHOD_SET, EMPTY_DICT
 
     def request_set_dict(self, payload, *args) -> "MerossRequestType":
         return self, mc.METHOD_SET, {self.key: payload}

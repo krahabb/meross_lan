@@ -168,9 +168,7 @@ class MLRollerShutter(MLCover):
 
     async def async_request_position(self, position: int):
         self._transition_cancel()
-        await self.handler_ns.async_set(
-            {mc.KEY_CHANNEL: self.channel, self.key_value: position}
-        )
+        await self.async_request_payload({self.key_value: position})
         self._transition_cancel()
         await self._async_transition_callback()
 

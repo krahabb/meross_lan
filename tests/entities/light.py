@@ -105,7 +105,7 @@ class EntityTest(EntityComponentTest):
             )
             assert (
                 state.attributes[haec.ATTR_RGB_COLOR] == native_to_rgb(rgb_meross)
-                and entity._light[mc.KEY_RGB] == rgb_meross
+                and entity._payload_ns[mc.KEY_RGB] == rgb_meross
             ), "rgb_to_native"
 
         if ColorMode.COLOR_TEMP in supported_color_modes:
@@ -122,7 +122,7 @@ class EntityTest(EntityComponentTest):
                 )
                 assert (
                     state.attributes[haec.ATTR_COLOR_TEMP_KELVIN] == kelvin
-                    and entity._light[mc.KEY_TEMPERATURE] == temperature
+                    and entity._payload_ns[mc.KEY_TEMPERATURE] == temperature
                 ), "kelvin_to_native"
 
         if check_brightness:
@@ -138,7 +138,7 @@ class EntityTest(EntityComponentTest):
                 )
                 assert (
                     state.attributes[haec.ATTR_BRIGHTNESS] == brightness
-                    and entity._light[mc.KEY_LUMINANCE] == luminance
+                    and entity._payload_ns[mc.KEY_LUMINANCE] == luminance
                 ), "brightness_to_native"
 
     async def async_test_disabled_callback(

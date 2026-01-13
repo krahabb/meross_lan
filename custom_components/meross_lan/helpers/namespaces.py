@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from .. import const as mlc
 from ..merossclient import merge_dicts
-from ..merossclient.protocol import const as mc, namespaces as mn
+from ..merossclient.protocol import MerossProtocolError, const as mc, namespaces as mn
 
 if TYPE_CHECKING:
     from typing import Any, Callable, Coroutine, Final, Iterable
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from . import Loggable
     from ..merossclient.protocol import types as mt
     from ..merossclient.protocol.message import MerossMessage, MerossResponse
-    from ..merossclient.protocol.types import JsonDict
+    from ..merossclient.protocol.types import JsonDict, JsonMapping
     from .device import AsyncRequestFunc, Device
     from .entity import MLEntity
 
@@ -40,23 +40,22 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
         # namespace payload syntax. NamespaceHandler will lookup any of these when
         # establishing the link between the handler and the parser
         ns: mn.Namespace
-        channel: int
-        # id: str
-        subId: str
+        channel: int | str  # the channel/id/subId key value according to the namespace
 
-        """Reference to the NamespaceHandler this parser is registered to. If this parser
-        is registered to multiple handlers, this will point to the first of them only.
-        As a rough formal rule, this should point to the handler managing the 'ns' member defined in the
-        derived class (MLEntity actually)."""
-        _namespace_handlers: set["NamespaceHandler"]
+        _payload_ns: JsonDict  # the last parsed payload
+        _namespace_handlers: set[
+            "NamespaceHandler"
+        ]  # multiple ns could forward to this parser
 
-    # This set will be created x instance when linking the parser to the handler
+    # using class-level defaults here until we build a proper hierarchy
+    # with specialized __init__
+    _payload_ns = mn.EMPTY_DICT  # class-level default
     _namespace_handlers = None  # type: ignore
 
     async def async_shutdown(self):
         try:
             for handler in self._namespace_handlers:
-                del handler.parsers[getattr(self, handler.ns.key_channel)]
+                del handler.parsers[self.channel]
             del self._namespace_handlers
             del self.handler_ns  # type: ignore
         except TypeError:  # never registered
@@ -71,6 +70,36 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
         # where ns parsing is delegated to a container object/handler which is then dispatching
         # updates without using the NamespaceHandler inner mechanisms.
         return self.manager.ns_handlers[self.ns]  # type: ignore
+
+    async def async_request_payload(self, payload: "JsonDict", /):
+        # return await self.handler_ns.async_set(payload)
+        return await self.handler_ns.device.async_request(
+            *self.ns.request_set(payload, self.channel)
+        )
+
+    async def async_request_parse(self, payload: "JsonDict", /):
+        response = await self.async_request_payload(payload)
+        # TODO: consider maybe a dedicated _parse_set_xxxx method?
+        # also, most namespaces SETACK replies are empty dicts
+        # so we just dispatch the request payload (which might be a
+        # subset of the whole GET payload).
+        # Some namespaces though might return different payloads on SETACK
+        # GarageDoor.State or mts100.Temperature
+        getattr(self, f"_parse_{self.ns.slug_end}", self._parse)(payload)
+        return response
+
+    async def async_request_parse_ex(self, payload: "JsonDict", /):
+        response = await self.async_request_payload(payload)
+        # TODO: consider maybe a dedicated _parse_set_xxxx method?
+        # also, most namespaces SETACK replies are empty dicts
+        # so we just dispatch the request payload (which might be a
+        # subset of the whole GET payload).
+        # Some namespaces though might return different payloads on SETACK
+        # GarageDoor.State or mts100.Temperature
+        getattr(self, f"_parse_{self.ns.slug_end}", self._parse)(
+            merge_dicts(self._payload_ns, payload)
+        )
+        return response
 
     def _parse(self, payload: dict, /):
         """Default payload message parser. This is invoked automatically
@@ -234,20 +263,10 @@ class NamespaceHandler:
                 self.polling_request = (
                     ns,
                     mc.METHOD_PUSH,
-                    mn.PayloadType.PUSH.value,
-                )
-            case mn.PayloadType.EMPTY:
-                self.polling_request = (
-                    ns,
-                    mc.METHOD_GET,
-                    mn.PayloadType.EMPTY.value,
+                    mn.EMPTY_DICT,
                 )
             case _:
-                self.polling_request = (
-                    ns,
-                    mc.METHOD_GET,
-                    {ns.key: _payload_type.value if _payload_type else {}},
-                )
+                self.polling_request = _payload_type.build_get(ns)
 
     def polling_request_add_channel(
         self, channel, extra: "mt.MerossPayloadType" = {}, /
@@ -318,7 +337,7 @@ class NamespaceHandler:
         # either carry dict or, worse, could present themselves in both forms
         # (ToggleX is a well-known example)
         ns = self.ns
-        channel = getattr(parser, ns.key_channel)
+        channel = parser.channel
         assert channel not in self.parsers, "parser already registered"
         self.parsers[channel] = getattr(parser, f"_parse_{ns.slug_end}", parser._parse)
         if not parser._namespace_handlers:
@@ -333,6 +352,8 @@ class NamespaceHandler:
         This is invoked by Device._handle after routing the message to
         the proper NamespaceHandler based off the namespace in the header.
         """
+        # TODO: save all of the last sent/received payloads for a ns_handler
+        # for diagnostics (GET/ACK/SET/PUSH/DEL)
         self.lastresponse = self.device.lastresponse
         self.polling_epoch_next = self.lastresponse + self.polling_period
         try:
@@ -561,39 +582,25 @@ class NamespaceHandler:
 
         return self.parsers[channel]
 
-    async def async_get(self, channel: object = None, /):
+    async def async_get(self, *channels):
         """
         Helper to execute a straigth query to get the whole namespace payload
         or a single item/channel and dispatch the response to the internal
         handler bypassing the Device message routing.
         if channel is None the whole namespace is requested.
         """
-        if channel is None:
-            response = await self.device.async_request_ack(*self.polling_request)
-        else:
+        if channels:
             ns = self.ns
-            payload_type = self.polling_request[2][ns.key]
-            if isinstance(payload_type, list):
-                response = await self.device.async_request_ack(
-                    ns,
-                    mc.METHOD_GET,
-                    {ns.key: [{ns.key_channel: channel}]},
-                )
-            elif isinstance(payload_type, dict):
-                response = await self.device.async_request_ack(
-                    ns,
-                    mc.METHOD_GET,
-                    {ns.key: {ns.key_channel: channel}},
-                )
-            else:
-                raise Exception(f"Cannot GET single channel for {ns} namespace")
+            response = await self.device.async_request(
+                *ns.payload_get.build_get(ns, *channels)
+            )
+        else:
+            response = await self.device.async_request(*self.polling_request)
 
-        # TODO: save all of the last sent/received payloads for a ns_handler
-        # for diagnostics (GET/ACK/SET/PUSH/DEL)
         self.handle_response(response)
         return response
 
-    async def async_get_safe(self, channel: object = None, /):
+    async def async_get_safe(self, *channels):
         """
         Helper to execute a straigth query to get the whole namespace payload
         or a single item/channel and dispatch the response to the internal
@@ -601,21 +608,29 @@ class NamespaceHandler:
         if channel is None the whole namespace is requested.
         """
         try:
-            return await self.async_get(channel)
+            return await self.async_get(*channels)
         except Exception as e:
             self.handle_exception(e, "async_get", None)
 
-    def schedule_get(self, channel: object = None, task_name: str = "", /):
+    def schedule_get(
+        self,
+        *channels,
+        task_name: str = "",
+    ):
         """
         Helper to schedule a straigth query to get the whole namespace payload.
         This shouldnt be used for namespaces that don't support GET.
         """
         self.device.async_create_task(
-            self.async_get_safe(channel), task_name or self.ns, False
+            self.async_get_safe(*channels), task_name or self.ns, False
         )
 
     async def async_set(
-        self, payload: "JsonDict", parser: NamespaceParser | None = None, state=None, /
+        self,
+        payload: "JsonDict",
+        parser: NamespaceParser | None = None,
+        state: "JsonMapping" = mn.EMPTY_DICT,
+        /,
     ):
         """
         Helper to request method SET and eventually dispatch the response to the parser
@@ -625,28 +640,8 @@ class NamespaceHandler:
         the SET command payload will be automatically set to the parser's channel.
         """
         ns = self.ns
-        match ns.payload_set:
-            case mn.PayloadType.LIST_C:
-                if parser:
-                    payload[ns.key_channel] = parser.channel
-                set_payload = {ns.key: [payload]}
-            case mn.PayloadType.DICT_C:
-                if parser:
-                    payload[ns.key_channel] = parser.channel
-                set_payload = {ns.key: payload}
-            case mn.PayloadType.DICT:
-                set_payload = {ns.key: payload}
-            case mn.PayloadType.EMPTY:
-                if payload:
-                    raise Exception(f"{ns} namespace expects empty payload on SET")
-                set_payload = payload
-            case _:
-                raise Exception(f"{ns} namespace does not support SET method")
-
-        response = await self.device.async_request_ack(
-            ns,
-            mc.METHOD_SET,
-            set_payload,
+        response = await self.device.async_request(
+            *ns.request_set(payload, parser.channel if parser else None)
         )
         if parser:
             # TODO: consider maybe a dedicated _parse_set_xxxx method?
@@ -660,16 +655,9 @@ class NamespaceHandler:
             )
         return response
 
-    async def async_set_safe(
-        self, payload: "JsonDict", parser: NamespaceParser | None = None, state=None, /
+    async def async_set_c_ex(
+        self, payload, parser: NamespaceParser, state: "JsonMapping" = mn.EMPTY_DICT, /
     ):
-        try:
-            return await self.async_set(payload, parser, state)
-        except Exception as e:
-            # TODO: try to recover the received payload if the exception was raised after
-            self.handle_exception(e, "async_set", None)
-
-    async def async_set_c_ex(self, payload, parser: NamespaceParser, state, /):
         """
         Helper to request method SET (only for LIST_C payload types)and eventually dispatch the response to the parser
         bypassing the Device and the NamespaceHandler message routing.
@@ -689,9 +677,8 @@ class NamespaceHandler:
         assert ns.payload_set is mn.PayloadType.LIST_C, "Only LIST_C supported here"
         response = None
         try:
-            payload[ns.key_channel] = getattr(parser, ns.key_channel)
-            response = await self.device.async_request_ack(
-                ns, mc.METHOD_SET, {ns.key: [payload]}
+            response = await self.device.async_request(
+                *ns.request_set(payload, parser.channel)
             )
             try:
                 payload = response.payload[ns.key][0]
@@ -835,22 +822,45 @@ class NamespaceHandler:
         In general, current Namespace class restructure (dec 2025) tried to mantain our knowledge from
         the 'field' but that might likely be too much for many of these namespaces.
         """
+
         ns = self.ns
         if ns.grammar is mn.Grammar.STABLE:
-            if (not self.polling_request_channels) and (
-                ns.payload_get
-                in (mn.PayloadType.LIST_C_STRICT, mn.PayloadType.LIST_C_DATA_STRICT)
-            ):
-                # when a 'LIST_C_STRICT' namespace has no registered parsers, self.polling_request will fail
-                # so we use the mocked default request
-                await async_request_func(*ns.request_default)
-            elif ns.can_query:
-                await async_request_func(*self.polling_request)
+            try:
+                if (not self.polling_request_channels) and (
+                    ns.payload_get
+                    in (mn.PayloadType.LIST_C_STRICT, mn.PayloadType.LIST_C_DATA_STRICT)
+                ):
+                    # when a 'LIST_C_STRICT' namespace has no registered parsers, self.polling_request will fail
+                    # so we use the mocked default request
+                    await async_request_func(*ns.request_default)
+                elif ns.can_query:
+                    await async_request_func(*self.polling_request)
+            except Exception:
+                pass
             return
 
         ns_name = ns
         ns_key = ns.key
         ns_key_channel = ns.key_channel
+
+        async def _async_wrapped_get(payload: "JsonDict"):
+            try:
+                return await async_request_func(ns_name, mc.METHOD_GET, payload)
+            except Exception:
+                # Right now we just keep on going..
+                # It would be better to detect if the device is offline and leave the whole
+                # tracing at that point (maybe).
+                return None
+
+        async def _async_wrapped_push():
+            try:
+                return await async_request_func(ns_name, mc.METHOD_PUSH, mn.EMPTY_DICT)
+            except Exception:
+                # Right now we just keep on going..
+                # It would be better to detect if the device is offline and leave the whole
+                # tracing at that point (maybe).
+                return None
+
         match ns.grammar:
             case mn.Grammar.EXPERIMENTAL:
                 # These are typically known in their structure and likely to be channelized
@@ -859,8 +869,8 @@ class NamespaceHandler:
                 # specifically implemented for GarageDoor.State. Other issues that might be due
                 # to the same 'structural querying format error' are #517 and others involving
                 # the namespaces marked as EXPERIMENTAL in our mn.grammar
-                await async_request_func(ns_name, mc.METHOD_PUSH, {})
-                await async_request_func(ns_name, mc.METHOD_GET, {})
+                await _async_wrapped_push()
+                await _async_wrapped_get({})
 
                 if self.device.DEVICE_TYPE is mlc.DeviceType.DEVICE:
                     channels = self.parsers.keys() or (0,)
@@ -875,18 +885,17 @@ class NamespaceHandler:
                 detected_request_payload_type: mn.PayloadType | None = None
 
                 async def _async_check(_payload: "mt.MerossPayloadType"):
-                    if _response := await async_request_func(
-                        ns_name, mc.METHOD_GET, _payload
-                    ):
-                        try:
-                            payload = _response.check()["payload"][ns_key]
-                            if type(payload) is list:
-                                return channels_count == len(payload)
-                            else:  # dict
-                                return channels_count == 1
-                        except Exception:
-                            pass
-                    return False
+                    try:
+                        _response = await async_request_func(
+                            ns_name, mc.METHOD_GET, _payload
+                        )
+                        payload = _response.payload[ns_key]
+                        if type(payload) is list:
+                            return channels_count == len(payload)
+                        else:  # dict
+                            return channels_count == 1
+                    except Exception:
+                        return False
 
                 if await _async_check({ns_key: channels_payload}):
                     detected_request_payload_type = mn.PayloadType.LIST_C_STRICT
@@ -899,7 +908,7 @@ class NamespaceHandler:
                     mn.PayloadType.LIST_C,
                     mn.PayloadType.DICT_C,
                 ):
-                    if await _async_check({ns_key: _payload_type.value}):
+                    if await _async_check(_payload_type.build(ns)):
                         detected_request_payload_type = _payload_type
 
                 if detected_request_payload_type:
@@ -913,53 +922,38 @@ class NamespaceHandler:
                     # If this querying format works but none of the other does then we'll
                     # need to implement async_poll_digest in order to send the whole set of requests
                     # needed to poll the digest
-                    await async_request_func(
-                        ns_name, mc.METHOD_GET, {ns_key: channel_payload}
-                    )
+                    await _async_wrapped_get({ns_key: channel_payload})
                 # Also check if hub namespaces indexed by "subId" maybe also need a "channel"
                 if ns_key_channel == mc.KEY_SUBID:
-                    await async_request_func(
-                        ns_name,
-                        mc.METHOD_GET,
+                    await _async_wrapped_get(
                         {
                             ns_key: [
                                 {ns_key_channel: channel, mc.KEY_CHANNEL: 0}
                                 for channel in channels
                             ]
-                        },
+                        }
                     )
 
             case mn.Grammar.UNKNOWN:
                 # We don't know yet how to query this ns so we'll brute-force it
-                if ns.payload_psh:
-                    response = await async_request_func(ns_name, mc.METHOD_PUSH, {})
-                    if response and (response.method == mc.METHOD_PUSH):
+                if ns.has_psh:
+                    if response := await _async_wrapped_push():
                         ns_key = mn.Namespace.infer_key(ns_name, response.payload)
 
-                if ns.payload_get:
-
-                    async def _async_get(_payload: "mt.MerossPayloadType"):
-                        if (
-                            _response := await async_request_func(
-                                ns_name, mc.METHOD_GET, _payload
-                            )
-                        ) and (_response.method == mc.METHOD_GETACK):
-                            return _response
-                        return None
-
-                    if response := await _async_get({}):
+                if ns.has_get:
+                    if response := await _async_wrapped_get({}):
                         ns_key = mn.Namespace.infer_key(ns_name, response.payload)
-                    elif response := await _async_get({ns.key: []}):
+                    elif response := await _async_wrapped_get({ns.key: []}):
                         ns_key = ns.key
                     else:
                         # ns.key might be wrong or verb GET unsupported
                         if ns_key and (ns_key != ns.key):
                             # try the namespace key from PUSH attempt
-                            response = await _async_get({ns_key: []})
+                            response = await _async_wrapped_get({ns_key: []})
                         if (not response) and ns.key.endswith("x"):
                             # euristic(!)
                             ns_key = ns.key[:-1]
-                            response = await _async_get({ns_key: []})
+                            response = await _async_wrapped_get({ns_key: []})
                         if not response:
                             # no chance
                             return
@@ -969,16 +963,11 @@ class NamespaceHandler:
                         return
                     # the namespace might need a channel index in the request
                     if self.device.DEVICE_TYPE is mlc.DeviceType.DEVICE:
-                        await async_request_func(
-                            ns_name,
-                            mc.METHOD_GET,
-                            {ns_key: [{mc.KEY_CHANNEL: 0}]},
-                        )
+                        await _async_wrapped_get({ns_key: [{mc.KEY_CHANNEL: 0}]})
                     else:  # it is an hub
                         subdevices = self.device.subdevices
                         # typical 'legacy' devices are queried by "id"
-
-                        if response := await _async_get(
+                        if response := await _async_wrapped_get(
                             {
                                 ns_key: [
                                     {mc.KEY_ID: subdevice_id}
@@ -990,7 +979,7 @@ class NamespaceHandler:
                             if response_payload:
                                 return
                         # many other new ones (ms130 for example) need a "subId"
-                        if response := await _async_get(
+                        if response := await _async_wrapped_get(
                             {
                                 ns_key: [
                                     {mc.KEY_SUBID: subdevice_id}
@@ -1002,7 +991,7 @@ class NamespaceHandler:
                             if response_payload:
                                 return
                         # finally: try also setting a "channel" (it is carried in messages from the subdevice)
-                        await _async_get(
+                        await _async_wrapped_get(
                             {
                                 ns_key: [
                                     {mc.KEY_SUBID: subdevice_id, mc.KEY_CHANNEL: 0}

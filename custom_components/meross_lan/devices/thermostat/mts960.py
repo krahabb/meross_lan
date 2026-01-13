@@ -58,7 +58,7 @@ class Mts960Climate(MtsThermostatClimate):
             MLEmulatedNumber.__init__(self, climate.manager, climate.channel, entitykey)
 
     if TYPE_CHECKING:
-        _mts_payload: mt_t.ModeB_C
+        _payload_ns: mt_t.ModeB_C
         binary_sensor_plug_state: PlugState
         number_timer_down_duration: TimerConfigNumber
         number_timer_cycle_off_duration: TimerConfigNumber
@@ -212,43 +212,35 @@ class Mts960Climate(MtsThermostatClimate):
             case MtsThermostatClimate.HVACMode.OFF:
                 await self.async_request_onoff(0)
             case MtsThermostatClimate.HVACMode.HEAT:
-                await self.handler_ns.async_set_c_ex(
+                await self.async_request_parse_ex(
                     {
                         mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
                         mc.KEY_MODE: mc.MTS960_MODE_HEAT_COOL,
                         mc.KEY_WORKING: mc.MTS960_WORKING_HEAT,
                     },
-                    self,
-                    self._mts_payload,
                 )
             case MtsThermostatClimate.HVACMode.COOL:
-                await self.handler_ns.async_set_c_ex(
+                await self.async_request_parse_ex(
                     {
                         mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
                         mc.KEY_MODE: mc.MTS960_MODE_HEAT_COOL,
                         mc.KEY_WORKING: mc.MTS960_WORKING_COOL,
                     },
-                    self,
-                    self._mts_payload,
                 )
             case MtsThermostatClimate.HVACMode.AUTO:
                 # preserves heating/cooling as actually set in the device
-                await self.handler_ns.async_set_c_ex(
+                await self.async_request_parse_ex(
                     {
                         mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
                         mc.KEY_MODE: mc.MTS960_MODE_SCHEDULE,
-                    },
-                    self,
-                    self._mts_payload,
+                    }
                 )
             case MtsThermostatClimate.HVACMode.FAN_ONLY:
-                await self.handler_ns.async_set_c_ex(
+                await self.async_request_parse_ex(
                     {
                         mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
                         mc.KEY_MODE: mc.MTS960_MODE_TIMER,
-                    },
-                    self,
-                    self._mts_payload,
+                    }
                 )
 
     @override
@@ -259,24 +251,20 @@ class Mts960Climate(MtsThermostatClimate):
             case Mts960Climate.Preset.COOLING:
                 await self.async_set_hvac_mode(MtsThermostatClimate.HVACMode.COOL)
             case Mts960Climate.Preset.SCHEDULE_HEATING:
-                await self.handler_ns.async_set_c_ex(
+                await self.async_request_parse_ex(
                     {
                         mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
                         mc.KEY_MODE: mc.MTS960_MODE_SCHEDULE,
                         mc.KEY_WORKING: mc.MTS960_WORKING_HEAT,
                     },
-                    self,
-                    self._mts_payload,
                 )
             case Mts960Climate.Preset.SCHEDULE_COOLING:
-                await self.handler_ns.async_set_c_ex(
+                await self.async_request_parse_ex(
                     {
                         mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
                         mc.KEY_MODE: mc.MTS960_MODE_SCHEDULE,
                         mc.KEY_WORKING: mc.MTS960_WORKING_COOL,
                     },
-                    self,
-                    self._mts_payload,
                 )
             case Mts960Climate.Preset.TIMER_CYCLE:
                 # how to start the timer is still unknown..here a guessed impl
@@ -333,7 +321,7 @@ class Mts960Climate(MtsThermostatClimate):
     async def async_set_temperature(self, **kwargs):
         # bumps out of any timer/schedule mode and sets target temp
         # preserving heating/cooling mode
-        await self.handler_ns.async_set_c_ex(
+        await self.async_request_parse_ex(
             {
                 mc.KEY_MODE: mc.MTS960_MODE_HEAT_COOL,
                 mc.KEY_WORKING: self._mts_working or mc.MTS960_WORKING_HEAT,
@@ -341,26 +329,20 @@ class Mts960Climate(MtsThermostatClimate):
                     kwargs[self.ATTR_TEMPERATURE] * self.device_scale
                 ),
             },
-            self,
-            self._mts_payload,
         )
 
     @override
     async def async_request_preset(self, mode: int, /):
-        await self.handler_ns.async_set_c_ex(
+        await self.async_request_parse_ex(
             {mc.KEY_ONOFF: mc.MTS960_ONOFF_ON, mc.KEY_MODE: mode},
-            self,
-            self._mts_payload,
         )
 
     @override
     async def async_request_onoff(self, onoff: int, /):
-        await self.handler_ns.async_set_c_ex(
+        await self.async_request_parse_ex(
             {
                 mc.KEY_ONOFF: mc.MTS960_ONOFF_ON if onoff else mc.MTS960_ONOFF_OFF,
             },
-            self,
-            self._mts_payload,
         )
 
     @override
@@ -377,14 +359,13 @@ class Mts960Climate(MtsThermostatClimate):
                 Mts960Climate.TIMER_TYPE_KEY[timer_type]: payload,
             },
             self,
-            {},
         )
 
     # message handlers
     def _parse_modeB(self, payload: "mt_t.ModeB_C", /):
-        if self._mts_payload == payload:
+        if self._payload_ns == payload:
             return
-        self._mts_payload = payload
+        self._payload_ns = payload
         if mc.KEY_MODE in payload:
             self._mts_mode = payload[mc.KEY_MODE]
         if mc.KEY_ONOFF in payload:

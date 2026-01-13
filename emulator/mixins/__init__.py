@@ -543,8 +543,6 @@ class MerossEmulator:
 
         match method:
             case mc.METHOD_GET:
-                if not ns.payload_get:
-                    raise Exception(f"{method} not supported for {namespace}")
                 channels: list | None
                 try:
                     match ns.payload_get:
@@ -577,6 +575,8 @@ class MerossEmulator:
                                 if key_payload[ns.key_channel] == 65535
                                 else [key_payload]
                             )
+                        case mn.PayloadType.UNSUPPORTED:
+                            raise Exception(f"{method} not supported for {namespace}")
                         case _:
                             channels = None
 
@@ -608,12 +608,12 @@ class MerossEmulator:
                     )
 
             case mc.METHOD_SET:
-                if not ns.payload_set:
-                    raise Exception(f"{method} not supported for {namespace}")
-
-                if ns.payload_set is mn.PayloadType.EMPTY:
-                    assert not payload
-                    return mc.METHOD_SETACK, {}
+                match ns.payload_set:
+                    case mn.PayloadType.UNSUPPORTED:
+                        raise Exception(f"{method} not supported for {namespace}")
+                    case mn.PayloadType.EMPTY:
+                        assert not payload
+                        return mc.METHOD_SETACK, {}
 
                 key_payload = payload[ns.key]
                 p_state = p_state[ns.key]
@@ -645,7 +645,7 @@ class MerossEmulator:
                             f"ns.payload_set({ns.payload_set}) not supported  for {namespace}"
                         )
 
-                if self.mqtt_connected and ns.payload_psh:
+                if self.mqtt_connected and ns.has_psh:
                     # TODO: generalize to every namespace update (also in mixins)
                     # by implementing some interception of update_dict_strict and
                     # update_dict_strict_by_key. Then, only push if the state changed
