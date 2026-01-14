@@ -312,7 +312,7 @@ class MLRollerShutter(MLCover):
         ) or (self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE):
             try:
                 if manager.multiple_max >= 2:
-                    await manager.async_multiple_requests_ack(
+                    await manager.async_request_multiple(
                         (
                             mn.Appliance_RollerShutter_State.request_default,
                             mn.Appliance_RollerShutter_Position.request_default,

@@ -11,7 +11,8 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util, slugify
 
-from . import datetime_from_epoch
+# import core modules instead of symbols to ease patching in a single place
+from . import datetime_from_epoch, manager as mlm
 from .. import const as mlc
 from ..button import MLPersistentButton
 
@@ -40,7 +41,6 @@ from ..merossclient.protocol.message import (
 from ..merossclient.protocol.namespaces import thermostat as mn_t
 from ..sensor import ProtocolSensor
 from ..update import MLUpdate
-from .manager import ConfigEntryManager, EntityManager
 from .namespaces import NamespaceHandler, mc, mn
 
 if TYPE_CHECKING:
@@ -88,7 +88,7 @@ if TYPE_CHECKING:
     ]
 
 
-class BaseDevice(EntityManager):
+class BaseDevice(mlm.EntityManager):
     """
     Abstract base class for Device and SubDevice (from hub)
     giving common behaviors like device_registry interface
@@ -99,14 +99,14 @@ class BaseDevice(EntityManager):
 
         # override some nullable since we're pretty sure they're none
         config_entry: Final[ConfigEntry]  # type: ignore
-        deviceentry_id: Final[EntityManager.DeviceEntryIdType]  # type: ignore
+        deviceentry_id: Final[mlm.EntityManager.DeviceEntryIdType]  # type: ignore
 
         online: Final[bool]
         device_registry_entry: Final[dr.DeviceEntry]
         latest_version: LatestVersionType
         update_firmware: MLUpdate | None
 
-        class Args(EntityManager.Args):
+        class Args(mlm.EntityManager.Args):
             config_entry: ConfigEntry
             name: str
             model: str
@@ -160,15 +160,6 @@ class BaseDevice(EntityManager):
         )
 
     # interface: self
-    def update_device_registry(
-        self, *, connections: set[tuple[str, str]] | None = None
-    ):
-        device_registry_entry = self.device_registry_entry
-        if connections is not None and device_registry_entry.connections != connections:
-            self.api.device_registry.async_update_device(
-                device_registry_entry.id, new_connections=connections
-            )
-
     def update_latest_version(self, latest_version: "LatestVersionType"):
         self.latest_version = latest_version
         if self.update_firmware:
@@ -193,6 +184,10 @@ class BaseDevice(EntityManager):
 
     @abc.abstractmethod
     def check_device_timezone(self):
+        # TODO: remove this from BaseDevice and move to Device only.
+        # also change the invocation logic maybe scheduling this only when onlining.
+        # This is actually needed in BaseDevice because Mts valves (being thermostats)
+        # require timezone checking too. We should think a different requirement check.
         raise NotImplementedError("check_device_timezone")
 
     @abc.abstractmethod
@@ -215,7 +210,7 @@ class BaseDevice(EntityManager):
         raise NotImplementedError("_get_internal_name")
 
 
-class Device(BaseDevice, ConfigEntryManager):
+class Device(BaseDevice, mlm.ConfigEntryManager):
     """
     Generic protocol handler class managing the physical device stack/state
     """
@@ -287,7 +282,7 @@ class Device(BaseDevice, ConfigEntryManager):
         _polling_epoch: float
         _polling_unsub: TimerHandle | None
         _polling_task: Task | None
-        _queued_cloudpoll_requests: int
+        cloudpoll_requests: Final[int]  # externally read-only
         multiple_max: int
         _multiple_requests: list[NamespaceHandler]
         _multiple_response_size: int
@@ -414,7 +409,7 @@ class Device(BaseDevice, ConfigEntryManager):
         *(ns for ns in mn.NAMESPACES.values() if not ns.can_query),
     )
 
-    DEFAULT_PLATFORMS = ConfigEntryManager.DEFAULT_PLATFORMS | {
+    DEFAULT_PLATFORMS = mlm.ConfigEntryManager.DEFAULT_PLATFORMS | {
         MLUpdate.PLATFORM: None,
     }
 
@@ -457,7 +452,7 @@ class Device(BaseDevice, ConfigEntryManager):
         "_polling_epoch",
         "_polling_unsub",
         "_polling_task",
-        "_queued_cloudpoll_requests",
+        "cloudpoll_requests",
         "multiple_max",
         "_multiple_requests",
         "_multiple_response_size",
@@ -515,7 +510,7 @@ class Device(BaseDevice, ConfigEntryManager):
         self._polling_epoch = 0.0
         self._polling_unsub = None
         self._polling_task = None
-        self._queued_cloudpoll_requests = 0
+        self.cloudpoll_requests = 0
         self.multiple_max = 0
         self._multiple_requests = []
         self._multiple_response_size = PARAM_HEADER_SIZE
@@ -697,8 +692,11 @@ class Device(BaseDevice, ConfigEntryManager):
                     _bluetooth.attach(self)
         elif _bluetooth := self._bluetooth:
             _bluetooth.detach()
-            self.update_device_registry(
-                connections={(dr.CONNECTION_NETWORK_MAC, self.descriptor.macAddress)}
+            self.api.device_registry.async_update_device(
+                self.device_registry_entry.id,
+                new_connections={
+                    (dr.CONNECTION_NETWORK_MAC, self.descriptor.macAddress)
+                },
             )
 
     def _update_host(self):
@@ -1136,7 +1134,14 @@ class Device(BaseDevice, ConfigEntryManager):
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
             if self._mqtt_publish:
                 try:
-                    return await self.async_mqtt_request(*args)
+                    return await self.async_mqtt_request_raw(
+                        MerossRequest(
+                            *args,
+                            self.key,
+                            self._topic_response,
+                            self.__class__.__name__,
+                        )
+                    )
                 except Exception:
                     if self.conf_protocol is CONF_PROTOCOL_MQTT:
                         raise
@@ -1147,14 +1152,28 @@ class Device(BaseDevice, ConfigEntryManager):
                 raise MerossError("No MQTT transport available to send the request")
 
         try:
-            return await self.async_http_request(*args)
+            return await self.async_http_request_raw(
+                MerossRequest(
+                    *args,
+                    self.key,
+                    self._topic_response,
+                    self.__class__.__name__,
+                )
+            )
         except Exception:
             if (
                 self._mqtt_active  # device is connected to broker
                 and self._mqtt_publish  # profile allows publishing
                 and not mqttfailed  # we've already tried mqtt
             ):
-                return await self.async_mqtt_request(*args)
+                return await self.async_mqtt_request_raw(
+                    MerossRequest(
+                        *args,
+                        self.key,
+                        self._topic_response,
+                        self.__class__.__name__,
+                    )
+                )
             raise
 
     @override
@@ -1391,7 +1410,7 @@ class Device(BaseDevice, ConfigEntryManager):
         self._multiple_requests.clear()
         self._multiple_response_size = PARAM_HEADER_SIZE
 
-    async def async_multiple_requests_ack(
+    async def async_request_multiple(
         self, requests: "Iterable[MerossRequestType]", auto_handle: bool = True
     ) -> MerossResponse:
         """Send requests in a single NS_APPLIANCE_CONTROL_MULTIPLE message.
@@ -1426,127 +1445,6 @@ class Device(BaseDevice, ConfigEntryManager):
 
         return response
 
-    async def _async_multiple_requests_flush(self):
-        multiple_requests = self._multiple_requests
-        multiple_response_size = self._multiple_response_size
-        self._multiple_requests = []
-        self._multiple_response_size = PARAM_HEADER_SIZE
-
-        requests_len = len(multiple_requests)
-        while self.online and requests_len:
-            lazypoll_requests = self._lazypoll_requests
-            while (requests_len < self.multiple_max) and lazypoll_requests:
-                # we have space available in current ns_multiple and lazy pollers are waiting
-                for handler in lazypoll_requests:
-                    # lazy pollers are ordered by 'oldest polled first' so
-                    # the first is the one which hasn't been polled since longer
-                    # we then decide to add to the current ns_multiple the first that would fit in
-                    if (
-                        handler.polling_response_size + multiple_response_size
-                    ) < self.device_response_size_max:
-                        handler.lastrequest = self._polling_epoch
-                        handler.polling_epoch_next = (
-                            handler.lastrequest + handler.polling_period
-                        )
-                        multiple_requests.append(handler)
-                        lazypoll_requests.remove(handler)
-                        multiple_response_size += handler.polling_response_size
-                        requests_len += 1
-                        # check if we can add more
-                        break  # for
-                else:
-                    # no lazy_poller could match..break out of while
-                    break  # while
-
-            if requests_len == 1:
-                await multiple_requests[0].async_get_safe()
-                return
-
-            try:
-                response = await self.async_multiple_requests_ack(
-                    (handler.polling_request for handler in multiple_requests),
-                    auto_handle=False,
-                )
-            except Exception as e:
-                # the ns_multiple failed but the reason could be the device
-                # did overflow somehow. I've seen 2 kind of errors so far on the
-                # HTTP client: typically the device returns an incomplete json
-                # and this is partly recovered in our http interface. One(old)
-                # bulb (msl120) instead completely disconnects (ServerDisconnectedException
-                # in http client) and so we get here with no response. The same
-                # msl bulb timeouts completely on MQTT, so the response to our mqtt requests
-                # is None again. At this point, if the device is still online we're
-                # trying a last resort issue of single requests
-                if self.online:
-                    self.log(
-                        self.DEBUG,
-                        "Appliance.Control.Multiple failed with '%s' (requests=%d expected size=%d)",
-                        str(e) or e.__class__.__name__,
-                        requests_len,
-                        multiple_response_size,
-                    )
-                    # Here we reduce the device_response_size_max so that
-                    # next ns_multiple will be less demanding. device_response_size_min
-                    # is another dynamic param representing the biggest payload ever received
-                    self.device_response_size_max = (
-                        self.device_response_size_max + self.device_response_size_min
-                    ) / 2
-                    self.log(
-                        self.DEBUG,
-                        "Updating device_response_size_max:%d",
-                        self.device_response_size_max,
-                    )
-                    for handler in multiple_requests:
-                        if not self.online:  # TODO: remove these online checks
-                            break
-                        await handler.async_get_safe()
-                return
-
-            multiple_responses = response[mc.KEY_PAYLOAD][mc.KEY_MULTIPLE]
-            if not multiple_responses:
-                # no response at all..this is pathological but we have
-                # examples (#526) of this so we'll just try issue single requests
-                self.log(
-                    self.WARNING,
-                    "Appliance.Control.Multiple empty response (requests=%d expected size=%d)",
-                    requests_len,
-                    multiple_response_size,
-                    timeout=14400,
-                )
-                for handler in multiple_requests:
-                    if not self.online:
-                        break
-                    await handler.async_get_safe()
-                return
-
-            responses_len = len(multiple_responses)
-            if self.isEnabledFor(self.DEBUG):
-                self.log(
-                    self.DEBUG,
-                    "Appliance.Control.Multiple requests=%d (responses=%d) expected size=%d (actual=%d)",
-                    requests_len,
-                    responses_len,
-                    multiple_response_size,
-                    len(response.json),
-                )
-
-            message: "MerossMessageType"
-            for message in multiple_responses:
-                _response = MerossMessage(message)
-                for handler in multiple_requests:
-                    if handler.ns != _response.namespace:
-                        continue
-                    multiple_requests.remove(handler)
-                    handler.handle_response(_response)
-                    break
-                else:
-                    # not found..something is wrong!! TODO: log a DEBUG/WARNING here?
-                    pass
-
-            # and re-issue the missing ones
-            requests_len = len(multiple_requests)
-            multiple_response_size = -1  # logging purpose
-
     async def async_bluetooth_request(
         self, *request_args: "Unpack[MerossRequestType]"
     ) -> MerossResponse:
@@ -1578,7 +1476,7 @@ class Device(BaseDevice, ConfigEntryManager):
         try:
             assert self._mqtt_publish
             if self._mqtt_publish.is_cloud_connection:
-                self._queued_cloudpoll_requests += 1
+                self.cloudpoll_requests += 1  # type: ignore
             response = await self._mqtt_publish.async_mqtt_request(self.id, request)
             self._mqtt_lastresponse = epoch = time()
             self._trace_or_log(epoch, response, CONF_PROTOCOL_MQTT, self.TRACE_RX)
@@ -1669,14 +1567,23 @@ class Device(BaseDevice, ConfigEntryManager):
                 self.device_response_size_min,
                 self.device_response_size_max,
             )
-            if request.namespace is not mn.Appliance_Control_Multiple:
-                raise
-            # try to recover NS_MULTIPLE by discarding the incomplete
-            # message at the end
-            trunc_pos = response_text.rfind(',{"header":')
+            # try to recover the message by truncating the payload
+            # with various heuristics
+            namespace = request.namespace
+            if not type(namespace) is mn.Namespace:
+                namespace = self.NAMESPACES[namespace]
+            match namespace:
+                case mn.Appliance_Control_Multiple:
+                    list_break_matcher = '},{"header":'
+                case _:
+                    if not namespace.key_channel:
+                        raise
+                    list_break_matcher = f'}},{{"{namespace.key_channel}":'
+
+            trunc_pos = response_text.rfind(list_break_matcher)
             if trunc_pos == -1:
                 raise
-            response_text = response_text[0:trunc_pos] + "]}}"
+            response_text = response_text[0:trunc_pos] + "}]}}"
             response = MerossResponse(response_text)
         except Exception as exception:
             self.log(
@@ -1750,6 +1657,137 @@ class Device(BaseDevice, ConfigEntryManager):
             )
         )
 
+    @property
+    def polling_response_size_available(self):
+        """Returns the expected maximum allowed request response size in the current
+        multiple request poll. If multiple polling is disabled this works too."""
+        return (
+            self.device_response_size_max - self._multiple_response_size
+            if self.multiple_max
+            else self.device_response_size_max
+        )
+
+    async def _async_poll_multiple_flush(self):
+        multiple_requests = self._multiple_requests
+        multiple_response_size = self._multiple_response_size
+        self._multiple_requests = []
+        self._multiple_response_size = PARAM_HEADER_SIZE
+
+        requests_len = len(multiple_requests)
+        while self.online and requests_len:
+            lazypoll_requests = self._lazypoll_requests
+            while (requests_len < self.multiple_max) and lazypoll_requests:
+                # we have space available in current ns_multiple and lazy pollers are waiting
+                for handler in lazypoll_requests:
+                    # lazy pollers are ordered by 'oldest polled first' so
+                    # the first is the one which hasn't been polled since longer
+                    # we then decide to add to the current ns_multiple the first that would fit in
+                    if (
+                        handler.polling_response_size + multiple_response_size
+                    ) < self.device_response_size_max:
+                        handler.lastrequest = self._polling_epoch
+                        handler.polling_epoch_next = (
+                            handler.lastrequest + handler.polling_period
+                        )
+                        multiple_requests.append(handler)
+                        lazypoll_requests.remove(handler)
+                        multiple_response_size += handler.polling_response_size
+                        requests_len += 1
+                        # check if we can add more
+                        break  # for
+                else:
+                    # no lazy_poller could match..break out of while
+                    break  # while
+
+            if requests_len == 1:
+                await multiple_requests[0].async_get_safe()
+                return
+
+            try:
+                response = await self.async_request_multiple(
+                    (handler.polling_request for handler in multiple_requests),
+                    auto_handle=False,
+                )
+            except Exception as e:
+                # the ns_multiple failed but the reason could be the device
+                # did overflow somehow. I've seen 2 kind of errors so far on the
+                # HTTP client: typically the device returns an incomplete json
+                # and this is partly recovered in our http interface. One(old)
+                # bulb (msl120) instead completely disconnects (ServerDisconnectedException
+                # in http client) and so we get here with no response. The same
+                # msl bulb timeouts completely on MQTT, so the response to our mqtt requests
+                # is None again. At this point, if the device is still online we're
+                # trying a last resort issue of single requests
+                if self.online:
+                    self.log(
+                        self.DEBUG,
+                        "Appliance.Control.Multiple failed with '%s' (requests=%d expected size=%d)",
+                        str(e) or e.__class__.__name__,
+                        requests_len,
+                        multiple_response_size,
+                    )
+                    # Here we reduce the device_response_size_max so that
+                    # next ns_multiple will be less demanding. device_response_size_min
+                    # is another dynamic param representing the biggest payload ever received
+                    self.device_response_size_max = (
+                        self.device_response_size_max + self.device_response_size_min
+                    ) / 2
+                    self.log(
+                        self.DEBUG,
+                        "Updating device_response_size_max:%d",
+                        self.device_response_size_max,
+                    )
+                    for handler in multiple_requests:
+                        if not self.online:  # TODO: remove these online checks
+                            break
+                        await handler.async_get_safe()
+                return
+
+            multiple_responses = response[mc.KEY_PAYLOAD][mc.KEY_MULTIPLE]
+            if not multiple_responses:
+                # no response at all..this is pathological but we have
+                # examples (#526) of this so we'll just try issue single requests
+                self.log(
+                    self.WARNING,
+                    "Appliance.Control.Multiple empty response (requests=%d expected size=%d)",
+                    requests_len,
+                    multiple_response_size,
+                    timeout=14400,
+                )
+                for handler in multiple_requests:
+                    if not self.online:
+                        break
+                    await handler.async_get_safe()
+                return
+
+            responses_len = len(multiple_responses)
+            if self.isEnabledFor(self.DEBUG):
+                self.log(
+                    self.DEBUG,
+                    "Appliance.Control.Multiple requests=%d (responses=%d) expected size=%d (actual=%d)",
+                    requests_len,
+                    responses_len,
+                    multiple_response_size,
+                    len(response.json),
+                )
+
+            message: "MerossMessageType"
+            for message in multiple_responses:
+                _response = MerossMessage(message)
+                for handler in multiple_requests:
+                    if handler.ns != _response.namespace:
+                        continue
+                    multiple_requests.remove(handler)
+                    handler.handle_response(_response)
+                    break
+                else:
+                    # not found..something is wrong!! TODO: log a DEBUG/WARNING here?
+                    pass
+
+            # and re-issue the missing ones
+            requests_len = len(multiple_requests)
+            multiple_response_size = -1  # logging purpose
+
     async def async_request_poll(self, handler: NamespaceHandler, /):
         handler.lastrequest = self._polling_epoch
         handler.polling_epoch_next = handler.lastrequest + handler.polling_period
@@ -1764,7 +1802,7 @@ class Device(BaseDevice, ConfigEntryManager):
         multiple_response_size = (
             self._multiple_response_size + handler.polling_response_size
         )
-        if multiple_response_size > self.device_response_size_max:
+        if multiple_response_size >= self.device_response_size_max:
             # this request (together with already previously packed)
             # would overflow the device response size limit
             if not self._multiple_requests:
@@ -1772,14 +1810,14 @@ class Device(BaseDevice, ConfigEntryManager):
                 await handler.async_get_safe()
                 return
             # flush the pending multiple requests
-            await self._async_multiple_requests_flush()
+            await self._async_poll_multiple_flush()
             multiple_response_size = (
                 self._multiple_response_size + handler.polling_response_size
             )
         self._multiple_requests.append(handler)
         self._multiple_response_size = multiple_response_size
         if len(self._multiple_requests) >= self.multiple_max:
-            await self._async_multiple_requests_flush()
+            await self._async_poll_multiple_flush()
 
     async def async_request_smartpoll(
         self,
@@ -1789,7 +1827,7 @@ class Device(BaseDevice, ConfigEntryManager):
     ):
         if (
             (self.curr_protocol is CONF_PROTOCOL_MQTT)
-            and (self._queued_cloudpoll_requests >= cloud_queue_max)
+            and (self.cloudpoll_requests >= cloud_queue_max)
             and (
                 (self._polling_epoch - handler.lastrequest)
                 < handler.polling_period_cloud
@@ -1951,7 +1989,7 @@ class Device(BaseDevice, ConfigEntryManager):
             subsequent polls
             """
             self._lazypoll_requests.clear()
-            self._queued_cloudpoll_requests = 0
+            self.cloudpoll_requests = 0  # type: ignore
             # self.ns_handlers could change at any time due to async
             # message parsing (handlers might be dynamically created by then)
             for handler in [
@@ -1966,7 +2004,7 @@ class Device(BaseDevice, ConfigEntryManager):
 
             # needed even if offline: it takes care of resetting the ns_multiple state
             if self._multiple_requests:
-                await self._async_multiple_requests_flush()
+                await self._async_poll_multiple_flush()
 
             # when create_diagnostic_entities is True, after onlining we'll dynamically
             # scan the abilities to look for 'unknown' namespaces (kind of like tracing)
@@ -2036,10 +2074,10 @@ class Device(BaseDevice, ConfigEntryManager):
         self.async_create_task(self.async_poll_full(), task_name, False)
 
     def bt_attached(self, bt_device: "ComponentApi.BTDevice", /):
-        if _bluetooth := self._bluetooth:
-            if _bluetooth is bt_device:
+        if self._bluetooth:
+            if self._bluetooth is bt_device:
                 return
-            _bluetooth.detach()
+            self._bluetooth.detach()
         self.log(
             self.DEBUG,
             "bt_attached to %s",
@@ -2049,20 +2087,20 @@ class Device(BaseDevice, ConfigEntryManager):
         if bt_device.is_connected:
             self.bt_connected()
 
-        self.update_device_registry(
-            connections={
+        self.api.device_registry.async_update_device(
+            self.device_registry_entry.id,
+            new_connections={
                 (dr.CONNECTION_NETWORK_MAC, self.descriptor.macAddress),
                 (dr.CONNECTION_BLUETOOTH, bt_device.address),
-            }
+            },
         )
 
     def bt_detached(self):
-        _bluetooth = self._bluetooth
-        assert _bluetooth
+        assert self._bluetooth
         self.log(
             self.DEBUG,
             "bt_detached from %s",
-            _bluetooth.address,
+            self._bluetooth.address,
         )
         if self._bluetooth_active:
             self.bt_disconnected()
@@ -2424,6 +2462,7 @@ class Device(BaseDevice, ConfigEntryManager):
 
     def _handle_Appliance_System_Report(self, message: MerossMessage, /):
         # No clue: sent (MQTT PUSH) by the device on initial connection
+        # TODO: move these empty stubs to VoidHandlers on a lazy basis
         pass
 
     def _handle_Appliance_System_Time(self, message: MerossMessage, /):

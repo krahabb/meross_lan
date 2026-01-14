@@ -156,7 +156,7 @@ class NamespaceHandler:
         handler: NamespaceHandlerFunc
         polling_strategy: PollingStrategyFunc | None
         polling_request: mt.MerossRequestType
-        polling_request_channels: list[dict[str, Any]]
+        polling_request_channels: list[dict[str, Any]]  # on demand instance
 
     __slots__ = (
         "device",
@@ -222,7 +222,6 @@ class NamespaceHandler:
         self.polling_response_size = (
             self.polling_response_base_size + self.polling_response_item_size
         )
-        self.polling_request_channels = []
         self.polling_request_configure(None)
         device.ns_handlers[ns] = self
 
@@ -242,12 +241,16 @@ class NamespaceHandler:
         device configuration/type at runtime. Needs to be called early on before
         registering any parser.
         Passing None as payload_type configures the default for the namespace.
+        TODO: this need further attention when used after the handler initialization (
+        in async_trace for example) because the polling_request_channels might have
+        already been set and this method would override them losing channels.
         """
         ns = self.ns
         _payload_type = payload_type or ns.payload_get
         if (_payload_type is mn.PayloadType.LIST_C_STRICT) or (
             _payload_type is mn.PayloadType.LIST_C_DATA_STRICT
         ):
+            self.polling_request_channels = []
             self.polling_request = (
                 ns,
                 mc.METHOD_GET,
@@ -273,7 +276,11 @@ class NamespaceHandler:
     ):
         # Ensures the channel is set in polling request payload should
         # the ns need it. Also adjusts the estimated polling_response_size.
-        polling_request_channels = self.polling_request_channels
+        try:
+            polling_request_channels = self.polling_request_channels
+        except AttributeError:
+            self.polling_request_channels = polling_request_channels = []
+
         key_channel = self.ns.key_channel
         for channel_payload in polling_request_channels:
             if channel_payload[key_channel] == channel:
@@ -298,6 +305,10 @@ class NamespaceHandler:
 
     def polling_response_size_inc(self):
         self.polling_response_size += self.polling_response_item_size
+
+    def channels_to_poll(self):
+        # snapshot sequence of channels to query (likely needed with all these asyncs)
+        return tuple(self.parsers.keys())
 
     def register_entity_class(
         self, entity_class: type["MLEntity"], channels: "Iterable[int] | None", /
@@ -362,6 +373,7 @@ class NamespaceHandler:
             self.handle_exception(exception, self.handler.__name__, response.payload)
 
     def handle_exception(self, exception: Exception, function_name: str, payload, /):
+        # TODO: migrate to Loggable so we have more flexibility in logging
         device = self.device
         device.log_exception(
             device.WARNING,
@@ -790,6 +802,97 @@ class NamespaceHandler:
         if not self.polling_epoch_next:
             await self.device.async_request_smartpoll(self)
 
+    async def async_poll_chunked(self):
+        """
+        This strategy allows splitting the request (which might lead to a huge response payload)
+        into smaller chunks in order to fit into the device response buffer.
+        This was historically developed for Hub devices where the number of subdevices might grow huge
+        and the response to a full GET request might exceed the device capabilities (see #244 for insights).
+        TODO: we might want to dynamically 'swap' this strategy with async_poll_default
+        whenever the number of registered parsers is small enough to fit into the device
+        response buffer in one go and avoid all of this mess.
+        """
+        device = self.device
+        if device._mqtt_active and (device._polling_epoch < self.polling_epoch_next):
+            # this check is the same as async_poll_default where we expect this ns to be
+            # PUSHed when on MQTT
+            return
+
+        size_available = (
+            device.polling_response_size_available - self.polling_response_base_size
+        )
+        if size_available < self.polling_response_item_size:
+            if device._multiple_requests:
+                await device._async_poll_multiple_flush()
+                size_available = (
+                    device.polling_response_size_available
+                    - self.polling_response_base_size
+                )
+            else:
+                device.log(
+                    device.WARNING,
+                    "%s(%s).async_poll_chunked: not enough space to add polling request (available:%s, device max:%s)",
+                    self.__class__.__name__,
+                    self.ns,
+                    size_available,
+                    device.device_response_size_max,
+                    timeout=14400,
+                )
+                return  # defer to next (hopefully)
+
+        if device.cloudpoll_requests:
+            # We've already queued cloud polling requests for this cycle
+            # TODO: re-implement this feature by leveraging MQTT rate-limiting state
+            # i.e. if we're not rate-limited we could allow polling else defer.
+            return  # defer to next (hopefully)
+
+        # Previous implementation was just splitting-up the requests in fixed amounts
+        # determined at design time.
+        # New implementation tries to leverage the knowledge of allowed response buffers
+        # in the device to fill up the most subdevices requests per message.
+        channels = iter(self.channels_to_poll())
+        channels_payload = self.polling_request_channels
+        channels_payload.clear()
+        self.polling_response_size = self.polling_response_base_size
+        while True:
+            if size_available > self.polling_response_item_size:
+                try:
+                    channels_payload.append({self.ns.key_channel: next(channels)})
+                    size_available -= self.polling_response_item_size
+                    self.polling_response_size += self.polling_response_item_size
+                    continue
+                except StopIteration:
+                    if channels_payload:
+                        await device.async_request_poll(self)
+                    # no need to flush multiple since the polling loop
+                    # will continue with standard handling
+                    break
+
+            if channels_payload:
+                await device.async_request_poll(self)
+            if device._multiple_requests:
+                # ensure we (eventually) flush multiple requests
+                await device._async_poll_multiple_flush()
+
+            # reset for next chunk
+            channels_payload.clear()
+            self.polling_response_size = self.polling_response_base_size
+            size_available = (
+                device.polling_response_size_available - self.polling_response_base_size
+            )
+            if size_available < self.polling_response_item_size:
+                # This is pathological since we've just flushed everything
+                device.log(
+                    device.WARNING,
+                    "%s(%s).async_poll_chunked: not enough space to add polling request (available:%s, device max:%s)",
+                    self.__class__.__name__,
+                    self.ns,
+                    size_available,
+                    device.device_response_size_max,
+                    timeout=14400,
+                )
+                break
+
     async def async_poll_diagnostic(self):
         """
         This strategy is for namespace polling when diagnostics sensors are detected and
@@ -826,10 +929,10 @@ class NamespaceHandler:
         ns = self.ns
         if ns.grammar is mn.Grammar.STABLE:
             try:
-                if (not self.polling_request_channels) and (
+                if (
                     ns.payload_get
                     in (mn.PayloadType.LIST_C_STRICT, mn.PayloadType.LIST_C_DATA_STRICT)
-                ):
+                ) and (not self.polling_request_channels):
                     # when a 'LIST_C_STRICT' namespace has no registered parsers, self.polling_request will fail
                     # so we use the mocked default request
                     await async_request_func(*ns.request_default)

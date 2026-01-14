@@ -6,8 +6,7 @@ from ...binary_sensor import MLBinarySensor
 from ...button import MLButton
 from ...calendar import MtsSchedule
 from ...climate import MtsClimate
-from ...helpers import entity as me
-from ...helpers.device import BaseDevice, Device
+from ...helpers import device as mld, entity as me
 from ...helpers.namespaces import (
     POLLING_STRATEGY_CONF,
     NamespaceHandler,
@@ -41,12 +40,15 @@ if TYPE_CHECKING:
         TypedDict,
     )
 
-    from ...helpers.device import AsyncRequestFunc, DigestInitReturnType, MerossMessage
-    from ...helpers.entity import MLEntity
-    from ...helpers.meross_profile import (
-        DeviceInfoExtType,
-        MQTTProfile,
+    from ...helpers.device import (
+        AsyncRequestFunc,
+        Device,
+        DigestInitReturnType,
+        MerossMessage,
     )
+    from ...helpers.entity import MLEntity
+    from ...helpers.meross_profile import DeviceInfoExtType
+    from ...helpers.mqtt_profile import MQTTProfile
     from ...merossclient.cloudapi import SubDeviceInfoType
     from ...merossclient.protocol import types as mt
     from ...merossclient.protocol.namespaces import Namespace
@@ -194,27 +196,36 @@ class HubNamespaceHandler(NamespaceHandler):
 
     def __init__(self, device: "HubMixin", ns: "Namespace"):
         NamespaceHandler.__init__(self, device, ns, handler=self._handle_subdevice)
+        if self.polling_strategy is NamespaceHandler.async_poll_chunked:
+            # This is needed to setup the polling_request_channels.
+            # 'chunked' namespaces could be presented in
+            # abilities but not correctly initialized if subdevices of the right type
+            # are not present at init time (we need to setup the polling_request_channels).
+            # TODO: This need to be better refined
+            self.polling_request_configure(mn.PayloadType.LIST_C_STRICT)
+
+    def channels_to_poll(self):
+        # snapshot of subdevices to query (likely needed with all these asyncs)
+        return tuple(self.device.subdevices.keys())
 
     def _handle_subdevice(self, message: "MerossMessage"):
         """Generalized Hub namespace dispatcher to subdevices"""
         hub = self.device
         subdevices = hub.subdevices
         subdevices_parsed = set()
-        key_namespace = self.ns.key
+        ns_key = self.ns.key
         key_channel = self.ns.key_channel
-        for p_subdevice in message.payload[key_namespace]:
+        for p_subdevice in message.payload[ns_key]:
             try:
                 subdevice_id = p_subdevice[key_channel]
                 if subdevice_id in subdevices_parsed:
                     hub.log_duplicated_subdevice(subdevice_id)
                 else:
                     try:
-                        subdevices[subdevice_id]._hub_parse(key_namespace, p_subdevice)
+                        subdevices[subdevice_id]._hub_parse(ns_key, p_subdevice)
                     except KeyError:
                         # force a rescan since we discovered a new subdevice
-                        hub.ns_handlers[mn.Appliance_System_All].polling_epoch_next = (
-                            0.0
-                        )
+                        hub.handler_all.polling_epoch_next = 0.0
                     subdevices_parsed.add(subdevice_id)
             except TypeError:
                 # This could happen when the main payload is not a list of subdevices
@@ -233,13 +244,6 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
     The strategy itself will poll the namespace on every cycle if no MQTT active
     When MQTT active we rely on states PUSHES in general but we'll also poll
     from time to time (see POLLING_STRATEGY_CONF for the relevant namespaces).
-    TODO# refactor this code to take care of multiple requests size limits (or in
-    general device buffer estimated sizes) so that we can adapt the chunking size
-    to the available buffers and not use a fixed preset. Also,
-    since we're refactoring the message handling routing in NamespaceHandler/Device
-    the current way of building the payloads doesnt work anymore since the device
-    is maintaining a list of namespaces to query and not a list of actual payloads
-    like it was before.
     """
 
     __slots__ = (
@@ -256,81 +260,64 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
         included: bool,
         count: int,
     ):
-        HubNamespaceHandler.__init__(self, device, ns)
         self._models = models
         self._included = included
-        self._count = count
-        self.polling_strategy = HubChunkedNamespaceHandler.async_poll_chunked  # type: ignore
+        self._count = count  # TODO: eventually remove if we don't need an hard limit
+        HubNamespaceHandler.__init__(self, device, ns)
 
-    async def async_poll_chunked(self):
-        device = self.device
-        if (not device._mqtt_active) or (
-            device._polling_epoch >= self.polling_epoch_next
-        ):
-            max_queuable = 1
-            # for hubs, this payload request might be splitted
-            # in order to query a small amount of devices per iteration
-            # see #244 for insights
-            for p in self._build_subdevices_payload():
-                # in case we're going through cloud mqtt
-                # async_request_smartpoll would check how many
-                # polls are standing in queue in order to
-                # not burst the meross mqtt. We want to
-                # send these requests (in loop) as a whole
-                # so, we start with max_queuable == 1 in order
-                # to avoid starting when something is already
-                # sent in the current poll cycle but then,
-                # if we're good to go on the first iteration,
-                # we don't want to break this cycle else it
-                # would restart (stateless) at the next polling cycle
-                self._polling_request_set(p)
-                if await device.async_request_smartpoll(
-                    self,
-                    cloud_queue_max=max_queuable,
-                ):
-                    max_queuable += 1
-                    # TODO# refactor this code to take care of new async_pol/request semantics
-                    # Right now, this 'flush' should do the job but is strongly inefficient.
-                    if device._multiple_requests:
-                        await device._async_multiple_requests_flush()
+    def channels_to_poll(self):
+        # snapshot iterator of subdevices to query (likely needed with all these asyncs)
+        return tuple(
+            subdevice.id
+            for subdevice in self.device.subdevices.values()
+            if (subdevice.model in self._models) == self._included
+        )
 
     async def async_trace(self, async_request_func: "AsyncRequestFunc"):
-        for p in self._build_subdevices_payload():
-            self._polling_request_set(p)
-            await HubNamespaceHandler.async_trace(self, async_request_func)
-
-    def _build_subdevices_payload(self):
-        """
-        This generator helps dealing with hubs hosting an high number
-        of subdevices: when queried, the response payload might became huge
-        with overflow issues likely on the device side (see #244).
-        If this is the case, we'll split the request for fewer
-        devices at a time. The count param allows some flexibility depending
-        on expected payload size but we might have no clue especially for
-        bigger payloads like NS_APPLIANCE_HUB_MTS100_SCHEDULEB
-        """
-        payload = []
-        key_channel = self.ns.key_channel
-        for subdevice in self.device.subdevices.values():
-            if (subdevice.model in self._models) == self._included:
-                payload.append({key_channel: subdevice.id})
-                if len(payload) == self._count:
-                    yield payload
-                    payload = []
-        if payload:
-            yield payload
-
-    def _polling_request_set(self, payload: list | dict, /):
-        self.polling_request = (
-            self.ns,
-            mc.METHOD_GET,
-            {self.ns.key: payload},
+        # TODO: move to base namespaceHandler by 'smart' merging with actual async_trace
+        device = self.device
+        size_available = (
+            device.polling_response_size_available - self.polling_response_base_size
         )
-        self.polling_response_size = (
-            self.polling_response_base_size
-            + self.polling_response_item_size
-            * (len(payload) if type(payload) is list else 1)
-        )
+        channels = iter(self.channels_to_poll())
+        channels_payload = self.polling_request_channels
+        channels_payload.clear()
+        self.polling_response_size = self.polling_response_base_size
+        while True:
+            if size_available > self.polling_response_item_size:
+                try:
+                    channels_payload.append({self.ns.key_channel: next(channels)})
+                    size_available -= self.polling_response_item_size
+                    self.polling_response_size += self.polling_response_item_size
+                    continue
+                except StopIteration:
+                    if channels_payload:
+                        await HubNamespaceHandler.async_trace(self, async_request_func)
+                    # no need to flush multiple since the polling loop
+                    # will continue with standard handling
+                    break
+
+            if channels_payload:
+                await HubNamespaceHandler.async_trace(self, async_request_func)
+
+            # reset for next chunk
+            channels_payload.clear()
+            self.polling_response_size = self.polling_response_base_size
+            size_available = (
+                device.polling_response_size_available - self.polling_response_base_size
+            )
+            if size_available < self.polling_response_item_size:
+                # This is pathological since we've just flushed everything
+                device.log(
+                    device.WARNING,
+                    "%s(%s).async_trace: not enough space to add polling request (available:%s, device max:%s)",
+                    self.__class__.__name__,
+                    self.ns,
+                    size_available,
+                    device.device_response_size_max,
+                    timeout=14400,
+                )
+                break
 
 
 class HubMixin(Device if TYPE_CHECKING else object):
@@ -341,7 +328,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
     DEVICE_TYPE = mlc.DeviceType.HUB
     NAMESPACES = mn.HUB_NAMESPACES
 
-    DEFAULT_PLATFORMS = Device.DEFAULT_PLATFORMS | {
+    DEFAULT_PLATFORMS = mld.Device.DEFAULT_PLATFORMS | {
         MLBinarySensor.PLATFORM: None,
         MLButton.PLATFORM: None,
         MtsSchedule.PLATFORM: None,
@@ -352,7 +339,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
         MtsClimate.TrackSensorSelect.PLATFORM: None,
     }
 
-    TRACE_ABILITY_EXCLUDE = Device.TRACE_ABILITY_EXCLUDE + (
+    TRACE_ABILITY_EXCLUDE = mld.Device.TRACE_ABILITY_EXCLUDE + (
         mn_h.Appliance_Hub_Exception,
         mn_h.Appliance_Hub_Report,
         mn_h.Appliance_Hub_SubdeviceList,
@@ -571,7 +558,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
             return SubDevice(self, p_subdevice, model)
 
 
-class SubDevice(NamespaceParser, BaseDevice):
+class SubDevice(NamespaceParser, mld.BaseDevice):
     """
     SubDevice introduces some hybridization in EntityManager:
     (owned) entities will refer to SubDevice effectively as if
@@ -685,7 +672,7 @@ class SubDevice(NamespaceParser, BaseDevice):
     @override
     async def async_shutdown(self):
         await NamespaceParser.async_shutdown(self)
-        await BaseDevice.async_shutdown(self)
+        await mld.BaseDevice.async_shutdown(self)
         del self.check_device_timezone
         del self.async_request
         del self.ns_handlers
@@ -732,7 +719,7 @@ class SubDevice(NamespaceParser, BaseDevice):
 
     @override
     def _set_online(self):
-        BaseDevice._set_online(self)
+        mld.BaseDevice._set_online(self)
         # force a re-poll even on MQTT
         self.ns_handlers[self.NS_ALL].polling_epoch_next = 0.0
 
@@ -1521,14 +1508,14 @@ POLLING_STRATEGY_CONF |= {
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         350,
-        None,  # HubChunkedNamespaceHandler.async_poll_chunked
+        NamespaceHandler.async_poll_chunked,
     ),
     mn_h.Appliance_Hub_Mts100_ScheduleB: (
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         500,
-        None,  # HubChunkedNamespaceHandler.async_poll_chunked
+        NamespaceHandler.async_poll_chunked,
     ),
     mn_h.Appliance_Hub_Sensor_Adjust: (
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
@@ -1542,7 +1529,7 @@ POLLING_STRATEGY_CONF |= {
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         250,
-        None,  # HubChunkedNamespaceHandler.async_poll_chunked
+        NamespaceHandler.async_poll_chunked,
     ),
     mn_h.Appliance_Hub_SubDevice_Beep: (
         0,
