@@ -4,9 +4,8 @@ from typing import TYPE_CHECKING
 
 from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 
-from .helpers import LOGGER, ConfigEntryType
+from .helpers import LOGGER, ConfigEntryType, meross_profile as mlp
 from .helpers.component_api import ComponentApi
-from .helpers.meross_profile import MerossProfile, MerossProfileStore
 
 if TYPE_CHECKING:
 
@@ -54,7 +53,7 @@ async def async_setup_entry(
             except KeyError:
                 # this could happen when we add entries after boot
                 api.profiles[profile_id] = None
-            profile = MerossProfile(profile_id, api, config_entry)
+            profile = mlp.MerossProfile(profile_id, api, config_entry)
             try:
                 await profile.async_init()
                 await profile.async_setup_entry(hass, config_entry)
@@ -98,4 +97,4 @@ async def async_remove_entry(hass: "HomeAssistant", config_entry: "ConfigEntry")
 
         case (ConfigEntryType.PROFILE, profile_id):
             api.profiles.pop(profile_id)
-            await MerossProfileStore(hass, profile_id).async_remove_and_logout(config_entry.data)  # type: ignore
+            await mlp.MerossProfileStore(hass, profile_id).async_remove_and_logout(config_entry.data)  # type: ignore

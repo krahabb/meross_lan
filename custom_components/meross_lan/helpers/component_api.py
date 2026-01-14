@@ -19,7 +19,8 @@ from homeassistant.helpers import (
     issue_registry as ir,
 )
 
-from . import ConfigEntryType
+# import core modules instead of symbols to ease patching in a single place
+from . import ConfigEntryType, manager as mlm, mqtt_profile as mlq, device as mld
 from .. import const as mlc
 from ..merossclient import (
     MEROSSDEBUG,
@@ -35,9 +36,6 @@ from ..merossclient.protocol.message import (
     MerossRequest,
     json_loads,
 )
-from .device import Device
-from .manager import ConfigEntryManager
-from .mqtt_profile import MQTTConnection, MQTTProfile
 
 if TYPE_CHECKING:
 
@@ -55,8 +53,8 @@ if TYPE_CHECKING:
     from ..config_flow import ConfigFlow
     from ..merossclient.protocol.message import MerossMessage
     from ..merossclient.protocol.types import MerossHeaderType, MerossPayloadType
+    from .device import Device
     from .meross_profile import MerossProfile
-
 
 else:
     # In order to avoid a static dependency we resolve these
@@ -69,7 +67,7 @@ MIXIN_DIGEST_INIT = {
 }
 
 
-class HAMQTTConnection(MQTTConnection):
+class HAMQTTConnection(mlq.MQTTConnection):
 
     if TYPE_CHECKING:
         is_cloud_connection: Final[bool]
@@ -90,7 +88,7 @@ class HAMQTTConnection(MQTTConnection):
 
     def __init__(self, api: "ComponentApi"):
         self.is_cloud_connection = False
-        MQTTConnection.__init__(
+        mlq.MQTTConnection.__init__(
             self,
             api,
             HostAddress("homeassistant", 0),
@@ -240,10 +238,7 @@ class HAMQTTConnection(MQTTConnection):
     # these 'session messages' here but we'll forward them to the device too in order
     # to trigger all of the device connection management.
     async def _handle_Appliance_Control_Bind(
-        self: MQTTConnection,
-        device_id: str,
-        header: "MerossHeaderType",
-        payload: "MerossPayloadType",
+        self, device_id: str, header: "MerossHeaderType", payload: "MerossPayloadType"
     ):
         # this transaction appears when a device (firstly)
         # connects to an MQTT broker and tries to 'register'
@@ -282,10 +277,7 @@ class HAMQTTConnection(MQTTConnection):
         return False
 
     async def _handle_Appliance_Control_ConsumptionConfig(
-        self: MQTTConnection,
-        device_id: str,
-        header: "MerossHeaderType",
-        payload: "MerossPayloadType",
+        self, device_id: str, header: "MerossHeaderType", payload: "MerossPayloadType"
     ):
         # this message is published by mss switches
         # and it appears newer mss315 could abort their connection
@@ -299,10 +291,7 @@ class HAMQTTConnection(MQTTConnection):
         return False
 
     async def _handle_Appliance_System_Clock(
-        self: MQTTConnection,
-        device_id: str,
-        header: "MerossHeaderType",
-        payload: "MerossPayloadType",
+        self, device_id: str, header: "MerossHeaderType", payload: "MerossPayloadType"
     ):
         # this is part of initial flow over MQTT
         # we'll try to set the correct time in order to avoid
@@ -324,11 +313,11 @@ HAMQTTConnection.SESSION_HANDLERS = {
     mn.Appliance_Control_Bind: HAMQTTConnection._handle_Appliance_Control_Bind,
     mn.Appliance_Control_ConsumptionConfig: HAMQTTConnection._handle_Appliance_Control_ConsumptionConfig,
     mn.Appliance_System_Clock: HAMQTTConnection._handle_Appliance_System_Clock,
-    mn.Appliance_System_Online: MQTTConnection._handle_Appliance_System_Online,
+    mn.Appliance_System_Online: HAMQTTConnection._handle_Appliance_System_Online,
 }
 
 
-class ComponentApi(MQTTProfile):
+class ComponentApi(mlq.MQTTProfile):
     """
     central meross_lan management (singleton) class which handles devices
     and MQTT discovery and message routing
@@ -430,7 +419,7 @@ class ComponentApi(MQTTProfile):
             if self.is_connected:
                 await self.disconnect()
 
-        def attach(self, device: Device):
+        def attach(self, device: "Device"):
             if self.device:
                 self.device.bt_detached()
             device.bt_attached(self)
@@ -576,7 +565,7 @@ class ComponentApi(MQTTProfile):
 
     def __init__(self, hass: "HomeAssistant"):
         self.is_cloud_profile = False
-        MQTTProfile.__init__(
+        mlq.MQTTProfile.__init__(
             self,
             mlc.CONF_PROFILE_ID_LOCAL,
             api=self,
@@ -763,7 +752,7 @@ class ComponentApi(MQTTProfile):
                 await profile.async_shutdown()
             for bt_device in tuple(self._bt_devices.values()):
                 await bt_device.async_shutdown()
-            await MQTTProfile.async_shutdown(self)
+            await mlq.MQTTProfile.async_shutdown(self)
             await MerossHttpClient.async_shutdown_session()
             self._mqtt_connection = None
             del self.device_registry  # type: ignore
@@ -795,7 +784,7 @@ class ComponentApi(MQTTProfile):
         # while preserving our mqtt_connection and device linking.
         # That's a risky mess
         # for real shutdown there's self.async_terminate
-        await ConfigEntryManager.async_shutdown(self)
+        await mlm.ConfigEntryManager.async_shutdown(self)
 
     @override
     def get_logger_name(self) -> str:
@@ -822,7 +811,7 @@ class ComponentApi(MQTTProfile):
     ):
         self.config_entry = config_entry  # type: ignore
         await self.entry_update_listener(hass, config_entry)
-        await MQTTProfile.async_setup_entry(self, hass, config_entry)
+        await mlq.MQTTProfile.async_setup_entry(self, hass, config_entry)
 
     # interface: self
     @property
@@ -885,7 +874,7 @@ class ComponentApi(MQTTProfile):
         # We must be careful when ordering the mixin and leave Device as last class.
         # Messing up with that will cause MRO to not resolve inheritance correctly.
         # see https://github.com/albertogeniola/MerossIot/blob/0.4.X.X/meross_iot/device_factory.py
-        mixin_classes.append(Device)
+        mixin_classes.append(mld.Device)
         # build a label to cache the set
         class_name = ""
         for m in mixin_classes:

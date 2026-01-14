@@ -112,13 +112,37 @@ def disable_entity_registry_update():
 def log_exception(request: "pytest.FixtureRequest", capsys: "pytest.CaptureFixture"):
     """Intercepts any code managed exception sent to logging."""
 
-    with helpers.LoggableException() as patch:
-        yield patch
-        calls = patch._mock.mock_calls
+    with helpers.LoggableMocker() as loggable_mock:
+        yield loggable_mock
+        calls = loggable_mock._mock.mock_calls
         if calls:
             with capsys.disabled():
                 print(f"\n{request.node.name}: Loggable.log_exception calls:")
                 print(*calls, sep="\n")
+
+
+@pytest.fixture(autouse=True, scope="session")
+def config_entry_manager():
+    """Intercepts any code managed exception sent to logging."""
+
+    with patch(
+        "custom_components.meross_lan.helpers.manager.ConfigEntryManager",
+        new=helpers.ConfigEntryMocker.ManagerMock,
+    ):
+        yield
+
+
+@pytest.fixture(autouse=True, scope="session")
+def config_entry_device():
+    """Allows a 'global' mock of Device class. Mock layout is defined in helpers.DeviceContext.ManagerMock."""
+
+    import unittest.mock
+
+    with patch(
+        "custom_components.meross_lan.helpers.device.Device",
+        new=helpers.DeviceContext.ManagerMock,
+    ):
+        yield
 
 
 @pytest.fixture()

@@ -7,7 +7,8 @@ from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.core import callback
 
-from . import Loggable, entity as me
+# import core modules instead of symbols to ease patching in a single place
+from . import Loggable, entity as me, manager as mlm
 from .. import const as mlc
 from ..merossclient import HostAddress, _BaseClient
 from ..merossclient.mqttclient import MerossMQTTRateLimitException
@@ -23,12 +24,20 @@ from ..merossclient.protocol.message import (
     json_dumps,
 )
 from ..sensor import MLDiagnosticSensor
-from .manager import ConfigEntryManager
 from .obfuscate import obfuscated_dict
 
 if TYPE_CHECKING:
     import asyncio
-    from typing import Awaitable, Callable, ClassVar, Final, Mapping, TypedDict, Unpack
+    from typing import (
+        Awaitable,
+        Callable,
+        ClassVar,
+        Final,
+        Mapping,
+        Self,
+        TypedDict,
+        Unpack,
+    )
 
     from homeassistant.components import mqtt as ha_mqtt
     from homeassistant.config_entries import ConfigEntry
@@ -249,7 +258,7 @@ class MQTTConnection(Loggable):
         SessionHandlersType = Mapping[
             str,
             Callable[
-                ["MQTTConnection", str, MerossHeaderType, MerossPayloadType],
+                [Self, str, MerossHeaderType, MerossPayloadType],
                 Awaitable[bool],
             ],
         ]
@@ -742,7 +751,7 @@ class MQTTConnection(Loggable):
         return True
 
 
-class MQTTProfile(ConfigEntryManager):
+class MQTTProfile(mlm.ConfigEntryManager):
     """
     Base class for both MerossProfile and ComponentApi allowing lightweight
     sharing of globals and defining some common interfaces.
@@ -753,7 +762,7 @@ class MQTTProfile(ConfigEntryManager):
         linkeddevices: dict[str, Device]
         mqttconnections: dict[str, MQTTConnection]
 
-    DEFAULT_PLATFORMS = ConfigEntryManager.DEFAULT_PLATFORMS | {
+    DEFAULT_PLATFORMS = mlm.ConfigEntryManager.DEFAULT_PLATFORMS | {
         SENSOR_DOMAIN: None,
     }
 
@@ -763,7 +772,7 @@ class MQTTProfile(ConfigEntryManager):
         "mqttconnections",
     )
 
-    def __init__(self, id: str, **kwargs: "Unpack[ConfigEntryManager.Args]"):
+    def __init__(self, id: str, **kwargs: "Unpack[mlm.ConfigEntryManager.Args]"):
         super().__init__(id, **kwargs)
         self.linkeddevices = {}
         self.mqttconnections = {}

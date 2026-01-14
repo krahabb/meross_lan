@@ -5,14 +5,19 @@ meross_lan module interface to access Meross Cloud services
 import asyncio
 from contextlib import asynccontextmanager
 from time import time
-import typing
 from typing import TYPE_CHECKING, override
 
 from homeassistant.core import callback
 from homeassistant.helpers import storage
 from homeassistant.util import dt as dt_util
 
-from . import datetime_from_epoch, get_default_ssl_context
+# import core modules instead of symbols to ease patching in a single place
+from . import (
+    datetime_from_epoch,
+    get_default_ssl_context,
+    manager as mlm,
+    mqtt_profile as mlq,
+)
 from .. import const as mlc
 from ..helpers.obfuscate import OBFUSCATE_DEVICE_ID_MAP, obfuscated_dict
 from ..merossclient import (
@@ -24,8 +29,6 @@ from ..merossclient import (
 )
 from ..merossclient.mqttclient import MerossMQTTAppClient
 from ..merossclient.protocol import const as mc, namespaces as mn
-from .manager import CloudApiClient
-from .mqtt_profile import MQTTConnection, MQTTProfile
 
 if TYPE_CHECKING:
     from typing import Final, Iterable, NotRequired, Sequence, TypedDict, Unpack
@@ -72,7 +75,7 @@ if TYPE_CHECKING:
         tokenRequestTime: float
 
 
-class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
+class MerossMQTTConnection(mlq.MQTTConnection, MerossMQTTAppClient):
 
     # here we're acrobatically slottizing MerossMQTTAppClient
     # since it cannot be slotted itself leading to multiple inheritance
@@ -93,7 +96,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
             sslcontext=get_default_ssl_context(),
         )
         self.is_cloud_connection = True
-        MQTTConnection.__init__(self, profile, broker, self.topic_command)
+        mlq.MQTTConnection.__init__(self, profile, broker, self.topic_command)
 
         if MEROSSDEBUG:
 
@@ -123,7 +126,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
             self._unsub_random_disconnect.cancel()
             self._unsub_random_disconnect = None
         await MerossMQTTAppClient.async_shutdown(self)
-        await MQTTConnection.async_shutdown(self)
+        await mlq.MQTTConnection.async_shutdown(self)
 
     def get_rl_safe_delay(self, uuid: str):
         return MerossMQTTAppClient.get_rl_safe_delay(self, uuid)
@@ -141,7 +144,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
     @callback
     def _mqtt_connected(self):
         MerossMQTTAppClient._mqtt_connected(self)
-        MQTTConnection._mqtt_connected(self)
+        mlq.MQTTConnection._mqtt_connected(self)
 
     @callback
     def _mqtt_published(self):
@@ -162,7 +165,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
 
 
 MerossMQTTConnection.SESSION_HANDLERS = {
-    mn.Appliance_System_Online: MQTTConnection._handle_Appliance_System_Online,
+    mn.Appliance_System_Online: MerossMQTTConnection._handle_Appliance_System_Online,
 }
 
 
@@ -185,7 +188,7 @@ class MerossProfileStore(storage.Store["MerossProfileStoreType"]):
         ).async_logout_safe()
 
 
-class MerossProfile(MQTTProfile):
+class MerossProfile(mlq.MQTTProfile):
     """
     Represents and manages a cloud account profile used to retrieve keys
     and/or to manage cloud mqtt connection(s).
@@ -228,7 +231,7 @@ class MerossProfile(MQTTProfile):
         self, profile_id: str, api: "ComponentApi", config_entry: "ConfigEntry"
     ):
         self.is_cloud_profile = True
-        MQTTProfile.__init__(
+        mlq.MQTTProfile.__init__(
             self, profile_id, api=api, hass=api.hass, config_entry=config_entry
         )
         # state of the art for credentials is that they're mixed in
@@ -239,7 +242,7 @@ class MerossProfile(MQTTProfile):
         # so we're putting the migration code in 5.0.0 but still not going
         # to change the version(s) in storage/config. At the moment I'm still very confused
         # and opting to keep the credentials where they are embedded in ConfigEntry
-        self.apiclient = CloudApiClient(self, self.config)
+        self.apiclient = mlm.CloudApiClient(self, self.config)
         self._store = MerossProfileStore(self.hass, profile_id)
         self._unsub_polling_query_device_info = None
 
@@ -464,7 +467,7 @@ class MerossProfile(MQTTProfile):
         The list is empty if device not configured or if the connection(s) to the brokers
         cannot be established (like broker is down any network issue)
         """
-        mqttconnections: list[MQTTConnection] = []
+        mqttconnections: list[mlq.MQTTConnection] = []
 
         async def _add_connection(domain: str | None):
             if not domain:

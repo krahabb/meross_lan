@@ -27,10 +27,12 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.config_flow import ConfigFlow
 from custom_components.meross_lan.diagnostics import async_get_config_entry_diagnostics
-from custom_components.meross_lan.helpers import Loggable
-from custom_components.meross_lan.helpers.meross_profile import (
-    MerossMQTTConnection,
-    MQTTConnection,
+from custom_components.meross_lan.helpers import (
+    Loggable,
+    device as mld,
+    manager as mlm,
+    meross_profile as mlp,
+    mqtt_profile as mlq,
 )
 from custom_components.meross_lan.merossclient import cloudapi
 from custom_components.meross_lan.merossclient.protocol import const as mc, md5hexdigest
@@ -83,7 +85,6 @@ if TYPE_CHECKING:
 
     from custom_components.meross_lan.helpers.component_api import ComponentApi
     from custom_components.meross_lan.helpers.device import Device
-    from custom_components.meross_lan.helpers.manager import ConfigEntryManager
     from custom_components.meross_lan.merossclient.protocol.message import (
         MerossMessage,
         MerossResponse,
@@ -153,7 +154,7 @@ class MessageMatcher:
         )
 
 
-class LoggableException(contextlib.AbstractContextManager):
+class LoggableMocker(contextlib.AbstractContextManager):
 
     raise_on_log_exception: bool
 
@@ -164,7 +165,7 @@ class LoggableException(contextlib.AbstractContextManager):
         "_log_exception_old",
     )
 
-    def __init__(self, raise_on_log_exception=True):
+    def __init__(self, raise_on_log_exception=False):
         self.raise_on_log_exception = raise_on_log_exception
         self._log_exception_old = Loggable.log_exception
         self._patch = patch.object(
@@ -191,9 +192,12 @@ class LoggableException(contextlib.AbstractContextManager):
         **kwargs,
     ):
         self._log_exception_old(loggable, level, exception, msg, *args, **kwargs)
-        LOGGER.warning(
-            f"Loggable.log_exception called with: loggable={loggable} level={level} exception={exception}",
-        )
+        # pretty useless right now and it is just a working collector
+        # of every call made to log_exception.
+        # In order to intercept spcific classes/instances we have another approach
+        # see config_entry_manager, config_entry_device fixtures.
+        if self.raise_on_log_exception:
+            raise BaseException() from exception
 
 
 class TimeMocker(contextlib.AbstractContextManager):
@@ -410,29 +414,34 @@ class LogManager:
             p_message = re.compile(kwargs.get("message", r".*"))
             records = caplog.records
             if level:
-                pop = [
+                pop = tuple(
                     record
                     for record in records
                     if record.levelno == level
                     and p_name.match(record.name)
                     and p_message.match(record.message)
-                ]
+                )
             else:
-                pop = [
+                pop = tuple(
                     record
                     for record in records
                     if p_name.match(record.name) and p_message.match(record.message)
-                ]
+                )
 
             for record in pop:
                 records.remove(record)
             return pop
         else:
-            return []
+            return ()
 
     def assert_logs(self, count: int, **kwargs: "Unpack[LogMatchArgs]"):
+        """Allows the test case to ensure some logs were capturedor not. This is useful
+        when we expect some error/warning to be logged during the test execution.
+        - count: expected number of logs matching the criteria
+        - kwargs: filtering criteria for the logs to be matched
+        This also effectively removes the matched logs from the captured log list."""
         logs = self.pop_logs(**kwargs)
-        assert logs and len(logs) == count, "Inconsistent logging output"
+        assert logs and len(logs) == count, f"Inconsistent logging output {logs}"
 
     def flush_logs(self, context_tag: str):
         if (capsys := self.capsys) and (caplog := self.caplog):
@@ -469,6 +478,22 @@ class LogManager:
 
 class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
 
+    class ManagerMock(mlm.ConfigEntryManager):
+        """this is an easy place to override manager behavior if needed.
+        This class can be extended in subclasses of ConfigEntryMocker"""
+
+        if TYPE_CHECKING:
+            RAISE_MESSAGES: ClassVar[list[tuple[type[Exception] | None, re.Pattern | None]]]
+
+        RAISE_MESSAGES = [(AttributeError, None),]
+
+        def log_exception(self, level, exception, msg, *args, **kwargs):
+            _msg = msg % args
+            for exc, pattern in self.__class__.RAISE_MESSAGES:
+                if (exc is None or isinstance(exception, exc)) and (pattern is None or pattern.match(_msg)):
+                    raise BaseException(_msg) from exception
+            return super().log_exception(level, exception, msg, *args, **kwargs)
+
     if TYPE_CHECKING:
 
         class Args(TypedDict):
@@ -476,7 +501,7 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
             auto_setup: NotRequired[bool]
 
         hass: Final[HomeAssistant]
-        config_entry: Final[ConfigEntry[ConfigEntryManager]]
+        config_entry: Final[ConfigEntry[mlm.ConfigEntryManager]]
         config_entry_id: Final
         auto_setup: Final
 
@@ -772,6 +797,12 @@ class DeviceContext(ConfigEntryMocker):
     It also provides timefreezing
     """
 
+    class ManagerMock(ConfigEntryMocker.ManagerMock, mld.Device):
+        """this is an easy place to override manager behavior if needed.
+        This class can be extended in subclasses of ConfigEntryMocker"""
+
+        RAISE_MESSAGES = ConfigEntryMocker.ManagerMock.RAISE_MESSAGES + [(None, re.compile(r".*initializing digest key.*")),]
+
     if TYPE_CHECKING:
 
         class Args(ConfigEntryMocker.Args):
@@ -861,7 +892,9 @@ class DeviceContext(ConfigEntryMocker):
             await self.async_setup()
         assert (device := self.device)
         if not device.online:
-            await self.time_mock.async_tick(timedelta(seconds=10))
+            await self.time_mock.async_tick(
+                timedelta(seconds=mlc.PARAM_COLDSTARTPOLL_DELAY)
+            )
             assert device.online
         return device
 
@@ -1044,21 +1077,21 @@ class MQTTConnectionMocker(contextlib.AbstractContextManager):
     def __init__(self, hass: "HomeAssistant"):
 
         self.async_mqtt_publish_patcher = patch.object(
-            MQTTConnection,
+            mlq.MQTTConnection,
             "async_mqtt_publish",
             autospec=True,
             side_effect=self.async_mqtt_publish,
         )
 
         self.async_mqtt_request_patcher = patch.object(
-            MQTTConnection,
+            mlq.MQTTConnection,
             "async_mqtt_request",
             autospec=True,
             side_effect=self.async_mqtt_request,
         )
 
         async def _async_identify_device(
-            _self: MQTTConnection, device_id: str, key: str
+            _self: mlq.MQTTConnection, device_id: str, key: str
         ) -> mlc.DeviceConfigType:
             try:
                 device_info = tc.MOCK_CLOUDAPI_DEVICE_DEVLIST[device_id]
@@ -1075,19 +1108,25 @@ class MQTTConnectionMocker(contextlib.AbstractContextManager):
                 ) from e
 
         self.async_identify_device_patcher = patch.object(
-            MQTTConnection,
+            mlq.MQTTConnection,
             "async_identify_device",
             autospec=True,
             side_effect=_async_identify_device,
         )
 
     async def async_mqtt_request(
-        self, mqttconnection: MQTTConnection, device_id: str, request: "MerossMessage"
+        self,
+        mqttconnection: mlq.MQTTConnection,
+        device_id: str,
+        request: "MerossMessage",
     ) -> "MerossResponse":
         raise asyncio.TimeoutError()
 
     async def async_mqtt_publish(
-        self, mqttconnection: MQTTConnection, device_id: str, request: "MerossMessage"
+        self,
+        mqttconnection: mlq.MQTTConnection,
+        device_id: str,
+        request: "MerossMessage",
     ) -> None:
         return None
 
@@ -1137,25 +1176,25 @@ class MerossMQTTMocker(MQTTConnectionMocker):
     def __init__(self, hass: "HomeAssistant"):
         super().__init__(hass)
 
-        def _safe_start(_self: MerossMQTTConnection, *args, **kwargs):
+        def _safe_start(_self: mlp.MerossMQTTConnection, *args, **kwargs):
             """this runs in an executor"""
             _self._stateext = _self.STATE_CONNECTED
             hass.add_job(_self._mqtt_connected)
 
         self.safe_start_patcher = patch.object(
-            MerossMQTTConnection,
+            mlp.MerossMQTTConnection,
             "safe_start",
             autospec=True,
             side_effect=_safe_start,
         )
 
-        def _safe_stop(_self: MerossMQTTConnection, *args, **kwargs):
+        def _safe_stop(_self: mlp.MerossMQTTConnection, *args, **kwargs):
             """this runs in an executor"""
             _self._stateext = _self.STATE_DISCONNECTED
             hass.add_job(_self._mqtt_disconnected)
 
         self.safe_stop_patcher = patch.object(
-            MerossMQTTConnection,
+            mlp.MerossMQTTConnection,
             "safe_stop",
             autospec=True,
             side_effect=_safe_stop,
