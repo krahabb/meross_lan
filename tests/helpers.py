@@ -483,14 +483,20 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
         This class can be extended in subclasses of ConfigEntryMocker"""
 
         if TYPE_CHECKING:
-            RAISE_MESSAGES: ClassVar[list[tuple[type[Exception] | None, re.Pattern | None]]]
+            RAISE_MESSAGES: ClassVar[
+                list[tuple[type[Exception] | None, re.Pattern | None]]
+            ]
 
-        RAISE_MESSAGES = [(AttributeError, None),]
+        RAISE_MESSAGES = [
+            (AttributeError, None),
+        ]
 
         def log_exception(self, level, exception, msg, *args, **kwargs):
             _msg = msg % args
             for exc, pattern in self.__class__.RAISE_MESSAGES:
-                if (exc is None or isinstance(exception, exc)) and (pattern is None or pattern.match(_msg)):
+                if (exc is None or isinstance(exception, exc)) and (
+                    pattern is None or pattern.match(_msg)
+                ):
                     raise BaseException(_msg) from exception
             return super().log_exception(level, exception, msg, *args, **kwargs)
 
@@ -801,7 +807,9 @@ class DeviceContext(ConfigEntryMocker):
         """this is an easy place to override manager behavior if needed.
         This class can be extended in subclasses of ConfigEntryMocker"""
 
-        RAISE_MESSAGES = ConfigEntryMocker.ManagerMock.RAISE_MESSAGES + [(None, re.compile(r".*initializing digest key.*")),]
+        RAISE_MESSAGES = ConfigEntryMocker.ManagerMock.RAISE_MESSAGES + [
+            (None, re.compile(r".*initializing digest key.*")),
+        ]
 
     if TYPE_CHECKING:
 
@@ -1115,18 +1123,12 @@ class MQTTConnectionMocker(contextlib.AbstractContextManager):
         )
 
     async def async_mqtt_request(
-        self,
-        mqttconnection: mlq.MQTTConnection,
-        device_id: str,
-        request: "MerossMessage",
+        self, mqttconnection: mlq.MQTTConnection, request: "MerossMessage"
     ) -> "MerossResponse":
         raise asyncio.TimeoutError()
 
     async def async_mqtt_publish(
-        self,
-        mqttconnection: mlq.MQTTConnection,
-        device_id: str,
-        request: "MerossMessage",
+        self, mqttconnection: mlq.MQTTConnection, request: "MerossMessage"
     ) -> None:
         return None
 
