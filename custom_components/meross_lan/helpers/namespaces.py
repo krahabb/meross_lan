@@ -72,7 +72,6 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
         return self.manager.ns_handlers[self.ns]  # type: ignore
 
     async def async_request_payload(self, payload: "JsonDict", /):
-        # return await self.handler_ns.async_set(payload)
         return await self.handler_ns.device.async_request(
             *self.ns.request_set(payload, self.channel)
         )
@@ -90,12 +89,6 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
 
     async def async_request_parse_ex(self, payload: "JsonDict", /):
         response = await self.async_request_payload(payload)
-        # TODO: consider maybe a dedicated _parse_set_xxxx method?
-        # also, most namespaces SETACK replies are empty dicts
-        # so we just dispatch the request payload (which might be a
-        # subset of the whole GET payload).
-        # Some namespaces though might return different payloads on SETACK
-        # GarageDoor.State or mts100.Temperature
         getattr(self, f"_parse_{self.ns.slug_end}", self._parse)(
             merge_dicts(self._payload_ns, payload)
         )
@@ -927,28 +920,10 @@ class NamespaceHandler:
         """
 
         ns = self.ns
-        if ns.grammar is mn.Grammar.STABLE:
-            try:
-                if (
-                    ns.payload_get
-                    in (mn.PayloadType.LIST_C_STRICT, mn.PayloadType.LIST_C_DATA_STRICT)
-                ) and (not self.polling_request_channels):
-                    # when a 'LIST_C_STRICT' namespace has no registered parsers, self.polling_request will fail
-                    # so we use the mocked default request
-                    await async_request_func(*ns.request_default)
-                elif ns.can_query:
-                    await async_request_func(*self.polling_request)
-            except Exception:
-                pass
-            return
-
-        ns_name = ns
-        ns_key = ns.key
-        ns_key_channel = ns.key_channel
 
         async def _async_wrapped_get(payload: "JsonDict"):
             try:
-                return await async_request_func(ns_name, mc.METHOD_GET, payload)
+                return await async_request_func(ns, mc.METHOD_GET, payload)
             except Exception:
                 # Right now we just keep on going..
                 # It would be better to detect if the device is offline and leave the whole
@@ -957,13 +932,54 @@ class NamespaceHandler:
 
         async def _async_wrapped_push():
             try:
-                return await async_request_func(ns_name, mc.METHOD_PUSH, mn.EMPTY_DICT)
+                return await async_request_func(ns, mc.METHOD_PUSH, mn.EMPTY_DICT)
             except Exception:
                 # Right now we just keep on going..
                 # It would be better to detect if the device is offline and leave the whole
                 # tracing at that point (maybe).
                 return None
 
+        if ns.grammar is mn.Grammar.STABLE:
+            try:
+                match ns.payload_get:
+                    case (
+                        mn.PayloadType.LIST_C
+                        | mn.PayloadType.LIST_C_STRICT
+                        | mn.PayloadType.LIST_C_DATA_STRICT
+                    ):
+                        try:
+                            if self.polling_request_channels:
+                                await async_request_func(*self.polling_request)
+                            else:
+                                # when a 'LIST_C_STRICT' namespace has no registered parsers, self.polling_request will fail
+                                # so we use the mocked default request
+                                await async_request_func(*ns.request_default)
+                        except AttributeError as ae:
+                            if ae.name == "polling_request_channels":
+                                # might be if payload_type is LIST_C though...
+                                # so we use the mocked default request
+                                await async_request_func(*ns.request_default)
+                    case mn.PayloadType.UNSUPPORTED:
+                        if ns.has_psq:
+                            await _async_wrapped_push()
+                    case _:
+                        await async_request_func(*self.polling_request)
+
+                if ns.payload_get is not mn.PayloadType.EMPTY:
+                    # Beside what is being stated by our grammar, it might be we've
+                    # always probed this ns with the wrong GET payload. According
+                    # to knowledge from Meross App analisys many if not all should
+                    # instead work with a plain empty GET payload.
+                    await _async_wrapped_get({})
+
+            except Exception:
+                # TODO: log exception?
+                pass
+
+            return
+
+        ns_key = ns.key
+        ns_key_channel = ns.key_channel
         match ns.grammar:
             case mn.Grammar.EXPERIMENTAL:
                 # These are typically known in their structure and likely to be channelized
@@ -990,7 +1006,7 @@ class NamespaceHandler:
                 async def _async_check(_payload: "mt.MerossPayloadType"):
                     try:
                         _response = await async_request_func(
-                            ns_name, mc.METHOD_GET, _payload
+                            ns, mc.METHOD_GET, _payload
                         )
                         payload = _response.payload[ns_key]
                         if type(payload) is list:
@@ -1041,11 +1057,11 @@ class NamespaceHandler:
                 # We don't know yet how to query this ns so we'll brute-force it
                 if ns.has_psh:
                     if response := await _async_wrapped_push():
-                        ns_key = mn.Namespace.infer_key(ns_name, response.payload)
+                        ns_key = mn.Namespace.infer_key(ns, response.payload)
 
                 if ns.has_get:
                     if response := await _async_wrapped_get({}):
-                        ns_key = mn.Namespace.infer_key(ns_name, response.payload)
+                        ns_key = mn.Namespace.infer_key(ns, response.payload)
                     elif response := await _async_wrapped_get({ns.key: []}):
                         ns_key = ns.key
                     else:
