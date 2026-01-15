@@ -25,7 +25,7 @@ from ...sensor import (
     MLNumericSensor,
     MLTemperatureSensor,
 )
-from ...switch import MLDeviceSwitch
+from ...switch import MLSwitch
 from .mts100 import Mts100Climate
 
 if TYPE_CHECKING:
@@ -122,18 +122,18 @@ class HubSensorAdjustNumber(MLConfigNumber):
         self.update_device_value(device_value)
 
 
-class HubToggleX(MLDeviceSwitch):
+class HubToggleX(MLSwitch):
     """Generic switch to map Appliance.Hub.ToggleX namespace."""
 
     ENTITY_KEY = mc.KEY_TOGGLEX
     ns = mn_h.Appliance_Hub_ToggleX
 
 
-class HubBeep(MLDeviceSwitch):
+class HubBeep(MLSwitch):
     """Generic switch to map Appliance.Hub.SubDevice.Beep namespace."""
 
     ns = mn_h.Appliance_Hub_SubDevice_Beep
-    ENTITY_KEY = f"{ns.slug}__{MLDeviceSwitch.key_value}"
+    ENTITY_KEY = f"{ns.slug}__{MLSwitch.key_value}"
 
 
 class HubSubIdChannelMixin(MLEntity if TYPE_CHECKING else object):
@@ -198,7 +198,7 @@ class HubNamespaceHandler(NamespaceHandler):
         NamespaceHandler.__init__(self, device, ns, handler=self._handle_subdevice)
         if self.polling_strategy is NamespaceHandler.async_poll_chunked:
             # This is needed to setup the polling_request_channels.
-            # 'chunked' namespaces could be presented in
+            # 'chunked' polling namespaces could be presented in
             # abilities but not correctly initialized if subdevices of the right type
             # are not present at init time (we need to setup the polling_request_channels).
             # TODO: This need to be better refined
@@ -249,7 +249,6 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
     __slots__ = (
         "_models",
         "_included",
-        "_count",
     )
 
     def __init__(
@@ -258,11 +257,9 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
         ns: "Namespace",
         models: "Collection",
         included: bool,
-        count: int,
     ):
         self._models = models
         self._included = included
-        self._count = count  # TODO: eventually remove if we don't need an hard limit
         HubNamespaceHandler.__init__(self, device, ns)
 
     def channels_to_poll(self):
@@ -334,7 +331,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
         MtsSchedule.PLATFORM: None,
         MLConfigNumber.PLATFORM: None,
         MLNumericSensor.PLATFORM: None,
-        MLDeviceSwitch.PLATFORM: None,
+        MLSwitch.PLATFORM: None,
         MtsClimate.PLATFORM: None,
         MtsClimate.TrackSensorSelect.PLATFORM: None,
     }
@@ -455,10 +452,10 @@ class HubMixin(Device if TYPE_CHECKING else object):
             timeout=604800,  # 1 week
         )
 
-    def setup_chunked_handler(self, ns: "Namespace", is_mts100: bool, count: int, /):
+    def setup_chunked_handler(self, ns: "Namespace", is_mts100: bool, /):
         if (ns not in self.ns_handlers) and (ns in self.descriptor.ability):
             HubChunkedNamespaceHandler(
-                self, ns, mc.MTS100_ALL_TYPESET, is_mts100, count
+                self, ns, mc.MTS100_ALL_TYPESET, is_mts100
             )
 
     def setup_simple_handlers(self, *nss: "Namespace"):
@@ -933,8 +930,8 @@ class MTSSubDevice(SubDevice):
 
     def __init__(self, hub: HubMixin, p_digest: dict, model: str):
         SubDevice.__init__(self, hub, p_digest, model)
-        hub.setup_chunked_handler(mn_h.Appliance_Hub_Mts100_All, True, 8)
-        hub.setup_chunked_handler(mn_h.Appliance_Hub_Mts100_ScheduleB, True, 4)
+        hub.setup_chunked_handler(mn_h.Appliance_Hub_Mts100_All, True)
+        hub.setup_chunked_handler(mn_h.Appliance_Hub_Mts100_ScheduleB, True)
         hub.setup_simple_handlers(
             mn_h.Appliance_Hub_Mts100_Adjust,
             mn_h.Appliance_Hub_Mts100_Mode,
@@ -958,7 +955,7 @@ class SensorSubDevice(SubDevice):
 
     def __init__(self, hub: HubMixin, p_digest: dict, model: str, /):
         SubDevice.__init__(self, hub, p_digest, model)
-        hub.setup_chunked_handler(mn_h.Appliance_Hub_Sensor_All, False, 8)
+        hub.setup_chunked_handler(mn_h.Appliance_Hub_Sensor_All, False)
 
 
 class GS559SubDevice(SensorSubDevice):
@@ -1345,7 +1342,7 @@ class MST100SubDevice(SensorSubDevice):
         native_max_value = 86400  # 1 day max duration (no real info just guessing)
         native_min_value = 1
 
-    class OnOffSwitch(HubSubIdChannelMixin, MLDeviceSwitch):
+    class OnOffSwitch(HubSubIdChannelMixin, MLSwitch):
         """Switch to turn on/off watering."""
 
         ns = mn_h.Appliance_Control_Water

@@ -14,7 +14,7 @@ from ..cover import MLCover
 from ..helpers import clamp, entity as me
 from ..helpers.namespaces import NamespaceHandler, mc, mn
 from ..number import MLConfigNumber, MLEmulatedNumber
-from ..switch import MLDeviceSwitch
+from ..switch import MLSwitch
 
 if TYPE_CHECKING:
     from typing import Final, Unpack
@@ -63,7 +63,7 @@ class MLGarageTimeoutBinarySensor(me.MEPartialAvailableMixin, MLBinarySensor):
         self.flush_state()
 
 
-class MLGarageMultipleConfigSwitch(MLDeviceSwitch):
+class MLGarageMultipleConfigSwitch(MLSwitch):
     """
     switch entity to manage MSG configuration (buzzer, enable)
     'x channel' through mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
@@ -80,7 +80,7 @@ class MLGarageMultipleConfigSwitch(MLDeviceSwitch):
         device_value=None,
     ):
         self.key_value = key
-        MLDeviceSwitch.__init__(
+        MLSwitch.__init__(
             self, manager, channel, f"config_{key}", device_value=device_value, name=key
         )
 
@@ -675,7 +675,7 @@ class GarageDoorStateNamespaceHandler(NamespaceHandler):
 
 def digest_init_garagedoor(device: "Device", digest: list, /) -> "DigestInitReturnType":
     device.platforms.setdefault(MLConfigNumber.PLATFORM, None)
-    device.platforms.setdefault(MLDeviceSwitch.PLATFORM, None)
+    device.platforms.setdefault(MLSwitch.PLATFORM, None)
 
     handler = GarageDoorStateNamespaceHandler(device)
 

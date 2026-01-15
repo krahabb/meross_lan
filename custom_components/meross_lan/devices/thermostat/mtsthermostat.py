@@ -7,7 +7,7 @@ from ...merossclient.protocol.namespaces import thermostat as mn_t
 from ...number import MLConfigNumber
 from ...select import MLConfigSelect
 from ...sensor import MLEnumSensor, MLTemperatureSensor
-from ...switch import MLDeviceSwitch
+from ...switch import MLSwitch
 
 if TYPE_CHECKING:
     from typing import Any, Callable, ClassVar, Final, Unpack
@@ -35,13 +35,13 @@ class MtsWarningSensor(MLEnumSensor):
         )
 
 
-class MtsConfigSwitch(MLDeviceSwitch):
+class MtsConfigSwitch(MLSwitch):
 
     def __init__(
         self, number_temperature: "MtsCommonTemperatureExtNumber", device_value, /
     ):
         self.ns = number_temperature.ns
-        MLDeviceSwitch.__init__(
+        MLSwitch.__init__(
             self,
             number_temperature.manager,
             number_temperature.channel,
@@ -204,14 +204,14 @@ class MtsWindowOpened(MLBinarySensor):
         climate.manager.register_parser_entity(self)
 
 
-class MtsExternalSensorSwitch(MLDeviceSwitch):
+class MtsExternalSensorSwitch(MLSwitch):
     # External sensor mode: use internal(0) vs external(1) sensor as temperature loopback.
 
     ns = mn_t.Appliance_Control_Thermostat_Sensor
     key_value = mc.KEY_MODE
 
     def __init__(self, climate: "MtsThermostatClimate", /):
-        MLDeviceSwitch.__init__(
+        MLSwitch.__init__(
             self, climate.manager, climate.channel, "external sensor mode"
         )
         climate.manager.register_parser_entity(self)

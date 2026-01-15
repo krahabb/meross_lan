@@ -122,7 +122,7 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
                 ns,
                 MerossEmulator.NSDefaultMode.MixOut,
                 {
-                    ns.key_channel: 0,
+                    "channel": 0,
                     "value": 0.5 * self.device_scale,
                     "max": 3.5 * self.device_scale,
                     "min": 0.5 * self.device_scale,
@@ -134,7 +134,7 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
                 ns,
                 MerossEmulator.NSDefaultMode.MixOut,
                 {
-                    ns.key_channel: 0,
+                    "channel": 0,
                     "value": 0.5 * self.device_scale,
                     "max": 3.5 * self.device_scale,
                     "min": 0.5 * self.device_scale,
@@ -148,7 +148,7 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
                 ns,
                 MerossEmulator.NSDefaultMode.MixOut,
                 {
-                    ns.key_channel: 0,
+                    "channel": 0,
                     "value": 32 * self.device_scale,
                     "max": 70 * self.device_scale,
                     "min": 20 * self.device_scale,

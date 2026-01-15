@@ -14,7 +14,7 @@ from ..helpers.namespaces import (
     mn,
 )
 from ..sensor import MLEnumSensor, MLNumericSensor
-from ..switch import MLDeviceSwitch
+from ..switch import MLSwitch
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final, Unpack
@@ -575,7 +575,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         self.log(self.DEBUG, "updating consumption=%d", day_last_value)
 
 
-class OverTempEnableSwitch(EntityNamespaceMixin, MLDeviceSwitch):
+class OverTempEnableSwitch(EntityNamespaceMixin, MLSwitch):
 
     ENTITY_KEY = "config_overtemp_enable"
     ns = mn.Appliance_Config_OverTemp

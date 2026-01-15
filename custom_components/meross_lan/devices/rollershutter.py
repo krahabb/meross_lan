@@ -6,7 +6,7 @@ from ..const import CONF_PROTOCOL_HTTP, PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIME
 from ..cover import MLCover, cover
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..number import MLConfigNumber
-from ..switch import MLDeviceSwitch
+from ..switch import MLSwitch
 
 if TYPE_CHECKING:
     from typing import ClassVar, NotRequired
@@ -333,7 +333,7 @@ class MLRollerShutter(MLCover):
         await self.async_stop_cover()
 
 
-class MLRollerShutterAdjustSwitch(MLDeviceSwitch):
+class MLRollerShutterAdjustSwitch(MLSwitch):
     """
     Appliance.RollerShutter.Adjust is a bit weird. It seems to report
     some binary status about shutter tuning operations.
@@ -349,7 +349,7 @@ class MLRollerShutterAdjustSwitch(MLDeviceSwitch):
     native_off = 2
 
     def __init__(self, manager: "Device", channel: int):
-        MLDeviceSwitch.__init__(
+        MLSwitch.__init__(
             self,
             manager,
             channel,

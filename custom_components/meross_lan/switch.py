@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .helpers.device import BaseDevice, Device, DigestInitReturnType
+    from .helpers.device import Device, DigestInitReturnType
 
 
 async def async_setup_entry(
@@ -23,9 +23,9 @@ async def async_setup_entry(
 
 class MLSwitch(me.MLBinaryEntity, switch.SwitchEntity):
     """
-    Base (almost abstract) entity for switches. This has 2 main implementations:
-    - MLDeviceSwitch: switch representing some device feature (an actual output or a config option)
-    - MLEmulatedSwitch: switch used to configure a meross_lan feature/option
+    Generic switch entity for meross_lan devices.
+    This class is 'ready to use' for most of the devices toggleable features.
+    It just need to be configured and linked to a proper ns/channel/key_value in order to work.
     """
 
     if TYPE_CHECKING:
@@ -50,16 +50,6 @@ class MLEmulatedSwitch(me.MEPartialAvailableMixin, MLSwitch):
     behaviors for meross_lan entities.
     """
 
-    def __init__(
-        self,
-        manager: "BaseDevice",
-        channel: object,
-        entitykey: str | None = None,
-        /,
-        **kwargs: "Unpack[MLEmulatedSwitch.Args]",
-    ):
-        super().__init__(manager, channel, entitykey, **kwargs)
-
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
         with self.exception_warning("restoring previous state"):
@@ -75,31 +65,18 @@ class MLEmulatedSwitch(me.MEPartialAvailableMixin, MLSwitch):
         self.update_native_value(False)
 
 
-class MLDeviceSwitch(MLSwitch):
-    """
-    Generic HA switch: could either be a physical outlet or another binary setting
-    of the device (see various config switches)
-    Switches are sometimes hybrid and their message dispatching is not 'set in stone'
-    since the status updates are likely managed in higher level implementations or so.
-    This class needs to be mixed in with any of the me.MENoChannelMixin,
-    me.MEDictChannelMixin, MEListChannelMixin in order to actually define the
-    implementation of the protocol message payload for 'SET' commands.
-    TODO: remove this class and use directly MLSwitch with proper mixins
-    """
-
-
-class PhysicalLockSwitch(MLDeviceSwitch):
+class PhysicalLockSwitch(MLSwitch):
 
     ENTITY_KEY = mc.KEY_LOCK
     ns = mn.Appliance_Control_PhysicalLock
     NS_CHANNELS = (0,)
 
     def __init__(self, manager: "Device", channel, /):
-        MLDeviceSwitch.__init__(self, manager, channel)
+        MLSwitch.__init__(self, manager, channel)
         manager.register_parser_entity(self)
 
 
-class MLToggle(EntityNamespaceMixin, MLDeviceSwitch):
+class MLToggle(EntityNamespaceMixin, MLSwitch):
 
     # 2024-03-13: passing entitykey="0" instead of channel in order
     # to mantain unique_id compatibility with installations but
@@ -110,7 +87,7 @@ class MLToggle(EntityNamespaceMixin, MLDeviceSwitch):
     ns = mn.Appliance_Control_Toggle
 
     # HA core entity attributes:
-    _attr_device_class = MLDeviceSwitch.DeviceClass.OUTLET
+    _attr_device_class = MLSwitch.DeviceClass.OUTLET
     entity_category = None
 
 
@@ -120,16 +97,16 @@ def digest_init_toggle(device: "Device", digest: dict, /) -> "DigestInitReturnTy
     return toggle._parse, (device.ns_handlers[mn.Appliance_Control_Toggle],)
 
 
-class MLToggleX(MLDeviceSwitch):
+class MLToggleX(MLSwitch):
 
     ns = mn.Appliance_Control_ToggleX
 
     # HA core entity attributes:
-    _attr_device_class = MLDeviceSwitch.DeviceClass.OUTLET
+    _attr_device_class = MLSwitch.DeviceClass.OUTLET
     entity_category = None
 
     def __init__(self, manager: "Device", channel, /):
-        MLDeviceSwitch.__init__(self, manager, channel, None)
+        MLSwitch.__init__(self, manager, channel, None)
         manager.register_parser_entity(self)
 
 
