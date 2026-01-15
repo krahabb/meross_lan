@@ -54,7 +54,7 @@ if TYPE_CHECKING:
 
     from .helpers.device import Device
     from .helpers.manager import ConfigEntryManager
-    from .helpers.meross_profile import MQTTConnection
+    from .helpers.mqtt_profile import MQTTConnection
     from .merossclient import _BaseClient
     from .merossclient.protocol import types as mt
 

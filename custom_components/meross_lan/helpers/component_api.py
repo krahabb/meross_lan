@@ -9,10 +9,7 @@ from homeassistant import const as hac
 from homeassistant.components import bluetooth as ha_bt
 from homeassistant.core import SupportsResponse, callback
 from homeassistant.data_entry_flow import AbortFlow
-from homeassistant.exceptions import (
-    ConfigEntryError,
-    HomeAssistantError,
-)
+from homeassistant.exceptions import ConfigEntryError, HomeAssistantError
 from homeassistant.helpers import (
     device_registry as dr,
     entity_registry as er,
@@ -52,7 +49,6 @@ if TYPE_CHECKING:
 
     from ..config_flow import ConfigFlow
     from ..merossclient.protocol.message import MerossMessage
-    from ..merossclient.protocol.types import MerossHeaderType, MerossPayloadType
     from .device import Device
     from .meross_profile import MerossProfile
 
@@ -133,13 +129,9 @@ class HAMQTTConnection(mlq.MQTTConnection):
         return 0.0
 
     @override
-    async def _async_mqtt_publish(
-        self,
-        device_id: str,
-        request: "MerossMessage",
-    ):
+    async def _async_mqtt_publish(self, request: "MerossMessage"):
         await mqtt_async_publish(
-            self.profile.hass, mc.TOPIC_REQUEST.format(device_id), request.json
+            self.profile.hass, mc.TOPIC_REQUEST.format(request.uuid), request.json
         )
         self._mqtt_published()
 
@@ -237,9 +229,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
     # configured yet in meross_lan. When the device is configured, we still manage
     # these 'session messages' here but we'll forward them to the device too in order
     # to trigger all of the device connection management.
-    async def _handle_Appliance_Control_Bind(
-        self, device_id: str, header: "MerossHeaderType", payload: "MerossPayloadType"
-    ):
+    async def _handle_Appliance_Control_Bind(self, message: "MerossMessage"):
         # this transaction appears when a device (firstly)
         # connects to an MQTT broker and tries to 'register'
         # itself. Our guess right now is to just SETACK
@@ -251,6 +241,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
         # At any rate I don't have a clue on how to properly
         # replicate this and the "from" field is set as ususal
 
+        device_id = message.uuid
         api = self.profile.api
         if device_id in api.devices:
             if device := api.devices[device_id]:
@@ -263,11 +254,10 @@ class HAMQTTConnection(mlq.MQTTConnection):
                     key = self.profile.key
         else:
             key = self.profile.key
-        if header[mc.KEY_METHOD] == mc.METHOD_SET:
+        if message.method == mc.METHOD_SET:
             await self.async_mqtt_publish(
-                device_id,
                 MerossAckReply(
-                    header,
+                    message,
                     {},
                     key,
                     mc.TOPIC_RESPONSE.format(device_id),
@@ -277,32 +267,28 @@ class HAMQTTConnection(mlq.MQTTConnection):
         return False
 
     async def _handle_Appliance_Control_ConsumptionConfig(
-        self, device_id: str, header: "MerossHeaderType", payload: "MerossPayloadType"
+        self, message: "MerossMessage"
     ):
         # this message is published by mss switches
         # and it appears newer mss315 could abort their connection
         # if not replied (see #346)
-        if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
+        if message.method == mc.METHOD_PUSH:
             await self.async_mqtt_publish(
-                device_id,
-                MerossPushReply(header, payload),
+                MerossPushReply(message, message.payload),
             )
         # keep forwarding the message
         return False
 
-    async def _handle_Appliance_System_Clock(
-        self, device_id: str, header: "MerossHeaderType", payload: "MerossPayloadType"
-    ):
+    async def _handle_Appliance_System_Clock(self, message: "MerossMessage"):
         # this is part of initial flow over MQTT
         # we'll try to set the correct time in order to avoid
         # having NTP opened to setup the device
         # Note: I actually see this NS only on mss310 plugs
         # (msl120j bulb doesnt have it)
-        if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
+        if message.method == mc.METHOD_PUSH:
             await self.async_mqtt_publish(
-                device_id,
                 MerossPushReply(
-                    header, {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}}
+                    message, {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}}
                 ),
             )
         # keep forwarding the message
@@ -662,6 +648,7 @@ class ComponentApi(mlq.MQTTProfile):
                         device.key if key is None else key,
                         device._topic_response,
                         trigger_src,
+                        device_id,
                     ),
                     (
                         device.async_mqtt_request_raw
@@ -694,11 +681,11 @@ class ComponentApi(mlq.MQTTProfile):
                         self.key if key is None else key,
                         mqtt_connection.topic_response,
                         trigger_src,
+                        device_id,
                     )
                     try:
-
                         service_response["response"] = (
-                            await mqtt_connection.async_mqtt_request(device_id, request)
+                            await mqtt_connection.async_mqtt_request(request)
                         )
                     except Exception as exception:
                         service_response["exception"] = (

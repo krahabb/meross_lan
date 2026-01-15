@@ -20,13 +20,7 @@ from . import (
 )
 from .. import const as mlc
 from ..helpers.obfuscate import OBFUSCATE_DEVICE_ID_MAP, obfuscated_dict
-from ..merossclient import (
-    MEROSSDEBUG,
-    HostAddress,
-    cloudapi,
-    get_active_broker,
-    versiontuple,
-)
+from ..merossclient import MEROSSDEBUG, HostAddress, cloudapi, get_active_broker
 from ..merossclient.mqttclient import MerossMQTTAppClient
 from ..merossclient.protocol import const as mc, namespaces as mn
 
@@ -132,14 +126,8 @@ class MerossMQTTConnection(mlq.MQTTConnection, MerossMQTTAppClient):
         return MerossMQTTAppClient.get_rl_safe_delay(self, uuid)
 
     @override
-    async def _async_mqtt_publish(
-        self,
-        device_id: str,
-        request: "MerossMessage",
-    ):
-        return await self.profile.hass.async_add_executor_job(
-            self.rl_publish, device_id, request
-        )
+    async def _async_mqtt_publish(self, request: "MerossMessage"):
+        return await self.profile.hass.async_add_executor_job(self.rl_publish, request)
 
     @callback
     def _mqtt_connected(self):

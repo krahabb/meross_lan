@@ -4,16 +4,10 @@ import os
 from time import time
 from typing import TYPE_CHECKING
 
-from . import (
-    MerossKeyError,
-    MerossProtocolError,
-    const as mc,
-    md5hexdigest,
-    namespaces as mn,
-)
+from . import MerossKeyError, MerossProtocolError, const as mc, md5hexdigest
 
 if TYPE_CHECKING:
-    from .types import KeyType, MerossHeaderType, MerossMessageType, MerossPayloadType
+    from .types import KeyType, MerossHeaderType, MerossPayloadType
 
 
 #
@@ -127,17 +121,6 @@ class MerossMessage(dict):
         return message
 
     @staticmethod
-    def check_(message: "MerossMessage | None", /):
-        """
-        Does a formal check of the message structure also raising a
-        typed exception if formally correct but carrying a protocol error
-        TODO: remove
-        """
-        if not message:
-            raise MerossProtocolError(message, "No response")
-        return message.check()
-
-    @staticmethod
     def generate_id():
         return "%032x" % int.from_bytes(os.urandom(16))
 
@@ -166,6 +149,10 @@ class MerossMessage(dict):
         return self.header[mc.KEY_MESSAGEID]
 
     @cached_property
+    def uuid(self, /):
+        return self.header.get(mc.KEY_UUID) or mc.RE_PATTERN_TOPIC_UUID.match(self.header[mc.KEY_FROM]).group(1)  # type: ignore
+
+    @cached_property
     def payload(self) -> "MerossPayloadType":
         return self[mc.KEY_PAYLOAD]
 
@@ -188,13 +175,10 @@ class MerossMessage(dict):
 
     def compute_signature(self, key: str, /):
         return compute_message_signature(
-            self.header[mc.KEY_MESSAGEID],
+            self.messageid,
             key,
             self.header[mc.KEY_TIMESTAMP],
         )
-
-    def get_uuid(self, /):
-        return self.header.get(mc.KEY_UUID) or mc.RE_PATTERN_TOPIC_UUID.match(self.header[mc.KEY_FROM]).group(1)  # type: ignore
 
 
 class MerossResponse(MerossMessage):
@@ -216,8 +200,11 @@ class MerossRequest(MerossMessage):
         key: str = "",
         from_: str = mc.HEADER_FROM_DEFAULT,
         trigger_src: str = mc.HEADER_TRIGGERSRC_DEFAULT,
+        uuid: str | None = None,
         /,
     ):
+        if uuid:
+            self.uuid = uuid
         self.namespace = namespace
         self.method = method
         self.payload = payload
@@ -253,13 +240,12 @@ class MerossPushReply(MerossMessage):
     the incoming header data.
     """
 
-    def __init__(self, header: "MerossHeaderType", payload: "MerossPayloadType", /):
-        self.namespace = header[mc.KEY_NAMESPACE]
-        self.method = header[mc.KEY_METHOD]
-        self.messageid = header[mc.KEY_MESSAGEID]
-        self.payload = payload
-        self.header = header = header.copy()
-        header.pop(mc.KEY_UUID, None)
+    def __init__(self, message: MerossMessage, payload: "MerossPayloadType", /):
+        # The policy here is to only preset the properties which are almost always used
+        # while processing this message. Generally speaking uuid is the most relevant while
+        # namespace, method, messageid should only be used when VERBOSE/DEBUG logging is active.
+        self.uuid = message.uuid
+        header = message.header.copy()
         header[mc.KEY_TRIGGERSRC] = mc.HEADER_TRIGGERSRC_CLOUDCONTROL
         MerossMessage.__init__(
             self,
@@ -277,31 +263,31 @@ class MerossAckReply(MerossMessage):
 
     def __init__(
         self,
-        header: "MerossHeaderType",
+        message: MerossMessage,
         payload: "MerossPayloadType",
         key: str,
         from_: str,
         /,
     ):
-        self.namespace = header[mc.KEY_NAMESPACE]
-        self.method = mc.METHOD_ACK_MAP[header[mc.KEY_METHOD]]
-        self.messageid = header[mc.KEY_MESSAGEID]
-        self.payload = payload
+        # The policy here is to only preset the properties which are almost always used
+        # while processing this message. Generally speaking uuid is the most relevant while
+        # namespace, method, messageid should only be used when VERBOSE/DEBUG logging is active.
+        self.uuid = message.uuid
         timestamp = int(time())
         MerossMessage.__init__(
             self,
             {
                 mc.KEY_HEADER: {
-                    mc.KEY_MESSAGEID: self.messageid,
-                    mc.KEY_NAMESPACE: self.namespace,
-                    mc.KEY_METHOD: self.method,
+                    mc.KEY_MESSAGEID: message.messageid,
+                    mc.KEY_NAMESPACE: message.namespace,
+                    mc.KEY_METHOD: mc.METHOD_ACK_MAP[message.method],
                     mc.KEY_PAYLOADVERSION: 1,
                     mc.KEY_TRIGGERSRC: mc.HEADER_TRIGGERSRC_CLOUDCONTROL,
                     mc.KEY_FROM: from_,
                     mc.KEY_TIMESTAMP: timestamp,
                     mc.KEY_TIMESTAMPMS: 0,
                     mc.KEY_SIGN: compute_message_signature(
-                        self.messageid, key, timestamp
+                        message.messageid, key, timestamp
                     ),
                 },
                 mc.KEY_PAYLOAD: payload,

@@ -362,13 +362,13 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
             # queue empty
             return 0.0
 
-    def rl_publish(self, uuid: str, request: "MerossMessage"):
+    def rl_publish(self, request: "MerossMessage"):
         with self._lock_queue:
 
             try:
-                _rl2 = self._rl2_queues[uuid]
+                _rl2 = self._rl2_queues[request.uuid]
             except KeyError:
-                self._rl2_queues[uuid] = _rl2 = _MQTTRateLimiter()
+                self._rl2_queues[request.uuid] = _rl2 = _MQTTRateLimiter()
 
             t_now = monotonic()
             # implementing a rate-limiter trying to keep the send rate to lower than
@@ -391,7 +391,7 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
             t_queue.append(t_now)
             return mqtt.Client.publish(
                 self,
-                mc.TOPIC_REQUEST.format(uuid),
+                mc.TOPIC_REQUEST.format(request.uuid),
                 request.json,
             )
 

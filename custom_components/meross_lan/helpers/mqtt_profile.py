@@ -12,11 +12,7 @@ from . import Loggable, entity as me, manager as mlm
 from .. import const as mlc
 from ..merossclient import HostAddress, _BaseClient
 from ..merossclient.mqttclient import MerossMQTTRateLimitException
-from ..merossclient.protocol import (
-    MerossKeyError,
-    const as mc,
-    namespaces as mn,
-)
+from ..merossclient.protocol import MerossKeyError, const as mc, namespaces as mn
 from ..merossclient.protocol.message import (
     MerossRequest,
     MerossResponse,
@@ -47,11 +43,7 @@ if TYPE_CHECKING:
     from ..merossclient import HostAddress
     from ..merossclient.cloudapi import DeviceInfoType, LatestVersionType
     from ..merossclient.protocol.message import MerossMessage
-    from ..merossclient.protocol.types import (
-        MerossHeaderType,
-        MerossPayloadType,
-    )
-    from .device import Device, MerossDeviceDescriptor
+    from .device import Device
 
 
 class ConnectionSensor(me.MEAlwaysAvailableMixin, MLDiagnosticSensor):
@@ -163,6 +155,7 @@ class ConnectionSensor(me.MEAlwaysAvailableMixin, MLDiagnosticSensor):
 class _MQTTTransaction:
     """Context for pending MQTT publish(es) waiting for responses.
     This will allow to synchronize message request-response flow on MQTT
+    TODO: rethink this as a context manager
     """
 
     __slots__ = (
@@ -175,11 +168,10 @@ class _MQTTTransaction:
     def __init__(
         self,
         mqtt_connection: "MQTTConnection",
-        device_id: str,
         request: "MerossMessage",
     ):
         self.mqtt_connection = mqtt_connection
-        self.device_id = device_id
+        self.device_id = request.uuid
         self.request = request
         self.response_future: asyncio.Future[MerossResponse] = (
             asyncio.get_running_loop().create_future()
@@ -194,7 +186,7 @@ class _MQTTTransaction:
             "Cancelling mqtt transaction on %s %s (uuid:%s messageId:%s)",
             request.method,
             request.namespace,
-            mqtt_connection.profile.loggable_device_id(self.device_id),
+            mqtt_connection.profile.loggable_device_id(request.uuid),
             request.messageid,
         )
         del mqtt_connection._mqtt_transactions[request.messageid]
@@ -246,9 +238,8 @@ class MQTTConnection(Loggable):
         async def async_request_raw(
             self, request: MerossRequest, /, **kwargs: "Unpack[RequestArgs]"
         ):
-            return await self.mqtt_connection.async_mqtt_request(
-                self.device_id, request, self.timeout
-            )
+            request.uuid = self.device_id
+            return await self.mqtt_connection.async_mqtt_request(request, self.timeout)
 
     if TYPE_CHECKING:
         _MQTT_DROP: Final
@@ -257,10 +248,7 @@ class MQTTConnection(Loggable):
 
         SessionHandlersType = Mapping[
             str,
-            Callable[
-                [Self, str, MerossHeaderType, MerossPayloadType],
-                Awaitable[bool],
-            ],
+            Callable[[Self, MerossMessage], Awaitable[bool]],
         ]
 
         SESSION_HANDLERS: ClassVar[SessionHandlersType]
@@ -371,9 +359,11 @@ class MQTTConnection(Loggable):
             "unexpected MQTTConnection.detach",
             device_id,
         )
-        for mqtt_transaction in tuple(self._mqtt_transactions.values()):
-            if mqtt_transaction.device_id == device_id:
-                mqtt_transaction.cancel()
+
+        for mqtt_transaction in [
+            _t for _t in self._mqtt_transactions.values() if _t.device_id == device_id
+        ]:
+            mqtt_transaction.cancel()
         device.mqtt_detached()
         self.mqttdevices.pop(device_id)
         if self.sensor_connection:
@@ -382,14 +372,14 @@ class MQTTConnection(Loggable):
     @final
     async def async_mqtt_request(
         self,
-        device_id: str,
-        request: "MerossMessage",
+        request: "MerossRequest",
         timeout: float | None = DEFAULT_RESPONSE_TIMEOUT,
     ) -> MerossResponse:
-        transaction = _MQTTTransaction(self, device_id, request)
-        self.profile.trace_or_log(self, device_id, request, MQTTProfile.TRACE_TX)
+        assert request.uuid
+        transaction = _MQTTTransaction(self, request)
+        self.profile.trace_or_log(self, request, MQTTProfile.TRACE_TX)
         try:
-            await self._async_mqtt_publish(device_id, request)
+            await self._async_mqtt_publish(request)
             async with asyncio.timeout(timeout):
                 return await transaction.response_future
         except MerossMQTTRateLimitException:
@@ -401,7 +391,7 @@ class MQTTConnection(Loggable):
             self.log(
                 self.WARNING,
                 "MQTT publish rate-limit exceeded for device uuid:%s",
-                self.profile.loggable_device_id(device_id),
+                self.profile.loggable_device_id(request.uuid),
             )
             transaction.cancel()
             raise
@@ -412,7 +402,7 @@ class MQTTConnection(Loggable):
                 "async_mqtt_request %s %s (uuid:%s messageId:%s)",
                 request.method,
                 request.namespace,
-                self.profile.loggable_device_id(device_id),
+                self.profile.loggable_device_id(request.uuid),
                 request.messageid,
                 timeout=14400,
             )
@@ -425,14 +415,11 @@ class MQTTConnection(Loggable):
     @final
     async def async_mqtt_publish(
         self,
-        device_id: str,
-        request: "MerossMessage",
+        message: "MerossMessage",
     ) -> None:
-        # TODO#: embed device_id in meross message as header["uuid"] so we
-        # can avoid the extra parameter here
-        self.profile.trace_or_log(self, device_id, request, MQTTProfile.TRACE_TX)
+        self.profile.trace_or_log(self, message, MQTTProfile.TRACE_TX)
         try:
-            await self._async_mqtt_publish(device_id, request)
+            await self._async_mqtt_publish(message)
         except MerossMQTTRateLimitException:
             if self.sensor_connection:
                 self.sensor_connection.inc_counter_with_state(
@@ -442,17 +429,17 @@ class MQTTConnection(Loggable):
             self.log(
                 self.WARNING,
                 "MQTT publish rate-limit exceeded for device uuid:%s",
-                self.profile.loggable_device_id(device_id),
+                self.profile.loggable_device_id(message.uuid),
             )
         except Exception as exception:
             self.log_exception(
                 self.DEBUG,
                 exception,
                 "async_mqtt_publish %s %s (uuid:%s messageId:%s)",
-                request.method,
-                request.namespace,
-                self.profile.loggable_device_id(device_id),
-                request.messageid,
+                message.method,
+                message.namespace,
+                self.profile.loggable_device_id(message.uuid),
+                message.messageid,
                 timeout=14400,
             )
 
@@ -470,11 +457,12 @@ class MQTTConnection(Loggable):
                 if type(mqtt_payload) is str
                 else mqtt_payload.decode("utf-8")  # type: ignore
             )
-            device_id = message.get_uuid()
+            device_id = message.uuid
             profile = self.profile
             api = profile.api
-            profile.trace_or_log(self, device_id, message, MQTTProfile.TRACE_RX)
+            profile.trace_or_log(self, message, MQTTProfile.TRACE_RX)
 
+            # first check among pending transactions (i.e. replies to our requests)
             try:
                 _mqtt_transaction = self._mqtt_transactions.pop(message.messageid)
                 if _mqtt_transaction.device_id == device_id:
@@ -483,57 +471,63 @@ class MQTTConnection(Loggable):
                 else:  # this is unlikely to happen
                     self._mqtt_transactions[message.messageid] = _mqtt_transaction
             except KeyError:
-                # special session management: cloud connections would
-                # behave differently than the local MQTT. Their behavior
-                # will definitely be set in the dynamic/custom message handlers
-                # implemented in the derived MQTTConnections
-                if message.namespace in self.session_handlers:
-                    if await self.session_handlers[message.namespace](
-                        self, device_id, message.header, message.payload
-                    ):
-                        # session management has already taken care of everything
-                        return
+                pass
 
+            # then check for any special 'cloud' session management:
+            # cloud connections would behave differently than local MQTT.
+            # The behavior will definitely be set in the dynamic/custom
+            # message handlers implemented in the derived MQTTConnection
+            try:
+                if await self.session_handlers[message.namespace](self, message):
+                    # session management has already taken care of everything
+                    return
+            except KeyError as key_error:
+                if key_error.args[0] != message.namespace:
+                    raise
+
+            # then route to the device if already binded (should be the common case
+            # when PUSH messages are broadcasted by the device)
             try:
                 self.mqttdevices[device_id].mqtt_receive(message)
                 return
             except KeyError as key_error:
                 if key_error.args[0] != device_id:
                     raise
-                # device is not binded to this MQTTConnection
-                if device := api.devices.get(device_id):
-                    # check among current loaded devices if they could be re-binded
-                    if device.conf_protocol is mlc.CONF_PROTOCOL_HTTP:
+
+            # device_id is not binded to this MQTTConnection
+            if device := api.devices.get(device_id):
+                # check among current loaded devices if they could be re-binded
+                if device.conf_protocol is mlc.CONF_PROTOCOL_HTTP:
+                    self.log(
+                        self.DEBUG,
+                        "Dropping MQTT received message for device uuid:%s since it is configured for HTTP only",
+                        profile.loggable_device_id(device_id),
+                    )
+                    return
+                if device._profile == profile:
+                    self.attach(device)
+                else:
+                    if (device.key != profile.key) or (
+                        device.descriptor.userId != profile.id
+                    ):
+                        # this is not really expected and deserves a warning but is expected
+                        # when you (re)bind a device and it still is connected to the old broker
+                        # until reboot
                         self.log(
-                            self.DEBUG,
-                            "Dropping MQTT received message for device uuid:%s since it is configured for HTTP only",
+                            self.WARNING,
+                            "Received MQTT message for device uuid:%s which cannot be registered for MQTT handling on this profile",
                             profile.loggable_device_id(device_id),
+                            timeout=14400,
                         )
                         return
-                    if device._profile == profile:
+                    profile.link(device)
+                    # profile.link will attach to the mqtt broker known to the device cfg..
+                    # we'll ensure that (in case device cfg is stale) we're correctly binded here
+                    if device._mqtt_connection != self:
                         self.attach(device)
-                    else:
-                        if (device.key != profile.key) or (
-                            device.descriptor.userId != profile.id
-                        ):
-                            # this is not really expected and deserves a warning but is expected
-                            # when you (re)bind a device and it still is connected to the old broker
-                            # until reboot
-                            self.log(
-                                self.WARNING,
-                                "Received MQTT message for device uuid:%s which cannot be registered for MQTT handling on this profile",
-                                profile.loggable_device_id(device_id),
-                                timeout=14400,
-                            )
-                            return
-                        profile.link(device)
-                        # profile.link will attach to the mqtt broker known to the device cfg..
-                        # we'll ensure that (in case device cfg is stale) we're correctly binded here
-                        if device._mqtt_connection != self:
-                            self.attach(device)
 
-                    device.mqtt_receive(message)
-                    return
+                device.mqtt_receive(message)
+                return
 
             # the device is not configured: proceed to discovery in case
             if device_id in self.mqttdiscovering:
@@ -608,12 +602,12 @@ class MQTTConnection(Loggable):
             ability = (
                 (
                     await self.async_mqtt_request(
-                        device_id,
                         MerossRequest(
                             *mn.Appliance_System_Ability.request_default,
                             key,
                             self.topic_response,
                             self.__class__.__name__,
+                            device_id,
                         ),
                     )
                 )
@@ -629,12 +623,12 @@ class MQTTConnection(Loggable):
             all = (
                 (
                     await self.async_mqtt_request(
-                        device_id,
                         MerossRequest(
                             *mn.Appliance_System_All.request_default,
                             key,
                             self.topic_response,
                             self.__class__.__name__,
+                            device_id,
                         ),
                     )
                 )
@@ -688,11 +682,7 @@ class MQTTConnection(Loggable):
                     transaction.cancel()
 
     @abc.abstractmethod
-    async def _async_mqtt_publish(
-        self,
-        device_id: str,
-        request: "MerossMessage",
-    ):
+    async def _async_mqtt_publish(self, request: "MerossMessage"):
         """
         Actually sends the message to the transport. On return gives
         (status_code, timeout) with the expected timeout-to-reply depending
@@ -727,9 +717,7 @@ class MQTTConnection(Loggable):
         if self.sensor_connection:
             self.sensor_connection.inc_counter(ConnectionSensor.ATTR_PUBLISHED)
 
-    async def _handle_Appliance_System_Online(
-        self, device_id: str, header: "MerossHeaderType", payload: "MerossPayloadType"
-    ):
+    async def _handle_Appliance_System_Online(self, message: "MerossMessage"):
         """
         This is likely sent by the session management layer on the Meross brokers
         to notify the app of the device connection state. We then intercept
@@ -738,8 +726,8 @@ class MQTTConnection(Loggable):
         handled in every MQTTConnection (cloud, local) so we process even messages
         originated from the device itself
         """
-        if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
-            status = payload[mc.KEY_ONLINE].get(mc.KEY_STATUS)
+        if message.method == mc.METHOD_PUSH:
+            status = message.payload[mc.KEY_ONLINE].get(mc.KEY_STATUS)
             if status == mc.STATUS_ONLINE:
                 # the device is now online on this connection: tell the pipe to continue processing
                 # This will in turn (eventually) link the device to the current profile/connection
@@ -851,7 +839,6 @@ class MQTTProfile(mlm.ConfigEntryManager):
     def trace_or_log(
         self,
         connection: "MQTTConnection",
-        device_id: str,
         message: "MerossMessage",
         rxtx: str,
     ):
@@ -872,8 +859,8 @@ class MQTTProfile(mlm.ConfigEntryManager):
                 mlc.CONF_PROTOCOL_MQTT,
                 message.method,
                 message.namespace,
-                self.loggable_device_id(device_id),
-                message.header[mc.KEY_MESSAGEID],
+                self.loggable_device_id(message.uuid),
+                message.messageid,
                 (
                     json_dumps(obfuscated_dict(message))
                     if self.obfuscate
@@ -888,6 +875,6 @@ class MQTTProfile(mlm.ConfigEntryManager):
                 mlc.CONF_PROTOCOL_MQTT,
                 message.method,
                 message.namespace,
-                self.loggable_device_id(device_id),
-                message.header[mc.KEY_MESSAGEID],
+                self.loggable_device_id(message.uuid),
+                message.messageid,
             )

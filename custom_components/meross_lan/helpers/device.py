@@ -887,11 +887,7 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
         )
 
     def _trace_or_log(
-        self,
-        epoch: float,
-        message: MerossMessage,
-        protocol: str,
-        rxtx: str,
+        self, epoch: float, message: MerossMessage, protocol: str, rxtx: str
     ):
         if self.is_tracing:
             self.trace(
@@ -915,7 +911,7 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
                     protocol,
                     message.method,
                     message.namespace,
-                    message.header[mc.KEY_MESSAGEID],
+                    message.messageid,
                     json_dumps(self.loggable_dict(message)),
                 ),
             )
@@ -928,7 +924,7 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
                     protocol,
                     message.method,
                     message.namespace,
-                    message.header[mc.KEY_MESSAGEID],
+                    message.messageid,
                 ),
             )
 
@@ -1077,10 +1073,7 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
             self.DEBUG, "Device.async_shutdown complete (object: %s)", self.objects
         )
 
-    async def async_request_raw(
-        self,
-        request: MerossRequest,
-    ) -> MerossResponse:
+    async def async_request_raw(self, request: MerossRequest) -> MerossResponse:
         """
         route the request through MQTT or HTTP to the physical device.
         callback will be called on successful replies and actually implemented
@@ -1140,6 +1133,7 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
                             self.key,
                             self._topic_response,
                             self.__class__.__name__,
+                            self.id,
                         )
                     )
                 except Exception:
@@ -1172,12 +1166,13 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
                         self.key,
                         self._topic_response,
                         self.__class__.__name__,
+                        self.id,
                     )
                 )
             raise
 
     @override
-    def _set_offline(self):
+    def _set_offline(self, /):
         super()._set_offline()
         self._polling_delay = self.polling_period
         self._bluetooth_active = self._http_active = self._mqtt_active = None
@@ -1186,7 +1181,7 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
             handler.polling_epoch_next = 0.0
 
     @override
-    def check_device_timezone(self):
+    def check_device_timezone(self, /):
         """
         Verifies the device timezone has the same utc offset as HA local timezone.
         This is expecially sensible when the device has 'Consumption' or
@@ -1448,8 +1443,6 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
     async def async_bluetooth_request(
         self, *request_args: "Unpack[MerossRequestType]"
     ) -> MerossResponse:
-        # TODO: migrate to exception handling system so that we don't need to check
-        # results for errors, unify also timeouts management among requests
         request = MerossRequest(*request_args, "", mlc.DOMAIN, self.__class__.__name__)
         self._trace_or_log(time(), request, CONF_PROTOCOL_BLUETOOTH, Device.TRACE_TX)
         try:
@@ -1471,13 +1464,13 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
                 )
             raise
 
-    async def async_mqtt_request_raw(self, request: MerossMessage, /) -> MerossResponse:
+    async def async_mqtt_request_raw(self, request: MerossRequest, /) -> MerossResponse:
         self._trace_or_log(time(), request, CONF_PROTOCOL_MQTT, Device.TRACE_TX)
         try:
             assert self._mqtt_publish
             if self._mqtt_publish.is_cloud_connection:
                 self.cloudpoll_requests += 1  # type: ignore
-            response = await self._mqtt_publish.async_mqtt_request(self.id, request)
+            response = await self._mqtt_publish.async_mqtt_request(request)
             self._mqtt_lastresponse = epoch = time()
             self._trace_or_log(epoch, response, CONF_PROTOCOL_MQTT, self.TRACE_RX)
             if not self._mqtt_active:
@@ -1512,6 +1505,7 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
                 self.key,
                 self._topic_response,
                 self.__class__.__name__,
+                self.id,
             )
         )
 
@@ -1620,8 +1614,7 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
         # and this might (unluckily) be another Meross with the same key
         # so it could rightly respond here. This shouldnt happen over MQTT
         # since the device.id is being taken care of by the routing mechanism
-        response_uuid = response.get_uuid()
-        if self.id != response_uuid:
+        if self.id != response.uuid:
             try:
                 assert self._http
                 mismatched_payload_all = await self._http.async_request(
@@ -1629,9 +1622,9 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
                 )
             except Exception:
                 mismatched_payload_all = None
-            self._process_uuid_mismatch(response_uuid, mismatched_payload_all)
+            self._process_uuid_mismatch(response.uuid, mismatched_payload_all)
             raise MerossError(
-                f"Device UUID mismatch over HTTP (expected:{self.id} got:{response_uuid})"
+                f"Device UUID mismatch over HTTP (expected:{self.id} got:{response.uuid})"
             )
 
         if not self._http_active and self._http:
