@@ -45,6 +45,10 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
 
     MAXIMUM_RESPONSE_SIZE = 4000
 
+    if TYPE_CHECKING:
+        subdevices: list["JsonDict"]
+        """list of subdevice dicts as per hub digest"""
+
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
         # we have to sanitize our structures since it might happen some traces
@@ -82,7 +86,7 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
             ]
         }
         """
-        digest_subdevices = descriptor.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE]
+        self.subdevices = descriptor.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE]
         namespaces = descriptor.namespaces
         ability = descriptor.ability
 
@@ -98,6 +102,7 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
                 mn_h.Appliance_Hub_Sensor_All,
                 mn_h.Appliance_Hub_Sensor_Smoke,
                 mn_h.Appliance_Hub_Sensor_DoorWindow,
+                mn_h.Appliance_Hub_Sensor_WaterLeak,
                 mn_h.Appliance_Hub_Battery,
                 mn_h.Appliance_Hub_Online,
                 mn_h.Appliance_Hub_ToggleX,
@@ -126,17 +131,22 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
 
         # DEBUG/TESTING feature: remove a subdevice from hub definitions
         if subdevice_id_remove := "28004811B776":
-            delete_element_by_key(digest_subdevices, mc.KEY_ID, subdevice_id_remove)
+            delete_element_by_key(self.subdevices, mc.KEY_ID, subdevice_id_remove)
             for _, _ns_state in ns_state.items():
                 delete_element_by_key(_ns_state, mc.KEY_ID, subdevice_id_remove)
 
-        for p_subdevice_digest in digest_subdevices:
+        for p_subdevice_digest in self.subdevices:
             subdevice_id = p_subdevice_digest[mc.KEY_ID]
             subdevice_type = get_subdevice_typekey(p_subdevice_digest)
             # TODO: setup a 'map' to generalize to all those ns behaving like this
             # (i.e. no data in digest but still needing setup)
             match subdevice_type:
-                case mc.TYPE_MTS150 | mc.TYPE_MTS150P:
+                case (
+                    mc.TYPE_MTS150
+                    | mc.TYPE_MTS150P
+                    | mc.KEY_WATERLEAK
+                    | mc.KEY_DOORWINDOW
+                ):
                     self.update_namespace_state(
                         mn_h.Appliance_Hub_SubDevice_Beep,
                         self.NSDefaultMode.MixOut,
@@ -220,7 +230,7 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
 
     def _scheduler(self):
         super()._scheduler()
-        for subdevice_digest in self.descriptor.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE]:
+        for subdevice_digest in self.subdevices:
             # we randomly change the status of subdevices to emulate
             # motion/smoke/doorwindow triggers
             if mc.KEY_DOORWINDOW in subdevice_digest:
@@ -239,7 +249,7 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
     def _get_subdevice_digest(self, subdevice_id: str):
         """returns the subdevice dict from the hub digest key"""
         return get_element_by_key(
-            self.descriptor.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE],
+            self.subdevices,
             mc.KEY_ID,
             subdevice_id,
         )

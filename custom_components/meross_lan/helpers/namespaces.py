@@ -57,7 +57,6 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
             for handler in self._namespace_handlers:
                 del handler.parsers[self.channel]
             del self._namespace_handlers
-            del self.handler_ns  # type: ignore
         except TypeError:  # never registered
             assert self._namespace_handlers is None
 
@@ -215,7 +214,11 @@ class NamespaceHandler:
         self.polling_response_size = (
             self.polling_response_base_size + self.polling_response_item_size
         )
-        self.polling_request_configure(None)
+        self.polling_request_configure(
+            mn.PayloadType.LIST_C_STRICT
+            if self.polling_strategy is NamespaceHandler.async_poll_chunked
+            else None
+        )
         device.ns_handlers[ns] = self
 
     def shutdown(self):
@@ -346,7 +349,6 @@ class NamespaceHandler:
         self.parsers[channel] = getattr(parser, f"_parse_{ns.slug_end}", parser._parse)
         if not parser._namespace_handlers:
             parser._namespace_handlers = set()
-            parser.handler_ns = self
         parser._namespace_handlers.add(self)
         self.polling_request_add_channel(channel)
         self.handler = self._handle_list

@@ -1,7 +1,7 @@
 from homeassistant.components import switch as haec
 from homeassistant.helpers.entity import STATE_OFF, STATE_ON
 
-from custom_components.meross_lan.devices.hub import MST100SubDevice
+from custom_components.meross_lan.devices.hub import HubBeep, MST100SubDevice
 from custom_components.meross_lan.devices.mss import OverTempEnableSwitch
 from custom_components.meross_lan.devices.rollershutter import (
     MLRollerShutterAdjustSwitch,
@@ -49,10 +49,12 @@ class EntityTest(EntityComponentTest):
         mn.Appliance_RollerShutter_Adjust: [MLRollerShutterAdjustSwitch],
     }
     HUB_SUBDEVICES_ENTITIES = {
-        mc.TYPE_MTS100: [MLEmulatedSwitch],  # patch hvacaction
-        mc.TYPE_MTS100V3: [MLEmulatedSwitch],  # patch hvacaction
-        mc.TYPE_MTS150: [MLEmulatedSwitch],  # patch hvacaction
+        mc.TYPE_MTS100: [MLEmulatedSwitch],
+        mc.TYPE_MTS100V3: [MLEmulatedSwitch],
+        mc.TYPE_MTS150: [MLEmulatedSwitch, HubBeep],
+        mc.KEY_DOORWINDOW: [HubBeep],
         mc.KEY_MST: [MST100SubDevice.OnOffSwitch],
+        mc.KEY_WATERLEAK: [HubBeep],
     }
 
     async def async_test_enabled_callback(self, entity: haec.SwitchEntity):

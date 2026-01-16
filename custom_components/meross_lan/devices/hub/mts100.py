@@ -91,22 +91,37 @@ class Mts100Climate(MtsClimate):
         "switch_patch_hvacaction",
     )
 
-    def __init__(self, manager: "MTSSubDevice", /):
+    def __init__(self, manager: "MTSSubDevice", channel, /):
         self.extra_state_attributes = {}
-        MtsClimate.__init__(self, manager, manager.id)
+        MtsClimate.__init__(self, manager, channel)
         self.binary_sensor_window = MLBinarySensor(
             manager,
-            manager.id,
+            channel,
             str(MLBinarySensor.DeviceClass.WINDOW),
             device_class=MLBinarySensor.DeviceClass.WINDOW,
         )
         self.switch_patch_hvacaction = MLEmulatedSwitch(
             manager,
-            manager.id,
+            channel,
             "patch_hvacaction",
             device_value=0,
             state_callback=self._switch_emulate_hvacaction_state_callback,
         )
+
+        # ns registration. TODO: move to MtsClimate base class once Hub subdevice ns handling is sorted out
+        hub = manager.hub
+        ability = hub.descriptor.ability
+        for _entity in (self.number_adjust_temperature, self.schedule):
+            if _entity.ns in ability:
+                hub.register_parser_entity(_entity)
+
+        for ns in (
+            mn_h.Appliance_Hub_Mts100_All,
+            mn_h.Appliance_Hub_Mts100_Mode,
+            mn_h.Appliance_Hub_ToggleX,
+        ):
+            if ns in ability:
+                hub.register_parser(self, ns)
 
     # interface: MtsClimate
     @override
@@ -210,6 +225,8 @@ class Mts100Climate(MtsClimate):
     # message handlers
     def _parse_all(self, payload: dict, /):
         self.manager._parse_online(payload.get(mc.KEY_ONLINE, {}))
+        if not self.manager.online:
+            return
 
         if mc.KEY_SCHEDULEBMODE in payload:
             self.update_scheduleb_mode(payload[mc.KEY_SCHEDULEBMODE])
