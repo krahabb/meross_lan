@@ -1116,7 +1116,6 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
         route the request through MQTT or HTTP to the physical device according to
         current protocol. When switching transport the message is recomputed to
         avoid reusing the same (old) timestamps and messageids.
-        TODO: move to Exception based response handling
         """
         self.lastrequest = time()
         if self._bluetooth:
@@ -1298,6 +1297,16 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
 
     def register_parser_entity(self, entity: "MLEntity", /):
         self.get_handler(entity.ns).register_parser(entity)
+
+    def register_parser_ex(
+        self,
+        parser: "NamespaceParser",
+        *nss: "mn.Namespace",
+    ):
+        """Register a parser for multiple namespaces. Abilities are checked for namespaces availability."""
+        ability = self.descriptor.ability
+        for ns in (_ns for _ns in nss if _ns in ability):
+            self.get_handler(ns).register_parser(parser)
 
     def register_togglex_channel(self, entity: "MLEntity", active: bool, /):
         """
@@ -1946,8 +1955,8 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
                             # we should leave'em so that transports can come online later
                             # this code instead cancels the 'losers' immediately
                             # since it actually doesn't work with tests (mqtt publish mocking is missing)
-                            for task in tasks:
-                                task.cancel()
+                            # for task in tasks:
+                            #    task.cancel()
                             break
                         except Exception:
                             ns_all_response = None

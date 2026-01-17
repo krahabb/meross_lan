@@ -53,7 +53,7 @@ class EntityTest(EntityComponentTest):
         mc.TYPE_MTS100V3: [MLEmulatedSwitch],
         mc.TYPE_MTS150: [MLEmulatedSwitch, HubBeep],
         mc.KEY_DOORWINDOW: [HubBeep],
-        mc.KEY_MST: [MST100SubDevice.OnOffSwitch],
+        mc.KEY_MST: [MST100SubDevice.MstSwitch],
         mc.KEY_WATERLEAK: [HubBeep],
     }
 

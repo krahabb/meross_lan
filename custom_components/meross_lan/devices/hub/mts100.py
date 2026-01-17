@@ -108,20 +108,14 @@ class Mts100Climate(MtsClimate):
             state_callback=self._switch_emulate_hvacaction_state_callback,
         )
 
-        # ns registration. TODO: move to MtsClimate base class once Hub subdevice ns handling is sorted out
+        # ns registration. TODO: move (maybe) to MtsClimate base class once Hub subdevice ns handling is sorted out
         hub = manager.hub
         ability = hub.descriptor.ability
         for _entity in (self.number_adjust_temperature, self.schedule):
             if _entity.ns in ability:
                 hub.register_parser_entity(_entity)
 
-        for ns in (
-            mn_h.Appliance_Hub_Mts100_All,
-            mn_h.Appliance_Hub_Mts100_Mode,
-            mn_h.Appliance_Hub_ToggleX,
-        ):
-            if ns in ability:
-                hub.register_parser(self, ns)
+        hub.register_parser_ex(self, mn_h.Appliance_Hub_Mts100_Mode)
 
     # interface: MtsClimate
     @override

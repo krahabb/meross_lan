@@ -1,5 +1,6 @@
 from homeassistant.components import sensor as haec
 
+from custom_components.meross_lan.devices.hub import GS559SubDevice, SubDevice
 from custom_components.meross_lan.devices.mss import (
     ConsumptionHSensor,
     ConsumptionXSensor,
@@ -87,7 +88,7 @@ class EntityTest(EntityComponentTest):
     }
 
     HUB_SUBDEVICES_ENTITIES = {
-        None: [MLNumericSensor],  # battery sensor
+        None: [SubDevice.BatterySensor],  # battery sensor
         mc.TYPE_MS100: [MLHumiditySensor, MLTemperatureSensor],
         mc.KEY_TEMPHUMI: [MLHumiditySensor, MLTemperatureSensor, MLLightSensor],
         mc.TYPE_MTS100: [
@@ -99,7 +100,10 @@ class EntityTest(EntityComponentTest):
         mc.TYPE_MTS150: [
             MLTemperatureSensor
         ],  # additional (disabled) current temperature sensor
-        mc.KEY_SMOKEALARM: [MLEnumSensor, MLEnumSensor],  # status, interConn sensors
+        mc.KEY_SMOKEALARM: [
+            GS559SubDevice.SmokeAlarmSensor,
+            MLEnumSensor,
+        ],  # status, interConn sensors
     }
 
     async def async_test_enabled_callback(self, entity: MLEnumSensor | MLNumericSensor):

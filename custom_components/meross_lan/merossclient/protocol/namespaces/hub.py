@@ -40,10 +40,10 @@ Appliance_Control_Alarm = mn.ns(
     "Appliance.Control.Alarm", mc.KEY_ALARM, GETSET_SUBID, mn.EXP
 )  # mst100 (hub too has it)
 Appliance_Control_Sensor_HistoryX = mn.ns(
-    "Appliance.Control.Sensor.HistoryX", mc.KEY_HISTORY, GET_SUBID
+    "Appliance.Control.Sensor.HistoryX", mc.KEY_HISTORY, SUBID, mn.G_LCDS
 )
 Appliance_Control_Sensor_LatestX = mn.ns(
-    "Appliance.Control.Sensor.LatestX", mc.KEY_LATEST, GET_SUBID, mn.PSH
+    "Appliance.Control.Sensor.LatestX", mc.KEY_LATEST, SUBID, mn.G_LCDS, mn.PSH
 )
 Appliance_Control_Water = mn.ns(
     "Appliance.Control.Water", mc.KEY_CONTROL, GETSETPSH_SUBID
