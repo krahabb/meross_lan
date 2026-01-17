@@ -89,7 +89,7 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
     async def async_request_parse_ex(self, payload: "JsonDict", /):
         response = await self.async_request_payload(payload)
         getattr(self, f"_parse_{self.ns.slug_end}", self._parse)(
-            merge_dicts(self._payload_ns, payload)
+            merge_dicts(dict(self._payload_ns), payload)
         )
         return response
 
@@ -274,24 +274,34 @@ class NamespaceHandler:
         # the ns need it. Also adjusts the estimated polling_response_size.
         try:
             polling_request_channels = self.polling_request_channels
+            key_channel = self.ns.key_channel
+            for channel_payload in polling_request_channels:
+                if channel_payload[key_channel] == channel:
+                    break
+            else:
+                # this is just a shurtcut since 'subId' namespaces do not
+                # still expose a channel different than 0. When that changes
+                # it'll be a mess.
+                channel_payload = (
+                    {key_channel: channel, mc.KEY_CHANNEL: 0}
+                    if key_channel == mc.KEY_SUBID
+                    else {key_channel: channel}
+                )
+                polling_request_channels.append(channel_payload)
+
+            if extra:
+                channel_payload.update(extra)
+
+            self.polling_response_size = (
+                self.polling_response_base_size
+                + len(polling_request_channels) * self.polling_response_item_size
+            )
         except AttributeError:
-            self.polling_request_channels = polling_request_channels = []
-
-        key_channel = self.ns.key_channel
-        for channel_payload in polling_request_channels:
-            if channel_payload[key_channel] == channel:
-                break
-        else:
-            channel_payload = {key_channel: channel}
-            polling_request_channels.append(channel_payload)
-
-        if extra:
-            channel_payload.update(extra)
-
-        self.polling_response_size = (
-            self.polling_response_base_size
-            + len(polling_request_channels) * self.polling_response_item_size
-        )
+            # polling_request_channels not used for this ns
+            self.polling_response_size = (
+                self.polling_response_base_size
+                + len(self.parsers) * self.polling_response_item_size
+            )
 
     def polling_response_size_adj(self, item_count: int, /):
         self.polling_response_size = (
@@ -658,7 +668,7 @@ class NamespaceHandler:
             # Some namespaces though might return different payloads on SETACK
             # GarageDoor.State or mts100.Temperature
             getattr(parser, f"_parse_{ns.slug_end}", parser._parse)(
-                merge_dicts(state, payload) if state else payload
+                merge_dicts(dict(state), payload) if state else payload
             )
         return response
 
@@ -692,7 +702,7 @@ class NamespaceHandler:
             except (KeyError, IndexError):
                 # optimistic update
                 if state:
-                    payload = merge_dicts(state, payload)
+                    payload = merge_dicts(dict(state), payload)
             getattr(parser, f"_parse_{ns.slug_end}", parser._parse)(payload)
             return response
         except Exception as e:

@@ -149,19 +149,120 @@ def delete_element_by_key(payload: "JsonList", key: str, value):
             pass
 
 
-def merge_dicts(dict1: "Mapping", dict2: "Mapping") -> "Any":
+def _meross_payload_merge_hasher(item):
     """
-    Recursively merge two dictionaries.
+    This is a default hasher function used to identify items in lists
+    representing indexed payloads like channel dicts, effects, triggers.
+    It is used in combination with merge_lists (and merge_dicts) to recursively
+    merge lists of dicts where each dict is identified by some 'indexing' key
+    like 'channel' or 'id'.
     """
-    result = dict(dict1)
-    for key, value in dict2.items():
-        if (type(value) is dict) and (key in result):
-            result_value = result[key]
-            if type(result_value) is dict:
-                result[key] = merge_dicts(result_value, value)
-                continue
-        result[key] = value
-    return result
+    # _hasher is used to check for list items equality in order to merge 2 lists
+    item_type = type(item)
+    if item_type is dict:
+        # we're interested in merging dicts representing channels/indexed payloads
+        # so we just brute-force use the 'channel' key if present
+        try:
+            # most commonly used key
+            channel = item[mc.KEY_CHANNEL]
+            # there might also be a 'subId' key used for indexing
+            try:
+                return (item[mc.KEY_SUBID], channel)
+            except KeyError:
+                return channel
+        except KeyError:
+            pass
+        try:
+            # hub subdevices payloads
+            return item[mc.KEY_ID]
+        except KeyError:
+            pass
+
+        try:
+            # other indexed payloads like effects, triggers and the likes
+            return item[mc.KEY_ID_]
+        except KeyError:
+            pass
+
+        try:
+            sub_item: tuple[str, Any] = next(iter(item.items()))
+            return ":".join(
+                (sub_item[0], str(_meross_payload_merge_hasher(sub_item[1])))
+            )
+        except:
+            pass
+        return id(mn.EMPTY_DICT)
+
+    elif item_type is list:
+        # might be whatever list of items.
+        # This happens when a list is embedded in a list.
+        # we assume this to be a very rare case not useful anyway.
+        # but we need to be careful since the merging could 'explode' our
+        # data structure if we don't handle this properly.
+        # Also, the concept of the hasher function prevents us from
+        # merging list of dicts embedded in lists anyway.
+        try:
+            return _meross_payload_merge_hasher(item[0])
+        except IndexError:
+            return id(mn.EMPTY_LIST)
+
+    else:
+        return item
+
+
+def merge_dicts[_T: dict](
+    original: _T, update: "Mapping", hasher: "Callable" = _meross_payload_merge_hasher
+) -> _T:
+    """
+    Recursively merge two dictionaries with keys from 'update'
+    overwriting those in 'original'. The original dict is modified
+    in place and returned for convenience.
+    """
+    for update_key, update_value in update.items():
+        try:
+            original_value = original[update_key]
+            original_type = type(original_value)
+            if original_type == type(update_value):
+                if original_type is dict:
+                    original[update_key] = merge_dicts(
+                        original_value, update_value, hasher
+                    )
+                    continue
+                elif original_type is list:
+                    original[update_key] = merge_lists(
+                        original_value, update_value, hasher
+                    )
+                    continue
+        except KeyError:
+            pass
+
+        original[update_key] = update_value
+    return original
+
+
+def merge_lists(
+    original: "Iterable",
+    update: "Iterable",
+    hasher: "Callable" = _meross_payload_merge_hasher,
+) -> list:
+    """
+    Recursively merge two lists based on a hasher function used to identify which
+    items in the lists are to be considered the same and thus merged. The original list is not modified.
+    This is mainly intended to merge list of dicts where each dict is also recursively merged based on
+    some generic key matching as defined in hasher.
+    Typical example is a list of channel payloads where each dict in the list has a 'channel' key.
+    """
+    try:
+        return [
+            value
+            for value in merge_dicts(
+                {hasher(item): item for item in original},
+                {hasher(item): item for item in update},
+                hasher,
+            ).values()
+        ]
+    except TypeError:
+        return list(update)
 
 
 def update_dict_strict(dst_dict: dict, src_dict: "Mapping"):
@@ -371,7 +472,6 @@ class MerossDeviceDescriptor:
     }
 
     DYNAMIC_ATTRS = {
-        # TODO: use cached_property
         mc.KEY_ALL: lambda _self: _self.payload.get(mc.KEY_ALL, {}),
         mc.KEY_ABILITY: lambda _self: _self.payload.get(mc.KEY_ABILITY, {}),
         mc.KEY_DIGEST: lambda _self: _self.all.get(mc.KEY_DIGEST, {}),
@@ -592,6 +692,10 @@ class _BaseClient:
     async def async_request_raw(
         self, request: MerossRequest, /, **kwargs: "Unpack[RequestArgs]"
     ) -> "MerossResponse":
+        """Low level request sending/receiving method to be implemented by
+        transport-specific implementations."""
+        # When implemented in an MQTT client ensure to forward the uuid in the request
+        # which is typically needed to build the publish topic
         raise NotImplementedError("async_request_raw")
 
     async def async_request(

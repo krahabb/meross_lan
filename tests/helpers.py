@@ -741,19 +741,13 @@ def build_emulator_config_entry(
     return data
 
 
-def build_emulators():
+def build_emulators(included_uuid: "Iterable[str] | None" = None):
     return emulator.build_emulators(
         tc.EMULATOR_TRACES_PATH,
         key=tc.MOCK_KEY,
         uuid=tc.MOCK_DEVICE_UUID,
+        included_uuid=included_uuid,
     )
-    """
-    included_uuid=(
-            "01234567890123456789012345678925",
-            "01234567890123456789012345678926",
-            "01234567890123456789012345678927",
-    )
-    """
 
 
 class EmulatorContext(contextlib.AbstractContextManager):

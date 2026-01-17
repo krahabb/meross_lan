@@ -15,6 +15,7 @@ from custom_components.meross_lan.merossclient import (
     get_element_by_key,
     get_element_by_key_safe,
     get_macaddress_from_uuid,
+    merge_dicts,
     update_dict_strict,
     update_dict_strict_by_key,
 )
@@ -121,7 +122,10 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         for line in f:
             row = line.split("\t")
             if not version:
-                row.insert(1, "")  # patch earlier versions missing 'txrx'
+                row.insert(1, "unknown")  # patch earlier versions missing 'txrx'
+            elif row[1] != "RX":
+                # skip TX messages in version >=1
+                continue
             if row[2] == "auto":
                 continue
             row[-1] = json_loads(row[-1])
@@ -144,7 +148,7 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
                 next(rows)  # skip Ability
 
             for row in rows:
-                if row[2] == "auto":
+                if (row[2] == "auto") or (row[1] not in ("RX", "unknown")):
                     continue
                 self._import_tracerow(*row)
 
@@ -201,23 +205,30 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         data: dict,
     ):
 
+        def _update_namespace_state(_namespace: str, payload: dict, /):
+            try:
+                p_namespace = self.namespaces[_namespace]
+            except KeyError:
+                self.namespaces[_namespace] = payload
+                return
+
+            try:
+                merge_dicts(p_namespace, payload)
+            except Exception as e:
+                # whatever goes wrong we just overwrite
+                p_namespace.update(payload)
+
         match method:
-            case mc.METHOD_PUSH:
-                if rxtx == "RX" and (namespace not in self.namespaces):
-                    # TODO: merge channels
-                    self.namespaces[namespace] = data
-            case mc.METHOD_GETACK:
-                # TODO: merge channels
-                self.namespaces[namespace] = data
+            case mc.METHOD_GETACK | mc.METHOD_PUSH:
+                _update_namespace_state(namespace, data)
             case mc.METHOD_SETACK:
                 if namespace == mn.Appliance_Control_Multiple:
                     for message in data[mc.KEY_MULTIPLE]:
                         header = message[mc.KEY_HEADER]
-                        if header[mc.KEY_METHOD] == mc.METHOD_GETACK:
-                            # TODO: merge channels
-                            self.namespaces[header[mc.KEY_NAMESPACE]] = message[
-                                mc.KEY_PAYLOAD
-                            ]
+                        if header[mc.KEY_METHOD] in (mc.METHOD_GETACK, mc.METHOD_PUSH):
+                            _update_namespace_state(
+                                header[mc.KEY_NAMESPACE], message[mc.KEY_PAYLOAD]
+                            )
 
 
 class MerossEmulator:
