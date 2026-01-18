@@ -28,8 +28,6 @@ class Mts300Climate(MtsThermostatClimate):
             """{"channel":0,"value":150,"min":-450,"max":450,"humiValue":-60}"""
             number_calibration_humi: MLConfigNumber
 
-        ns = mn_t.Appliance_Control_Thermostat_Calibration
-
         __slots__ = ("number_calibration_humi",)
 
         def __init__(self, climate: "MtsThermostatClimate", /):

@@ -7,6 +7,7 @@ from custom_components.meross_lan.merossclient import (
     delete_element_by_key,
     get_element_by_key,
     get_element_by_key_safe,
+    get_subdevice_key_digest,
     update_dict_strict,
 )
 from custom_components.meross_lan.merossclient.protocol import (
@@ -25,18 +26,13 @@ if TYPE_CHECKING:
 
 # TODO: wrap-up these helpers in a SubDeviceDescriptor-like class
 # to manage type/version and common info (like id/online maybe more)
-def get_subdevice_typekey(digest: "JsonDict") -> str:
-    """Parses the subdevice dict from the hub digest to identify it's 'type'."""
-    return (
-        p_key for p_key, p_value in digest.items() if type(p_value) is dict
-    ).__next__()
 
 
 def get_mts_digest(digest: "JsonDict") -> "JsonDict | None":
     """Parses the subdevice dict from the hub digest to identify if it's
     an mts-like (and so queried through 'Hub.Mts100.All')."""
-    subdevtype = get_subdevice_typekey(digest)
-    return digest[subdevtype] if subdevtype.startswith("mts") else None
+    subdevtype = get_subdevice_key_digest(digest)
+    return digest[subdevtype] if subdevtype.startswith(mc.TYPE_MTS) else None
 
 
 class HubMixin(MerossEmulator if TYPE_CHECKING else object):
@@ -137,10 +133,10 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
 
         for p_subdevice_digest in self.subdevices:
             subdevice_id = p_subdevice_digest[mc.KEY_ID]
-            subdevice_type = get_subdevice_typekey(p_subdevice_digest)
+            key_digest = get_subdevice_key_digest(p_subdevice_digest)
             # TODO: setup a 'map' to generalize to all those ns behaving like this
             # (i.e. no data in digest but still needing setup)
-            match subdevice_type:
+            match key_digest:
                 case (
                     mc.TYPE_MTS150
                     | mc.TYPE_MTS150P

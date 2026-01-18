@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
 from ...binary_sensor import MLBinarySensor
-from ...climate import MtsClimate, cached_property
+from ...climate import MtsClimate
 from ...helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
 from ...merossclient.protocol.namespaces import thermostat as mn_t
 from ...number import MLConfigNumber
@@ -12,7 +12,6 @@ from ...switch import MLSwitch
 if TYPE_CHECKING:
     from typing import Any, Callable, ClassVar, Final, Unpack
 
-    from ...calendar import MtsSchedule
     from ...helpers.device import Device
     from ...merossclient.protocol.types import thermostat as mt_t
 
@@ -315,13 +314,13 @@ class MLScreenBrightnessNumber(MLConfigNumber):
         await self.async_request_value(value)
 
 
-OPTIONAL_NAMESPACES_INITIALIZERS: set["mn.Namespace"] = {
+OPTIONAL_NAMESPACES_INITIALIZERS: tuple["mn.Namespace", ...] = (
     mn_t.Appliance_Control_Thermostat_CtlRange,  # mts960
     mn_t.Appliance_Control_Thermostat_SummerMode,  # mts200
     mn_t.Appliance_Control_Thermostat_System,  # mts300
     mn_t.Appliance_Control_Thermostat_Timer,  # mts960
     mn.Appliance_Config_Sensor_Association,  # mts300
-}
+)
 """These namespaces handlers will forward message parsing to the climate entity"""
 
 OPTIONAL_ENTITIES_INITIALIZERS: dict[str, "Callable[[MtsThermostatClimate], Any]"] = {
@@ -367,21 +366,15 @@ class MtsThermostatClimate(MtsClimate):
 
     def __init__(self, manager: "Device", channel, /):
         MtsClimate.__init__(self, manager, channel)
-        manager.register_parser_entity(self)
+        manager.register_parser_ex(self, self.ns, *OPTIONAL_NAMESPACES_INITIALIZERS)
         manager.register_parser_entity(self.schedule)
         ability = manager.descriptor.ability
-        for optional_ns in OPTIONAL_NAMESPACES_INITIALIZERS:
-            if optional_ns in ability:
-                manager.register_parser(self, optional_ns)
-
-        for namespace, entity_class in OPTIONAL_ENTITIES_INITIALIZERS.items():
-            if namespace in ability:
-                entity_class(self)
-
-    # interface: MtsClimate
-    @cached_property
-    def handler_adjust(self):
-        return self.manager.ns_handlers[mn_t.Appliance_Control_Thermostat_Calibration]
+        for entity_class in (
+            _entity_class
+            for _namespace, _entity_class in OPTIONAL_ENTITIES_INITIALIZERS.items()
+            if _namespace in ability
+        ):
+            entity_class(self)
 
     # interface: self
     def _parse_ctlRange(self, payload: dict, /):

@@ -421,6 +421,14 @@ def get_productnametype(producttype: str) -> str:
     return f"{name} ({producttype})" if name is not producttype else producttype
 
 
+def get_subdevice_key_digest(digest: "JsonDict") -> str:
+    """Parses the subdevice dict from the hub digest to identify it's 'type'.
+    Raises StopIteration if unable to find a valid digest key."""
+    return (
+        p_key for p_key, p_value in digest.items() if type(p_value) is dict
+    ).__next__()
+
+
 class MerossDeviceDescriptor:
     """
     Utility class to extract various info from Appliance.System.All/Ability

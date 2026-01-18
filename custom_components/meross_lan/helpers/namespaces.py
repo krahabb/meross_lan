@@ -1,11 +1,10 @@
 import bisect
 from functools import cached_property
-from time import time
 from typing import TYPE_CHECKING
 
 from .. import const as mlc
 from ..merossclient import merge_dicts
-from ..merossclient.protocol import MerossProtocolError, const as mc, namespaces as mn
+from ..merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
     from typing import Any, Callable, Coroutine, Final, Iterable
@@ -14,7 +13,7 @@ if TYPE_CHECKING:
     from ..merossclient.protocol import types as mt
     from ..merossclient.protocol.message import MerossMessage, MerossResponse
     from ..merossclient.protocol.types import JsonDict, JsonMapping
-    from .device import AsyncRequestFunc, Device
+    from .device import AsyncRequestFunc, BaseDevice, Device
     from .entity import MLEntity
 
     type NamespaceHandlerFunc = Callable[[MerossMessage], None]
@@ -39,6 +38,7 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
         # These properties must be implemented in derived classes according to the
         # namespace payload syntax. NamespaceHandler will lookup any of these when
         # establishing the link between the handler and the parser
+        manager: BaseDevice
         ns: mn.Namespace
         channel: int | str  # the channel/id/subId key value according to the namespace
 
@@ -59,6 +59,7 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
             del self._namespace_handlers
         except TypeError:  # never registered
             assert self._namespace_handlers is None
+        del self.manager
 
     @cached_property
     def handler_ns(self) -> "NamespaceHandler":
@@ -68,10 +69,10 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
         # the NamespaceHandler to issue device requests. Most of the times these are entities
         # where ns parsing is delegated to a container object/handler which is then dispatching
         # updates without using the NamespaceHandler inner mechanisms.
-        return self.manager.ns_handlers[self.ns]  # type: ignore
+        return self.manager.ns_handlers[self.ns]
 
     async def async_request_payload(self, payload: "JsonDict", /):
-        return await self.handler_ns.device.async_request(
+        return await self.manager.async_request(
             *self.ns.request_set(payload, self.channel)
         )
 
@@ -461,7 +462,7 @@ class NamespaceHandler:
             "Handler undefined for method:%s namespace:%s payload:%s",
             message.method,
             message.namespace,
-            str(device.loggable_dict(message.payload)),
+            device.loggable_dict_str(message.payload),
             timeout=14400,
         )
         if device.create_diagnostic_entities:
@@ -561,7 +562,7 @@ class NamespaceHandler:
             device.DEBUG,
             "Parser stub called on namespace:%s payload:%s",
             self.ns,
-            str(device.loggable_dict(payload)),
+            device.loggable_dict_str(payload),
             timeout=14400,
         )
 

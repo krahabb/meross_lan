@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 # helper function to 'commonize' platform setup
 #
 def platform_setup_entry(
-    hass: "HomeAssistant",
+    hass,
     config_entry: "ConfigEntry[ConfigEntryManager]",
     async_add_devices,
     platform: str,
@@ -306,10 +306,9 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
 
     # interface: self
     async def async_shutdown(self):
-        await super().async_shutdown()
         del self.manager.entities[self.id]
         del self.state_callbacks
-        del self.manager
+        await super().async_shutdown()
 
     @final
     def register_state_callback(self, state_callback: "StateCallback", /):

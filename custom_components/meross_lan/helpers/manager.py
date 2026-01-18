@@ -3,7 +3,7 @@ import asyncio
 import logging
 import os
 from time import localtime, strftime, time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, final
 import weakref
 
 from homeassistant.components import persistent_notification as pn
@@ -461,6 +461,7 @@ class ConfigEntryManager(EntityManager):
     def get_logger_name(self) -> str:
         raise NotImplementedError()
 
+    @final
     def loggable_any(self, value):
         """
         Conditionally obfuscate any type to send to logging/tracing.
@@ -468,10 +469,17 @@ class ConfigEntryManager(EntityManager):
         """
         return obfuscated_any(value) if self.obfuscate else value
 
+    @final
     def loggable_dict(self, value: "Mapping[str, Any]"):
         """Conditionally obfuscate the dict values (based off OBFUSCATE_KEYS) to send to logging/tracing"""
         return obfuscated_dict(value) if self.obfuscate else value
 
+    @final
+    def loggable_dict_str(self, value: "Mapping[str, Any]"):
+        """Conditionally obfuscate the dict values (based off OBFUSCATE_KEYS) to send to logging/tracing"""
+        return str(obfuscated_dict(value) if self.obfuscate else value)
+
+    @final
     def loggable_config(self):
         """Return a 'loggable' version of the entry config (for diagnostic/logging purposes)"""
         return obfuscated_dict(self.config) if self.obfuscate else dict(self.config)
@@ -480,6 +488,7 @@ class ConfigEntryManager(EntityManager):
         """Return a 'loggable' version of the entry state (for diagnostic/logging purposes)"""
         return {}
 
+    @final
     def loggable_broker(self, broker: "HostAddress | str"):
         """Conditionally obfuscate the connection_id (which is a broker address host:port) to send to logging/tracing"""
         return (
@@ -488,6 +497,7 @@ class ConfigEntryManager(EntityManager):
             else str(broker)
         )
 
+    @final
     def loggable_device_id(self, device_id: str):
         """Conditionally obfuscate the device_id to send to logging/tracing"""
         return (
@@ -496,6 +506,7 @@ class ConfigEntryManager(EntityManager):
             else device_id
         )
 
+    @final
     def loggable_profile_id(self, profile_id: str | int):
         """Conditionally obfuscate the profile_id (which is the Meross account userId) to send to logging/tracing"""
         return (

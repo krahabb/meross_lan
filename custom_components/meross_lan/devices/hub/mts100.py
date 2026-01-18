@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, override
 
 from ...binary_sensor import MLBinarySensor
 from ...calendar import MtsSchedule
-from ...climate import MtsClimate, MtsSetPointNumber, cached_property
+from ...climate import MtsClimate, MtsSetPointNumber
 from ...merossclient.protocol import const as mc
 from ...merossclient.protocol.namespaces import hub as mn_h
 from ...number import MLConfigNumber
@@ -10,7 +10,6 @@ from ...switch import MLEmulatedSwitch
 
 if TYPE_CHECKING:
     from . import MTSSubDevice
-    from ...merossclient.protocol.namespaces import Namespace
 
 
 class Mts100Climate(MtsClimate):
@@ -50,7 +49,7 @@ class Mts100Climate(MtsClimate):
 
         def __init__(self, climate: "Mts100Climate", /):
             MtsSchedule.__init__(self, climate)
-            self._schedule_unit_time = climate.manager.hub.descriptor.ability.get(
+            self._schedule_unit_time = climate.manager.manager.descriptor.ability.get(
                 mn_h.Appliance_Hub_Mts100_ScheduleB, {}
             ).get(mc.KEY_SCHEDULEUNITTIME, 15)
 
@@ -109,7 +108,7 @@ class Mts100Climate(MtsClimate):
         )
 
         # ns registration. TODO: move (maybe) to MtsClimate base class once Hub subdevice ns handling is sorted out
-        hub = manager.hub
+        hub = manager.manager
         ability = hub.descriptor.ability
         for _entity in (self.number_adjust_temperature, self.schedule):
             if _entity.ns in ability:
@@ -181,10 +180,6 @@ class Mts100Climate(MtsClimate):
         )
 
     # interface: MtsClimate
-    @cached_property
-    def handler_adjust(self):
-        return self.manager.ns_handlers[mn_h.Appliance_Hub_Mts100_Adjust]
-
     @override
     async def async_request_preset(self, mode: int, /):
         """Requests an mts mode and (ensure) turn-on"""

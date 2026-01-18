@@ -470,7 +470,7 @@ class MLGarage(MLCover):
                     self.WARNING,
                     exception,
                     "_parse_config (payload=%s)",
-                    str(self.manager.loggable_dict(payload)),
+                    self.manager.loggable_dict_str(payload),
                 )
 
     def _transition_cancel(self, /):

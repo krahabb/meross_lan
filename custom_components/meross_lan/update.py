@@ -4,7 +4,7 @@ from homeassistant.components import update
 from homeassistant.exceptions import HomeAssistantError
 
 from .helpers import entity as me
-from .merossclient.protocol import const as mc, namespaces as mn
+from .merossclient.protocol import namespaces as mn
 
 if TYPE_CHECKING:
     from typing import ClassVar, NotRequired

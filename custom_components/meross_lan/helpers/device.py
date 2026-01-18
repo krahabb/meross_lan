@@ -97,7 +97,7 @@ class BaseDevice(mlm.EntityManager):
     if TYPE_CHECKING:
         DEVICE_TYPE: ClassVar[mlc.DeviceType]
 
-        # override some nullable since we're pretty sure they're none
+        # override some nullable since we're pretty sure they're not here
         config_entry: Final[ConfigEntry]  # type: ignore
         deviceentry_id: Final[mlm.EntityManager.DeviceEntryIdType]  # type: ignore
 
@@ -208,6 +208,11 @@ class BaseDevice(mlm.EntityManager):
     @abc.abstractmethod
     def _get_internal_name(self, /) -> str:
         raise NotImplementedError("_get_internal_name")
+
+    @property
+    @abc.abstractmethod
+    def ns_handlers(self, /) -> "Mapping[str, NamespaceHandler]":
+        raise NotImplementedError("ns_handlers")
 
 
 class Device(BaseDevice, mlm.ConfigEntryManager):
@@ -2287,7 +2292,7 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
                     self.DEBUG,
                     "Received signature error: computed=%s, header=%s",
                     sign,
-                    str(self.loggable_dict(header)),
+                    self.loggable_dict_str(header),
                 )
 
         if not self.online:
@@ -2325,7 +2330,7 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
                     self.WARNING,
                     "Protocol error: namespace:%s payload:%s",
                     message.namespace,
-                    str(self.loggable_dict(message.payload)),
+                    self.loggable_dict_str(message.payload),
                     timeout=14400,
                 )
             return
@@ -2342,7 +2347,7 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
                 self.log(
                     self.WARNING,
                     "Protocol error: received empty namespace (message: %s)",
-                    str(self.loggable_dict(message)),
+                    self.loggable_dict_str(message),
                     timeout=14400,
                 )
                 return

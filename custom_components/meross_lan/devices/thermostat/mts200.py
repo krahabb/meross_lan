@@ -57,7 +57,7 @@ class Mts200Climate(MtsThermostatClimate):
     )
 
     def __init__(self, manager: "Device", channel: object, /):
-        super().__init__(manager, channel)
+        MtsThermostatClimate.__init__(self, manager, channel)
         self._mts_summermode = None
         self._mts_summermode_supported = (
             mn_t.Appliance_Control_Thermostat_SummerMode in manager.descriptor.ability
@@ -82,7 +82,7 @@ class Mts200Climate(MtsThermostatClimate):
         else:
             self.hvac_mode = MtsThermostatClimate.HVACMode.OFF
             self.hvac_action = MtsThermostatClimate.HVACAction.OFF
-        super().flush_state()
+        MtsThermostatClimate.flush_state(self)
 
     async def async_set_hvac_mode(self, hvac_mode: MtsThermostatClimate.HVACMode, /):
         if hvac_mode == MtsThermostatClimate.HVACMode.OFF:

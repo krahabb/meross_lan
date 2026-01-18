@@ -489,6 +489,7 @@ TYPE_NAME_MAP["mss570"] = TYPE_NAME_MAP["mss560"]
 TYPE_NAME_MAP["mss"] = "Smart Switch"
 TYPE_NAME_MAP["mop320"] = "Smart Outdoor Plug"
 
+TYPE_MTS = "mts"  # smart thermostat prefix
 TYPE_MTS100 = "mts100"  # Smart thermostat over hub
 TYPE_MTS100V3 = "mts100v3"  # Smart thermostat over hub
 TYPE_MTS150 = "mts150"  # Smart thermostat over hub
@@ -497,7 +498,7 @@ TYPE_NAME_MAP["mts1"] = "Smart Thermostat Valve"
 TYPE_MTS200 = "mts200"  # Smart thermostat over wifi
 TYPE_MTS960 = "mts960"  # Smart thermostat over wifi
 TYPE_NAME_MAP[TYPE_MTS960] = "Smart Socket Thermostat"
-TYPE_NAME_MAP["mts"] = "Smart Thermostat"
+TYPE_NAME_MAP[TYPE_MTS] = "Smart Thermostat"
 # do not register class 'ms' since it is rather
 # unusual naming and could issue collissions with mss or msl
 # just set the known type
@@ -508,13 +509,14 @@ TYPE_GS559 = "gs559"
 TYPE_NAME_MAP[TYPE_GS559] = "Smart Smoke Alarm"
 
 TYPE_MS100 = "ms100"  # Smart temp/humidity sensor over Hub
-TYPE_NAME_MAP[TYPE_MS100] = "Smart Temp/Humidity Sensor"
-
+TYPE_MS100F = "ms100f"  # Smart temp/humidity sensor over Hub
 TYPE_MS130 = "ms130"  # Smart temp/humidity sensor (with display) over Hub
-TYPE_NAME_MAP[TYPE_MS130] = "Smart Temp/Humidity Sensor"
+TYPE_NAME_MAP["ms1"] = "Smart Temp/Humidity Sensor"
 
 TYPE_MS200 = "ms200"
 TYPE_NAME_MAP[TYPE_MS200] = "Smart Door/Window Sensor"
+
+TYPE_MS300 = "ms300"  # TODO: unknown sensor type
 
 TYPE_MS400 = "ms400"
 TYPE_NAME_MAP[TYPE_MS400] = "Smart Water Leak Sensor"
@@ -523,7 +525,7 @@ TYPE_MS600 = "ms600"
 TYPE_NAME_MAP[TYPE_MS600] = "Smart Presence Sensor"
 
 TYPE_MST100 = "mst100"
-TYPE_NAME_MAP[TYPE_MST100] = "Smart Sprinkler Timer"
+TYPE_NAME_MAP["mst"] = "Smart Sprinkler Timer"
 
 # REFOSS device types
 _SMART_ENERGY_MONITOR = "Smart Energy Monitor"

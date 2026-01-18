@@ -502,13 +502,13 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
 
     # interface: self
     @cached_property
-    def handler_adjust(self) -> "NamespaceHandler":
+    def handler_adjust(self):
         """
         Returns the correct ns handler for the adjust namespace.
         Used to trigger a poll and the ns which is by default polled
         on a long timeout.
         """
-        raise NotImplementedError()
+        return self.manager.ns_handlers[self.number_adjust_temperature.ns]
 
     async def async_request_preset(self, mode: int, /):
         """Implements the protocol to set the Meross thermostat mode"""
