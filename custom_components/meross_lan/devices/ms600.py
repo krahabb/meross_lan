@@ -1,20 +1,24 @@
-import typing
+from typing import TYPE_CHECKING
 
 from ..binary_sensor import MLBinarySensor
 from ..helpers import entity as me
-from ..helpers.namespaces import NamespaceHandler, mc, mn
+from ..helpers.namespaces import mc, mn
 from ..number import MLConfigNumber
 from ..select import MLConfigSelect
 from ..sensor import MLNumericSensor
 
-if typing.TYPE_CHECKING:
-    from typing import Unpack
+if TYPE_CHECKING:
+    from typing import Final, Unpack
 
     from ..helpers.device import Device
 
 
 class PresenceConfigBase(me.MEGroupListChannelMixin):
     """Mixin style base class for all of the entities managed in Appliance.Control.Presence.Config"""
+
+    if TYPE_CHECKING:
+        ns: Final
+        entity_category: Final
 
     ns = mn.Appliance_Control_Presence_Config
 
@@ -138,16 +142,13 @@ class PresenceConfigMthX(PresenceConfigNumberBase):
 
 class PresenceConfigMode(PresenceConfigModeBase):
 
-    ns = mn.Appliance_Control_Presence_Config
     NS_CHANNELS = (0,)
 
     _entities: tuple[PresenceConfigBase, ...]
 
-    __slots__ = ("_entities",)
-
     def __init__(self, manager: "Device", channel, /):
         PresenceConfigModeBase.__init__(self, manager, channel, mc.KEY_WORKMODE)
-        self._entities = (
+        manager.get_handler(mn.Appliance_Control_Presence_Config).register_parsers(
             self,
             PresenceConfigModeBase(manager, channel, mc.KEY_TESTMODE),
             PresenceConfigNoBodyTime(manager, channel),
@@ -157,25 +158,6 @@ class PresenceConfigMode(PresenceConfigModeBase):
             PresenceConfigMthX(manager, channel, mc.KEY_MTH2),
             PresenceConfigMthX(manager, channel, mc.KEY_MTH3),
         )
-        manager.register_parser_entity(self)
-
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        del self._entities
-
-    def _parse(self, payload: dict, /):
-        """
-        {
-            "channel": 0,
-            "mode": {"workMode": 1,"testMode": 2},
-            "noBodyTime": {"time": 15},
-            "distance": {"value": 8100},
-            "sensitivity": {"level": 2},
-            "mthx": {"mth1": 120,"mth2": 72,"mth3": 72}
-        }
-        """
-        for entity in self._entities:
-            entity.update_device_value(payload[entity.key_group][entity.key_value])
 
 
 class MLPresenceSensor(MLNumericSensor):
@@ -196,7 +178,9 @@ class MLPresenceSensor(MLNumericSensor):
         entitykey: str | None,
         **kwargs: "Unpack[MLNumericSensor.Args]",
     ):
-        super().__init__(manager, channel, entitykey, **(kwargs | {"name": "Presence"}))
+        MLNumericSensor.__init__(
+            self, manager, channel, entitykey, **(kwargs | {"name": "Presence"})
+        )
         self.sensor_distance = MLNumericSensor(
             manager,
             channel,

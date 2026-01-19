@@ -76,9 +76,12 @@ class MLRollerShutter(MLCover):
         except Exception:
             self._position_native_isgood = False
         MLCover.__init__(self, manager, channel)
-        manager.register_parser_entity(self)
-        manager.register_parser(self, mn.Appliance_RollerShutter_Config)
-        manager.register_parser(self, mn.Appliance_RollerShutter_State)
+        manager.register_parser_ex(
+            self,
+            self.ns,
+            mn.Appliance_RollerShutter_Config,
+            mn.Appliance_RollerShutter_State,
+        )
         if mn.Appliance_Control_ToggleX in descriptor.ability:
             # This is still to be understood. This call will do nothing
             # since the digest seen so far carries an empty list of channels

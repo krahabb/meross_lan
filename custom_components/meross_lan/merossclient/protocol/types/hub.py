@@ -76,7 +76,7 @@ class Battery(IdPayload):
 
 
 class _Online(TypedDict):
-    online: int  # 1: online, 0: offline
+    status: int
     lastActiveTime: int
 
 

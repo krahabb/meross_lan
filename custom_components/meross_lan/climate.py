@@ -324,9 +324,9 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         ATTR_TARGET_TEMP_LOW: Final
 
         device_scale: ClassVar[float]
-        AdjustNumber: ClassVar[type["MLConfigNumber"]]
+        AdjustNumber: ClassVar[type[MLConfigNumber]]
         """The specific Adjust/Calibrate number class to instantiate."""
-        SetPointNumber: ClassVar[type["MtsSetPointNumber"] | None]
+        SetPointNumber: ClassVar[type["MtsSetPointNumber"]]
         """The (optional) class for setting up a group of preset setpoints."""
         Schedule: ClassVar[type[MtsSchedule]]
         """The specific Schedule/Calendar class to instantiate."""
@@ -379,8 +379,6 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
     HVACMode = climate.HVACMode
 
     device_scale = 1
-
-    SetPointNumber = None
 
     PRESET_TO_ICON_MAP = {
         Preset.COMFORT: "mdi:sun-thermometer",
@@ -449,12 +447,16 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         super().__init__(manager, channel)
         self.number_adjust_temperature = self.__class__.AdjustNumber(self)  # type: ignore
         self.number_preset_temperature = {}
-        if preset_number_class := self.__class__.SetPointNumber:
+        try:
+            SetPointNumber = self.__class__.SetPointNumber
             for preset in MtsClimate.PRESET_TO_ICON_MAP.keys():
-                number_preset_temperature = preset_number_class(self, preset)
+                number_preset_temperature = SetPointNumber(self, preset)
                 self.number_preset_temperature[number_preset_temperature.key_value] = (
                     number_preset_temperature
                 )
+        except AttributeError:
+            # no preset setpoints for this climate class
+            pass
         self.schedule = self.__class__.Schedule(self)
         self.select_track_sensor = MtsClimate.TrackSensorSelect(self)
         self.sensor_current_temperature = MLTemperatureSensor(

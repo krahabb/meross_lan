@@ -1,5 +1,7 @@
 from typing import TYPE_CHECKING, override
 
+from aiohttp import payload
+
 from ... import const as mlc
 from ...binary_sensor import MLBinarySensor
 from ...button import MLButton
@@ -25,7 +27,6 @@ from ...sensor import (
     MLTemperatureSensor,
 )
 from ...switch import MLSwitch
-from .mts100 import Mts100Climate
 
 if TYPE_CHECKING:
     from typing import (
@@ -186,6 +187,7 @@ class HubNamespaceHandler(NamespaceHandler):
 
     def channels_to_poll(self):
         # snapshot of subdevices to query (likely needed with all these asyncs)
+        # TODO: remove when finished refactoring Hub parsing
         return tuple(
             self.parsers.keys() if self.parsers else self.device.subdevices.keys()
         )
@@ -474,7 +476,13 @@ class SubDeviceEntity(MLEntity if TYPE_CHECKING else object):
     if TYPE_CHECKING:
         manager: "SubDevice"
 
-    def _parse_all(self, payload: dict, /):
+    def parse_digest(self, payload: "mt_h.Digest_SubDevice", /):
+        """Placeholder for digest parsing. This is installed automatically
+        when the SubDevice has a 'main' entity so that when HubMixin calls
+        subdevice.parse_digest(...) the call is forwarded to the main entity (self)"""
+        self.manager._parse_online(payload)
+
+    def _parse_all(self, payload: "mt_h.Sensor_All", /):
         """
         Heuristic parser for Appliance.Hub.Mts100.All or Appliance.Hub.Sensor.All
         when the SubDevice has a 'main' entity. This is automatically installed by
@@ -536,7 +544,6 @@ class SubDevice(NamespaceParser, mld.BaseDevice):
     This refactor would also streamline moving the custom ns handling in HubMixin/SubDevice
     to a more natural NamespaceHandler implementation and also remove the need for
     BaseDevice inheritance here.
-    TODO: low priority migrate also digest parsing to MAIN_ENTITY_CLASS where possible.
     """
 
     class BatterySensor(MLNumericSensor):
@@ -575,7 +582,7 @@ class SubDevice(NamespaceParser, mld.BaseDevice):
         'Appliance.Hub.Mts100.All' namespaces to report their full state.
         Newer devices seem to be moving away from this pattern so this property
         might be None in some subdevice types."""
-        MAIN_ENTITY_CLASS: ClassVar[type[MLEntity]]
+        MAIN_ENTITY_CLASS: ClassVar[type[SubDeviceEntity]]
 
         model: Final[str]
 
@@ -634,7 +641,8 @@ class SubDevice(NamespaceParser, mld.BaseDevice):
                 raise
             main_parser = self
         else:
-            hub.register_parser_ex(main_parser, main_parser.ns)
+            hub.register_parser_entity(main_parser)
+            self.parse_digest = main_parser.parse_digest
 
         if self.NS_ALL:
             hub.register_parser(main_parser, self.NS_ALL)
@@ -745,6 +753,8 @@ class SubDevice(NamespaceParser, mld.BaseDevice):
             # carrying similar payloads structures. We'll be conservative
             # by not 'exploiting' lists in payloads since they usually carry
             # historic data or so
+            # TODO: reconcile this code with the similar implementation in
+            # NamespaceHandler for diagnostic sensors dumping
             if not self.manager.create_diagnostic_entities:
                 return
 
@@ -904,7 +914,7 @@ class SubDevice(NamespaceParser, mld.BaseDevice):
         # and the device. We might put up a binary sensor.
         self.log(self.WARNING, "Received exception payload: %s", str(payload))
 
-    def _parse_online(self, payload, /):
+    def _parse_online(self, payload: "mt_h._Online", /):
         if payload[mc.KEY_STATUS] == mc.STATUS_ONLINE:
             if not self.online:
                 self._set_online()
@@ -943,7 +953,10 @@ class MTSSubDevice(SubDevice):
 
     NS_ALL = mn_h.Appliance_Hub_Mts100_All
     KEY_DIGEST = mc.TYPE_MTS  # just for syntax
-    MAIN_ENTITY_CLASS = Mts100Climate
+
+    # TODO: this lame import is to be later refactored to use lazy imports
+    # whenever subdevices appear in the code.
+    from .mts100 import Mts100Climate as MAIN_ENTITY_CLASS
 
 
 class SensorSubDevice(SubDevice):
@@ -1057,126 +1070,98 @@ class GS559SubDevice(SensorSubDevice):
 
 class MS100SubDevice(SensorSubDevice):
 
-    if TYPE_CHECKING:
-        TEMP_SENSOR_SCALE: ClassVar[int]
+    class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
 
-        sensor_temperature: MLTemperatureSensor
-        sensor_humidity: MLHumiditySensor
-        number_adjust_temperature: HubSensorAdjustNumber | None
-        number_adjust_humidity: HubSensorAdjustNumber | None
+        ns = mn_h.Appliance_Hub_Sensor_TempHum
+
+        _attr_device_scale = 10
+
+        __slots__ = ("sensor_humidity",)
+
+        def __init__(self, manager: SubDevice, channel: str):
+            super().__init__(manager, channel)
+            self.sensor_humidity = MLHumiditySensor(manager, channel)
+            manager.manager.register_parser_ex(
+                self, mn_h.Appliance_Hub_Sensor_Adjust, mn_h.Appliance_Hub_Sensor_Latest
+            )
+
+        async def async_shutdown(self):
+            await super().async_shutdown()
+            del self.sensor_humidity
+
+        @override
+        def parse_digest(self, payload: "mt_h.Digest_ms100", /):
+            manager = self.manager
+            manager._parse_online(payload)
+            if manager.online:
+                digest = payload[manager.KEY_DIGEST]
+                self._update_sensors(
+                    digest[mc.KEY_LATESTTEMPERATURE], digest[mc.KEY_LATESTHUMIDITY]
+                )
+
+        def _parse_adjust(self, payload: "mt_h.Sensor_Adjust"):
+            manager = self.manager
+            manager.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
+                self,
+                HubSensorAdjustNumber(
+                    manager,
+                    mc.KEY_TEMPERATURE,
+                    HubSensorAdjustNumber.DeviceClass.TEMPERATURE,
+                    -5,
+                    5,
+                    0.1,
+                    payload[mc.KEY_TEMPERATURE],
+                ),
+                HubSensorAdjustNumber(
+                    manager,
+                    mc.KEY_HUMIDITY,
+                    HubSensorAdjustNumber.DeviceClass.HUMIDITY,
+                    -20,
+                    20,
+                    1,
+                    payload[mc.KEY_HUMIDITY],
+                ),
+            )
+
+        def _parse_all(self, payload: "mt_h.Sensor_All_ms100", /):
+            self.manager._parse_online(payload[mc.KEY_ONLINE])
+            if self.available:
+                self._update_sensors(
+                    payload[mc.KEY_TEMPERATURE][mc.KEY_LATEST],
+                    payload[mc.KEY_HUMIDITY][mc.KEY_LATEST],
+                )
+
+        def _parse_latest(self, payload: "mt_h.Sensor_Latest"):
+            self._update_sensors(
+                payload[mc.KEY_TEMPERATURE]["sample"],
+                payload[mc.KEY_HUMIDITY]["sample"],
+            )
+
+        def _parse_tempHum(self, payload: "mt_h.Sensor_TempHum"):
+            self._update_sensors(
+                payload[mc.KEY_LATESTTEMPERATURE], payload[mc.KEY_LATESTHUMIDITY]
+            )
+
+        def _update_sensors(self, temperature: int, humidity: int):
+            self.update_device_value(temperature)
+            self.sensor_humidity.update_device_value(humidity)
+
+        def _update_sensors_adjust(self, temperature: int, humidity: int):
+            # when a temp/hum reading changes we're smartly requesting
+            # the adjust sooner than scheduled in case the change
+            # was due to an adjustment. This method is dynamically installed
+            # by _parse_adjust when we have confirtmation that ns_adjust is
+            # delivering for this device.
+            _poll_adjust = bool(self.update_device_value(temperature))
+            _poll_adjust |= bool(self.sensor_humidity.update_device_value(humidity))
+            if _poll_adjust:
+                handler = self.manager.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust]
+                if handler.lastrequest < (self.manager.manager.lastresponse - 30):
+                    handler.polling_epoch_next = 0.0
 
     MODEL = mc.TYPE_MS100
     KEY_DIGEST = mc.TYPE_MS100
-
-    TEMP_SENSOR_SCALE = 10
-
-    __slots__ = (
-        "sensor_temperature",
-        "sensor_humidity",
-        "number_adjust_temperature",
-        "number_adjust_humidity",
-    )
-
-    def __init__(
-        self, hub: HubMixin, p_digest: dict, **kwargs: "Unpack[SubDevice.Args]"
-    ):
-        SensorSubDevice.__init__(self, hub, p_digest, **kwargs)
-        self.sensor_temperature = MLTemperatureSensor(
-            self, self.id, device_scale=self.TEMP_SENSOR_SCALE
-        )
-        self.sensor_humidity = MLHumiditySensor(self, self.id)
-        self.number_adjust_temperature = None
-        self.number_adjust_humidity = None
-        hub.register_parser_ex(
-            self,
-            mn_h.Appliance_Hub_Sensor_Adjust,
-            mn_h.Appliance_Hub_Sensor_Latest,
-            mn_h.Appliance_Hub_Sensor_TempHum,
-        )
-
-    async def async_shutdown(self):
-        await SensorSubDevice.async_shutdown(self)
-        del self.sensor_temperature
-        del self.sensor_humidity
-        del self.number_adjust_temperature
-        del self.number_adjust_humidity
-
-    @override
-    def parse_digest(self, payload: "mt_h.Digest_ms100", /):
-        self._parse_online(payload)
-        if self.online:
-            digest = payload[self.KEY_DIGEST]
-            self._update_sensors(
-                digest[mc.KEY_LATESTTEMPERATURE], digest[mc.KEY_LATESTHUMIDITY]
-            )
-
-    def _parse_adjust(self, payload: "mt_h.Sensor_Adjust"):
-        try:
-            assert self.number_adjust_temperature and self.number_adjust_humidity
-            self.number_adjust_temperature.update_device_value(
-                payload[mc.KEY_TEMPERATURE]
-            )
-            self.number_adjust_humidity.update_device_value(payload[mc.KEY_HUMIDITY])
-        except (AttributeError, AssertionError):
-            self.number_adjust_temperature = HubSensorAdjustNumber(
-                self,
-                mc.KEY_TEMPERATURE,
-                HubSensorAdjustNumber.DeviceClass.TEMPERATURE,
-                -5,
-                5,
-                0.1,
-                payload[mc.KEY_TEMPERATURE],
-            )
-            self.number_adjust_humidity = HubSensorAdjustNumber(
-                self,
-                mc.KEY_HUMIDITY,
-                HubSensorAdjustNumber.DeviceClass.HUMIDITY,
-                -20,
-                20,
-                1,
-                payload[mc.KEY_HUMIDITY],
-            )
-
-    def _parse_all(self, payload: "mt_h.Sensor_All_ms100", /):
-        self._parse_online(payload[mc.KEY_ONLINE])
-        if self.online:
-            self._update_sensors(
-                payload[mc.KEY_TEMPERATURE][mc.KEY_LATEST],
-                payload[mc.KEY_HUMIDITY][mc.KEY_LATEST],
-            )
-
-    def _parse_latest(self, payload: "mt_h.Sensor_Latest"):
-        self._update_sensors(
-            payload[mc.KEY_TEMPERATURE]["sample"], payload[mc.KEY_HUMIDITY]["sample"]
-        )
-
-    def _parse_tempHum(self, payload: "mt_h.Sensor_TempHum"):
-        self._update_sensors(
-            payload[mc.KEY_LATESTTEMPERATURE], payload[mc.KEY_LATESTHUMIDITY]
-        )
-
-    @override
-    def _parse_togglex(self, p_togglex: dict):
-        # avoid the base class creating a toggle entity
-        # since we're pretty sure ms100 doesn't have one
-        pass
-
-    def _update_sensors(self, temperature: int, humidity: int):
-        # when a temp/hum reading changes we're smartly requesting
-        # the adjust sooner than scheduled in case the change
-        # was due to an adjustment
-        if self.number_adjust_temperature:
-            _poll_adjust = bool(
-                self.sensor_temperature.update_device_value(temperature)
-            )
-            _poll_adjust |= bool(self.sensor_humidity.update_device_value(humidity))
-            if _poll_adjust:
-                handler = self.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust]
-                if handler.lastrequest < (self.manager.lastresponse - 30):
-                    handler.polling_epoch_next = 0.0
-        else:
-            self.sensor_temperature.update_device_value(temperature)
-            self.sensor_humidity.update_device_value(humidity)
+    MAIN_ENTITY_CLASS = MS100Sensor
 
 
 class MS100FSubDevice(MS100SubDevice):
@@ -1188,89 +1173,91 @@ class MS100FSubDevice(MS100SubDevice):
 
 class MS130SubDevice(MS100SubDevice):
 
+    class MS130Sensor(MS100SubDevice.MS100Sensor):
+
+        _attr_device_scale = 100
+
+        __slots__ = ("sensor_light",)
+
+        def __init__(self, manager: SubDevice, channel):
+            super().__init__(manager, channel)
+            self.sensor_light = MLLightSensor(manager, channel)
+            manager.manager.register_parser_subid(
+                self,
+                mn_h.Appliance_Control_Sensor_LatestX,
+                extra={"channel": 0, "data": ["light", "temp", "humi"]},
+            )
+
+        async def async_shutdown(self):
+            await super().async_shutdown()
+            del self.sensor_light
+
+        @override
+        def parse_digest(self, payload: "mt_h.Digest_ms130", /):
+            manager = self.manager
+            manager._parse_online(payload)
+            if manager.online:
+                digest = payload[mc.KEY_TEMPHUMI]
+                self._update_sensors(digest[mc.KEY_TEMP], digest[mc.KEY_HUMI])
+
+        @override
+        def _parse_deviceCfg(self, payload: "mt_h.SubIdPayload", /):
+            """TODO: implement entities
+            {
+                "calibrateCfg": {
+                "temp": 0,
+                "humi": 0
+                },
+                "timeCfg": {
+                "am": 2
+                },
+                "ms130Cfg": {
+                "bl": {
+                    "bri": 2,
+                    "lv": 4,
+                    "sleep": 10
+                }
+                },
+                "channel": 0,
+                "subId": "1A00694ACBC7",
+                "unitCfg": {
+                "tempUnit": 1  # 1 °C - 2 °F
+                }
+            }
+            """
+            pass
+
+        def _parse_latestx(self, payload: "mt_s.LatestXResponse_C", /):
+            """parser for Appliance.Control.Sensor.LatestX:
+            {
+                "latest": [
+                    {
+                        "data": {
+                            "light": [{"value": 220, "timestamp": 1722349685}],
+                            "temp": [{"value": 2134, "timestamp": 1722349685}],
+                            "humi": [{"value": 670, "timestamp": 1722349685}],
+                        },
+                        "channel": 0,
+                        "subId": "1A00694ACBC7",
+                    }
+                ]
+            }
+            """
+            p_data = payload[mc.KEY_DATA]
+            entity: MLNumericSensor
+            for key, entity in {
+                mc.KEY_TEMP: self,
+                mc.KEY_HUMI: self.sensor_humidity,
+                mc.KEY_LIGHT: self.sensor_light,
+            }.items():
+                try:
+                    entity.update_device_value(p_data[key][0][mc.KEY_VALUE])
+                except:
+                    pass
+
     MODEL = mc.TYPE_MS130
     KEY_DIGEST = mc.KEY_TEMPHUMI
-
-    TEMP_SENSOR_SCALE = 100
-
-    __slots__ = ("sensor_light",)
-
-    def __init__(
-        self, hub: HubMixin, p_digest: dict, **kwargs: "Unpack[SubDevice.Args]"
-    ):
-        MS100SubDevice.__init__(self, hub, p_digest, **kwargs)
-        self.sensor_light = MLLightSensor(self, self.id)
-        hub.register_parser_subid(
-            self,
-            mn_h.Appliance_Control_Sensor_LatestX,
-            extra={"channel": 0, "data": ["light", "temp", "humi"]},
-        )
-
-    async def async_shutdown(self):
-        await SensorSubDevice.async_shutdown(self)
-        del self.sensor_light
-
-    @override
-    def parse_digest(self, payload: "mt_h.Digest_ms130", /):
-        self._parse_online(payload)
-        if self.online:
-            digest = payload[mc.KEY_TEMPHUMI]
-            self._update_sensors(digest[mc.KEY_TEMP], digest[mc.KEY_HUMI])
-
-    @override
-    def _parse_deviceCfg(self, payload: "mt_h.SubIdPayload", /):
-        """TODO: implement entities
-        {
-            "calibrateCfg": {
-            "temp": 0,
-            "humi": 0
-            },
-            "timeCfg": {
-            "am": 2
-            },
-            "ms130Cfg": {
-            "bl": {
-                "bri": 2,
-                "lv": 4,
-                "sleep": 10
-            }
-            },
-            "channel": 0,
-            "subId": "1A00694ACBC7",
-            "unitCfg": {
-            "tempUnit": 1  # 1 °C - 2 °F
-            }
-        }
-        """
-        pass
-
-    def _parse_latestx(self, payload: "mt_s.LatestXResponse_C", /):
-        """parser for Appliance.Control.Sensor.LatestX:
-        {
-            "latest": [
-                {
-                    "data": {
-                        "light": [{"value": 220, "timestamp": 1722349685}],
-                        "temp": [{"value": 2134, "timestamp": 1722349685}],
-                        "humi": [{"value": 670, "timestamp": 1722349685}],
-                    },
-                    "channel": 0,
-                    "subId": "1A00694ACBC7",
-                }
-            ]
-        }
-        """
-        p_data = payload[mc.KEY_DATA]
-        entity: MLNumericSensor
-        for key, entity in {
-            mc.KEY_LIGHT: self.sensor_light,
-            mc.KEY_TEMP: self.sensor_temperature,
-            mc.KEY_HUMI: self.sensor_humidity,
-        }.items():
-            try:
-                entity.update_device_value(p_data[key][0][mc.KEY_VALUE])
-            except:
-                pass
+    MAIN_ENTITY_CLASS = MS130Sensor
 
 
 class MS200SubDevice(SensorSubDevice):
@@ -1429,89 +1416,91 @@ def digest_init_hub(device: "HubMixin", digest, /) -> "DigestInitReturnType":
     return device._parse_hub, ()
 
 
-POLLING_STRATEGY_CONF |= {
-    mn_h.Appliance_Config_DeviceCfg: (
-        mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        100,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn_h.Appliance_Control_Sensor_LatestX: (
-        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        220,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn_h.Appliance_Control_Water: (
-        0,
-        0,
-        mlc.PARAM_HEADER_SIZE,
-        50,
-        NamespaceHandler.async_poll_default,
-    ),
-    mn_h.Appliance_Hub_Battery: (
-        3600,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        40,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn_h.Appliance_Hub_Mts100_Adjust: (
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        40,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn_h.Appliance_Hub_Mts100_All: (
-        mlc.PARAM_HEARTBEAT_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        350,
-        NamespaceHandler.async_poll_chunked,
-    ),
-    mn_h.Appliance_Hub_Mts100_ScheduleB: (
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        500,
-        NamespaceHandler.async_poll_chunked,
-    ),
-    mn_h.Appliance_Hub_Sensor_Adjust: (
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        60,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn_h.Appliance_Hub_Sensor_All: (
-        mlc.PARAM_HEARTBEAT_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        250,
-        NamespaceHandler.async_poll_chunked,
-    ),
-    mn_h.Appliance_Hub_SubDevice_Beep: (
-        0,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        35,
-        NamespaceHandler.async_poll_default,
-    ),
-    mn_h.Appliance_Hub_SubDevice_Version: (
-        0,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        55,
-        NamespaceHandler.async_poll_once,
-    ),
-    mn_h.Appliance_Hub_ToggleX: (
-        0,
-        0,
-        mlc.PARAM_HEADER_SIZE,
-        35,
-        NamespaceHandler.async_poll_default,
-    ),
-}
+POLLING_STRATEGY_CONF.update(
+    {
+        mn_h.Appliance_Config_DeviceCfg: (
+            mlc.PARAM_CONFIG_UPDATE_PERIOD,
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_HEADER_SIZE,
+            100,
+            NamespaceHandler.async_poll_smart,
+        ),
+        mn_h.Appliance_Control_Sensor_LatestX: (
+            mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_HEADER_SIZE,
+            220,
+            NamespaceHandler.async_poll_smart,
+        ),
+        mn_h.Appliance_Control_Water: (
+            0,
+            0,
+            mlc.PARAM_HEADER_SIZE,
+            50,
+            NamespaceHandler.async_poll_default,
+        ),
+        mn_h.Appliance_Hub_Battery: (
+            3600,
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_HEADER_SIZE,
+            40,
+            NamespaceHandler.async_poll_smart,
+        ),
+        mn_h.Appliance_Hub_Mts100_Adjust: (
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_HEADER_SIZE,
+            40,
+            NamespaceHandler.async_poll_smart,
+        ),
+        mn_h.Appliance_Hub_Mts100_All: (
+            mlc.PARAM_HEARTBEAT_PERIOD,
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_HEADER_SIZE,
+            350,
+            NamespaceHandler.async_poll_chunked,
+        ),
+        mn_h.Appliance_Hub_Mts100_ScheduleB: (
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_HEADER_SIZE,
+            500,
+            NamespaceHandler.async_poll_chunked,
+        ),
+        mn_h.Appliance_Hub_Sensor_Adjust: (
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_HEADER_SIZE,
+            60,
+            NamespaceHandler.async_poll_smart,
+        ),
+        mn_h.Appliance_Hub_Sensor_All: (
+            mlc.PARAM_HEARTBEAT_PERIOD,
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_HEADER_SIZE,
+            250,
+            NamespaceHandler.async_poll_chunked,
+        ),
+        mn_h.Appliance_Hub_SubDevice_Beep: (
+            0,
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_HEADER_SIZE,
+            35,
+            NamespaceHandler.async_poll_default,
+        ),
+        mn_h.Appliance_Hub_SubDevice_Version: (
+            0,
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_HEADER_SIZE,
+            55,
+            NamespaceHandler.async_poll_once,
+        ),
+        mn_h.Appliance_Hub_ToggleX: (
+            0,
+            0,
+            mlc.PARAM_HEADER_SIZE,
+            35,
+            NamespaceHandler.async_poll_default,
+        ),
+    }
+)

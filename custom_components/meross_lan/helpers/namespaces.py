@@ -16,9 +16,7 @@ if TYPE_CHECKING:
     from .device import AsyncRequestFunc, BaseDevice, Device
     from .entity import MLEntity
 
-    type NamespaceHandlerFunc = Callable[[MerossMessage], None]
-    type PollingStrategyFunc = Callable[["NamespaceHandler"], Coroutine]
-    type NamespaceConfigType = tuple[int, int, int, int, PollingStrategyFunc | None]
+    POLLING_STRATEGY_CONF: Final[dict[mn.Namespace, "NamespaceHandler.ConfigType"]]
 
 
 class NamespaceParser(Loggable if TYPE_CHECKING else object):
@@ -55,7 +53,16 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
     async def async_shutdown(self):
         try:
             for handler in self._namespace_handlers:
-                del handler.parsers[self.channel]
+                _dispatcher: NamespaceHandler._DispatcherParser = handler.parsers[self.channel]  # type: ignore
+                if type(_dispatcher) is NamespaceHandler._DispatcherParser:
+                    # remove from dispatcher
+                    _dispatcher.parsers.remove(
+                        getattr(self, f"_parse_{handler.ns.slug_end}", self._parse)
+                    )
+                    if not _dispatcher.parsers:
+                        del handler.parsers[self.channel]
+                else:
+                    del handler.parsers[self.channel]
             del self._namespace_handlers
         except TypeError:  # never registered
             assert self._namespace_handlers is None
@@ -94,7 +101,7 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
         )
         return response
 
-    def _parse(self, payload: dict, /):
+    def _parse(self, payload: "JsonMapping", /):
         """Default payload message parser. This is invoked automatically
         when the parser is registered to a NamespaceHandler for a given namespace
         and no 'better' _parse_xxxx has been defined. See NamespaceHandler.register.
@@ -144,12 +151,46 @@ class NamespaceHandler:
     """
 
     if TYPE_CHECKING:
-        parsers: dict[object, Callable[[dict], None]]
+
+        type HandlerFunc = Callable[[MerossMessage], None]
+        type ParserFunc = Callable[[JsonMapping], None]
+        type PollingStrategyFunc = Callable[["NamespaceHandler"], Coroutine]
+        type ConfigType = tuple[int, int, int, int, PollingStrategyFunc | None]
+
+        parsers: Final[dict[object, ParserFunc]]
         lastpush: JsonDict | None  # TODO: implement caching of all methods responses
-        handler: NamespaceHandlerFunc
+        handler: HandlerFunc
         polling_strategy: PollingStrategyFunc | None
         polling_request: mt.MerossRequestType
         polling_request_channels: list[dict[str, Any]]  # on demand instance
+
+    class _DispatcherParser:
+        """Small helper class to implement dispatching the same payload to
+        multiple registered NamespaceParsers.
+        By default (and historically), only a single parser is registered to
+        receive a (channel) payload when dispatching message data for a namespace.
+        When needed though, we might want to dispatch the same payload to multiple
+        Parsers/Entities. This is typically needed when we have multiple data field in a payload
+        each one binded or needed to be forwarded to a different entity.
+        The single parser model overcomes this by installing a parser that subsequently
+        dispatches the data to the multiple entities. This helper class simplifies
+        and generalizes this pattern by automatically creating the 'dispatcher parser'
+        responsible to deliver data to multiple entities."""
+
+        if TYPE_CHECKING:
+            type ParsersContainer = list["NamespaceHandler.ParserFunc"]
+            parsers: Final[ParsersContainer]
+
+        __slots__ = ("parsers",)
+
+        def __init__(
+            self, parsers: "Iterable[NamespaceHandler.ParserFunc] | None" = None, /
+        ):
+            self.parsers = list(parsers) if parsers is not None else []
+
+        def __call__(self, payload: "JsonMapping", /):
+            for parser in self.parsers:
+                parser(payload)
 
     __slots__ = (
         "device",
@@ -178,8 +219,8 @@ class NamespaceHandler:
         ns: "mn.Namespace",
         /,
         *,
-        handler: "NamespaceHandlerFunc | None" = None,
-        config: "NamespaceConfigType | None" = None,
+        handler: "HandlerFunc | None" = None,
+        config: "ConfigType | None" = None,
     ):
         assert ns not in device.ns_handlers, (
             "Namespace already registered",
@@ -341,35 +382,94 @@ class NamespaceHandler:
             entity_class(self.device, channel)
 
     def register_parser(self, parser: "NamespaceParser", /):
-        # when setting up the entity-dispatching we'll substitute the legacy handler
-        # (used to be a Device method with syntax like _handle_Appliance_xxx_xxx)
-        # with our _handle_list, _handle_dict, _handle_generic. The 3 versions are meant
-        # to be optimized against a well known type of payload. We're starting by guessing our
-        # payload is a list but we'll dynamically adjust this whenever we find (in real world)
-        # a different payload structure so we can adapt.
-        # As an example of why this is needed, many modern payloads are just lists (
-        # Thermostat payloads for instance) but many older ones are not, and still
-        # either carry dict or, worse, could present themselves in both forms
-        # (ToggleX is a well-known example)
-        ns = self.ns
+        """Installs a dedicated parser for the given channel payload.
+        Calling this multiple times for the same channel is prohibited
+        by design even though the dispatching model allows (_DispatcherParser)
+        multiple recipients. Use register_parsers instead."""
         channel = parser.channel
-        assert channel not in self.parsers, "parser already registered"
-        self.parsers[channel] = getattr(parser, f"_parse_{ns.slug_end}", parser._parse)
+        assert channel not in self.parsers, "Parser already registered for channel"
+        self.parsers[channel] = getattr(
+            parser, f"_parse_{self.ns.slug_end}", parser._parse
+        )
+
+        """
+        try:
+            # at this stage _dispatcher might be either a single parserfunc or a dispatcher
+            _dispatcher: NamespaceHandler._DispatcherParser
+            _dispatcher = self.parsers[channel]  # type: ignore
+            _dispatcher.parsers.append(
+                getattr(parser, f"_parse_{self.ns.slug_end}", parser._parse)
+            )
+        except KeyError:
+            # parser slot not yet assigned: install a 'simple' parser
+            self.parsers[channel] = getattr(
+                parser, f"_parse_{self.ns.slug_end}", parser._parse
+            )
+        except AttributeError as ae:
+            assert ae.name == "parsers", "unexpected AttributeError"
+            # parser slot already assigned to a simple parser: convert to dispatcher
+            self.parsers[channel] = NamespaceHandler._DispatcherParser(
+                [
+                    _dispatcher,
+                    getattr(parser, f"_parse_{self.ns.slug_end}", parser._parse),
+                ]
+            )
+        """
+
         if not parser._namespace_handlers:
             parser._namespace_handlers = set()
         parser._namespace_handlers.add(self)
         self.polling_request_add_channel(channel)
         self.handler = self._handle_list
 
-    def swap_parsers(self, old: "NamespaceParser", new: "NamespaceParser", /):
-        assert old.channel == new.channel, "channel mismatch"
-        old._namespace_handlers.remove(self)
-        self.parsers[new.channel] = getattr(
-            new, f"_parse_{self.ns.slug_end}", new._parse
-        )
-        if not new._namespace_handlers:
-            new._namespace_handlers = set()
-        new._namespace_handlers.add(self)
+    def register_parsers(self, *parsers: "NamespaceParser"):
+        """Registers a whole set of parsers at once for the same channel payload.
+        This will automatically install a dispatcher. This feature is useful to avoid having
+        to define a dedicated parser class just to dispatch data to multiple entities.
+        This will in turn remove the need for references that need to be maintained."""
+        channel = parsers[0].channel
+        assert channel not in self.parsers, "Parser already registered for channel"
+        self.parsers[channel] = _dispatcher = NamespaceHandler._DispatcherParser()
+        _parser_method_name = f"_parse_{self.ns.slug_end}"
+        for parser in parsers:
+            assert parser.channel == channel, "All parsers must have the same channel"
+            if not parser._namespace_handlers:
+                parser._namespace_handlers = set()
+            parser._namespace_handlers.add(self)
+            _dispatcher.parsers.append(
+                getattr(parser, _parser_method_name, parser._parse)
+            )
+        self.polling_request_add_channel(channel)
+        self.handler = self._handle_list
+
+    def swap_parsers(self, old: "NamespaceParser", *parsers: "NamespaceParser"):
+        if len(parsers) == 1:
+            parser = parsers[0]
+            assert old.channel == parser.channel, "channel mismatch"
+            old._namespace_handlers.remove(self)
+            self.parsers[parser.channel] = getattr(
+                parser, f"_parse_{self.ns.slug_end}", parser._parse
+            )
+            if not parser._namespace_handlers:
+                parser._namespace_handlers = set()
+            parser._namespace_handlers.add(self)
+        else:
+            # install a dispatcher
+            old._namespace_handlers.remove(self)
+            self.parsers[old.channel] = _dispatcher = (
+                NamespaceHandler._DispatcherParser()
+            )
+            _parser_method_name = f"_parse_{self.ns.slug_end}"
+            for parser in parsers:
+                assert (
+                    parser.channel == old.channel
+                ), "All parsers must have the same channel"
+                if not parser._namespace_handlers:
+                    parser._namespace_handlers = set()
+                parser._namespace_handlers.add(self)
+                _dispatcher.parsers.append(
+                    getattr(parser, _parser_method_name, parser._parse)
+                )
 
     def handle_response(self, response: "MerossMessage", /):
         """Entry point for handling a received message for this namespace.
@@ -1207,7 +1307,7 @@ response. This issue also appeared on hubs when querying for a big number of sub
 as reported in #244 (here the buffer limit was around 4000 chars). From limited testing this 'kind of overflow' is not happening on MQTT
 responses though
 """
-POLLING_STRATEGY_CONF: dict[mn.Namespace, "NamespaceConfigType"] = {
+POLLING_STRATEGY_CONF = {
     mn.Appliance_System_All: (
         mlc.PARAM_HEARTBEAT_PERIOD,
         0,

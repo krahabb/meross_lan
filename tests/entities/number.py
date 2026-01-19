@@ -9,6 +9,11 @@ from custom_components.meross_lan.devices.hub import (
     MST100SubDevice,
 )
 from custom_components.meross_lan.devices.hub.mts100 import Mts100Climate
+from custom_components.meross_lan.devices.ms600 import (
+    PresenceConfigDistance,
+    PresenceConfigMthX,
+    PresenceConfigNoBodyTime,
+)
 from custom_components.meross_lan.devices.rollershutter import (
     MLRollerShutterConfigNumber,
 )
@@ -17,6 +22,7 @@ from custom_components.meross_lan.devices.thermostat.mts300 import Mts300Climate
 from custom_components.meross_lan.devices.thermostat.mts960 import Mts960Climate
 from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
     MLScreenBrightnessNumber,
+    MtsClimate,
     MtsCommonTemperatureExtNumber,
     MtsDeadZoneNumber,
     MtsFrostNumber,
@@ -24,6 +30,7 @@ from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
     MtsThermostatClimate,
     mn_t,
 )
+from custom_components.meross_lan.helpers.entity import MLEntity
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
@@ -33,12 +40,14 @@ from custom_components.meross_lan.switch import MLEmulatedSwitch
 
 from tests.entities import EntityComponentTest
 
-_MTS100_ENTITES = [
-    Mts100Climate.AdjustNumber,
-    Mts100Climate.SetPointNumber,
-    Mts100Climate.SetPointNumber,
-    Mts100Climate.SetPointNumber,
-]
+
+def _climate_number_entities(climate_class: type[MtsClimate]) -> list[type[MLEntity]]:
+    # TODO: redefine EntityComponentTest base container types to allow Sequence instead of list for defining
+    # entity types
+    return [climate_class.AdjustNumber] + [climate_class.SetPointNumber] * 3  # type: ignore
+
+
+_MTS100_ENTITES = _climate_number_entities(Mts100Climate)
 
 
 class EntityTest(EntityComponentTest):
@@ -47,12 +56,7 @@ class EntityTest(EntityComponentTest):
 
     DIGEST_ENTITIES = {
         mc.KEY_THERMOSTAT: {
-            mc.KEY_MODE: [
-                Mts200Climate.AdjustNumber,
-                Mts200Climate.SetPointNumber,
-                Mts200Climate.SetPointNumber,
-                Mts200Climate.SetPointNumber,
-            ],
+            mc.KEY_MODE: _climate_number_entities(Mts200Climate),
             mc.KEY_MODEB: [
                 Mts960Climate.AdjustNumber,
                 Mts960Climate.TimerConfigNumber,
@@ -64,14 +68,13 @@ class EntityTest(EntityComponentTest):
     NAMESPACES_ENTITIES = {
         mn.Appliance_GarageDoor_Config: [MLGarageConfigNumber],
         mn.Appliance_GarageDoor_MultipleConfig: [MLGarageMultipleConfigNumber],
-        mn.Appliance_RollerShutter_Config: [
-            MLRollerShutterConfigNumber,
-            MLRollerShutterConfigNumber,
-        ],
-        mn.Appliance_Control_Screen_Brightness: [
-            MLScreenBrightnessNumber,
-            MLScreenBrightnessNumber,
-        ],
+        mn.Appliance_RollerShutter_Config: [MLRollerShutterConfigNumber] * 2,
+        mn.Appliance_Control_Presence_Config: [
+            PresenceConfigNoBodyTime,
+            PresenceConfigDistance,
+        ]
+        + [PresenceConfigMthX] * 3,
+        mn.Appliance_Control_Screen_Brightness: [MLScreenBrightnessNumber] * 2,
         mn_t.Appliance_Control_Thermostat_Calibration: [
             MtsThermostatClimate.AdjustNumber
         ],
@@ -86,7 +89,7 @@ class EntityTest(EntityComponentTest):
         mn_t.Appliance_Control_Thermostat_Overheat: [MtsOverheatNumber],
     }
     HUB_SUBDEVICES_ENTITIES = {
-        mc.TYPE_MS100: [HubSensorAdjustNumber, HubSensorAdjustNumber],
+        mc.TYPE_MS100: [HubSensorAdjustNumber] * 2,
         mc.TYPE_MTS100: _MTS100_ENTITES,
         mc.TYPE_MTS100V3: _MTS100_ENTITES,
         mc.TYPE_MTS150: _MTS100_ENTITES,

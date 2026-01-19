@@ -1,6 +1,11 @@
 from homeassistant.components import sensor as haec
 
-from custom_components.meross_lan.devices.hub import GS559SubDevice, SubDevice
+from custom_components.meross_lan.devices.hub import (
+    GS559SubDevice,
+    MS100SubDevice,
+    MS130SubDevice,
+    SubDevice,
+)
 from custom_components.meross_lan.devices.mss import (
     ConsumptionHSensor,
     ConsumptionXSensor,
@@ -89,8 +94,8 @@ class EntityTest(EntityComponentTest):
 
     HUB_SUBDEVICES_ENTITIES = {
         None: [SubDevice.BatterySensor],  # battery sensor
-        mc.TYPE_MS100: [MLHumiditySensor, MLTemperatureSensor],
-        mc.KEY_TEMPHUMI: [MLHumiditySensor, MLTemperatureSensor, MLLightSensor],
+        mc.TYPE_MS100: [MS100SubDevice.MS100Sensor, MLHumiditySensor],
+        mc.KEY_TEMPHUMI: [MS130SubDevice.MS130Sensor, MLHumiditySensor, MLLightSensor],
         mc.TYPE_MTS100: [
             MLTemperatureSensor
         ],  # additional (disabled) current temperature sensor

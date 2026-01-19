@@ -2,6 +2,11 @@ from homeassistant.components import select as haec
 
 from custom_components.meross_lan.climate import MtsClimate
 from custom_components.meross_lan.devices.diffuser import MLDiffuserSpray
+from custom_components.meross_lan.devices.ms600 import (
+    PresenceConfigMode,
+    PresenceConfigModeBase,
+    PresenceConfigSensitivity,
+)
 from custom_components.meross_lan.devices.spray import MLSpray
 from custom_components.meross_lan.devices.thermostat.mts300 import Mts300Climate
 from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
@@ -31,6 +36,11 @@ class EntityTest(EntityComponentTest):
     NAMESPACES_ENTITIES = {
         mn.Appliance_Config_Sensor_Association: [Mts300Climate.SensorAssociationSelect],
         mn.Appliance_Control_TempUnit: [MtsTempUnit],
+        mn.Appliance_Control_Presence_Config: [
+            PresenceConfigMode,
+            PresenceConfigModeBase,
+            PresenceConfigSensitivity,
+        ],
         mn_t.Appliance_Control_Thermostat_HoldAction: [MtsHoldAction],
         mn_t.Appliance_Control_Thermostat_ModeC: [MtsClimate.TrackSensorSelect],
     }

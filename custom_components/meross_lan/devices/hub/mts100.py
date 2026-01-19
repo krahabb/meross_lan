@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING, override
 
+from . import SubDeviceEntity
 from ...binary_sensor import MLBinarySensor
 from ...calendar import MtsSchedule
 from ...climate import MtsClimate, MtsSetPointNumber
@@ -9,10 +10,10 @@ from ...number import MLConfigNumber
 from ...switch import MLEmulatedSwitch
 
 if TYPE_CHECKING:
-    from . import MTSSubDevice
+    from . import MTSSubDevice, mt_h
 
 
-class Mts100Climate(MtsClimate):
+class Mts100Climate(SubDeviceEntity, MtsClimate):
     """Climate entity for hub paired devices MTS100, MTS100V3, MTS150"""
 
     class AdjustNumber(MLConfigNumber):
@@ -211,10 +212,18 @@ class Mts100Climate(MtsClimate):
     def is_mts_scheduled(self, /):
         return self._mts_onoff and self._mts_mode == mc.MTS100_MODE_AUTO
 
+    # interface: SubDeviceEntity
+    @override
+    def parse_digest(self, payload: "mt_h.Digest_SubDevice", /):
+        self.manager._parse_online(payload)
+        # TODO: maybe...this is rarely polled and we're already parsing
+        # more state in _parse_all
+
     # message handlers
+    @override
     def _parse_all(self, payload: dict, /):
         self.manager._parse_online(payload.get(mc.KEY_ONLINE, {}))
-        if not self.manager.online:
+        if not self.available:
             return
 
         if mc.KEY_SCHEDULEBMODE in payload:
