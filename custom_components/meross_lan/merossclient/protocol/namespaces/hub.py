@@ -65,18 +65,6 @@ Appliance_Digest_WaterPlan = mn.ns(
 Appliance_Hub_Battery = mn.ns("Appliance.Hub.Battery", mc.KEY_BATTERY, GETPSH_ID)
 Appliance_Hub_Exception = mn.ns("Appliance.Hub.Exception", mc.KEY_EXCEPTION, mn.PSQ, ID)
 Appliance_Hub_ExtraInfo = mn.ns("Appliance.Hub.ExtraInfo", "extraInfo", mn.G_D, H)
-Appliance_Hub_Online = mn.ns("Appliance.Hub.Online", mc.KEY_ONLINE, GETPSH_ID)
-Appliance_Hub_PairSubDev = mn.ns("Appliance.Hub.PairSubDev", mc.KEY_, mn.S_E, H)
-Appliance_Hub_Report = mn.ns("Appliance.Hub.Report", "report", GETPSH_ID, mn.EXP)
-Appliance_Hub_Sensitivity = mn.ns(
-    "Appliance.Hub.Sensitivity", "sensitivity", GETSET_ID, mn.PSH
-)
-Appliance_Hub_SubdeviceList = mn.ns(
-    "Appliance.Hub.SubdeviceList", "subdeviceList", mn.PSH, H
-)
-Appliance_Hub_ToggleX = mn.ns(
-    "Appliance.Hub.ToggleX", mc.KEY_TOGGLEX, GETSET_ID, mn.PSH
-)
 Appliance_Hub_Mts100_Adjust = mn.ns(
     "Appliance.Hub.Mts100.Adjust", mc.KEY_ADJUST, GETSET_ID
 )
@@ -102,6 +90,12 @@ Appliance_Hub_Mts100_TimeSync = mn.ns(
 Appliance_Hub_Mts100_SuperCtl = mn.ns(
     "Appliance.Hub.Mts100.SuperCtl", "superCtl", GET_ID, mn.PSH
 )
+Appliance_Hub_Online = mn.ns("Appliance.Hub.Online", mc.KEY_ONLINE, GETPSH_ID)
+Appliance_Hub_PairSubDev = mn.ns("Appliance.Hub.PairSubDev", mc.KEY_, mn.S_E, H)
+Appliance_Hub_Report = mn.ns("Appliance.Hub.Report", "report", GETPSH_ID, mn.EXP)
+Appliance_Hub_Sensitivity = mn.ns(
+    "Appliance.Hub.Sensitivity", "sensitivity", GETSET_ID, mn.PSH
+)
 Appliance_Hub_Sensor_Adjust = mn.ns(
     "Appliance.Hub.Sensor.Adjust", mc.KEY_ADJUST, GETSET_ID
 )
@@ -125,6 +119,9 @@ Appliance_Hub_Sensor_TempHum = mn.ns(
 Appliance_Hub_Sensor_WaterLeak = mn.ns(
     "Appliance.Hub.Sensor.WaterLeak", mc.KEY_WATERLEAK, GETPSH_ID
 )
+Appliance_Hub_SubdeviceList = mn.ns(
+    "Appliance.Hub.SubdeviceList", "subdeviceList", mn.PSH, H
+)
 Appliance_Hub_SubDevice_Beep = mn.ns(
     "Appliance.Hub.SubDevice.Beep", mc.KEY_ALARM, GETSET_ID
 )
@@ -135,4 +132,7 @@ Appliance_Hub_SubDevice_MotorAdjust = mn.ns(
 )
 Appliance_Hub_SubDevice_Version = mn.ns(
     "Appliance.Hub.SubDevice.Version", mc.KEY_VERSION, GETPSH_ID
+)
+Appliance_Hub_ToggleX = mn.ns(
+    "Appliance.Hub.ToggleX", mc.KEY_TOGGLEX, GETSET_ID, mn.PSH
 )

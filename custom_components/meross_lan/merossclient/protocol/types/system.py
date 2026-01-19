@@ -2,7 +2,7 @@
 A collection of typing definitions for payloads in Appliance.System.*
 """
 
-from . import TypedDict
+from . import NotRequired, TypedDict
 
 
 class Debug_System(TypedDict):
@@ -46,7 +46,27 @@ class Debug_Cloud(TypedDict):
     iotDisconnectDetail: Debug_DisconnectDetail
 
 
+class _Debug_Hub_SubDevice_Data(TypedDict):
+    hardware: str
+    firmware: str
+    online: NotRequired[int]
+
+
+class _Debug_Hub_SubDevice(TypedDict):
+    id: str
+    # This dictionary, beside the subdev id, has only one of the next listed keys.
+    # It might look like this key is the same as the one presented in Hub.Digest
+    ms100: NotRequired[_Debug_Hub_SubDevice_Data]
+    mts100v3: NotRequired[_Debug_Hub_SubDevice_Data]
+
+
+class Debug_Hub(TypedDict):
+    channel: int
+    subdevice: list[_Debug_Hub_SubDevice]
+
+
 class Debug(TypedDict):
     system: Debug_System
     network: Debug_Network
     cloud: Debug_Cloud
+    hub: NotRequired[Debug_Hub]
