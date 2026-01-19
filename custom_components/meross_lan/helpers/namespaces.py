@@ -310,9 +310,6 @@ class NamespaceHandler:
             + item_count * self.polling_response_item_size
         )
 
-    def polling_response_size_inc(self):
-        self.polling_response_size += self.polling_response_item_size
-
     def channels_to_poll(self):
         # snapshot sequence of channels to query (likely needed with all these asyncs)
         return tuple(self.parsers.keys())
@@ -363,6 +360,16 @@ class NamespaceHandler:
         parser._namespace_handlers.add(self)
         self.polling_request_add_channel(channel)
         self.handler = self._handle_list
+
+    def swap_parsers(self, old: "NamespaceParser", new: "NamespaceParser", /):
+        assert old.channel == new.channel, "channel mismatch"
+        old._namespace_handlers.remove(self)
+        self.parsers[new.channel] = getattr(
+            new, f"_parse_{self.ns.slug_end}", new._parse
+        )
+        if not new._namespace_handlers:
+            new._namespace_handlers = set()
+        new._namespace_handlers.add(self)
 
     def handle_response(self, response: "MerossMessage", /):
         """Entry point for handling a received message for this namespace.

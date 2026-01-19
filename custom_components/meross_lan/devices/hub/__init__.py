@@ -73,6 +73,7 @@ class HubSensorAdjustNumber(MLConfigNumber):
         min_value: float,
         max_value: float,
         step: float,
+        device_value: float,
         /,
     ):
         self.key_value = key
@@ -86,6 +87,7 @@ class HubSensorAdjustNumber(MLConfigNumber):
             f"config_{self.ns.key}_{self.key_value}",
             device_class=device_class,
             device_scale=10,
+            device_value=device_value,
             name=f"Adjust {device_class}",
         )
 
@@ -110,8 +112,8 @@ class HubSensorAdjustNumber(MLConfigNumber):
 class HubToggleX(MLSwitch):
     """Generic switch to map Appliance.Hub.ToggleX namespace."""
 
-    ENTITY_KEY = mc.KEY_TOGGLEX
     ns = mn_h.Appliance_Hub_ToggleX
+    ENTITY_KEY = mc.KEY_TOGGLEX
 
 
 class HubBeep(MLSwitch):
@@ -369,15 +371,6 @@ class HubMixin(Device if TYPE_CHECKING else object):
             timeout=604800,  # 1 week
         )
 
-    def setup_simple_handlers(self, *nss: "Namespace"):
-        ability = self.descriptor.ability
-        for ns in nss:
-            try:
-                self.ns_handlers[ns].polling_response_size_inc()
-            except KeyError:
-                if ns in ability:
-                    HubNamespaceHandler(self, ns)
-
     def register_parser_subid(
         self,
         parser: "NamespaceParser",
@@ -506,10 +499,10 @@ class SubDeviceEntity(MLEntity if TYPE_CHECKING else object):
 
     # placeholders/stubs for common ns parsing. These are automatically
     # installed by SubDevice initialization
-    def _parse_togglex(self, payload: "mt_h.ToggleX", /):
+    def _parse_deviceCfg(self, payload, /):
         pass
 
-    def _parse_deviceCfg(self, payload, /):
+    def _parse_togglex(self, payload: "mt_h.ToggleX", /):
         pass
 
 
@@ -585,7 +578,6 @@ class SubDevice(NamespaceParser, mld.BaseDevice):
         MAIN_ENTITY_CLASS: ClassVar[type[MLEntity]]
 
         model: Final[str]
-        p_digest: JsonDict
 
     DEVICE_TYPE = mlc.DeviceType.SUBDEVICE
 
@@ -622,7 +614,6 @@ class SubDevice(NamespaceParser, mld.BaseDevice):
         self.manager = hub
         self.channel = id = p_digest[mc.KEY_ID]
         self.model = model = self.MODEL or kwargs.get("key_digest") or "unknown"
-        self.p_digest = p_digest
         super().__init__(
             id,
             api=hub.api,
@@ -642,28 +633,24 @@ class SubDevice(NamespaceParser, mld.BaseDevice):
             if ae.name != "MAIN_ENTITY_CLASS":
                 raise
             main_parser = self
-            hub.setup_simple_handlers(mn_h.Appliance_Hub_ToggleX)
         else:
-            hub.register_parser_ex(
-                main_parser,
-                mn_h.Appliance_Hub_ToggleX,
-                main_parser.ns,
-            )
+            hub.register_parser_ex(main_parser, main_parser.ns)
 
         if self.NS_ALL:
             hub.register_parser(main_parser, self.NS_ALL)
         hub.register_parser_ex(
             main_parser,
             mn_h.Appliance_Config_DeviceCfg,
+            mn_h.Appliance_Hub_ToggleX,
         )
         hub.register_parser_entity(SubDevice.BatterySensor(self, self.id))
         hub.register_parser_ex(
             self,
-            mn_h.Appliance_Hub_Online,
             mn_h.Appliance_Hub_Exception,
+            mn_h.Appliance_Hub_Online,
+            mn_h.Appliance_Hub_SubDevice_Beep,
             mn_h.Appliance_Hub_SubDevice_Version,
         )
-        hub.setup_simple_handlers(mn_h.Appliance_Hub_SubDevice_Beep)
 
         hub.remove_issue(mlc.ISSUE_HUB_SUBDEVICE_REMOVED, id)
 
@@ -833,7 +820,6 @@ class SubDevice(NamespaceParser, mld.BaseDevice):
             "doorWindow": {"status": 0, "lmTime": 1681983460}
         }
         """
-        self.p_digest = payload
         self._parse_online(payload)
         if self.online:
             _excluded_keys = (
@@ -898,6 +884,20 @@ class SubDevice(NamespaceParser, mld.BaseDevice):
     def _parse_deviceCfg(self, payload: "mt_h.SubIdPayload", /):
         pass
 
+    def _parse_togglex(self, payload: "mt_h.ToggleX", /):
+        # This handler is installed as a fallback when no specialized
+        # parser is defined for togglex ns during SubDevice init.
+        # Here we just swap-in a HubToggleX entity so that it'll be
+        # self-managing from now on.
+        self.ns_handlers[mn_h.Appliance_Hub_ToggleX].swap_parsers(
+            self,
+            HubToggleX(
+                self,
+                self.id,
+                device_value=payload[mc.KEY_ONOFF],
+            ),
+        )
+
     def _parse_exception(self, payload, /):
         """{"id": "00000000", "code": 5061}"""
         # TODO: code 5061 seems related to loss of connectivity between the hub
@@ -912,23 +912,18 @@ class SubDevice(NamespaceParser, mld.BaseDevice):
             if self.online:
                 self._set_offline()
 
-    def _parse_togglex(self, payload: "mt_h.ToggleX", /):
-        self._parse_togglex = HubToggleX(
+    def _parse_beep(self, payload: "mt_h.SubDevice_Beep", /):
+        self.ns_handlers[mn_h.Appliance_Hub_SubDevice_Beep].swap_parsers(
             self,
-            self.id,
-            device_value=payload[mc.KEY_ONOFF],
-        )._parse
+            HubBeep(
+                self,
+                self.id,
+                name="Beep alarm",
+                device_value=payload[mc.KEY_ONOFF],
+            ),
+        )
 
-    def _parse_alarm(self, payload: "mt_h.Beep", /):
-        # likely working in mts150 - GS559(smokeAlarm) - MS400(waterLeak)
-        self._parse_alarm = HubBeep(
-            self,
-            self.id,
-            name="Beep alarm",
-            device_value=payload[mc.KEY_ONOFF],
-        )._parse
-
-    def _parse_version(self, payload: "mt_h.Version", /):
+    def _parse_version(self, payload: "mt_h.SubDevice_Version", /):
         device_registry_entry = self.device_registry_entry
         kwargs = {}
         hw_version = payload[mc.KEY_HARDWARE]
@@ -1062,8 +1057,18 @@ class GS559SubDevice(SensorSubDevice):
 
 class MS100SubDevice(SensorSubDevice):
 
+    if TYPE_CHECKING:
+        TEMP_SENSOR_SCALE: ClassVar[int]
+
+        sensor_temperature: MLTemperatureSensor
+        sensor_humidity: MLHumiditySensor
+        number_adjust_temperature: HubSensorAdjustNumber | None
+        number_adjust_humidity: HubSensorAdjustNumber | None
+
     MODEL = mc.TYPE_MS100
     KEY_DIGEST = mc.TYPE_MS100
+
+    TEMP_SENSOR_SCALE = 10
 
     __slots__ = (
         "sensor_temperature",
@@ -1076,25 +1081,18 @@ class MS100SubDevice(SensorSubDevice):
         self, hub: HubMixin, p_digest: dict, **kwargs: "Unpack[SubDevice.Args]"
     ):
         SensorSubDevice.__init__(self, hub, p_digest, **kwargs)
-        self.sensor_temperature = MLTemperatureSensor(self, self.id, device_scale=10)
+        self.sensor_temperature = MLTemperatureSensor(
+            self, self.id, device_scale=self.TEMP_SENSOR_SCALE
+        )
         self.sensor_humidity = MLHumiditySensor(self, self.id)
-        self.number_adjust_temperature = HubSensorAdjustNumber(
+        self.number_adjust_temperature = None
+        self.number_adjust_humidity = None
+        hub.register_parser_ex(
             self,
-            mc.KEY_TEMPERATURE,
-            HubSensorAdjustNumber.DeviceClass.TEMPERATURE,
-            -5,
-            5,
-            0.1,
+            mn_h.Appliance_Hub_Sensor_Adjust,
+            mn_h.Appliance_Hub_Sensor_Latest,
+            mn_h.Appliance_Hub_Sensor_TempHum,
         )
-        self.number_adjust_humidity = HubSensorAdjustNumber(
-            self,
-            mc.KEY_HUMIDITY,
-            HubSensorAdjustNumber.DeviceClass.HUMIDITY,
-            -20,
-            20,
-            1,
-        )
-        hub.setup_simple_handlers(mn_h.Appliance_Hub_Sensor_Adjust)
 
     async def async_shutdown(self):
         await SensorSubDevice.async_shutdown(self)
@@ -1103,26 +1101,59 @@ class MS100SubDevice(SensorSubDevice):
         del self.number_adjust_temperature
         del self.number_adjust_humidity
 
-    def _parse_adjust(self, p_adjust: dict):
-        self.number_adjust_temperature.update_device_value(p_adjust[mc.KEY_TEMPERATURE])
-        self.number_adjust_humidity.update_device_value(p_adjust[mc.KEY_HUMIDITY])
+    @override
+    def parse_digest(self, payload: "mt_h.Digest_ms100", /):
+        self._parse_online(payload)
+        if self.online:
+            digest = payload[self.KEY_DIGEST]
+            self._update_sensors(
+                digest[mc.KEY_LATESTTEMPERATURE], digest[mc.KEY_LATESTHUMIDITY]
+            )
 
-    def _parse_humidity(self, p_humidity: dict):
-        self._update_sensor(self.sensor_humidity, p_humidity[mc.KEY_LATEST])
+    def _parse_adjust(self, payload: "mt_h.Sensor_Adjust"):
+        try:
+            assert self.number_adjust_temperature and self.number_adjust_humidity
+            self.number_adjust_temperature.update_device_value(
+                payload[mc.KEY_TEMPERATURE]
+            )
+            self.number_adjust_humidity.update_device_value(payload[mc.KEY_HUMIDITY])
+        except (AttributeError, AssertionError):
+            self.number_adjust_temperature = HubSensorAdjustNumber(
+                self,
+                mc.KEY_TEMPERATURE,
+                HubSensorAdjustNumber.DeviceClass.TEMPERATURE,
+                -5,
+                5,
+                0.1,
+                payload[mc.KEY_TEMPERATURE],
+            )
+            self.number_adjust_humidity = HubSensorAdjustNumber(
+                self,
+                mc.KEY_HUMIDITY,
+                HubSensorAdjustNumber.DeviceClass.HUMIDITY,
+                -20,
+                20,
+                1,
+                payload[mc.KEY_HUMIDITY],
+            )
 
-    def _parse_ms100(self, p_ms100: dict):
-        # typically called by SubDevice.parse_digest
-        # when parsing Appliance.System.All
-        self._parse_tempHum(p_ms100)
+    def _parse_all(self, payload: "mt_h.Sensor_All_ms100", /):
+        self._parse_online(payload[mc.KEY_ONLINE])
+        if self.online:
+            self._update_sensors(
+                payload[mc.KEY_TEMPERATURE][mc.KEY_LATEST],
+                payload[mc.KEY_HUMIDITY][mc.KEY_LATEST],
+            )
 
-    def _parse_temperature(self, p_temperature: dict):
-        self._update_sensor(self.sensor_temperature, p_temperature[mc.KEY_LATEST])
-
-    def _parse_tempHum(self, p_temphum: dict):
-        self._update_sensor(
-            self.sensor_temperature, p_temphum[mc.KEY_LATESTTEMPERATURE]
+    def _parse_latest(self, payload: "mt_h.Sensor_Latest"):
+        self._update_sensors(
+            payload[mc.KEY_TEMPERATURE]["sample"], payload[mc.KEY_HUMIDITY]["sample"]
         )
-        self._update_sensor(self.sensor_humidity, p_temphum[mc.KEY_LATESTHUMIDITY])
+
+    def _parse_tempHum(self, payload: "mt_h.Sensor_TempHum"):
+        self._update_sensors(
+            payload[mc.KEY_LATESTTEMPERATURE], payload[mc.KEY_LATESTHUMIDITY]
+        )
 
     @override
     def _parse_togglex(self, p_togglex: dict):
@@ -1130,40 +1161,44 @@ class MS100SubDevice(SensorSubDevice):
         # since we're pretty sure ms100 doesn't have one
         pass
 
-    def _update_sensor(self, sensor: MLNumericSensor, device_value):
+    def _update_sensors(self, temperature: int, humidity: int):
         # when a temp/hum reading changes we're smartly requesting
         # the adjust sooner than scheduled in case the change
         # was due to an adjustment
-        if sensor.update_device_value(device_value):
-            handler = self.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust]
-            if handler.lastrequest < (self.manager.lastresponse - 30):
-                handler.polling_epoch_next = 0.0
+        if self.number_adjust_temperature:
+            _poll_adjust = bool(
+                self.sensor_temperature.update_device_value(temperature)
+            )
+            _poll_adjust |= bool(self.sensor_humidity.update_device_value(humidity))
+            if _poll_adjust:
+                handler = self.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust]
+                if handler.lastrequest < (self.manager.lastresponse - 30):
+                    handler.polling_epoch_next = 0.0
+        else:
+            self.sensor_temperature.update_device_value(temperature)
+            self.sensor_humidity.update_device_value(humidity)
 
 
-class MS100FHSubDevice(MS100SubDevice):
+class MS100FSubDevice(MS100SubDevice):
     """A variant of MS100SubDevice for the MS100FH device"""
 
     MODEL = mc.TYPE_MS100F
     KEY_DIGEST = mc.KEY_TEMPHUM
 
 
-class MS130SubDevice(SensorSubDevice):
+class MS130SubDevice(MS100SubDevice):
 
     MODEL = mc.TYPE_MS130
     KEY_DIGEST = mc.KEY_TEMPHUMI
 
-    __slots__ = (
-        "sensor_humidity",
-        "sensor_light",
-        "sensor_temperature",
-    )
+    TEMP_SENSOR_SCALE = 100
+
+    __slots__ = ("sensor_light",)
 
     def __init__(
         self, hub: HubMixin, p_digest: dict, **kwargs: "Unpack[SubDevice.Args]"
     ):
-        SensorSubDevice.__init__(self, hub, p_digest, **kwargs)
-        self.sensor_humidity = MLHumiditySensor(self, self.id, device_scale=100)
-        self.sensor_temperature = MLTemperatureSensor(self, self.id, device_scale=100)
+        MS100SubDevice.__init__(self, hub, p_digest, **kwargs)
         self.sensor_light = MLLightSensor(self, self.id)
         hub.register_parser_subid(
             self,
@@ -1174,8 +1209,13 @@ class MS130SubDevice(SensorSubDevice):
     async def async_shutdown(self):
         await SensorSubDevice.async_shutdown(self)
         del self.sensor_light
-        del self.sensor_temperature
-        del self.sensor_humidity
+
+    @override
+    def parse_digest(self, payload: "mt_h.Digest_ms130", /):
+        self._parse_online(payload)
+        if self.online:
+            digest = payload[mc.KEY_TEMPHUMI]
+            self._update_sensors(digest[mc.KEY_TEMP], digest[mc.KEY_HUMI])
 
     @override
     def _parse_deviceCfg(self, payload: "mt_h.SubIdPayload", /):
@@ -1198,51 +1238,10 @@ class MS130SubDevice(SensorSubDevice):
             "channel": 0,
             "subId": "1A00694ACBC7",
             "unitCfg": {
-            "tempUnit": 1
+            "tempUnit": 1  # 1 °C - 2 °F
             }
         }
         """
-        pass
-
-    def _parse_humidity(self, payload, /):
-        """parser for Appliance.Hub.Sensor.All:
-        {
-        ...
-        "humidity": {
-                "latest": 711,
-                "latestSampleTime": 1722219198,
-                "max": 1000,
-                "min": 0
-              },
-        ...
-        }
-        """
-        self.sensor_humidity.update_device_value(payload[mc.KEY_LATEST])
-
-    def _parse_temperature(self, payload, /):
-        """parser for Appliance.Hub.Sensor.All:
-        {
-        ...
-        "temperature": {
-                "latest": 1772,
-                "latestSampleTime": 1722219198,
-                "max": 600,
-                "min": -200
-              },
-        ...
-        }
-        """
-        self.sensor_temperature.update_device_value(payload[mc.KEY_LATEST])
-
-    def _parse_tempHumi(self, payload: dict, /):
-        """parser for digest carried "tempHumi": {"latestTime": 1722219198, "temp": 1772, "humi": 711}"""
-        self.sensor_temperature.update_device_value(payload[mc.KEY_TEMP])
-        self.sensor_humidity.update_device_value(payload[mc.KEY_HUMI])
-
-    @override
-    def _parse_togglex(self, payload: dict, /):
-        # avoid the base class creating a toggle entity
-        # since we're pretty sure ms130 doesn't have one
         pass
 
     def _parse_latestx(self, payload: "mt_s.LatestXResponse_C", /):
@@ -1262,22 +1261,16 @@ class MS130SubDevice(SensorSubDevice):
         }
         """
         p_data = payload[mc.KEY_DATA]
-        try:
-            self.sensor_light.update_device_value(p_data[mc.KEY_LIGHT][0][mc.KEY_VALUE])
-        except:
-            pass
-        try:
-            self.sensor_temperature.update_device_value(
-                p_data[mc.KEY_TEMP][0][mc.KEY_VALUE]
-            )
-        except:
-            pass
-        try:
-            self.sensor_humidity.update_device_value(
-                p_data[mc.KEY_HUMI][0][mc.KEY_VALUE]
-            )
-        except:
-            pass
+        entity: MLNumericSensor
+        for key, entity in {
+            mc.KEY_LIGHT: self.sensor_light,
+            mc.KEY_TEMP: self.sensor_temperature,
+            mc.KEY_HUMI: self.sensor_humidity,
+        }.items():
+            try:
+                entity.update_device_value(p_data[key][0][mc.KEY_VALUE])
+            except:
+                pass
 
 
 class MS200SubDevice(SensorSubDevice):
