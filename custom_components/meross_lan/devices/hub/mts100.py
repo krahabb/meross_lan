@@ -10,7 +10,7 @@ from ...number import MLConfigNumber
 from ...switch import MLEmulatedSwitch
 
 if TYPE_CHECKING:
-    from . import MTSSubDevice, mt_h
+    from . import SubDevice, mt_h
 
 
 class Mts100Climate(SubDeviceEntity, MtsClimate):
@@ -55,7 +55,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
             ).get(mc.KEY_SCHEDULEUNITTIME, 15)
 
     if TYPE_CHECKING:
-        manager: MTSSubDevice
+        manager: SubDevice
         binary_sensor_window: MLBinarySensor
         switch_patch_hvacaction: MLEmulatedSwitch
 
@@ -91,7 +91,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         "switch_patch_hvacaction",
     )
 
-    def __init__(self, manager: "MTSSubDevice", channel, /):
+    def __init__(self, manager: "SubDevice", channel, /):
         self.extra_state_attributes = {}
         MtsClimate.__init__(self, manager, channel)
         self.binary_sensor_window = MLBinarySensor(
@@ -115,7 +115,9 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
             if _entity.ns in ability:
                 hub.register_parser_entity(_entity)
 
-        hub.register_parser_ex(self, mn_h.Appliance_Hub_Mts100_Mode)
+        hub.register_parser_ex(
+            self, mn_h.Appliance_Hub_Mts100_All, mn_h.Appliance_Hub_Mts100_Mode
+        )
 
     # interface: MtsClimate
     @override

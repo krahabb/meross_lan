@@ -447,24 +447,33 @@ class HubMixin(Device if TYPE_CHECKING else object):
                 raise Exception("Cannot identify subdevice type")
             model = model.lower()
             if model.startswith(mc.TYPE_MTS):
-                return MTSSubDevice(self, p_subdevice, key_digest=model)
-
-            return (
-                subdevice_cls(self, p_subdevice)
-                for subdevice_cls in SubDevice.DIGEST_MAP.values()
-                if subdevice_cls.MODEL == model
-            ).__next__()
+                return SubDevice(
+                    self, p_subdevice, key_digest=model, entity_class=Mts100Climate
+                )
+            else:
+                return SubDevice(
+                    self,
+                    p_subdevice,
+                    entity_class=(
+                        entity_class
+                        for entity_class in SubDeviceEntity.DIGEST_MAP.values()
+                        if entity_class.MODEL == model
+                    ).__next__(),
+                )
 
         if key_digest.lower().startswith(mc.TYPE_MTS):
-            return MTSSubDevice(self, p_subdevice, key_digest=key_digest)
-
+            return SubDevice(
+                self, p_subdevice, key_digest=key_digest, entity_class=Mts100Climate
+            )
         try:
-            return SubDevice.DIGEST_MAP[key_digest](self, p_subdevice)
+            return SubDevice(
+                self, p_subdevice, entity_class=SubDeviceEntity.DIGEST_MAP[key_digest]
+            )
         except KeyError as ke:
             if ke.args[0] != key_digest:
                 raise
             # build something anyway...
-            return SensorSubDevice(self, p_subdevice, key_digest=key_digest)
+            return SubDevice(self, p_subdevice, key_digest=key_digest)
 
 
 class SubDeviceEntity(MLEntity if TYPE_CHECKING else object):
@@ -474,7 +483,37 @@ class SubDeviceEntity(MLEntity if TYPE_CHECKING else object):
     """
 
     if TYPE_CHECKING:
+        MODEL: ClassVar[str | None]
+        """SubDevice model string. This is the commercial name of the subdevice
+        like MTS100, MS100, GS559, ...
+        """
+        KEY_DIGEST: ClassVar[str]
+        """Key in the digest payload identifying this subdevice type. Historically
+        this has often been the same as MODEL but no hard rule enforces this.
+        positive examples are MS100 vs ms100, MTS150 vs mts150, ...
+        negative examples are GS559 vs smokeAlarm, MS400 vs waterLeak, ...
+        """
+        NS_ALL: ClassVar[Namespace | None]
+        """Indicates the 'all' namespace for this subdevice type, if any.
+        Historically subdevices have been using 'Appliance.Hub.Sensor.All' or
+        'Appliance.Hub.Mts100.All' namespaces to report their full state.
+        Newer devices seem to be moving away from this pattern so this property
+        might be None in some subdevice types."""
+        DIGEST_MAP: Final[dict[str, type["SubDeviceEntity"]]]
+
         manager: "SubDevice"
+
+    DIGEST_MAP = {}
+
+    MODEL = None
+    NS_ALL = None
+
+    def __init_subclass__(cls):
+        try:
+            cls.DIGEST_MAP[cls.KEY_DIGEST] = cls
+        except AttributeError:
+            # KEY_DIGEST not defined...we need to allow for intermediate classes
+            pass
 
     def parse_digest(self, payload: "mt_h.Digest_SubDevice", /):
         """Placeholder for digest parsing. This is installed automatically
@@ -563,42 +602,11 @@ class SubDevice(NamespaceParser, mld.BaseDevice):
         # self
         class Args(TypedDict):
             key_digest: NotRequired[str]
-
-        DIGEST_MAP: Final[dict[str, type["SubDevice"]]]
-
-        MODEL: ClassVar[str | None]
-        """SubDevice model string. This is the commercial name of the subdevice
-        like MTS100, MS100, GS559, ...
-        """
-        KEY_DIGEST: ClassVar[str]
-        """Key in the digest payload identifying this subdevice type. Historically
-        this has often been the same as MODEL but no hard rule enforces this.
-        positive examples are MS100 vs ms100, MTS150 vs mts150, ...
-        negative examples are GS559 vs smokeAlarm, MS400 vs waterLeak, ...
-        """
-        NS_ALL: ClassVar[Namespace | None]
-        """Indicates the 'all' namespace for this subdevice type, if any.
-        Historically subdevices have been using 'Appliance.Hub.Sensor.All' or
-        'Appliance.Hub.Mts100.All' namespaces to report their full state.
-        Newer devices seem to be moving away from this pattern so this property
-        might be None in some subdevice types."""
-        MAIN_ENTITY_CLASS: ClassVar[type[SubDeviceEntity]]
+            entity_class: NotRequired[type[SubDeviceEntity]]
 
         model: Final[str]
 
     DEVICE_TYPE = mlc.DeviceType.SUBDEVICE
-
-    DIGEST_MAP = {}
-
-    MODEL = None
-    NS_ALL = None
-
-    def __init_subclass__(cls):
-        try:
-            SubDevice.DIGEST_MAP[cls.KEY_DIGEST] = cls
-        except AttributeError:
-            # KEY_DIGEST not defined...we need to allow for intermediate classes
-            pass
 
     __slots__ = (
         "async_request",
@@ -620,7 +628,15 @@ class SubDevice(NamespaceParser, mld.BaseDevice):
         # these properties are needed to be in place before base class init
         self.manager = hub
         self.channel = id = p_digest[mc.KEY_ID]
-        self.model = model = self.MODEL or kwargs.get("key_digest") or "unknown"
+        try:
+            entity_class = kwargs["entity_class"]  # type: ignore[assignment]
+        except KeyError:
+            entity_class = None
+        self.model = model = (
+            (entity_class and entity_class.MODEL)
+            or kwargs.get("key_digest")
+            or "unknown"
+        )
         super().__init__(
             id,
             api=hub.api,
@@ -633,19 +649,15 @@ class SubDevice(NamespaceParser, mld.BaseDevice):
         )
         self.platforms = hub.platforms
         hub.subdevices[id] = self
-        try:
-            # create the 'main' entity if specified
-            main_parser = self.MAIN_ENTITY_CLASS(self, self.id)
-        except AttributeError as ae:
-            if ae.name != "MAIN_ENTITY_CLASS":
-                raise
-            main_parser = self
-        else:
+        if entity_class is not None:
+            main_parser = entity_class(self, self.id)
             hub.register_parser_entity(main_parser)
+            if main_parser.NS_ALL:
+                hub.register_parser(main_parser, main_parser.NS_ALL)
             self.parse_digest = main_parser.parse_digest
+        else:
+            main_parser = self
 
-        if self.NS_ALL:
-            hub.register_parser(main_parser, self.NS_ALL)
         hub.register_parser_ex(
             main_parser,
             mn_h.Appliance_Config_DeviceCfg,
@@ -720,13 +732,6 @@ class SubDevice(NamespaceParser, mld.BaseDevice):
     @override
     def _get_internal_name(self) -> str:
         return get_productnameuuid(self.model, self.id)
-
-    @override
-    def _set_online(self):
-        mld.BaseDevice._set_online(self)
-        # force a re-poll even on MQTT
-        if self.NS_ALL:
-            self.ns_handlers[self.NS_ALL].polling_epoch_next = 0.0
 
     # interface: self
     def update_sub_device_info(self, sub_device_info: "SubDeviceInfoType", /):
@@ -948,349 +953,326 @@ class SubDevice(NamespaceParser, mld.BaseDevice):
             )
 
 
-class MTSSubDevice(SubDevice):
-    """Common class for any mts-like subdevice (mts100, mts150, mts150p, ...)."""
-
-    NS_ALL = mn_h.Appliance_Hub_Mts100_All
-    KEY_DIGEST = mc.TYPE_MTS  # just for syntax
-
-    # TODO: this lame import is to be later refactored to use lazy imports
-    # whenever subdevices appear in the code.
-    from .mts100 import Mts100Climate as MAIN_ENTITY_CLASS
+# TODO: this lame import is to be later refactored to use lazy imports
+# whenever subdevices appear in the code.
+from .mts100 import Mts100Climate
 
 
-class SensorSubDevice(SubDevice):
-    """
-    Common class for any sensor-like subdevice (ms100, ms120, ms130, ...).
-    """
-
-    NS_ALL = mn_h.Appliance_Hub_Sensor_All
-
-
-class GS559SubDevice(SensorSubDevice):
-
-    class SmokeAlarmSensor(SubDeviceEntity, MLEnumSensor):
-        if TYPE_CHECKING:
-            STATUS_MAP: Final
-            MUTE_MAP: Final
-            STATUS_ALARM: Final[set[int]]
-            STATUS_ERROR: Final[set[int]]
-            STATUS_MUTED: Final[set[int]]
-
-        ENTITY_KEY = mc.KEY_STATUS
-        ns = mn_h.Appliance_Hub_Sensor_Smoke
-        key_value = mc.KEY_STATUS
-
-        STATUS_MAP = {
-            17: "error_temperature",
-            18: "error_smoke",
-            19: "error_battery",
-            20: "error_temperature",
-            21: "error_smoke",
-            22: "error_battery",
-            23: "alarm_test",
-            24: "alarm_temperature_high",
-            25: "alarm_smoke",
-            26: "alarm_temperature_high",
-            27: "alarm_smoke",
-            170: "ok",
-        }
-        MUTE_MAP = {17: 20, 18: 21, 19: 22, 24: 26, 25: 27, None: 170}
-        STATUS_ALARM = {23, 24, 25, 26, 27}
-        STATUS_ERROR = {17, 18, 19, 20, 21, 22}
-        STATUS_MUTED = {20, 21, 22, 26, 27}
-
-        __slots__ = (
-            "binary_sensor_alarm",
-            "binary_sensor_error",
-            "binary_sensor_muted",
-            "sensor_interConn",
-        )
-
-        def __init__(self, manager: SubDevice, channel):
-            self.device_value = (
-                None  # TODO: move to MLEnumSensor together with mapping capability
-            )
-            super().__init__(
-                manager, channel, mc.KEY_STATUS, translation_key="smoke_alarm_status"
-            )
-            self.binary_sensor_alarm = MLBinarySensor(
-                manager,
-                channel,
-                mc.KEY_ALARM,
-                device_class=MLBinarySensor.DeviceClass.SAFETY,
-            )
-            self.binary_sensor_error = MLBinarySensor(
-                manager,
-                channel,
-                mc.KEY_ERROR,
-                device_class=MLBinarySensor.DeviceClass.PROBLEM,
-            )
-            self.binary_sensor_muted = MLBinarySensor(manager, channel, "muted")
-            self.sensor_interConn = MLEnumSensor(manager, channel, mc.KEY_INTERCONN)
-            MLButton(manager, channel, "button_mute", self.async_mute, name="Mute")
-            MLButton(manager, channel, "button_test", self.async_test, name="Test")
-
-        def _parse_smokeAlarm(self, payload: dict, /):
-            self.device_value = value = payload[mc.KEY_STATUS]
-            self.update_native_value(self.STATUS_MAP.get(value, value))
-            self.binary_sensor_alarm.update_native_value(value in self.STATUS_ALARM)
-            self.binary_sensor_error.update_native_value(value in self.STATUS_ERROR)
-            self.binary_sensor_muted.update_native_value(value in self.STATUS_MUTED)
-            try:
-                self.sensor_interConn.update_native_value(payload[mc.KEY_INTERCONN])
-            except KeyError:
-                pass
-
-        async def async_shutdown(self):
-            await super().async_shutdown()
-            del self.binary_sensor_muted
-            del self.binary_sensor_error
-            del self.binary_sensor_alarm
-            del self.sensor_interConn
-
-        async def async_mute(self, /):
-            try:
-                await self.async_request_payload(
-                    {
-                        mc.KEY_STATUS: self.MUTE_MAP.get(self.device_value, 170),
-                    }
-                )
-            except KeyError as e:
-                # in case the state is not present in the MUTE_MAP (i.e. not mutable)
-                self.log_exception(self.DEBUG, e, "trying to send mute command")
-
-        async def async_test(self, /):
-            await self.async_request_payload({mc.KEY_STATUS: 23})
+class SmokeAlarmSensor(SubDeviceEntity, MLEnumSensor):
+    if TYPE_CHECKING:
+        STATUS_MAP: Final
+        MUTE_MAP: Final
+        STATUS_ALARM: Final[set[int]]
+        STATUS_ERROR: Final[set[int]]
+        STATUS_MUTED: Final[set[int]]
 
     MODEL = mc.TYPE_GS559
     KEY_DIGEST = mc.KEY_SMOKEALARM
-    MAIN_ENTITY_CLASS = SmokeAlarmSensor
+    NS_ALL = mn_h.Appliance_Hub_Sensor_All
 
+    ENTITY_KEY = mc.KEY_STATUS
+    ns = mn_h.Appliance_Hub_Sensor_Smoke
+    key_value = mc.KEY_STATUS
 
-class MS100SubDevice(SensorSubDevice):
+    STATUS_MAP = {
+        17: "error_temperature",
+        18: "error_smoke",
+        19: "error_battery",
+        20: "error_temperature",
+        21: "error_smoke",
+        22: "error_battery",
+        23: "alarm_test",
+        24: "alarm_temperature_high",
+        25: "alarm_smoke",
+        26: "alarm_temperature_high",
+        27: "alarm_smoke",
+        170: "ok",
+    }
+    MUTE_MAP = {17: 20, 18: 21, 19: 22, 24: 26, 25: 27, None: 170}
+    STATUS_ALARM = {23, 24, 25, 26, 27}
+    STATUS_ERROR = {17, 18, 19, 20, 21, 22}
+    STATUS_MUTED = {20, 21, 22, 26, 27}
 
-    class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
+    __slots__ = (
+        "binary_sensor_alarm",
+        "binary_sensor_error",
+        "binary_sensor_muted",
+        "sensor_interConn",
+    )
 
-        ns = mn_h.Appliance_Hub_Sensor_TempHum
+    def __init__(self, manager: SubDevice, channel):
+        self.device_value = (
+            None  # TODO: move to MLEnumSensor together with mapping capability
+        )
+        super().__init__(
+            manager, channel, mc.KEY_STATUS, translation_key="smoke_alarm_status"
+        )
+        self.binary_sensor_alarm = MLBinarySensor(
+            manager,
+            channel,
+            mc.KEY_ALARM,
+            device_class=MLBinarySensor.DeviceClass.SAFETY,
+        )
+        self.binary_sensor_error = MLBinarySensor(
+            manager,
+            channel,
+            mc.KEY_ERROR,
+            device_class=MLBinarySensor.DeviceClass.PROBLEM,
+        )
+        self.binary_sensor_muted = MLBinarySensor(manager, channel, "muted")
+        self.sensor_interConn = MLEnumSensor(manager, channel, mc.KEY_INTERCONN)
+        MLButton(manager, channel, "button_mute", self.async_mute, name="Mute")
+        MLButton(manager, channel, "button_test", self.async_test, name="Test")
 
-        _attr_device_scale = 10
+    def _parse_smokeAlarm(self, payload: dict, /):
+        self.device_value = value = payload[mc.KEY_STATUS]
+        self.update_native_value(self.STATUS_MAP.get(value, value))
+        self.binary_sensor_alarm.update_native_value(value in self.STATUS_ALARM)
+        self.binary_sensor_error.update_native_value(value in self.STATUS_ERROR)
+        self.binary_sensor_muted.update_native_value(value in self.STATUS_MUTED)
+        try:
+            self.sensor_interConn.update_native_value(payload[mc.KEY_INTERCONN])
+        except KeyError:
+            pass
 
-        __slots__ = ("sensor_humidity",)
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        del self.binary_sensor_muted
+        del self.binary_sensor_error
+        del self.binary_sensor_alarm
+        del self.sensor_interConn
 
-        def __init__(self, manager: SubDevice, channel: str):
-            super().__init__(manager, channel)
-            self.sensor_humidity = MLHumiditySensor(manager, channel)
-            manager.manager.register_parser_ex(
-                self, mn_h.Appliance_Hub_Sensor_Adjust, mn_h.Appliance_Hub_Sensor_Latest
+    async def async_mute(self, /):
+        try:
+            await self.async_request_payload(
+                {
+                    mc.KEY_STATUS: self.MUTE_MAP.get(self.device_value, 170),
+                }
             )
+        except KeyError as e:
+            # in case the state is not present in the MUTE_MAP (i.e. not mutable)
+            self.log_exception(self.DEBUG, e, "trying to send mute command")
 
-        async def async_shutdown(self):
-            await super().async_shutdown()
-            del self.sensor_humidity
+    async def async_test(self, /):
+        await self.async_request_payload({mc.KEY_STATUS: 23})
 
-        @override
-        def parse_digest(self, payload: "mt_h.Digest_ms100", /):
-            manager = self.manager
-            manager._parse_online(payload)
-            if manager.online:
-                digest = payload[manager.KEY_DIGEST]
-                self._update_sensors(
-                    digest[mc.KEY_LATESTTEMPERATURE], digest[mc.KEY_LATESTHUMIDITY]
-                )
 
-        def _parse_adjust(self, payload: "mt_h.Sensor_Adjust"):
-            manager = self.manager
-            manager.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
-                self,
-                HubSensorAdjustNumber(
-                    manager,
-                    mc.KEY_TEMPERATURE,
-                    HubSensorAdjustNumber.DeviceClass.TEMPERATURE,
-                    -5,
-                    5,
-                    0.1,
-                    payload[mc.KEY_TEMPERATURE],
-                ),
-                HubSensorAdjustNumber(
-                    manager,
-                    mc.KEY_HUMIDITY,
-                    HubSensorAdjustNumber.DeviceClass.HUMIDITY,
-                    -20,
-                    20,
-                    1,
-                    payload[mc.KEY_HUMIDITY],
-                ),
-            )
-
-        def _parse_all(self, payload: "mt_h.Sensor_All_ms100", /):
-            self.manager._parse_online(payload[mc.KEY_ONLINE])
-            if self.available:
-                self._update_sensors(
-                    payload[mc.KEY_TEMPERATURE][mc.KEY_LATEST],
-                    payload[mc.KEY_HUMIDITY][mc.KEY_LATEST],
-                )
-
-        def _parse_latest(self, payload: "mt_h.Sensor_Latest"):
-            self._update_sensors(
-                payload[mc.KEY_TEMPERATURE]["sample"],
-                payload[mc.KEY_HUMIDITY]["sample"],
-            )
-
-        def _parse_tempHum(self, payload: "mt_h.Sensor_TempHum"):
-            self._update_sensors(
-                payload[mc.KEY_LATESTTEMPERATURE], payload[mc.KEY_LATESTHUMIDITY]
-            )
-
-        def _update_sensors(self, temperature: int, humidity: int):
-            self.update_device_value(temperature)
-            self.sensor_humidity.update_device_value(humidity)
-
-        def _update_sensors_adjust(self, temperature: int, humidity: int):
-            # when a temp/hum reading changes we're smartly requesting
-            # the adjust sooner than scheduled in case the change
-            # was due to an adjustment. This method is dynamically installed
-            # by _parse_adjust when we have confirtmation that ns_adjust is
-            # delivering for this device.
-            _poll_adjust = bool(self.update_device_value(temperature))
-            _poll_adjust |= bool(self.sensor_humidity.update_device_value(humidity))
-            if _poll_adjust:
-                handler = self.manager.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust]
-                if handler.lastrequest < (self.manager.manager.lastresponse - 30):
-                    handler.polling_epoch_next = 0.0
+class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
 
     MODEL = mc.TYPE_MS100
     KEY_DIGEST = mc.TYPE_MS100
-    MAIN_ENTITY_CLASS = MS100Sensor
+
+    ns = mn_h.Appliance_Hub_Sensor_TempHum
+
+    _attr_device_scale = 10
+
+    __slots__ = ("sensor_humidity",)
+
+    def __init__(self, manager: SubDevice, channel: str):
+        super().__init__(manager, channel)
+        self.sensor_humidity = MLHumiditySensor(manager, channel)
+        manager.manager.register_parser_ex(
+            self,
+            mn_h.Appliance_Hub_Sensor_All,
+            mn_h.Appliance_Hub_Sensor_Adjust,
+            mn_h.Appliance_Hub_Sensor_Latest,
+        )
+
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        del self.sensor_humidity
+
+    @override
+    def parse_digest(self, payload: "mt_h.Digest_ms100", /):
+        manager = self.manager
+        manager._parse_online(payload)
+        if manager.online:
+            digest = payload[self.KEY_DIGEST]
+            self._update_sensors(
+                digest[mc.KEY_LATESTTEMPERATURE], digest[mc.KEY_LATESTHUMIDITY]
+            )
+
+    def _parse_adjust(self, payload: "mt_h.Sensor_Adjust"):
+        manager = self.manager
+        manager.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
+            self,
+            HubSensorAdjustNumber(
+                manager,
+                mc.KEY_TEMPERATURE,
+                HubSensorAdjustNumber.DeviceClass.TEMPERATURE,
+                -5,
+                5,
+                0.1,
+                payload[mc.KEY_TEMPERATURE],
+            ),
+            HubSensorAdjustNumber(
+                manager,
+                mc.KEY_HUMIDITY,
+                HubSensorAdjustNumber.DeviceClass.HUMIDITY,
+                -20,
+                20,
+                1,
+                payload[mc.KEY_HUMIDITY],
+            ),
+        )
+
+    def _parse_all(self, payload: "mt_h.Sensor_All_ms100", /):
+        self.manager._parse_online(payload[mc.KEY_ONLINE])
+        if self.available:
+            self._update_sensors(
+                payload[mc.KEY_TEMPERATURE][mc.KEY_LATEST],
+                payload[mc.KEY_HUMIDITY][mc.KEY_LATEST],
+            )
+
+    def _parse_latest(self, payload: "mt_h.Sensor_Latest"):
+        self._update_sensors(
+            payload[mc.KEY_TEMPERATURE]["sample"],
+            payload[mc.KEY_HUMIDITY]["sample"],
+        )
+
+    def _parse_tempHum(self, payload: "mt_h.Sensor_TempHum"):
+        self._update_sensors(
+            payload[mc.KEY_LATESTTEMPERATURE], payload[mc.KEY_LATESTHUMIDITY]
+        )
+
+    def _update_sensors(self, temperature: int, humidity: int):
+        self.update_device_value(temperature)
+        self.sensor_humidity.update_device_value(humidity)
+
+    def _update_sensors_adjust(self, temperature: int, humidity: int):
+        # when a temp/hum reading changes we're smartly requesting
+        # the adjust sooner than scheduled in case the change
+        # was due to an adjustment. This method is dynamically installed
+        # by _parse_adjust when we have confirtmation that ns_adjust is
+        # delivering for this device.
+        _poll_adjust = bool(self.update_device_value(temperature))
+        _poll_adjust |= bool(self.sensor_humidity.update_device_value(humidity))
+        if _poll_adjust:
+            handler = self.manager.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust]
+            if handler.lastrequest < (self.manager.manager.lastresponse - 30):
+                handler.polling_epoch_next = 0.0
 
 
-class MS100FSubDevice(MS100SubDevice):
+class MS100FSensor(MS100Sensor):
     """A variant of MS100SubDevice for the MS100FH device"""
 
     MODEL = mc.TYPE_MS100F
     KEY_DIGEST = mc.KEY_TEMPHUM
 
 
-class MS130SubDevice(MS100SubDevice):
-
-    class MS130Sensor(MS100SubDevice.MS100Sensor):
-
-        _attr_device_scale = 100
-
-        __slots__ = ("sensor_light",)
-
-        def __init__(self, manager: SubDevice, channel):
-            super().__init__(manager, channel)
-            self.sensor_light = MLLightSensor(manager, channel)
-            manager.manager.register_parser_subid(
-                self,
-                mn_h.Appliance_Control_Sensor_LatestX,
-                extra={"channel": 0, "data": ["light", "temp", "humi"]},
-            )
-
-        async def async_shutdown(self):
-            await super().async_shutdown()
-            del self.sensor_light
-
-        @override
-        def parse_digest(self, payload: "mt_h.Digest_ms130", /):
-            manager = self.manager
-            manager._parse_online(payload)
-            if manager.online:
-                digest = payload[mc.KEY_TEMPHUMI]
-                self._update_sensors(digest[mc.KEY_TEMP], digest[mc.KEY_HUMI])
-
-        @override
-        def _parse_deviceCfg(self, payload: "mt_h.SubIdPayload", /):
-            """TODO: implement entities
-            {
-                "calibrateCfg": {
-                "temp": 0,
-                "humi": 0
-                },
-                "timeCfg": {
-                "am": 2
-                },
-                "ms130Cfg": {
-                "bl": {
-                    "bri": 2,
-                    "lv": 4,
-                    "sleep": 10
-                }
-                },
-                "channel": 0,
-                "subId": "1A00694ACBC7",
-                "unitCfg": {
-                "tempUnit": 1  # 1 °C - 2 °F
-                }
-            }
-            """
-            pass
-
-        def _parse_latestx(self, payload: "mt_s.LatestXResponse_C", /):
-            """parser for Appliance.Control.Sensor.LatestX:
-            {
-                "latest": [
-                    {
-                        "data": {
-                            "light": [{"value": 220, "timestamp": 1722349685}],
-                            "temp": [{"value": 2134, "timestamp": 1722349685}],
-                            "humi": [{"value": 670, "timestamp": 1722349685}],
-                        },
-                        "channel": 0,
-                        "subId": "1A00694ACBC7",
-                    }
-                ]
-            }
-            """
-            p_data = payload[mc.KEY_DATA]
-            entity: MLNumericSensor
-            for key, entity in {
-                mc.KEY_TEMP: self,
-                mc.KEY_HUMI: self.sensor_humidity,
-                mc.KEY_LIGHT: self.sensor_light,
-            }.items():
-                try:
-                    entity.update_device_value(p_data[key][0][mc.KEY_VALUE])
-                except:
-                    pass
-
+class MS130Sensor(MS100Sensor):
     MODEL = mc.TYPE_MS130
     KEY_DIGEST = mc.KEY_TEMPHUMI
-    MAIN_ENTITY_CLASS = MS130Sensor
+
+    _attr_device_scale = 100
+
+    __slots__ = ("sensor_light",)
+
+    def __init__(self, manager: SubDevice, channel):
+        super().__init__(manager, channel)
+        self.sensor_light = MLLightSensor(manager, channel)
+        manager.manager.register_parser_subid(
+            self,
+            mn_h.Appliance_Control_Sensor_LatestX,
+            extra={"channel": 0, "data": ["light", "temp", "humi"]},
+        )
+
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        del self.sensor_light
+
+    @override
+    def parse_digest(self, payload: "mt_h.Digest_ms130", /):
+        manager = self.manager
+        manager._parse_online(payload)
+        if manager.online:
+            digest = payload[mc.KEY_TEMPHUMI]
+            self._update_sensors(digest[mc.KEY_TEMP], digest[mc.KEY_HUMI])
+
+    @override
+    def _parse_deviceCfg(self, payload: "mt_h.SubIdPayload", /):
+        """TODO: implement entities
+        {
+            "calibrateCfg": {
+            "temp": 0,
+            "humi": 0
+            },
+            "timeCfg": {
+            "am": 2
+            },
+            "ms130Cfg": {
+            "bl": {
+                "bri": 2,
+                "lv": 4,
+                "sleep": 10
+            }
+            },
+            "channel": 0,
+            "subId": "1A00694ACBC7",
+            "unitCfg": {
+            "tempUnit": 1  # 1 °C - 2 °F
+            }
+        }
+        """
+        pass
+
+    def _parse_latestx(self, payload: "mt_s.LatestXResponse_C", /):
+        """parser for Appliance.Control.Sensor.LatestX:
+        {
+            "latest": [
+                {
+                    "data": {
+                        "light": [{"value": 220, "timestamp": 1722349685}],
+                        "temp": [{"value": 2134, "timestamp": 1722349685}],
+                        "humi": [{"value": 670, "timestamp": 1722349685}],
+                    },
+                    "channel": 0,
+                    "subId": "1A00694ACBC7",
+                }
+            ]
+        }
+        """
+        p_data = payload[mc.KEY_DATA]
+        entity: MLNumericSensor
+        for key, entity in {
+            mc.KEY_TEMP: self,
+            mc.KEY_HUMI: self.sensor_humidity,
+            mc.KEY_LIGHT: self.sensor_light,
+        }.items():
+            try:
+                entity.update_device_value(p_data[key][0][mc.KEY_VALUE])
+            except:
+                pass
 
 
-class MS200SubDevice(SensorSubDevice):
-
-    class DoorWindowSensor(SubDeviceEntity, MLBinarySensor):
-        ENTITY_KEY = MLBinarySensor.DeviceClass.WINDOW
-        ns = mn_h.Appliance_Hub_Sensor_DoorWindow
-        key_value = mc.KEY_STATUS
-
-        _attr_device_class = MLBinarySensor.DeviceClass.WINDOW
-
-        _parse_doorWindow = MLBinarySensor._parse
-
+class DoorWindowSensor(SubDeviceEntity, MLBinarySensor):
     MODEL = mc.TYPE_MS200
     KEY_DIGEST = mc.KEY_DOORWINDOW
-    MAIN_ENTITY_CLASS = DoorWindowSensor
+    NS_ALL = mn_h.Appliance_Hub_Sensor_All
+
+    ENTITY_KEY = MLBinarySensor.DeviceClass.WINDOW
+    ns = mn_h.Appliance_Hub_Sensor_DoorWindow
+    key_value = mc.KEY_STATUS
+
+    _attr_device_class = MLBinarySensor.DeviceClass.WINDOW
+
+    _parse_doorWindow = MLBinarySensor._parse
 
 
-class MS400SubDevice(SensorSubDevice):
-
-    class WaterLeakSensor(SubDeviceEntity, MLBinarySensor):
-        ENTITY_KEY = mc.KEY_WATERLEAK
-        ns = mn_h.Appliance_Hub_Sensor_WaterLeak
-        key_value = mc.KEY_LATESTWATERLEAK
-
-        _attr_device_class = MLBinarySensor.DeviceClass.SAFETY
-
+class WaterLeakSensor(SubDeviceEntity, MLBinarySensor):
     MODEL = mc.TYPE_MS400
     KEY_DIGEST = mc.KEY_WATERLEAK
-    MAIN_ENTITY_CLASS = WaterLeakSensor
+    NS_ALL = mn_h.Appliance_Hub_Sensor_All
+
+    ENTITY_KEY = mc.KEY_WATERLEAK
+    ns = mn_h.Appliance_Hub_Sensor_WaterLeak
+    key_value = mc.KEY_LATESTWATERLEAK
+
+    _attr_device_class = MLBinarySensor.DeviceClass.SAFETY
 
 
-class MST100SubDevice(SubDevice):
+class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, MLSwitch):
+    """Switch to turn on/off the MST valve."""
 
     if TYPE_CHECKING:
         # Appliance.Config.DeviceCfg payload structure
@@ -1302,10 +1284,10 @@ class MST100SubDevice(SubDevice):
         class DeviceCfg_mstCfg(TypedDict):
             dura: int  # duration of watering in seconds
             wfm: int  # water flow measurement
-            calibration: "MST100SubDevice.DeviceCfg_mstCfg_calibration"
+            calibration: "MstSwitch.DeviceCfg_mstCfg_calibration"
 
         class DeviceCfg(mt_h.SubIdPayload):
-            mstCfg: "MST100SubDevice.DeviceCfg_mstCfg"
+            mstCfg: "MstSwitch.DeviceCfg_mstCfg"
 
         # Appliance.Control.Water payload structure
         class Water(mt_h.SubIdPayload):
@@ -1325,41 +1307,37 @@ class MST100SubDevice(SubDevice):
         native_max_value = 86400  # 1 day max duration (no real info just guessing)
         native_min_value = 1
 
-    class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, MLSwitch):
-        """Switch to turn on/off the MST valve."""
-
-        ENTITY_KEY = mc.KEY_ONOFF
-        ns = mn_h.Appliance_Control_Water
-        native_on = 1
-        native_off = 2
-
-        # TODO: define _attr_name in MLEntity base class
-
-        __slots__ = ("number_duration",)
-
-        def __init__(self, manager, channel):
-            super().__init__(manager, channel, mc.KEY_ONOFF, name="Watering")
-            self.number_duration = MST100SubDevice.WateringDurationNumber(
-                manager,
-                channel,
-                mc.KEY_DURATION,
-                name="Watering duration",
-            )
-
-        async def async_shutdown(self):
-            await super().async_shutdown()
-            del self.number_duration
-
-        @override
-        def _parse_deviceCfg(self, payload: "MST100SubDevice.DeviceCfg", /):
-            self.number_duration._parse(payload)
-
-        def _parse_water(self, payload: "MST100SubDevice.Water", /):
-            self.update_device_value(payload[mc.KEY_ONOFF])
-
     MODEL = mc.TYPE_MST100
     KEY_DIGEST = mc.KEY_MST
-    MAIN_ENTITY_CLASS = MstSwitch
+
+    ENTITY_KEY = mc.KEY_ONOFF
+    ns = mn_h.Appliance_Control_Water
+    native_on = 1
+    native_off = 2
+
+    # TODO: define _attr_name in MLEntity base class
+
+    __slots__ = ("number_duration",)
+
+    def __init__(self, manager, channel):
+        super().__init__(manager, channel, mc.KEY_ONOFF, name="Watering")
+        self.number_duration = MstSwitch.WateringDurationNumber(
+            manager,
+            channel,
+            mc.KEY_DURATION,
+            name="Watering duration",
+        )
+
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        del self.number_duration
+
+    @override
+    def _parse_deviceCfg(self, payload: "DeviceCfg", /):
+        self.number_duration._parse(payload)
+
+    def _parse_water(self, payload: "Water", /):
+        self.update_device_value(payload[mc.KEY_ONOFF])
 
 
 def digest_init_hub(device: "HubMixin", digest, /) -> "DigestInitReturnType":

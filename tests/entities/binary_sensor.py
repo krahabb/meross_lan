@@ -1,7 +1,7 @@
 from homeassistant.components import binary_sensor as haec
 
 from custom_components.meross_lan.binary_sensor import MLBinarySensor
-from custom_components.meross_lan.devices.hub import MS200SubDevice, MS400SubDevice
+from custom_components.meross_lan.devices.hub import DoorWindowSensor, WaterLeakSensor
 from custom_components.meross_lan.devices.thermostat.mts960 import Mts960Climate
 from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
     MtsWarningSensor,
@@ -37,13 +37,13 @@ class EntityTest(EntityComponentTest):
         mc.TYPE_MTS100: [MLBinarySensor],  # window opened
         mc.TYPE_MTS100V3: [MLBinarySensor],  # window opened
         mc.TYPE_MTS150: [MLBinarySensor],  # window opened
-        mc.KEY_DOORWINDOW: [MS200SubDevice.DoorWindowSensor],
+        mc.KEY_DOORWINDOW: [DoorWindowSensor],
         mc.KEY_SMOKEALARM: [
             MLBinarySensor,  # alarm
             MLBinarySensor,  # error
             MLBinarySensor,  # muted
         ],
-        mc.KEY_WATERLEAK: [MS400SubDevice.WaterLeakSensor],
+        mc.KEY_WATERLEAK: [WaterLeakSensor],
     }
 
     async def async_test_enabled_callback(self, entity):

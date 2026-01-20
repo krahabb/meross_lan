@@ -6,7 +6,7 @@ from custom_components.meross_lan.devices.garagedoor import (
 )
 from custom_components.meross_lan.devices.hub import (
     HubSensorAdjustNumber,
-    MST100SubDevice,
+    MstSwitch,
 )
 from custom_components.meross_lan.devices.hub.mts100 import Mts100Climate
 from custom_components.meross_lan.devices.ms600 import (
@@ -93,7 +93,7 @@ class EntityTest(EntityComponentTest):
         mc.TYPE_MTS100: _MTS100_ENTITES,
         mc.TYPE_MTS100V3: _MTS100_ENTITES,
         mc.TYPE_MTS150: _MTS100_ENTITES,
-        mc.KEY_MST: [MST100SubDevice.WateringDurationNumber],
+        mc.KEY_MST: [MstSwitch.WateringDurationNumber],
     }
 
     async def async_test_each_callback(self, entity: MLNumber):

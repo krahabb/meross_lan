@@ -1,7 +1,7 @@
 from homeassistant.components import switch as haec
 from homeassistant.helpers.entity import STATE_OFF, STATE_ON
 
-from custom_components.meross_lan.devices.hub import HubBeep, MST100SubDevice
+from custom_components.meross_lan.devices.hub import HubBeep, MstSwitch
 from custom_components.meross_lan.devices.mss import OverTempEnableSwitch
 from custom_components.meross_lan.devices.rollershutter import (
     MLRollerShutterAdjustSwitch,
@@ -53,7 +53,7 @@ class EntityTest(EntityComponentTest):
         mc.TYPE_MTS100V3: [MLEmulatedSwitch],
         mc.TYPE_MTS150: [MLEmulatedSwitch, HubBeep],
         mc.KEY_DOORWINDOW: [HubBeep],
-        mc.KEY_MST: [MST100SubDevice.MstSwitch],
+        mc.KEY_MST: [MstSwitch],
         mc.KEY_WATERLEAK: [HubBeep],
     }
 
