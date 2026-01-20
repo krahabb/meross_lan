@@ -4,7 +4,7 @@ We also try to 'commonize' HA core symbols import in order to better manage
 versioning
 """
 
-from functools import partial
+from functools import cached_property, partial
 from typing import TYPE_CHECKING, final, override
 
 try:
@@ -124,7 +124,6 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         entity_registry_enabled_default: bool
         name: str | None
         suggested_object_id: str | None
-        unique_id: str
 
     class EntityDef[_T: MLEntity]:
         """Descriptor class used when populating maps used to dynamically instantiate (sensor)
@@ -197,7 +196,6 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         "entity_registry_enabled_default",
         "name",
         "suggested_object_id",
-        "unique_id",
     )
 
     def __init__(
@@ -281,9 +279,6 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
             name = f"{name} {channel}" if name else str(channel)
         self.suggested_object_id = self.name = name
 
-        # by default all of our entities have unique_id so they're registered
-        # there could be some exceptions though (MLUpdate)
-        self.unique_id = self._generate_unique_id()
         # some attributes can be set via kwargs
         for _attr_name, _attr_value in kwargs.items():
             setattr(self, _attr_name, _attr_value)
@@ -294,6 +289,10 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
             async_add_devices([self])
 
     # interface: Entity
+    @cached_property
+    def unique_id(self) -> str | None:
+        return self.manager.generate_unique_id(self)
+
     async def async_added_to_hass(self):
         self.log(self.VERBOSE, "Added to HomeAssistant")
         self.hass_connected = True  # type: ignore
@@ -367,9 +366,6 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
                 ):
                     return state
         return None
-
-    def _generate_unique_id(self):
-        return self.manager.generate_unique_id(self)
 
     # TODO: move to a subclass kind of MLDeviceEntity
     # interface: device communication

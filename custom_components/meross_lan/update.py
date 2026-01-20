@@ -51,6 +51,7 @@ class MLUpdate(me.MEPartialAvailableMixin, me.MLEntity, update.UpdateEntity):
     def __init__(self, manager: "BaseDevice"):
         self.supported_features = self._attr_supported_features
         self.title = manager.name
+        self.unique_id = None
         self.installed_version, self.latest_version, self.release_summary = (
             manager.get_upgrade_info()
         )
@@ -61,10 +62,6 @@ class MLUpdate(me.MEPartialAvailableMixin, me.MLEntity, update.UpdateEntity):
             self.manager.get_upgrade_info()
         )
         self.flush_state()
-
-    @override
-    def _generate_unique_id(self):
-        return None
 
     @override
     async def async_install(self, version: str | None, backup: bool, **kwargs):
