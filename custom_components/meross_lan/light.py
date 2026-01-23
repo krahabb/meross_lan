@@ -459,8 +459,7 @@ class MLLight(MLLightBase):
         # also (issue #218) the newer mss560-570 dimmer switches are implemented as 'light' devices with ToggleX
         # api and show a glitch when used this way (ToggleX + Light)
         # State-of-the-art is now to auto-detect (when booting the entity) what is the behavior
-        descriptor = manager.descriptor
-        ability = descriptor.ability
+        ability = manager.descriptor.ability
 
         capacity = ability[mn.Appliance_Control_Light].get(
             mc.KEY_CAPACITY, mc.LIGHT_CAPACITY_LUMINANCE

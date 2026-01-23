@@ -25,7 +25,7 @@ from ..merossclient.mqttclient import MerossMQTTAppClient
 from ..merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
-    from typing import Final, Iterable, NotRequired, Sequence, TypedDict, Unpack
+    from typing import Final, Literal, NotRequired, TypedDict
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -76,20 +76,20 @@ class MerossMQTTConnection(mlq.MQTTConnection, MerossMQTTAppClient):
     # "forbidden" slots
 
     if TYPE_CHECKING:
-        is_cloud_connection: Final[bool]
+        is_cloud_connection: Final[Literal[True]]
 
     __slots__ = MerossMQTTAppClient._calc_slots("_unsub_random_disconnect")
 
     def __init__(self, profile: "MerossProfile", broker: "HostAddress"):
+        self.is_cloud_connection = True
         MerossMQTTAppClient.__init__(
             self,
             key=profile.key,
             app_id=profile.app_id,
             user_id=profile.userid,
-            loop=profile.hass.loop,
+            loop=profile.api.hass.loop,
             sslcontext=get_default_ssl_context(),
         )
-        self.is_cloud_connection = True
         mlq.MQTTConnection.__init__(self, profile, broker, self.topic_command)
 
         if MEROSSDEBUG:
@@ -127,7 +127,9 @@ class MerossMQTTConnection(mlq.MQTTConnection, MerossMQTTAppClient):
 
     @override
     async def _async_mqtt_publish(self, request: "MerossMessage"):
-        return await self.profile.hass.async_add_executor_job(self.rl_publish, request)
+        return await self.profile.api.hass.async_add_executor_job(
+            self.rl_publish, request
+        )
 
     @callback
     def _mqtt_connected(self):
@@ -184,8 +186,6 @@ class MerossProfile(mlq.MQTTProfile):
     """
 
     if TYPE_CHECKING:
-        is_cloud_profile: Final[bool]
-        config: ProfileConfigType
 
         KEY_APP_ID: Final
         KEY_DEVICE_INFO: Final
@@ -197,6 +197,10 @@ class MerossProfile(mlq.MQTTProfile):
 
         _data: MerossProfileStoreType
         _unsub_polling_query_device_info: asyncio.TimerHandle | None
+
+        # Overrides
+        config: ProfileConfigType
+        is_cloud_profile: Final[Literal[True]]
 
     KEY_APP_ID = "appId"
     KEY_DEVICE_INFO = "deviceInfo"
@@ -215,13 +219,9 @@ class MerossProfile(mlq.MQTTProfile):
         "_device_info_time",
     )
 
-    def __init__(
-        self, profile_id: str, api: "ComponentApi", config_entry: "ConfigEntry"
-    ):
+    def __init__(self, api: "ComponentApi", id: str, config_entry: "ConfigEntry", /):
         self.is_cloud_profile = True
-        mlq.MQTTProfile.__init__(
-            self, profile_id, api=api, hass=api.hass, config_entry=config_entry
-        )
+        mlq.MQTTProfile.__init__(self, api, id, config_entry)
         # state of the art for credentials is that they're mixed in
         # into the config_entry.data but this is prone to issues and confusing
         # so we 'might' decide to move them to a dict valued key in configentry.data
@@ -231,7 +231,7 @@ class MerossProfile(mlq.MQTTProfile):
         # to change the version(s) in storage/config. At the moment I'm still very confused
         # and opting to keep the credentials where they are embedded in ConfigEntry
         self.apiclient = mlm.CloudApiClient(self, self.config)
-        self._store = MerossProfileStore(self.hass, profile_id)
+        self._store = MerossProfileStore(api.hass, id)
         self._unsub_polling_query_device_info = None
 
     async def async_init(self):
@@ -422,7 +422,7 @@ class MerossProfile(mlq.MQTTProfile):
                 exception,
                 "attach_mqtt for device uuid:%s (%s)",
                 self.loggable_device_id(device.id),
-                device.name,
+                device.display_name,
             )
             try:
                 # fallback if we have the KEY_MQTTDOMAIN
@@ -540,7 +540,7 @@ class MerossProfile(mlq.MQTTProfile):
                 profile_config = dict(profile_entry.data)
                 profile_config.update(credentials)
                 # watchout: this will in turn call self.entry_update_listener
-                self.hass.config_entries.async_update_entry(
+                self.api.hass.config_entries.async_update_entry(
                     profile_entry,
                     data=profile_config,
                 )

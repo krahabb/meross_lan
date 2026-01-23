@@ -44,7 +44,7 @@ class Mts300Climate(MtsThermostatClimate):
                 self.number_calibration_humi = MLConfigNumber(
                     self.manager,
                     self.channel,
-                    "humidity_calibration",
+                    entity_key="humidity_calibration",
                     device_class=MLConfigNumber.DeviceClass.HUMIDITY,
                     device_scale=10,
                     device_value=humidity,
@@ -86,7 +86,7 @@ class Mts300Climate(MtsThermostatClimate):
             super().__init__(
                 climate.manager,
                 climate.channel,
-                f"{self.ns.slug}__{self.key_group}_{self.key_value}",
+                entity_key=f"{self.ns.slug}__{self.key_group}_{self.key_value}",
                 name="Sensor Association",
             )
 
@@ -146,26 +146,26 @@ class Mts300Climate(MtsThermostatClimate):
     """Status flags in "more" dict mapped as: (bool(hStatus), bool(cStatus), bool(fStatus))."""
     ENTITY_DEFS = {
         "hdStatus": MLEnumSensor.ENTITY_DEF(
-            "(de)humidifier_status",
+            entity_key="(de)humidifier_status",
             translation_key="mts300_hdstatus",
             entity_category=MLEnumSensor.EntityCategory.DIAGNOSTIC,
         ),
         "hStatus": MLEnumSensor.ENTITY_DEF(
-            "heating_status",
+            entity_key="heating_status",
             translation_key="mts300_status",
             entity_category=MLEnumSensor.EntityCategory.DIAGNOSTIC,
         ),
         "cStatus": MLEnumSensor.ENTITY_DEF(
-            "cooling_status",
+            entity_key="cooling_status",
             translation_key="mts300_status",
             entity_category=MLEnumSensor.EntityCategory.DIAGNOSTIC,
         ),
         "fStatus": MLEnumSensor.ENTITY_DEF(
-            "fan_speed",
+            entity_key="fan_speed",
             translation_key="mts300_status",
         ),
         "aStatus": MLEnumSensor.ENTITY_DEF(
-            "auxiliary_status",
+            entity_key="auxiliary_status",
             translation_key="mts300_status",
             entity_category=MLEnumSensor.EntityCategory.DIAGNOSTIC,
         ),
@@ -207,7 +207,7 @@ class Mts300Climate(MtsThermostatClimate):
             setattr(
                 self,
                 f"sensor_{_key}",
-                _def.type(manager, channel, _def.entitykey, **_def.kwargs),
+                _def.type(manager, channel, **_def.kwargs),
             )
         self.sensor_current_humidity = MLHumiditySensor(
             manager, channel, entity_registry_enabled_default=False
@@ -215,7 +215,7 @@ class Mts300Climate(MtsThermostatClimate):
         self.number_fan_hold = MLConfigNumber(
             manager,
             channel,
-            "fan_hold_time",
+            entity_key="fan_hold_time",
             device_class=MLConfigNumber.DEVICE_CLASS_DURATION,
             native_unit_of_measurement=MLConfigNumber.hac.UnitOfTime.MINUTES,
             device_scale=1,
@@ -226,7 +226,7 @@ class Mts300Climate(MtsThermostatClimate):
         self.switch_fan_hold = MLEmulatedSwitch(
             manager,
             channel,
-            "fan_hold_enable",
+            entity_key="fan_hold_enable",
         )
         self.switch_fan_hold.async_turn_on = self._async_turn_on_switch_fan_hold
         self.switch_fan_hold.async_turn_off = self._async_turn_off_switch_fan_hold

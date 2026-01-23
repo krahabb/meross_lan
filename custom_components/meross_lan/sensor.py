@@ -4,7 +4,7 @@ from homeassistant.components import sensor
 
 from . import const as mlc
 from .helpers import entity as me
-from .helpers.namespaces import EntityNamespaceMixin, NamespaceHandler, mc, mn
+from .helpers.namespaces import EntityNamespaceMixin, mc, mn
 from .merossclient.protocol.message import json_dumps
 
 if TYPE_CHECKING:
@@ -36,7 +36,6 @@ class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
         @classmethod
         def ENTITY_DEF(
             cls,
-            entitykey: str | None = None,
             **kwargs: "Unpack[MLEnumSensor.Args]",
         ) -> "MLEnumSensor.EntityDef[MLEnumSensor]":  # type: ignore[override]
             pass
@@ -51,15 +50,9 @@ class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
 
     __slots__ = ("native_value",)
 
-    def __init__(
-        self,
-        manager: "EntityManager",
-        channel: object | None,
-        entitykey: str | None,
-        **kwargs: "Unpack[Args]",
-    ):
+    def __init__(self, manager: "EntityManager", channel, **kwargs: "Unpack[Args]"):
         self.native_value = kwargs.pop("native_value", None)
-        super().__init__(manager, channel, entitykey, **kwargs)
+        super().__init__(manager, channel, **kwargs)
 
     def set_unavailable(self):
         self.native_value = None
@@ -86,7 +79,6 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
         @classmethod
         def ENTITY_DEF(
             cls,
-            entitykey: str | None = None,
             **kwargs: "Unpack[MLNumericSensor.Args]",
         ) -> "MLNumericSensor.EntityDef[MLNumericSensor]":  # type: ignore[override]
             pass
@@ -133,13 +125,7 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
         "suggested_display_precision",
     )
 
-    def __init__(
-        self,
-        manager: "EntityManager",
-        channel: object | None,
-        entitykey: str | None = None,
-        **kwargs: "Unpack[Args]",
-    ):
+    def __init__(self, manager: "EntityManager", channel, **kwargs: "Unpack[Args]"):
         self.state_class = kwargs.pop(
             "state_class", None
         ) or self.DEVICECLASS_TO_STATECLASS_MAP.get(
@@ -149,12 +135,7 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
         self.suggested_display_precision = kwargs.pop(
             "suggested_display_precision", self._attr_suggested_display_precision
         )
-        super().__init__(
-            manager,
-            channel,
-            entitykey,
-            **kwargs,
-        )
+        super().__init__(manager, channel, **kwargs)
 
 
 class MLHumiditySensor(MLNumericSensor):
@@ -163,24 +144,12 @@ class MLHumiditySensor(MLNumericSensor):
     - suggested_display_precision defaults to 1
     """
 
+    ENTITY_KEY = mc.KEY_HUMIDITY
+
     _attr_device_scale = 10
     # HA core entity attributes:
     _attr_device_class = sensor.SensorDeviceClass.HUMIDITY
     _attr_suggested_display_precision = 1
-
-    def __init__(
-        self,
-        manager: "EntityManager",
-        channel: object | None,
-        entitykey: str | None = None,
-        **kwargs: "Unpack[MLNumericSensor.Args]",
-    ):
-        super().__init__(
-            manager,
-            channel,
-            entitykey or mc.KEY_HUMIDITY,
-            **kwargs,
-        )
 
 
 class MLTemperatureSensor(MLNumericSensor):
@@ -189,46 +158,22 @@ class MLTemperatureSensor(MLNumericSensor):
     - suggested_display_precision defaults to 1
     """
 
+    ENTITY_KEY = mc.KEY_TEMPERATURE
+
     # HA core entity attributes:
     _attr_device_class = sensor.SensorDeviceClass.TEMPERATURE
     _attr_suggested_display_precision = 1
-
-    def __init__(
-        self,
-        manager: "EntityManager",
-        channel: object | None,
-        entitykey: str | None = None,
-        **kwargs: "Unpack[MLNumericSensor.Args]",
-    ):
-        super().__init__(
-            manager,
-            channel,
-            entitykey or mc.KEY_TEMPERATURE,
-            **kwargs,
-        )
 
 
 class MLLightSensor(MLNumericSensor):
     """Specialization for sensor reporting light illuminance (lux)."""
 
+    ENTITY_KEY = mc.KEY_LIGHT
+
     _attr_device_scale = 1
     # HA core entity attributes:
     _attr_device_class = sensor.SensorDeviceClass.ILLUMINANCE
     _attr_suggested_display_precision = 0
-
-    def __init__(
-        self,
-        manager: "EntityManager",
-        channel: object | None,
-        entitykey: str | None = None,
-        **kwargs: "Unpack[MLNumericSensor.Args]",
-    ):
-        super().__init__(
-            manager,
-            channel,
-            entitykey or mc.KEY_LIGHT,
-            **kwargs,
-        )
 
 
 class MLDiagnosticSensor(MLEnumSensor):
@@ -251,6 +196,13 @@ class MLDiagnosticSensor(MLEnumSensor):
 
 
 class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
+
+    if TYPE_CHECKING:
+        manager: "Device"
+        native_value: str
+
+    ENTITY_KEY = "sensor_protocol"
+
     STATE_DISCONNECTED = "disconnected"
     STATE_ACTIVE = "active"
     STATE_INACTIVE = "inactive"
@@ -259,12 +211,9 @@ class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
     ATTR_MQTT = mlc.CONF_PROTOCOL_MQTT
     ATTR_MQTT_BROKER = "mqtt_broker"
 
-    manager: "Device"
-
     # HA core entity attributes:
     _attr_entity_registry_enabled_default = False
     entity_category = MLEnumSensor.EntityCategory.DIAGNOSTIC
-    native_value: str
     options: list[str] = [
         STATE_DISCONNECTED,
         ATTR_BLUETOOTH,
@@ -276,17 +225,9 @@ class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
     def _get_attr_state(value):
         return ProtocolSensor.STATE_ACTIVE if value else ProtocolSensor.STATE_INACTIVE
 
-    def __init__(
-        self,
-        manager: "Device",
-    ):
+    def __init__(self, manager: "Device"):
         self.extra_state_attributes = {}
-        super().__init__(
-            manager,
-            None,
-            "sensor_protocol",
-            native_value=ProtocolSensor.STATE_DISCONNECTED,
-        )
+        super().__init__(manager, None, native_value=ProtocolSensor.STATE_DISCONNECTED)
 
     def set_available(self):
         manager = self.manager

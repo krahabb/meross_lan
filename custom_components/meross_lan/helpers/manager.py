@@ -9,7 +9,7 @@ import weakref
 from homeassistant.components import persistent_notification as pn
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.core import callback
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import device_registry as dr, issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from . import LOGGER, Loggable, getLogger
@@ -33,7 +33,6 @@ from .obfuscate import (
 
 if TYPE_CHECKING:
     import io
-    from types import MappingProxyType
     from typing import (
         Any,
         Callable,
@@ -75,56 +74,55 @@ class EntityManager(Loggable):
         type PlatformsType = dict[str, Callable | None]
 
         api: Final[ComponentApi]
-        hass: Final[HomeAssistant]
-        config_entry: Final[ConfigEntry | None]
-        deviceentry_id: Final[DeviceEntryIdType | None]
+        online: Final[bool]  # TODO: rename to available to mix with Entity.available
+        """Indicates if the manager is 'online' i.e. active (connected to device/cloud)."""
+        device_entry: Final[dr.DeviceEntry | None]
+        device_entry_ids: Final[DeviceEntryIdType | None]  # TODO: rename to device_info
+        """Link to optional DeviceRegistry entry info."""
+
         platforms: PlatformsType  # init in derived
         entities: Final[dict[object, MLEntity]]
         objects: Final[weakref.WeakSet]
         """Keeps track of some object instances (for debugging) built and managed by this EntityManager."""
         _tasks: set[asyncio.Future]
-        _issues: set[str]  # BEWARE: on demand attribute
 
         class Args(Loggable.Args):
-            api: ComponentApi
-            hass: HomeAssistant
-            config_entry: ConfigEntry | None
-            deviceentry_id: NotRequired["EntityManager.DeviceEntryIdType"]
+            device_entry: NotRequired[dr.DeviceEntry]
 
     IssueSeverity = ir.IssueSeverity
 
+    _attr_online: bool = True
+
     # slots for ConfigEntryManager are defined here since we would have some
     # multiple inheritance conflicts in Device
-    __slots__ = (
+
+    __SLOTS__ = (
+        "manager",
         "api",
-        "hass",
-        "config_entry",
-        "deviceentry_id",
+        "online",
+        "device_entry",
+        "device_entry_ids",
+        "platforms",
         "entities",
         "objects",
-        "platforms",
-        "config",
-        "key",
-        "obfuscate",
         "_tasks",
-        "_issues",
-        "_trace_file",
-        "_trace_future",
-        "_trace_data",
-        "_unsub_trace_endtime",
-        "_unsub_entry_reload",
-        "_unsub_entry_update_listener",
     )
 
-    def __init__(self, id: str, **kwargs: "Unpack[Args]"):
-        self.api = kwargs["api"]
-        self.hass = kwargs["hass"]
-        self.config_entry = kwargs.get("config_entry")
-        self.deviceentry_id = kwargs.get("deviceentry_id")
+    def __init__(self, parent: "EntityManager", id: str, **kwargs: "Unpack[Args]"):
+        self.manager = parent
+        self.api = parent.api
+        self.online = self._attr_online
+        try:
+            self.device_entry = kwargs.pop("device_entry")
+            self.device_entry_ids = {"identifiers": self.device_entry.identifiers}
+        except KeyError:
+            self.device_entry = None
+            self.device_entry_ids = None
+        assert hasattr(self, "platforms"), "platforms must be set in derived classes"
         self.entities = {}
         self.objects = weakref.WeakSet()
         self._tasks = set()
-        super().__init__(id, **kwargs)
+        super().__init__(parent, id, **kwargs)
 
     async def async_shutdown(self):
         """
@@ -135,6 +133,8 @@ class EntityManager(Loggable):
         their async polling before invalidating the member pointers (which are
         usually referred to inside the polling /parsing code)
         """
+        await super().async_shutdown()
+
         for task in tuple(self._tasks):
             if task.done():
                 continue
@@ -144,7 +144,7 @@ class EntityManager(Loggable):
                 async with asyncio.timeout(0.5):
                     await task
             except asyncio.CancelledError:
-                pass
+                continue
             except Exception as exception:
                 self.log_exception(
                     self.WARNING, exception, "cancelling task %s during shutdown", task
@@ -152,6 +152,7 @@ class EntityManager(Loggable):
         for entity in tuple(self.entities.values()):
             # async_shutdown will pop out of self.entities
             await entity.async_shutdown()
+
         if self._tasks:
             self.log(self.DEBUG, "Some tasks were not shutdown %s", self._tasks)
         self.log(
@@ -161,13 +162,12 @@ class EntityManager(Loggable):
         )
 
     @property
-    def name(self) -> str:
-        config_entry = self.config_entry
-        return config_entry.title if config_entry else self.logtag
-
-    @property
-    def online(self) -> bool:
-        return True
+    def display_name(self) -> str:
+        """
+        returns a proper (friendly) 'manager' name for logging purposes
+        """
+        de = self.device_entry
+        return (de and (de.name_by_user or de.name)) or self.logtag
 
     def managed_entities(self, platform, /):
         """entities list for platform setup"""
@@ -175,7 +175,7 @@ class EntityManager(Loggable):
             entity for entity in self.entities.values() if entity.PLATFORM is platform
         ]
 
-    def generate_unique_id(self, entity: "MLEntity"):
+    def generate_unique_id(self, entity: "MLEntity", /):
         """
         flexible policy in order to generate unique_ids for entities:
         This is an helper needed to better control migrations in code
@@ -192,31 +192,275 @@ class EntityManager(Loggable):
         def _callback(*_args):
             self.async_create_task(target(*_args), "._callback")
 
-        return self.hass.loop.call_later(delay, _callback, *args)
+        return self.api.hass.loop.call_later(delay, _callback, *args)
 
     def schedule_callback(
         self, delay: float, target: "Callable", *args
     ) -> "asyncio.TimerHandle":
-        return self.hass.loop.call_later(delay, target, *args)
+        return self.api.hass.loop.call_later(delay, target, *args)
 
     @callback
     def async_create_task[_T](
-        self,
-        target: "Coroutine[Any, Any, _T]",
-        name: str,
-        eager_start: bool = True,
+        self, target: "Coroutine[Any, Any, _T]", name: str, eager_start: bool = True
     ):
         try:
-            task = self.hass.async_create_task(
+            task = self.api.hass.async_create_task(
                 target, f"{self.logtag}{name}", eager_start
             )
         except TypeError:  # older api compatibility fallback (likely pre core 2024.3)
-            task = self.hass.async_create_task(target, f"{self.logtag}{name}")
+            task = self.api.hass.async_create_task(target, f"{self.logtag}{name}")
             eager_start = False
         if not (eager_start and task.done()):
             self._tasks.add(task)
             task.add_done_callback(self._tasks.remove)
         return task
+
+    def _set_online(self, /):
+        self.log(self.DEBUG, "Back online!")
+        self.online = True  # type: ignore
+        for entity in self.entities.values():
+            entity.set_available()
+
+    def _set_offline(self, /):
+        self.log(self.DEBUG, "Going offline!")
+        self.online = False  # type: ignore
+        for entity in self.entities.values():
+            entity.set_unavailable()
+
+
+class ConfigEntryManager(EntityManager):
+    """
+    This class manages the relationships with an actual ConfigEntry and its managed
+    device(s) and entities. A typical Meross device inherits from this but also
+    A MerossCloudProfile and the 'MQTTHub'.
+    """
+
+    if TYPE_CHECKING:
+
+        TRACE_RX: Final
+        TRACE_TX: Final
+        DEFAULT_PLATFORMS: ClassVar[EntityManager.PlatformsType]
+
+        config_entry: Final[ConfigEntry | None]
+        config: Mapping[str, Any]
+        key: str
+        logger: logging.Logger
+        _issues: set[str]  # BEWARE: on demand attribute
+        _trace_file: io.TextIOWrapper | None
+        _trace_future: asyncio.Future | None
+        _trace_data: list | None
+        _unsub_trace_endtime: asyncio.TimerHandle | None
+        _unsub_entry_reload: asyncio.TimerHandle | None
+        _unsub_entry_update_listener: CALLBACK_TYPE | None
+
+        class Args(EntityManager.Args):
+            pass
+
+    TRACE_RX = "RX"
+    TRACE_TX = "TX"
+
+    DEFAULT_PLATFORMS = {}
+    """Defined at the class level to preset a list of domains for entities
+    which could be dynamically added after ConfigEntry loading."""
+
+    __slots__ = (
+        (
+            "config_entry",
+            "config",
+            "key",
+            "obfuscate",
+            "_issues",
+            "_trace_file",
+            "_trace_future",
+            "_trace_data",
+            "_unsub_trace_endtime",
+            "_unsub_entry_reload",
+            "_unsub_entry_update_listener",
+        )
+        + EntityManager.__SLOTS__
+        + Loggable.__SLOTS__
+    )
+
+    def __init__(
+        self,
+        api: "ComponentApi",
+        id: str,
+        config_entry: "ConfigEntry | None" = None,
+        /,
+        **kwargs: "Unpack[Args]",
+    ):
+        self.config_entry = config_entry
+        try:
+            self.config = config = config_entry.data  # type: ignore
+            self.key = config.get(CONF_KEY, mlc.PARAM_DEFAULT_KEY)
+            self.obfuscate = config.get(CONF_OBFUSCATE, True)
+        except AttributeError:
+            # this is the ComponentApi: ConfigEntry not configured..
+            assert id == mlc.CONF_PROFILE_ID_LOCAL
+            self.config = {}
+            self.key = mlc.PARAM_DEFAULT_KEY
+            self.obfuscate = True
+        # when we build an entity we also add the relative platform name here
+        # so that the async_setup_entry for this integration will be able to forward
+        # the setup to the appropriate platform(s).
+        # The item value here will be set to the async_add_entities callback
+        # during the corresponding platform async_setup_entry so to be able
+        # to dynamically add more entities should they 'pop-up' (Hub only?)
+        self.platforms = self.DEFAULT_PLATFORMS.copy()
+        self._trace_file = None
+        self._trace_future = None
+        self._trace_data = None
+        self._unsub_trace_endtime = None
+        self._unsub_entry_reload = None
+        self._unsub_entry_update_listener = None
+        super().__init__(api, id, **kwargs)
+
+    async def async_shutdown(self):
+        """
+        Cleanup code called when the config entry is unloaded.
+        Beware, when a derived class owns some direct member pointers to entities,
+        be sure to invalidate them after calling the super() implementation.
+        This is especially true for Device(s) classes which need to stop
+        their async polling before invalidating the member pointers (which are
+        usually referred to inside the polling /parsing code)
+        """
+        self._cleanup_subscriptions()  # extra-safety cleanup: shouldnt be loaded/listened at this point
+        await super().async_shutdown()
+        await self.async_destroy_diagnostic_entities()
+        if self.is_tracing:
+            self.trace_close()
+
+    # interface: Loggable
+    def configure_logger(self, /):
+        """
+        Configure a 'logger' and a 'logtag' based off current config for every ConfigEntry.
+        We'll need this updated when CONF_OBFUSCATE changes since
+        the name might depend on it. We're then using this call during
+        __init__ for the first setup and subsequently when ConfigEntry changes
+        """
+        self.logtag = self.get_logger_name()
+        self.logger = logger = getLogger(f"{LOGGER.name}.{self.logtag}")
+        try:
+            logger.setLevel(self.config.get(mlc.CONF_LOGGING_LEVEL, logging.NOTSET))
+        except Exception as exception:
+            # do not use self Loggable interface since we might be not set yet
+            LOGGER.warning(
+                "error (%s) setting log level: likely a corrupted configuration entry",
+                str(exception),
+            )
+
+    def log(self, level: int, msg: str, *args, **kwargs):
+        if (logger := self.logger).isEnabledFor(level):
+            logger._log(level, msg, args, **kwargs)
+        if self.is_tracing:
+            self.trace_log(
+                level,
+                msg % args,
+            )
+
+    # interface: EntityManager
+    @property
+    def display_name(self) -> str:
+        de = self.device_entry
+        return (de and (de.name_by_user or de.name)) or (
+            self.config_entry.title if self.config_entry else self.logtag
+        )
+
+    # interface: self
+    @property
+    def create_diagnostic_entities(self):
+        return self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
+
+    async def async_setup_entry(
+        self, hass: "HomeAssistant", config_entry: "ConfigEntry", /
+    ):
+        assert self.config_entry == config_entry
+        config_entry.runtime_data = self
+        api = self.api
+        # open the (eventual) trace before adding the entities
+        # so we could catch logs in this phase too. See
+        # OptionsFlow.async_step_diagnostics for the mechanic.
+        try:
+            await self.async_trace_open(
+                api.managers_transient_state[config_entry.entry_id].pop(mlc.CONF_TRACE)
+            )
+        except KeyError:
+            # no CONF_TRACE key and/or no config_entry.entry_id...no tracing configured
+            pass
+
+        if self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES):
+            await self.async_create_diagnostic_entities()
+
+        await hass.config_entries.async_forward_entry_setups(
+            config_entry, self.platforms.keys()
+        )
+        self._unsub_entry_update_listener = config_entry.add_update_listener(
+            self.entry_update_listener
+        )
+
+    async def async_unload_entry(
+        self, hass: "HomeAssistant", config_entry: "ConfigEntry", /
+    ):
+        if not await hass.config_entries.async_unload_platforms(
+            config_entry, self.platforms.keys()
+        ):
+            return False
+        self._cleanup_subscriptions()
+        self.platforms.clear()
+        self.config = {}
+        await self.async_shutdown()
+        return True
+
+    def schedule_reload(self, delay: float = 0, /):
+        """
+        Schedule the reload in a delayed task (using 'call_later').
+        config_entries.async_schedule_reload is now 'eager' and
+        it might execute synchronously leading to unintended semantics.
+        """
+        if self._unsub_entry_reload:
+            self._unsub_entry_reload.cancel()
+        assert self.config_entry
+        self._unsub_entry_reload = self.schedule_callback(
+            delay,
+            self.api.schedule_entry_reload,
+            self.config_entry.entry_id,
+        )
+
+    async def entry_update_listener(
+        self, hass: "HomeAssistant", config_entry: "ConfigEntry", /
+    ):
+        old_config = self.config
+        config = self.config = config_entry.data
+        self.key = config.get(CONF_KEY) or ""
+        self.obfuscate = config.get(CONF_OBFUSCATE, True)
+        self.configure_logger()
+        if self.isEnabledFor(self.DEBUG):
+            self.log(
+                self.DEBUG,
+                "Config updated: old=%s new=%s",
+                str(obfuscated_dict(old_config) if self.obfuscate else old_config),
+                str(obfuscated_dict(config) if self.obfuscate else config),
+            )
+        if config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES):
+            await self.async_create_diagnostic_entities()
+        else:
+            await self.async_destroy_diagnostic_entities(True)
+
+    async def async_create_diagnostic_entities(self, /):
+        """Dynamically create some diagnostic entities depending on configuration"""
+        pass
+
+    async def async_destroy_diagnostic_entities(self, remove: bool = False, /):
+        """Cleanup diagnostic entities, when the entry is unloaded. If 'remove' is True
+        it will be removed from the entity registry as well."""
+        ent_reg = self.api.entity_registry if remove else None
+        for entity in self.managed_entities(SENSOR_DOMAIN):
+            if entity.is_diagnostic:
+                if entity.hass_connected:
+                    await entity.async_remove()
+                await entity.async_shutdown()
+                if ent_reg:
+                    ent_reg.async_remove(entity.entity_id)
 
     def create_issue(
         self,
@@ -257,212 +501,12 @@ class EntityManager(Loggable):
     def remove_issue(self, issue_key: str, issue_subkey: str = "", /):
         self.remove_issue_id(f"{issue_key}.{self.id}.{issue_subkey}")
 
-
-class ConfigEntryManager(EntityManager):
-    """
-    This class manages the relationships with an actual ConfigEntry and its managed
-    device(s) and entities. A typical Meross device inherits from this but also
-    A MerossCloudProfile and the 'MQTTHub'.
-    """
-
-    if TYPE_CHECKING:
-
-        TRACE_RX: Final
-        TRACE_TX: Final
-        DEFAULT_PLATFORMS: ClassVar[EntityManager.PlatformsType]
-        config: Mapping[str, Any]
-        key: str
-        logger: logging.Logger
-        _trace_file: io.TextIOWrapper | None
-        _trace_future: asyncio.Future | None
-        _trace_data: list | None
-        _unsub_trace_endtime: asyncio.TimerHandle | None
-        _unsub_entry_reload: asyncio.TimerHandle | None
-        _unsub_entry_update_listener: CALLBACK_TYPE | None
-
-        class Args(EntityManager.Args):
-            pass
-
-    TRACE_RX = "RX"
-    TRACE_TX = "TX"
-
-    DEFAULT_PLATFORMS = {}
-    """Defined at the class level to preset a list of domains for entities
-    which could be dynamically added after ConfigEntry loading."""
-
-    def __init__(self, id: str, **kwargs: "Unpack[Args]"):
-
-        config_entry = kwargs["config_entry"]
-        try:
-            self.config = config = config_entry.data  # type: ignore
-            self.key = config.get(CONF_KEY, mlc.PARAM_DEFAULT_KEY)
-            self.obfuscate = config.get(CONF_OBFUSCATE, True)
-        except AttributeError:
-            # this is the ComponentApi: ConfigEntry not configured..
-            assert id == mlc.CONF_PROFILE_ID_LOCAL
-            self.config = {}
-            self.key = mlc.PARAM_DEFAULT_KEY
-            self.obfuscate = True
-        # when we build an entity we also add the relative platform name here
-        # so that the async_setup_entry for this integration will be able to forward
-        # the setup to the appropriate platform(s).
-        # The item value here will be set to the async_add_entities callback
-        # during the corresponding platform async_setup_entry so to be able
-        # to dynamically add more entities should they 'pop-up' (Hub only?)
-        self.platforms = self.DEFAULT_PLATFORMS.copy()
-        self._trace_file = None
-        self._trace_future = None
-        self._trace_data = None
-        self._unsub_trace_endtime = None
-        self._unsub_entry_reload = None
-        self._unsub_entry_update_listener = None
-        super().__init__(id, **kwargs)
-
-    async def async_shutdown(self):
-        """
-        Cleanup code called when the config entry is unloaded.
-        Beware, when a derived class owns some direct member pointers to entities,
-        be sure to invalidate them after calling the super() implementation.
-        This is especially true for Device(s) classes which need to stop
-        their async polling before invalidating the member pointers (which are
-        usually referred to inside the polling /parsing code)
-        """
-        self._cleanup_subscriptions()  # extra-safety cleanup: shouldnt be loaded/listened at this point
-        await super().async_shutdown()
-        await self.async_destroy_diagnostic_entities()
-        if self.is_tracing:
-            self.trace_close()
-
-    # interface: Loggable
-    def configure_logger(self):
-        """
-        Configure a 'logger' and a 'logtag' based off current config for every ConfigEntry.
-        We'll need this updated when CONF_OBFUSCATE changes since
-        the name might depend on it. We're then using this call during
-        __init__ for the first setup and subsequently when ConfigEntry changes
-        """
-        self.logtag = self.get_logger_name()
-        self.logger = logger = getLogger(f"{LOGGER.name}.{self.logtag}")
-        try:
-            logger.setLevel(self.config.get(mlc.CONF_LOGGING_LEVEL, logging.NOTSET))
-        except Exception as exception:
-            # do not use self Loggable interface since we might be not set yet
-            LOGGER.warning(
-                "error (%s) setting log level: likely a corrupted configuration entry",
-                str(exception),
-            )
-
-    def log(self, level: int, msg: str, *args, **kwargs):
-        if (logger := self.logger).isEnabledFor(level):
-            logger._log(level, msg, args, **kwargs)
-        if self.is_tracing:
-            self.trace_log(
-                level,
-                msg % args,
-            )
-
-    # interface: self
-    @property
-    def create_diagnostic_entities(self):
-        return self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
-
-    async def async_setup_entry(
-        self, hass: "HomeAssistant", config_entry: "ConfigEntry"
-    ):
-        assert self.config_entry == config_entry
-        config_entry.runtime_data = self
-        api = self.api
-        # open the (eventual) trace before adding the entities
-        # so we could catch logs in this phase too. See
-        # OptionsFlow.async_step_diagnostics for the mechanic.
-        try:
-            await self.async_trace_open(
-                api.managers_transient_state[config_entry.entry_id].pop(mlc.CONF_TRACE)
-            )
-        except KeyError:
-            # no CONF_TRACE key and/or no config_entry.entry_id...no tracing configured
-            pass
-
-        if self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES):
-            await self.async_create_diagnostic_entities()
-
-        await hass.config_entries.async_forward_entry_setups(
-            config_entry, self.platforms.keys()
-        )
-        self._unsub_entry_update_listener = config_entry.add_update_listener(
-            self.entry_update_listener
-        )
-
-    async def async_unload_entry(
-        self, hass: "HomeAssistant", config_entry: "ConfigEntry"
-    ):
-        if not await hass.config_entries.async_unload_platforms(
-            config_entry, self.platforms.keys()
-        ):
-            return False
-        self._cleanup_subscriptions()
-        self.platforms.clear()
-        self.config = {}
-        await self.async_shutdown()
-        return True
-
-    def schedule_reload(self, delay: float = 0):
-        """
-        Schedule the reload in a delayed task (using 'call_later').
-        config_entries.async_schedule_reload is now 'eager' and
-        it might execute synchronously leading to unintended semantics.
-        """
-        if self._unsub_entry_reload:
-            self._unsub_entry_reload.cancel()
-        assert self.config_entry
-        self._unsub_entry_reload = self.schedule_callback(
-            delay,
-            self.api.schedule_entry_reload,
-            self.config_entry.entry_id,
-        )
-
-    async def entry_update_listener(
-        self, hass: "HomeAssistant", config_entry: "ConfigEntry"
-    ):
-        old_config = self.config
-        config = self.config = config_entry.data
-        self.key = config.get(CONF_KEY) or ""
-        self.obfuscate = config.get(CONF_OBFUSCATE, True)
-        self.configure_logger()
-        if self.isEnabledFor(self.DEBUG):
-            self.log(
-                self.DEBUG,
-                "Config updated: old=%s new=%s",
-                str(obfuscated_dict(old_config) if self.obfuscate else old_config),
-                str(obfuscated_dict(config) if self.obfuscate else config),
-            )
-        if config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES):
-            await self.async_create_diagnostic_entities()
-        else:
-            await self.async_destroy_diagnostic_entities(True)
-
-    async def async_create_diagnostic_entities(self):
-        """Dynamically create some diagnostic entities depending on configuration"""
-        pass
-
-    async def async_destroy_diagnostic_entities(self, remove: bool = False):
-        """Cleanup diagnostic entities, when the entry is unloaded. If 'remove' is True
-        it will be removed from the entity registry as well."""
-        ent_reg = self.api.entity_registry if remove else None
-        for entity in self.managed_entities(SENSOR_DOMAIN):
-            if entity.is_diagnostic:
-                if entity.hass_connected:
-                    await entity.async_remove()
-                await entity.async_shutdown()
-                if ent_reg:
-                    ent_reg.async_remove(entity.entity_id)
-
     @abc.abstractmethod
     def get_logger_name(self) -> str:
         raise NotImplementedError()
 
     @final
-    def loggable_any(self, value):
+    def loggable_any(self, value, /):
         """
         Conditionally obfuscate any type to send to logging/tracing.
         use the typed versions to increase efficiency/context
@@ -470,26 +514,26 @@ class ConfigEntryManager(EntityManager):
         return obfuscated_any(value) if self.obfuscate else value
 
     @final
-    def loggable_dict(self, value: "Mapping[str, Any]"):
+    def loggable_dict(self, value: "Mapping[str, Any]", /):
         """Conditionally obfuscate the dict values (based off OBFUSCATE_KEYS) to send to logging/tracing"""
         return obfuscated_dict(value) if self.obfuscate else value
 
     @final
-    def loggable_dict_str(self, value: "Mapping[str, Any]"):
+    def loggable_dict_str(self, value: "Mapping[str, Any]", /):
         """Conditionally obfuscate the dict values (based off OBFUSCATE_KEYS) to send to logging/tracing"""
         return str(obfuscated_dict(value) if self.obfuscate else value)
 
     @final
-    def loggable_config(self):
+    def loggable_config(self, /):
         """Return a 'loggable' version of the entry config (for diagnostic/logging purposes)"""
         return obfuscated_dict(self.config) if self.obfuscate else dict(self.config)
 
-    def loggable_diagnostic_state(self):
+    def loggable_diagnostic_state(self, /):
         """Return a 'loggable' version of the entry state (for diagnostic/logging purposes)"""
         return {}
 
     @final
-    def loggable_broker(self, broker: "HostAddress | str"):
+    def loggable_broker(self, broker: "HostAddress | str", /):
         """Conditionally obfuscate the connection_id (which is a broker address host:port) to send to logging/tracing"""
         return (
             OBFUSCATE_SERVER_MAP.obfuscate(str(broker))
@@ -498,7 +542,7 @@ class ConfigEntryManager(EntityManager):
         )
 
     @final
-    def loggable_device_id(self, device_id: str):
+    def loggable_device_id(self, device_id: str, /):
         """Conditionally obfuscate the device_id to send to logging/tracing"""
         return (
             OBFUSCATE_DEVICE_ID_MAP.obfuscate(device_id)
@@ -507,7 +551,7 @@ class ConfigEntryManager(EntityManager):
         )
 
     @final
-    def loggable_profile_id(self, profile_id: str | int):
+    def loggable_profile_id(self, profile_id: str | int, /):
         """Conditionally obfuscate the profile_id (which is the Meross account userId) to send to logging/tracing"""
         return (
             OBFUSCATE_USERID_MAP.obfuscate(profile_id) if self.obfuscate else profile_id
@@ -528,7 +572,7 @@ class ConfigEntryManager(EntityManager):
         try:
             self.log(self.DEBUG, "Tracing start")
             epoch = time()
-            hass = self.hass
+            hass = self.api.hass
 
             def _trace_open():
                 tracedir = hass.config.path(
@@ -576,8 +620,8 @@ class ConfigEntryManager(EntityManager):
 
             self._trace_opened(epoch)
             pn.async_create(
-                self.hass,
-                f"Device: {self.name}\nFile: {_t.name}",  # type: ignore
+                self.api.hass,
+                f"Device: {self.display_name}\nFile: {_t.name}",  # type: ignore
                 "meross_lan tracing started",
                 f"{DOMAIN}.{self.id}.tracing",
             )
@@ -585,7 +629,7 @@ class ConfigEntryManager(EntityManager):
         except Exception as exception:
             self.trace_close(exception, "creating file")
 
-    def _trace_opened(self, epoch: float):
+    def _trace_opened(self, epoch: float, /):
         """
         Virtual placeholder called when a new trace is opened.
         Allows derived EntityManagers to log some preamble in the trace.
@@ -623,8 +667,8 @@ class ConfigEntryManager(EntityManager):
         else:
             notify_title = "Tracing terminated"
         pn.async_create(
-            self.hass,
-            f"Device: {self.name}\n{notify_message}",
+            self.api.hass,
+            f"Device: {self.display_name}\n{notify_message}",
             notify_title,
             f"{DOMAIN}.{self.id}.tracing",
         )
@@ -666,11 +710,7 @@ class ConfigEntryManager(EntityManager):
         except Exception as exception:
             self.trace_close(exception, "appending data")
 
-    def trace_log(
-        self,
-        level: int,
-        msg: str,
-    ):
+    def trace_log(self, level: int, msg: str, /):
         try:
             columns = [
                 strftime("%Y/%m/%d - %H:%M:%S", localtime(time())),
@@ -691,7 +731,7 @@ class ConfigEntryManager(EntityManager):
         except Exception as exception:
             self.trace_close(exception, "appending log")
 
-    async def async_get_diagnostics(self) -> "mlc.TracingHeaderType":
+    async def async_get_diagnostics(self, /) -> "mlc.TracingHeaderType":
         # used to return diagnostic data for this manager ConfigEntry (see diagnostics.py)
         return {
             "version": mlc.CONF_TRACE_VERSION,
@@ -699,7 +739,7 @@ class ConfigEntryManager(EntityManager):
             "state": self.loggable_diagnostic_state(),
         }
 
-    def _cleanup_subscriptions(self):
+    def _cleanup_subscriptions(self, /):
         if self._unsub_entry_update_listener:
             self._unsub_entry_update_listener()
             self._unsub_entry_update_listener = None
@@ -719,11 +759,11 @@ class CloudApiClient(cloudapi.CloudApiClient, Loggable):
         manager: "ConfigEntryManager",
         credentials: "cloudapi.MerossCloudCredentials | None" = None,
     ):
-        Loggable.__init__(self, "", logger=manager)
+        Loggable.__init__(self, manager, "")
         cloudapi.CloudApiClient.__init__(
             self,
             credentials=credentials,
-            session=async_get_clientsession(manager.hass),
+            session=async_get_clientsession(manager.api.hass),
             logger=self,  # type: ignore (Loggable almost duck-compatible with logging.Logger)
             obfuscate_func=manager.loggable_any,
         )

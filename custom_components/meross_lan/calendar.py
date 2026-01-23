@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from .climate import MtsClimate
     from .helpers.device import BaseDevice
 
+    # TODO: mode the payload structure definition to merossclient.types
     MtsScheduleNativeEntry = list[int]
     MtsScheduleNativeDayEntry = list[MtsScheduleNativeEntry]
     MtsScheduleNativeType = dict[str, MtsScheduleNativeDayEntry]
@@ -96,7 +97,7 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
     if TYPE_CHECKING:
         manager: "BaseDevice"
         climate: Final[MtsClimate]
-        _native_schedule: MtsScheduleNativeType | None
+        _payload_ns: MtsScheduleNativeType | None
         _schedule: MtsScheduleNativeType | None
         # HA core entity attributes:
         supported_features: calendar.CalendarEntityFeature
@@ -114,7 +115,6 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
     __slots__ = (
         "climate",
         "_flatten",
-        "_native_schedule",
         "_schedule",
         "_schedule_unit_time",
         "_schedule_entry_count_max",
@@ -127,9 +127,8 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
         # save a flattened version of the device schedule to ease/optimize CalendarEvent management
         # since the original schedule has a fixed number of contiguous events spanning the day(s) (6 on my MTS100)
         # we might 'compress' these when 2 or more consecutive entries don't change the temperature
-        # _native_schedule carries the original unpacked schedule payload from the device representing
+        # _payload_ns carries the original unpacked schedule payload from the device representing
         # its effective state
-        self._native_schedule = None
         self._schedule = None
         # set the 'granularity' of the schedule entries i.e. the schedule duration
         # must be a multiple of this time (in minutes). It is set lately by customized
@@ -144,19 +143,16 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
         # shown/available in the calendar UI.
         self._schedule_entry_count_max = 0
         self._schedule_entry_count_min = 0
-        super().__init__(climate.manager, climate.channel, self.ns.key, name="Schedule")
+        super().__init__(
+            climate.manager, climate.channel, entity_key=self.ns.key, name="Schedule"
+        )
 
     # interface: MLEntity
     async def async_shutdown(self):
         await super().async_shutdown()
         del self.climate  # type: ignore
 
-    async def async_added_to_hass(self):
-        self.manager.check_device_timezone()
-        return await super().async_added_to_hass()
-
     def set_unavailable(self):
-        self._native_schedule = None
         self._schedule = None
         super().set_unavailable()
 
@@ -563,8 +559,8 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
 
     def _build_internal_schedule(self):
         self._schedule = None
-        if state := self._native_schedule:
-            # state = {
+        if payload := self._payload_ns:
+            # payload = {
             #   ...
             #   "mon": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
             #   "tue": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
@@ -579,7 +575,8 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
                     w: [] for w in MTS_SCHEDULE_WEEKDAY
                 }
                 for weekday, weekday_schedule in schedule.items():
-                    if weekday_state := state.get(weekday):
+                    try:
+                        weekday_state = payload[weekday]
                         # weekday_state = [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]]
                         if self._flatten:
                             current_entry = None
@@ -594,7 +591,9 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
                             # don't flatten..but (deep)copy over
                             for entry in weekday_state:
                                 weekday_schedule.append(list(entry))
-
+                    except KeyError as ke:
+                        # missing day: leave empty
+                        continue
                 self._schedule = schedule
 
     # message handlers
@@ -602,12 +601,16 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
         # the payload we receive from the device might be partial
         # if we're getting the PUSH in realtime since it only carries
         # the updated entries for the updated day.
-        native_schedule = self._native_schedule
+        native_schedule = self._payload_ns
         if native_schedule:
             payload = native_schedule | payload
             if payload == native_schedule:
                 return
-        self._native_schedule = payload
+        else:
+            # onlining case: we have no previous schedule
+            self.handler_ns.device.check_device_timezone()
+
+        self._payload_ns = payload
         if mc.KEY_SECTION in payload:
             # mts960 carries 'section' to accomodate the
             # maximum number of entries according to @bernardpe

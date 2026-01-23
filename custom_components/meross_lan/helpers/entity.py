@@ -15,7 +15,7 @@ except ImportError:
 
 from homeassistant.helpers import entity
 
-from . import Loggable
+from .manager import EntityManager
 from .namespaces import NamespaceHandler, NamespaceParser, mc, mn
 
 if TYPE_CHECKING:
@@ -55,7 +55,7 @@ def platform_setup_entry(
     async_add_devices(manager.managed_entities(platform))
 
 
-class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else object):
+class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
     """
     Mixin style base class for all of the entity platform(s)
     This class must prepend the HA entity class in our custom
@@ -69,6 +69,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         type StateCallback = Callable[[], Any]
 
         class Args(TypedDict):
+            entity_key: NotRequired[str | None]
             name: NotRequired[str | None]
             translation_key: NotRequired[str]
             device_class: NotRequired[str | None]
@@ -130,28 +131,20 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         entities based on their appearance in a payload key."""
 
         type: "Final[type[_T]]"
-        entitykey: str | None
         kwargs: "Final[Any]"
 
-        __slots__ = ("type", "entitykey", "kwargs")
+        __slots__ = ("type", "kwargs")
 
-        def __init__(
-            self,
-            type: "type[_T]",
-            entitykey: str | None,
-            **kwargs: "Unpack[MLEntity.Args]",
-        ):
+        def __init__(self, type: "type[_T]", **kwargs: "Unpack[MLEntity.Args]"):
             self.type = type
-            self.entitykey = entitykey
             self.kwargs = kwargs
 
     @classmethod
     def ENTITY_DEF(
         cls,
-        entitykey: str | None = None,
         **kwargs: "Unpack[Args]",
     ) -> "MLEntity.EntityDef[Self]":
-        return MLEntity.EntityDef["Self"](cls, entitykey, **kwargs)
+        return MLEntity.EntityDef["Self"](cls, **kwargs)
 
     EntityCategory = entity.EntityCategory
 
@@ -174,14 +167,6 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
     translation_key = None
 
     __slots__ = (
-        # slotting also base Entity frequently used attributes...
-        "entity_id",
-        "hass",
-        "platform",
-        "registry_entry",
-        "device_entry",
-        "_context",
-        "_context_set",
         # meross_lan managed attributes
         "manager",
         "channel",
@@ -198,14 +183,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         "suggested_object_id",
     )
 
-    def __init__(
-        self,
-        manager: "EntityManager",
-        channel: object | None,
-        entitykey: str | None = None,
-        /,
-        **kwargs: "Unpack[Args]",
-    ):
+    def __init__(self, manager: "EntityManager", channel, /, **kwargs: "Unpack[Args]"):
         """
         - channel: historically used to create an unique id for this entity inside the device
         and also related to the physical channel used in various api for some kind of entities.
@@ -221,24 +199,22 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         manager.objects.add(self)
         self.manager = manager
         self.channel = channel
-        if entitykey is None:
-            entitykey = self.__class__.ENTITY_KEY
-        self.entitykey = entitykey
+        self.entitykey = entitykey = kwargs.pop("entity_key", self.__class__.ENTITY_KEY)
         self._payload_ns = mn.EMPTY_DICT
         id = (
             channel
             if entitykey is None
             else entitykey if channel is None else f"{channel}_{entitykey}"
         )
-        Loggable.__init__(self, id, logger=manager)
+        super().__init__(manager, id)
         # init before raising exceptions so that the Loggable is
         # setup before any exception is raised
-        if id is None:
-            raise AssertionError(
-                "provide at least channel or entitykey (cannot be 'None' together)"
-            )
-        if id in manager.entities:
-            raise AssertionError(f"id:{id} is not unique inside manager.entities")
+        assert (
+            id is not None
+        ), "provide at least channel or entitykey (cannot be 'None' together)"
+        assert (
+            id not in manager.entities
+        ), f"id:{id} is not unique inside manager.entities"
 
         if "state_callback" in kwargs:
             self.state_callbacks = set()
@@ -247,17 +223,9 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
             self.state_callbacks = None
         self.hass_connected = False
 
-        self.entity_id = entity.Entity.entity_id
-        self.hass = entity.Entity.hass
-        self.platform = entity.Entity.platform
-        self.registry_entry = None
-        self.device_entry = None
-
-        self._context = None
-        self._context_set = None
         self.available = self._attr_available or manager.online
         self.device_class = kwargs.pop("device_class", self._attr_device_class)
-        self.device_info = self.manager.deviceentry_id  # type: ignore
+        self.device_info = self.manager.device_entry_ids  # type: ignore
         self.entity_registry_enabled_default = kwargs.pop(
             "entity_registry_enabled_default",
             self._attr_entity_registry_enabled_default,
@@ -479,14 +447,7 @@ class MLBinaryEntity(MLEntity):
 
     __slots__ = ("is_on",)
 
-    def __init__(
-        self,
-        manager: "BaseDevice",
-        channel: object,
-        entitykey: str | None = None,
-        /,
-        **kwargs: "Unpack[Args]",
-    ):
+    def __init__(self, manager: "BaseDevice", channel, /, **kwargs: "Unpack[Args]"):
         match kwargs.pop("device_value", None):
             case self.native_on:
                 self.is_on = True
@@ -494,7 +455,7 @@ class MLBinaryEntity(MLEntity):
                 self.is_on = False
             case _:
                 self.is_on = None
-        super().__init__(manager, channel, entitykey, **kwargs)
+        super().__init__(manager, channel, **kwargs)
 
     def set_unavailable(self):
         self.is_on = None
@@ -560,14 +521,7 @@ class MLNumericEntity(MLEntity):
         "native_unit_of_measurement",
     )
 
-    def __init__(
-        self,
-        manager: "EntityManager",
-        channel: object,
-        entitykey: str | None = None,
-        /,
-        **kwargs: "Unpack[Args]",
-    ):
+    def __init__(self, manager: "EntityManager", channel, /, **kwargs: "Unpack[Args]"):
         self.device_scale = kwargs.pop("device_scale", self._attr_device_scale)
         if "device_value" in kwargs:
             self.device_value = kwargs.pop("device_value")
@@ -585,7 +539,7 @@ class MLNumericEntity(MLEntity):
                 )
             )
 
-        super().__init__(manager, channel, entitykey, **kwargs)
+        super().__init__(manager, channel, **kwargs)
 
     def set_unavailable(self):
         self.device_value = None
@@ -606,3 +560,13 @@ class MLNumericEntity(MLEntity):
             self.native_value = native_value
             self.flush_state()
             return True
+
+
+class MLManagerEntity(MLEntity):
+    """
+    Base class for all entities directly attached to a Device
+    (i.e. not SubDevice entities)
+    """
+
+    if TYPE_CHECKING:
+        manager: Device

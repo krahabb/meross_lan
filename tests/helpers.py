@@ -489,6 +489,7 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
 
         RAISE_MESSAGES = [
             (AttributeError, None),
+            (TypeError, None),
         ]
 
         def log_exception(self, level, exception, msg, *args, **kwargs):

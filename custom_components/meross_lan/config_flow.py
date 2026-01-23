@@ -572,7 +572,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         # Add also Meross cloud bound device connections
         for _profile in api.active_profiles():
             for _broker, _mqtt_connection in _profile.mqttconnections.items():
-                mqtt_connections[f"{_profile.name} (mqtt://{_broker})"] = (
+                mqtt_connections[f"{_profile.display_name} (mqtt://{_broker})"] = (
                     _mqtt_connection,
                     _mqtt_connection.broker,
                     False,

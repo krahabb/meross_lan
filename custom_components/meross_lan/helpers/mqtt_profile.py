@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from ..merossclient import HostAddress
     from ..merossclient.cloudapi import DeviceInfoType, LatestVersionType
     from ..merossclient.protocol.message import MerossMessage
+    from .component_api import ComponentApi
     from .device import Device
 
 
@@ -104,7 +105,8 @@ class ConnectionSensor(me.MEAlwaysAvailableMixin, MLDiagnosticSensor):
         self.connection = connection
         self.extra_state_attributes = {
             ConnectionSensor.ATTR_DEVICES: {
-                device.id: device.name for device in connection.mqttdevices.values()
+                device.id: device.display_name
+                for device in connection.mqttdevices.values()
             },
             ConnectionSensor.ATTR_RECEIVED: 0,
             ConnectionSensor.ATTR_PUBLISHED: 0,
@@ -113,7 +115,7 @@ class ConnectionSensor(me.MEAlwaysAvailableMixin, MLDiagnosticSensor):
         super().__init__(
             connection.profile,
             None,
-            connection.id,
+            entity_key=connection.id,
             native_value=(
                 self.STATE_CONNECTED
                 if connection.mqtt_is_connected
@@ -139,7 +141,8 @@ class ConnectionSensor(me.MEAlwaysAvailableMixin, MLDiagnosticSensor):
         # rebuild the attr (sub)dict else we were keeping a reference
         # to the underlying hass.state and updates were missing
         self.extra_state_attributes[ConnectionSensor.ATTR_DEVICES] = {
-            device.id: device.name for device in self.connection.mqttdevices.values()
+            device.id: device.display_name
+            for device in self.connection.mqttdevices.values()
         }
         self.flush_state()
 
@@ -305,10 +308,7 @@ class MQTTConnection(Loggable):
         # self.is_cloud_connection = False to be fixed in derived
         self._mqtt_transactions = {}
         self._mqtt_is_connected = False
-        super().__init__(
-            str(broker),
-            logger=profile,
-        )
+        super().__init__(profile, str(broker))
         profile.mqttconnections[self.id] = self
         if profile.create_diagnostic_entities:
             ConnectionSensor(self)
@@ -321,6 +321,7 @@ class MQTTConnection(Loggable):
 
     # interface: self
     async def async_shutdown(self):
+        await super().async_shutdown()
         for mqtt_transaction in self._mqtt_transactions.values():
             mqtt_transaction.cancel(False)
         self._mqtt_transactions.clear()
@@ -642,7 +643,7 @@ class MQTTConnection(Loggable):
         profile = self.profile
         self.mqttdiscovering.add(device_id)
         try:
-            result = await profile.hass.config_entries.flow.async_init(
+            result = await profile.api.hass.config_entries.flow.async_init(
                 mlc.DOMAIN,
                 context={"source": SOURCE_INTEGRATION_DISCOVERY},
                 data=await self.async_identify_device(device_id, profile.key),
@@ -736,8 +737,8 @@ class MQTTProfile(mlm.ConfigEntryManager):
 
     if TYPE_CHECKING:
         is_cloud_profile: bool
-        linkeddevices: dict[str, Device]
-        mqttconnections: dict[str, MQTTConnection]
+        linkeddevices: Final[dict[str, Device]]
+        mqttconnections: Final[dict[str, MQTTConnection]]
 
     DEFAULT_PLATFORMS = mlm.ConfigEntryManager.DEFAULT_PLATFORMS | {
         SENSOR_DOMAIN: None,
@@ -749,8 +750,15 @@ class MQTTProfile(mlm.ConfigEntryManager):
         "mqttconnections",
     )
 
-    def __init__(self, id: str, **kwargs: "Unpack[mlm.ConfigEntryManager.Args]"):
-        super().__init__(id, **kwargs)
+    def __init__(
+        self,
+        api: "ComponentApi",
+        id: str,
+        config_entry: "ConfigEntry | None" = None,
+        /,
+        **kwargs: "Unpack[MQTTProfile.Args]",
+    ):
+        super().__init__(api, id, config_entry, **kwargs)
         self.linkeddevices = {}
         self.mqttconnections = {}
 

@@ -62,7 +62,6 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from ..devices.hub import SubDevice
     from ..merossclient import MerossDeviceDescriptor
     from ..merossclient.protocol.types import (
         JsonDict,
@@ -97,70 +96,35 @@ class BaseDevice(mlm.EntityManager):
     if TYPE_CHECKING:
         DEVICE_TYPE: ClassVar[mlc.DeviceType]
 
-        # override some nullable since we're pretty sure they're not here
-        config_entry: Final[ConfigEntry]  # type: ignore
-        deviceentry_id: Final[mlm.EntityManager.DeviceEntryIdType]  # type: ignore
-
-        online: Final[bool]
-        device_registry_entry: Final[dr.DeviceEntry]
         latest_version: LatestVersionType
         update_firmware: MLUpdate | None
+        # Overrides
+        device_entry_ids: Final[mlm.EntityManager.DeviceEntryIdType]  # type: ignore
+        device_entry: Final[dr.DeviceEntry]  # type: ignore
 
         class Args(mlm.EntityManager.Args):
-            config_entry: ConfigEntry
-            name: str
-            model: str
-            hw_version: NotRequired[str]
-            sw_version: NotRequired[str]
-            connections: NotRequired[set[tuple[str, str]]]
-            via_device: NotRequired[tuple[str, str]]
+            device_entry: dr.DeviceEntry
 
+    _attr_online = False
+
+    """TODO
     __slots__ = (
-        "online",
-        "device_registry_entry",
         "latest_version",
         "update_firmware",
     )
+    """
 
-    def __init__(self, id: str, **kwargs: "Unpack[Args]"):
-        identifiers = {(mlc.DOMAIN, id)}
-        kwargs["deviceentry_id"] = {"identifiers": identifiers}
-        super().__init__(
-            id,
-            **kwargs,
-        )
-        self.online = False
-        self.device_registry_entry = self.api.device_registry.async_get_or_create(
-            config_entry_id=self.config_entry.entry_id,
-            connections=kwargs.get("connections"),
-            manufacturer=mc.MANUFACTURER,
-            name=kwargs.get("name"),
-            model=kwargs.get("model"),
-            hw_version=kwargs.get("hw_version"),
-            sw_version=kwargs.get("sw_version"),
-            via_device=kwargs.get("via_device"),
-            identifiers=identifiers,
-        )
+    def __init__(self, parent: mlm.EntityManager, id: str, **kwargs: "Unpack[Args]"):
         self.update_firmware = None
+        super().__init__(parent, id, **kwargs)
 
     async def async_shutdown(self):
         await super().async_shutdown()
         del self.update_firmware
 
-    # interface: EntityManager
-    @property
-    def name(self) -> str:
-        """
-        returns a proper (friendly) device name for logging purposes
-        """
-        return (
-            self.device_registry_entry.name_by_user
-            or self.device_registry_entry.name
-            or self._get_internal_name()
-        )
-
     # interface: self
     def update_latest_version(self, latest_version: "LatestVersionType"):
+        # TODO: add the update invocation path for Hub Subdevices.
         self.latest_version = latest_version
         if self.update_firmware:
             self.update_firmware.update_info()
@@ -169,26 +133,6 @@ class BaseDevice(mlm.EntityManager):
 
     async def async_request(self, *args: "Unpack[MerossRequestType]") -> MerossResponse:
         raise NotImplementedError("async_request")
-
-    def _set_online(self):
-        self.log(self.DEBUG, "Back online!")
-        self.online = True  # type: ignore
-        for entity in self.entities.values():
-            entity.set_available()
-
-    def _set_offline(self):
-        self.log(self.DEBUG, "Going offline!")
-        self.online = False  # type: ignore
-        for entity in self.entities.values():
-            entity.set_unavailable()
-
-    @abc.abstractmethod
-    def check_device_timezone(self):
-        # TODO: remove this from BaseDevice and move to Device only.
-        # also change the invocation logic maybe scheduling this only when onlining.
-        # This is actually needed in BaseDevice because Mts valves (being thermostats)
-        # require timezone checking too. We should think a different requirement check.
-        raise NotImplementedError("check_device_timezone")
 
     @abc.abstractmethod
     def get_upgrade_payload(self, /) -> "mt_c.Upgrade":
@@ -205,17 +149,12 @@ class BaseDevice(mlm.EntityManager):
     def tz(self, /) -> tzinfo:
         raise NotImplementedError("tz")
 
-    @abc.abstractmethod
-    def _get_internal_name(self, /) -> str:
-        raise NotImplementedError("_get_internal_name")
-
     @property
-    @abc.abstractmethod
     def ns_handlers(self, /) -> "Mapping[str, NamespaceHandler]":
         raise NotImplementedError("ns_handlers")
 
 
-class Device(BaseDevice, mlm.ConfigEntryManager):
+class Device(mlm.ConfigEntryManager, BaseDevice):
     """
     Generic protocol handler class managing the physical device stack/state
     """
@@ -259,7 +198,6 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
         tz: tzinfo
 
         # these are set from ConfigEntry
-        config: mlc.DeviceConfigType
         polling_period: int
         _polling_delay: int
         conf_protocol: str
@@ -298,9 +236,9 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
         # entities
         sensor_protocol: ProtocolSensor
 
-        # HubMixin attributes: beware these are only
-        # initialized in HubMixin(s) and not set/available in standard Device(s)
-        subdevices: dict[str, "SubDevice"]
+        # Overrides
+        config_entry: Final[ConfigEntry]  # type: ignore
+        config: mlc.DeviceConfigType
 
     @staticmethod
     def digest_parse_empty(digest: dict | list):
@@ -527,16 +465,21 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
         self._trace_ability_callback_unsub = None
         self._diagnostics_build = False
 
+        uuid = config_entry.data[mlc.CONF_DEVICE_ID]
         super().__init__(
-            config_entry.data[mlc.CONF_DEVICE_ID],
-            api=api,
-            hass=api.hass,
-            config_entry=config_entry,
-            name=descriptor.productname,
-            model=descriptor.productmodel,
-            hw_version=descriptor.hardwareVersion,
-            sw_version=descriptor.firmwareVersion,
-            connections={(dr.CONNECTION_NETWORK_MAC, descriptor.macAddress)},
+            api,
+            uuid,
+            config_entry,
+            device_entry=api.device_registry.async_get_or_create(
+                config_entry_id=config_entry.entry_id,
+                connections={(dr.CONNECTION_NETWORK_MAC, descriptor.macAddress)},
+                manufacturer=mc.MANUFACTURER,
+                name=descriptor.productname,
+                model=descriptor.productmodel,
+                hw_version=descriptor.hardwareVersion,
+                sw_version=descriptor.firmwareVersion,
+                identifiers={(mlc.DOMAIN, uuid)},
+            ),
         )
 
         self.sensor_protocol = ProtocolSensor(self)
@@ -698,7 +641,7 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
         elif _bluetooth := self._bluetooth:
             _bluetooth.detach()
             self.api.device_registry.async_update_device(
-                self.device_registry_entry.id,
+                self.device_entry.id,
                 new_connections={
                     (dr.CONNECTION_NETWORK_MAC, self.descriptor.macAddress)
                 },
@@ -723,7 +666,7 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
                     key=self.key,
                     from_=mlc.DOMAIN,
                     trigger_src=self.__class__.__name__,
-                    loop=self.hass.loop,
+                    loop=self.api.hass.loop,
                 )
 
             if mn.Appliance_Encrypt_ECDHE in self.descriptor.ability:
@@ -788,6 +731,15 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
 
             if _profile:
                 _profile.attach_mqtt(self)
+
+    @property
+    @override
+    def display_name(self) -> str:
+        return (
+            self.device_entry.name_by_user
+            or self.device_entry.name
+            or self.descriptor.productname
+        )
 
     # interface: ConfigEntryManager
     async def entry_update_listener(
@@ -969,7 +921,7 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
 
         # reset and restart with a debug tracing to build the diagnostics
         self._trace_data = [mlc.CONF_TRACE_COLUMNS]
-        self._trace_future = future = self.hass.loop.create_future()
+        self._trace_future = future = self.api.hass.loop.create_future()
         await self.async_trace_open()
         return await future
 
@@ -1185,26 +1137,6 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
             handler.polling_epoch_next = 0.0
 
     @override
-    def check_device_timezone(self, /):
-        """
-        Verifies the device timezone has the same utc offset as HA local timezone.
-        This is expecially sensible when the device has 'Consumption' or
-        schedules (calendar entities) in order to align device local time to
-        what is expected in HA.
-        """
-        # TODO: check why the emulator keeps raising the issue (at boot) when the TZ is ok
-        ha_now = dt_util.now()
-        device_now = ha_now.astimezone(self.tz)
-        if ha_now.utcoffset() == device_now.utcoffset():
-            self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
-            return
-        self.create_issue(
-            mlc.ISSUE_DEVICE_TIMEZONE,
-            severity=self.IssueSeverity.WARNING,
-            translation_placeholders={"device_name": self.name},
-        )
-
-    @override
     def get_upgrade_payload(self, /) -> "mt_c.Upgrade":
         return self.descriptor.build_upgrade_payload(self.latest_version)
 
@@ -1237,10 +1169,6 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
                 str(descriptor.mcu),
             )
             return None, None, None
-
-    @override
-    def _get_internal_name(self) -> str:
-        return self.descriptor.productname
 
     # interface: self
     @property
@@ -1378,7 +1306,9 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
                         *mn.Appliance_System_Ability.request_default
                     )
                 ).payload[mc.KEY_ABILITY]
-            self.hass.config_entries.async_update_entry(self.config_entry, data=data)
+            self.api.hass.config_entries.async_update_entry(
+                self.config_entry, data=data
+            )
 
         # we also take the time to sync our tz to the device timezone
         tzname = self.descriptor.timezone
@@ -2095,7 +2025,7 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
             self.bt_connected()
 
         self.api.device_registry.async_update_device(
-            self.device_registry_entry.id,
+            self.device_entry.id,
             new_connections={
                 (dr.CONNECTION_NETWORK_MAC, self.descriptor.macAddress),
                 (dr.CONNECTION_BLUETOOTH, bt_device.address),
@@ -2578,6 +2508,24 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
 
         return False
 
+    def check_device_timezone(self, /):
+        """
+        Verifies the device timezone has the same utc offset as HA local timezone.
+        This is expecially sensible when the device has 'Consumption' or
+        schedules (calendar entities) in order to align device local time to
+        what is expected in HA.
+        """
+        ha_now = dt_util.now()
+        device_now = ha_now.astimezone(self.tz)
+        if ha_now.utcoffset() == device_now.utcoffset():
+            self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
+            return
+        self.create_issue(
+            mlc.ISSUE_DEVICE_TIMEZONE,
+            severity=self.IssueSeverity.WARNING,
+            translation_placeholders={"device_name": self.display_name},
+        )
+
     async def async_config_device_timezone(self, tzname: str | None):
         # assert self.mqtt_locallyactive
         timerules: list[list[int]]
@@ -2658,7 +2606,7 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
                     utcoffset = utcoffset.seconds if utcoffset else 0
                     return [[timestamp, utcoffset, 1 if tz.dst(device_datetime) else 0]]
 
-                timerules = await self.hass.async_add_executor_job(_build_timerules)
+                timerules = await self.api.hass.async_add_executor_job(_build_timerules)
 
             except Exception as exception:
                 self.log_exception(
@@ -2720,15 +2668,15 @@ class Device(BaseDevice, mlm.ConfigEntryManager):
         self.create_issue(
             mlc.ISSUE_DEVICE_ID_MISMATCH,
             severity=self.IssueSeverity.CRITICAL,
-            translation_placeholders={"device_name": self.name},
+            translation_placeholders={"device_name": self.display_name},
         )
 
     def update_device_info(self, device_info: "DeviceInfoType", profile: "MQTTProfile"):
         """Called when linked to a (cloud) profile and device info is available or whenever updated."""
-        name = device_info.get(mc.KEY_DEVNAME) or self._get_internal_name()
-        if name != self.device_registry_entry.name:
+        name = device_info.get(mc.KEY_DEVNAME) or self.descriptor.productname
+        if name != self.device_entry.name:
             self.api.device_registry.async_update_device(
-                self.device_registry_entry.id, name=name
+                self.device_entry.id, name=name
             )
         channel = -1
         async_update_entity = self.api.entity_registry.async_update_entity

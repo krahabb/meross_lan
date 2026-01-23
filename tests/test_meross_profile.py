@@ -200,10 +200,10 @@ async def test_meross_profile_with_device(
 
         # check the device registry has the device name from the cloud (stored)
         assert (
-            device_registry_entry := dr.async_get(hass).async_get_device(
-                **device.deviceentry_id
+            device_entry := dr.async_get(hass).async_get_device(
+                **device.device_entry_ids
             )
-        ) and device_registry_entry.name == tc.MOCK_PROFILE_MSS310_DEVNAME_STORED
+        ) and device_entry.name == tc.MOCK_PROFILE_MSS310_DEVNAME_STORED
         # now the profile should query the cloudapi and get an updated device_info list
         await device_context.time_mock.async_tick(
             mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT
@@ -222,10 +222,10 @@ async def test_meross_profile_with_device(
         )
         # check the device name was updated from cloudapi query
         assert (
-            device_registry_entry := dr.async_get(hass).async_get_device(
-                **device.deviceentry_id
+            device_entry := dr.async_get(hass).async_get_device(
+                **device.device_entry_ids
             )
-        ) and device_registry_entry.name == tc.MOCK_PROFILE_MSS310_DEVNAME
+        ) and device_entry.name == tc.MOCK_PROFILE_MSS310_DEVNAME
         assert cloudapi_mock.api_calls[cloudapi.API_DEVICE_DEVLIST_PATH] == 1
 
         # now check if a new fw is correctly managed in update entity

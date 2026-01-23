@@ -78,11 +78,11 @@ class PhysicalLockSwitch(MLSwitch):
 
 class MLToggle(EntityNamespaceMixin, MLSwitch):
 
-    # 2024-03-13: passing entitykey="0" instead of channel in order
+    # 2024-03-13: passing entity_key="0" instead of channel in order
     # to mantain unique_id compatibility with installations but
     # updating to new toggle entity model (where channel is None for this entity type)
     # 2025-12-22: restructiring MLToggle to use EntityNamespaceMixin
-    # but we still keep entitykey = "0" for compatibility with installed registry entries
+    # but we still keep entity_key = "0" for compatibility with installed registry entries
     ENTITY_KEY = "0"
     ns = mn.Appliance_Control_Toggle
 
@@ -106,7 +106,7 @@ class MLToggleX(MLSwitch):
     entity_category = None
 
     def __init__(self, manager: "Device", channel, /):
-        MLSwitch.__init__(self, manager, channel, None)
+        MLSwitch.__init__(self, manager, channel)
         manager.register_parser_entity(self)
 
 

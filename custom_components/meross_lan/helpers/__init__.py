@@ -177,11 +177,13 @@ class Loggable(abc.ABC):
     """
 
     if typing.TYPE_CHECKING:
+        type LoggerType = Loggable | logging.Logger
+
         id: Final[Any]
-        logger: "Loggable | logging.Logger"
+        logger: LoggerType
 
         class Args(TypedDict):
-            logger: NotRequired["Loggable | logging.Logger"]
+            pass
 
     hac = hac
 
@@ -191,13 +193,17 @@ class Loggable(abc.ABC):
     WARNING = mlc.CONF_LOGGING_WARNING
     CRITICAL = mlc.CONF_LOGGING_CRITICAL
 
-    __slots__ = ("id", "logtag", "logger")
+    __SLOTS__ = ("id", "logtag", "logger")
 
-    def __init__(self, id, **kwargs: "Unpack[Args]"):
+    def __init__(self, parent: "LoggerType", id, /, **kwargs: "Unpack[Args]"):
         self.id = id
-        self.logger = kwargs.get("logger", LOGGER)
+        self.logger = parent
         self.configure_logger()
         self.log(self.DEBUG, "init")
+
+    async def async_shutdown(self):
+        # mostly useful for multiple inheritance patterns
+        self.log(self.DEBUG, "async_shutdown")
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.id})"

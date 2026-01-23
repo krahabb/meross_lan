@@ -25,6 +25,8 @@ if TYPE_CHECKING:
 
 class MLGarageTimeoutBinarySensor(me.MEPartialAvailableMixin, MLBinarySensor):
 
+    ENTITY_KEY = "problem"
+
     # the time at which the transition timeout occurred
     ATTR_TRANSITION_TIMEOUT = "transition_timeout"
     # the target state which was not reached
@@ -43,7 +45,7 @@ class MLGarageTimeoutBinarySensor(me.MEPartialAvailableMixin, MLBinarySensor):
 
     def __init__(self, garage: "MLGarage", /):
         self.extra_state_attributes = {}
-        super().__init__(garage.manager, garage.channel, "problem", device_value=False)
+        super().__init__(garage.manager, garage.channel, device_value=False)
 
     def update_ok(self, was_closing, /):
         extra_state_attributes = self.extra_state_attributes
@@ -81,7 +83,12 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
     ):
         self.key_value = key
         MLSwitch.__init__(
-            self, manager, channel, f"config_{key}", device_value=device_value, name=key
+            self,
+            manager,
+            channel,
+            entity_key=f"config_{key}",
+            device_value=device_value,
+            name=key,
         )
 
 
@@ -173,10 +180,11 @@ class MLGarageMultipleConfigNumber(MLConfigNumber):
     ):
         self.key_value = key
         kwargs["name"] = key
+        kwargs["entity_key"] = f"config_{key}"
         kwargs["device_class"], kwargs["device_scale"] = (
             MLGarageMultipleConfigNumber.KEY_TO_DEVICE_CLASS_MAP.get(key, (None, 1))
         )
-        MLConfigNumber.__init__(self, manager, channel, f"config_{key}", **kwargs)
+        MLConfigNumber.__init__(self, manager, channel, **kwargs)
 
 
 class MLGarageConfigNumber(MLGarageMultipleConfigNumber):
@@ -208,7 +216,7 @@ class MLGarageEmulatedConfigNumber(MLEmulatedNumber):
             self,
             garage.manager,
             garage.channel,
-            f"config_{key}",
+            entity_key=f"config_{key}",
             device_value=garage._transition_duration,
             name=key,
         )

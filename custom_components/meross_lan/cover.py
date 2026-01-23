@@ -65,7 +65,7 @@ class MLCover(me.MLEntity, cover.CoverEntity):
         self.is_opening = False
         self._transition_unsub = None
         self._transition_end_unsub = None
-        super().__init__(manager, channel, None)
+        super().__init__(manager, channel)
 
     # interface: MLEntity
     async def async_shutdown(self):

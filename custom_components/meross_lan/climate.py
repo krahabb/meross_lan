@@ -82,7 +82,9 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
             self._tracking_state_change_unsub = None
             self._track_last_epoch = 0
             self._track_unsub = None
-            super().__init__(climate.manager, climate.channel, "tracked_sensor")
+            super().__init__(
+                climate.manager, climate.channel, entity_key="tracked_sensor"
+            )
 
         # interface: MLEntity
         async def async_shutdown(self):
@@ -578,7 +580,7 @@ class MtsSetPointNumber(MLConfigNumber):
             self,
             climate.manager,
             climate.channel,
-            f"config_temperature_{self.key_value}",
+            entity_key=f"config_temperature_{self.key_value}",
             name=f"{preset_mode} temperature",
             device_scale=climate.device_scale,
         )

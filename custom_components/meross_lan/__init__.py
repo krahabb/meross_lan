@@ -53,7 +53,7 @@ async def async_setup_entry(
             except KeyError:
                 # this could happen when we add entries after boot
                 api.profiles[profile_id] = None
-            profile = mlp.MerossProfile(profile_id, api, config_entry)
+            profile = mlp.MerossProfile(api, profile_id, config_entry)
             try:
                 await profile.async_init()
                 await profile.async_setup_entry(hass, config_entry)

@@ -356,7 +356,7 @@ class MLRollerShutterAdjustSwitch(MLSwitch):
             self,
             manager,
             channel,
-            f"{self.ns.slug}__{self.key_value}",
+            entity_key=f"{self.ns.slug}__{self.key_value}",
             name="Auto Calibration",
         )
 
@@ -393,9 +393,5 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
     def __init__(self, cover: "MLRollerShutter", key: str):
         self.key_value = key
         MLConfigNumber.__init__(
-            self,
-            cover.manager,
-            cover.channel,
-            f"config_{key}",
-            name=key,
+            self, cover.manager, cover.channel, entity_key=f"config_{key}", name=key
         )

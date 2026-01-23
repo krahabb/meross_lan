@@ -35,6 +35,8 @@ class Mts960Climate(MtsThermostatClimate):
 
     class PlugState(MLBinarySensor):
 
+        ENTITY_KEY = "plug_state"
+
         # HA core entity attributes:
         _attr_entity_registry_enabled_default = False
 
@@ -54,8 +56,10 @@ class Mts960Climate(MtsThermostatClimate):
         native_min_value = 1
         native_step = 1
 
-        def __init__(self, climate: "Mts960Climate", entitykey: str, /):
-            MLEmulatedNumber.__init__(self, climate.manager, climate.channel, entitykey)
+        def __init__(self, climate: "Mts960Climate", entity_key: str, /):
+            MLEmulatedNumber.__init__(
+                self, climate.manager, climate.channel, entity_key=entity_key
+            )
 
     if TYPE_CHECKING:
         _payload_ns: mt_t.ModeB_C
@@ -104,9 +108,7 @@ class Mts960Climate(MtsThermostatClimate):
         self._mts_timer_payload = None
         self._mts_timer_mode = None
         super().__init__(manager, channel)
-        self.binary_sensor_plug_state = Mts960Climate.PlugState(
-            manager, channel, "plug_state"
-        )
+        self.binary_sensor_plug_state = Mts960Climate.PlugState(manager, channel)
         self.number_timer_down_duration = Mts960Climate.TimerConfigNumber(
             self, "timer_down_duration"
         )
@@ -395,10 +397,7 @@ class Mts960Climate(MtsThermostatClimate):
                 except KeyError as key_error:
                     if key_error.args[0] != key:
                         MLDiagnosticSensor(
-                            manager,
-                            channel,
-                            key,
-                            native_value=native_value,
+                            manager, channel, entity_key=key, native_value=native_value
                         )
 
         self.flush_state()

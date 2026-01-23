@@ -4,7 +4,7 @@ from custom_components.meross_lan.devices.hub import (
     MS100Sensor,
     MS130Sensor,
     SmokeAlarmSensor,
-    SubDevice,
+    SubDeviceEntity,
 )
 from custom_components.meross_lan.devices.mss import (
     ConsumptionHSensor,
@@ -93,7 +93,7 @@ class EntityTest(EntityComponentTest):
     }
 
     HUB_SUBDEVICES_ENTITIES = {
-        None: [SubDevice.BatterySensor],  # battery sensor
+        None: [SubDeviceEntity.BatterySensor],
         mc.TYPE_MS100: [MS100Sensor, MLHumiditySensor],
         mc.KEY_TEMPHUMI: [MS130Sensor, MLHumiditySensor, MLLightSensor],
         mc.TYPE_MTS100: [

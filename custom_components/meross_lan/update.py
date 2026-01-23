@@ -48,14 +48,14 @@ class MLUpdate(me.MEPartialAvailableMixin, me.MLEntity, update.UpdateEntity):
         "title",
     )
 
-    def __init__(self, manager: "BaseDevice"):
+    def __init__(self, manager: "BaseDevice", /):
         self.supported_features = self._attr_supported_features
-        self.title = manager.name
+        self.title = manager.display_name
         self.unique_id = None
         self.installed_version, self.latest_version, self.release_summary = (
             manager.get_upgrade_info()
         )
-        super().__init__(manager, None, MLUpdate.ENTITY_KEY)
+        super().__init__(manager, None)
 
     def update_info(self, /):
         self.installed_version, self.latest_version, self.release_summary = (

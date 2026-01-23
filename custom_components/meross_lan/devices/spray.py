@@ -23,6 +23,7 @@ class MLSpray(MLConfigSelect):
     message formatting.
     """
 
+    ENTITY_KEY = mc.KEY_SPRAY
     ns = mn.Appliance_Control_Spray
     key_value = mc.KEY_MODE
 
@@ -32,10 +33,8 @@ class MLSpray(MLConfigSelect):
         mc.SPRAY_MODE_INTERMITTENT: "eco",
     }
 
-    manager: "Device"
-
     entity_category = None
 
-    def __init__(self, manager: "Device", channel: object):
-        MLConfigSelect.__init__(self, manager, channel, mc.KEY_SPRAY)
+    def __init__(self, manager: "Device", channel: object, /):
+        MLConfigSelect.__init__(self, manager, channel)
         manager.register_parser_entity(self)

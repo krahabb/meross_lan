@@ -23,14 +23,14 @@ class MtsWarningSensor(MLEnumSensor):
     def __init__(
         self, number_temperature: "MtsCommonTemperatureExtNumber", native_value, /
     ):
-        entitykey = f"{number_temperature.entitykey}_warning"
+        entity_key = f"{number_temperature.entitykey}_warning"
         MLEnumSensor.__init__(
             self,
             number_temperature.manager,
             number_temperature.channel,
-            entitykey,
+            entity_key=entity_key,
             native_value=native_value,
-            translation_key=f"mts_{entitykey}",
+            translation_key=f"mts_{entity_key}",
         )
 
 
@@ -44,7 +44,7 @@ class MtsConfigSwitch(MLSwitch):
             self,
             number_temperature.manager,
             number_temperature.channel,
-            f"{number_temperature.entitykey}_switch",
+            entity_key=f"{number_temperature.entitykey}_switch",
             device_value=device_value,
             name=(f"{number_temperature.entitykey} Alarm").capitalize(),
             state_callback=number_temperature._switch_state_callback,
@@ -71,7 +71,7 @@ class MtsCommonTemperatureNumber(MLConfigNumber):
             self,
             climate.manager,
             climate.channel,
-            self.__class__.ns.slug_end,
+            entity_key=self.__class__.ns.slug_end,
             device_scale=climate.device_scale,
         )
         self.manager.register_parser_entity(self)
@@ -179,7 +179,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
             self.sensor_external_temperature = MLTemperatureSensor(
                 self.manager,
                 self.channel,
-                "external sensor",
+                entity_key="external sensor",
                 device_value=current_temp,
                 device_scale=self.device_scale,
             )
@@ -191,28 +191,26 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
 class MtsWindowOpened(MLBinarySensor):
     # Specialized binary sensor for Thermostat.WindowOpened entity used in Mts200-Mts960(maybe).
 
+    ENTITY_KEY = mc.KEY_WINDOWOPENED
     ns = mn_t.Appliance_Control_Thermostat_WindowOpened
     key_value = mc.KEY_STATUS
 
     _attr_device_class = MLBinarySensor.DeviceClass.WINDOW
 
     def __init__(self, climate: "MtsThermostatClimate", /):
-        MLBinarySensor.__init__(
-            self, climate.manager, climate.channel, mc.KEY_WINDOWOPENED
-        )
+        MLBinarySensor.__init__(self, climate.manager, climate.channel)
         climate.manager.register_parser_entity(self)
 
 
 class MtsExternalSensorSwitch(MLSwitch):
     # External sensor mode: use internal(0) vs external(1) sensor as temperature loopback.
 
+    ENTITY_KEY = "external sensor mode"
     ns = mn_t.Appliance_Control_Thermostat_Sensor
     key_value = mc.KEY_MODE
 
     def __init__(self, climate: "MtsThermostatClimate", /):
-        MLSwitch.__init__(
-            self, climate.manager, climate.channel, "external sensor mode"
-        )
+        MLSwitch.__init__(self, climate.manager, climate.channel)
         climate.manager.register_parser_entity(self)
 
 
@@ -222,6 +220,7 @@ class MtsHoldAction(MLConfigSelect):
         manager: "Device"
         number_time: MLConfigNumber
 
+    ENTITY_KEY = "hold action"
     ns = mn_t.Appliance_Control_Thermostat_HoldAction
     key_value = mc.KEY_MODE
 
@@ -234,12 +233,12 @@ class MtsHoldAction(MLConfigSelect):
     __slots__ = ("number_time",)
 
     def __init__(self, climate: "MtsThermostatClimate", /):
-        MLConfigSelect.__init__(self, climate.manager, climate.channel, "hold_action")
+        MLConfigSelect.__init__(self, climate.manager, climate.channel)
         climate.manager.register_parser_entity(self)
         self.number_time = MLConfigNumber(
             climate.manager,
             climate.channel,
-            "hold_action_time",
+            entity_key="hold_action_time",
             device_scale=1,
             device_class=MLConfigNumber.DEVICE_CLASS_DURATION,
             native_unit_of_measurement=MLConfigNumber.hac.UnitOfTime.MINUTES,
@@ -269,6 +268,7 @@ class MtsHoldAction(MLConfigSelect):
 
 class MtsTempUnit(MLConfigSelect):
 
+    ENTITY_KEY = "display_temperature_unit"
     ns = mn.Appliance_Control_TempUnit
     key_value = mc.KEY_TEMPUNIT
 
@@ -280,9 +280,7 @@ class MtsTempUnit(MLConfigSelect):
     manager: "Device"
 
     def __init__(self, climate: "MtsThermostatClimate", /):
-        MLConfigSelect.__init__(
-            self, climate.manager, climate.channel, "display_temperature_unit"
-        )
+        MLConfigSelect.__init__(self, climate.manager, climate.channel)
         climate.manager.register_parser_entity(self)
 
 
@@ -304,7 +302,7 @@ class MLScreenBrightnessNumber(MLConfigNumber):
             self,
             manager,
             0,
-            f"screenbrightness_{key}",
+            entity_key=f"screenbrightness_{key}",
             name=f"Screen brightness ({key})",
         )
 

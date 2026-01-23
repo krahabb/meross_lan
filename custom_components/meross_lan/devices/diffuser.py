@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     DIFFUSER_SENSOR_ENTITY_DEFS: Final
 
 DIFFUSER_SENSOR_ENTITY_DEFS = {
-    mc.KEY_HUMIDITY: MLHumiditySensor.ENTITY_DEF(None),
+    mc.KEY_HUMIDITY: MLHumiditySensor.ENTITY_DEF(),
     mc.KEY_TEMPERATURE: MLTemperatureSensor.ENTITY_DEF(device_scale=10),
 }
 
@@ -74,7 +74,9 @@ def digest_init_diffuser(device: "Device", digest: dict) -> "DigestInitReturnTyp
                         entity = entities[key]
                     except KeyError:
                         entity_def = DIFFUSER_SENSOR_ENTITY_DEFS[key]
-                        entity = entity_def.type(device, None, key, **entity_def.kwargs)
+                        entity = entity_def.type(
+                            device, None, entity_key=key, **entity_def.kwargs
+                        )
                     entity.update_device_value(value)
                 except KeyError:
                     continue

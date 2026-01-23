@@ -2,6 +2,7 @@ import bisect
 from functools import cached_property
 from typing import TYPE_CHECKING
 
+from . import Loggable
 from .. import const as mlc
 from ..merossclient import merge_dicts
 from ..merossclient.protocol import const as mc, namespaces as mn
@@ -9,7 +10,6 @@ from ..merossclient.protocol import const as mc, namespaces as mn
 if TYPE_CHECKING:
     from typing import Any, Callable, Coroutine, Final, Iterable
 
-    from . import Loggable
     from ..merossclient.protocol import types as mt
     from ..merossclient.protocol.message import MerossMessage, MerossResponse
     from ..merossclient.protocol.types import JsonDict, JsonMapping
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     POLLING_STRATEGY_CONF: Final[dict[mn.Namespace, "NamespaceHandler.ConfigType"]]
 
 
-class NamespaceParser(Loggable if TYPE_CHECKING else object):
+class NamespaceParser(Loggable):
     """
     Represents the final 'parser' of a message after 'handling' in NamespaceHandler.
     In this model, NamespaceHandler is responsible for unpacking those messages
@@ -36,8 +36,8 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
         # These properties must be implemented in derived classes according to the
         # namespace payload syntax. NamespaceHandler will lookup any of these when
         # establishing the link between the handler and the parser
-        manager: BaseDevice
-        ns: mn.Namespace
+        manager: BaseDevice  # used for async_request and ns_handlers access (only MLEntity for now)
+        ns: mn.Namespace  # same (only MLEntity for now)
         channel: int | str  # the channel/id/subId key value according to the namespace
 
         _payload_ns: JsonDict  # the last parsed payload
@@ -51,6 +51,7 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
     _namespace_handlers = None  # type: ignore
 
     async def async_shutdown(self):
+        await super().async_shutdown()
         try:
             for handler in self._namespace_handlers:
                 _dispatcher: NamespaceHandler._DispatcherParser = handler.parsers[self.channel]  # type: ignore
@@ -63,10 +64,10 @@ class NamespaceParser(Loggable if TYPE_CHECKING else object):
                         del handler.parsers[self.channel]
                 else:
                     del handler.parsers[self.channel]
-            del self._namespace_handlers
+            self._namespace_handlers = None  # type: ignore
         except TypeError:  # never registered
-            assert self._namespace_handlers is None
-        del self.manager
+            pass
+        assert self._namespace_handlers is None
 
     @cached_property
     def handler_ns(self) -> "NamespaceHandler":
@@ -654,7 +655,7 @@ class NamespaceHandler:
                 MLDiagnosticSensor(
                     self.device,
                     channel,
-                    f"{key}_{subkey}",
+                    entity_key=f"{key}_{subkey}",
                     native_value=subvalue,
                 )
                 if not self.polling_strategy:
@@ -696,11 +697,7 @@ class NamespaceHandler:
             from ..sensor import MLDiagnosticSensor
 
             self.register_parser(
-                MLDiagnosticSensor(
-                    self.device,
-                    channel,
-                    self.ns.key,
-                )
+                MLDiagnosticSensor(self.device, channel, entity_key=self.ns.key)
             )
         else:
             self.parsers[channel] = self._parse_stub

@@ -2,8 +2,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components import number
 
-from .helpers import entity as me, reverse_lookup
-from .merossclient.protocol import const as mc
+from .helpers import entity as me
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final, NotRequired, Unpack
@@ -76,21 +75,6 @@ class MLConfigNumber(MLNumber):
 
     __slots__ = ("_async_request_debounce_unsub",)
 
-    def __init__(
-        self,
-        manager: "BaseDevice",
-        channel: object | None,
-        entitykey: str | None = None,
-        **kwargs: "Unpack[MLConfigNumber.Args]",
-    ):
-        self._async_request_debounce_unsub = None
-        super().__init__(
-            manager,
-            channel,
-            entitykey,
-            **kwargs,
-        )
-
     async def async_shutdown(self):
         self._cancel_request()
         await super().async_shutdown()
@@ -110,15 +94,14 @@ class MLConfigNumber(MLNumber):
         # especially when using the BOXED UI we're debouncing the device
         # request and provide 'temporaneous' optimistic updates
         self.update_native_value(device_value / self.device_scale)
-        if self._async_request_debounce_unsub:
-            self._async_request_debounce_unsub.cancel()
+        self._cancel_request()
         self._async_request_debounce_unsub = self.manager.schedule_async_callback(
             self.DEBOUNCE_DELAY, self._async_request_debounce, device_value
         )
 
     # interface: self
     async def _async_request_debounce(self, device_value):
-        self._async_request_debounce_unsub = None
+        del self._async_request_debounce_unsub
         try:
             await self.async_request_value(device_value)
         except Exception:
@@ -128,9 +111,11 @@ class MLConfigNumber(MLNumber):
                 self.update_native_value(device_value / self.device_scale)
 
     def _cancel_request(self):
-        if self._async_request_debounce_unsub:
+        try:
             self._async_request_debounce_unsub.cancel()
-            self._async_request_debounce_unsub = None
+            del self._async_request_debounce_unsub
+        except AttributeError:
+            return
 
 
 class MLEmulatedNumber(me.MEPartialAvailableMixin, MLNumber):

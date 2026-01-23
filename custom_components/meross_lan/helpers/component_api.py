@@ -17,7 +17,7 @@ from homeassistant.helpers import (
 )
 
 # import core modules instead of symbols to ease patching in a single place
-from . import ConfigEntryType, manager as mlm, mqtt_profile as mlq, device as mld
+from . import ConfigEntryType, device as mld, manager as mlm, mqtt_profile as mlq
 from .. import const as mlc
 from ..merossclient import (
     MEROSSDEBUG,
@@ -36,7 +36,7 @@ from ..merossclient.protocol.message import (
 
 if TYPE_CHECKING:
 
-    from typing import Callable, Final
+    from typing import Callable, Final, Literal
 
     from homeassistant.components.mqtt import async_publish as mqtt_async_publish
     from homeassistant.config_entries import ConfigEntry
@@ -66,7 +66,7 @@ MIXIN_DIGEST_INIT = {
 class HAMQTTConnection(mlq.MQTTConnection):
 
     if TYPE_CHECKING:
-        is_cloud_connection: Final[bool]
+        is_cloud_connection: Final[Literal[False]]
 
         _unsub_mqtt_subscribe: Callable | None
         _unsub_mqtt_disconnected: Callable | None
@@ -131,7 +131,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
     @override
     async def _async_mqtt_publish(self, request: "MerossMessage"):
         await mqtt_async_publish(
-            self.profile.hass, mc.TOPIC_REQUEST.format(request.uuid), request.json
+            self.profile.api.hass, mc.TOPIC_REQUEST.format(request.uuid), request.json
         )
         self._mqtt_published()
 
@@ -147,7 +147,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
         if self._mqtt_subscribe_future:
             return await self._mqtt_subscribe_future
 
-        hass = self.profile.hass
+        hass = self.profile.api.hass
         self._mqtt_subscribe_future = hass.loop.create_future()
         try:
             from homeassistant.components import mqtt
@@ -213,7 +213,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
         with self.exception_warning("async_mqtt_subscribe: recovering broker conf"):
             from homeassistant.components import mqtt
 
-            mqtt_data = self.profile.hass.data[mqtt.DATA_MQTT]
+            mqtt_data = self.profile.api.hass.data[mqtt.DATA_MQTT]
             if mqtt_data and mqtt_data.client:
                 conf = mqtt_data.client.conf
                 self.broker.host = conf[mqtt.CONF_BROKER]
@@ -472,7 +472,7 @@ class ComponentApi(mlq.MQTTProfile):
             )
 
     if TYPE_CHECKING:
-        is_cloud_profile: Final[bool]
+        hass: Final[HomeAssistant]
 
         devices: Final[dict[str, Device | None]]
         """
@@ -496,6 +496,7 @@ class ComponentApi(mlq.MQTTProfile):
         device_registry: Final[dr.DeviceRegistry]
         entity_registry: Final[er.EntityRegistry]
         issue_registry: Final[ir.IssueRegistry]
+        # TODO: cache configentries and/or loop accessor?
 
         _mqtt_connection: HAMQTTConnection | None
 
@@ -505,7 +506,11 @@ class ComponentApi(mlq.MQTTProfile):
 
         _bt_devices: Final[dict[str, BTDevice]]
 
+        # Overrides
+        is_cloud_profile: Final[Literal[False]]
+
     __slots__ = (
+        "hass",
         "devices",
         "profiles",
         "managers_transient_state",
@@ -550,16 +555,7 @@ class ComponentApi(mlq.MQTTProfile):
         return None
 
     def __init__(self, hass: "HomeAssistant"):
-        self.is_cloud_profile = False
-        mlq.MQTTProfile.__init__(
-            self,
-            mlc.CONF_PROFILE_ID_LOCAL,
-            api=self,
-            hass=hass,
-            config_entry=hass.config_entries.async_entry_for_domain_unique_id(
-                mlc.DOMAIN, mlc.DOMAIN
-            ),
-        )
+        self.hass = hass
         self.devices = {}
         self.profiles = {}
         self.managers_transient_state = {}
@@ -579,6 +575,16 @@ class ComponentApi(mlq.MQTTProfile):
                 case (ConfigEntryType.PROFILE, profile_id):
                     self.profiles[profile_id] = None
         self._bt_devices = {}
+        self.api = self  # type: ignore
+        self.is_cloud_profile = False
+        mlq.MQTTProfile.__init__(
+            self,
+            self,
+            mlc.CONF_PROFILE_ID_LOCAL,
+            hass.config_entries.async_entry_for_domain_unique_id(
+                mlc.DOMAIN, mlc.DOMAIN
+            ),
+        )
 
         async def _async_service_request(
             service_call: "ServiceCall",
@@ -714,7 +720,7 @@ class ComponentApi(mlq.MQTTProfile):
                         ),
                         MerossHttpClient(
                             host,
-                            loop=self.hass.loop,
+                            loop=hass.loop,
                             logger=self,
                         ).async_request_raw,
                     )
@@ -745,6 +751,8 @@ class ComponentApi(mlq.MQTTProfile):
             del self.device_registry  # type: ignore
             del self.entity_registry  # type: ignore
             del self.issue_registry  # type: ignore
+            del self.hass  # type: ignore
+            del self.api  # type: ignore
             hass.data.pop(mlc.DOMAIN)
 
         hass.bus.async_listen_once(hac.EVENT_HOMEASSISTANT_STOP, _async_terminate)
@@ -836,12 +844,8 @@ class ComponentApi(mlq.MQTTProfile):
                 "in the integration configuration page"
             )
 
-        ability = descriptor.ability
-        digest = descriptor.digest
-
         mixin_classes = []
-
-        for key_digest in digest:
+        for key_digest in descriptor.digest:
             if key_digest not in MIXIN_DIGEST_INIT:
                 continue
             _mixin_or_descriptor = MIXIN_DIGEST_INIT[key_digest]
