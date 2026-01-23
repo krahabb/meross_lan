@@ -97,11 +97,17 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         "switch_patch_hvacaction",
     )
 
-    def __init__(
-        self, hub: "HubMixin", subid: str, **kwargs: "Unpack[SubDeviceEntity.Args]"
-    ):
+    def __init__(self, hub: "HubMixin", subid: str, key_digest: str, /):
         self.extra_state_attributes = {}
-        SubDeviceEntity.__init__(self, hub, subid, **kwargs)
+        match key_digest:
+            case mc.TYPE_MTS100 | mc.TYPE_MTS100V3:
+                self._digest_parse = self._parse_mts100
+            case mc.TYPE_MTS150 | mc.TYPE_MTS150P:
+                # mts150p subdevs should still report their key_digest as mts150
+                # but we handle that option as possible though
+                self._digest_parse = self._parse_mts150
+
+        SubDeviceEntity.__init__(self, hub, subid, key_digest)
         self.binary_sensor_window = MLBinarySensor(
             self,
             subid,
@@ -221,13 +227,6 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
 
     # interface: SubDeviceEntity
     @override
-    def parse_digest(self, payload: "mt_h.Digest_SubDevice", /):
-        self._parse_online(payload)
-        # TODO: maybe...this is rarely polled and we're already parsing
-        # more state in _parse_all
-
-    # message handlers
-    @override
     def _parse_all(self, payload: dict, /):
         self._parse_online(payload.get(mc.KEY_ONLINE, {}))
         if not self.available:
@@ -246,6 +245,12 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         else:
             self.flush_state()
 
+    @override
+    def _parse_togglex(self, payload, /):
+        self._mts_onoff = payload[mc.KEY_ONOFF]
+        self.flush_state()
+
+    # interface: self
     def _parse_mode(self, payload, /):
         self._mts_mode = payload[mc.KEY_STATE]
         self.flush_state()
@@ -287,11 +292,17 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
                 pass
         self.flush_state()
 
-    def _parse_togglex(self, payload, /):
-        self._mts_onoff = payload[mc.KEY_ONOFF]
+    def _parse_mts100(self, payload: dict, /):
+        """parse digest key for mts100/mts100v3 subdevice"""
+        self._mts_mode = payload[mc.KEY_MODE]
         self.flush_state()
 
-    # interface: self
+    def _parse_mts150(self, payload: dict, /):
+        """parse digest key for mts150/mts150p subdevice"""
+        self._mts_mode = payload[mc.KEY_MODE]
+        # TODO: parse more keys?
+        self.flush_state()
+
     def update_scheduleb_mode(self, mode, /):
         self.extra_state_attributes[mc.KEY_SCHEDULEBMODE] = mode
         self.schedule._schedule_entry_count_max = mode

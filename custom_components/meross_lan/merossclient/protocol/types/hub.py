@@ -11,62 +11,7 @@ class IdPayload(TypedDict):
 
 class SubIdPayload(TypedDict):
     subId: str
-    channel: str
-
-
-class Digest_SubDevice(IdPayload):
-    """Common fields for subdevices in hub digest."""
-
-    status: int
-    onoff: int
-    lastActiveTime: int
-
-
-class _ms100(TypedDict):
-    latestTime: int
-    latestTemperature: int
-    latestHumidity: int
-    voltage: int
-
-
-class Digest_ms100(Digest_SubDevice):
-    """Digest payload for ms100 subdevice."""
-
-    ms100: _ms100
-
-
-class _tempHumi(TypedDict):
-    latestTime: int
-    temp: int
-    humi: int
-
-
-class Digest_ms130(Digest_SubDevice):
-    """Digest payload for ms130 subdevice."""
-
-    tempHumi: _tempHumi
-
-
-class _mts100v3(TypedDict):
-    mode: int
-
-
-class Digest_mts100v3(Digest_SubDevice):
-    """Digest payload for mts100v3 subdevice."""
-
-    scheduleBMode: int
-    mts100v3: _mts100v3
-
-
-class Digest_Hub(TypedDict):
-    """Appliance.Digest.Hub"""
-
-    hubId: int
-    mode: int
-    nvdmChl: NotRequired[int]
-    workChl: NotRequired[int]
-    curChl: NotRequired[int]
-    subdevice: list[Digest_SubDevice]  # TODO: define better
+    channel: int
 
 
 class Battery(IdPayload):
@@ -82,6 +27,12 @@ class _Online(TypedDict):
 
 class Online(_Online, IdPayload):
     """Appliance.Hub.Online"""
+
+
+class ToggleX(IdPayload):
+    """Appliance.Hub.ToggleX"""
+
+    onoff: int  # 1: on, 0: off
 
 
 class Sensor_All(IdPayload):
@@ -152,7 +103,54 @@ class SubDevice_Version(IdPayload):
     firmware: str
 
 
-class ToggleX(IdPayload):
-    """Appliance.Hub.ToggleX"""
+class Digest_SubDevice(_Online, ToggleX, IdPayload):
+    """Common fields for subdevices in hub digest."""
 
-    onoff: int  # 1: on, 0: off
+    pass
+
+
+class _ms100(TypedDict):
+    latestTime: int
+    latestTemperature: int
+    latestHumidity: int
+    voltage: int
+
+
+class Digest_ms100(Digest_SubDevice):
+    """Digest payload for ms100 subdevice."""
+
+    ms100: _ms100
+
+
+class _tempHumi(TypedDict):
+    latestTime: int
+    temp: int
+    humi: int
+
+
+class Digest_ms130(Digest_SubDevice):
+    """Digest payload for ms130 subdevice."""
+
+    tempHumi: _tempHumi
+
+
+class _mts100v3(TypedDict):
+    mode: int
+
+
+class Digest_mts100v3(Digest_SubDevice):
+    """Digest payload for mts100v3 subdevice."""
+
+    scheduleBMode: int
+    mts100v3: _mts100v3
+
+
+class Digest_Hub(TypedDict):
+    """Appliance.Digest.Hub"""
+
+    hubId: int
+    mode: int
+    nvdmChl: NotRequired[int]
+    workChl: NotRequired[int]
+    curChl: NotRequired[int]
+    subdevice: list[Digest_SubDevice]  # TODO: define better
