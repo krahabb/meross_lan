@@ -56,58 +56,6 @@ if TYPE_CHECKING:
     )
 
 
-class HubSensorAdjustNumber(MLConfigNumber):
-    ns = mn_h.Appliance_Hub_Sensor_Adjust
-
-    __slots__ = (
-        "native_max_value",
-        "native_min_value",
-        "native_step",
-    )
-
-    def __init__(
-        self,
-        manager: "SubDeviceEntity",
-        device_class: MLConfigNumber.DeviceClass,
-        min_value: float,
-        max_value: float,
-        step: float,
-        device_value: float,
-        /,
-    ):
-        self.key_value = device_class  # either 'temperature' or 'humidity'
-        self.native_min_value = min_value
-        self.native_max_value = max_value
-        self.native_step = step
-        MLConfigNumber.__init__(
-            self,
-            manager,
-            manager.channel,
-            entity_key=f"config_{self.ns.key}_{self.key_value}",
-            device_class=device_class,
-            device_scale=10,
-            device_value=device_value,
-            name=f"Adjust {device_class}",
-        )
-
-    @override
-    async def async_request_value(self, device_value, /):
-        # the SET command on NS_APPLIANCE_HUB_SENSOR_ADJUST works by applying
-        # the issued value as a 'delta' to the current configured value i.e.
-        # 'new adjust value' = 'current adjust value' + 'issued adjust value'
-        # Since the native HA interface async_set_native_value wants to set
-        # the 'new adjust value' we have to issue the difference against the
-        # currently configured one
-        (
-            await self.manager.async_request(
-                *self.ns.request_set(
-                    {self.key_value: device_value - self.device_value}, self.channel
-                )
-            )
-        )
-        self.update_device_value(device_value)
-
-
 class HubToggleX(MLSwitch):
     """Generic switch to map Appliance.Hub.ToggleX namespace."""
 
@@ -1074,6 +1022,48 @@ class SmokeAlarmSensor(SubDeviceEntity, MLEnumSensor):
 
 class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
 
+    class SensorAdjustNumber(MLConfigNumber):
+        ns = mn_h.Appliance_Hub_Sensor_Adjust
+
+        _attr_device_scale = 10
+
+        @override
+        async def async_request_value(self, device_value, /):
+            # the SET command on NS_APPLIANCE_HUB_SENSOR_ADJUST works by applying
+            # the issued value as a 'delta' to the current configured value i.e.
+            # 'new adjust value' = 'current adjust value' + 'issued adjust value'
+            # Since the native HA interface async_set_native_value wants to set
+            # the 'new adjust value' we have to issue the difference against the
+            # currently configured one
+            (
+                await self.manager.async_request(
+                    *self.ns.request_set(
+                        {self.key_value: device_value - self.device_value}, self.channel
+                    )
+                )
+            )
+            self.update_device_value(device_value)
+
+    class AdjustTemperatureNumber(SensorAdjustNumber):
+
+        ENTITY_KEY = "config_adjust_temperature"
+        key_value = mc.KEY_TEMPERATURE
+        _attr_device_class = MLConfigNumber.DeviceClass.TEMPERATURE
+
+        native_min_value = -5
+        native_max_value = 5
+        native_step = 0.1
+
+    class AdjustHumidityNumber(SensorAdjustNumber):
+
+        ENTITY_KEY = "config_adjust_humidity"
+        key_value = mc.KEY_HUMIDITY
+        _attr_device_class = MLConfigNumber.DeviceClass.HUMIDITY
+
+        native_min_value = -20
+        native_max_value = 20
+        native_step = 1
+
     MODEL = mc.TYPE_MS100
     KEY_DIGEST = mc.TYPE_MS100
     NS_HUB = (
@@ -1100,21 +1090,17 @@ class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
     def _parse_adjust(self, payload: "mt_h.Sensor_Adjust"):
         self.hub.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
             self,
-            HubSensorAdjustNumber(
+            MS100Sensor.AdjustTemperatureNumber(
                 self,
-                HubSensorAdjustNumber.DeviceClass.TEMPERATURE,
-                -5,
-                5,
-                0.1,
-                payload[mc.KEY_TEMPERATURE],
+                self.subid,
+                name=f"Adjust temperature",
+                device_value=payload[mc.KEY_TEMPERATURE],
             ),
-            HubSensorAdjustNumber(
+            MS100Sensor.AdjustHumidityNumber(
                 self,
-                HubSensorAdjustNumber.DeviceClass.HUMIDITY,
-                -20,
-                20,
-                1,
-                payload[mc.KEY_HUMIDITY],
+                self.subid,
+                name=f"Adjust humidity",
+                device_value=payload[mc.KEY_HUMIDITY],
             ),
         )
         # swap also the update_sensors method to a smarter one

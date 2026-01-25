@@ -4,10 +4,7 @@ from custom_components.meross_lan.devices.garagedoor import (
     MLGarageConfigNumber,
     MLGarageMultipleConfigNumber,
 )
-from custom_components.meross_lan.devices.hub import (
-    HubSensorAdjustNumber,
-    MstSwitch,
-)
+from custom_components.meross_lan.devices.hub import MS100Sensor, MstSwitch
 from custom_components.meross_lan.devices.hub.mts100 import Mts100Climate
 from custom_components.meross_lan.devices.ms600 import (
     PresenceConfigDistance,
@@ -89,7 +86,10 @@ class EntityTest(EntityComponentTest):
         mn_t.Appliance_Control_Thermostat_Overheat: [MtsOverheatNumber],
     }
     HUB_SUBDEVICES_ENTITIES = {
-        mc.TYPE_MS100: [HubSensorAdjustNumber] * 2,
+        mc.TYPE_MS100: [
+            MS100Sensor.AdjustTemperatureNumber,
+            MS100Sensor.AdjustHumidityNumber,
+        ],
         mc.TYPE_MTS100: _MTS100_ENTITES,
         mc.TYPE_MTS100V3: _MTS100_ENTITES,
         mc.TYPE_MTS150: _MTS100_ENTITES,
