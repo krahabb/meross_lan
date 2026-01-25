@@ -296,9 +296,10 @@ class NamespaceHandler:
                 {ns.key: self.polling_request_channels},
             )
             return
-        if (_payload_type is ns.payload_get) and ns.can_query:
+        if _payload_type is ns.payload_get:
             # we'll reuse the default in the ns definition
-            self.polling_request = ns.request_default
+            if ns.can_query:
+                self.polling_request = ns.request_default
             return
         match _payload_type:
             case mn.PayloadType.PUSH | mn.PayloadType.PUSH_QUERY:
@@ -307,11 +308,13 @@ class NamespaceHandler:
                     mc.METHOD_PUSH,
                     mn.EMPTY_DICT,
                 )
+            case mn.PayloadType.UNSUPPORTED:
+                pass  # do nothing
             case _:
                 self.polling_request = _payload_type.build_get(ns)
 
     def polling_request_add_channel(
-        self, channel, extra: "mt.MerossPayloadType" = {}, /
+        self, channel, extra: "mt.MerossPayloadType" = mn.EMPTY_DICT, /
     ):
         # Ensures the channel is set in polling request payload should
         # the ns need it. Also adjusts the estimated polling_response_size.
@@ -382,7 +385,12 @@ class NamespaceHandler:
         for channel in channels:
             entity_class(self.device, channel)
 
-    def register_parser(self, parser: "NamespaceParser", /):
+    def register_parser(
+        self,
+        parser: "NamespaceParser",
+        extra: "mt.MerossPayloadType" = mn.EMPTY_DICT,
+        /,
+    ):
         """Installs a dedicated parser for the given channel payload.
         Calling this multiple times for the same channel is prohibited
         by design even though the dispatching model allows (_DispatcherParser)
@@ -393,34 +401,10 @@ class NamespaceHandler:
             parser, f"_parse_{self.ns.slug_end}", parser._parse
         )
 
-        """
-        try:
-            # at this stage _dispatcher might be either a single parserfunc or a dispatcher
-            _dispatcher: NamespaceHandler._DispatcherParser
-            _dispatcher = self.parsers[channel]  # type: ignore
-            _dispatcher.parsers.append(
-                getattr(parser, f"_parse_{self.ns.slug_end}", parser._parse)
-            )
-        except KeyError:
-            # parser slot not yet assigned: install a 'simple' parser
-            self.parsers[channel] = getattr(
-                parser, f"_parse_{self.ns.slug_end}", parser._parse
-            )
-        except AttributeError as ae:
-            assert ae.name == "parsers", "unexpected AttributeError"
-            # parser slot already assigned to a simple parser: convert to dispatcher
-            self.parsers[channel] = NamespaceHandler._DispatcherParser(
-                [
-                    _dispatcher,
-                    getattr(parser, f"_parse_{self.ns.slug_end}", parser._parse),
-                ]
-            )
-        """
-
         if not parser._namespace_handlers:
             parser._namespace_handlers = set()
         parser._namespace_handlers.add(self)
-        self.polling_request_add_channel(channel)
+        self.polling_request_add_channel(channel, extra)
         self.handler = self._handle_list
 
     def register_parsers(self, *parsers: "NamespaceParser"):

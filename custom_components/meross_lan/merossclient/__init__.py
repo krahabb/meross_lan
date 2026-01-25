@@ -38,10 +38,12 @@ if TYPE_CHECKING:
     from .protocol.types import (
         JsonDict,
         JsonList,
+        JsonMapping,
         MerossRequestType,
         VersionTupleType,
         config as mt_cf,
         control as mt_c,
+        hub as mt_h,
         mcu as mt_m,
     )
 
@@ -421,7 +423,7 @@ def get_productnametype(producttype: str) -> str:
     return f"{name} ({producttype})" if name is not producttype else producttype
 
 
-def get_subdevice_key_digest(digest: "JsonDict") -> str:
+def get_subdevice_key_digest(digest: "JsonMapping") -> str:
     """Parses the subdevice dict from the hub digest to identify it's 'type'.
     Raises StopIteration if unable to find a valid digest key."""
     return (

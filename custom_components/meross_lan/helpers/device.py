@@ -219,7 +219,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         _mqtt_lastresponse: float
         _profile: MQTTProfile | None
         ns_handlers: Final[dict[str, NamespaceHandler]]
-        digest_handlers: Final[dict[str, DigestParseFunc]]
+        digest_parsers: Final[dict[str, DigestParseFunc]]
         digest_pollers: Final[set[NamespaceHandler]]
         _lazypoll_requests: list[NamespaceHandler]
         _polling_epoch: float
@@ -389,7 +389,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         "_profile",
         "ns_handlers",
         "handler_all",
-        "digest_handlers",
+        "digest_parsers",
         "digest_pollers",
         "_lazypoll_requests",
         "_polling_epoch",
@@ -447,7 +447,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         self._profile = None
         self.ns_handlers = {}
         self.handler_all = NamespaceHandler(self, mn.Appliance_System_All)
-        self.digest_handlers = {}
+        self.digest_parsers = {}
         self.digest_pollers = set()
         self._lazypoll_requests = []
         self._polling_epoch = 0.0
@@ -557,7 +557,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
             # carrying 'control' instead of 'digest'
             try:
                 try:
-                    self.digest_handlers[key_digest], _digest_pollers = (
+                    self.digest_parsers[key_digest], _digest_pollers = (
                         Device.DIGEST_INIT[key_digest](self, _digest)
                     )
                 except (KeyError, TypeError):
@@ -567,7 +567,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                     _module_path = Device.DIGEST_INIT.get(
                         key_digest, f".devices.{key_slug}"
                     )
-                    if not isinstance(_module_path, str):
+                    if type(_module_path) is not str:
                         # This means we catched an error inside the digest init func
                         raise
                     try:
@@ -584,8 +584,8 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                         )
                         digest_init_func = Device.digest_init_empty
                     Device.DIGEST_INIT[key_digest] = digest_init_func
-                    self.digest_handlers[key_digest], _digest_pollers = (
-                        digest_init_func(self, _digest)
+                    self.digest_parsers[key_digest], _digest_pollers = digest_init_func(
+                        self, _digest
                     )
                 self.digest_pollers.update(_digest_pollers)
 
@@ -593,7 +593,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                 self.log_exception(
                     self.WARNING, exception, "initializing digest key '%s'", key_digest
                 )
-                self.digest_handlers[key_digest] = Device.digest_parse_empty
+                self.digest_parsers[key_digest] = Device.digest_parse_empty
 
     def start(self):
         # called by async_setup_entry after the entities have been registered
@@ -1021,7 +1021,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         for handler in self.ns_handlers.values():
             handler.shutdown()
         del self.ns_handlers  # type: ignore
-        del self.digest_handlers  # type: ignore
+        del self.digest_parsers  # type: ignore
         del self.digest_pollers  # type: ignore
         del self._lazypoll_requests
         del self.sensor_protocol
@@ -2366,7 +2366,14 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                 self.device_debug = None
 
         for key_digest, _digest in descr.digest.items() or descr.control.items():
-            self.digest_handlers[key_digest](_digest)
+            try:
+                self.digest_parsers[key_digest](_digest)
+            except Exception as e:
+                self.log_exception(
+                    self.WARNING,
+                    e,
+                    self.digest_parsers[key_digest].__name__,
+                )
 
         if needsave:
             self.schedule_entry_update(query_abilities)

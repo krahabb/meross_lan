@@ -47,7 +47,7 @@ def digest_init_thermostat(device: "Device", digest: dict) -> "DigestInitReturnT
 
     ability = device.descriptor.ability
 
-    digest_handlers: dict[str, "DigestParseFunc"] = {}
+    digest_parsers: dict[str, "DigestParseFunc"] = {}
     digest_pollers: set["NamespaceHandler"] = set()
 
     for ns_key, ns_digest in digest.items():
@@ -63,18 +63,18 @@ def digest_init_thermostat(device: "Device", digest: dict) -> "DigestInitReturnT
                     break
             else:
                 # ns_key is really unknown..
-                digest_handlers[ns_key] = device.digest_parse_empty
+                digest_parsers[ns_key] = device.digest_parse_empty
                 continue
 
         handler = device.get_handler(ns)
-        digest_handlers[ns_key] = handler.parse_list
+        digest_parsers[ns_key] = handler.parse_list
         digest_pollers.add(handler)
 
         if climate_class := CLIMATE_INITIALIZERS.get(ns_key):
             for channel_digest in ns_digest:
                 climate_class(device, channel_digest[mc.KEY_CHANNEL])
 
-    def digest_parse(digest: dict):
+    def digest_parse_thermostat(digest: dict):
         """
         MTS200 typically carries:
         {
@@ -88,9 +88,9 @@ def digest_init_thermostat(device: "Device", digest: dict) -> "DigestInitReturnT
         }
         """
         for ns_key, ns_digest in digest.items():
-            digest_handlers[ns_key](ns_digest)
+            digest_parsers[ns_key](ns_digest)
 
-    return digest_parse, digest_pollers
+    return digest_parse_thermostat, digest_pollers
 
 
 class ScreenBrightnessNamespaceHandler(NamespaceHandler):

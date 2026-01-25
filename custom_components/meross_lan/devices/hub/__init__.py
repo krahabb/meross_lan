@@ -10,6 +10,7 @@ from ...helpers.namespaces import (
     POLLING_STRATEGY_CONF,
     NamespaceHandler,
     NamespaceParser,
+    VoidNamespaceHandler,
     mc,
     mn,
 )
@@ -186,6 +187,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
     DEVICE_TYPE = mlc.DeviceType.HUB
     NAMESPACES = mn.HUB_NAMESPACES
 
+    # TODO: skip caching add_entity callback and directly access core component method
     DEFAULT_PLATFORMS = mld.Device.DEFAULT_PLATFORMS | {
         MLBinarySensor.PLATFORM: None,
         MLButton.PLATFORM: None,
@@ -226,14 +228,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
 
     @override
     def _create_handler(self, ns: "Namespace", /):
-        _handler = getattr(self, f"_handle_{ns.replace('.', '_')}", None)
-        if _handler:
-            return NamespaceHandler(
-                self,
-                ns,
-                handler=_handler,
-            )
-        elif ns.key_channel is mc.KEY_ID:
+        if ns.key_channel is mc.KEY_ID:
             # This rule states that the payload is a list of subdevices indexed by 'id'.
             # Newer devices (2024) started using namespaces/payload indexed by 'subid'
             # and 'channel'. These will be handled by the base class NamespaceHandler
@@ -241,55 +236,6 @@ class HubMixin(Device if TYPE_CHECKING else object):
             return HubNamespaceHandler(self, ns)
         else:
             return super()._create_handler(ns)
-
-    def _parse_hub(self, p_hub: dict, /):
-        # Usually called by _handle_Appliance_System_All as part of the digest parsing
-        # Here we'll check the fresh subdevice list against the actual one and
-        # eventually manage newly added subdevices or removed ones #119
-        # telling the caller to persist the changed configuration (self.needsave)
-        subdevices_actual = set(self.subdevices)
-        for p_subdevice_digest in p_hub[mc.KEY_SUBDEVICE]:
-            try:
-                subdevice_id = p_subdevice_digest[mc.KEY_ID]
-                try:
-                    subdevice = self.subdevices[subdevice_id]
-                    try:
-                        subdevices_actual.remove(subdevice_id)
-                    except KeyError:
-                        # this shouldnt but happened in a trace (#331)
-                        self.log_duplicated_subdevice(subdevice_id)
-                        continue
-                except KeyError:
-                    subdevice = self._subdevice_build(p_subdevice_digest)
-                    self.needsave = True
-
-                subdevice.parse_digest(p_subdevice_digest)
-            except Exception as exception:
-                self.log_exception(self.WARNING, exception, "_parse_hub")
-
-        if subdevices_actual:
-            # now we're left with non-existent (removed) subdevices
-            self.needsave = True
-            for subdevice_id in subdevices_actual:
-                subdevice = self.subdevices.pop(subdevice_id)
-                self.log(
-                    self.WARNING,
-                    "%s (id:%s) unregistered from hub",
-                    subdevice.display_name,
-                    subdevice_id,
-                )
-                if subdevice.online:
-                    subdevice._set_offline()
-                self.async_create_task(
-                    subdevice.async_shutdown(),
-                    f"{subdevice.__class__.__name__}.async_shutdown()",
-                )
-                self.create_issue(
-                    mlc.ISSUE_HUB_SUBDEVICE_REMOVED,
-                    subdevice_id,
-                    severity=self.IssueSeverity.WARNING,
-                    translation_placeholders={"device_name": subdevice.display_name},
-                )
 
     @override
     def update_device_info(
@@ -315,62 +261,9 @@ class HubMixin(Device if TYPE_CHECKING else object):
             timeout=604800,  # 1 week
         )
 
-    def register_parser_subid(
-        self,
-        parser: "NamespaceParser",
-        *nss: "Namespace",
-        extra: "mt.MerossPayloadType" = {"channel": 0},
-    ):
-        ability = self.descriptor.ability
-        for ns in nss:
-            if ns not in ability:
-                continue
-            handler = self.get_handler(ns)
-            handler.register_parser(parser)
-            handler.polling_request_add_channel(parser.channel, extra)
-
-    def _handle_Appliance_Digest_Hub(self, message: "MerossMessage", /):
-        self._parse_hub(message.payload[mc.KEY_HUB])
-
-    def _handle_Appliance_Hub_ExtraInfo(self, message: "MerossMessage", /):
-        """TODO: decode
-        {
-          "extraInfo": {
-            "upgradeSubDevs": [
-              {
-                "type": "ms200"
-              },
-              {
-                "type": "mts150p"
-              },
-              {
-                "type": "ms130"
-              },
-              {
-                "type": "ms120"
-              }
-            ]
-          }
-        }
-        """
-        pass
-
-    def _handle_Appliance_Hub_SubdeviceList(self, message: "MerossMessage", /):
-        """TODO: decode
-        {
-            'subdeviceList': {
-                'subdevice': [
-                    {'id': '120027D21C19', 'status': 1, 'time': 1623423242, 'hardware': '0000', 'firmware': '0000'},
-                    {'id': '01008C11', 'status': 0, 'time': 0},
-                    {'id': '0100783A', 'status': 0, 'time': 0}
-                ],
-                'needReply': 1
-            }
-        }
-        """
-        pass
-
-    def _subdevice_build(self, p_subdevice: "dict[str, Any]", /) -> "SubDeviceEntity":
+    def _subdevice_build(
+        self, p_subdevice: "mt_h.Digest_SubDevice", /
+    ) -> "SubDeviceEntity":
         # parses the subdevice payload in 'digest' to look for a well-known type
         # and builds accordingly
         subid = p_subdevice[mc.KEY_ID]
@@ -1123,10 +1016,9 @@ class MS130Sensor(MS100Sensor):
     def __init__(self, hub: HubMixin, subid: str, key_digest: str):
         super().__init__(hub, subid, key_digest)
         self.sensor_light = MLLightSensor(self, subid)
-        hub.register_parser_subid(
+        hub.get_handler(mn_h.Appliance_Control_Sensor_LatestX).register_parser(
             self,
-            mn_h.Appliance_Control_Sensor_LatestX,
-            extra={"channel": 0, "data": ["light", "temp", "humi"]},
+            {"channel": 0, "data": ["light", "temp", "humi"]},
         )
 
     async def async_shutdown(self):
@@ -1290,7 +1182,9 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, MLSwitch):
         self.update_device_value(payload[mc.KEY_ONOFF])
 
 
-def digest_init_hub(device: "HubMixin", digest, /) -> "DigestInitReturnType":
+def digest_init_hub(
+    device: "HubMixin", digest: "mt_h.Digest_Hub", /
+) -> "DigestInitReturnType":
 
     # Check for unbinded subdevices which are 'still' in the device_registry
     registry_subdevices = {}
@@ -1341,7 +1235,69 @@ def digest_init_hub(device: "HubMixin", digest, /) -> "DigestInitReturnType":
             translation_placeholders={"device_name": device_entry.name},
         )
 
-    return device._parse_hub, ()
+    def digest_parse_hub(p_hub: dict, /):
+        # Usually called by _handle_Appliance_System_All as part of the digest parsing
+        # Here we'll check the fresh subdevice list against the actual one and
+        # eventually manage newly added subdevices or removed ones #119
+        subdevices_actual = set(device.subdevices)
+        for p_subdevice_digest in p_hub[mc.KEY_SUBDEVICE]:
+            try:
+                subdevice_id = p_subdevice_digest[mc.KEY_ID]
+                try:
+                    subdevice = device.subdevices[subdevice_id]
+                    try:
+                        subdevices_actual.remove(subdevice_id)
+                    except KeyError:
+                        # this shouldnt but happened in a trace (#331)
+                        device.log_duplicated_subdevice(subdevice_id)
+                        continue
+                except KeyError:
+                    subdevice = device._subdevice_build(p_subdevice_digest)
+                    device.schedule_entry_update(True)
+
+                subdevice.parse_digest(p_subdevice_digest)
+            except Exception as exception:
+                device.log_exception(device.WARNING, exception, "digest_parse_hub")
+
+        if subdevices_actual:
+            # now we're left with non-existent (removed) subdevices
+            device.schedule_entry_update(False)
+            for subdevice_id in subdevices_actual:
+                subdevice = device.subdevices.pop(subdevice_id)
+                device.log(
+                    device.WARNING,
+                    "%s (id:%s) unregistered from hub",
+                    subdevice.display_name,
+                    subdevice_id,
+                )
+                if subdevice.online:
+                    subdevice._set_offline()
+                device.async_create_task(
+                    subdevice.async_shutdown(),
+                    f"{subdevice.__class__.__name__}.async_shutdown()",
+                )
+                device.create_issue(
+                    mlc.ISSUE_HUB_SUBDEVICE_REMOVED,
+                    subdevice_id,
+                    severity=device.IssueSeverity.WARNING,
+                    translation_placeholders={"device_name": subdevice.display_name},
+                )
+
+    ability = device.descriptor.ability
+    if mn_h.Appliance_Digest_Hub in ability:
+        NamespaceHandler(
+            device,
+            mn_h.Appliance_Digest_Hub,
+            handler=lambda message: digest_parse_hub(message.payload[mc.KEY_HUB]),
+        )
+    for ns in (
+        mn_h.Appliance_Hub_ExtraInfo,
+        mn_h.Appliance_Hub_SubdeviceList,
+    ):
+        if ns in ability:
+            VoidNamespaceHandler(device, ns)
+
+    return digest_parse_hub, ()
 
 
 POLLING_STRATEGY_CONF.update(
@@ -1354,7 +1310,7 @@ POLLING_STRATEGY_CONF.update(
             NamespaceHandler.async_poll_smart,
         ),
         mn_h.Appliance_Control_Sensor_LatestX: (
-            mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
+            0,  # ms600 devices lack of refresh #599
             mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
             mlc.PARAM_HEADER_SIZE,
             220,
@@ -1414,7 +1370,7 @@ POLLING_STRATEGY_CONF.update(
             mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
             mlc.PARAM_HEADER_SIZE,
             35,
-            NamespaceHandler.async_poll_default,
+            NamespaceHandler.async_poll_smart,
         ),
         mn_h.Appliance_Hub_SubDevice_Version: (
             0,
