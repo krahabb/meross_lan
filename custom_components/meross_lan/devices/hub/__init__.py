@@ -202,7 +202,6 @@ class HubMixin(Device if TYPE_CHECKING else object):
     TRACE_ABILITY_EXCLUDE = mld.Device.TRACE_ABILITY_EXCLUDE + (
         mn_h.Appliance_Hub_Exception,
         mn_h.Appliance_Hub_Report,
-        *(ns for ns in mn.HUB_NAMESPACES.values() if not ns.can_query),
     )
 
     @override

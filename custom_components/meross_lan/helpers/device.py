@@ -349,7 +349,6 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         mn.Appliance_Config_WifiX,
         mn.Appliance_Control_Bind,
         mn.Appliance_Control_Unbind,
-        *(ns for ns in mn.NAMESPACES.values() if not ns.can_query),
     )
 
     DEFAULT_PLATFORMS = mlm.ConfigEntryManager.DEFAULT_PLATFORMS | {
@@ -822,7 +821,18 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
             self._trace_ability_callback_unsub = None
         super().trace_close(exception, error_context)
 
-    async def _async_trace_ability(self, abilities_iterator: "Iterator[str]"):
+    def _trace_ability_next(self, abilities: "Iterator[str]", /):
+        ability = next(abilities)
+        if ability in self.TRACE_ABILITY_EXCLUDE:
+            return None
+        ns = self.NAMESPACES.get(ability)
+        if not ns: # unknown namespace..setup generic handler
+            return self.get_handler_by_name(ability)
+        if ns.can_query:
+            return self.get_handler(ns)
+        return None
+
+    async def _async_trace_ability(self, abilities: "Iterator[str]"):
         self._trace_ability_callback_unsub = None
         try:
             # avoid interleave tracing ability with polling loop
@@ -831,12 +841,10 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
             # at least until the device fully initialize through
             # self.start()
             if self.online and not self._polling_task:
-                while (
-                    ability := next(abilities_iterator)
-                ) in self.TRACE_ABILITY_EXCLUDE:
+                while not (ns_handler := self._trace_ability_next(abilities)):
                     continue
-                self.log(self.DEBUG, "Tracing %s ability", ability)
-                await self.get_handler_by_name(ability).async_trace(self.async_request)
+                self.log(self.DEBUG, "Tracing %s ability", ns_handler.ns)
+                await ns_handler.async_trace(self.async_request)
         except StopIteration:
             self.log(self.DEBUG, "Tracing abilities end")
             return
@@ -859,7 +867,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         self._trace_ability_callback_unsub = self.schedule_async_callback(
             timeout,
             self._async_trace_ability,
-            abilities_iterator,
+            abilities,
         )
 
     def _trace_or_log(
@@ -924,11 +932,8 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
             try:
                 abilities = iter(self.descriptor.ability)
                 while self.online and self.is_tracing:
-                    ability = next(abilities)
-                    if ability not in self.TRACE_ABILITY_EXCLUDE:
-                        await self.get_handler_by_name(ability).async_trace(
-                            self.async_http_request
-                        )
+                    if ns_handler := self._trace_ability_next(abilities):
+                        await ns_handler.async_trace(self.async_http_request)
                 self._trace_data = None
                 return trace_data  # might be truncated because offlining or async shutting trace
             except StopIteration:
@@ -1971,13 +1976,10 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                 try:
                     abilities = iter(self.descriptor.ability)
                     while self.online:
-                        ability = next(abilities)
-                        if ability in self.TRACE_ABILITY_EXCLUDE:
-                            continue
-                        ns_handler = self.get_handler_by_name(ability)
-                        if ns_handler.polling_strategy:
-                            continue
-                        await ns_handler.async_get_safe()
+                        if (
+                            ns_handler := self._trace_ability_next(abilities)
+                        ) and not ns_handler.polling_strategy:
+                            await ns_handler.async_get_safe()
                 except StopIteration:
                     self.log(self.DEBUG, "Diagnostic scan end")
                 except Exception as e:
