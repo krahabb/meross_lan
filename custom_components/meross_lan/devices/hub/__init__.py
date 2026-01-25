@@ -202,7 +202,6 @@ class HubMixin(Device if TYPE_CHECKING else object):
     TRACE_ABILITY_EXCLUDE = mld.Device.TRACE_ABILITY_EXCLUDE + (
         mn_h.Appliance_Hub_Exception,
         mn_h.Appliance_Hub_Report,
-        mn_h.Appliance_Hub_SubdeviceList,
         *(ns for ns in mn.HUB_NAMESPACES.values() if not ns.can_query),
     )
 
@@ -1186,6 +1185,24 @@ def digest_init_hub(
     device: "HubMixin", digest: "mt_h.Digest_Hub", /
 ) -> "DigestInitReturnType":
 
+    # This is a trick to dynamically mixin the HubMixin capabilities
+    # into the device instance. Historically we were mixing HubMixin
+    # as a subclass of the device class at ConfigEntry load time in ComponentApi
+    # but this new approach requires less coding.
+    # BEWARE: this works if we don't need special __init__ logic in HubMixin
+    # because the instance is already initialized here and we're called in the
+    # context of Device.async_init method. This happens rather soon but surely
+    # after Device.__init__
+    # Also, the base Device class mixed-in might be different at test time since it gets mocked
+    # so we have to dynamically create a new class on the fly. and ensure HubMixin is not
+    # overriding any mocked attribute (see test.helpers.ConfigEntryMocker.ManagerMock)
+    device.__class__ = type(
+        f"HubMixin{device.__class__.__name__}", (HubMixin, device.__class__), {}
+    )
+    # temporary patch entry platforms defaults
+    device.platforms = HubMixin.DEFAULT_PLATFORMS.copy() | device.platforms
+    device.subdevices = {}
+
     # Check for unbinded subdevices which are 'still' in the device_registry
     registry_subdevices = {}
     for (
@@ -1206,7 +1223,6 @@ def digest_init_hub(
                 if identifiers[0] == mlc.DOMAIN:
                     registry_subdevices[identifiers[1]] = device_entry
 
-    device.subdevices = {}
     for p_subdevice_digest in digest[mc.KEY_SUBDEVICE]:
         try:
             subdevice_id = p_subdevice_digest[mc.KEY_ID]

@@ -489,6 +489,7 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
 
         RAISE_MESSAGES = [
             (AttributeError, None),
+            (ModuleNotFoundError, None),
             (TypeError, None),
         ]
 

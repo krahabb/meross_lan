@@ -4,7 +4,12 @@ from typing import TYPE_CHECKING
 
 from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 
-from .helpers import LOGGER, ConfigEntryType, meross_profile as mlp
+from .helpers import (
+    LOGGER,
+    ConfigEntryType,
+    device as mld,
+    meross_profile as mlp,
+)
 from .helpers.component_api import ComponentApi
 
 if TYPE_CHECKING:
@@ -34,7 +39,8 @@ async def async_setup_entry(
             except KeyError:
                 # this could happen when we add profile entries after boot
                 api.devices[device_id] = None
-            device = await api.async_build_device(device_id, config_entry)
+
+            device = mld.Device(api, device_id, config_entry)
             try:
                 await device.async_init()
                 await device.async_setup_entry(hass, config_entry)

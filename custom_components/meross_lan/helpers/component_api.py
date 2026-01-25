@@ -9,7 +9,7 @@ from homeassistant import const as hac
 from homeassistant.components import bluetooth as ha_bt
 from homeassistant.core import SupportsResponse, callback
 from homeassistant.data_entry_flow import AbortFlow
-from homeassistant.exceptions import ConfigEntryError, HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import (
     device_registry as dr,
     entity_registry as er,
@@ -17,7 +17,7 @@ from homeassistant.helpers import (
 )
 
 # import core modules instead of symbols to ease patching in a single place
-from . import ConfigEntryType, device as mld, manager as mlm, mqtt_profile as mlq
+from . import ConfigEntryType, manager as mlm, mqtt_profile as mlq
 from .. import const as mlc
 from ..merossclient import (
     MEROSSDEBUG,
@@ -56,11 +56,6 @@ else:
     # In order to avoid a static dependency we resolve these
     # at runtime only when mqtt is actually needed in code
     mqtt_async_publish = None
-
-
-MIXIN_DIGEST_INIT = {
-    mc.KEY_HUB: (".devices.hub", "HubMixin"),
-}
 
 
 class HAMQTTConnection(mlq.MQTTConnection):
@@ -814,70 +809,6 @@ class ComponentApi(mlq.MQTTProfile):
         if not (mqtt_connection := self._mqtt_connection):
             self._mqtt_connection = mqtt_connection = HAMQTTConnection(self)
         return mqtt_connection
-
-    async def async_build_device(
-        self, device_id: str, config_entry: "ConfigEntry"
-    ) -> "Device":
-        """
-        scans device descriptor to build a 'slightly' specialized Device
-        The base Device class is a bulk 'do it all' implementation
-        but some devices (i.e. Hub) need a (radically?) different behaviour
-        """
-        if device_id != config_entry.data[mlc.CONF_DEVICE_ID]:
-            # shouldnt really happen: it means we have a 'critical' bug in our config entry/flow management
-            # or that the config_entry was tampered
-            raise ConfigEntryError(
-                "Unrecoverable device id mismatch. 'ConfigEntry.unique_id' "
-                "does not match the configured 'device_id'. "
-                "Please delete the entry and reconfigure it"
-            )
-        descriptor = MerossDeviceDescriptor(config_entry.data[mlc.CONF_PAYLOAD])
-        if device_id != descriptor.uuid:
-            # this could happen (#341 raised the suspect) if a working device
-            # 'suddenly' starts talking with another one and doesn't recognize
-            # the mismatch (the issue appears as the device usually keeps updating
-            # the config_entry data from live communication). This behavior is being
-            # fixed in 4.5.0 so that devices don't update wrong configurations 'in the wild'
-            raise ConfigEntryError(
-                "Configuration data mismatch. Please refresh "
-                "the configuration by hitting 'Configure' "
-                "in the integration configuration page"
-            )
-
-        mixin_classes = []
-        for key_digest in descriptor.digest:
-            if key_digest not in MIXIN_DIGEST_INIT:
-                continue
-            _mixin_or_descriptor = MIXIN_DIGEST_INIT[key_digest]
-            if isinstance(_mixin_or_descriptor, tuple):
-                with self.exception_warning(
-                    "initializing digest(%s) mixin", key_digest
-                ):
-                    _mixin_or_descriptor = getattr(
-                        await self.async_import_module(_mixin_or_descriptor[0]),
-                        _mixin_or_descriptor[1],
-                    )
-                    MIXIN_DIGEST_INIT[key_digest] = _mixin_or_descriptor
-                    mixin_classes.append(_mixin_or_descriptor)
-            else:
-                mixin_classes.append(_mixin_or_descriptor)
-
-        # We must be careful when ordering the mixin and leave Device as last class.
-        # Messing up with that will cause MRO to not resolve inheritance correctly.
-        # see https://github.com/albertogeniola/MerossIot/blob/0.4.X.X/meross_iot/device_factory.py
-        mixin_classes.append(mld.Device)
-        # build a label to cache the set
-        class_name = ""
-        for m in mixin_classes:
-            class_name = class_name + m.__name__
-        try:
-            return self._deviceclasses[class_name](self, config_entry, descriptor)
-        except KeyError as key_error:
-            if key_error.args[0] != class_name:
-                raise
-            class_type = type(class_name, tuple(mixin_classes), {})
-            self._deviceclasses[class_name] = class_type
-            return class_type(self, config_entry, descriptor)
 
     async def async_available_timezones(self):
         timezones = self._available_timezones

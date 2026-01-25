@@ -29,7 +29,7 @@ from ..const import (
     PARAM_TIMESTAMP_TOLERANCE,
 )
 from ..helpers.obfuscate import obfuscated_dict
-from ..merossclient import get_active_broker, is_device_online
+from ..merossclient import MerossDeviceDescriptor, get_active_broker, is_device_online
 from ..merossclient.httpclient import MerossHttpClient, TerminatedException
 from ..merossclient.protocol import MerossError
 from ..merossclient.protocol.message import (
@@ -62,7 +62,6 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from ..merossclient import MerossDeviceDescriptor
     from ..merossclient.protocol.types import (
         JsonDict,
         JsonList,
@@ -170,7 +169,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         This is built on demand during Device init whenever a new digest key
         is encountered. This static dict in turn is used to setup the Device instance
         'digest_handlers' dict which contains a lookup to the digest parsing function when
-        an NS_ALL message is received/parsed.
+        an Appliance.System.All message is received/parsed.
         The 'digest initialization function' will (at device init time) parse the digest to
         setup the dedicated entities for the particular digest key.
         The definition of this init function is looked up at runtime by an algorithm that:
@@ -259,6 +258,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
 
     DIGEST_INIT = {
         mc.KEY_FAN: ".fan",
+        mc.KEY_HUB: ".devices.hub",
         mc.KEY_LIGHT: ".light",
         "light.effect": ".light",
         mc.KEY_TIMER: digest_init_empty,
@@ -410,9 +410,29 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
     def __init__(
         self,
         api: "ComponentApi",
+        device_id: str,
         config_entry: "ConfigEntry",
-        descriptor: "MerossDeviceDescriptor",
     ):
+        if device_id != config_entry.data[mlc.CONF_DEVICE_ID]:
+            # shouldnt really happen: it means we have a 'critical' bug in our config entry/flow management
+            # or that the config_entry was tampered
+            raise Exception(
+                "Unrecoverable device id mismatch. 'ConfigEntry.unique_id' "
+                "does not match the configured 'device_id'. "
+                "Please delete the entry and reconfigure it"
+            )
+        descriptor = MerossDeviceDescriptor(config_entry.data[mlc.CONF_PAYLOAD])
+        if device_id != descriptor.uuid:
+            # this could happen (#341 raised the suspect) if a working device
+            # 'suddenly' starts talking with another one and doesn't recognize
+            # the mismatch (the issue appears as the device usually keeps updating
+            # the config_entry data from live communication). This behavior is being
+            # fixed in 4.5.0 so that devices don't update wrong configurations 'in the wild'
+            raise Exception(
+                "Configuration data mismatch. Please refresh "
+                "the configuration by hitting 'Configure' "
+                "in the integration configuration page"
+            )
         self.descriptor = descriptor
         self.tz = UTC
         self._async_entry_update_unsub = None
@@ -465,10 +485,9 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         self._trace_ability_callback_unsub = None
         self._diagnostics_build = False
 
-        uuid = config_entry.data[mlc.CONF_DEVICE_ID]
         super().__init__(
             api,
-            uuid,
+            device_id,
             config_entry,
             device_entry=api.device_registry.async_get_or_create(
                 config_entry_id=config_entry.entry_id,
@@ -478,7 +497,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                 model=descriptor.productmodel,
                 hw_version=descriptor.hardwareVersion,
                 sw_version=descriptor.firmwareVersion,
-                identifiers={(mlc.DOMAIN, uuid)},
+                identifiers={(mlc.DOMAIN, device_id)},
             ),
         )
 
@@ -515,40 +534,6 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                 timeout=14400,
             ):
                 self.tz = await self.api.async_load_zoneinfo(tzname)
-
-        ability = descriptor.ability
-        for ns, ns_init_func in Device.NAMESPACE_INIT.items():
-            if ns not in ability:
-                continue
-            try:
-                try:
-                    ns_init_func(self, ns)
-                except TypeError:
-                    try:
-                        ns_init_func = getattr(
-                            await self.api.async_import_module(ns_init_func[0]),
-                            ns_init_func[1],
-                        )
-                    except Exception as exception:
-                        self.log_exception(
-                            self.WARNING,
-                            exception,
-                            "loading namespace initializer for %s",
-                            ns,
-                        )
-                        Device.NAMESPACE_INIT[ns] = Device.namespace_init_empty
-                    else:
-                        try:
-                            ns_init_func = ns_init_func.namespace_init
-                        except AttributeError:
-                            pass
-                        Device.NAMESPACE_INIT[ns] = ns_init_func
-                        ns_init_func(self, ns)
-
-            except Exception as exception:
-                self.log_exception(
-                    self.WARNING, exception, "initializing namespace %s", ns
-                )
 
         for key_digest, _digest in (
             descriptor.digest.items() or descriptor.control.items()
@@ -594,6 +579,40 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                     self.WARNING, exception, "initializing digest key '%s'", key_digest
                 )
                 self.digest_parsers[key_digest] = Device.digest_parse_empty
+
+        ability = descriptor.ability
+        for ns, ns_init_func in self.NAMESPACE_INIT.items():
+            if ns not in ability:
+                continue
+            try:
+                try:
+                    ns_init_func(self, ns)
+                except TypeError:
+                    try:
+                        ns_init_func = getattr(
+                            await self.api.async_import_module(ns_init_func[0]),
+                            ns_init_func[1],
+                        )
+                    except Exception as exception:
+                        self.log_exception(
+                            self.WARNING,
+                            exception,
+                            "loading namespace initializer for %s",
+                            ns,
+                        )
+                        Device.NAMESPACE_INIT[ns] = Device.namespace_init_empty
+                    else:
+                        try:
+                            ns_init_func = ns_init_func.namespace_init
+                        except AttributeError:
+                            pass
+                        Device.NAMESPACE_INIT[ns] = ns_init_func
+                        ns_init_func(self, ns)
+
+            except Exception as exception:
+                self.log_exception(
+                    self.WARNING, exception, "initializing namespace %s", ns
+                )
 
     def start(self):
         # called by async_setup_entry after the entities have been registered
