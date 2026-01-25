@@ -63,6 +63,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
     NS_HUB = (
         mn_h.Appliance_Hub_Mts100_All,
         mn_h.Appliance_Hub_Mts100_Mode,
+        mn_h.Appliance_Hub_ToggleX,
         *SubDeviceEntity.NS_HUB,
     )
     ns = mn_h.Appliance_Hub_Mts100_Temperature
@@ -245,7 +246,6 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         else:
             self.flush_state()
 
-    @override
     def _parse_togglex(self, payload, /):
         self._mts_onoff = payload[mc.KEY_ONOFF]
         self.flush_state()

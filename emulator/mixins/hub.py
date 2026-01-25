@@ -112,12 +112,12 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
         # digest <-> ns_all payloads structure relationship
         NS_BASE_TO_DIGEST_MAP: dict[mn.Namespace, str] = {
             mn_h.Appliance_Hub_Online: mc.KEY_STATUS,
-            mn_h.Appliance_Hub_ToggleX: mc.KEY_ONOFF,
         }
         """digest structure common to both sensors and mtss"""
         NS_TO_DIGEST_MAP: dict[mn.Namespace, dict[mn.Namespace, str]] = {
             mn_h.Appliance_Hub_Mts100_All: NS_BASE_TO_DIGEST_MAP
             | {
+                mn_h.Appliance_Hub_ToggleX: mc.KEY_ONOFF,
                 mn_h.Appliance_Hub_Mts100_Mode: "",  # "" here means we're not defaulting to a digest key
                 mn_h.Appliance_Hub_Mts100_Temperature: "",
             },

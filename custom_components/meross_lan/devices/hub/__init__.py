@@ -56,13 +56,6 @@ if TYPE_CHECKING:
     )
 
 
-class HubToggleX(MLSwitch):
-    """Generic switch to map Appliance.Hub.ToggleX namespace."""
-
-    ns = mn_h.Appliance_Hub_ToggleX
-    ENTITY_KEY = mc.KEY_TOGGLEX
-
-
 class HubBeep(MLSwitch):
     """Generic switch to map Appliance.Hub.SubDevice.Beep namespace."""
 
@@ -487,7 +480,6 @@ class SubDeviceEntity(mld.BaseDevice, NamespaceParser):
         mn_h.Appliance_Hub_Online,
         mn_h.Appliance_Hub_SubDevice_Beep,
         mn_h.Appliance_Hub_SubDevice_Version,
-        mn_h.Appliance_Hub_ToggleX,
     )
 
     """TODO
@@ -653,10 +645,6 @@ class SubDeviceEntity(mld.BaseDevice, NamespaceParser):
         self._parse_online(payload)
         if self.online:
             self._digest_parse(payload[self.key_digest])
-            if mc.KEY_ONOFF in payload:
-                self.hub.ns_handlers[mn_h.Appliance_Hub_ToggleX].parsers[self.subid](
-                    payload
-                )
 
     def _parse_all(self, payload: dict, /):
         """
@@ -692,15 +680,7 @@ class SubDeviceEntity(mld.BaseDevice, NamespaceParser):
 
         self._parse_online(payload[mc.KEY_ONLINE])
         if self.online:
-            try:
-                self.hub.ns_handlers[mn_h.Appliance_Hub_ToggleX].parsers[self.subid](
-                    payload[mc.KEY_TOGGLEX]
-                )
-            except KeyError as ke:
-                if ke.args[0] != mc.KEY_TOGGLEX:
-                    raise
-
-            _excluded_keys = (mc.KEY_ID, mc.KEY_ONLINE, mc.KEY_TOGGLEX)
+            _excluded_keys = (mc.KEY_ID, mc.KEY_ONLINE)
             for _ in (
                 self._hub_parse(key, value)
                 for key, value in payload.items()
@@ -712,20 +692,6 @@ class SubDeviceEntity(mld.BaseDevice, NamespaceParser):
     # installed by SubDevice initialization
     def _parse_deviceCfg(self, payload: "mt_h.SubIdPayload", /):
         pass
-
-    def _parse_togglex(self, payload: "mt_h.ToggleX", /):
-        # This handler is installed as a fallback when no specialized
-        # parser is defined for togglex ns during SubDevice init.
-        # Here we just swap-in a HubToggleX entity so that it'll be
-        # self-managing from now on.
-        self.hub.ns_handlers[mn_h.Appliance_Hub_ToggleX].swap_parsers(
-            self,
-            HubToggleX(
-                self,
-                self.subid,
-                device_value=payload[mc.KEY_ONOFF],
-            ),
-        )
 
     def _parse_exception(self, payload, /):
         """{"id": "00000000", "code": 5061}"""
@@ -896,15 +862,7 @@ class UnknownSubDevice(SubDeviceEntity):
 
         self._parse_online(payload[mc.KEY_ONLINE])
         if self.online:
-            try:
-                self.hub.ns_handlers[mn_h.Appliance_Hub_ToggleX].parsers[self.subid](
-                    payload[mc.KEY_TOGGLEX]
-                )
-            except KeyError as ke:
-                if ke.args[0] != mc.KEY_TOGGLEX:
-                    raise
-
-            _excluded_keys = (mc.KEY_ID, mc.KEY_ONLINE, mc.KEY_TOGGLEX)
+            _excluded_keys = (mc.KEY_ID, mc.KEY_ONLINE)
             for _ in (
                 self._hub_parse(key, value)
                 for key, value in payload.items()
@@ -1464,13 +1422,6 @@ POLLING_STRATEGY_CONF.update(
             mlc.PARAM_HEADER_SIZE,
             55,
             NamespaceHandler.async_poll_once,
-        ),
-        mn_h.Appliance_Hub_ToggleX: (
-            0,
-            0,
-            mlc.PARAM_HEADER_SIZE,
-            35,
-            NamespaceHandler.async_poll_default,
         ),
     }
 )
