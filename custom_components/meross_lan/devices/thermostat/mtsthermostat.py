@@ -47,8 +47,8 @@ class MtsConfigSwitch(MLSwitch):
             entity_key=f"{number_temperature.entitykey}_switch",
             device_value=device_value,
             name=(f"{number_temperature.entitykey} Alarm").capitalize(),
-            state_callback=number_temperature._switch_state_callback,
         )
+        self.register_state_callback(number_temperature._switch_state_callback)
 
 
 class MtsCommonTemperatureNumber(MLConfigNumber):

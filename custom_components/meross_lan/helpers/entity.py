@@ -74,7 +74,6 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
             device_class: NotRequired[str | None]
             entity_category: NotRequired[entity.EntityCategory | None]
             entity_registry_enabled_default: NotRequired[bool]
-            state_callback: NotRequired["MLEntity.StateCallback"]
 
         EntityCategory: Final
 
@@ -100,7 +99,6 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         manager: EntityManager  # Final
         channel: Final[object | None]
         entitykey: Final[str | None]
-        state_callbacks: set[StateCallback] | None
         # used to speed-up checks if entity is enabled and loaded
         hass_connected: Final[bool]  # public ReadOnly attribute
 
@@ -171,7 +169,6 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         "manager",
         "channel",
         "entitykey",
-        "state_callbacks",
         "hass_connected",
         "_payload_ns",  # inherited from NamespaceParser
         # HA core
@@ -216,11 +213,6 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
             id not in manager.entities
         ), f"id:{id} is not unique inside manager.entities"
 
-        if "state_callback" in kwargs:
-            self.state_callbacks = set()
-            self.state_callbacks.add(kwargs.pop("state_callback"))
-        else:
-            self.state_callbacks = None
         self.hass_connected = False
 
         self.available = self._attr_available or manager.online
@@ -276,20 +268,22 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
     # interface: self
     async def async_shutdown(self):
         del self.manager.entities[self.id]
-        del self.state_callbacks
         await super().async_shutdown()
 
     @final
     def register_state_callback(self, state_callback: "StateCallback", /):
-        if not self.state_callbacks:
-            self.state_callbacks = set()
-        self.state_callbacks.add(state_callback)
+        """Registers a callback to be called when flush_state is called."""
+
+        old_flush = self.flush_state
+
+        def _wrapper():
+            old_flush()
+            state_callback()
+
+        self.flush_state = _wrapper
 
     def flush_state(self):
         """Actually commits a state change to HA."""
-        if self.state_callbacks:
-            for state_callback in self.state_callbacks:
-                state_callback()
         if self.hass_connected:
             self.async_write_ha_state()
 

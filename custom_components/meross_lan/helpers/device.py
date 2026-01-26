@@ -222,6 +222,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         _mqtt_lastresponse: float
         _profile: MQTTProfile | None
         ns_handlers: Final[dict[str, NamespaceHandler]]
+        handler_all: Final[NamespaceHandler]
         digest_parsers: Final[dict[str, DigestParseFunc]]
         digest_pollers: Final[set[NamespaceHandler]]
         _lazypoll_requests: list[NamespaceHandler]
@@ -1043,6 +1044,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         for handler in self.ns_handlers.values():
             handler.shutdown()
         del self.ns_handlers  # type: ignore
+        del self.handler_all  # type: ignore
         del self.digest_parsers  # type: ignore
         del self.digest_pollers  # type: ignore
         del self._lazypoll_requests

@@ -120,8 +120,8 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
             subid,
             entity_key="patch_hvacaction",
             device_value=0,
-            state_callback=self._switch_emulate_hvacaction_state_callback,
         )
+        self.switch_patch_hvacaction.register_state_callback(self.flush_state)
         # ns registration. TODO: move (maybe) to MtsClimate base class once Hub subdevice ns handling is sorted out
         for _entity in (self.number_adjust_temperature, self.schedule):
             subdevice.manager.register_parser_entity(_entity)
@@ -305,6 +305,3 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         self.extra_state_attributes[mc.KEY_SCHEDULEBMODE] = mode
         self.schedule._schedule_entry_count_max = mode
         self.schedule._schedule_entry_count_min = mode
-
-    def _switch_emulate_hvacaction_state_callback(self, /):
-        self.flush_state()

@@ -268,7 +268,6 @@ class NamespaceHandler:
 
     def shutdown(self):
         """Cleanup possible circular references."""
-        self.device.objects.add(self)  # REMOVE
         del self.handler  # especially this one
         del self.polling_strategy
         del self.device
