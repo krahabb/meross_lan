@@ -1,3 +1,4 @@
+from functools import cached_property
 from typing import TYPE_CHECKING, override
 
 from ... import const as mlc
@@ -182,6 +183,8 @@ class HubMixin(Device if TYPE_CHECKING else object):
     """
 
     if TYPE_CHECKING:
+        # TODO: try to remove this attribute in favor of self.entities
+        # which already contains the subdevice core battery entities
         subdevices: dict[str, "SubDevice"]
 
     DEVICE_TYPE = mlc.DeviceType.HUB
@@ -325,7 +328,7 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
     DEVICE_TYPE = mlc.DeviceType.SUBDEVICE
 
     # MLNumericSensor attributes
-    ENTITY_KEY = mc.KEY_BATTERY
+    # ENTITY_KEY = mc.KEY_BATTERY
     _attr_device_class = MLNumericSensor.DeviceClass.BATTERY
 
     NS_SUBDEVICE = (
@@ -339,7 +342,6 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
     __slots__ = (
         (
             "async_request",
-            "subid",
             "key_digest",
             "model",
         )
@@ -362,7 +364,6 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
         # In order to keep compatibility with existing code
         # until we find a clear solution for id/channel/entity_key
         # we save subid for safe use whenever we need a 'clear' device subid
-        self.subid = subid  # temporary alias for clarity (we should use id)
         self.key_digest = key_digest
         self.model = model = (entity_class and entity_class.MODEL) or key_digest
         super().__init__(
@@ -398,18 +399,11 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
         return (
             self.device_entry.name_by_user
             or self.device_entry.name
-            or get_productnameuuid(self.model, self.subid)
+            or get_productnameuuid(self.model, self.id)
         )
 
     @override
     def generate_unique_id(self, entity: me.MLEntity, /):
-        """
-        flexible policy in order to generate unique_ids for entities:
-        This is an helper needed to better control migrations in code
-        which could/would lead to a unique_id change.
-        We could put here code checks in order to avoid entity_registry
-        migrations
-        """
         return f"{self.manager.id}_{entity.id}"
 
     # interface: BaseDevice
@@ -423,7 +417,7 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
         ):
             upgrade_payload["subdev"] = [
                 {
-                    "devid": self.subid,
+                    "devid": self.id,
                     mc.KEY_URL: latest_version[mc.KEY_URL],
                     mc.KEY_MD5: latest_version[mc.KEY_MD5],
                 }
@@ -443,10 +437,18 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
     def tz(self):
         return self.manager.tz
 
+    # interface: MLEntity
+    @cached_property
+    @override
+    def unique_id(self) -> str:
+        # temporary fix to keep the embedded battery sensor unique_id
+        # compatible with previous layout
+        return f"{self.manager.id}_{self.id}_battery"
+
     # interface: self
     def update_sub_device_info(self, sub_device_info: "SubDeviceInfoType", /):
         name = sub_device_info.get(mc.KEY_SUBDEVICENAME) or get_productnameuuid(
-            self.model, self.subid
+            self.model, self.id
         )
         if name != self.device_entry.name:
             self.api.device_registry.async_update_device(
@@ -558,7 +560,7 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
             self,
             HubBeep(
                 self,
-                self.subid,
+                self.id,
                 name="Beep alarm",
                 device_value=payload[mc.KEY_ONOFF],
             ),
@@ -617,13 +619,13 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
                         continue
                     entity_key = f"{parent_key}_{subkey}"
                     try:
-                        self.entities[f"{self.subid}_{entity_key}"].update_native_value(
+                        self.entities[f"{self.id}_{entity_key}"].update_native_value(
                             subvalue
                         )
                     except KeyError:
                         MLDiagnosticSensor(
                             self,
-                            self.subid,
+                            self.id,
                             entity_key=entity_key,
                             native_value=subvalue,
                         )
@@ -879,13 +881,13 @@ class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
             self,
             MS100Sensor.AdjustTemperatureNumber(
                 subdevice,
-                subdevice.subid,
+                subdevice.id,
                 name=f"Adjust temperature",
                 device_value=payload[mc.KEY_TEMPERATURE],
             ),
             MS100Sensor.AdjustHumidityNumber(
                 subdevice,
-                subdevice.subid,
+                subdevice.id,
                 name=f"Adjust humidity",
                 device_value=payload[mc.KEY_HUMIDITY],
             ),
@@ -1031,6 +1033,8 @@ class WaterLeakSensor(SubDeviceEntity, MLBinarySensor):
 
 class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, MLSwitch):
     """Switch to turn on/off the MST valve."""
+
+    # TODO: it looks like this device could support Hub.ToggleX
 
     if TYPE_CHECKING:
         # Appliance.Config.DeviceCfg payload structure
