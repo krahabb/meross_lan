@@ -63,15 +63,11 @@ class PresenceConfigNoBodyTime(PresenceConfigNumberBase):
     key_value = mc.KEY_TIME
 
     # HA core entity attributes:
+    _attr_name = mc.KEY_NOBODYTIME
     _attr_device_class = MLConfigNumber.DEVICE_CLASS_DURATION
     native_max_value = 3600  # 1 hour ?
     native_min_value = 1
     native_step = 1
-
-    def __init__(self, manager: "Device", channel: object):
-        PresenceConfigNumberBase.__init__(
-            self, manager, channel, name=mc.KEY_NOBODYTIME
-        )
 
 
 class PresenceConfigDistance(PresenceConfigNumberBase):
@@ -81,6 +77,7 @@ class PresenceConfigDistance(PresenceConfigNumberBase):
     key_group = mc.KEY_DISTANCE
     key_value = mc.KEY_VALUE
 
+    _attr_name = mc.KEY_DISTANCE
     _attr_device_scale = 1000
 
     # HA core entity attributes:
@@ -90,9 +87,6 @@ class PresenceConfigDistance(PresenceConfigNumberBase):
     native_min_value = 0.1
     native_step = 0.1
 
-    def __init__(self, manager: "Device", channel, /):
-        PresenceConfigNumberBase.__init__(self, manager, channel, name=mc.KEY_DISTANCE)
-
 
 class PresenceConfigSensitivity(PresenceConfigSelectBase):
 
@@ -101,17 +95,13 @@ class PresenceConfigSensitivity(PresenceConfigSelectBase):
     key_group = mc.KEY_SENSITIVITY
     key_value = mc.KEY_LEVEL
 
+    _attr_name = mc.KEY_SENSITIVITY
     # TODO: configure real labels
     OPTIONS_MAP = {
         0: "0",
         1: "1",
         2: "2",
     }
-
-    def __init__(self, manager: "Device", channel, /):
-        PresenceConfigSelectBase.__init__(
-            self, manager, channel, name=mc.KEY_SENSITIVITY
-        )
 
 
 class PresenceConfigMthX(PresenceConfigNumberBase):
@@ -151,9 +141,12 @@ class PresenceConfigMode(PresenceConfigModeBase):
 class MLPresenceSensor(MLNumericSensor):
     """ms600 presence sensor."""
 
+    if TYPE_CHECKING:
+        manager: "Device"
+
     ENTITY_KEY = "sensor_presence"
 
-    manager: "Device"
+    _attr_name = "Presence"
 
     __slots__ = (
         "sensor_distance",
@@ -165,11 +158,10 @@ class MLPresenceSensor(MLNumericSensor):
         self,
         manager: "Device",
         channel: object | None,
+        /,
         **kwargs: "Unpack[MLNumericSensor.Args]",
     ):
-        MLNumericSensor.__init__(
-            self, manager, channel, **(kwargs | {"name": "Presence"})
-        )
+        MLNumericSensor.__init__(self, manager, channel, **kwargs)
         self.sensor_distance = MLNumericSensor(
             manager,
             channel,

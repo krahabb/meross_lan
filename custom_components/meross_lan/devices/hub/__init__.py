@@ -64,6 +64,8 @@ class HubBeep(MLSwitch):
     ns = mn_h.Appliance_Hub_SubDevice_Beep
     ENTITY_KEY = f"{ns.slug}__{MLSwitch.key_value}"
 
+    _attr_name = "Beep alarm"
+
 
 class HubSubIdChannelMixin(MLEntity if TYPE_CHECKING else object):
     """
@@ -552,7 +554,6 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
             HubBeep(
                 self,
                 self.id,
-                name="Beep alarm",
                 device_value=payload[mc.KEY_ONOFF],
             ),
         )
@@ -813,6 +814,7 @@ class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
         ENTITY_KEY = "config_adjust_temperature"
         key_value = mc.KEY_TEMPERATURE
         _attr_device_class = MLConfigNumber.DeviceClass.TEMPERATURE
+        _attr_name = "Adjust temperature"
 
         native_min_value = -5
         native_max_value = 5
@@ -823,6 +825,7 @@ class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
         ENTITY_KEY = "config_adjust_humidity"
         key_value = mc.KEY_HUMIDITY
         _attr_device_class = MLConfigNumber.DeviceClass.HUMIDITY
+        _attr_name = "Adjust humidity"
 
         native_min_value = -20
         native_max_value = 20
@@ -873,13 +876,11 @@ class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
             MS100Sensor.AdjustTemperatureNumber(
                 subdevice,
                 subdevice.id,
-                name=f"Adjust temperature",
                 device_value=payload[mc.KEY_TEMPERATURE],
             ),
             MS100Sensor.AdjustHumidityNumber(
                 subdevice,
                 subdevice.id,
-                name=f"Adjust humidity",
                 device_value=payload[mc.KEY_HUMIDITY],
             ),
         )
@@ -1055,6 +1056,7 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, MLSwitch):
         key_value = "dura"
 
         # HA core entity attributes:
+        _attr_name = "Watering duration"
         _attr_device_class = MLConfigNumber.DEVICE_CLASS_DURATION
         _attr_native_unit_of_measurement = MLConfigNumber.hac.UnitOfTime.SECONDS
         native_max_value = 86400  # 1 day max duration (no real info just guessing)
@@ -1069,15 +1071,13 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, MLSwitch):
     native_on = 1
     native_off = 2
 
-    # TODO: define _attr_name in MLEntity base class
+    _attr_name = "Watering"
 
     __slots__ = ("number_duration",)
 
     def __init__(self, subdevice: "SubDevice", subid: str):
-        super().__init__(subdevice, subid, name="Watering")
-        self.number_duration = MstSwitch.WateringDurationNumber(
-            subdevice, subid, name="Watering duration"
-        )
+        super().__init__(subdevice, subid)
+        self.number_duration = MstSwitch.WateringDurationNumber(subdevice, subid)
 
     async def async_shutdown(self):
         await super().async_shutdown()

@@ -113,6 +113,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         _attr_available: ClassVar[bool]
         _attr_entity_registry_enabled_default: ClassVar[bool]
         _attr_device_class: ClassVar[str | None]
+        _attr_name: ClassVar[str | None]
         # These may be customized here and there per class or instance
         assumed_state: bool = False
         entity_category: entity.EntityCategory | None
@@ -232,6 +233,8 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
 
         if "name" in kwargs:
             name = kwargs.pop("name")
+        elif hasattr(self, "_attr_name"):
+            name = self._attr_name
         elif entitykey:
             name = entitykey.replace("_", " ").capitalize()
         elif self.device_class:

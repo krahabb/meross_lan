@@ -351,14 +351,9 @@ class MLRollerShutterAdjustSwitch(MLSwitch):
     native_on = 1
     native_off = 2
 
-    def __init__(self, manager: "Device", channel: int):
-        MLSwitch.__init__(
-            self,
-            manager,
-            channel,
-            entity_key=f"{self.ns.slug}__{self.key_value}",
-            name="Auto Calibration",
-        )
+    ENTITY_KEY = f"{ns.slug}__{key_value}"
+
+    _attr_name = "Auto Calibration"
 
     def _parse_adjust(self, payload: "mt_rs.AdjustResponse_C"):
         # payload = {"channel": 0, "status": 0}

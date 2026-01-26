@@ -26,6 +26,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         _attr_device_scale = 100
 
         # HA core entity attributes:
+        _attr_name = "Adjust temperature"
         _attr_device_class = MLConfigNumber.DEVICE_CLASS_TEMPERATURE_DELTA
         native_max_value = 5
         native_min_value = -5
@@ -37,7 +38,6 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
                 climate.manager,
                 climate.channel,
                 entity_key=f"config_{self.ns.key}_{self.key_value}",
-                name="Adjust temperature",
             )
 
     class SetPointNumber(MtsSetPointNumber):

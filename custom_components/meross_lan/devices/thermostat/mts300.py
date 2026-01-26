@@ -73,22 +73,17 @@ class Mts300Climate(MtsThermostatClimate):
         key_group = mc.KEY_TEMP
         key_value = ns.slug_end
 
+        ENTITY_KEY = f"{ns.slug}__{key_group}_{key_value}"
+        _attr_name = "Sensor Association"
+
+        entity_category = MLConfigSelect.EntityCategory.DIAGNOSTIC
+
         """ TODO: get a description of possible options and implement either translations or constant symbols
         so that we can change also the entity category to CONFIG
         """
         OPTIONS_MAP = {
             2: "Internal sensor",  # almost sure
         }
-
-        entity_category = MLConfigSelect.EntityCategory.DIAGNOSTIC
-
-        def __init__(self, climate: "MtsThermostatClimate", /):
-            super().__init__(
-                climate.manager,
-                climate.channel,
-                entity_key=f"{self.ns.slug}__{self.key_group}_{self.key_value}",
-                name="Sensor Association",
-            )
 
     if TYPE_CHECKING:
         # overrides
@@ -422,7 +417,9 @@ class Mts300Climate(MtsThermostatClimate):
         try:
             self.select_temp_association._parse(payload)
         except AttributeError:
-            self.select_temp_association = Mts300Climate.SensorAssociationSelect(self)
+            self.select_temp_association = Mts300Climate.SensorAssociationSelect(
+                self.manager, self.channel
+            )
             self.select_temp_association._parse(payload)
 
     async def _async_request_value_number_fan_hold(self, device_value, /):
