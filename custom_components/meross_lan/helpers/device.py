@@ -402,8 +402,6 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         "_trace_ability_callback_unsub",
         "_diagnostics_build",
         "sensor_protocol",
-        # Hub slots
-        "subdevices",
     ) + BaseDevice.__SLOTS__
 
     def __init__(

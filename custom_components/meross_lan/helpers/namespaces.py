@@ -1187,7 +1187,11 @@ class NamespaceHandler:
                     if self.device.DEVICE_TYPE is mlc.DeviceType.DEVICE:
                         await _async_wrapped_get({ns_key: [{mc.KEY_CHANNEL: 0}]})
                     else:  # it is an hub
-                        subdevices = self.device.subdevices
+                        subdevices = tuple(
+                            entity.id
+                            for entity in self.device.entities.values()
+                            if entity.id is entity.channel
+                        )
                         # typical 'legacy' devices are queried by "id"
                         if response := await _async_wrapped_get(
                             {

@@ -126,13 +126,6 @@ class HubNamespaceHandler(NamespaceHandler):
     def __init__(self, device: "HubMixin", ns: "Namespace"):
         NamespaceHandler.__init__(self, device, ns, handler=self._handle_list)
 
-    def channels_to_poll(self):
-        # snapshot of subdevices to query (likely needed with all these asyncs)
-        # TODO: remove when finished refactoring Hub parsing
-        return tuple(
-            self.parsers.keys() if self.parsers else self.device.subdevices.keys()
-        )
-
     def _handle_list(self, message: "MerossMessage"):
         """Generalized Hub namespace dispatcher to subdevices.
         This code is being step-by-step migrated to be complient with
@@ -140,7 +133,7 @@ class HubNamespaceHandler(NamespaceHandler):
         Migration will be done ns by ns so we'll have some ns with 'parsers'
         while some other will still work through this generalized handler."""
         hub = self.device
-        subdevices = hub.subdevices
+        entities = hub.entities
         subdevices_parsed = set()
         ns_key = self.ns.key
         key_channel = self.ns.key_channel
@@ -151,7 +144,8 @@ class HubNamespaceHandler(NamespaceHandler):
                     hub.log_duplicated_subdevice(subdevice_id)
                     continue
                 subdevices_parsed.add(subdevice_id)
-                # try standard parser first (ns should be migrated to NamespaceHandler.register_parser)
+
+                # try default parsing mechanics
                 try:
                     self.parsers[subdevice_id](payload)
                     continue
@@ -160,7 +154,7 @@ class HubNamespaceHandler(NamespaceHandler):
                         raise
                 # fallback
                 try:
-                    subdevices[subdevice_id]._hub_parse(ns_key, payload)
+                    entities[subdevice_id]._hub_parse(ns_key, payload)
                 except KeyError as ke:
                     if ke.args[0] != subdevice_id:
                         raise
@@ -183,9 +177,9 @@ class HubMixin(Device if TYPE_CHECKING else object):
     """
 
     if TYPE_CHECKING:
-        # TODO: try to remove this attribute in favor of self.entities
-        # which already contains the subdevice core battery entities
-        subdevices: dict[str, "SubDevice"]
+        # entities now contains both MLEntity and SubDevice
+        # so we just override this to make the linter happy
+        entities: Final[dict[str, "SubDevice"]]  # type: ignore[override]
 
     DEVICE_TYPE = mlc.DeviceType.HUB
     NAMESPACES = mn.HUB_NAMESPACES
@@ -208,24 +202,11 @@ class HubMixin(Device if TYPE_CHECKING else object):
     )
 
     @override
-    async def async_shutdown(self):
-        for subdevice in self.subdevices.values():
-            await subdevice.async_shutdown()
-        self.subdevices.clear()
-        await super().async_shutdown()
-
-    @override
     def managed_entities(self, platform, /):
         entities = super().managed_entities(platform)
-        for subdevice in self.subdevices.values():
+        for subdevice in self.subdevices:
             entities.extend(subdevice.managed_entities(platform))
         return entities
-
-    @override
-    def _set_offline(self):
-        for subdevice in self.subdevices.values():
-            subdevice._set_offline()
-        super()._set_offline()
 
     @override
     def _create_handler(self, ns: "Namespace", /):
@@ -246,18 +227,24 @@ class HubMixin(Device if TYPE_CHECKING else object):
         # propagate device info to subdevices
         for sub_device_info in device_info.get("__subDeviceInfo", []):
             try:
-                self.subdevices[sub_device_info["subDeviceId"]].update_sub_device_info(
+                self.entities[sub_device_info["subDeviceId"]].update_sub_device_info(
                     sub_device_info
                 )
             except KeyError:
                 continue
 
     # interface: self
+    @property
+    def subdevices(self, /):
+        return (
+            entity for entity in self.entities.values() if entity.__class__ is SubDevice
+        )
+
     def log_duplicated_subdevice(self, subdevice_id: str, /):
         self.log(
             self.CRITICAL,
             "Subdevice %s (id:%s) appears twice in device data. Shouldn't happen",
-            self.subdevices[subdevice_id].display_name,
+            self.entities[subdevice_id].display_name,
             subdevice_id,
             timeout=604800,  # 1 week
         )
@@ -302,19 +289,14 @@ class HubMixin(Device if TYPE_CHECKING else object):
 
 class SubDevice(mld.BaseDevice, MLNumericSensor):
     """
-    (Dangerous) mixin class for entities acting as a 'main' entity for a SubDevice.
-    This class is designed to behave consistently either as a Mixin with
-    any MLEntity implementation or standalone.
-    The resulting hierarchy is fragile as for standard python multiple inheritance pattern
-    so we need special care (at least) for init and shutdown sequences.
-    In general, the SubDeviceEntity path is the one responsible for the containing behavior (BaseDevice)
-    but also provides default parsers for the hub namespaces, while the subclassed
-    entity (like MtsClimate) is responsible for the entity behavior.
-    The standalone version is used when the Hub subdevices initialization doesn't find
-    any specialized entity class for the given subdevice type (i.e. new device model currently
-    not mapped to an actual implementation class).
-    For that scenario we try to implement some basic functionality like battery sensor and
-    some diagnostic sensors to expose raw payload values.
+    Class for a physical subdevice registered with a Hub device.
+    This class acts as a 'container' for the actual entities implemented for the device
+    but also implements a default entity (battery level) since this seems pretty universal.
+    This nevertheless adds NamespaceParser behavior for this class so that we can handle
+    subdevice-specific namespaces and digest parsing in this context.
+    The SubDevice will appear in the containing Hub entities container together with
+    some other general entities (almost appearing in any other device) strictly related to
+    the Hub device itself (like signal level or so).
     """
 
     if TYPE_CHECKING:
@@ -378,7 +360,6 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
                 identifiers={(mlc.DOMAIN, subid)},
             ),
         )
-        hub.subdevices[subid] = self
         hub.register_parser_ex(self, *self.NS_SUBDEVICE)
         if entity_class:
             subdev_entity = entity_class(self, subid)
@@ -444,6 +425,16 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
         # temporary fix to keep the embedded battery sensor unique_id
         # compatible with previous layout
         return f"{self.manager.id}_{self.id}_battery"
+
+    @override
+    def set_available(self):
+        self._set_online()
+        super().set_available()
+
+    @override
+    def set_unavailable(self):
+        self._set_offline()
+        super().set_unavailable()
 
     # interface: self
     def update_sub_device_info(self, sub_device_info: "SubDeviceInfoType", /):
@@ -1123,7 +1114,6 @@ def digest_init_hub(
     )
     # temporary patch entry platforms defaults
     device.platforms = HubMixin.DEFAULT_PLATFORMS.copy() | device.platforms
-    device.subdevices = {}
 
     # Check for unbinded subdevices which are 'still' in the device_registry
     registry_subdevices = {}
@@ -1148,7 +1138,7 @@ def digest_init_hub(
     for p_subdevice_digest in digest[mc.KEY_SUBDEVICE]:
         try:
             subdevice_id = p_subdevice_digest[mc.KEY_ID]
-            if subdevice_id in device.subdevices:
+            if subdevice_id in device.entities:
                 device.log_duplicated_subdevice(subdevice_id)
                 continue
 
@@ -1177,14 +1167,15 @@ def digest_init_hub(
         # Usually called by _handle_Appliance_System_All as part of the digest parsing
         # Here we'll check the fresh subdevice list against the actual one and
         # eventually manage newly added subdevices or removed ones #119
-        subdevices_actual = set(device.subdevices)
+        subdevices = set(device.subdevices)
+
         for p_subdevice_digest in p_hub[mc.KEY_SUBDEVICE]:
             try:
                 subdevice_id = p_subdevice_digest[mc.KEY_ID]
                 try:
-                    subdevice = device.subdevices[subdevice_id]
+                    subdevice = device.entities[subdevice_id]
                     try:
-                        subdevices_actual.remove(subdevice_id)
+                        subdevices.remove(subdevice)
                     except KeyError:
                         # this shouldnt but happened in a trace (#331)
                         device.log_duplicated_subdevice(subdevice_id)
@@ -1197,28 +1188,25 @@ def digest_init_hub(
             except Exception as exception:
                 device.log_exception(device.WARNING, exception, "digest_parse_hub")
 
-        if subdevices_actual:
+        if subdevices:
             # now we're left with non-existent (removed) subdevices
             device.schedule_entry_update(False)
-            for subdevice_id in subdevices_actual:
-                subdevice = device.subdevices.pop(subdevice_id)
+            for subdevice in subdevices:
                 device.log(
                     device.WARNING,
                     "%s (id:%s) unregistered from hub",
                     subdevice.display_name,
-                    subdevice_id,
-                )
-                if subdevice.online:
-                    subdevice._set_offline()
-                device.async_create_task(
-                    subdevice.async_shutdown(),
-                    f"{subdevice.__class__.__name__}.async_shutdown()",
+                    subdevice.id,
                 )
                 device.create_issue(
                     mlc.ISSUE_HUB_SUBDEVICE_REMOVED,
-                    subdevice_id,
+                    subdevice.id,
                     severity=device.IssueSeverity.WARNING,
                     translation_placeholders={"device_name": subdevice.display_name},
+                )
+                device.async_create_task(
+                    subdevice.async_shutdown(),
+                    f"{subdevice.__class__.__name__}.async_shutdown()",
                 )
 
     ability = device.descriptor.ability
