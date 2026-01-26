@@ -12,7 +12,7 @@ from ...switch import MLEmulatedSwitch
 if TYPE_CHECKING:
     from typing import Unpack
 
-    from . import HubMixin, mt_h
+    from . import SubDevice, mt_h
 
 
 class Mts100Climate(SubDeviceEntity, MtsClimate):
@@ -52,7 +52,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
 
         def __init__(self, climate: "Mts100Climate", /):
             MtsSchedule.__init__(self, climate)
-            self._schedule_unit_time = climate.hub.descriptor.ability.get(
+            self._schedule_unit_time = climate.manager.manager.descriptor.ability.get(
                 mn_h.Appliance_Hub_Mts100_ScheduleB, {}
             ).get(mc.KEY_SCHEDULEUNITTIME, 15)
 
@@ -98,34 +98,33 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         "switch_patch_hvacaction",
     )
 
-    def __init__(self, hub: "HubMixin", subid: str, key_digest: str, /):
+    def __init__(self, subdevice: "SubDevice", subid: str, /):
         self.extra_state_attributes = {}
-        match key_digest:
+        match subdevice.key_digest:
             case mc.TYPE_MTS100 | mc.TYPE_MTS100V3:
-                self._digest_parse = self._parse_mts100
+                self._parse = self._parse_mts100
             case mc.TYPE_MTS150 | mc.TYPE_MTS150P:
                 # mts150p subdevs should still report their key_digest as mts150
                 # but we handle that option as possible though
-                self._digest_parse = self._parse_mts150
+                self._parse = self._parse_mts150
 
-        SubDeviceEntity.__init__(self, hub, subid, key_digest)
+        super().__init__(subdevice, subid)
         self.binary_sensor_window = MLBinarySensor(
-            self,
+            subdevice,
             subid,
             entity_key=str(MLBinarySensor.DeviceClass.WINDOW),
             device_class=MLBinarySensor.DeviceClass.WINDOW,
         )
         self.switch_patch_hvacaction = MLEmulatedSwitch(
-            self,
+            subdevice,
             subid,
             entity_key="patch_hvacaction",
             device_value=0,
             state_callback=self._switch_emulate_hvacaction_state_callback,
         )
-
         # ns registration. TODO: move (maybe) to MtsClimate base class once Hub subdevice ns handling is sorted out
         for _entity in (self.number_adjust_temperature, self.schedule):
-            hub.register_parser_entity(_entity)
+            subdevice.manager.register_parser_entity(_entity)
 
     async def async_shutdown(self):
         await SubDeviceEntity.async_shutdown(self)
@@ -183,7 +182,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
             # This is intended (right now) to allow the user change
             # the setpoint without implying the device switch on.
             # Turning on/off the device must be an explicit action on HVACMode.
-            await self.async_request(
+            await self.manager.async_request(
                 *mn_h.Appliance_Hub_Mts100_Mode.request_set(
                     {mc.KEY_STATE: mc.MTS100_MODE_CUSTOM}, self.id
                 )
@@ -198,12 +197,12 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
     @override
     async def async_request_preset(self, mode: int, /):
         """Requests an mts mode and (ensure) turn-on"""
-        await self.async_request(
+        await self.manager.async_request(
             *mn_h.Appliance_Hub_Mts100_Mode.request_set({mc.KEY_STATE: mode}, self.id)
         )
         self._mts_mode = mode
         if not self._mts_onoff:
-            await self.async_request(
+            await self.manager.async_request(
                 *mn_h.Appliance_Hub_ToggleX.request_set({mc.KEY_ONOFF: 1}, self.id)
             )
             self._mts_onoff = 1
@@ -216,7 +215,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
 
     @override
     async def async_request_onoff(self, onoff: int, /):
-        await self.async_request(
+        await self.manager.async_request(
             *mn_h.Appliance_Hub_ToggleX.request_set({mc.KEY_ONOFF: onoff}, self.id)
         )
         self._mts_onoff = onoff
@@ -227,9 +226,8 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         return self._mts_onoff and self._mts_mode == mc.MTS100_MODE_AUTO
 
     # interface: SubDeviceEntity
-    @override
     def _parse_all(self, payload: dict, /):
-        self._parse_online(payload.get(mc.KEY_ONLINE, {}))
+        self.manager._parse_online(payload[mc.KEY_ONLINE])
         if not self.available:
             return
 
@@ -246,11 +244,11 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         else:
             self.flush_state()
 
+    # interface: self
     def _parse_togglex(self, payload, /):
         self._mts_onoff = payload[mc.KEY_ONOFF]
         self.flush_state()
 
-    # interface: self
     def _parse_mode(self, payload, /):
         self._mts_mode = payload[mc.KEY_STATE]
         self.flush_state()
@@ -269,7 +267,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
                 # only room temperature/setpoint updated -> this is 99.9% a PUSH
                 # whenever the target temp or mode changes
                 self.flush_state()
-                self.hub.ns_handlers[mn_h.Appliance_Hub_Mts100_Mode].schedule_get(
+                self.manager.ns_handlers[mn_h.Appliance_Hub_Mts100_Mode].schedule_get(
                     self.id
                 )
                 return
@@ -292,12 +290,12 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
                 pass
         self.flush_state()
 
-    def _parse_mts100(self, payload: dict, /):
+    def _parse_mts100(self, payload, /):
         """parse digest key for mts100/mts100v3 subdevice"""
         self._mts_mode = payload[mc.KEY_MODE]
         self.flush_state()
 
-    def _parse_mts150(self, payload: dict, /):
+    def _parse_mts150(self, payload, /):
         """parse digest key for mts150/mts150p subdevice"""
         self._mts_mode = payload[mc.KEY_MODE]
         # TODO: parse more keys?

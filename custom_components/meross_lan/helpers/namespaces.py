@@ -50,6 +50,8 @@ class NamespaceParser(Loggable):
     _payload_ns = mn.EMPTY_DICT  # class-level default
     _namespace_handlers = None  # type: ignore
 
+    __SLOTS__ = ()
+
     async def async_shutdown(self):
         await super().async_shutdown()
         try:
@@ -1095,7 +1097,7 @@ class NamespaceHandler:
                 if self.device.DEVICE_TYPE is mlc.DeviceType.DEVICE:
                     channels = self.parsers.keys() or (0,)
                 else:  # it is an hub
-                    channels = self.device.subdevices
+                    channels = self.parsers.keys()
 
                 channels_count = len(channels)
                 channels_payload = [{ns_key_channel: channel} for channel in channels]

@@ -25,7 +25,6 @@ if TYPE_CHECKING:
         ClassVar,
         Final,
         Iterable,
-        Mapping,
         NotRequired,
         Self,
         TypedDict,
@@ -35,7 +34,7 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from ..merossclient.protocol.types import JsonDict
+    from ..merossclient.protocol.types import JsonDict, JsonMapping
     from .device import BaseDevice, Device, MerossResponse
     from .manager import ConfigEntryManager, EntityManager
 
@@ -181,7 +180,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         "entity_registry_enabled_default",
         "name",
         "suggested_object_id",
-    )
+    ) + NamespaceParser.__SLOTS__
 
     def __init__(self, manager: "EntityManager", channel, /, **kwargs: "Unpack[Args]"):
         """
@@ -225,7 +224,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
 
         self.available = self._attr_available or manager.online
         self.device_class = kwargs.pop("device_class", self._attr_device_class)
-        self.device_info = self.manager.device_entry_ids  # type: ignore
+        self.device_info = manager.device_entry_ids  # type: ignore
         self.entity_registry_enabled_default = kwargs.pop(
             "entity_registry_enabled_default",
             self._attr_entity_registry_enabled_default,
@@ -351,7 +350,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         self.update_device_value(device_value)
 
     @override  # NamespaceParser
-    def _parse(self, payload: "Mapping[str, Any]", /):
+    def _parse(self, payload: "JsonMapping", /):
         """Default parsing for entities. Set the proper
         key_value in class/instance definition to make it work."""
         self.update_device_value(payload[self.key_value])
@@ -388,7 +387,7 @@ class MEGroupListChannelMixin(MLEntity if TYPE_CHECKING else object):
         self.update_device_value(device_value)
 
     @override  # NamespaceParser
-    def _parse(self, payload: "Mapping[str, Any]", /):
+    def _parse(self, payload, /):
         self.update_device_value(payload[self.key_group][self.key_value])
 
 

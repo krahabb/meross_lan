@@ -2,6 +2,7 @@ import abc
 import asyncio
 import bisect
 from datetime import UTC, tzinfo
+from functools import cached_property
 from json import JSONDecodeError
 from time import time
 from typing import TYPE_CHECKING, override
@@ -106,12 +107,10 @@ class BaseDevice(mlm.EntityManager):
 
     _attr_online = False
 
-    """TODO
-    __slots__ = (
+    __SLOTS__ = (
         "latest_version",
         "update_firmware",
     )
-    """
 
     def __init__(self, parent: mlm.EntityManager, id: str, **kwargs: "Unpack[Args]"):
         self.update_firmware = None
@@ -148,7 +147,8 @@ class BaseDevice(mlm.EntityManager):
     def tz(self, /) -> tzinfo:
         raise NotImplementedError("tz")
 
-    @property
+    @cached_property
+    @abc.abstractmethod
     def ns_handlers(self, /) -> "Mapping[str, NamespaceHandler]":
         raise NotImplementedError("ns_handlers")
 
@@ -159,6 +159,10 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
     """
 
     if TYPE_CHECKING:
+        # Overrides
+        config_entry: Final[ConfigEntry]  # type: ignore
+        config: mlc.DeviceConfigType
+
         NAMESPACES: ClassVar[mn.NamespacesMapType]
         """ Accesses the namespaces definitions for this Device. This could be overriden
         when needed to extend with other namespaces (this is actually true for Hub). This
@@ -234,10 +238,6 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
 
         # entities
         sensor_protocol: ProtocolSensor
-
-        # Overrides
-        config_entry: Final[ConfigEntry]  # type: ignore
-        config: mlc.DeviceConfigType
 
     @staticmethod
     def digest_parse_empty(digest: dict | list):
@@ -404,7 +404,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         "sensor_protocol",
         # Hub slots
         "subdevices",
-    )
+    ) + BaseDevice.__SLOTS__
 
     def __init__(
         self,
@@ -826,7 +826,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         if ability in self.TRACE_ABILITY_EXCLUDE:
             return None
         ns = self.NAMESPACES.get(ability)
-        if not ns: # unknown namespace..setup generic handler
+        if not ns:  # unknown namespace..setup generic handler
             return self.get_handler_by_name(ability)
         if ns.can_query:
             return self.get_handler(ns)
@@ -1237,6 +1237,10 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         """
         return datetime_from_epoch(epoch, self.tz)
 
+    # TODO: maybe move these ns_handlers management to baseDevice?
+    # we already have ns_handlers as a 'virtual' property in BaseDevice
+    # so we could just virtualize _create_handler and move all these
+    # interfaces to base.
     def get_handler(self, ns: "mn.Namespace", /):
         try:
             return self.ns_handlers[ns]
