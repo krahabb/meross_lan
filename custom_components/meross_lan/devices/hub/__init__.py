@@ -760,7 +760,7 @@ class SmokeAlarmSensor(SubDeviceEntity, MLEnumSensor):
         MLButton(subdevice, subid, "button_mute", self.async_mute, name="Mute")
         MLButton(subdevice, subid, "button_test", self.async_test, name="Test")
 
-    def _parse(self, payload: dict, /):
+    def _parse(self, payload: "mt_h._smokeAlarm", /):
         self.device_value = value = payload[mc.KEY_STATUS]
         self.update_native_value(self.STATUS_MAP.get(value, value))
         self.binary_sensor_alarm.update_native_value(value in self.STATUS_ALARM)
@@ -1071,6 +1071,7 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, MLSwitch):
 
     MODEL = mc.TYPE_MST100
     KEY_DIGEST = mc.KEY_MST
+    NS_HUB = (mn_h.Appliance_Config_DeviceCfg, *SubDeviceEntity.NS_HUB)
 
     ENTITY_KEY = mc.KEY_ONOFF
     ns = mn_h.Appliance_Control_Water
@@ -1090,6 +1091,13 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, MLSwitch):
     async def async_shutdown(self):
         await super().async_shutdown()
         del self.number_duration
+
+    @override
+    def _parse(self, payload: "mt_h._mst", /):
+        # unknown payload semantic
+        pass
+
+    _parse_water = MLSwitch._parse
 
     def _parse_deviceCfg(self, payload: "DeviceCfg", /):
         self.number_duration._parse(payload)

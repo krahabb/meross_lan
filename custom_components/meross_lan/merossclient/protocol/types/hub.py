@@ -35,32 +35,6 @@ class ToggleX(IdPayload):
     onoff: int  # 1: on, 0: off
 
 
-class Sensor_All(IdPayload):
-    """Appliance.Hub.Sensor.All"""
-
-    online: _Online
-
-
-class _Sensor_AllSample(TypedDict):
-    latest: int
-    latestSampleTime: int
-    max: int
-    min: int
-
-
-class Sensor_All_ms100(Sensor_All):
-    """Appliance.Hub.Sensor.All for ms100 subdevice."""
-
-    temperature: _Sensor_AllSample
-    humidity: _Sensor_AllSample
-
-
-class Sensor_All_ms130(Sensor_All_ms100):
-    """Appliance.Hub.Sensor.All for ms130 subdevice."""
-
-    pass
-
-
 class Sensor_Adjust(IdPayload):
     """Appliance.Hub.Sensor.Adjust"""
 
@@ -88,6 +62,50 @@ class Sensor_TempHum(IdPayload):
     latestHumidity: int
     latestTime: int
     sample: list[list[int]]  # [temperature, humidity, startTime, endTime]
+
+
+class _smokeAlarm(TypedDict):
+    status: int
+    lmTime: int
+    interConn: int
+
+
+class Sensor_Smoke(_smokeAlarm, IdPayload):
+    """Appliance.Hub.Sensor.Smoke"""
+
+    pass
+
+
+class Sensor_All(IdPayload):
+    """Appliance.Hub.Sensor.All"""
+
+    online: _Online
+
+
+class _Sensor_AllSample(TypedDict):
+    latest: int
+    latestSampleTime: int
+    max: int
+    min: int
+
+
+class Sensor_All_ms100(Sensor_All):
+    """Appliance.Hub.Sensor.All for ms100 subdevice."""
+
+    temperature: _Sensor_AllSample
+    humidity: _Sensor_AllSample
+
+
+class Sensor_All_ms130(Sensor_All_ms100):
+    """Appliance.Hub.Sensor.All for ms130 subdevice."""
+
+    pass
+
+
+class Sensor_All_gs559(Sensor_All):
+    """Appliance.Hub.Sensor.All for ms100 subdevice."""
+
+    smokeAlarm: _smokeAlarm
 
 
 class SubDevice_Beep(IdPayload):
@@ -145,6 +163,24 @@ class Digest_mts100v3(Digest_SubDevice):
     mts100v3: _mts100v3
 
 
+class Digest_gs559(Digest_SubDevice):
+    """Digest payload for smoke subdevice."""
+
+    smokeAlarm: _smokeAlarm
+
+
+class _mst(TypedDict):
+    ts: int
+    dura: int
+    wflow: int
+
+
+class Digest_mst100(Digest_SubDevice):
+    """Digest payload for mst subdevice."""
+
+    mst: _mst
+
+
 class Digest_Hub(TypedDict):
     """Appliance.Digest.Hub"""
 
@@ -153,4 +189,4 @@ class Digest_Hub(TypedDict):
     nvdmChl: NotRequired[int]
     workChl: NotRequired[int]
     curChl: NotRequired[int]
-    subdevice: list[Digest_SubDevice]  # TODO: define better
+    subdevice: list[Digest_SubDevice]
