@@ -238,7 +238,20 @@ class TimeMocker(contextlib.AbstractContextManager):
     def __call__(self):
         return self.time()
 
+    def tick(self, tick: timedelta | float | int):
+        """Advances the time mocker by 'tick' and fires the time changed event in HA
+        so that all the asyncio loop TimerHandles scheduled in range are fired accordingly.
+        """
+        dt_now = self.time.tick(
+            tick if isinstance(tick, timedelta) else timedelta(seconds=tick)
+        )
+        async_fire_time_changed_exact(self.hass, dt_now.replace(tzinfo=UTC))
+        return dt_now
+
     async def async_tick(self, tick: timedelta | float | int):
+        """Advances the time mocker by 'tick' and fires the time changed event in HA
+        so that all the asyncio loop TimerHandles scheduled in range are fired accordingly
+        and waits for all the resulting tasks to be completed."""
         dt_now = self.time.tick(
             tick if isinstance(tick, timedelta) else timedelta(seconds=tick)
         )
@@ -488,7 +501,9 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
             ]
 
         RAISE_MESSAGES = [
+            # (AssertionError, None),
             (AttributeError, None),
+            (KeyError, None),
             (ModuleNotFoundError, None),
             (TypeError, None),
         ]
@@ -934,9 +949,15 @@ class DeviceContext(ConfigEntryMocker):
 
     async def async_poll_single(self):
         """Advances the time mocker up to the next polling cycle and executes it."""
-        return await self.time_mock.async_tick(
-            self.device._polling_unsub.when() - self.hass.loop.time()  # type: ignore
+        assert self.device._polling_unsub
+        dt = self.time_mock.tick(
+            self.device._polling_unsub.when() - self.hass.loop.time()
         )
+        task = self.device._polling_task
+        assert task
+        await task
+        assert self.device._polling_unsub, task.exception()
+        return dt
 
     async def async_poll_timeout(
         self,

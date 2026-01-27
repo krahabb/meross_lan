@@ -107,6 +107,8 @@ async def test_entities(
     to actual HA service calls. We're looping through all of our emulator traces
     in order to try cover all of the entities features. For each entity platform
     the test code is defined in the respective module.
+    # TODO!! add expectancy for enabled/disabled entities
+    # TODO add expected MLGarageTimeoutBinarySensor for MLGarage (and maybe some others in garageConfig)
     """
     EntityComponentTest.hass = hass
     EntityComponentTest.hass_states = hass.states
@@ -122,6 +124,9 @@ async def test_entities(
             EntityComponentTest.ability = ability = descriptor.ability
             EntityComponentTest.digest = digest = descriptor.digest
             ishub = mc.KEY_HUB in digest
+
+            if False and not ishub:
+                continue
 
             unexpected: list[str] = []
             unavailable: list[str] = []
@@ -189,7 +194,7 @@ async def test_entities(
                         assert isinstance(device, HubMixin) and (
                             device.DEVICE_TYPE is mlc.DeviceType.HUB
                         )
-                        for subdevice in device.subdevices.values():
+                        for subdevice in device.subdevices:
                             assert subdevice.DEVICE_TYPE is mlc.DeviceType.SUBDEVICE
                             await _async_test_entities(
                                 subdevice, expected, unexpected, unavailable
