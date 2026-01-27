@@ -350,6 +350,8 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
         # we save subid for safe use whenever we need a 'clear' device subid
         self.key_digest = key_digest
         self.model = model = (entity_class and entity_class.MODEL) or key_digest
+        # MLNumericSensor init (battery level) will pop device_entry from kwargs
+        # so we need to ensure it's built after EntityManager base
         super().__init__(
             hub,
             subid,
@@ -358,7 +360,7 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
                 manufacturer=mc.MANUFACTURER,
                 name=get_productnameuuid(model, subid),
                 model=model,
-                via_device=next(iter(hub.device_entry_ids["identifiers"])),
+                via_device=next(iter(hub.device_entry.identifiers)),
                 identifiers={(mlc.DOMAIN, subid)},
             ),
         )

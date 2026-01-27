@@ -77,7 +77,6 @@ class EntityManager(Loggable):
         online: Final[bool]  # TODO: rename to available to mix with Entity.available
         """Indicates if the manager is 'online' i.e. active (connected to device/cloud)."""
         device_entry: Final[dr.DeviceEntry | None]
-        device_entry_ids: Final[DeviceEntryIdType | None]  # TODO: rename to device_info
         """Link to optional DeviceRegistry entry info."""
 
         platforms: PlatformsType  # init in derived
@@ -87,7 +86,7 @@ class EntityManager(Loggable):
         _tasks: set[asyncio.Future]
 
         class Args(Loggable.Args):
-            device_entry: NotRequired[dr.DeviceEntry]
+            device_entry: NotRequired[dr.DeviceEntry | None]
 
     IssueSeverity = ir.IssueSeverity
 
@@ -101,7 +100,6 @@ class EntityManager(Loggable):
         "api",
         "online",
         "device_entry",
-        "device_entry_ids",
         "platforms",
         "entities",
         "objects",
@@ -112,12 +110,7 @@ class EntityManager(Loggable):
         self.manager = parent
         self.api = parent.api
         self.online = self._attr_online
-        try:
-            self.device_entry = kwargs.pop("device_entry")
-            self.device_entry_ids = {"identifiers": self.device_entry.identifiers}
-        except KeyError:
-            self.device_entry = None
-            self.device_entry_ids = None
+        self.device_entry = kwargs.get("device_entry")
         assert hasattr(self, "platforms"), "platforms must be set in derived classes"
         self.entities = {}
         self.objects = weakref.WeakSet()

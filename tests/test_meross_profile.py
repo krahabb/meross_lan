@@ -201,7 +201,7 @@ async def test_meross_profile_with_device(
         # check the device registry has the device name from the cloud (stored)
         assert (
             device_entry := dr.async_get(hass).async_get_device(
-                **device.device_entry_ids
+                identifiers={(mlc.DOMAIN, device_context.device_id)}
             )
         ) and device_entry.name == tc.MOCK_PROFILE_MSS310_DEVNAME_STORED
         # now the profile should query the cloudapi and get an updated device_info list
@@ -223,7 +223,7 @@ async def test_meross_profile_with_device(
         # check the device name was updated from cloudapi query
         assert (
             device_entry := dr.async_get(hass).async_get_device(
-                **device.device_entry_ids
+                identifiers={(mlc.DOMAIN, device_context.device_id)}
             )
         ) and device_entry.name == tc.MOCK_PROFILE_MSS310_DEVNAME
         assert cloudapi_mock.api_calls[cloudapi.API_DEVICE_DEVLIST_PATH] == 1

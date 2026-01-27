@@ -99,7 +99,6 @@ class BaseDevice(mlm.EntityManager):
         latest_version: LatestVersionType
         update_firmware: MLUpdate | None
         # Overrides
-        device_entry_ids: Final[mlm.EntityManager.DeviceEntryIdType]  # type: ignore
         device_entry: Final[dr.DeviceEntry]  # type: ignore
 
         class Args(mlm.EntityManager.Args):

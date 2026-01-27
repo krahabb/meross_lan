@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.device_registry import DeviceEntry
 
     from ..merossclient.protocol.types import JsonDict, JsonMapping
     from .device import BaseDevice, Device, MerossResponse
@@ -72,6 +73,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
             name: NotRequired[str | None]
             translation_key: NotRequired[str]
             device_class: NotRequired[str | None]
+            device_entry: NotRequired[DeviceEntry | None]
             entity_category: NotRequired[entity.EntityCategory | None]
             entity_registry_enabled_default: NotRequired[bool]
 
@@ -120,6 +122,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         translation_key: str | None
         # These are actually per instance
         available: bool
+        device_entry: DeviceEntry | None
         entity_registry_enabled_default: bool
         name: str | None
         suggested_object_id: str | None
@@ -174,7 +177,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         # HA core
         "available",
         "device_class",
-        "device_info",
+        "device_entry",
         "entity_registry_enabled_default",
         "name",
         "suggested_object_id",
@@ -217,12 +220,14 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
 
         self.available = self._attr_available or manager.online
         self.device_class = kwargs.pop("device_class", self._attr_device_class)
-        self.device_info = manager.device_entry_ids  # type: ignore
+        self.device_entry = kwargs.pop("device_entry", manager.device_entry)
         self.entity_registry_enabled_default = kwargs.pop(
             "entity_registry_enabled_default",
             self._attr_entity_registry_enabled_default,
         )
 
+        # TODO: remove all these mechanics and migrate to
+        # default HA leveraging translation_key and so on
         if "name" in kwargs:
             name = kwargs.pop("name")
         elif hasattr(self, "_attr_name"):
@@ -235,7 +240,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
             name = None
         # when channel == 0 it might be the only one so skip it
         # when channel is already in device name it also may be skipped
-        if channel and (channel is not manager.id):
+        if (type(channel) is int) and channel != 0:
             # (channel is manager.id) means this is the 'main' entity of an hub subdevice
             # so we skip adding the subdevice.id to the entity name
             name = f"{name} {channel}" if name else str(channel)
@@ -246,9 +251,12 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
             setattr(self, _attr_name, _attr_value)
 
         manager.entities[id] = self
-        async_add_devices = manager.platforms.setdefault(self.PLATFORM)
-        if async_add_devices:
-            async_add_devices([self])
+        try:
+            manager.platforms[self.PLATFORM]([self])  # type: ignore
+        except KeyError:
+            manager.platforms[self.PLATFORM] = None
+        except TypeError:
+            pass  # platform setup not yet done
 
     # interface: Entity
     @cached_property
