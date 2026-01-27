@@ -3,7 +3,10 @@ from typing import TYPE_CHECKING
 from homeassistant.core import HomeAssistant, StateMachine
 from homeassistant.helpers import entity
 
-from custom_components.meross_lan.merossclient.protocol import const as mc
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 from custom_components.meross_lan.switch import MLToggleX
 
 from tests.helpers import DeviceContext
@@ -20,7 +23,7 @@ if TYPE_CHECKING:
     )
     DeviceEntitiesType = MerossEntityTypesList
     DigestEntitiesType = dict[str, MerossEntityTypesDigestContainer]
-    NamespaceEntitiesType = dict[str, MerossEntityTypesList]
+    NamespaceEntitiesType = dict[mn.Namespace, MerossEntityTypesList]
     HubSubDeviceEntitiesType = dict[str | None, MerossEntityTypesList]
     """Container mapping the expected entities for any specific subdevice type.
     None (in the map) means the entities list is expected for any device type (i.e. battery)."""

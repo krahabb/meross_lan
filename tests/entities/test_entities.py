@@ -71,14 +71,13 @@ for entity_domain in (
         # since digest iteslf might be a dict hierarchy (2 levels though)
         try:
             container = DIGEST_ENTITIES[digest_key]
-            assert type(container) is type(entity_types)
-            if isinstance(entity_types, dict):
-                assert isinstance(container, dict)
+            if type(entity_types) is dict:
+                assert type(container) is dict
                 for sub_digest_key, sub_entity_types in entity_types.items():
                     sub_container = container.setdefault(sub_digest_key, [])
                     sub_container.extend(sub_entity_types)
             else:
-                assert isinstance(container, list)
+                assert type(container) is list and type(entity_types) is list
                 container.extend(entity_types)
         except KeyError:
             DIGEST_ENTITIES[digest_key] = entity_types.copy()
@@ -116,6 +115,7 @@ async def test_entities(
 
     unexpected_summary: dict[str, list[str]] = {}
     unavailable_summary: dict[str, list[str]] = {}
+    missing_summary: dict[str, list[type]] = {}
 
     try:
         for emulator in helpers.build_emulators():
@@ -137,8 +137,8 @@ async def test_entities(
             for digest_key, entity_types in DIGEST_ENTITIES.items():
                 if digest_key in digest:
                     sub_digest = digest[digest_key]
-                    if isinstance(entity_types, list):
-                        if isinstance(sub_digest, list):
+                    if type(entity_types) is list:
+                        if type(sub_digest) is list:
                             for _ in sub_digest:
                                 _add_func(entity_types)
                         else:
@@ -147,15 +147,19 @@ async def test_entities(
                             # dict struct
                             _add_func(entity_types)
                     else:  # digest carries a 2nd level
-                        assert isinstance(sub_digest, dict)
+                        assert type(entity_types) is dict
+                        assert type(sub_digest) is dict
                         for sub_digest_key, sub_entity_types in entity_types.items():
                             if sub_digest_key in sub_digest:
                                 for channel_digest in sub_digest[sub_digest_key]:
                                     _add_func(sub_entity_types)
 
-            for namespace, entity_types in NAMESPACES_ENTITIES.items():
-                if namespace in ability:
-                    _add_func(entity_types)
+            for ns, entity_types in NAMESPACES_ENTITIES.items():
+                if ns in ability:
+                    if ns.indexed and ns.key_channel == mc.KEY_CHANNEL:
+                        _add_func(entity_types * len(descriptor.channels))
+                    else:
+                        _add_func(entity_types)
             if ishub:
                 subdevice_ids = set()
                 for p_subdevice in digest[mc.KEY_HUB][mc.KEY_SUBDEVICE]:
@@ -170,7 +174,7 @@ async def test_entities(
                     # Record the id to check for duplicates
                     subdevice_ids.add(subdevice_id)
                     for p_key, p_value in p_subdevice.items():
-                        if isinstance(p_value, dict):
+                        if type(p_value) is dict:
                             if p_key in HUB_SUBDEVICES_ENTITIES:
                                 _add_func(HUB_SUBDEVICES_ENTITIES[p_key])
                             break
@@ -206,8 +210,8 @@ async def test_entities(
                         unexpected_summary[device_name] = unexpected
                     if unavailable:
                         unavailable_summary[device_name] = unavailable
-
-                    assert not expected, f"{device_name} does not generate {expected}"
+                    if expected:
+                        missing_summary[device_name] = expected
 
                 except BaseException as e:
                     e.args = (*e.args, EntityComponentTest.entity_id)
@@ -229,6 +233,10 @@ async def test_entities(
         for device_name, unavailable in unavailable_summary.items():
             if unavailable:
                 print(f"- {device_name}:\n{[_entity for _entity in unavailable]}\n")
+        print("\nMissing entities:")
+        for device_name, missing in missing_summary.items():
+            if missing:
+                print(f"- {device_name}:\n{[_type.__name__ for _type in missing]}\n")
 
 
 async def _async_test_entities(

@@ -487,7 +487,7 @@ class Namespace(str):
 
         # TODO: check consistencies:
         # for example key_channel must be set if payload_get is any of DICT_C DICT_C_STRICT LIST_C or LIST_C_STRICT
-        if self.payload_get.indexed or self.payload_set.indexed:
+        if self.indexed:
             if not self.key_channel:
                 raise ValueError(
                     f"Namespace {self} uses indexed payloads but has no key_channel defined."
@@ -522,6 +522,16 @@ class Namespace(str):
     @cached_property
     def has_psq(self) -> bool:
         return self.payload_psh is PayloadType.PUSH_QUERY
+
+    @cached_property
+    def has_del(self) -> bool:
+        return self.payload_del is not PayloadType.UNSUPPORTED
+
+    @cached_property
+    def indexed(self) -> bool:
+        """Indicates if the namespace uses indexed payloads for any verb.
+        This is typically true for 'channel based' namespaces."""
+        return self.payload_get.indexed or self.payload_set.indexed
 
     @cached_property
     def request_default(self) -> "MerossRequestType":

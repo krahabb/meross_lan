@@ -1,19 +1,12 @@
 from homeassistant.components import number as haec
 
-from custom_components.meross_lan.devices.garagedoor import (
-    MLGarageConfigNumber,
-    MLGarageMultipleConfigNumber,
+from custom_components.meross_lan.devices import (
+    garagedoor as gd,
+    hub,
+    ms600,
+    rollershutter as rs,
 )
-from custom_components.meross_lan.devices.hub import MS100Sensor, MstSwitch
 from custom_components.meross_lan.devices.hub.mts100 import Mts100Climate
-from custom_components.meross_lan.devices.ms600 import (
-    PresenceConfigDistance,
-    PresenceConfigMthX,
-    PresenceConfigNoBodyTime,
-)
-from custom_components.meross_lan.devices.rollershutter import (
-    MLRollerShutterConfigNumber,
-)
 from custom_components.meross_lan.devices.thermostat.mts200 import Mts200Climate
 from custom_components.meross_lan.devices.thermostat.mts300 import Mts300Climate
 from custom_components.meross_lan.devices.thermostat.mts960 import Mts960Climate
@@ -63,18 +56,23 @@ class EntityTest(EntityComponentTest):
         },
     }
     NAMESPACES_ENTITIES = {
-        mn.Appliance_GarageDoor_Config: [MLGarageConfigNumber],
-        mn.Appliance_GarageDoor_MultipleConfig: [MLGarageMultipleConfigNumber],
-        mn.Appliance_RollerShutter_Config: [MLRollerShutterConfigNumber] * 2,
-        mn.Appliance_Control_Presence_Config: [
-            PresenceConfigNoBodyTime,
-            PresenceConfigDistance,
-        ]
-        + [PresenceConfigMthX] * 3,
-        mn.Appliance_Control_Screen_Brightness: [MLScreenBrightnessNumber] * 2,
-        mn_t.Appliance_Control_Thermostat_Calibration: [
-            MtsThermostatClimate.AdjustNumber
+        mn.Appliance_GarageDoor_Config: [
+            gd.MLGarageConfigNumber,
+            gd.MLGarageConfigNumber,  # doorOpenDuration
+            gd.MLGarageConfigNumber,  # doorCloseDuration
+            gd.MLGarageConfigSwitch,  # buzzerEnble
         ],
+        mn.Appliance_GarageDoor_MultipleConfig: [
+            gd.MLGarageMultipleConfigNumber,
+            gd.MLGarageMultipleConfigNumber,
+        ],
+        mn.Appliance_RollerShutter_Config: [rs.MLRollerShutterConfigNumber] * 2,
+        mn.Appliance_Control_Presence_Config: [
+            ms600.PresenceConfigNoBodyTime,
+            ms600.PresenceConfigDistance,
+        ]
+        + [ms600.PresenceConfigMthX] * 3,
+        mn.Appliance_Control_Screen_Brightness: [MLScreenBrightnessNumber] * 2,
         mn_t.Appliance_Control_Thermostat_DeadZone: [MtsDeadZoneNumber],
         mn_t.Appliance_Control_Thermostat_Frost: [MtsFrostNumber],
         mn_t.Appliance_Control_Thermostat_HoldAction: [MLConfigNumber],
@@ -87,24 +85,20 @@ class EntityTest(EntityComponentTest):
     }
     HUB_SUBDEVICES_ENTITIES = {
         mc.TYPE_MS100: [
-            MS100Sensor.AdjustTemperatureNumber,
-            MS100Sensor.AdjustHumidityNumber,
+            hub.MS100Sensor.AdjustTemperatureNumber,
+            hub.MS100Sensor.AdjustHumidityNumber,
         ],
         mc.TYPE_MTS100: _MTS100_ENTITES,
         mc.TYPE_MTS100V3: _MTS100_ENTITES,
         mc.TYPE_MTS150: _MTS100_ENTITES,
-        mc.KEY_MST: [MstSwitch.WateringDurationNumber],
+        mc.KEY_MST: [hub.MstSwitch.WateringDurationNumber],
     }
 
     async def async_test_each_callback(self, entity: MLNumber):
-        if isinstance(entity, MtsThermostatClimate.AdjustNumber):
-            # This is to intercept thermostat Calibration namespace requirement where
-            # every MtsThermostatClimate descendant should instantiate
-            # MtsThermostatClimate.AdjustNumber or a descendant
-            EntityComponentTest.expected_entity_types.remove(
-                MtsThermostatClimate.AdjustNumber
-            )
-        elif isinstance(entity, MtsCommonTemperatureExtNumber):
+        if type(entity) is gd.MLGarageEmulatedConfigNumber:
+            EntityComponentTest.expected_entity_types.remove(gd.MLGarageConfigNumber)
+
+        if isinstance(entity, MtsCommonTemperatureExtNumber):
             # rich temperatures are set to 'unavailable' when
             # the corresponding function is 'off'. We'll so use
             # the associated switch to turn it on in case.

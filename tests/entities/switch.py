@@ -1,10 +1,11 @@
 from homeassistant.components import switch as haec
 from homeassistant.helpers.entity import STATE_OFF, STATE_ON
 
-from custom_components.meross_lan.devices.hub import HubBeep, MstSwitch
-from custom_components.meross_lan.devices.mss import OverTempEnableSwitch
-from custom_components.meross_lan.devices.rollershutter import (
-    MLRollerShutterAdjustSwitch,
+from custom_components.meross_lan.devices import (
+    garagedoor as gd,
+    hub,
+    mss,
+    rollershutter as rs,
 )
 from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
     MtsConfigSwitch,
@@ -37,7 +38,14 @@ class EntityTest(EntityComponentTest):
         mc.KEY_TOGGLEX: [MLToggleX],
     }
     NAMESPACES_ENTITIES = {
-        mn.Appliance_Config_OverTemp: [OverTempEnableSwitch],
+        mn.Appliance_GarageDoor_Config: [
+            gd.MLGarageConfigSwitch,  # buzzerEnable
+        ],
+        mn.Appliance_GarageDoor_MultipleConfig: [
+            gd.MLGarageDoorEnableSwitch,
+            gd.MLGarageMultipleConfigSwitch,
+        ],
+        mn.Appliance_Config_OverTemp: [mss.OverTempEnableSwitch],
         mn.Appliance_Control_PhysicalLock: [PhysicalLockSwitch],
         mn_t.Appliance_Control_Thermostat_ModeC: [
             MLEmulatedSwitch,  # fan_hold_enable
@@ -46,15 +54,15 @@ class EntityTest(EntityComponentTest):
         mn_t.Appliance_Control_Thermostat_Sensor: [MtsExternalSensorSwitch],
         mn_t.Appliance_Control_Thermostat_Overheat: [MtsConfigSwitch],
         mn.Appliance_Control_Toggle: [MLToggle],
-        mn.Appliance_RollerShutter_Adjust: [MLRollerShutterAdjustSwitch],
+        mn.Appliance_RollerShutter_Adjust: [rs.MLRollerShutterAdjustSwitch],
     }
     HUB_SUBDEVICES_ENTITIES = {
         mc.TYPE_MTS100: [MLEmulatedSwitch],
         mc.TYPE_MTS100V3: [MLEmulatedSwitch],
-        mc.TYPE_MTS150: [MLEmulatedSwitch, HubBeep],
-        mc.KEY_DOORWINDOW: [HubBeep],
-        mc.KEY_MST: [MstSwitch],
-        mc.KEY_WATERLEAK: [HubBeep],
+        mc.TYPE_MTS150: [MLEmulatedSwitch, hub.HubBeep],
+        mc.KEY_DOORWINDOW: [hub.HubBeep],
+        mc.KEY_MST: [hub.MstSwitch],
+        mc.KEY_WATERLEAK: [hub.HubBeep],
     }
 
     async def async_test_enabled_callback(self, entity: haec.SwitchEntity):

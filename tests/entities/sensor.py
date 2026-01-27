@@ -1,17 +1,6 @@
 from homeassistant.components import sensor as haec
 
-from custom_components.meross_lan.devices.hub import (
-    MS100Sensor,
-    MS130Sensor,
-    SmokeAlarmSensor,
-    SubDevice,
-)
-from custom_components.meross_lan.devices.mss import (
-    ConsumptionHSensor,
-    ConsumptionXSensor,
-    ElectricitySensor,
-    ElectricityXSensor,
-)
+from custom_components.meross_lan.devices import hub, ms600, mss
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
@@ -52,14 +41,14 @@ class EntityTest(EntityComponentTest):
 
     NAMESPACES_ENTITIES = {
         mn.Appliance_Config_OverTemp: [MLEnumSensor],
-        mn.Appliance_Control_ConsumptionH: [ConsumptionHSensor],
-        mn.Appliance_Control_ConsumptionX: [ConsumptionXSensor],
+        mn.Appliance_Control_ConsumptionH: [mss.ConsumptionHSensor],
+        mn.Appliance_Control_ConsumptionX: [mss.ConsumptionXSensor],
         mn.Appliance_Control_Diffuser_Sensor: [
             MLHumiditySensor,
             MLTemperatureSensor,
         ],
         mn.Appliance_Control_Electricity: [
-            ElectricitySensor,
+            mss.ElectricitySensor,
             MLNumericSensor,
             MLNumericSensor,
             MLNumericSensor,
@@ -68,16 +57,21 @@ class EntityTest(EntityComponentTest):
             # There's an issue in removing 'ElectricityXSensor' when
             # the code in '_async_test_entities' should remove
             # this class from 'expected_entities'
-            # ElectricityXSensor,
+            mss.ElectricityXSensor,
             *(
-                [
-                    _entity_def.type
-                    for _entity_def in ElectricityXSensor.ENTITY_DEFS.values()
-                ]
+                _entity_def.type
+                for _entity_def in mss.ElectricityXSensor.ENTITY_DEFS.values()
             ),
-        ]
-        * 6,  # em06 has 6 channels but we might need a better approach for other supporting devices
+        ],
         mn.Appliance_Control_FilterMaintenance: [MLFilterMaintenanceSensor],
+        mn.Appliance_Control_Presence_Config: [
+            # These are entities installed by mn.Appliance_Control_Sensor_LatestX
+            # but we use this namespace to detect presence capability (ms600)
+            ms600.MLPresenceSensor,
+            ms600.MLNumericSensor,
+            ms600.MLNumericSensor,
+            MLLightSensor,
+        ],
         mn_t.Appliance_Control_Thermostat_ModeC: [  # mts300
             MLEnumSensor,  # output status sensors
             MLEnumSensor,
@@ -93,9 +87,9 @@ class EntityTest(EntityComponentTest):
     }
 
     HUB_SUBDEVICES_ENTITIES = {
-        None: [SubDevice],  # actual implementation of battery sensor
-        mc.TYPE_MS100: [MS100Sensor, MLHumiditySensor],
-        mc.KEY_TEMPHUMI: [MS130Sensor, MLHumiditySensor, MLLightSensor],
+        None: [hub.SubDevice],  # actual implementation of battery sensor
+        mc.TYPE_MS100: [hub.MS100Sensor, MLHumiditySensor],
+        mc.KEY_TEMPHUMI: [hub.MS130Sensor, MLHumiditySensor, MLLightSensor],
         mc.TYPE_MTS100: [
             MLTemperatureSensor
         ],  # additional (disabled) current temperature sensor
@@ -106,7 +100,7 @@ class EntityTest(EntityComponentTest):
             MLTemperatureSensor
         ],  # additional (disabled) current temperature sensor
         mc.KEY_SMOKEALARM: [
-            SmokeAlarmSensor,
+            hub.SmokeAlarmSensor,
             MLEnumSensor,
         ],  # status, interConn sensors
     }
