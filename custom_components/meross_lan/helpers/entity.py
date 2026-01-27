@@ -267,8 +267,13 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
 
     # interface: self
     async def async_shutdown(self):
-        del self.manager.entities[self.id]
         await super().async_shutdown()
+        try:
+            del self.flush_state  # remove any possible state callback registration
+        except AttributeError:
+            pass
+        del self.manager.entities[self.id]
+        del self.manager
 
     @final
     def register_state_callback(self, state_callback: "StateCallback", /):

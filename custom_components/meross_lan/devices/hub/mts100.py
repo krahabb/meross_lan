@@ -127,9 +127,10 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
             subdevice.manager.register_parser_entity(_entity)
 
     async def async_shutdown(self):
-        await SubDeviceEntity.async_shutdown(self)
+        await super().async_shutdown()
         del self.binary_sensor_window
         del self.switch_patch_hvacaction
+        del self._parse
 
     # interface: MtsClimate
     @override

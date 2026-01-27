@@ -67,7 +67,8 @@ class NamespaceParser(Loggable):
                 else:
                     del handler.parsers[self.channel]
             self._namespace_handlers = None  # type: ignore
-        except TypeError:  # never registered
+            del self.handler_ns
+        except (TypeError, AttributeError):  # never registered
             pass
         assert self._namespace_handlers is None
 

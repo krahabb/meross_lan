@@ -374,6 +374,7 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
         await super().async_shutdown()
         del self.async_request
         del self.ns_handlers
+        del self._digest_parse
 
     # interface: EntityManager
     @property
