@@ -794,7 +794,7 @@ def digest_init_light(device: "Device", digest: dict, /) -> "DigestInitReturnTyp
     else:
         MLLight(device, digest[mc.KEY_CHANNEL])
     handler = device.ns_handlers[mn.Appliance_Control_Light]
-    return handler.parse_generic, (handler,)
+    return handler.parse_dict, (handler,)
 
 
 def digest_init_light_effect(

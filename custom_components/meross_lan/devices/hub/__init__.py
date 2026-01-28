@@ -18,7 +18,6 @@ from ...merossclient import get_productnameuuid, get_subdevice_key_digest, versi
 from ...merossclient.protocol.namespaces import hub as mn_h
 from ...number import MLConfigNumber
 from ...sensor import (
-    MLDiagnosticSensor,
     MLEnumSensor,
     MLHumiditySensor,
     MLLightSensor,
@@ -125,7 +124,7 @@ class HubNamespaceHandler(NamespaceHandler):
 
     device: "HubMixin"
 
-    def __init__(self, device: "HubMixin", ns: "Namespace"):
+    def __init__(self, device, ns, /):
         NamespaceHandler.__init__(self, device, ns, handler=self._handle_list)
 
     def _handle_list(self, message: "MerossMessage"):
@@ -135,42 +134,43 @@ class HubNamespaceHandler(NamespaceHandler):
         Migration will be done ns by ns so we'll have some ns with 'parsers'
         while some other will still work through this generalized handler."""
         hub = self.device
-        entities = hub.entities
         subdevices_parsed = set()
-        ns_key = self.ns.key
         key_channel = self.ns.key_channel
-        for payload in message.payload[ns_key]:
+        for payload in message.payload[self.ns.key]:
             try:
                 subdevice_id = payload[key_channel]
                 if subdevice_id in subdevices_parsed:
                     hub.log_duplicated_subdevice(subdevice_id)
                     continue
                 subdevices_parsed.add(subdevice_id)
-
                 # try default parsing mechanics
-                try:
-                    self.parsers[subdevice_id](payload)
-                    continue
-                except KeyError as ke:
-                    if ke.args[0] != subdevice_id:
-                        raise
-                # fallback
-                try:
-                    entities[subdevice_id]._hub_parse(ns_key, payload)
-                except KeyError as ke:
-                    if ke.args[0] != subdevice_id:
-                        raise
+                self.parsers[subdevice_id](payload)
+            except KeyError as ke:
+                if subdevice_id in self.parsers:
+                    self.log_parser_exception(ke, payload)
+                elif subdevice_id in hub.entities:
+                    subdevice = hub.entities[subdevice_id]
+
+                    # dynamically register a generic parser for this namespace
+                    # so that next time we'll use the standard mechanics
+                    def _unknown_ns_parse(_payload):
+                        subdevice._unknown_ns_parse(self, _payload)
+
+                    setattr(subdevice, f"_parse_{self.ns.slug_end}", _unknown_ns_parse)
+                    self.register_parser(subdevice)
+                    subdevice._unknown_ns_parse(self, payload)
+                else:
                     # force a rescan since we discovered a new subdevice
                     hub.handler_all.polling_epoch_next = 0.0
-
-            except TypeError:
-                # This could happen when the main payload is not a list of subdevices
-                # and might indicate this namespace is likely devoted to general hub
-                # commands/info (something like Appliance.Hub.*)
-                self.handler = self._handle_undefined
-                self._handle_undefined(message)
-            except Exception as exception:
-                self.handle_exception(exception, "_handle_list", payload)
+            except Exception as e:
+                if type(payload) is str:  # enumerating dict keys
+                    # This could happen when the main payload is not a list of subdevices
+                    # and might indicate this namespace is likely devoted to general hub
+                    # commands/info (something like Appliance.Hub.*)
+                    self.handler = self._handle_undefined
+                    self._handle_undefined(message)
+                    return
+                self.log_parser_exception(e, payload)
 
 
 class HubMixin(Device if TYPE_CHECKING else object):
@@ -212,7 +212,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
 
     @override
     def _create_handler(self, ns: "Namespace", /):
-        if ns.key_channel is mc.KEY_ID:
+        if ns.key_channel in (mc.KEY_ID, mc.KEY_SUBID):
             # This rule states that the payload is a list of subdevices indexed by 'id'.
             # Newer devices (2024) started using namespaces/payload indexed by 'subid'
             # and 'channel'. These will be handled by the base class NamespaceHandler
@@ -229,11 +229,17 @@ class HubMixin(Device if TYPE_CHECKING else object):
         # propagate device info to subdevices
         for sub_device_info in device_info.get("__subDeviceInfo", []):
             try:
-                self.entities[sub_device_info["subDeviceId"]].update_sub_device_info(
-                    sub_device_info
-                )
+                subdevice = self.entities[sub_device_info["subDeviceId"]]
             except KeyError:
                 continue
+            else:
+                name = sub_device_info.get(mc.KEY_SUBDEVICENAME) or get_productnameuuid(
+                    subdevice.model, subdevice.id
+                )
+                if name != subdevice.device_entry.name:
+                    self.api.device_registry.async_update_device(
+                        subdevice.device_entry.id, name=name
+                    )
 
     # interface: self
     @property
@@ -308,6 +314,12 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
         # self
         NS_SUBDEVICE: ClassVar[Iterable[Namespace]]
         model: Final[str]
+        _digest_parse: Final[Callable[[dict], None]]
+        """Internally invoked by parse_digest to parse subdevice-specific digest payloads.
+        When a specialized SubDeviceEntity is installed this attribute will be redirected
+        to the entity generic '_parse' method.
+        The default implementation will just try the 'smart logic' parser by inspecting the
+        class methods or building diagnostic entities in case."""
 
     DEVICE_TYPE = mlc.DeviceType.SUBDEVICE
 
@@ -328,6 +340,7 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
             "async_request",
             "key_digest",
             "model",
+            "_digest_parse",
         )
         + mld.BaseDevice.__SLOTS__
         + mld.mlm.EntityManager.__SLOTS__
@@ -369,6 +382,12 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
             subdev_entity = entity_class(self, subid)
             self._digest_parse = subdev_entity._parse
             hub.register_parser_ex(subdev_entity, entity_class.ns, *entity_class.NS_HUB)
+        else:
+
+            def _digest_parse(_payload, /):
+                self._hub_parse(self.key_digest, _payload)
+
+            self._digest_parse = _digest_parse
 
     @override
     async def async_shutdown(self):
@@ -376,7 +395,7 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
         await super().async_shutdown()
         del self.async_request
         del self.ns_handlers
-        del self._digest_parse
+        del self._digest_parse  # type: ignore[assignment]
 
     # interface: EntityManager
     @property
@@ -450,14 +469,6 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
             self.api.device_registry.async_update_device(
                 self.device_entry.id, name=name
             )
-
-    def _digest_parse(self, payload, /):
-        """Internally invoked by parse_digest to parse subdevice-specific digest payloads.
-        When a specialized SubDeviceEntity is installed this attribute will be redirected
-        to the entity generic '_parse' method.
-        The default implementation will just try the 'smart logic' parser by inspecting the
-        class methods or building diagnostic entities in case."""
-        self._hub_parse(self.key_digest, payload)
 
     def parse_digest(self, payload: "mt_h.Digest_SubDevice", /):
         """
@@ -573,8 +584,29 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
         if kwargs:
             self.api.device_registry.async_update_device(device_entry.id, **kwargs)
 
+    def _unknown_ns_parse(self, nh: NamespaceHandler, payload: dict, /):
+        if self.manager.create_diagnostic_entities:
+            # since we're parsing an unknown namespace, our euristic about
+            # the key_namespace might be wrong so we use another euristic
+            if not nh.polling_strategy:
+                nh.polling_strategy = NamespaceHandler.async_poll_diagnostic
+            # Here we should decide between ns.key and ns.slug_end as the parent_key
+            # for structured parsing. For reference, consider the standard NamespaceHandler
+            # implementation in helpers/namespaces.py where both values are concatenated.
+            # Using ns.key should be more consistent with how the Hub subdevices
+            # usually report their payloads in *.All and *.Digest.
+            self.parse_undefined_dict(nh.ns.key, payload, self.id)
+        else:
+            self.log(
+                self.DEBUG,
+                "Handler undefined for namespace:%s payload:%s",
+                nh.ns,
+                self.manager.loggable_dict_str(payload),
+                timeout=14400,
+            )
+
     def _hub_parse(self, key: str, payload: dict, /):
-        """Legacy subdevice parsing system. This will be eventually removed
+        """Heuristic subdevice parsing system. This will be eventually removed
         in favor of NamespaceHandler/NamespaceParser system.
         This method tries to call a specialized parser for the given key.
         It is actually called by HubMixin when no specialized NamespaceHandler
@@ -590,46 +622,8 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
             # carrying similar payloads structures. We'll be conservative
             # by not 'exploiting' lists in payloads since they usually carry
             # historic data or so
-            # TODO: reconcile this code with the similar implementation in
-            # NamespaceHandler for diagnostic sensors dumping
-            if not self.manager.create_diagnostic_entities:
-                return
-
-            def _parse_dict(parent_key: str, parent_dict: dict):
-                for subkey, subvalue in parent_dict.items():
-                    if type(subvalue) is dict:
-                        _parse_dict(f"{parent_key}_{subkey}", subvalue)
-                        continue
-                    if type(subvalue) is list:
-                        _parse_list()
-                        continue
-                    if subkey in {
-                        mc.KEY_ID,
-                        mc.KEY_SUBID,
-                        mc.KEY_LMTIME,
-                        mc.KEY_LMTIME_,
-                        mc.KEY_SYNCEDTIME,
-                        mc.KEY_LATESTSAMPLETIME,
-                    }:
-                        continue
-                    entity_key = f"{parent_key}_{subkey}"
-                    try:
-                        self.entities[f"{self.id}_{entity_key}"].update_native_value(
-                            subvalue
-                        )
-                    except KeyError:
-                        MLDiagnosticSensor(
-                            self,
-                            self.id,
-                            entity_key=entity_key,
-                            native_value=subvalue,
-                        )
-
-            def _parse_list():
-                pass
-
-            _parse_dict(key, payload)
-
+            if self.manager.create_diagnostic_entities:
+                self.parse_undefined_dict(key, payload, self.id)
         except Exception as exception:
             self.log_exception(
                 self.WARNING,
@@ -1239,7 +1233,7 @@ POLLING_STRATEGY_CONF.update(
             NamespaceHandler.async_poll_smart,
         ),
         mn_h.Appliance_Control_Sensor_LatestX: (
-            0,  # ms600 devices lack of refresh #599
+            mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
             mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
             mlc.PARAM_HEADER_SIZE,
             220,
@@ -1281,7 +1275,7 @@ POLLING_STRATEGY_CONF.update(
             NamespaceHandler.async_poll_chunked,
         ),
         mn_h.Appliance_Hub_Sensor_Adjust: (
-            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_HEARTBEAT_PERIOD,
             mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
             mlc.PARAM_HEADER_SIZE,
             60,

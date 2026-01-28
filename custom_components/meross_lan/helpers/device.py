@@ -131,6 +131,50 @@ class BaseDevice(mlm.EntityManager):
     async def async_request(self, *args: "Unpack[MerossRequestType]") -> MerossResponse:
         raise NotImplementedError("async_request")
 
+    def parse_undefined_dict(
+        self, key_parent: str, payload: dict, channel: object | None, /
+    ):
+        device_entities = self.entities
+        excluded = (
+            mc.KEY_ID,
+            mc.KEY_SUBID,
+            mc.KEY_CHANNEL,
+            mc.KEY_LMTIME,
+            mc.KEY_LMTIME_,
+            mc.KEY_SYNCEDTIME,
+            mc.KEY_LATESTSAMPLETIME,
+            "lastActiveTime",
+        )
+        for key, value in payload.items():
+            if key in excluded:
+                continue
+            if type(value) is dict:
+                self.parse_undefined_dict(f"{key_parent}_{key}", value, channel)
+                continue
+            if type(value) is list:
+                self.parse_undefined_list(f"{key_parent}_{key}", value, channel)
+                continue
+            try:
+                device_entities[
+                    (
+                        f"{channel}_{key_parent}_{key}"
+                        if channel is not None
+                        else f"{key_parent}_{key}"
+                    )
+                ].update_native_value(value)
+            except KeyError:
+                from ..sensor import MLDiagnosticSensor
+
+                MLDiagnosticSensor(
+                    self,
+                    channel,
+                    entity_key=f"{key_parent}_{key}",
+                    native_value=value,
+                )
+
+    def parse_undefined_list(self, key_parent: str, payload: list, channel, /):
+        pass
+
     @abc.abstractmethod
     def get_upgrade_payload(self, /) -> "mt_c.Upgrade":
         """Builds and returns the correct upgrade payload if an upgrade is available, otherwise returns None/empty dict."""
@@ -2358,24 +2402,19 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
 
         self.remove_issue(mlc.ISSUE_DEVICE_ID_MISMATCH)
 
-        needsave = query_abilities = False
         descr = self.descriptor
         oldfirmware = descr.firmware
         oldtimezone = descr.timezone
         descr.update(message.payload)
 
-        if oldtimezone != descr.timezone:
-            needsave = True
-
         if oldfirmware != descr.firmware:
-            needsave = True
-            query_abilities = True
+            self.schedule_entry_update(True)
             if self.update_firmware:
                 self.update_firmware.update_info()
             if not self.config.get(CONF_HOST):
                 self._update_host()
-        else:
-            query_abilities = False
+        elif oldtimezone != descr.timezone:
+            self.schedule_entry_update(False)
 
         if self.conf_protocol is CONF_PROTOCOL_AUTO:
             if self._mqtt_active:
@@ -2396,11 +2435,10 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                 self.log_exception(
                     self.WARNING,
                     e,
+                    "parsing digest '%s' with parser '%s'",
+                    key_digest,
                     self.digest_parsers[key_digest].__name__,
                 )
-
-        if needsave:
-            self.schedule_entry_update(query_abilities)
 
     def _handle_Appliance_System_Clock(self, message: MerossMessage, /):
         # already processed by the MQTTConnection session manager

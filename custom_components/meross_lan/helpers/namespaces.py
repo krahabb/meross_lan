@@ -470,9 +470,9 @@ class NamespaceHandler:
         try:
             self.handler(response)
         except Exception as exception:
-            self.handle_exception(exception, self.handler.__name__, response.payload)
+            self.log_exception(exception, self.handler.__name__, response.payload)
 
-    def handle_exception(self, exception: Exception, function_name: str, payload, /):
+    def log_exception(self, exception: Exception, function_name: str, payload, /):
         # TODO: migrate to Loggable so we have more flexibility in logging
         device = self.device
         device.log_exception(
@@ -486,24 +486,45 @@ class NamespaceHandler:
             timeout=604800,
         )
 
+    def log_parser_exception(self, exception: Exception, payload, /):
+        device = self.device
+        device.log_exception(
+            device.WARNING,
+            exception,
+            "%s(%s).%s: payload=%s",
+            self.__class__.__name__,
+            self.ns,
+            self.parsers[payload[self.ns.key_channel]].__name__,
+            str(device.loggable_any(payload)),
+            timeout=14400,
+        )
+
     def _handle_list(self, message: "MerossMessage", /):
         """
         splits and forwards the received NS payload to
         the registered entity(es).
         This handler si optimized for list payloads:
-        "payload": { "key_namespace": [{"channel":...., ...}] }
+        "payload": { "{self.ns.key}": [{"{self.ns.key_channel}":...., ...}] }
+        Under normal conditions the loop is optimized with direct parser lookup
+        and invocation without caching any intermediate variable since this is the 99%
+        expected pattern. The most-likely exceptions are when no parser is registered
+        for the channel (KeyError) or when the payload is not a list (TypeError).
+        These will be managed so that they'll don't recur anymore.
         """
-        try:
-            for p_channel in message.payload[self.ns.key]:
-                try:
-                    _parse = self.parsers[p_channel[self.ns.key_channel]]
-                except KeyError as key_error:
-                    _parse = self._try_create_entity(key_error)
-                _parse(p_channel)
-        except TypeError:
-            # this might be expected: the payload is not a list
-            self.handler = self._handle_dict
-            self._handle_dict(message)
+        key_channel = self.ns.key_channel
+        for p_channel in message.payload[self.ns.key]:
+            try:
+                self.parsers[p_channel[key_channel]](p_channel)
+            except KeyError as ke:
+                self._try_create_entity(p_channel, ke)
+            except Exception as e:
+                # this might be expected: the key payload is not a list
+                if type(p_channel) is str:  # enumerating dict keys
+                    self.handler = self._handle_dict
+                    self._handle_dict(message)
+                    return
+                else:
+                    self.log_parser_exception(e, p_channel)
 
     def _handle_dict(self, message: "MerossMessage", /):
         """
@@ -512,18 +533,24 @@ class NamespaceHandler:
         This handler si optimized for dict payloads:
         "payload": { "key_namespace": {"channel":...., ...} }
         """
-        p_channel = message.payload[self.ns.key]
+        payload = message.payload[self.ns.key]
         try:
-            _parse = self.parsers[p_channel.get(self.ns.key_channel)]
-        except KeyError as key_error:
-            _parse = self._try_create_entity(key_error)
-        except AttributeError:
+            self.parsers[payload[self.ns.key_channel]](payload)
+        except KeyError as ke:
+            if ke.args[0] == self.ns.key_channel:
+                # might be expected for ns with no channels
+                # for example EntityNamespaceMixin
+                self.parsers[None](payload)
+            else:
+                self._try_create_entity(payload, ke)
+        except Exception as e:
             # this might be expected: the payload is not a dict
             # final fallback to the safe _handle_generic
-            self.handler = self._handle_generic
-            self._handle_generic(message)
-            return
-        _parse(p_channel)
+            if type(payload) is not dict:
+                self.handler = self._handle_generic
+                self._handle_generic(message)
+            else:
+                self.log_parser_exception(e, payload)
 
     def _handle_generic(self, message: "MerossMessage", /):
         """
@@ -533,122 +560,79 @@ class NamespaceHandler:
         payloads without the "channel" key (see namespace Toggle)
         which will default forwarding to channel == None
         """
-        p_channel = message.payload[self.ns.key]
-        if type(p_channel) is dict:
+        payload = message.payload[self.ns.key]
+        if type(payload) is dict:
             try:
-                _parse = self.parsers[p_channel.get(self.ns.key_channel)]
-            except KeyError as key_error:
-                _parse = self._try_create_entity(key_error)
-            _parse(p_channel)
+                self.parsers[payload[self.ns.key_channel]](payload)
+            except KeyError as ke:
+                if ke.args[0] == self.ns.key_channel:
+                    # might be expected for ns with no channels
+                    # for example EntityNamespaceMixin
+                    self.parsers[None](payload)
+                else:
+                    self._try_create_entity(payload, ke)
         else:
             key_channel = self.ns.key_channel
-            for p_channel in p_channel:
+            for p_channel in payload:
                 try:
-                    _parse = self.parsers[p_channel[key_channel]]
-                except KeyError as key_error:
-                    _parse = self._try_create_entity(key_error)
-                _parse(p_channel)
+                    self.parsers[p_channel[key_channel]](p_channel)
+                except KeyError as ke:
+                    self._try_create_entity(p_channel, ke)
+                except Exception as e:
+                    self.log_parser_exception(e, p_channel)
 
     def _handle_undefined(self, message: "MerossMessage", /):
         device = self.device
-        device.log(
-            device.DEBUG,
-            "Handler undefined for method:%s namespace:%s payload:%s",
-            message.method,
-            message.namespace,
-            device.loggable_dict_str(message.payload),
-            timeout=14400,
-        )
         if device.create_diagnostic_entities:
             # since we're parsing an unknown namespace, our euristic about
             # the key_namespace might be wrong so we use another euristic
             ns = self.ns
+            if not self.polling_strategy:
+                self.polling_strategy = NamespaceHandler.async_poll_diagnostic
             for _key, _payload in message.payload.items():
                 # since the ns_key might be often the same across different namespaces
                 # we add the last split of the namespace to the extracted payload key
                 if type(_payload) is dict:
-                    self._parse_undefined_dict(
+                    device.parse_undefined_dict(
                         f"{ns.slug_end}_{_key}", _payload, _payload.get(ns.key_channel)
                     )
-                else:
+                elif type(_payload) is list:
                     _key = f"{ns.slug_end}_{_key}"
                     for __payload in _payload:
                         # not having a "channel" in the list payloads is unexpected so far
-                        self._parse_undefined_dict(
+                        device.parse_undefined_dict(
                             _key, __payload, __payload.get(ns.key_channel)
                         )
+                else:
+                    # should we diagnostic scalar values in root payload ?
+                    pass
+
+        else:
+            device.log(
+                device.DEBUG,
+                "Handler undefined for method:%s namespace:%s payload:%s",
+                message.method,
+                message.namespace,
+                device.loggable_dict_str(message.payload),
+                timeout=14400,
+            )
 
     def parse_list(self, digest: list, /):
-        """twin method for _handle (same job - different context).
+        """twin method for _handle_list (same job - different context).
         Used when parsing digest(s) in NS_ALL"""
-        try:
-            key_channel = self.ns.key_channel
-            for p_channel in digest:
-                try:
-                    _parse = self.parsers[p_channel[key_channel]]
-                except KeyError as key_error:
-                    _parse = self._try_create_entity(key_error)
-                _parse(p_channel)
-        except Exception as exception:
-            self.handle_exception(exception, "_parse_list", digest)
-
-    def parse_generic(self, digest: list | dict, /):
-        """twin method for _handle (same job - different context).
-        Used when parsing digest(s) in NS_ALL"""
-        try:
-            if type(digest) is dict:
-                self.parsers[digest.get(self.ns.key_channel)](digest)
-            else:
-                key_channel = self.ns.key_channel
-                for p_channel in digest:
-                    try:
-                        _parse = self.parsers[p_channel[key_channel]]
-                    except KeyError as key_error:
-                        _parse = self._try_create_entity(key_error)
-                    _parse(p_channel)
-        except Exception as exception:
-            self.handle_exception(exception, "_parse_generic", digest)
-
-    def _parse_undefined_dict(self, key: str, payload: dict, channel: object | None, /):
-        device_entities = self.device.entities
-        for subkey, subvalue in payload.items():
-            if isinstance(subvalue, dict):
-                self._parse_undefined_dict(f"{key}_{subkey}", subvalue, channel)
-                continue
-            if isinstance(subvalue, list):
-                self._parse_undefined_list(f"{key}_{subkey}", subvalue, channel)
-                continue
-            if subkey in {
-                mc.KEY_ID,
-                mc.KEY_CHANNEL,
-                mc.KEY_LMTIME,
-                mc.KEY_LMTIME_,
-                mc.KEY_SYNCEDTIME,
-                mc.KEY_LATESTSAMPLETIME,
-            }:
-                continue
+        key_channel = self.ns.key_channel
+        for p_channel in digest:
             try:
-                device_entities[
-                    (
-                        f"{channel}_{key}_{subkey}"
-                        if channel is not None
-                        else f"{key}_{subkey}"
-                    )
-                ].update_native_value(subvalue)
-            except KeyError:
-                from ..sensor import MLDiagnosticSensor
+                self.parsers[p_channel[key_channel]](p_channel)
+            except KeyError as ke:
+                self._try_create_entity(p_channel, ke)
+            except Exception as e:
+                self.log_parser_exception(e, p_channel)
 
-                MLDiagnosticSensor(
-                    self.device,
-                    channel,
-                    entity_key=f"{key}_{subkey}",
-                    native_value=subvalue,
-                )
-                if not self.polling_strategy:
-                    self.polling_strategy = NamespaceHandler.async_poll_diagnostic
-
-    def _parse_undefined_list(self, key: str, payload: list, channel, /):
-        pass
+    def parse_dict(self, digest: dict, /):
+        """twin method for _handle_dict (same job - different context).
+        Used when parsing digest(s) in NS_ALL"""
+        self.parsers[digest[self.ns.key_channel]](digest)
 
     def _parse_stub(self, payload, /):
         device = self.device
@@ -660,20 +644,19 @@ class NamespaceHandler:
             timeout=14400,
         )
 
-    def _try_create_entity(self, key_error: KeyError, /):
+    def _try_create_entity(self, p_channel: dict, ke: KeyError, /):
         """
-        Handler for when a payload points to a channel
-        actually not registered for parsing.
-        If an entity_class was registered then instantiate that else
-        proceed with a 'stub' in order to just silence (from now on)
-        the exception. This stub might be a dignostic entity if device
-        configured so, or just an empty handler.
+        Smart handler for KeyError raised when dispatching
+        a channel payload to a parser.
+        # KeyError here might have been raised because:
+        # - key_channel not in p_channel -> critical
+        # - no parser registered for this channel -> create entity if possible
+        # - KeyError in parser function
         """
-        channel = key_error.args[0]
-        if channel == self.ns.key_channel:
-            # ensure key represents a channel and not the "channel" key
-            # in the p_channel dict
-            raise key_error
+        channel = p_channel[self.ns.key_channel]
+        if channel in self.parsers:
+            self.log_parser_exception(ke, p_channel)
+            return
 
         if self.entity_class:
             self.entity_class(
@@ -688,7 +671,7 @@ class NamespaceHandler:
         else:
             self.parsers[channel] = self._parse_stub
 
-        return self.parsers[channel]
+        self.parsers[channel](p_channel)
 
     async def async_get(self, *channels):
         """
@@ -718,7 +701,7 @@ class NamespaceHandler:
         try:
             return await self.async_get(*channels)
         except Exception as e:
-            self.handle_exception(e, "async_get", None)
+            self.log_exception(e, "async_get", None)
 
     def schedule_get(
         self,
@@ -797,7 +780,7 @@ class NamespaceHandler:
             getattr(parser, f"_parse_{ns.slug_end}", parser._parse)(payload)
             return response
         except Exception as e:
-            self.handle_exception(e, "async_set_c_ex", response)
+            self.log_exception(e, "async_set_c_ex", response)
 
     # Polling Strategies:
     # These are configured at initialization time by setting the 'polling_strategy' attribute
@@ -1416,14 +1399,14 @@ POLLING_STRATEGY_CONF = {
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Sensor_Latest: (
-        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
+        mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
         mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         80,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Sensor_LatestX: (
-        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
+        mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         220,
