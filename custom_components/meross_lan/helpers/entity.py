@@ -15,7 +15,6 @@ except ImportError:
 
 from homeassistant.helpers import entity
 
-from .manager import EntityManager
 from .namespaces import NamespaceHandler, NamespaceParser, mc, mn
 
 if TYPE_CHECKING:
@@ -25,6 +24,7 @@ if TYPE_CHECKING:
         ClassVar,
         Final,
         Iterable,
+        Literal,
         NotRequired,
         Self,
         TypedDict,
@@ -106,8 +106,9 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
 
         # HA core entity attributes:
         # These are constants throughout our model
+        # TODO: migrate to compliancy with HA core standards
         force_update: Final[bool]
-        has_entity_name: Final[bool]
+        _attr_has_entity_name: Final[Literal[True]]
         should_poll: Final[bool]
         # These may be customized here and there per class
         _attr_available: ClassVar[bool]
@@ -125,7 +126,6 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         device_entry: DeviceEntry | None
         entity_registry_enabled_default: bool
         name: str | None
-        suggested_object_id: str | None
 
     class EntityDef[_T: MLEntity]:
         """Descriptor class used when populating maps used to dynamically instantiate (sensor)
@@ -156,7 +156,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
 
     # HA core entity attributes:
     force_update = False
-    has_entity_name = True
+    _attr_has_entity_name = True
     should_poll = False
     _attr_available = False
     _attr_device_class = None
@@ -179,8 +179,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         "device_class",
         "device_entry",
         "entity_registry_enabled_default",
-        "name",
-        "suggested_object_id",
+        "has_entity_name",
     ) + NamespaceParser.__SLOTS__
 
     def __init__(self, manager: "EntityManager", channel, /, **kwargs: "Unpack[Args]"):
@@ -220,31 +219,27 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
 
         self.available = self._attr_available or manager.online
         self.device_class = kwargs.pop("device_class", self._attr_device_class)
-        self.device_entry = kwargs.pop("device_entry", manager.device_entry)
+        self.device_entry = kwargs.pop(
+            "device_entry", None
+        ) or manager.get_device_entry(channel)
         self.entity_registry_enabled_default = kwargs.pop(
             "entity_registry_enabled_default",
             self._attr_entity_registry_enabled_default,
         )
 
-        # TODO: remove all these mechanics and migrate to
-        # default HA leveraging translation_key and so on
-        if "name" in kwargs:
-            name = kwargs.pop("name")
-        elif hasattr(self, "_attr_name"):
-            name = self._attr_name
-        elif entitykey:
-            name = entitykey.replace("_", " ").capitalize()
-        elif self.device_class:
-            name = self.device_class.capitalize()
-        else:
-            name = None
-        # when channel == 0 it might be the only one so skip it
-        # when channel is already in device name it also may be skipped
-        if (type(channel) is int) and channel != 0:
-            # (channel is manager.id) means this is the 'main' entity of an hub subdevice
-            # so we skip adding the subdevice.id to the entity name
-            name = f"{name} {channel}" if name else str(channel)
-        self.suggested_object_id = self.name = name
+        # TODO: entity naming is slowly migrating to a more comfortable
+        # HA core Entity class semantics/mechanics in order to
+        # gain translation capabilities
+        self.has_entity_name = self._attr_has_entity_name
+        try:
+            self.name = kwargs.pop("name") or self._attr_name
+        except (KeyError, AttributeError):
+            if entitykey:
+                self.name = entitykey.replace("_", " ").capitalize()
+            else:
+                # as it is now implemented this will instruct HA core
+                # to use device name when it can't provide an entity name
+                self.use_device_name = True
 
         # some attributes can be set via kwargs
         for _attr_name, _attr_value in kwargs.items():
@@ -569,13 +564,3 @@ class MLNumericEntity(MLEntity):
             self.native_value = native_value
             self.flush_state()
             return True
-
-
-class MLManagerEntity(MLEntity):
-    """
-    Base class for all entities directly attached to a Device
-    (i.e. not SubDevice entities)
-    """
-
-    if TYPE_CHECKING:
-        manager: Device

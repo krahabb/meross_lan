@@ -106,16 +106,16 @@ class EntityManager(Loggable):
         "_tasks",
     )
 
-    def __init__(self, parent: "EntityManager", id: str, **kwargs: "Unpack[Args]"):
-        self.manager = parent
-        self.api = parent.api
+    def __init__(self, manager: "EntityManager", id: str, **kwargs: "Unpack[Args]"):
+        self.manager = manager
+        self.api = manager.api
         self.online = self._attr_online
         self.device_entry = kwargs.get("device_entry")
         assert hasattr(self, "platforms"), "platforms must be set in derived classes"
         self.entities = {}
         self.objects = weakref.WeakSet()
         self._tasks = set()
-        super().__init__(parent, id, **kwargs)
+        super().__init__(manager, id, **kwargs)
 
     async def async_shutdown(self):
         """
@@ -177,6 +177,15 @@ class EntityManager(Loggable):
         migrations
         """
         return f"{self.id}_{entity.id}"
+
+    def get_device_entry(self, channel, /):
+        """
+        Return the DeviceRegistry entry for a given channel (if any).
+        By default this returns self.device_entry but derived classes
+        (like Hub) could override this to return different entries
+        for different channels.
+        """
+        return self.device_entry
 
     def schedule_async_callback(
         self, delay: float, target: "Callable[..., Coroutine]", *args

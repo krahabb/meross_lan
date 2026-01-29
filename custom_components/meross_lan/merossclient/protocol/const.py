@@ -454,20 +454,20 @@ TYPE_UNKNOWN = "unknown"
 TYPE_NAME_MAP = collections.OrderedDict()
 
 TYPE_MAP100 = "map100"
-TYPE_NAME_MAP["map"] = "Smart Air Purifier"
+TYPE_NAME_MAP["map"] = "Air Purifier"
 
 TYPE_MFC100 = "mfc100"
-TYPE_NAME_MAP["mfc"] = "Smart Fan"
+TYPE_NAME_MAP["mfc"] = "Fan"
 
 TYPE_MOD100 = "mod100"  # smart humidifier
 TYPE_MOD150 = "mod150"  # smart humidifier
-TYPE_NAME_MAP["mod"] = "Smart Humidifier"
+TYPE_NAME_MAP["mod"] = "Humidifier"
 
-TYPE_NAME_MAP["mrs"] = "Smart Roller Shutter"
+TYPE_NAME_MAP["mrs"] = "Roller Shutter"
 
 TYPE_MSG100 = "msg100"  # smart garage door (1 channel)
 TYPE_MSG200 = "msg200"  # smart garage door (3 channels)
-TYPE_NAME_MAP["msg"] = "Smart Garage Door"
+TYPE_NAME_MAP["msg"] = "Garage Door"
 
 TYPE_MSH300 = "msh300"  # WiFi Hub
 TYPE_NAME_MAP["msh"] = "Smart Hub"
@@ -475,60 +475,60 @@ TYPE_NAME_MAP["msh"] = "Smart Hub"
 TYPE_MSL100 = "msl100"  # smart bulb
 TYPE_NAME_MAP[TYPE_MSL100] = "Smart Bulb"
 TYPE_MSL120 = "msl120"  # smart bulb with color/temp
-TYPE_NAME_MAP[TYPE_MSL120] = "Smart RGB Bulb"
+TYPE_NAME_MAP[TYPE_MSL120] = "RGB Bulb"
 TYPE_MSL320_PRO = "msl320cp"  # smart led strip pro
-TYPE_NAME_MAP[TYPE_MSL320_PRO] = "Smart RGB Pro Led Strip"
+TYPE_NAME_MAP[TYPE_MSL320_PRO] = "RGB Pro Led Strip"
 TYPE_MSL320 = "msl320"  # smart led strip
-TYPE_NAME_MAP[TYPE_MSL320] = "Smart RGB Led Strip"
+TYPE_NAME_MAP[TYPE_MSL320] = "RGB Led Strip"
 TYPE_NAME_MAP["msl"] = "Smart Light"
 
 TYPE_MSS310 = "mss310"  # smart plug with energy meter
 TYPE_NAME_MAP[TYPE_MSS310] = "Smart Plug"
-TYPE_NAME_MAP["mss560"] = "Smart Dimmer Switch"
+TYPE_NAME_MAP["mss560"] = "Dimmer Switch"
 TYPE_NAME_MAP["mss570"] = TYPE_NAME_MAP["mss560"]
 TYPE_NAME_MAP["mss"] = "Smart Switch"
-TYPE_NAME_MAP["mop320"] = "Smart Outdoor Plug"
+TYPE_NAME_MAP["mop320"] = "Outdoor Plug"
 
 TYPE_MTS = "mts"  # smart thermostat prefix
 TYPE_MTS100 = "mts100"  # Smart thermostat over hub
 TYPE_MTS100V3 = "mts100v3"  # Smart thermostat over hub
 TYPE_MTS150 = "mts150"  # Smart thermostat over hub
 TYPE_MTS150P = "mts150p"  # Smart thermostat over hub
-TYPE_NAME_MAP["mts1"] = "Smart Thermostat Valve"
+TYPE_NAME_MAP["mts1"] = "Thermostat Valve"
 TYPE_MTS200 = "mts200"  # Smart thermostat over wifi
 TYPE_MTS960 = "mts960"  # Smart thermostat over wifi
-TYPE_NAME_MAP[TYPE_MTS960] = "Smart Socket Thermostat"
-TYPE_NAME_MAP[TYPE_MTS] = "Smart Thermostat"
+TYPE_NAME_MAP[TYPE_MTS960] = "Socket Thermostat"
+TYPE_NAME_MAP[TYPE_MTS] = "Thermostat"
 # do not register class 'ms' since it is rather
 # unusual naming and could issue collissions with mss or msl
 # just set the known type
 TYPE_HP110A = "hp110"
-TYPE_NAME_MAP[TYPE_HP110A] = "Smart Cherub Baby Machine"
+TYPE_NAME_MAP[TYPE_HP110A] = "Cherub Baby Machine"
 
 TYPE_GS559 = "gs559"
-TYPE_NAME_MAP[TYPE_GS559] = "Smart Smoke Alarm"
+TYPE_NAME_MAP[TYPE_GS559] = "Smoke Alarm"
 
 TYPE_MS100 = "ms100"  # Smart temp/humidity sensor over Hub
 TYPE_MS100F = "ms100f"  # Smart temp/humidity sensor over Hub
 TYPE_MS130 = "ms130"  # Smart temp/humidity sensor (with display) over Hub
-TYPE_NAME_MAP["ms1"] = "Smart Temp/Humidity Sensor"
+TYPE_NAME_MAP["ms1"] = "Temp/Humidity Sensor"
 
 TYPE_MS200 = "ms200"
-TYPE_NAME_MAP[TYPE_MS200] = "Smart Door/Window Sensor"
+TYPE_NAME_MAP[TYPE_MS200] = "Door/Window Sensor"
 
 TYPE_MS300 = "ms300"  # TODO: unknown sensor type
 
 TYPE_MS400 = "ms400"
-TYPE_NAME_MAP[TYPE_MS400] = "Smart Water Leak Sensor"
+TYPE_NAME_MAP[TYPE_MS400] = "Water Leak Sensor"
 
 TYPE_MS600 = "ms600"
-TYPE_NAME_MAP[TYPE_MS600] = "Smart Presence Sensor"
+TYPE_NAME_MAP[TYPE_MS600] = "Presence Sensor"
 
 TYPE_MST100 = "mst100"
-TYPE_NAME_MAP["mst"] = "Smart Sprinkler Timer"
+TYPE_NAME_MAP["mst"] = "Sprinkler Timer"
 
 # REFOSS device types
-_SMART_ENERGY_MONITOR = "Smart Energy Monitor"
+_SMART_ENERGY_MONITOR = "Energy Monitor"
 
 
 class RefossModel(enum.Enum):
@@ -551,11 +551,6 @@ class RefossModel(enum.Enum):
 
 for _rt in RefossModel:
     TYPE_NAME_MAP[_rt.name] = _rt.value
-#
-# HUB helpers symbols
-#
-MTS100_ALL_TYPESET = {TYPE_MTS150, TYPE_MTS150P, TYPE_MTS100V3, TYPE_MTS100}
-"""subdevices types listed in NS_APPLIANCE_HUB_MTS100_ALL"""
 
 
 """

@@ -253,6 +253,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
 
         device_timestamp: int
 
+        _device_entries: dict[Any, dr.DeviceEntry]
         _bluetooth: ComponentApi.BTDevice | None
         _bluetooth_active: ComponentApi.BTDevice | None
         _http: MerossHttpClient | None
@@ -408,6 +409,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         "pref_protocol",
         "curr_protocol",
         "host",
+        "_device_entries",
         "_async_entry_update_unsub",
         "device_debug",
         "device_timestamp",
@@ -791,6 +793,31 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
 
             if _profile:
                 _profile.attach_mqtt(self)
+
+    # interface: EntityManager
+    @override
+    def get_device_entry(self, channel, /):
+        if (not channel) or (len(self.descriptor.channels) <= 1):
+            return self.device_entry
+
+        try:
+            return self._device_entries[channel]
+        except AttributeError:
+            self._device_entries = {}
+        except KeyError:
+            pass
+
+        self._device_entries[channel] = device_entry = (
+            self.api.device_registry.async_get_or_create(
+                config_entry_id=self.config_entry.entry_id,
+                manufacturer=mc.MANUFACTURER,
+                name=f"{self.device_entry.name} Channel {channel}",
+                model=self.device_entry.model,
+                via_device=next(iter(self.device_entry.identifiers)),
+                identifiers={(mlc.DOMAIN, f"{self.id}_{channel}")},
+            )
+        )
+        return device_entry
 
     @property
     @override

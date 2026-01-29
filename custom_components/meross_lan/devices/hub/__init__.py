@@ -14,7 +14,7 @@ from ...helpers.namespaces import (
     mc,
     mn,
 )
-from ...merossclient import get_productnameuuid, get_subdevice_key_digest, versiontuple
+from ...merossclient import get_productname, get_subdevice_key_digest, versiontuple
 from ...merossclient.protocol.namespaces import hub as mn_h
 from ...number import MLConfigNumber
 from ...sensor import (
@@ -233,8 +233,8 @@ class HubMixin(Device if TYPE_CHECKING else object):
             except KeyError:
                 continue
             else:
-                name = sub_device_info.get(mc.KEY_SUBDEVICENAME) or get_productnameuuid(
-                    subdevice.model, subdevice.id
+                name = sub_device_info.get(mc.KEY_SUBDEVICENAME) or get_productname(
+                    subdevice.model
                 )
                 if name != subdevice.device_entry.name:
                     self.api.device_registry.async_update_device(
@@ -371,7 +371,7 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
             device_entry=hub.api.device_registry.async_get_or_create(
                 config_entry_id=hub.config_entry.entry_id,
                 manufacturer=mc.MANUFACTURER,
-                name=get_productnameuuid(model, subid),
+                name=get_productname(model),
                 model=model,
                 via_device=next(iter(hub.device_entry.identifiers)),
                 identifiers={(mlc.DOMAIN, subid)},
@@ -408,7 +408,7 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
         return (
             self.device_entry.name_by_user
             or self.device_entry.name
-            or get_productnameuuid(self.model, self.id)
+            or get_productname(self.model)
         )
 
     @override
@@ -466,9 +466,7 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
 
     # interface: self
     def update_sub_device_info(self, sub_device_info: "SubDeviceInfoType", /):
-        name = sub_device_info.get(mc.KEY_SUBDEVICENAME) or get_productnameuuid(
-            self.model, self.id
-        )
+        name = sub_device_info.get(mc.KEY_SUBDEVICENAME) or get_productname(self.model)
         if name != self.device_entry.name:
             self.api.device_registry.async_update_device(
                 self.device_entry.id, name=name
