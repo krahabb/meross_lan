@@ -152,7 +152,7 @@ class HubNamespaceHandler(NamespaceHandler):
                     subdevice = hub.entities[subdevice_id]
 
                     # dynamically register a generic parser for this namespace
-                    # so that next time we'll use the standard mechanics
+                    # so that next time we'll use the default mechanics
                     def _unknown_ns_parse(_payload):
                         subdevice._unknown_ns_parse(self, _payload)
 
@@ -396,6 +396,10 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
         del self.async_request
         del self.ns_handlers
         del self._digest_parse  # type: ignore[assignment]
+        for _parse_method in tuple(
+            _p for _p in self.__dict__ if _p.startswith("_parse_")
+        ):
+            delattr(self, _parse_method)
 
     # interface: EntityManager
     @property
