@@ -1488,13 +1488,10 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         request = MerossRequest(*request_args, "", mlc.DOMAIN, self.__class__.__name__)
         self._trace_or_log(time(), request, CONF_PROTOCOL_BLUETOOTH, Device.TRACE_TX)
         try:
-            response = await self._bluetooth.async_request_raw(request)  # type: ignore
-            epoch = time()
-            self._trace_or_log(epoch, response, CONF_PROTOCOL_BLUETOOTH, self.TRACE_RX)
-            if self.curr_protocol is not CONF_PROTOCOL_BLUETOOTH:
-                self._switch_protocol(CONF_PROTOCOL_BLUETOOTH)
-            self._receive(epoch, response)
-            return response
+            return self._receive(
+                await self._bluetooth.async_request_raw(request),  # type: ignore
+                CONF_PROTOCOL_BLUETOOTH,
+            )
         except Exception as e:
             if self._bluetooth:
                 self.log_exception(self.WARNING, e, "async_bluetooth_request")
@@ -1512,20 +1509,9 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
             assert self._mqtt_publish
             if self._mqtt_publish.is_cloud_connection:
                 self.cloudpoll_requests += 1  # type: ignore
-            response = await self._mqtt_publish.async_mqtt_request(request)
-            self._mqtt_lastresponse = epoch = time()
-            self._trace_or_log(epoch, response, CONF_PROTOCOL_MQTT, self.TRACE_RX)
-            if not self._mqtt_active:
-                self._mqtt_active = self._mqtt_connected
-                if self.online:
-                    self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
-            if self.curr_protocol is not CONF_PROTOCOL_MQTT:
-                if (self.pref_protocol is CONF_PROTOCOL_MQTT) or (
-                    not self._http_active
-                ):
-                    self._switch_protocol(CONF_PROTOCOL_MQTT)
-            self._receive(epoch, response)
-            return response
+            return self._receive(
+                await self._mqtt_publish.async_mqtt_request(request), CONF_PROTOCOL_MQTT
+            )
         except Exception as e:
             if self._mqtt_publish:
                 self.log_exception(self.WARNING, e, "async_mqtt_request_raw")
@@ -1555,7 +1541,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         self, namespace: str, method: str, payload: "MerossPayloadType", /
     ):
         # TODO: silence exception in task coroutine?
-        return self.async_create_task(
+        self.async_create_task(
             self.async_mqtt_request(namespace, method, payload),
             f".mqtt_request({namespace},{method},{type(payload)})",
         )
@@ -1644,8 +1630,6 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                     self._set_offline()
             raise
 
-        epoch = time()
-        self._trace_or_log(epoch, response, CONF_PROTOCOL_HTTP, self.TRACE_RX)
         # add a sanity check here since we have some issues (#341)
         # that might be related to misconfigured devices where the
         # host address points to a different device than configured.
@@ -1657,6 +1641,8 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         # so it could rightly respond here. This shouldnt happen over MQTT
         # since the device.id is being taken care of by the routing mechanism
         if self.id != response.uuid:
+            # log received message since we're breaking the _receive pipeline here
+            self._trace_or_log(time(), response, CONF_PROTOCOL_HTTP, self.TRACE_RX)
             try:
                 assert self._http
                 mismatched_payload_all = await self._http.async_request(
@@ -1669,14 +1655,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                 f"Device UUID mismatch over HTTP (expected:{self.id} got:{response.uuid})"
             )
 
-        if not self._http_active and self._http:
-            self._http_active = self._http
-            self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_HTTP)
-        if self.curr_protocol is not CONF_PROTOCOL_HTTP:
-            if (self.pref_protocol is CONF_PROTOCOL_HTTP) or (not self._mqtt_active):
-                self._switch_protocol(CONF_PROTOCOL_HTTP)
-        self._receive(epoch, response)
-        return response
+        return self._receive(response, CONF_PROTOCOL_HTTP)
 
     async def async_http_request(
         self, namespace: str, method: str, payload: "MerossPayloadType", /
@@ -2167,17 +2146,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
 
     def mqtt_receive(self, message: "MerossResponse", /):
         assert self._mqtt_connected
-        self._mqtt_lastresponse = epoch = time()
-        self._trace_or_log(epoch, message, CONF_PROTOCOL_MQTT, self.TRACE_RX)
-        if not self._mqtt_active:
-            self._mqtt_active = self._mqtt_connected
-            if self.online:
-                self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
-        if self.curr_protocol is not CONF_PROTOCOL_MQTT:
-            if (self.pref_protocol is CONF_PROTOCOL_MQTT) or (not self._http_active):
-                self._switch_protocol(CONF_PROTOCOL_MQTT)
-        self._receive(epoch, message)
-        self._handle(message)
+        self._handle(self._receive(message, CONF_PROTOCOL_MQTT))
 
     def mqtt_attached(self, mqtt_connection: "MQTTConnection", /):
         if self._mqtt_connection:
@@ -2271,15 +2240,33 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         )
         self._profile = None
 
-    def _receive(self, epoch: float, message: MerossResponse, /):
+    def _receive(self, message: MerossResponse, protocol, /):
         """
         default (received) message handling entry point
         """
-        self.lastresponse = epoch
-        # TODO: check if this is ok at this level: we want to early detect malformed messages
-        # but some operations like protocol switching might need further attention
-        # As of now, they're performed before the check in the calling functions
+        self.lastresponse = epoch = time()
+        self._trace_or_log(epoch, message, protocol, self.TRACE_RX)
         message.check()
+        if protocol is CONF_PROTOCOL_HTTP:
+            if not self._http_active:
+                self._http_active = self._http
+                self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_HTTP)
+            if self.curr_protocol is not protocol:
+                if (self.pref_protocol is protocol) or (not self._mqtt_active):
+                    self._switch_protocol(protocol)
+        elif protocol is CONF_PROTOCOL_MQTT:
+            self._mqtt_lastresponse = epoch
+            if not self._mqtt_active:
+                self._mqtt_active = self._mqtt_connected
+                if self.online:
+                    self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
+            if self.curr_protocol is not protocol:
+                if (self.pref_protocol is protocol) or (not self._http_active):
+                    self._switch_protocol(protocol)
+        else:
+            if self.curr_protocol is not protocol:
+                self._switch_protocol(protocol)
+
         message_size = len(message.json)
         if message_size > self.device_response_size_min:
             self.device_response_size_min = message_size
@@ -2330,6 +2317,8 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                 self._polling_unsub = self.schedule_callback(
                     0, self._poll, message.namespace
                 )
+
+        return message
 
     def _handle(self, message: MerossMessage, /):
         # This is almost superseeded by direct NamespaceHandler request/dispatching
