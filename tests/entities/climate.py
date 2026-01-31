@@ -93,11 +93,6 @@ class EntityTest(EntityComponentTest):
             assert entity.current_humidity is not None
 
     async def async_test_enabled_callback(self, entity: MtsClimate):
-        if isinstance(entity, Mts960Climate):
-            # TODO: restore testing once mts960 is done.
-            # Guess we need to add support for Timer namespace in emulator.
-            return
-
         for hvac_mode in entity.hvac_modes:
             await self.async_service_call_check(
                 haec.SERVICE_SET_HVAC_MODE, hvac_mode, {haec.ATTR_HVAC_MODE: hvac_mode}

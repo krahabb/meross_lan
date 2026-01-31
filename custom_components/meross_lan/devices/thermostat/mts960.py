@@ -278,7 +278,7 @@ class Mts960Climate(MtsThermostatClimate):
                     self.number_timer_cycle_on_duration.native_value or 1
                 )
                 device_timestamp = round(time() - self.manager.device_timedelta)
-                if await self._async_request_timer(
+                await self._async_request_timer(
                     mc.MTS960_TIMER_TYPE_CYCLE,
                     {
                         mc.KEY_OFFDURATION: offduration,
@@ -286,38 +286,29 @@ class Mts960Climate(MtsThermostatClimate):
                         mc.KEY_STATE: mc.MTS960_STATE_ON,
                         mc.KEY_END: device_timestamp + (onduration * 60),
                     },
-                ):
-                    await self.async_set_hvac_mode(
-                        MtsThermostatClimate.HVACMode.FAN_ONLY
-                    )
+                )
             case Mts960Climate.Preset.TIMER_COUNTDOWN_ON:
                 duration = round(self.number_timer_down_duration.native_value or 1)
                 device_timestamp = round(time() - self.manager.device_timedelta)
-                if await self._async_request_timer(
+                await self._async_request_timer(
                     mc.MTS960_TIMER_TYPE_COUNTDOWN,
                     {
                         mc.KEY_DURATION: duration,
                         mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
                         mc.KEY_END: device_timestamp + (duration * 60),
                     },
-                ):
-                    await self.async_set_hvac_mode(
-                        MtsThermostatClimate.HVACMode.FAN_ONLY
-                    )
+                )
             case Mts960Climate.Preset.TIMER_COUNTDOWN_OFF:
                 duration = round(self.number_timer_down_duration.native_value or 1)
                 device_timestamp = round(time() - self.manager.device_timedelta)
-                if await self._async_request_timer(
+                await self._async_request_timer(
                     mc.MTS960_TIMER_TYPE_COUNTDOWN,
                     {
                         mc.KEY_DURATION: duration,
                         mc.KEY_ONOFF: mc.MTS960_ONOFF_OFF,
                         mc.KEY_END: device_timestamp + (duration * 60),
                     },
-                ):
-                    await self.async_set_hvac_mode(
-                        MtsThermostatClimate.HVACMode.FAN_ONLY
-                    )
+                )
 
     @override
     async def async_set_temperature(self, **kwargs):
@@ -362,6 +353,12 @@ class Mts960Climate(MtsThermostatClimate):
             },
             self,
         )
+        await self.async_request_parse_ex(
+            {
+                mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
+                mc.KEY_MODE: mc.MTS960_MODE_TIMER,
+            }
+        )
 
     # message handlers
     def _parse_modeB(self, payload: "mt_t.ModeB_C", /):
@@ -402,7 +399,7 @@ class Mts960Climate(MtsThermostatClimate):
 
         self.flush_state()
 
-    def _parse_timer(self, payload: dict, /):
+    def _parse_timer(self, payload: "mt_t.Timer_C", /):
         """
         {'channel': 0, 'type': 1, 'down': {'duration': 1, 'end': 1718724107, 'onoff': 2}} ==> Count down Off
         {'channel': 0, 'type': 1, 'down': {'duration': 1, 'end': 1718724107, 'onoff': 1}} ==> Count down On
@@ -414,22 +411,22 @@ class Mts960Climate(MtsThermostatClimate):
         self._mts_timer_payload = payload
         match payload[mc.KEY_TYPE]:
             case mc.MTS960_TIMER_TYPE_COUNTDOWN:
-                payload = payload[mc.KEY_DOWN]
+                p_down: "mt_t.Timer_Down" = payload[mc.KEY_DOWN]  # type: ignore
                 self._mts_timer_mode = (
                     mc.MTS960_TIMER_TYPE_COUNTDOWN,
-                    payload[mc.KEY_ONOFF],
+                    p_down[mc.KEY_ONOFF],
                 )
                 self.number_timer_down_duration.update_native_value(
-                    payload[mc.KEY_DURATION]
+                    p_down[mc.KEY_DURATION]
                 )
             case mc.MTS960_TIMER_TYPE_CYCLE:
-                payload = payload[mc.KEY_CYCLE]
+                p_cycle: "mt_t.Timer_Cycle" = payload[mc.KEY_CYCLE]  # type: ignore
                 self._mts_timer_mode = (mc.MTS960_TIMER_TYPE_CYCLE, None)
                 self.number_timer_cycle_off_duration.update_native_value(
-                    payload[mc.KEY_OFFDURATION]
+                    p_cycle[mc.KEY_OFFDURATION]
                 )
                 self.number_timer_cycle_on_duration.update_native_value(
-                    payload[mc.KEY_ONDURATION]
+                    p_cycle[mc.KEY_ONDURATION]
                 )
             case _:
                 self._mts_timer_mode = (payload[mc.KEY_TYPE], None)

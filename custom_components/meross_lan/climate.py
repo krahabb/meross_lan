@@ -549,7 +549,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         Issues a command to the main NS for this climate entity.
         This is typically the NS controlling the setpoints/modes.
         """
-        return await self.handler_ns.async_set_c_ex(
+        await self.handler_ns.async_set_c_ex(
             payload,
             self,
             self._payload_ns,

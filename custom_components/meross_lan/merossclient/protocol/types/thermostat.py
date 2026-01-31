@@ -159,6 +159,29 @@ class ModeB(_MerossPayloadType):
     mode: list[ModeB_C]
 
 
+class Timer_Cycle(TypedDict):
+    onDuration: int  # minutes
+    offDuration: int  # minutes
+    end: int
+    state: int  # 1: on, 2: off
+
+
+class Timer_Down(TypedDict):
+    duration: int  # minutes
+    end: int
+    onoff: int  # 1: on, 2: off
+
+
+class Timer_C(ChannelPayload):
+    type: int  # 1: countdown, 2: cycle
+    down: NotRequired[Timer_Down]  # for type 1
+    cycle: NotRequired[Timer_Cycle]  # for type 2
+
+
+class Timer(_MerossPayloadType):
+    timer: list[Timer_C]
+
+
 class ModeC_fan(TypedDict):
     fMode: int  # 0
     speed: int  # 0

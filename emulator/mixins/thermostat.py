@@ -51,6 +51,14 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
             MerossEmulator.NSDefaultMode.MixOut,
             {mc.KEY_CHANNEL: 0, "mode": 0, "time": 0},
         ),
+        mn_t.Appliance_Control_Thermostat_Timer: (
+            MerossEmulator.NSDefaultMode.MixOut,
+            {
+                mc.KEY_CHANNEL: 0,
+                "type": mc.MTS960_TIMER_TYPE_COUNTDOWN,
+                "down": {"onoff": 0, "duration": 0, "end": 0},
+            },
+        ),
     }
 
     if TYPE_CHECKING:

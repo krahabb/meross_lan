@@ -766,21 +766,17 @@ class NamespaceHandler:
         """
         ns = self.ns
         assert ns.payload_set is mn.PayloadType.LIST_C, "Only LIST_C supported here"
-        response = None
+        response = await self.device.async_request(
+            *ns.request_set(payload, parser.channel)
+        )
         try:
-            response = await self.device.async_request(
-                *ns.request_set(payload, parser.channel)
-            )
-            try:
-                payload = response.payload[ns.key][0]
-            except (KeyError, IndexError):
-                # optimistic update
-                if state:
-                    payload = merge_dicts(dict(state), payload)
-            getattr(parser, f"_parse_{ns.slug_end}", parser._parse)(payload)
-            return response
-        except Exception as e:
-            self.log_exception(e, "async_set_c_ex", response)
+            payload = response.payload[ns.key][0]
+        except (KeyError, IndexError):
+            # optimistic update
+            if state:
+                payload = merge_dicts(dict(state), payload)
+        getattr(parser, f"_parse_{ns.slug_end}", parser._parse)(payload)
+        return response
 
     # Polling Strategies:
     # These are configured at initialization time by setting the 'polling_strategy' attribute
