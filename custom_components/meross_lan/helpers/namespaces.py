@@ -1314,7 +1314,7 @@ POLLING_STRATEGY_CONF = {
         mlc.PARAM_ENERGY_UPDATE_PERIOD,
         mlc.PARAM_ENERGY_UPDATE_CLOUD_PERIOD,
         320,
-        900,
+        1900,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_ConsumptionX: (

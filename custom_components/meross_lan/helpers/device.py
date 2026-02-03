@@ -330,7 +330,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         ),
         mn.Appliance_Control_ConsumptionH: (
             ".devices.mss",
-            "ConsumptionHSensor",
+            "ConsumptionHNamespaceHandler",
         ),
         mn.Appliance_Control_ConsumptionX: (".devices.mss", "ConsumptionXSensor"),
         mn.Appliance_Control_Fan: (".fan", "namespace_init_fan"),
@@ -513,7 +513,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         self.digest_parsers = {}
         self.digest_pollers = set()
         self._lazypoll_requests = []
-        self._polling_epoch = 0.0
+        self._polling_epoch = time()
         self._polling_unsub = None
         self._polling_task = None
         self.cloudpoll_requests = 0
