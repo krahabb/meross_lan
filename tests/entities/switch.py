@@ -7,7 +7,7 @@ from custom_components.meross_lan.devices import (
     mss,
     rollershutter as rs,
 )
-from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
+from custom_components.meross_lan.devices.thermostat import (
     MtsConfigSwitch,
     MtsExternalSensorSwitch,
 )

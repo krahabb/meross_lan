@@ -213,7 +213,6 @@ class NamespaceHandler:
         "polling_response_size",
         "polling_request",
         "polling_request_channels",
-        "__weakref__",  # REMOVE
     )
 
     def __init__(

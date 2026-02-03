@@ -2,11 +2,9 @@ from typing import TYPE_CHECKING, override
 
 from . import SubDeviceEntity
 from ...binary_sensor import MLBinarySensor
-from ...calendar import MtsSchedule
-from ...climate import MtsClimate, MtsSetPointNumber
+from ...climate import MtsClimate
 from ...merossclient.protocol import const as mc
 from ...merossclient.protocol.namespaces import hub as mn_h
-from ...number import MLConfigNumber
 from ...switch import MLEmulatedSwitch
 
 if TYPE_CHECKING:
@@ -18,40 +16,30 @@ if TYPE_CHECKING:
 class Mts100Climate(SubDeviceEntity, MtsClimate):
     """Climate entity for hub paired devices MTS100, MTS100V3, MTS150"""
 
-    class AdjustNumber(MLConfigNumber):
+    class AdjustNumber(MtsClimate.AdjustNumber):
 
         ns = mn_h.Appliance_Hub_Mts100_Adjust
         key_value = mc.KEY_TEMPERATURE
+        ENTITY_KEY = f"config_{ns.key}_{key_value}"
 
         _attr_device_scale = 100
 
-        # HA core entity attributes:
-        _attr_name = "Adjust temperature"
-        _attr_device_class = MLConfigNumber.DEVICE_CLASS_TEMPERATURE_DELTA
         native_max_value = 5
         native_min_value = -5
         native_step = 0.5
 
-        def __init__(self, climate: "Mts100Climate", /):
-            MLConfigNumber.__init__(
-                self,
-                climate.manager,
-                climate.channel,
-                entity_key=f"config_{self.ns.key}_{self.key_value}",
-            )
-
-    class SetPointNumber(MtsSetPointNumber):
+    class SetPointNumber(MtsClimate.SetPointNumber):
         """
-        customize MtsSetPointNumber to interact with Mts100 family valves
+        customize SetPointNumber to interact with Mts100 family valves
         """
 
         ns = mn_h.Appliance_Hub_Mts100_Temperature
 
-    class Schedule(MtsSchedule):
+    class Schedule(MtsClimate.Schedule):
         ns = mn_h.Appliance_Hub_Mts100_ScheduleB
 
         def __init__(self, climate: "Mts100Climate", /):
-            MtsSchedule.__init__(self, climate)
+            MtsClimate.Schedule.__init__(self, climate)
             self._schedule_unit_time = climate.manager.manager.descriptor.ability.get(
                 mn_h.Appliance_Hub_Mts100_ScheduleB, {}
             ).get(mc.KEY_SCHEDULEUNITTIME, 15)

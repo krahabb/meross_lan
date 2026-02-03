@@ -3,10 +3,9 @@ from time import time
 from typing import TYPE_CHECKING, override
 
 from ...binary_sensor import MLBinarySensor
-from ...calendar import MtsSchedule
 from ...number import MLEmulatedNumber
 from ...sensor import MLDiagnosticSensor
-from .mtsthermostat import MtsThermostatClimate, mc, mn_t
+from . import MtsThermostatClimate, mc, mn_t
 
 if TYPE_CHECKING:
     from typing import Final
@@ -30,7 +29,7 @@ class Mts960Climate(MtsThermostatClimate):
         TIMER_COUNTDOWN_ON = enum.auto()
         TIMER_COUNTDOWN_OFF = enum.auto()
 
-    class Schedule(MtsSchedule):
+    class Schedule(MtsThermostatClimate.Schedule):
         ns = mn_t.Appliance_Control_Thermostat_ScheduleB
 
     class PlugState(MLBinarySensor):

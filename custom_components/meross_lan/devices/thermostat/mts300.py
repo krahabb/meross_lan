@@ -2,7 +2,6 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.components.climate import const as hacc
 
-from ...calendar import MtsSchedule
 from ...helpers import reverse_lookup
 from ...helpers.entity import MEGroupListChannelMixin
 from ...helpers.namespaces import mc, mn
@@ -10,7 +9,7 @@ from ...number import MLConfigNumber
 from ...select import MLConfigSelect
 from ...sensor import MLEnumSensor, MLHumiditySensor
 from ...switch import MLEmulatedSwitch
-from .mtsthermostat import MtsThermostatClimate, mc, mn_t
+from . import MtsThermostatClimate, mc, mn_t
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final
@@ -59,7 +58,7 @@ class Mts300Climate(MtsThermostatClimate):
 
             super()._parse(payload)
 
-    class Schedule(MtsSchedule):
+    class Schedule(MtsThermostatClimate.Schedule):
         ns = mn_t.Appliance_Control_Thermostat_ScheduleB
 
         # TODO: customize parsing of native payload since we have 2 temperatures

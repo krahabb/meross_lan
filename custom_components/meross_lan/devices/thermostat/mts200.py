@@ -1,8 +1,6 @@
 from typing import TYPE_CHECKING
 
-from ...calendar import MtsSchedule
-from ...climate import MtsSetPointNumber
-from .mtsthermostat import MtsThermostatClimate, mc, mn_t
+from . import MtsThermostatClimate, mc, mn_t
 
 if TYPE_CHECKING:
     from ...helpers.device import Device
@@ -17,10 +15,10 @@ class Mts200Climate(MtsThermostatClimate):
     # MtsClimate class attributes
     device_scale = mc.MTS200_TEMP_SCALE
 
-    class SetPointNumber(MtsSetPointNumber):
+    class SetPointNumber(MtsThermostatClimate.SetPointNumber):
         ns = mn_t.Appliance_Control_Thermostat_Mode
 
-    class Schedule(MtsSchedule):
+    class Schedule(MtsThermostatClimate.Schedule):
         ns = mn_t.Appliance_Control_Thermostat_Schedule
 
     if TYPE_CHECKING:

@@ -2,11 +2,11 @@ from homeassistant.components import binary_sensor as haec
 
 from custom_components.meross_lan.binary_sensor import MLBinarySensor
 from custom_components.meross_lan.devices import garagedoor as gd, hub
-from custom_components.meross_lan.devices.thermostat.mts960 import Mts960Climate
-from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
+from custom_components.meross_lan.devices.thermostat import (
     MtsWarningSensor,
     MtsWindowOpened,
 )
+from custom_components.meross_lan.devices.thermostat.mts960 import Mts960Climate
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,

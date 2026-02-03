@@ -8,13 +8,13 @@ from custom_components.meross_lan.devices.ms600 import (
     PresenceConfigSensitivity,
 )
 from custom_components.meross_lan.devices.spray import MLSpray
-from custom_components.meross_lan.devices.thermostat.mts300 import Mts300Climate
-from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
+from custom_components.meross_lan.devices.thermostat import (
     MtsHoldAction,
     MtsTempUnit,
     mn,
     mn_t,
 )
+from custom_components.meross_lan.devices.thermostat.mts300 import Mts300Climate
 from custom_components.meross_lan.merossclient.protocol import const as mc
 
 from tests.entities import EntityComponentTest
