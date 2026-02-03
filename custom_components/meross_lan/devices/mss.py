@@ -241,7 +241,6 @@ def namespace_init_electricity(
 class ElectricityXSensor(ElectricitySensor):
 
     ns = mn.Appliance_Control_ElectricityX
-    NS_CHANNELS = None  # scan digests for channels
 
     class MConsumeSensor(MLNumericSensor):
         manager: "Device"

@@ -25,7 +25,6 @@ class MLRollerShutter(MLCover):
         supported_features: MLCover.EntityFeature
 
     ns = mn.Appliance_RollerShutter_Position
-    NS_CHANNELS = (0,)
     key_value = mc.KEY_POSITION
 
     ATTR_POSITION_NATIVE = "position_native"

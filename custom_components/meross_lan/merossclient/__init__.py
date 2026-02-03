@@ -479,6 +479,7 @@ class MerossDeviceDescriptor:
     TYPE_CHANNELS_MAP = {
         # some lookup when digest euristic parsing doesn't work
         "em06": frozenset({1, 2, 3, 4, 5, 6}),
+        "hp110": SINGLE_CHANNEL,  # Mp3 player/light device (Smart Cherub)
         "mfc100": frozenset(
             {2}
         ),  # This device is tricky since it exposes features on different channels

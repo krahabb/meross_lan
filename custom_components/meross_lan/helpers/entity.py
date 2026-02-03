@@ -150,6 +150,8 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
     EntityCategory = entity.EntityCategory
 
     ENTITY_KEY = None
+    NS_CHANNELS = None  # scan digests for channels
+
     is_diagnostic = False
 
     key_value = mc.KEY_VALUE

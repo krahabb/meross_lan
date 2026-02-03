@@ -104,7 +104,6 @@ class Mts300Climate(MtsThermostatClimate):
 
     # MtsClimate class attributes
     ns = mn_t.Appliance_Control_Thermostat_ModeC
-    NS_CHANNELS = (0,)
     device_scale = mc.MTS300_TEMP_SCALE
 
     MTS_MODE_TO_PRESET_MAP = {

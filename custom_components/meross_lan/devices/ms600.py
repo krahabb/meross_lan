@@ -120,8 +120,6 @@ class PresenceConfigMthX(PresenceConfigNumberBase):
 
 class PresenceConfigMode(PresenceConfigModeBase):
 
-    NS_CHANNELS = (0,)
-
     _entities: tuple[PresenceConfigBase, ...]
 
     def __init__(self, manager: "Device", channel, /):

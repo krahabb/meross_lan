@@ -367,24 +367,9 @@ class NamespaceHandler:
         self.entity_class = entity_class
         self.handler = self._handle_list
         self.device.platforms.setdefault(entity_class.PLATFORM)
-        if channels is None:
-            channels = set()
-
-            def _scan_digest(digest: dict):
-                try:
-                    channels.add(digest[mc.KEY_CHANNEL])
-                except KeyError:
-                    for value in digest.values():
-                        if type(value) is dict:
-                            _scan_digest(value)
-                        elif type(value) is list:
-                            for value_item in value:
-                                if type(value_item) is dict:
-                                    _scan_digest(value_item)
-
-            _scan_digest(self.device.descriptor.digest)
-
-        for channel in channels:
+        for channel in (
+            self.device.descriptor.channels if channels is None else channels
+        ):
             entity_class(self.device, channel)
 
     def register_parser(

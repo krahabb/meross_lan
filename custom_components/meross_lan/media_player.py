@@ -45,7 +45,7 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
     PLATFORM = media_player.DOMAIN
     ENTITY_KEY = mc.KEY_MP3
     ns = mn.Appliance_Control_Mp3
-    NS_CHANNELS = (0,)
+
     # HA core entity attributes:
     _attr_device_class = media_player.MediaPlayerDeviceClass.SPEAKER
     media_content_type = MediaType.MUSIC
