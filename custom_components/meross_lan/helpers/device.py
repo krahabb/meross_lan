@@ -316,6 +316,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
 
     NAMESPACE_INIT = {
         mn.Appliance_Config_OverTemp: (".devices.mss", "OverTempEnableSwitch"),
+        mn.Appliance_Control_Alarm: (".siren", "MLSiren"),
         mn.Appliance_Control_ConsumptionConfig: (
             ".helpers.namespaces",
             "VoidNamespaceHandler",
@@ -324,10 +325,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
             ".devices.mss",
             "namespace_init_electricity",
         ),
-        mn.Appliance_Control_ElectricityX: (
-            ".devices.mss",
-            "ElectricityXSensor",
-        ),
+        mn.Appliance_Control_ElectricityX: (".devices.mss", "ElectricityXSensor"),
         mn.Appliance_Control_ConsumptionH: (
             ".devices.mss",
             "ConsumptionHNamespaceHandler",
@@ -338,10 +336,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
             ".sensor",
             "MLFilterMaintenanceSensor",
         ),
-        mn.Appliance_Control_Mp3: (
-            ".media_player",
-            "MLMp3Player",
-        ),
+        mn.Appliance_Control_Mp3: (".media_player", "MLMp3Player"),
         mn.Appliance_Control_PhysicalLock: (".switch", "PhysicalLockSwitch"),
         mn.Appliance_Control_Presence_Config: (
             ".devices.ms600",

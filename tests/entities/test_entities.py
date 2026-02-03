@@ -57,6 +57,7 @@ for entity_domain in (
     "number",
     "select",
     "sensor",
+    "siren",
     "switch",
 ):
     module = import_module(f".{entity_domain}", "tests.entities")
@@ -157,7 +158,15 @@ async def test_entities(
             for ns, entity_types in NAMESPACES_ENTITIES.items():
                 if ns in ability:
                     if ns.indexed and ns.key_channel == mc.KEY_CHANNEL:
-                        _add_func(entity_types * len(descriptor.channels))
+                        for entity_type in entity_types:
+                            _add_func(
+                                [entity_type]
+                                * (
+                                    len(descriptor.channels)
+                                    if entity_type.NS_CHANNELS is None
+                                    else len(entity_type.NS_CHANNELS)
+                                )
+                            )
                     else:
                         _add_func(entity_types)
             if ishub:

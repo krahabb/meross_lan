@@ -300,7 +300,7 @@ class MLFilterMaintenanceSensor(MLNumericSensor):
 
     ENTITY_KEY = mc.KEY_FILTER
     ns = mn.Appliance_Control_FilterMaintenance
-    NS_CHANNELS = (0,)
+    NS_CHANNELS = MLNumericSensor.NS_CHANNELS_SINGLE
     key_value = mc.KEY_LIFE
 
     # HA core entity attributes:

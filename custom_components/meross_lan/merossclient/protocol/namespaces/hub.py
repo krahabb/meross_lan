@@ -36,9 +36,6 @@ Appliance_Config_Sensor_Association = mn.ns(
 Appliance_Config_WaterPlan = mn.ns(
     "Appliance.Config.WaterPlan", mc.KEY_CONFIG, GETSET_SUBID, mn.EXP
 )  # mst100 (used to read/write watering schedules)
-Appliance_Control_Alarm = mn.ns(
-    "Appliance.Control.Alarm", mc.KEY_ALARM, GETSET_SUBID, mn.EXP
-)  # mst100 (hub too has it)
 Appliance_Control_Sensor_HistoryX = mn.ns(
     "Appliance.Control.Sensor.HistoryX", mc.KEY_HISTORY, SUBID, mn.G_LCDS
 )

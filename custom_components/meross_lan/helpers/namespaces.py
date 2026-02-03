@@ -1281,6 +1281,13 @@ POLLING_STRATEGY_CONF = {
         0,
         NamespaceHandler.async_poll_smart,
     ),
+    mn.Appliance_Config_Alarm: (
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        44,
+        NamespaceHandler.async_poll_smart,
+    ),
     mn.Appliance_Config_Sensor_Association: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
@@ -1293,6 +1300,13 @@ POLLING_STRATEGY_CONF = {
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         340,
         0,
+        NamespaceHandler.async_poll_smart,
+    ),
+    mn.Appliance_Control_Alarm: (
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        40,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_ConsumptionH: (

@@ -1,5 +1,6 @@
 from homeassistant.components import number as haec
 
+from custom_components.meross_lan import number, siren, switch
 from custom_components.meross_lan.devices import (
     garagedoor as gd,
     hub,
@@ -25,8 +26,6 @@ from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
 )
-from custom_components.meross_lan.number import MLConfigNumber, MLNumber
-from custom_components.meross_lan.switch import MLEmulatedSwitch
 
 from tests.entities import EntityComponentTest
 
@@ -56,6 +55,7 @@ class EntityTest(EntityComponentTest):
         },
     }
     NAMESPACES_ENTITIES = {
+        mn.Appliance_Config_Alarm: [siren.MLSiren.VolumeNumber],
         mn.Appliance_GarageDoor_Config: [
             gd.MLGarageConfigNumber,
             gd.MLGarageConfigNumber,  # doorOpenDuration
@@ -75,11 +75,11 @@ class EntityTest(EntityComponentTest):
         mn.Appliance_Control_Screen_Brightness: [MLScreenBrightnessNumber] * 2,
         mn_t.Appliance_Control_Thermostat_DeadZone: [MtsDeadZoneNumber],
         mn_t.Appliance_Control_Thermostat_Frost: [MtsFrostNumber],
-        mn_t.Appliance_Control_Thermostat_HoldAction: [MLConfigNumber],
+        mn_t.Appliance_Control_Thermostat_HoldAction: [number.MLConfigNumber],
         mn_t.Appliance_Control_Thermostat_ModeC: [
             Mts300Climate.AdjustNumber,
-            MLConfigNumber,  # humidity_calibration
-            MLConfigNumber,  # fan_hold_time
+            number.MLConfigNumber,  # humidity_calibration
+            number.MLConfigNumber,  # fan_hold_time
         ],
         mn_t.Appliance_Control_Thermostat_Overheat: [MtsOverheatNumber],
     }
@@ -94,7 +94,7 @@ class EntityTest(EntityComponentTest):
         mc.KEY_MST: [hub.MstSwitch.WateringDurationNumber],
     }
 
-    async def async_test_each_callback(self, entity: MLNumber):
+    async def async_test_each_callback(self, entity: number.MLNumber):
         if type(entity) is gd.MLGarageEmulatedConfigNumber:
             EntityComponentTest.expected_entity_types.remove(gd.MLGarageConfigNumber)
 
@@ -102,26 +102,26 @@ class EntityTest(EntityComponentTest):
             # rich temperatures are set to 'unavailable' when
             # the corresponding function is 'off'. We'll so use
             # the associated switch to turn it on in case.
-            switch = entity.switch
-            ison = switch.is_on
+            _switch = entity.switch
+            ison = _switch.is_on
             assert ison is entity.available  # either both True or False
             if not ison:
-                await switch.async_turn_on()
+                await _switch.async_turn_on()
         elif entity.entitykey == "fan_hold_time":
             # This entity too (mts300) might be unavailable if
             # the device is configured to disable 'fan hold'.
             # Again we can control this function through a dedicated switch.
             device = self.device_context.device
-            switch = device.entities[f"{entity.channel}_fan_hold_enable"]
-            assert type(switch) is MLEmulatedSwitch
+            _switch = device.entities[f"{entity.channel}_fan_hold_enable"]
+            assert type(_switch) is switch.MLEmulatedSwitch
             # Here we cannot check for availability consistence
             # since at start it is a bit messed up.
-            if not switch.is_on:
-                await switch.async_turn_on()
+            if not _switch.is_on:
+                await _switch.async_turn_on()
         await super().async_test_each_callback(entity)
 
-    async def async_test_enabled_callback(self, entity: MLNumber):
-        is_config_number = isinstance(entity, MLConfigNumber)
+    async def async_test_enabled_callback(self, entity: number.MLNumber):
+        is_config_number = isinstance(entity, number.MLConfigNumber)
         states = self.hass_states
         time_mocker = self.device_context.time_mock
         await self.async_service_call(
@@ -139,8 +139,8 @@ class EntityTest(EntityComponentTest):
         assert (state := states.get(self.entity_id))
         assert float(state.state) == entity.min_value, "min_value"
 
-    async def async_test_disabled_callback(self, entity: MLNumber):
-        is_config_number = isinstance(entity, MLConfigNumber)
+    async def async_test_disabled_callback(self, entity: number.MLNumber):
+        is_config_number = isinstance(entity, number.MLConfigNumber)
         time_mocker = self.device_context.time_mock
         await entity.async_set_native_value(entity.native_max_value)
         if is_config_number:

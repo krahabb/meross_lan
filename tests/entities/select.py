@@ -1,6 +1,6 @@
 from homeassistant.components import select as haec
 
-from custom_components.meross_lan.climate import MtsClimate
+from custom_components.meross_lan import climate, select, siren
 from custom_components.meross_lan.devices.diffuser import MLDiffuserSpray
 from custom_components.meross_lan.devices.ms600 import (
     PresenceConfigMode,
@@ -16,7 +16,6 @@ from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
     mn_t,
 )
 from custom_components.meross_lan.merossclient.protocol import const as mc
-from custom_components.meross_lan.select import MLSelect
 
 from tests.entities import EntityComponentTest
 
@@ -27,13 +26,14 @@ class EntityTest(EntityComponentTest):
 
     DIGEST_ENTITIES = {
         mc.KEY_THERMOSTAT: {
-            mc.KEY_MODE: [MtsClimate.TrackSensorSelect],
-            mc.KEY_MODEB: [MtsClimate.TrackSensorSelect],
+            mc.KEY_MODE: [climate.MtsClimate.TrackSensorSelect],
+            mc.KEY_MODEB: [climate.MtsClimate.TrackSensorSelect],
         },
         mc.KEY_SPRAY: [MLSpray],
         mc.KEY_DIFFUSER: {mc.KEY_SPRAY: [MLDiffuserSpray]},
     }
     NAMESPACES_ENTITIES = {
+        mn.Appliance_Config_Alarm: [siren.MLSiren.SongSelect],
         mn.Appliance_Config_Sensor_Association: [Mts300Climate.SensorAssociationSelect],
         mn.Appliance_Control_TempUnit: [MtsTempUnit],
         mn.Appliance_Control_Presence_Config: [
@@ -42,22 +42,22 @@ class EntityTest(EntityComponentTest):
             PresenceConfigSensitivity,
         ],
         mn_t.Appliance_Control_Thermostat_HoldAction: [MtsHoldAction],
-        mn_t.Appliance_Control_Thermostat_ModeC: [MtsClimate.TrackSensorSelect],
+        mn_t.Appliance_Control_Thermostat_ModeC: [climate.MtsClimate.TrackSensorSelect],
     }
     HUB_SUBDEVICES_ENTITIES = {
-        mc.TYPE_MTS100: [MtsClimate.TrackSensorSelect],
-        mc.TYPE_MTS100V3: [MtsClimate.TrackSensorSelect],
-        mc.TYPE_MTS150: [MtsClimate.TrackSensorSelect],
+        mc.TYPE_MTS100: [climate.MtsClimate.TrackSensorSelect],
+        mc.TYPE_MTS100V3: [climate.MtsClimate.TrackSensorSelect],
+        mc.TYPE_MTS150: [climate.MtsClimate.TrackSensorSelect],
     }
 
-    async def async_test_enabled_callback(self, entity: MLSelect):
+    async def async_test_enabled_callback(self, entity: select.MLSelect):
         for option in entity.options:
             state = await self.async_service_call(
                 haec.SERVICE_SELECT_OPTION, {haec.ATTR_OPTION: option}
             )
             assert state.state == option
 
-    async def async_test_disabled_callback(self, entity: MLSelect):
+    async def async_test_disabled_callback(self, entity: select.MLSelect):
         for option in entity.options:
             await entity.async_select_option(option)
             assert entity.state == option

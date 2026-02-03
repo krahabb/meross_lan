@@ -69,7 +69,7 @@ class PhysicalLockSwitch(MLSwitch):
 
     ENTITY_KEY = mc.KEY_LOCK
     ns = mn.Appliance_Control_PhysicalLock
-    NS_CHANNELS = (0,)
+    NS_CHANNELS = MLSwitch.NS_CHANNELS_SINGLE
 
     def __init__(self, manager: "Device", channel, /):
         MLSwitch.__init__(self, manager, channel)

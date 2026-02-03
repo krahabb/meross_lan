@@ -82,7 +82,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         PLATFORM: ClassVar[str]
         ENTITY_KEY: ClassVar[str | None]
 
-        NS_CHANNELS: ClassVar[Iterable[int] | None]
+        NS_CHANNELS: ClassVar[tuple[int, ...] | None]
         """
         This is related to NamespaceHandler registration. For entity classes where we know
         the ns exposes fixed channel layouts (i.e. PhysicalLock) which are not exposed in any digest key
@@ -91,6 +91,8 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         Setting to None means 'scan digests for channels'.
         This is actually not mandatory though since only used for NamespaceHandler.register_entity_class.
         """
+        NS_CHANNELS_SINGLE: Final[tuple[int, ...]]
+        """Preset singleton for entities to be configured with a single channel in 0."""
 
         is_diagnostic: ClassVar[bool]
         """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
@@ -151,6 +153,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
 
     ENTITY_KEY = None
     NS_CHANNELS = None  # scan digests for channels
+    NS_CHANNELS_SINGLE = (0,)
 
     is_diagnostic = False
 

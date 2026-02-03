@@ -1,4 +1,3 @@
-from homeassistant import const as hac
 from homeassistant.components import light as haec
 from homeassistant.components.light import ColorMode, LightEntity, LightEntityFeature
 
@@ -86,8 +85,8 @@ class EntityTest(EntityComponentTest):
     async def async_test_enabled_callback(
         self, entity: MLLight | MLDiffuserLight | MLDNDLightEntity
     ):
-        await self.async_service_call_check(haec.SERVICE_TURN_OFF, hac.STATE_OFF)
-        await self.async_service_call_check(haec.SERVICE_TURN_ON, hac.STATE_ON)
+        await self.async_service_call_check(haec.SERVICE_TURN_OFF, entity.hac.STATE_OFF)
+        await self.async_service_call_check(haec.SERVICE_TURN_ON, entity.hac.STATE_ON)
 
         if entity.entitykey == MLDNDLightEntity.ENTITY_KEY:
             return
@@ -101,7 +100,9 @@ class EntityTest(EntityComponentTest):
             rgb_tuple = (255, 0, 0)
             rgb_meross = rgb_to_native(rgb_tuple)
             state = await self.async_service_call_check(
-                haec.SERVICE_TURN_ON, hac.STATE_ON, {haec.ATTR_RGB_COLOR: rgb_tuple}
+                haec.SERVICE_TURN_ON,
+                entity.hac.STATE_ON,
+                {haec.ATTR_RGB_COLOR: rgb_tuple},
             )
             assert (
                 state.attributes[haec.ATTR_RGB_COLOR] == native_to_rgb(rgb_meross)
@@ -117,7 +118,7 @@ class EntityTest(EntityComponentTest):
             for kelvin, temperature in KELVIN_TO_TEMPERATURE.items():
                 state = await self.async_service_call_check(
                     haec.SERVICE_TURN_ON,
-                    hac.STATE_ON,
+                    entity.hac.STATE_ON,
                     {haec.ATTR_COLOR_TEMP_KELVIN: kelvin},
                 )
                 assert (
@@ -133,7 +134,7 @@ class EntityTest(EntityComponentTest):
             for brightness, luminance in BRIGHTNESS_TO_LUMINANCE.items():
                 state = await self.async_service_call_check(
                     haec.SERVICE_TURN_ON,
-                    hac.STATE_ON,
+                    entity.hac.STATE_ON,
                     {haec.ATTR_BRIGHTNESS: brightness},
                 )
                 assert (

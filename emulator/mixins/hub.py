@@ -16,12 +16,14 @@ from custom_components.meross_lan.merossclient.protocol import (
 )
 from custom_components.meross_lan.merossclient.protocol.namespaces import hub as mn_h
 
+from . import MerossEmulator
+
 if TYPE_CHECKING:
     from typing import Any, Mapping
 
     from custom_components.meross_lan.merossclient.protocol.types import JsonDict
 
-    from . import MerossEmulator, MerossEmulatorDescriptor
+    from . import MerossEmulatorDescriptor
 
 
 # TODO: wrap-up these helpers in a SubDeviceDescriptor-like class
@@ -37,13 +39,24 @@ def get_mts_digest(digest: "JsonDict") -> "JsonDict | None":
 
 class HubMixin(MerossEmulator if TYPE_CHECKING else object):
 
+    if TYPE_CHECKING:
+        subdevices: list[JsonDict]
+        """list of subdevice dicts as per hub digest"""
+
     NAMESPACES = mn.HUB_NAMESPACES
 
     MAXIMUM_RESPONSE_SIZE = 4000
 
-    if TYPE_CHECKING:
-        subdevices: list["JsonDict"]
-        """list of subdevice dicts as per hub digest"""
+    NAMESPACES_DEFAULT = {
+        mn.Appliance_Config_Alarm: (
+            MerossEmulator.NSDefaultMode.MixOut,
+            {mc.KEY_CHANNEL: 0, mc.KEY_ENABLE: 1, mc.KEY_VOLUME: 100, mc.KEY_SONG: 1},
+        ),
+        mn.Appliance_Control_Alarm: (
+            MerossEmulator.NSDefaultMode.MixOut,
+            {mc.KEY_CHANNEL: 0, "event": {"security": {"value": 1}}},
+        ),
+    }
 
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
