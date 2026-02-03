@@ -284,34 +284,6 @@ class MtsTempUnit(MLConfigSelect):
         climate.manager.register_parser_entity(self)
 
 
-class MLScreenBrightnessNumber(MLConfigNumber):
-    manager: "Device"
-
-    ns = mn.Appliance_Control_Screen_Brightness
-
-    # HA core entity attributes:
-    _attr_native_unit_of_measurement = MLConfigNumber.hac.PERCENTAGE
-    icon: str = "mdi:brightness-percent"
-    native_max_value = 100
-    native_min_value = 0
-    native_step = 12.5
-
-    def __init__(self, manager: "Device", key: str, /):
-        self.key_value = key
-        MLConfigNumber.__init__(
-            self,
-            manager,
-            0,
-            entity_key=f"screenbrightness_{key}",
-            name=f"Screen brightness ({key})",
-        )
-
-    async def async_set_native_value(self, value: float, /):
-        """Override base async_set_native_value since it would round
-        the value to an int (common device native type)."""
-        await self.async_request_value(value)
-
-
 OPTIONAL_NAMESPACES_INITIALIZERS: tuple["mn.Namespace", ...] = (
     mn_t.Appliance_Control_Thermostat_CtlRange,  # mts960
     mn_t.Appliance_Control_Thermostat_SummerMode,  # mts200
@@ -407,87 +379,81 @@ class MtsThermostatClimate(MtsClimate):
 
 POLLING_STRATEGY_CONF.update(
     {
+        mn.Appliance_Control_Screen_Brightness: (
+            mlc.PARAM_CONFIG_UPDATE_PERIOD,
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            70,
+            NamespaceHandler.async_poll_smart,
+        ),
         mn.Appliance_Control_TempUnit: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
             mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-            mlc.PARAM_HEADER_SIZE,
             30,
             NamespaceHandler.async_poll_smart,
         ),
         mn_t.Appliance_Control_Thermostat_Calibration: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
             mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-            mlc.PARAM_HEADER_SIZE,
             80,
             NamespaceHandler.async_poll_smart,
         ),
         mn_t.Appliance_Control_Thermostat_CtlRange: (
             0,
             0,
-            mlc.PARAM_HEADER_SIZE,
             80,
             NamespaceHandler.async_poll_once,
         ),
         mn_t.Appliance_Control_Thermostat_DeadZone: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
             mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-            mlc.PARAM_HEADER_SIZE,
             80,
             NamespaceHandler.async_poll_smart,
         ),
         mn_t.Appliance_Control_Thermostat_Frost: (
             mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
             mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
-            mlc.PARAM_HEADER_SIZE,
             80,
             NamespaceHandler.async_poll_smart,
         ),
         mn_t.Appliance_Control_Thermostat_HoldAction: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
             mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-            mlc.PARAM_HEADER_SIZE,
             30,
             NamespaceHandler.async_poll_smart,
         ),
         mn_t.Appliance_Control_Thermostat_ModeC: (
             0,
             0,
-            mlc.PARAM_HEADER_SIZE,
             120,
             NamespaceHandler.async_poll_default,
         ),
         mn_t.Appliance_Control_Thermostat_Overheat: (
             mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
             mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
-            mlc.PARAM_HEADER_SIZE,
             140,
             NamespaceHandler.async_poll_smart,
         ),
         mn_t.Appliance_Control_Thermostat_Timer: (
             0,
             0,
-            mlc.PARAM_HEADER_SIZE,
             550,
             NamespaceHandler.async_poll_default,
         ),
         mn_t.Appliance_Control_Thermostat_Schedule: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
             mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-            mlc.PARAM_HEADER_SIZE,
             550,
             NamespaceHandler.async_poll_smart,
         ),
         mn_t.Appliance_Control_Thermostat_ScheduleB: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
             mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-            mlc.PARAM_HEADER_SIZE,
             550,
             NamespaceHandler.async_poll_smart,
         ),
         mn_t.Appliance_Control_Thermostat_Sensor: (
             mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
             mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
-            mlc.PARAM_HEADER_SIZE,
             40,
             NamespaceHandler.async_poll_smart,
         ),

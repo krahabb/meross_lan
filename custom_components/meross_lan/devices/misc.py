@@ -169,7 +169,7 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
                             {key_channel: channel, mc.KEY_DATA: [data_key]}
                         )
                         self.polling_response_size = (
-                            self.polling_response_base_size
+                            mlc.PARAM_HEADER_SIZE
                             + len(polling_request_channels)
                             * self.polling_response_item_size
                         )

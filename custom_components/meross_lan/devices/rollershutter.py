@@ -4,7 +4,7 @@ from homeassistant.exceptions import InvalidStateError
 
 from ..const import CONF_PROTOCOL_HTTP, PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT
 from ..cover import MLCover, cover
-from ..merossclient.protocol import const as mc, namespaces as mn
+from ..helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
 from ..number import MLConfigNumber
 from ..switch import MLSwitch
 
@@ -389,3 +389,33 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
         MLConfigNumber.__init__(
             self, cover.manager, cover.channel, entity_key=f"config_{key}", name=key
         )
+
+
+POLLING_STRATEGY_CONF.update(
+    {
+        mn.Appliance_RollerShutter_Adjust: (
+            mlc.PARAM_CONFIG_UPDATE_PERIOD,
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            35,
+            NamespaceHandler.async_poll_smart,
+        ),
+        mn.Appliance_RollerShutter_Config: (
+            mlc.PARAM_CONFIG_UPDATE_PERIOD,
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            70,
+            NamespaceHandler.async_poll_smart,
+        ),
+        mn.Appliance_RollerShutter_Position: (
+            0,
+            0,
+            50,
+            NamespaceHandler.async_poll_default,
+        ),
+        mn.Appliance_RollerShutter_State: (
+            0,
+            0,
+            40,
+            NamespaceHandler.async_poll_default,
+        ),
+    }
+)

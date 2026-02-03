@@ -159,7 +159,7 @@ class NamespaceHandler:
         type HandlerFunc = Callable[[MerossMessage], None]
         type ParserFunc = Callable[[JsonMapping], None]
         type PollingStrategyFunc = Callable[["NamespaceHandler"], Coroutine]
-        type ConfigType = tuple[int, int, int, int, PollingStrategyFunc | None]
+        type ConfigType = tuple[int, int, int, PollingStrategyFunc | None]
 
         parsers: Final[dict[object, ParserFunc]]
         lastpush: JsonDict | None  # TODO: implement caching of all methods responses
@@ -209,7 +209,6 @@ class NamespaceHandler:
         "polling_strategy",
         "polling_period",
         "polling_period_cloud",
-        "polling_response_base_size",
         "polling_response_item_size",
         "polling_response_size",
         "polling_request",
@@ -243,22 +242,20 @@ class NamespaceHandler:
         if _conf := config or POLLING_STRATEGY_CONF.get(ns):
             self.polling_period = _conf[0]
             self.polling_period_cloud = _conf[1]
-            self.polling_response_base_size = _conf[2]
-            self.polling_response_item_size = _conf[3]
-            self.polling_strategy = _conf[4]
+            self.polling_response_item_size = _conf[2]
+            self.polling_strategy = _conf[3]
         else:
             # these in turn are defaults for dynamically parsed
             # namespaces managed when using create_diagnostic_entities
             self.polling_period = mlc.PARAM_DIAGNOSTIC_UPDATE_PERIOD
             self.polling_period_cloud = mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD
-            self.polling_response_base_size = mlc.PARAM_HEADER_SIZE
-            self.polling_response_item_size = 0
+            self.polling_response_item_size = 50
             self.polling_strategy = None
 
         # by default we calculate 1 item/channel per payload but we should
         # refine this whenever needed
         self.polling_response_size = (
-            self.polling_response_base_size + self.polling_response_item_size
+            mlc.PARAM_HEADER_SIZE + self.polling_response_item_size
         )
         self.polling_request_configure(
             mn.PayloadType.LIST_C_STRICT
@@ -341,20 +338,19 @@ class NamespaceHandler:
                 channel_payload.update(extra)
 
             self.polling_response_size = (
-                self.polling_response_base_size
+                mlc.PARAM_HEADER_SIZE
                 + len(polling_request_channels) * self.polling_response_item_size
             )
         except AttributeError:
             # polling_request_channels not used for this ns
             self.polling_response_size = (
-                self.polling_response_base_size
+                mlc.PARAM_HEADER_SIZE
                 + len(self.parsers) * self.polling_response_item_size
             )
 
     def polling_response_size_adj(self, item_count: int, /):
         self.polling_response_size = (
-            self.polling_response_base_size
-            + item_count * self.polling_response_item_size
+            mlc.PARAM_HEADER_SIZE + item_count * self.polling_response_item_size
         )
 
     def channels_to_poll(self):
@@ -878,15 +874,12 @@ class NamespaceHandler:
             # PUSHed when on MQTT
             return
 
-        size_available = (
-            device.polling_response_size_available - self.polling_response_base_size
-        )
+        size_available = device.polling_response_size_available - mlc.PARAM_HEADER_SIZE
         if size_available < self.polling_response_item_size:
             if device._multiple_requests:
                 await device._async_poll_multiple_flush()
                 size_available = (
-                    device.polling_response_size_available
-                    - self.polling_response_base_size
+                    device.polling_response_size_available - mlc.PARAM_HEADER_SIZE
                 )
             else:
                 device.log(
@@ -913,7 +906,7 @@ class NamespaceHandler:
         channels = iter(self.channels_to_poll())
         channels_payload = self.polling_request_channels
         channels_payload.clear()
-        self.polling_response_size = self.polling_response_base_size
+        self.polling_response_size = mlc.PARAM_HEADER_SIZE
         while True:
             if size_available > self.polling_response_item_size:
                 try:
@@ -936,9 +929,9 @@ class NamespaceHandler:
 
             # reset for next chunk
             channels_payload.clear()
-            self.polling_response_size = self.polling_response_base_size
+            self.polling_response_size = mlc.PARAM_HEADER_SIZE
             size_available = (
-                device.polling_response_size_available - self.polling_response_base_size
+                device.polling_response_size_available - mlc.PARAM_HEADER_SIZE
             )
             if size_available < self.polling_response_item_size:
                 # This is pathological since we've just flushed everything
@@ -1210,7 +1203,7 @@ class EntityNamespaceMixin(MLEntity if TYPE_CHECKING else object):
         return entity
 
     async def async_added_to_hass(self):
-        self.handler_ns.polling_strategy = POLLING_STRATEGY_CONF[self.ns][4]
+        self.handler_ns.polling_strategy = POLLING_STRATEGY_CONF[self.ns][-1]
         return await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
@@ -1240,7 +1233,6 @@ The configuration is set in the tuple as:
 (
     polling_period,
     polling_period_cloud,
-    response_base_size,
     response_item_size,
     strategy
 )
@@ -1255,219 +1247,91 @@ This parameter in turn will be used to split expected huge payload requests/resp
 in Appliance.Control.Multiple since it appears the HTTP interface has an outbound
 message size limit around 3000 chars/bytes (on a legacy mss310) and this would lead to a malformed (truncated)
 response. This issue also appeared on hubs when querying for a big number of subdevices
-as reported in #244 (here the buffer limit was around 4000 chars). From limited testing this 'kind of overflow' is not happening on MQTT
-responses though
+as reported in #244 (here the buffer limit was around 4000 chars). From limited testing
+this 'kind of overflow' is not happening on MQTT responses though.
 """
 POLLING_STRATEGY_CONF = {
     mn.Appliance_System_All: (
         mlc.PARAM_HEARTBEAT_PERIOD,
         0,
-        1000,
-        0,
+        700,
         NamespaceHandler.async_poll_all,
     ),
-    mn.Appliance_System_Debug: (0, 0, 1900, 0, None),
+    mn.Appliance_System_Debug: (0, 0, 1600, None),
     mn.Appliance_System_DNDMode: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        320,
-        0,
+        20,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_System_Runtime: (
         mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        330,
-        0,
+        30,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Config_Alarm: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
         44,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Config_Sensor_Association: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
         30,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Config_OverTemp: (
-        mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        340,
-        0,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Alarm: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
         40,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Control_ConsumptionH: (
-        mlc.PARAM_ENERGY_UPDATE_PERIOD,
-        mlc.PARAM_ENERGY_UPDATE_CLOUD_PERIOD,
-        320,
-        1900,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Control_ConsumptionX: (
-        mlc.PARAM_ENERGY_UPDATE_PERIOD,
-        mlc.PARAM_ENERGY_UPDATE_CLOUD_PERIOD,
-        1800,  # assume full 30 days of data
-        0,  # single day roughly 53 bytes
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Control_Diffuser_Sensor: (
-        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-        mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        100,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Control_Electricity: (
-        mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
-        mlc.PARAM_SENSOR_FAST_UPDATE_CLOUD_PERIOD,
-        430,
-        0,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Control_ElectricityX: (
-        mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
-        mlc.PARAM_SENSOR_FAST_UPDATE_CLOUD_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        100,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Fan: (
         0,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
         20,
         None,
     ),
     mn.Appliance_Control_FilterMaintenance: (
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
         35,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Light_Effect: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        1850,
-        0,
+        1550,  # based on a standard effects list
         NamespaceHandler.async_poll_smart,
     ),
-    mn.Appliance_Control_Mp3: (
-        0,
-        0,
-        380,
-        0,
-        NamespaceHandler.async_poll_default,
-    ),
+    mn.Appliance_Control_Mp3: (0, 0, 80, NamespaceHandler.async_poll_default),
     mn.Appliance_Control_PhysicalLock: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
         35,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Presence_Config: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
         260,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Control_Screen_Brightness: (
-        mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        70,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Sensor_Latest: (
         mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
         mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
         80,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Sensor_LatestX: (
         mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
         220,
         NamespaceHandler.async_poll_smart,
     ),
-    mn.Appliance_Control_Toggle: (
-        0,
-        0,
-        mlc.PARAM_HEADER_SIZE,
-        40,
-        NamespaceHandler.async_poll_default,
-    ),
-    mn.Appliance_GarageDoor_Config: (
-        mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        410,
-        0,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_GarageDoor_MultipleConfig: (
-        mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        140,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Mcu_Firmware: (
-        0,
-        0,
-        mlc.PARAM_HEADER_SIZE,
-        80,
-        NamespaceHandler.async_poll_once,
-    ),
-    mn.Appliance_Mcu_Hp110_Firmware: (
-        0,
-        0,
-        mlc.PARAM_HEADER_SIZE,
-        80,
-        NamespaceHandler.async_poll_once,
-    ),
-    mn.Appliance_RollerShutter_Adjust: (
-        mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        35,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_RollerShutter_Config: (
-        mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        70,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_RollerShutter_Position: (
-        0,
-        0,
-        mlc.PARAM_HEADER_SIZE,
-        50,
-        NamespaceHandler.async_poll_default,
-    ),
-    mn.Appliance_RollerShutter_State: (
-        0,
-        0,
-        mlc.PARAM_HEADER_SIZE,
-        40,
-        NamespaceHandler.async_poll_default,
-    ),
+    mn.Appliance_Control_Toggle: (0, 0, 40, NamespaceHandler.async_poll_default),
+    mn.Appliance_Mcu_Firmware: (0, 0, 80, NamespaceHandler.async_poll_once),
+    mn.Appliance_Mcu_Hp110_Firmware: (0, 0, 80, NamespaceHandler.async_poll_once),
 }

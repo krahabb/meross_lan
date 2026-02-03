@@ -12,7 +12,7 @@ from ..const import (
 )
 from ..cover import MLCover
 from ..helpers import clamp, entity as me
-from ..helpers.namespaces import NamespaceHandler, mc, mn
+from ..helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
 from ..number import MLConfigNumber, MLEmulatedNumber
 from ..switch import MLSwitch
 
@@ -694,3 +694,21 @@ def digest_init_garagedoor(device: "Device", digest: list, /) -> "DigestInitRetu
         GarageDoorConfigNamespaceHandler(device)
 
     return handler.parse_list, (handler,)
+
+
+POLLING_STRATEGY_CONF.update(
+    {
+        mn.Appliance_GarageDoor_Config: (
+            mlc.PARAM_CONFIG_UPDATE_PERIOD,
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            110,
+            NamespaceHandler.async_poll_smart,
+        ),
+        mn.Appliance_GarageDoor_MultipleConfig: (
+            mlc.PARAM_CONFIG_UPDATE_PERIOD,
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            140,
+            NamespaceHandler.async_poll_smart,
+        ),
+    }
+)

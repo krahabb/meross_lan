@@ -2,11 +2,9 @@ import typing
 
 from ...helpers.namespaces import NamespaceHandler, mc, mn
 from ...merossclient.protocol.namespaces import thermostat as mn_t
+from ...number import MLConfigNumber
 from .mts200 import Mts200Climate
 from .mts960 import Mts960Climate
-from .mtsthermostat import (
-    MLScreenBrightnessNumber,
-)
 
 if typing.TYPE_CHECKING:
     from typing import Any, Callable, Unpack
@@ -91,6 +89,34 @@ def digest_init_thermostat(device: "Device", digest: dict) -> "DigestInitReturnT
             digest_parsers[ns_key](ns_digest)
 
     return digest_parse_thermostat, digest_pollers
+
+
+class MLScreenBrightnessNumber(MLConfigNumber):
+    manager: "Device"
+
+    ns = mn.Appliance_Control_Screen_Brightness
+
+    # HA core entity attributes:
+    _attr_native_unit_of_measurement = MLConfigNumber.hac.PERCENTAGE
+    icon: str = "mdi:brightness-percent"
+    native_max_value = 100
+    native_min_value = 0
+    native_step = 12.5
+
+    def __init__(self, manager: "Device", key: str, /):
+        self.key_value = key
+        MLConfigNumber.__init__(
+            self,
+            manager,
+            0,
+            entity_key=f"screenbrightness_{key}",
+            name=f"Screen brightness ({key})",
+        )
+
+    async def async_set_native_value(self, value: float, /):
+        """Override base async_set_native_value since it would round
+        the value to an int (common device native type)."""
+        await self.async_request_value(value)
 
 
 class ScreenBrightnessNamespaceHandler(NamespaceHandler):

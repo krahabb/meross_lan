@@ -7,8 +7,10 @@ from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.util import dt as dt_util
 
+from .. import const as mlc
 from ..helpers import entity as me
 from ..helpers.namespaces import (
+    POLLING_STRATEGY_CONF,
     EntityNamespaceMixin,
     NamespaceHandler,
     mc,
@@ -427,12 +429,12 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         if not self._channels_to_poll:
             return
         self.polling_response_size = (
-            self.polling_response_base_size + 3 * self.polling_response_item_size
+            mlc.PARAM_HEADER_SIZE + 3 * self.polling_response_item_size
         )
         await self.device.async_request_poll(self)
         self.polling_request_channels.append({})
         self.polling_response_size = (
-            self.polling_response_base_size + self.polling_response_item_size
+            mlc.PARAM_HEADER_SIZE + self.polling_response_item_size
         )
         self.polling_strategy = ConsumptionHNamespaceHandler.async_poll_smartchunk  # type: ignore
 
@@ -720,3 +722,39 @@ class OverTempEnableSwitch(EntityNamespaceMixin, MLSwitch):
             )
         except KeyError:
             pass
+
+
+POLLING_STRATEGY_CONF.update(
+    {
+        mn.Appliance_Config_OverTemp: (
+            mlc.PARAM_CONFIG_UPDATE_PERIOD,
+            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            40,
+            NamespaceHandler.async_poll_smart,
+        ),
+        mn.Appliance_Control_ConsumptionH: (
+            mlc.PARAM_ENERGY_UPDATE_PERIOD,
+            mlc.PARAM_ENERGY_UPDATE_CLOUD_PERIOD,
+            1900,
+            NamespaceHandler.async_poll_smart,
+        ),
+        mn.Appliance_Control_ConsumptionX: (
+            mlc.PARAM_ENERGY_UPDATE_PERIOD,
+            mlc.PARAM_ENERGY_UPDATE_CLOUD_PERIOD,
+            53,
+            NamespaceHandler.async_poll_smart,
+        ),
+        mn.Appliance_Control_Electricity: (
+            mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
+            mlc.PARAM_SENSOR_FAST_UPDATE_CLOUD_PERIOD,
+            130,
+            NamespaceHandler.async_poll_smart,
+        ),
+        mn.Appliance_Control_ElectricityX: (
+            mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
+            mlc.PARAM_SENSOR_FAST_UPDATE_CLOUD_PERIOD,
+            100,
+            NamespaceHandler.async_poll_smart,
+        ),
+    }
+)

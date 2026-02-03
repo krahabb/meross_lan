@@ -8,17 +8,16 @@ from custom_components.meross_lan.devices import (
     rollershutter as rs,
 )
 from custom_components.meross_lan.devices.hub.mts100 import Mts100Climate
+from custom_components.meross_lan.devices.thermostat import MLScreenBrightnessNumber
 from custom_components.meross_lan.devices.thermostat.mts200 import Mts200Climate
 from custom_components.meross_lan.devices.thermostat.mts300 import Mts300Climate
 from custom_components.meross_lan.devices.thermostat.mts960 import Mts960Climate
 from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
-    MLScreenBrightnessNumber,
     MtsClimate,
     MtsCommonTemperatureExtNumber,
     MtsDeadZoneNumber,
     MtsFrostNumber,
     MtsOverheatNumber,
-    MtsThermostatClimate,
     mn_t,
 )
 from custom_components.meross_lan.helpers.entity import MLEntity
