@@ -5,10 +5,10 @@ Descriptors for thermostats specific namespaces management (Appliance.Control.Th
 from .. import const as mc, namespaces as mn
 
 T: "mn.ns.Args" = {"is_thermostat": True}
-GETSET = T | mn.G_LCS | mn.S_LC | mn.IDX_C
+GETSET = T | mn.G_LIS | mn.S_LI | mn.IDX_C
 GETSETPSH = GETSET | mn.PSH
 GETSETPSQ = GETSET | mn.PSQ
-GETPSH = T | mn.G_LCS | mn.PSH | mn.IDX_C
+GETPSH = T | mn.G_LIS | mn.PSH | mn.IDX_C
 
 Appliance_Control_Thermostat_Alarm = mn.ns(
     "Appliance.Control.Thermostat.Alarm", mc.KEY_ALARM, GETPSH

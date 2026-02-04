@@ -355,10 +355,10 @@ class MerossEmulator:
                         # might as well return a list of dicts...
                         p_namespace[ns.key] = {}
                     case (
-                        mn.PayloadType.LIST_C
-                        | mn.PayloadType.LIST_C_STRICT
-                        | mn.PayloadType.DICT_C_STRICT
-                        | mn.PayloadType.DICT_C_65535
+                        mn.PayloadType.LIST_IDX
+                        | mn.PayloadType.LIST_IDX_STRICT
+                        | mn.PayloadType.DICT_IDX_STRICT
+                        | mn.PayloadType.DICT_IDX_65535
                     ):
                         p_namespace[ns.key] = []
                     case _:
@@ -559,31 +559,31 @@ class MerossEmulator:
                     match ns.payload_get:
                         case mn.PayloadType.EMPTY | mn.PayloadType.UNKNOWN:
                             channels = None
-                        case mn.PayloadType.DICT | mn.PayloadType.DICT_C:
+                        case mn.PayloadType.DICT | mn.PayloadType.DICT_IDX:
                             key_payload = payload[ns.key]
                             assert type(key_payload) is dict
                             channels = [key_payload] if key_payload else None
                         case (
-                            mn.PayloadType.LIST_C_STRICT
-                            | mn.PayloadType.LIST_C_DATA_STRICT
+                            mn.PayloadType.LIST_IDX_STRICT
+                            | mn.PayloadType.LIST_IDX_DATA_STRICT
                         ):
                             key_payload = payload[ns.key]
                             assert type(key_payload) is list
                             channels = key_payload
-                        case mn.PayloadType.LIST_C:
+                        case mn.PayloadType.LIST_IDX:
                             key_payload = payload[ns.key]
                             assert type(key_payload) is list
                             channels = key_payload or None
-                        case mn.PayloadType.DICT_C_STRICT:
+                        case mn.PayloadType.DICT_IDX_STRICT:
                             key_payload = payload[ns.key]
                             assert type(key_payload) is dict
                             channels = [key_payload]
-                        case mn.PayloadType.DICT_C_65535:
+                        case mn.PayloadType.DICT_IDX_65535:
                             key_payload = payload[ns.key]
                             assert type(key_payload) is dict
                             channels = (
                                 None
-                                if key_payload[ns.key_channel] == 65535
+                                if key_payload[ns.key_idx] == 65535
                                 else [key_payload]
                             )
                         case mn.PayloadType.UNSUPPORTED:
@@ -604,8 +604,8 @@ class MerossEmulator:
                                 for p_channelstate in (
                                     get_element_by_key_safe(
                                         p_state,
-                                        ns.key_channel,
-                                        p_channel[ns.key_channel],
+                                        ns.key_idx,
+                                        p_channel[ns.key_idx],
                                     )
                                     for p_channel in channels
                                 )
@@ -630,23 +630,23 @@ class MerossEmulator:
                 p_state = p_state[ns.key]
 
                 match ns.payload_set:
-                    case mn.PayloadType.LIST_C:
+                    case mn.PayloadType.LIST_IDX:
                         assert type(key_payload) is list
                         for p_payload_channel in key_payload:
                             update_dict_strict_by_key(
-                                p_state, p_payload_channel, key=ns.key_channel
+                                p_state, p_payload_channel, key=ns.key_idx
                             )
-                    case mn.PayloadType.DICT_C:
-                        assert ns.key_channel in key_payload
+                    case mn.PayloadType.DICT_IDX:
+                        assert ns.key_idx in key_payload
                         if type(p_state) is list:
                             update_dict_strict_by_key(
-                                p_state, key_payload, key=ns.key_channel
+                                p_state, key_payload, key=ns.key_idx
                             )
-                        elif p_state[ns.key_channel] == key_payload[ns.key_channel]:
+                        elif p_state[ns.key_idx] == key_payload[ns.key_idx]:
                             update_dict_strict(p_state, key_payload)
                         else:
                             raise Exception(
-                                f"'{key_payload[ns.key_channel]}' not present in digest.{ns.key}"
+                                f"'{key_payload[ns.key_idx]}' not present in digest.{ns.key}"
                             )
                     case mn.PayloadType.DICT:
                         assert type(key_payload) is dict
@@ -870,7 +870,7 @@ class MerossEmulator:
         self.update_epoch()
 
     def get_namespace_state(self, ns: "Namespace", channel, /):
-        return get_element_by_key(self.namespaces[ns][ns.key], ns.key_channel, channel)
+        return get_element_by_key(self.namespaces[ns][ns.key], ns.key_idx, channel)
 
     def update_namespace_state(
         self,
@@ -887,16 +887,16 @@ class MerossEmulator:
         except KeyError:
             self.namespaces[ns] = p_namespace = {}
 
-        if key_channel := ns.key_channel:
+        if key_idx := ns.key_idx:
             try:
                 p_state: list = p_namespace[ns.key]
             except KeyError:
                 p_namespace[ns.key] = p_state = []
 
             for p_payload_channel in extract_dict_payloads(payload):
-                channel = p_payload_channel[key_channel]
+                channel = p_payload_channel[key_idx]
                 try:
-                    p_channel_state = get_element_by_key(p_state, key_channel, channel)
+                    p_channel_state = get_element_by_key(p_state, key_idx, channel)
                     if nsdefaultmode is MerossEmulator.NSDefaultMode.MixIn:
                         p_channel_state |= p_payload_channel
                     else:

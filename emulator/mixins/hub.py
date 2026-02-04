@@ -273,19 +273,19 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
             try:
                 return get_element_by_key(
                     subdevices_namespace,
-                    ns.key_channel,
+                    ns.key_idx,
                     subdevice_id,
                 )
             except KeyError:
                 if not force_create:
                     raise
-                p_subdevice = {ns.key_channel: subdevice_id}
+                p_subdevice = {ns.key_idx: subdevice_id}
                 subdevices_namespace.append(p_subdevice)
         except KeyError:
             if not force_create:
                 raise
             assert ns in self.descriptor.ability, f"{ns} not available in Hub abilities"
-            p_subdevice = {ns.key_channel: subdevice_id}
+            p_subdevice = {ns.key_idx: subdevice_id}
             self.namespaces[ns] = {ns.key: [p_subdevice]}
         return p_subdevice
 

@@ -444,7 +444,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         if not self._channels_to_poll:
             return
         _poll_epoch, channel = self._channels_to_poll[0]
-        self.polling_request_channels[0][self.ns.key_channel] = channel
+        self.polling_request_channels[0][self.ns.key_idx] = channel
         device = self.device
         epoch = device._polling_epoch
         if _poll_epoch > epoch:

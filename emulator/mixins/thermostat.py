@@ -234,9 +234,7 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
                 response_list = []
                 for p_channel_request in payload[ns_key]:
                     channel = p_channel_request[mc.KEY_CHANNEL]
-                    p_channel_state = get_element_by_key(
-                        p_state, ns.key_channel, channel
-                    )
+                    p_channel_state = get_element_by_key(p_state, ns.key_idx, channel)
                     response_list.append(p_channel_state)
                     # randomize some input in case
                     """
@@ -260,9 +258,7 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
             case mc.METHOD_SET:
                 for p_channel_request in payload[ns_key]:
                     channel = p_channel_request[mc.KEY_CHANNEL]
-                    p_channel_state = get_element_by_key(
-                        p_state, ns.key_channel, channel
-                    )
+                    p_channel_state = get_element_by_key(p_state, ns.key_idx, channel)
                     _changed = False
                     if mc.KEY_VALUE in p_channel_state:
                         try:

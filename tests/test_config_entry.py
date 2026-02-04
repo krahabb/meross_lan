@@ -85,7 +85,7 @@ async def test_device_entry(request, hass: "HomeAssistant"):
                     handler.ns in ability
                 ), f"Namespace {handler.ns} has no ability declared"
                 assert (
-                    handler.ns.payload_get is not mn.PayloadType.LIST_C_STRICT
+                    handler.ns.payload_get is not mn.PayloadType.LIST_IDX_STRICT
                 ) or handler.polling_request_channels, (
                     f"Incorrect config for {handler.ns} namespace"
                 )

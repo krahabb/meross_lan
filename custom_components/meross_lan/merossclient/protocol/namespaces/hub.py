@@ -15,14 +15,14 @@ from .. import const as mc, namespaces as mn
 H: "mn.ns.Args" = {"map": mn.HUB_NAMESPACES}
 
 ID = H | mn.IDX_ID
-GET_ID = ID | mn.G_LC
-SET_ID = ID | mn.S_LC
-GETSET_ID = ID | mn.G_LC | mn.S_LC
+GET_ID = ID | mn.G_LI
+SET_ID = ID | mn.S_LI
+GETSET_ID = ID | mn.G_LI | mn.S_LI
 GETPSH_ID = GET_ID | mn.PSH
 
 SUBID = H | mn.IDX_SUB
-GET_SUBID = SUBID | mn.G_LCS
-GETSET_SUBID = GET_SUBID | mn.S_LC
+GET_SUBID = SUBID | mn.G_LIS
+GETSET_SUBID = GET_SUBID | mn.S_LI
 GETSETPSH_SUBID = GETSET_SUBID | mn.PSH
 GETSETPSQ_SUBID = GETSET_SUBID | mn.PSQ
 
@@ -37,10 +37,10 @@ Appliance_Config_WaterPlan = mn.ns(
     "Appliance.Config.WaterPlan", mc.KEY_CONFIG, GETSET_SUBID, mn.EXP
 )  # mst100 (used to read/write watering schedules)
 Appliance_Control_Sensor_HistoryX = mn.ns(
-    "Appliance.Control.Sensor.HistoryX", mc.KEY_HISTORY, SUBID, mn.G_LCDS
+    "Appliance.Control.Sensor.HistoryX", mc.KEY_HISTORY, SUBID, mn.G_LIDS
 )
 Appliance_Control_Sensor_LatestX = mn.ns(
-    "Appliance.Control.Sensor.LatestX", mc.KEY_LATEST, SUBID, mn.G_LCDS, mn.PSH
+    "Appliance.Control.Sensor.LatestX", mc.KEY_LATEST, SUBID, mn.G_LIDS, mn.PSH
 )
 Appliance_Control_Water = mn.ns(
     "Appliance.Control.Water", mc.KEY_CONTROL, GETSETPSH_SUBID
@@ -125,7 +125,7 @@ Appliance_Hub_SubDevice_Beep = mn.ns(
 Appliance_Hub_SubDevice_MotorAdjust = mn.ns(
     "Appliance.Hub.SubDevice.MotorAdjust",
     mc.KEY_ADJUST,
-    SET_ID | mn.G_LCS,  # this appears also with "motor_adjust" key in SET
+    SET_ID | mn.G_LIS,  # this appears also with "motor_adjust" key in SET
 )
 Appliance_Hub_SubDevice_Version = mn.ns(
     "Appliance.Hub.SubDevice.Version", mc.KEY_VERSION, GETPSH_ID

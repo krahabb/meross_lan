@@ -135,11 +135,11 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
 
     def _handle_Appliance_Control_Sensor_LatestX(self, message: "MerossMessage", /):
         ns = self.ns
-        key_channel = ns.key_channel
+        key_idx = ns.key_idx
         entities = self.device.entities
         p_channel: "mt_s.LatestXResponse_C"
         for p_channel in message.payload[ns.key]:
-            channel: int = p_channel[key_channel]
+            channel: int = p_channel[key_idx]
             for data_key, data_value in p_channel[mc.KEY_DATA].items():
                 try:
                     entity: MLNumericSensor = entities[f"{channel}_sensor_{data_key}"]  # type: ignore
@@ -161,12 +161,12 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
 
                     polling_request_channels = self.polling_request_channels
                     for channel_payload in polling_request_channels:
-                        if channel_payload[key_channel] == channel:
+                        if channel_payload[key_idx] == channel:
                             channel_payload[mc.KEY_DATA].append(data_key)
                             break
                     else:
                         polling_request_channels.append(
-                            {key_channel: channel, mc.KEY_DATA: [data_key]}
+                            {key_idx: channel, mc.KEY_DATA: [data_key]}
                         )
                         self.polling_response_size = (
                             mlc.PARAM_HEADER_SIZE

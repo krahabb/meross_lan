@@ -157,7 +157,7 @@ async def test_entities(
 
             for ns, entity_types in NAMESPACES_ENTITIES.items():
                 if ns in ability:
-                    if ns.indexed and ns.key_channel == mc.KEY_CHANNEL:
+                    if ns.indexed and ns.key_idx == mc.KEY_CHANNEL:
                         for entity_type in entity_types:
                             _add_func(
                                 [entity_type]

@@ -135,10 +135,10 @@ class HubNamespaceHandler(NamespaceHandler):
         while some other will still work through this generalized handler."""
         hub = self.device
         subdevices_parsed = set()
-        key_channel = self.ns.key_channel
+        key_idx = self.ns.key_idx
         for payload in message.payload[self.ns.key]:
             try:
-                subdevice_id = payload[key_channel]
+                subdevice_id = payload[key_idx]
                 if subdevice_id in subdevices_parsed:
                     hub.log_duplicated_subdevice(subdevice_id)
                     continue
@@ -212,7 +212,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
 
     @override
     def _create_handler(self, ns: "Namespace", /):
-        if ns.key_channel in (mc.KEY_ID, mc.KEY_SUBID):
+        if ns.key_idx in (mc.KEY_ID, mc.KEY_SUBID):
             # This rule states that the payload is a list of subdevices indexed by 'id'.
             # Newer devices (2024) started using namespaces/payload indexed by 'subid'
             # and 'channel'. These will be handled by the base class NamespaceHandler

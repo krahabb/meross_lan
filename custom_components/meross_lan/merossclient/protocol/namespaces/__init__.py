@@ -55,25 +55,25 @@ def _heuristic_args(name: str, kwargs: "Namespace.Args") -> "Namespace.Args":
             # by explicitly passing the map=HUB_NAMESPACES so that they're mapped into the right storage
             # but the rules for parsing are very custom and likely need to be managed on a case by case
             # at the HubMixin level.
-            kwargs["key_channel"] = mc.KEY_ID
+            kwargs["key_idx"] = mc.KEY_ID
         case (_, "RollerShutter", *_):
-            kwargs["key_channel"] = mc.KEY_CHANNEL
-            kwargs["payload_get"] = PayloadType.LIST_C
+            kwargs["key_idx"] = mc.KEY_CHANNEL
+            kwargs["payload_get"] = PayloadType.LIST_IDX
         case (_, "GarageDoor", *_):
-            kwargs["key_channel"] = mc.KEY_CHANNEL
+            kwargs["key_idx"] = mc.KEY_CHANNEL
         case (_, "Control", "Screen", *_):
-            kwargs["key_channel"] = mc.KEY_CHANNEL
-            kwargs["payload_get"] = PayloadType.LIST_C_STRICT
+            kwargs["key_idx"] = mc.KEY_CHANNEL
+            kwargs["payload_get"] = PayloadType.LIST_IDX_STRICT
         case (_, "Control", "Sensor", *_):
             if kwargs.get("map") is HUB_NAMESPACES:
-                kwargs["key_channel"] = mc.KEY_SUBID
+                kwargs["key_idx"] = mc.KEY_SUBID
             else:
-                kwargs["key_channel"] = mc.KEY_CHANNEL
-            kwargs["payload_get"] = PayloadType.LIST_C_STRICT
+                kwargs["key_idx"] = mc.KEY_CHANNEL
+            kwargs["payload_get"] = PayloadType.LIST_IDX_STRICT
         case (_, "Control", "Thermostat", *_):
             kwargs["is_thermostat"] = True
-            kwargs["key_channel"] = mc.KEY_CHANNEL
-            kwargs["payload_get"] = PayloadType.LIST_C_STRICT
+            kwargs["key_idx"] = mc.KEY_CHANNEL
+            kwargs["payload_get"] = PayloadType.LIST_IDX_STRICT
         case _:
             kwargs["payload_get"] = PayloadType.UNKNOWN
     return kwargs
@@ -186,16 +186,12 @@ class _PayloadType:
     if TYPE_CHECKING:
 
         class BuildType(Protocol):
-            def __call__(
-                self, ns: "Namespace", /, *channels
-            ) -> "MerossPayloadType": ...
+            def __call__(self, ns: "Namespace", /, *idxs) -> "MerossPayloadType": ...
 
         build: Final[BuildType]
-        prototype: Final[_immutabledict | _immutablelist]  # REMOVE: useless
         indexed: Final[bool]
 
     __slots__ = (
-        "prototype",
         "build",
         "indexed",
         "__dict__",
@@ -203,137 +199,85 @@ class _PayloadType:
 
     def __init__(
         self,
-        prototype: dict | list | _immutabledict | _immutablelist,
         build: "BuildType",
         indexed: bool,
         /,
     ):
-        if type(prototype) is dict:
-            prototype = _immutabledict(prototype)
-            self.prototype = prototype
-            self.prototype.__class__ = _immutabledict
-        elif type(prototype) is list:
-            prototype = _immutablelist(prototype)
-            self.prototype = prototype
-            self.prototype.__class__ = _immutablelist
-        else:
-            self.prototype = prototype  # type: ignore
         self.build = build
         self.indexed = indexed
 
-    @property
-    def value(self):
-        return self.prototype
-
-    def build_get(self, ns: "Namespace", /, *channels) -> "MerossRequestType":
-        return ns, mc.METHOD_GET, self.build(ns, *channels)
+    def build_get(self, ns: "Namespace", /, *idxs) -> "MerossRequestType":
+        return ns, mc.METHOD_GET, self.build(ns, *idxs)
 
 
 class PayloadType(_PayloadType, enum.Enum):
     """Depicts the payload structure in method queries."""
 
     @staticmethod
-    def _build_unsupported(ns: "Namespace", /, *channels) -> "MerossPayloadType":
+    def _build_unsupported(ns: "Namespace", /, *idxs) -> "MerossPayloadType":
         raise NotImplementedError("Unsupported payload type")
 
-    UNSUPPORTED = (
-        EMPTY_DICT,
-        _build_unsupported,
-        False,
-    )
+    UNSUPPORTED = (_build_unsupported, False)
     """Method is not supported."""
-    UNKNOWN = EMPTY_DICT, lambda *args: EMPTY_DICT, False
+    UNKNOWN = lambda *args: EMPTY_DICT, False
     """Method is supported but payload type is unknown."""
-    EMPTY = EMPTY_DICT, lambda *args: EMPTY_DICT, False
+    EMPTY = lambda *args: EMPTY_DICT, False
     """Payload for assigned method is an empty dict."""
-    DICT = EMPTY_DICT, lambda ns, *channels: {ns.key: EMPTY_DICT}, False
+    DICT = lambda ns, *idxs: {ns.key: EMPTY_DICT}, False
     """Command GET with {ns_key: {}} returns the state requested."""
-    # Payload types for channel based namespaces
-    # TODO: manage the 'key_channel' concept better in Namespace class
-    DICT_C = (
-        EMPTY_DICT,
-        lambda ns, *channels: {
-            ns.key: (
-                {ns.key_channel: channel for channel in channels}
-                if channels
-                else EMPTY_DICT
-            )
+    DICT_IDX = (
+        lambda ns, *idxs: {
+            ns.key: ({ns.key_idx: idx for idx in idxs} if idxs else EMPTY_DICT)
         },
         True,
     )
-    """Command GET with {ns_key: {}} returns all the (channels) state (key_channel must be defined)."""
-    DICT_C_65535 = (
-        {mc.KEY_CHANNEL: 65535},
-        lambda ns, *channels: {
-            ns.key: (
-                {ns.key_channel: channel for channel in channels}
-                if channels
-                else {ns.key_channel: 65535}
-            )
+    """Command GET with {ns_key: {}} returns all the (channels) state (key_idx must be defined)."""
+    DICT_IDX_65535 = (
+        lambda ns, *idxs: {
+            ns.key: ({ns.key_idx: idx for idx in idxs} if idxs else {ns.key_idx: 65535})
         },
         True,
     )
     """Command GET with channel 65535 in dict returns all the channels (only refoss devices ?). Else DICT_C_STRICT."""
-    DICT_C_STRICT = (
-        {mc.KEY_CHANNEL: 0},
-        lambda ns, *channels: {
+    DICT_IDX_STRICT = (
+        lambda ns, *idxs: {
+            ns.key: ({ns.key_idx: idx for idx in idxs} if idxs else {ns.key_idx: 0})
+        },
+        True,
+    )
+    """Command GET with index in dict returns the channel state requested."""
+    LIST_IDX = (
+        lambda ns, *idxs: {
+            ns.key: ([{ns.key_idx: idx} for idx in idxs] if idxs else EMPTY_LIST)
+        },
+        True,
+    )
+    """Command GET with an empty list returns all the (channels) state (key_idx must be defined)."""
+    LIST_IDX_STRICT = (
+        lambda ns, *idxs: {
             ns.key: (
-                {ns.key_channel: channel for channel in channels}
-                if channels
-                else {ns.key_channel: 0}
+                [{ns.key_idx: idx} for idx in idxs] if idxs else [{mc.KEY_CHANNEL: 0}]
             )
         },
         True,
     )
-    """Command GET with channel index in dict returns the channel state requested."""
-    LIST_C = (
-        EMPTY_LIST,
-        lambda ns, *channels: {
+    """Command GET with indexed dicts in a list returns the states requested."""
+    LIST_IDX_DATA_STRICT = (
+        lambda ns, *idxs: {
             ns.key: (
-                [{ns.key_channel: channel} for channel in channels]
-                if channels
-                else EMPTY_LIST
-            )
-        },
-        True,
-    )
-    """Command GET with an empty list returns all the (channels) state (key_channel must be defined)."""
-    LIST_C_STRICT = (
-        [{mc.KEY_CHANNEL: 0}],
-        lambda ns, *channels: {
-            ns.key: (
-                [{ns.key_channel: channel} for channel in channels]
-                if channels
-                else [{mc.KEY_CHANNEL: 0}]
-            )
-        },
-        True,
-    )
-    """Command GET with channel index dicts in a list returns the states requested.
-    TODO: it might be feasible that also (empty i.e. no ns_key) EMPTY payload type would work to retrieve the full set
-      especially if PUSH_QUERY appeared to work in our traces."""
-    LIST_C_DATA_STRICT = (
-        [_immutabledict({mc.KEY_CHANNEL: 0, mc.KEY_DATA: []})],
-        lambda ns, *channels: {
-            ns.key: (
-                [{ns.key_channel: channel, mc.KEY_DATA: []} for channel in channels]
-                if channels
+                [{ns.key_idx: idx, mc.KEY_DATA: []} for idx in idxs]
+                if idxs
                 else [_immutabledict({mc.KEY_CHANNEL: 0, mc.KEY_DATA: []})]
             )
         },
         True,
     )
-
     """Command GET for *.LatestX (and maybe *.HistoryX) ns."""
-
     # Payload types for PUSH verb
-    PUSH = EMPTY_DICT, lambda *args: EMPTY_DICT, False
+    PUSH = lambda *args: EMPTY_DICT, False
     """Namespace supports async PUSH of the state."""
-    PUSH_QUERY = EMPTY_DICT, lambda *args: EMPTY_DICT, False
-    """Namespace supports PUSH by client triggering (i.e. client query with method PUSH and EMPTY payload).
-    TODO: This might not be a real query feature, instead it might be that ns looking like supporting this
-    in our traces are queriable by using (GET, {}) i.e. no ns_key in request payload (
-    Actually corresponding to PayloadType.EMPTY)."""
+    PUSH_QUERY = lambda *args: EMPTY_DICT, False
+    """Namespace supports PUSH by client triggering (i.e. client query with method PUSH and EMPTY payload)."""
 
 
 # Semantics helpers symbols:
@@ -370,7 +314,7 @@ class Namespace(str):
 
             map: NotRequired[NamespacesMapType]
             grammar: NotRequired[Grammar]
-            key_channel: NotRequired[str]
+            key_idx: NotRequired[str]
             payload_get: NotRequired[PayloadType | None]
             payload_set: NotRequired[PayloadType | None]
             payload_del: NotRequired[PayloadType | None]
@@ -379,7 +323,7 @@ class Namespace(str):
 
         key: Final[str]  # type: ignore
         """The root key of the payload"""
-        key_channel: Final[str]  # type: ignore
+        key_idx: Final[str]  # type: ignore
         """The key used to index items in list payloads. If None/empty no indexing is used."""
         # These indicate support and format for the corresponding verb. None means no support.
         payload_get: Final[PayloadType]  # type: ignore
@@ -396,7 +340,7 @@ class Namespace(str):
 
     __slots__ = (
         "key",
-        "key_channel",
+        "key_idx",
         "payload_get",
         "payload_set",
         "payload_del",
@@ -466,7 +410,7 @@ class Namespace(str):
         kwargs: "Namespace.Args" = {
             "map": NAMESPACES,
             "grammar": Grammar.STABLE,
-            "key_channel": mc.KEY_,
+            "key_idx": mc.KEY_,
             "is_thermostat": False,
         }
         for _extra in args:
@@ -475,22 +419,17 @@ class Namespace(str):
         self.key = key  # type: ignore
         self.grammar = kwargs["grammar"]  # type: ignore
 
-        # TODO: remove (maybe) some of these flags in favor of just 'key_channel' presence
-        for _attr in ("is_thermostat",):
-            setattr(self, _attr, kwargs[_attr])
-
-        self.key_channel = kwargs["key_channel"]
+        self.key_idx = kwargs["key_idx"]
+        self.is_thermostat = kwargs["is_thermostat"]
         self.payload_get = kwargs.get("payload_get") or PayloadType.UNSUPPORTED
         self.payload_set = kwargs.get("payload_set") or PayloadType.UNSUPPORTED
         self.payload_del = kwargs.get("payload_del") or PayloadType.UNSUPPORTED
         self.payload_psh = kwargs.get("payload_psh") or PayloadType.UNSUPPORTED
 
-        # TODO: check consistencies:
-        # for example key_channel must be set if payload_get is any of DICT_C DICT_C_STRICT LIST_C or LIST_C_STRICT
         if self.indexed:
-            if not self.key_channel:
+            if not self.key_idx:
                 raise ValueError(
-                    f"Namespace {self} uses indexed payloads but has no key_channel defined."
+                    f"Namespace {self} uses indexed payloads but has no key_idx defined."
                 )
 
         assert (
@@ -499,7 +438,7 @@ class Namespace(str):
 
         kwargs["map"][name] = self  # type: ignore
 
-    @property
+    @cached_property
     def slug(self) -> str:
         return self.lower().replace(".", "_")
 
@@ -530,7 +469,7 @@ class Namespace(str):
     @cached_property
     def indexed(self) -> bool:
         """Indicates if the namespace uses indexed payloads for any verb.
-        This is typically true for 'channel based' namespaces."""
+        This is typically true for 'index based' namespaces."""
         return self.payload_get.indexed or self.payload_set.indexed
 
     @cached_property
@@ -557,9 +496,9 @@ class Namespace(str):
         The callable accepts the payload dict as argument.
         """
         match self.payload_set:
-            case PayloadType.LIST_C:
+            case PayloadType.LIST_IDX:
                 return self.request_set_list_c
-            case PayloadType.DICT_C:
+            case PayloadType.DICT_IDX:
                 return self.request_set_dict_c
             case PayloadType.DICT:
                 return self.request_set_dict
@@ -574,21 +513,13 @@ class Namespace(str):
     def request_set_dict(self, payload, *args) -> "MerossRequestType":
         return self, mc.METHOD_SET, {self.key: payload}
 
-    def request_set_dict_c(self, payload, channel, /) -> "MerossRequestType":
-        payload[self.key_channel] = channel
-        return (
-            self,
-            mc.METHOD_SET,
-            {self.key: payload},
-        )
+    def request_set_dict_c(self, payload, idx, /) -> "MerossRequestType":
+        payload[self.key_idx] = idx
+        return (self, mc.METHOD_SET, {self.key: payload})
 
-    def request_set_list_c(self, payload, channel, /) -> "MerossRequestType":
-        payload[self.key_channel] = channel
-        return (
-            self,
-            mc.METHOD_SET,
-            {self.key: [payload]},
-        )
+    def request_set_list_c(self, payload, idx, /) -> "MerossRequestType":
+        payload[self.key_idx] = idx
+        return (self, mc.METHOD_SET, {self.key: [payload]})
 
 
 ns = Namespace  # shortcut for declarations
@@ -598,26 +529,26 @@ ns = Namespace  # shortcut for declarations
 
 EXP: "ns.Args" = {"grammar": Grammar.EXPERIMENTAL}
 
-IDX_C: "ns.Args" = {"key_channel": mc.KEY_CHANNEL}
-IDX_ID: "ns.Args" = {"key_channel": mc.KEY_ID}
-IDX_SUB: "ns.Args" = {"key_channel": mc.KEY_SUBID}
+IDX_C: "ns.Args" = {"key_idx": mc.KEY_CHANNEL}
+IDX_ID: "ns.Args" = {"key_idx": mc.KEY_ID}
+IDX_SUB: "ns.Args" = {"key_idx": mc.KEY_SUBID}
 
 G_E: "ns.Args" = {"payload_get": PayloadType.EMPTY}
 G_D: "ns.Args" = {"payload_get": PayloadType.DICT}
-G_DC: "ns.Args" = {"payload_get": PayloadType.DICT_C}
-G_DCS: "ns.Args" = {"payload_get": PayloadType.DICT_C_STRICT}
-G_DC65535: "ns.Args" = {"payload_get": PayloadType.DICT_C_65535}
-G_LC: "ns.Args" = {"payload_get": PayloadType.LIST_C}
-G_LCS: "ns.Args" = {"payload_get": PayloadType.LIST_C_STRICT}
-G_LCDS: "ns.Args" = {"payload_get": PayloadType.LIST_C_DATA_STRICT}
+G_DI: "ns.Args" = {"payload_get": PayloadType.DICT_IDX}
+G_DIS: "ns.Args" = {"payload_get": PayloadType.DICT_IDX_STRICT}
+G_DI65535: "ns.Args" = {"payload_get": PayloadType.DICT_IDX_65535}
+G_LI: "ns.Args" = {"payload_get": PayloadType.LIST_IDX}
+G_LIS: "ns.Args" = {"payload_get": PayloadType.LIST_IDX_STRICT}
+G_LIDS: "ns.Args" = {"payload_get": PayloadType.LIST_IDX_DATA_STRICT}
 
 S_E: "ns.Args" = {"payload_set": PayloadType.EMPTY}
 S_D: "ns.Args" = {"payload_set": PayloadType.DICT}
-S_DC: "ns.Args" = {"payload_set": PayloadType.DICT_C}
-S_LC: "ns.Args" = {"payload_set": PayloadType.LIST_C}
+S_DI: "ns.Args" = {"payload_set": PayloadType.DICT_IDX}
+S_LI: "ns.Args" = {"payload_set": PayloadType.LIST_IDX}
 
-D_DC: "ns.Args" = {"payload_del": PayloadType.DICT_C}
-D_LC: "ns.Args" = {"payload_del": PayloadType.LIST_C}
+D_DI: "ns.Args" = {"payload_del": PayloadType.DICT_IDX}
+D_LI: "ns.Args" = {"payload_del": PayloadType.LIST_IDX}
 
 PSH: "ns.Args" = {"payload_psh": PayloadType.PUSH}
 PSQ: "ns.Args" = {"payload_psh": PayloadType.PUSH_QUERY}
@@ -628,10 +559,10 @@ PSQ: "ns.Args" = {"payload_psh": PayloadType.PUSH_QUERY}
 # Moreover, for some namespaces, the euristics about 'namespace key' and payload structure are not
 # good so we must fix those beforehand.
 Appliance_Config_Alarm = ns(
-    "Appliance.Config.Alarm", mc.KEY_CONFIG, G_LC, S_LC, PSQ, IDX_C, EXP
+    "Appliance.Config.Alarm", mc.KEY_CONFIG, G_LI, S_LI, PSQ, IDX_C, EXP
 )
 Appliance_Config_DeviceCfg = ns(
-    "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, G_LCS, S_LC, IDX_C, PSH
+    "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, G_LIS, S_LI, IDX_C, PSH
 )
 Appliance_Config_Info = ns("Appliance.Config.Info", mc.KEY_INFO, G_E, S_D, PSQ)
 Appliance_Config_Key = ns("Appliance.Config.Key", mc.KEY_KEY, S_D)
@@ -639,7 +570,7 @@ Appliance_Config_Matter = ns("Appliance.Config.Matter", mc.KEY_CONFIG, PSQ)
 Appliance_Config_NtpSite = ns("Appliance.Config.NtpSite", mc.KEY_CONFIG)
 Appliance_Config_OverTemp = ns("Appliance.Config.OverTemp", mc.KEY_OVERTEMP, G_E, S_D)
 Appliance_Config_StandbyKiller = ns(
-    "Appliance.Config.StandbyKiller", mc.KEY_CONFIG, G_LCS, S_LC, PSQ, IDX_C
+    "Appliance.Config.StandbyKiller", mc.KEY_CONFIG, G_LIS, S_LI, PSQ, IDX_C
 )  # according to Meross app could also support subId indexing
 Appliance_Config_Trace = ns("Appliance.Config.Trace", "trace", G_D)
 Appliance_Config_Wifi = ns("Appliance.Config.Wifi", mc.KEY_WIFI, S_D)
@@ -649,22 +580,22 @@ Appliance_Config_WifiX = ns("Appliance.Config.WifiX", mc.KEY_WIFI, S_D)
 Appliance_Config_Sensor_Association = ns(
     "Appliance.Config.Sensor.Association",
     mc.KEY_CONFIG,
-    G_LCS,
-    S_LC,
+    G_LIS,
+    S_LI,
     PSQ,
     IDX_C,
 )
 
 Appliance_Control_Alarm = ns(
-    "Appliance.Control.Alarm", mc.KEY_ALARM, G_LC, S_LC, IDX_C
+    "Appliance.Control.Alarm", mc.KEY_ALARM, G_LI, S_LI, IDX_C
 )  # mst100/ms130 actually only seen in hub
 Appliance_Control_AlertConfig = ns(
-    "Appliance.Control.AlertConfig", mc.KEY_CONFIG, G_LCS, S_LC, PSQ, IDX_C
+    "Appliance.Control.AlertConfig", mc.KEY_CONFIG, G_LIS, S_LI, PSQ, IDX_C
 )  # mts300 support the full set of verbs - em06 also exposes it but that's likely different
 Appliance_Control_AlertReport = ns(
-    "Appliance.Control.AlertReport", mc.KEY_ALERT, G_LCS, S_LC, IDX_C, EXP
+    "Appliance.Control.AlertReport", mc.KEY_ALERT, G_LIS, S_LI, IDX_C, EXP
 )
-Appliance_Control_Beep = ns("Appliance.Control.Beep", mc.KEY_ALARM, G_LCS, S_LC, IDX_C)
+Appliance_Control_Beep = ns("Appliance.Control.Beep", mc.KEY_ALARM, G_LIS, S_LI, IDX_C)
 Appliance_Control_Bind = ns("Appliance.Control.Bind", mc.KEY_BIND)
 Appliance_Control_ChangeWifi = ns(
     "Appliance.Control.ChangeWiFi", mc.KEY_
@@ -676,19 +607,19 @@ Appliance_Control_ConsumptionConfig = ns(
     "Appliance.Control.ConsumptionConfig", mc.KEY_CONFIG, G_E, PSH
 )
 Appliance_Control_ConsumptionH = ns(
-    "Appliance.Control.ConsumptionH", mc.KEY_CONSUMPTIONH, G_LCS, D_LC, IDX_C
+    "Appliance.Control.ConsumptionH", mc.KEY_CONSUMPTIONH, G_LIS, D_LI, IDX_C
 )
 Appliance_Control_ConsumptionX = ns(
     "Appliance.Control.ConsumptionX", mc.KEY_CONSUMPTIONX, G_E, PSH
 )
 Appliance_Control_Diffuser_Light = ns(
-    "Appliance.Control.Diffuser.Light", mc.KEY_LIGHT, G_E, S_LC, PSQ, IDX_C
+    "Appliance.Control.Diffuser.Light", mc.KEY_LIGHT, G_E, S_LI, PSQ, IDX_C
 )
 Appliance_Control_Diffuser_Sensor = ns(
     "Appliance.Control.Diffuser.Sensor", mc.KEY_, G_E, PSH
 )  # this ns has no ns_key in payload response
 Appliance_Control_Diffuser_Spray = ns(
-    "Appliance.Control.Diffuser.Spray", mc.KEY_SPRAY, G_E, S_LC, PSH, IDX_C
+    "Appliance.Control.Diffuser.Spray", mc.KEY_SPRAY, G_E, S_LI, PSH, IDX_C
 )
 Appliance_Control_Electricity = ns(
     "Appliance.Control.Electricity", mc.KEY_ELECTRICITY, G_E, PSH
@@ -696,81 +627,81 @@ Appliance_Control_Electricity = ns(
 Appliance_Control_ElectricityX = ns(
     "Appliance.Control.ElectricityX",
     mc.KEY_ELECTRICITY,
-    G_DC65535,
+    G_DI65535,
     PSH,
     IDX_C | EXP,
 )
-Appliance_Control_Fan = ns("Appliance.Control.Fan", mc.KEY_FAN, G_LCS, S_LC, IDX_C)
+Appliance_Control_Fan = ns("Appliance.Control.Fan", mc.KEY_FAN, G_LIS, S_LI, IDX_C)
 Appliance_Control_Fan_BtnConfig = ns(
-    "Appliance.Control.Fan.BtnConfig", mc.KEY_CONFIG, G_LCS, S_LC, PSQ, IDX_C
+    "Appliance.Control.Fan.BtnConfig", mc.KEY_CONFIG, G_LIS, S_LI, PSQ, IDX_C
 )
 Appliance_Control_Fan_Config = ns(
-    "Appliance.Control.Fan.Config", mc.KEY_CONFIG, G_LCS, S_LC, PSQ, IDX_C
+    "Appliance.Control.Fan.Config", mc.KEY_CONFIG, G_LIS, S_LI, PSQ, IDX_C
 )
 Appliance_Control_FilterMaintenance = ns(
-    "Appliance.Control.FilterMaintenance", mc.KEY_FILTER, G_LCS, S_LC, PSQ, IDX_C
+    "Appliance.Control.FilterMaintenance", mc.KEY_FILTER, G_LIS, S_LI, PSQ, IDX_C
 )
-Appliance_Control_Light = ns("Appliance.Control.Light", mc.KEY_LIGHT, G_E, S_DC, IDX_C)
+Appliance_Control_Light = ns("Appliance.Control.Light", mc.KEY_LIGHT, G_E, S_DI, IDX_C)
 Appliance_Control_Light_Effect = ns(
-    "Appliance.Control.Light.Effect", mc.KEY_EFFECT, G_E, S_LC, D_LC, IDX_ID
+    "Appliance.Control.Light.Effect", mc.KEY_EFFECT, G_E, S_LI, D_LI, IDX_ID
 )
-Appliance_Control_Mp3 = ns("Appliance.Control.Mp3", mc.KEY_MP3, G_DC, S_DC, IDX_C)
+Appliance_Control_Mp3 = ns("Appliance.Control.Mp3", mc.KEY_MP3, G_DI, S_DI, IDX_C)
 Appliance_Control_McuUpgrade = ns("Appliance.Control.McuUpgrade", mc.KEY_)
 Appliance_Control_Multiple = ns("Appliance.Control.Multiple", mc.KEY_MULTIPLE, S_D)
 Appliance_Control_OverTemp = ns("Appliance.Control.OverTemp", mc.KEY_OVERTEMP, PSH)
 Appliance_Control_PhysicalLock = ns(
-    "Appliance.Control.PhysicalLock", mc.KEY_LOCK, G_LCS, S_LC, PSQ, IDX_C
+    "Appliance.Control.PhysicalLock", mc.KEY_LOCK, G_LIS, S_LI, PSQ, IDX_C
 )
 Appliance_Control_Presence_Config = ns(
-    "Appliance.Control.Presence.Config", mc.KEY_CONFIG, G_LCS, S_LC, IDX_C
+    "Appliance.Control.Presence.Config", mc.KEY_CONFIG, G_LIS, S_LI, IDX_C
 )
 Appliance_Control_Presence_Study = ns(
-    "Appliance.Control.Presence.Study", mc.KEY_CONFIG, G_LCS, S_LC, PSQ, IDX_C
+    "Appliance.Control.Presence.Study", mc.KEY_CONFIG, G_LIS, S_LI, PSQ, IDX_C
 )
 Appliance_Control_Screen_Brightness = ns(
-    "Appliance.Control.Screen.Brightness", mc.KEY_BRIGHTNESS, G_LCS, S_LC, PSH, IDX_C
+    "Appliance.Control.Screen.Brightness", mc.KEY_BRIGHTNESS, G_LIS, S_LI, PSH, IDX_C
 )
 # Appliance.Control.Sensor.* appear on both regular devices (ms600) and hub/subdevices (ms130)
 # To distinguish the grammar between regular devices and hubs we save different definitions
 # in NAMESPACES (for regular devices) and in HUB_NAMESPACES (for hubs).
 Appliance_Control_Sensor_Association = ns(
-    "Appliance.Control.Sensor.Association", mc.KEY_CONTROL, G_LC, IDX_C
+    "Appliance.Control.Sensor.Association", mc.KEY_CONTROL, G_LI, IDX_C
 )  # mts300 works: though it seems this ns just returns (in a GET) the list of keys it supports (a kind of grammar).
 # We could setup an heuristic handler alone which queries this ns once and then setups some 'config entities'
 # working on Appliance.Config.Sensor.Association (which looks like the effective configuration).
 Appliance_Control_Sensor_History = ns(
-    "Appliance.Control.Sensor.History", mc.KEY_HISTORY, G_LCS, D_LC, IDX_C
+    "Appliance.Control.Sensor.History", mc.KEY_HISTORY, G_LIS, D_LI, IDX_C
 )  # history of sensor values
 Appliance_Control_Sensor_Latest = ns(
-    "Appliance.Control.Sensor.Latest", mc.KEY_LATEST, G_LCS, PSH, IDX_C
+    "Appliance.Control.Sensor.Latest", mc.KEY_LATEST, G_LIS, PSH, IDX_C
 )  # carrying miscellaneous sensor values (temp/humi)
 Appliance_Control_Sensor_HistoryX = ns(
-    "Appliance.Control.Sensor.HistoryX", mc.KEY_HISTORY, G_LCDS, D_LC, IDX_C
+    "Appliance.Control.Sensor.HistoryX", mc.KEY_HISTORY, G_LIDS, D_LI, IDX_C
 )  # cannot get query to work...it might look like LatestX
 Appliance_Control_Sensor_LatestX = ns(
-    "Appliance.Control.Sensor.LatestX", mc.KEY_LATEST, G_LCDS, PSH, IDX_C
+    "Appliance.Control.Sensor.LatestX", mc.KEY_LATEST, G_LIDS, PSH, IDX_C
 )
 Appliance_Control_Spray = ns(
-    "Appliance.Control.Spray", mc.KEY_SPRAY, G_D, S_DC, PSH, IDX_C
+    "Appliance.Control.Spray", mc.KEY_SPRAY, G_D, S_DI, PSH, IDX_C
 )
 Appliance_Control_TempUnit = ns(
-    "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, G_LCS, S_LC, IDX_C
+    "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, G_LIS, S_LI, IDX_C
 )
 Appliance_Control_Timer = ns(
-    "Appliance.Control.Timer", mc.KEY_TIMER, G_E, S_DC, D_DC, IDX_ID
+    "Appliance.Control.Timer", mc.KEY_TIMER, G_E, S_DI, D_DI, IDX_ID
 )
 Appliance_Control_TimerX = ns(
-    "Appliance.Control.TimerX", mc.KEY_TIMERX, G_DC, S_DC, D_DC, IDX_ID
+    "Appliance.Control.TimerX", mc.KEY_TIMERX, G_DI, S_DI, D_DI, IDX_ID
 )
 Appliance_Control_Toggle = ns("Appliance.Control.Toggle", mc.KEY_TOGGLE, G_D, S_D, PSH)
 Appliance_Control_ToggleX = ns(
-    "Appliance.Control.ToggleX", mc.KEY_TOGGLEX, G_DC, S_DC, PSH, IDX_C
+    "Appliance.Control.ToggleX", mc.KEY_TOGGLEX, G_DI, S_DI, PSH, IDX_C
 )
 Appliance_Control_Trigger = ns(
-    "Appliance.Control.Trigger", mc.KEY_TRIGGER, G_E, S_DC, D_DC, PSH, IDX_ID
+    "Appliance.Control.Trigger", mc.KEY_TRIGGER, G_E, S_DI, D_DI, PSH, IDX_ID
 )
 Appliance_Control_TriggerX = ns(
-    "Appliance.Control.TriggerX", mc.KEY_TRIGGERX, G_DC, S_DC, D_DC, PSH, IDX_ID
+    "Appliance.Control.TriggerX", mc.KEY_TRIGGERX, G_DI, S_DI, D_DI, PSH, IDX_ID
 )
 Appliance_Control_Unbind = ns("Appliance.Control.Unbind", mc.KEY_, PSQ)
 Appliance_Control_Upgrade = ns(
@@ -786,10 +717,10 @@ Appliance_Encrypt_ECDHE = ns("Appliance.Encrypt.ECDHE", "ecdhe", S_D)
 
 Appliance_GarageDoor_Config = ns("Appliance.GarageDoor.Config", mc.KEY_CONFIG, G_E, S_D)
 Appliance_GarageDoor_MultipleConfig = ns(
-    "Appliance.GarageDoor.MultipleConfig", mc.KEY_CONFIG, G_LCS, S_LC, IDX_C
+    "Appliance.GarageDoor.MultipleConfig", mc.KEY_CONFIG, G_LIS, S_LI, IDX_C
 )
 Appliance_GarageDoor_State = ns(
-    "Appliance.GarageDoor.State", mc.KEY_STATE, G_DCS, S_DC, IDX_C, EXP
+    "Appliance.GarageDoor.State", mc.KEY_STATE, G_DIS, S_DI, IDX_C, EXP
 )
 
 
@@ -798,7 +729,7 @@ Appliance_Mcu_Upgrade = ns("Appliance.Mcu.Upgrade", mc.KEY_UPGRADE, S_D)
 
 # Smart cherub HP110A TODO: try implement features for these namespaces
 Appliance_Mcu_Hp110_Favorite = ns(
-    "Appliance.Mcu.Hp110.Favorite", "favorite", G_DCS, S_DC, IDX_ID
+    "Appliance.Mcu.Hp110.Favorite", "favorite", G_DIS, S_DI, IDX_ID
 )
 Appliance_Mcu_Hp110_Firmware = ns("Appliance.Mcu.Hp110.Firmware", mc.KEY_FIRMWARE, G_E)
 Appliance_Mcu_Hp110_Lock = ns(
@@ -808,16 +739,16 @@ Appliance_Mcu_Hp110_Preview = ns("Appliance.Mcu.Hp110.Preview", "preview", S_D)
 
 
 Appliance_RollerShutter_Adjust = ns(
-    "Appliance.RollerShutter.Adjust", mc.KEY_ADJUST, S_DC, PSQ, IDX_C
+    "Appliance.RollerShutter.Adjust", mc.KEY_ADJUST, S_DI, PSQ, IDX_C
 )  # maybe SET supported too and/or GET with EMPTY
 Appliance_RollerShutter_Config = ns(
-    "Appliance.RollerShutter.Config", mc.KEY_CONFIG, G_LC, S_DC, IDX_C
+    "Appliance.RollerShutter.Config", mc.KEY_CONFIG, G_LI, S_DI, IDX_C
 )
 Appliance_RollerShutter_Position = ns(
-    "Appliance.RollerShutter.Position", mc.KEY_POSITION, G_LC, S_DC, PSH, IDX_C
+    "Appliance.RollerShutter.Position", mc.KEY_POSITION, G_LI, S_DI, PSH, IDX_C
 )
 Appliance_RollerShutter_State = ns(
-    "Appliance.RollerShutter.State", mc.KEY_STATE, G_LC, PSH, IDX_C
+    "Appliance.RollerShutter.State", mc.KEY_STATE, G_LI, PSH, IDX_C
 )
 
 Appliance_System_Ability = ns("Appliance.System.Ability", mc.KEY_ABILITY, G_E)

@@ -1593,9 +1593,9 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                 case mn.Appliance_Control_Multiple:
                     list_break_matcher = '},{"header":'
                 case _:
-                    if not namespace.key_channel:
+                    if not namespace.key_idx:
                         raise
-                    list_break_matcher = f'}},{{"{namespace.key_channel}":'
+                    list_break_matcher = f'}},{{"{namespace.key_idx}":'
 
             trunc_pos = response_text.rfind(list_break_matcher)
             if trunc_pos == -1:

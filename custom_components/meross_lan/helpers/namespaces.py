@@ -36,7 +36,7 @@ class NamespaceParser(Loggable):
         # These properties must be implemented in derived classes according to the
         # namespace payload syntax. NamespaceHandler will lookup any of these when
         # establishing the link between the handler and the parser
-        manager: BaseDevice  # used for async_request and ns_handlers access (only MLEntity for now)
+        manager: BaseDevice  # used for async_request and ns_handlers access
         ns: mn.Namespace  # same (only MLEntity for now)
         channel: int | str  # the channel/id/subId key value according to the namespace
 
@@ -257,7 +257,7 @@ class NamespaceHandler:
             mlc.PARAM_HEADER_SIZE + self.polling_response_item_size
         )
         self.polling_request_configure(
-            mn.PayloadType.LIST_C_STRICT
+            mn.PayloadType.LIST_IDX_STRICT
             if self.polling_strategy is NamespaceHandler.async_poll_chunked
             else None
         )
@@ -284,8 +284,8 @@ class NamespaceHandler:
         """
         ns = self.ns
         _payload_type = payload_type or ns.payload_get
-        if (_payload_type is mn.PayloadType.LIST_C_STRICT) or (
-            _payload_type is mn.PayloadType.LIST_C_DATA_STRICT
+        if (_payload_type is mn.PayloadType.LIST_IDX_STRICT) or (
+            _payload_type is mn.PayloadType.LIST_IDX_DATA_STRICT
         ):
             self.polling_request_channels = []
             self.polling_request = (
@@ -318,18 +318,18 @@ class NamespaceHandler:
         # the ns need it. Also adjusts the estimated polling_response_size.
         try:
             polling_request_channels = self.polling_request_channels
-            key_channel = self.ns.key_channel
+            key_idx = self.ns.key_idx
             for channel_payload in polling_request_channels:
-                if channel_payload[key_channel] == channel:
+                if channel_payload[key_idx] == channel:
                     break
             else:
                 # this is just a shurtcut since 'subId' namespaces do not
                 # still expose a channel different than 0. When that changes
                 # it'll be a mess.
                 channel_payload = (
-                    {key_channel: channel, mc.KEY_CHANNEL: 0}
-                    if key_channel == mc.KEY_SUBID
-                    else {key_channel: channel}
+                    {key_idx: channel, mc.KEY_CHANNEL: 0}
+                    if key_idx == mc.KEY_SUBID
+                    else {key_idx: channel}
                 )
                 polling_request_channels.append(channel_payload)
 
@@ -474,7 +474,7 @@ class NamespaceHandler:
             "%s(%s).%s: payload=%s",
             self.__class__.__name__,
             self.ns,
-            self.parsers[payload[self.ns.key_channel]].__name__,
+            self.parsers[payload[self.ns.key_idx]].__name__,
             str(device.loggable_any(payload)),
             timeout=14400,
         )
@@ -484,17 +484,17 @@ class NamespaceHandler:
         splits and forwards the received NS payload to
         the registered entity(es).
         This handler si optimized for list payloads:
-        "payload": { "{self.ns.key}": [{"{self.ns.key_channel}":...., ...}] }
+        "payload": { "{self.ns.key}": [{"{self.ns.key_idx}":...., ...}] }
         Under normal conditions the loop is optimized with direct parser lookup
         and invocation without caching any intermediate variable since this is the 99%
         expected pattern. The most-likely exceptions are when no parser is registered
         for the channel (KeyError) or when the payload is not a list (TypeError).
         These will be managed so that they'll don't recur anymore.
         """
-        key_channel = self.ns.key_channel
+        key_idx = self.ns.key_idx
         for p_channel in message.payload[self.ns.key]:
             try:
-                self.parsers[p_channel[key_channel]](p_channel)
+                self.parsers[p_channel[key_idx]](p_channel)
             except KeyError as ke:
                 self._try_create_entity(p_channel, ke)
             except Exception as e:
@@ -515,9 +515,9 @@ class NamespaceHandler:
         """
         payload = message.payload[self.ns.key]
         try:
-            self.parsers[payload[self.ns.key_channel]](payload)
+            self.parsers[payload[self.ns.key_idx]](payload)
         except KeyError as ke:
-            if ke.args[0] == self.ns.key_channel:
+            if ke.args[0] == self.ns.key_idx:
                 # might be expected for ns with no channels
                 # for example EntityNamespaceMixin
                 self.parsers[None](payload)
@@ -543,19 +543,19 @@ class NamespaceHandler:
         payload = message.payload[self.ns.key]
         if type(payload) is dict:
             try:
-                self.parsers[payload[self.ns.key_channel]](payload)
+                self.parsers[payload[self.ns.key_idx]](payload)
             except KeyError as ke:
-                if ke.args[0] == self.ns.key_channel:
+                if ke.args[0] == self.ns.key_idx:
                     # might be expected for ns with no channels
                     # for example EntityNamespaceMixin
                     self.parsers[None](payload)
                 else:
                     self._try_create_entity(payload, ke)
         else:
-            key_channel = self.ns.key_channel
+            key_idx = self.ns.key_idx
             for p_channel in payload:
                 try:
-                    self.parsers[p_channel[key_channel]](p_channel)
+                    self.parsers[p_channel[key_idx]](p_channel)
                 except KeyError as ke:
                     self._try_create_entity(p_channel, ke)
                 except Exception as e:
@@ -574,14 +574,14 @@ class NamespaceHandler:
                 # we add the last split of the namespace to the extracted payload key
                 if type(_payload) is dict:
                     device.parse_undefined_dict(
-                        f"{ns.slug_end}_{_key}", _payload, _payload.get(ns.key_channel)
+                        f"{ns.slug_end}_{_key}", _payload, _payload.get(ns.key_idx)
                     )
                 elif type(_payload) is list:
                     _key = f"{ns.slug_end}_{_key}"
                     for __payload in _payload:
                         # not having a "channel" in the list payloads is unexpected so far
                         device.parse_undefined_dict(
-                            _key, __payload, __payload.get(ns.key_channel)
+                            _key, __payload, __payload.get(ns.key_idx)
                         )
                 else:
                     # should we diagnostic scalar values in root payload ?
@@ -600,10 +600,10 @@ class NamespaceHandler:
     def parse_list(self, digest: list, /):
         """twin method for _handle_list (same job - different context).
         Used when parsing digest(s) in NS_ALL"""
-        key_channel = self.ns.key_channel
+        key_idx = self.ns.key_idx
         for p_channel in digest:
             try:
-                self.parsers[p_channel[key_channel]](p_channel)
+                self.parsers[p_channel[key_idx]](p_channel)
             except KeyError as ke:
                 self._try_create_entity(p_channel, ke)
             except Exception as e:
@@ -612,7 +612,7 @@ class NamespaceHandler:
     def parse_dict(self, digest: dict, /):
         """twin method for _handle_dict (same job - different context).
         Used when parsing digest(s) in NS_ALL"""
-        self.parsers[digest[self.ns.key_channel]](digest)
+        self.parsers[digest[self.ns.key_idx]](digest)
 
     def _parse_stub(self, payload, /):
         device = self.device
@@ -629,11 +629,11 @@ class NamespaceHandler:
         Smart handler for KeyError raised when dispatching
         a channel payload to a parser.
         # KeyError here might have been raised because:
-        # - key_channel not in p_channel -> critical
+        # - key_idx not in p_channel -> critical
         # - no parser registered for this channel -> create entity if possible
         # - KeyError in parser function
         """
-        channel = p_channel[self.ns.key_channel]
+        channel = p_channel[self.ns.key_idx]
         if channel in self.parsers:
             self.log_parser_exception(ke, p_channel)
             return
@@ -745,7 +745,7 @@ class NamespaceHandler:
         and use it when issuing set requests.
         """
         ns = self.ns
-        assert ns.payload_set is mn.PayloadType.LIST_C, "Only LIST_C supported here"
+        assert ns.payload_set is mn.PayloadType.LIST_IDX, "Only LIST_C supported here"
         response = await self.device.async_request(
             *ns.request_set(payload, parser.channel)
         )
@@ -909,7 +909,7 @@ class NamespaceHandler:
         while True:
             if size_available > self.polling_response_item_size:
                 try:
-                    channels_payload.append({self.ns.key_channel: next(channels)})
+                    channels_payload.append({self.ns.key_idx: next(channels)})
                     size_available -= self.polling_response_item_size
                     self.polling_response_size += self.polling_response_item_size
                     continue
@@ -1002,9 +1002,9 @@ class NamespaceHandler:
             try:
                 match ns.payload_get:
                     case (
-                        mn.PayloadType.LIST_C
-                        | mn.PayloadType.LIST_C_STRICT
-                        | mn.PayloadType.LIST_C_DATA_STRICT
+                        mn.PayloadType.LIST_IDX
+                        | mn.PayloadType.LIST_IDX_STRICT
+                        | mn.PayloadType.LIST_IDX_DATA_STRICT
                     ):
                         try:
                             if self.polling_request_channels:
@@ -1038,7 +1038,7 @@ class NamespaceHandler:
             return
 
         ns_key = ns.key
-        ns_key_channel = ns.key_channel
+        ns_key_index = ns.key_idx
         match ns.grammar:
             case mn.Grammar.EXPERIMENTAL:
                 # These are typically known in their structure and likely to be channelized
@@ -1056,7 +1056,7 @@ class NamespaceHandler:
                     channels = self.parsers.keys()
 
                 channels_count = len(channels)
-                channels_payload = [{ns_key_channel: channel} for channel in channels]
+                channels_payload = [{ns_key_index: channel} for channel in channels]
                 # We'll try then querying with those different payload structures as they're well known
                 # for channelized devices, starting from the most complex (verbose) to the least one.
                 # If any of these works it will candidate for this NamespaceHandler polling_request format.
@@ -1076,15 +1076,15 @@ class NamespaceHandler:
                         return False
 
                 if await _async_check({ns_key: channels_payload}):
-                    detected_request_payload_type = mn.PayloadType.LIST_C_STRICT
+                    detected_request_payload_type = mn.PayloadType.LIST_IDX_STRICT
 
                 # check ordered from more to less 'data heavy' payloads
                 # so that the last one working (less data) is the fallback
                 for _payload_type in (
-                    mn.PayloadType.DICT_C_65535,
-                    mn.PayloadType.DICT_C_STRICT,
-                    mn.PayloadType.LIST_C,
-                    mn.PayloadType.DICT_C,
+                    mn.PayloadType.DICT_IDX_65535,
+                    mn.PayloadType.DICT_IDX_STRICT,
+                    mn.PayloadType.LIST_IDX,
+                    mn.PayloadType.DICT_IDX,
                 ):
                     if await _async_check(_payload_type.build(ns)):
                         detected_request_payload_type = _payload_type
@@ -1102,11 +1102,11 @@ class NamespaceHandler:
                     # needed to poll the digest
                     await _async_wrapped_get({ns_key: channel_payload})
                 # Also check if hub namespaces indexed by "subId" maybe also need a "channel"
-                if ns_key_channel == mc.KEY_SUBID:
+                if ns_key_index == mc.KEY_SUBID:
                     await _async_wrapped_get(
                         {
                             ns_key: [
-                                {ns_key_channel: channel, mc.KEY_CHANNEL: 0}
+                                {ns_key_index: channel, mc.KEY_CHANNEL: 0}
                                 for channel in channels
                             ]
                         }
