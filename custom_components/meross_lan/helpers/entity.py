@@ -338,8 +338,8 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         if states := _last_state.get(self.entity_id):
             for state in reversed(states):
                 if state.state not in (
-                    MLEntity.hac.STATE_UNKNOWN,
-                    MLEntity.hac.STATE_UNAVAILABLE,
+                    entity.STATE_UNKNOWN,
+                    entity.STATE_UNAVAILABLE,
                 ):
                     return state
         return None

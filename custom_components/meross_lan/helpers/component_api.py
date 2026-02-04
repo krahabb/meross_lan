@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, override
 import zoneinfo
 
 from bleak.exc import BleakError
-from homeassistant import const as hac
 from homeassistant.components import bluetooth as ha_bt
 from homeassistant.core import SupportsResponse, callback
 from homeassistant.data_entry_flow import AbortFlow
@@ -212,7 +211,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
             if mqtt_data and mqtt_data.client:
                 conf = mqtt_data.client.conf
                 self.broker.host = conf[mqtt.CONF_BROKER]
-                self.broker.port = conf.get(hac.CONF_PORT, mqtt.const.DEFAULT_PORT)
+                self.broker.port = conf.get(mlc.hac.CONF_PORT, mqtt.const.DEFAULT_PORT)
                 self.configure_logger()
 
         super()._mqtt_connected()
@@ -329,6 +328,7 @@ class ComponentApi(mlq.MQTTProfile):
 
         def __init__(self, api: "ComponentApi", address: str, flow_id: str, /):
             self.api = api
+            # TODO: integrate Loggable properly
             self.getEffectiveLevel = api.getEffectiveLevel
             self.isEnabledFor = api.isEnabledFor
             self.address = address
@@ -750,7 +750,7 @@ class ComponentApi(mlq.MQTTProfile):
             del self.api  # type: ignore
             hass.data.pop(mlc.DOMAIN)
 
-        hass.bus.async_listen_once(hac.EVENT_HOMEASSISTANT_STOP, _async_terminate)
+        hass.bus.async_listen_once(mlc.hac.EVENT_HOMEASSISTANT_STOP, _async_terminate)
         # REMOVE
         if MEROSSDEBUG:
 

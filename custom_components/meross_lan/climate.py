@@ -8,9 +8,10 @@ from homeassistant.core import CoreState, callback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util.unit_conversion import TemperatureConverter
 
+from .calendar import MtsSchedule
+from .const import hac
 from .helpers import entity as me, reverse_lookup
 from .number import MLConfigNumber
-from .calendar import MtsSchedule
 from .select import MLSelect
 from .sensor import MLTemperatureSensor
 
@@ -143,7 +144,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
             self,
             climate: "MtsClimate",
         ):
-            self.current_option = MLSelect.hac.STATE_OFF
+            self.current_option = hac.STATE_OFF
             self.options = []
             self.climate = climate
             self._tracking_state = None
@@ -168,7 +169,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         async def async_added_to_hass(self):
             hass = self.hass
 
-            if self.current_option is MLSelect.hac.STATE_OFF:
+            if self.current_option is hac.STATE_OFF:
                 with self.exception_warning("restoring previous state"):
                     if last_state := await self.get_last_state_available():
                         self.current_option = last_state.state
@@ -183,7 +184,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
                 # list soon enough
                 self.options = [self.current_option]
                 hass.bus.async_listen_once(
-                    MLSelect.hac.EVENT_HOMEASSISTANT_STARTED,
+                    hac.EVENT_HOMEASSISTANT_STARTED,
                     self._setup_tracking_entities,
                 )
 
@@ -224,8 +225,8 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
                 )
                 return
             if tracked_state.state in (
-                MLSelect.hac.STATE_UNAVAILABLE,
-                MLSelect.hac.STATE_UNKNOWN,
+                hac.STATE_UNAVAILABLE,
+                hac.STATE_UNKNOWN,
             ):
                 # might be transient so we don't take any action or log
                 return
@@ -251,18 +252,18 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         @callback
         def _setup_tracking_entities(self, *_):
             _units = (
-                MLSelect.hac.UnitOfTemperature.CELSIUS,
-                MLSelect.hac.UnitOfTemperature.FAHRENHEIT,
+                hac.UnitOfTemperature.CELSIUS,
+                hac.UnitOfTemperature.FAHRENHEIT,
             )
             self.options = [
                 entity.entity_id
                 for entity in self.hass.data[sensor.DATA_COMPONENT].entities
                 if getattr(entity, "native_unit_of_measurement", None) in _units
             ]
-            self.options.append(MLSelect.hac.STATE_OFF)
+            self.options.append(hac.STATE_OFF)
             if self.current_option not in self.options:
                 # this might happen when restoring a not anymore valid entity
-                self.current_option = MLSelect.hac.STATE_OFF
+                self.current_option = hac.STATE_OFF
 
             self.flush_state()
             self._tracking_start()
@@ -271,9 +272,9 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
             self._tracking_stop()
             entity_id = self.current_option
             if entity_id and entity_id not in (
-                MLSelect.hac.STATE_OFF,
-                MLSelect.hac.STATE_UNKNOWN,
-                MLSelect.hac.STATE_UNAVAILABLE,
+                hac.STATE_OFF,
+                hac.STATE_UNKNOWN,
+                hac.STATE_UNAVAILABLE,
             ):
 
                 @callback
@@ -317,7 +318,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
                 tracked_temperature = float(tracked_state.state)
                 # ensure tracked_temperature is °C
                 tracked_temperature_unit = tracked_state.attributes.get(
-                    MtsClimate.hac.ATTR_UNIT_OF_MEASUREMENT
+                    hac.ATTR_UNIT_OF_MEASUREMENT
                 )
                 if not tracked_temperature_unit:
                     raise ValueError("tracked entity has no unit of measure")
@@ -504,7 +505,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         self.supported_features = self._attr_supported_features
         self.target_temperature = None
         self.target_temperature_step = 0.5
-        self.temperature_unit = self.hac.UnitOfTemperature.CELSIUS
+        self.temperature_unit = hac.UnitOfTemperature.CELSIUS
         self._mts_active = False
         self._mts_mode = 0
         self._mts_onoff = 0

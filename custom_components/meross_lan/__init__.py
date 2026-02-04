@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 
 from .helpers import (
-    LOGGER,
     ConfigEntryType,
     device as mld,
     meross_profile as mlp,
@@ -28,7 +27,7 @@ else:
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry[ConfigEntryManager]"
 ):
-    LOGGER.debug("async_setup_entry (entry_id:%s)", config_entry.entry_id)
+    ComponentApi.ROOT_LOGGER.debug("async_setup_entry (entry_id:%s)", config_entry.entry_id)
 
     api = ComponentApi.get(hass)
 
@@ -90,12 +89,12 @@ async def async_setup_entry(
 async def async_unload_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry[ConfigEntryManager]"
 ) -> bool:
-    LOGGER.debug("async_unload_entry (entry_id:%s)", config_entry.entry_id)
+    ComponentApi.ROOT_LOGGER.debug("async_unload_entry (entry_id:%s)", config_entry.entry_id)
     return await config_entry.runtime_data.async_unload_entry(hass, config_entry)
 
 
 async def async_remove_entry(hass: "HomeAssistant", config_entry: "ConfigEntry"):
-    LOGGER.debug("async_remove_entry (entry_id:%s)", config_entry.entry_id)
+    ComponentApi.ROOT_LOGGER.debug("async_remove_entry (entry_id:%s)", config_entry.entry_id)
     api = ComponentApi.get(hass)
     match ConfigEntryType.get_type_and_id(config_entry.unique_id):
         case (ConfigEntryType.DEVICE, device_id):

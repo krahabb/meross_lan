@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.components import switch
 
+from .const import hac
 from .helpers import entity as me
 from .helpers.namespaces import EntityNamespaceMixin, mc, mn
 from .merossclient import extract_dict_payloads
@@ -54,7 +55,7 @@ class MLEmulatedSwitch(me.MEPartialAvailableMixin, MLSwitch):
         await super().async_added_to_hass()
         with self.exception_warning("restoring previous state"):
             if last_state := await self.get_last_state_available():
-                self.is_on = last_state.state == self.hac.STATE_ON
+                self.is_on = last_state.state == hac.STATE_ON
 
     @override
     async def async_turn_on(self, **kwargs):

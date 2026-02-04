@@ -29,7 +29,7 @@ class MLScreenBrightnessNumber(MLConfigNumber):
     ns = mn.Appliance_Control_Screen_Brightness
 
     # HA core entity attributes:
-    _attr_native_unit_of_measurement = MLConfigNumber.hac.PERCENTAGE
+    _attr_native_unit_of_measurement = mlc.hac.PERCENTAGE
     icon: str = "mdi:brightness-percent"
     native_max_value = 100
     native_min_value = 0
@@ -314,7 +314,7 @@ class MtsHoldAction(MLConfigSelect):
             entity_key="hold_action_time",
             device_scale=1,
             device_class=MLConfigNumber.DEVICE_CLASS_DURATION,
-            native_unit_of_measurement=MLConfigNumber.hac.UnitOfTime.MINUTES,
+            native_unit_of_measurement=mlc.hac.UnitOfTime.MINUTES,
         )
         self.number_time.async_request_value = self._async_request_value_number_time
 
@@ -346,8 +346,8 @@ class MtsTempUnit(MLConfigSelect):
     key_value = mc.KEY_TEMPUNIT
 
     OPTIONS_MAP = {
-        mc.TEMPUNIT_CELSIUS: MLConfigSelect.hac.UnitOfTemperature.CELSIUS,
-        mc.TEMPUNIT_FAHRENHEIT: MLConfigSelect.hac.UnitOfTemperature.FAHRENHEIT,
+        mc.TEMPUNIT_CELSIUS: mlc.hac.UnitOfTemperature.CELSIUS,
+        mc.TEMPUNIT_FAHRENHEIT: mlc.hac.UnitOfTemperature.FAHRENHEIT,
     }
 
     manager: "Device"

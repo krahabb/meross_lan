@@ -2,9 +2,8 @@ import bisect
 from functools import cached_property
 from typing import TYPE_CHECKING
 
-from . import Loggable
 from .. import const as mlc
-from ..merossclient import merge_dicts
+from ..merossclient import logging, merge_dicts
 from ..merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
@@ -19,7 +18,7 @@ if TYPE_CHECKING:
     POLLING_STRATEGY_CONF: Final[dict[mn.Namespace, "NamespaceHandler.ConfigType"]]
 
 
-class NamespaceParser(Loggable):
+class NamespaceParser(logging.Loggable):
     """
     Represents the final 'parser' of a message after 'handling' in NamespaceHandler.
     In this model, NamespaceHandler is responsible for unpacking those messages

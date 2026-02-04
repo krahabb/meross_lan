@@ -1,6 +1,5 @@
 import abc
 import asyncio
-import logging
 import os
 from time import localtime, strftime, time
 from typing import TYPE_CHECKING, final
@@ -12,7 +11,6 @@ from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr, issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from . import LOGGER, Loggable, getLogger
 from .. import const as mlc
 from ..const import (
     CONF_CREATE_DIAGNOSTIC_ENTITIES,
@@ -21,7 +19,7 @@ from ..const import (
     CONF_PROTOCOL_AUTO,
     DOMAIN,
 )
-from ..merossclient import cloudapi
+from ..merossclient import cloudapi, logging
 from ..merossclient.protocol.message import json_dumps
 from .obfuscate import (
     OBFUSCATE_DEVICE_ID_MAP,
@@ -54,7 +52,7 @@ if TYPE_CHECKING:
     from .entity import MLEntity
 
 
-class EntityManager(Loggable):
+class EntityManager(logging.Loggable):
     """
     This is an abstraction of an actual (device or other) container
     for MLEntity(s). This container is very 'hybrid', end its main purpose
@@ -85,8 +83,11 @@ class EntityManager(Loggable):
         """Keeps track of some object instances (for debugging) built and managed by this EntityManager."""
         _tasks: set[asyncio.Future]
 
-        class Args(Loggable.Args):
+        class Args(logging.Loggable.Args):
             device_entry: NotRequired[dr.DeviceEntry | None]
+
+    ROOT_LOGGER = logging.getLogger(__name__[:-16])
+    """Root meross_lan logger"""
 
     IssueSeverity = ir.IssueSeverity
 
@@ -246,7 +247,7 @@ class ConfigEntryManager(EntityManager):
         config_entry: Final[ConfigEntry | None]
         config: Mapping[str, Any]
         key: str
-        logger: logging.Logger
+        logger: logging.logging.Logger
         _issues: set[str]  # BEWARE: on demand attribute
         _trace_file: io.TextIOWrapper | None
         _trace_future: asyncio.Future | None
@@ -280,7 +281,7 @@ class ConfigEntryManager(EntityManager):
             "_unsub_entry_update_listener",
         )
         + EntityManager.__SLOTS__
-        + Loggable.__SLOTS__
+        + logging.Loggable.__SLOTS__
     )
 
     def __init__(
@@ -341,19 +342,23 @@ class ConfigEntryManager(EntityManager):
         __init__ for the first setup and subsequently when ConfigEntry changes
         """
         self.logtag = self.get_logger_name()
-        self.logger = logger = getLogger(f"{LOGGER.name}.{self.logtag}")
+        self.logger = logger = logging.getLogger(
+            f"{self.ROOT_LOGGER.name}.{self.logtag}"
+        )
         try:
             logger.setLevel(self.config.get(mlc.CONF_LOGGING_LEVEL, logging.NOTSET))
         except Exception as exception:
             # do not use self Loggable interface since we might be not set yet
-            LOGGER.warning(
+            self.ROOT_LOGGER.warning(
                 "error (%s) setting log level: likely a corrupted configuration entry",
                 str(exception),
             )
+        self.getEffectiveLevel = logger.getEffectiveLevel
+        self.isEnabledFor = logger.isEnabledFor
 
     def log(self, level: int, msg: str, *args, **kwargs):
-        if (logger := self.logger).isEnabledFor(level):
-            logger._log(level, msg, args, **kwargs)
+        if self.isEnabledFor(level):
+            self.logger._log(level, msg, args, **kwargs)
         if self.is_tracing:
             self.trace_log(
                 level,
@@ -750,7 +755,7 @@ class ConfigEntryManager(EntityManager):
             self._unsub_entry_reload = None
 
 
-class CloudApiClient(cloudapi.CloudApiClient, Loggable):
+class CloudApiClient(cloudapi.CloudApiClient, logging.Loggable):
     """
     A specialized cloudapi.CloudApiClient providing meross_lan style logging
     interface to the underlying cloudapi services.
@@ -761,7 +766,7 @@ class CloudApiClient(cloudapi.CloudApiClient, Loggable):
         manager: "ConfigEntryManager",
         credentials: "cloudapi.MerossCloudCredentials | None" = None,
     ):
-        Loggable.__init__(self, manager, "")
+        logging.Loggable.__init__(self, manager, "")
         cloudapi.CloudApiClient.__init__(
             self,
             credentials=credentials,

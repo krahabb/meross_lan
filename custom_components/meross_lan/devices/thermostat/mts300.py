@@ -2,14 +2,13 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.components.climate import const as hacc
 
+from . import MtsThermostatClimate, mc, mlc, mn, mn_t
 from ...helpers import reverse_lookup
 from ...helpers.entity import MEGroupListChannelMixin
-from ...helpers.namespaces import mc, mn
 from ...number import MLConfigNumber
 from ...select import MLConfigSelect
 from ...sensor import MLEnumSensor, MLHumiditySensor
 from ...switch import MLEmulatedSwitch
-from . import MtsThermostatClimate, mc, mn_t
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final
@@ -210,7 +209,7 @@ class Mts300Climate(MtsThermostatClimate):
             channel,
             entity_key="fan_hold_time",
             device_class=MLConfigNumber.DEVICE_CLASS_DURATION,
-            native_unit_of_measurement=MLConfigNumber.hac.UnitOfTime.MINUTES,
+            native_unit_of_measurement=mlc.hac.UnitOfTime.MINUTES,
             device_scale=1,
         )
         self.number_fan_hold.async_request_value = (

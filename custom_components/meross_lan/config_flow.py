@@ -11,7 +11,7 @@ from time import time
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from homeassistant import config_entries as ce, const as hac
+from homeassistant import config_entries as ce
 from homeassistant.const import CONF_ERROR
 from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers import (
@@ -188,9 +188,9 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                     return device._bluetooth
                 elif device._http_active:
                     return device._http_active
-                elif device._mqtt_active:
+                elif device._mqtt_publish:
                     return MQTTConnection.Client(
-                        device._mqtt_active,
+                        device._mqtt_publish,
                         device_id,
                         key=self.device_config.get(mlc.CONF_KEY) or "",
                         trigger_src=self.__class__.__name__,
@@ -430,7 +430,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                                 unique_id=unique_id,
                                 subentries_data=(),  # required since 2025.3
                             )
-                            if (hac.MAJOR_VERSION, hac.MINOR_VERSION) >= (2025, 3)  # type: ignore
+                            if (mlc.hac.MAJOR_VERSION, mlc.hac.MINOR_VERSION) >= (2025, 3)  # type: ignore
                             else (
                                 ce.ConfigEntry(  # type: ignore
                                     version=self.VERSION,
@@ -445,7 +445,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                                     source=ce.SOURCE_USER,
                                     unique_id=unique_id,
                                 )
-                                if hac.MAJOR_VERSION >= 2024
+                                if mlc.hac.MAJOR_VERSION >= 2024
                                 else ce.ConfigEntry(  # type: ignore
                                     version=self.VERSION,
                                     domain=mlc.DOMAIN,

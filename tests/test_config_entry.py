@@ -3,17 +3,13 @@
 import asyncio
 from typing import TYPE_CHECKING
 
-from homeassistant import const as hac
 from homeassistant.config_entries import ConfigEntryState
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.helpers.component_api import ComponentApi
-from custom_components.meross_lan.light import MLDNDLightEntity
 from custom_components.meross_lan.merossclient.protocol import (
-    const as mc,
     namespaces as mn,
 )
-from custom_components.meross_lan.sensor import MLSignalStrengthSensor
 
 from tests import const as tc, helpers
 

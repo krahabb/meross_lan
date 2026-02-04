@@ -1057,7 +1057,7 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, MLSwitch):
         # HA core entity attributes:
         _attr_name = "Watering duration"
         _attr_device_class = MLConfigNumber.DEVICE_CLASS_DURATION
-        _attr_native_unit_of_measurement = MLConfigNumber.hac.UnitOfTime.SECONDS
+        _attr_native_unit_of_measurement = mlc.hac.UnitOfTime.SECONDS
         native_max_value = 86400  # 1 day max duration (no real info just guessing)
         native_min_value = 1
 

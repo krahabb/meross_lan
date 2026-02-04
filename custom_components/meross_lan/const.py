@@ -1,12 +1,11 @@
 """Constants for the Meross IoT local LAN integration."""
 
 import enum
-import logging
 from typing import TYPE_CHECKING, Final, NotRequired, TypedDict
 
 from homeassistant import const as hac
 
-from .merossclient import cloudapi
+from .merossclient import cloudapi, logging
 from .merossclient.protocol import const as mc
 
 if TYPE_CHECKING:
@@ -29,18 +28,13 @@ CONF_CREATE_DIAGNOSTIC_ENTITIES: Final = "create_diagnostic_entities"
 CONF_KEY: Final = "key"
 # sets the logging level x ConfigEntry
 CONF_LOGGING_LEVEL: Final = "logging_level"
-CONF_LOGGING_VERBOSE: Final = 5
-CONF_LOGGING_DEBUG: Final = logging.DEBUG
-CONF_LOGGING_INFO: Final = logging.INFO
-CONF_LOGGING_WARNING: Final = logging.WARNING
-CONF_LOGGING_CRITICAL: Final = logging.CRITICAL
 CONF_LOGGING_LEVEL_OPTIONS: Final = {
     logging.NOTSET: "default",
-    CONF_LOGGING_CRITICAL: "critical",
-    CONF_LOGGING_WARNING: "warning",
-    CONF_LOGGING_INFO: "info",
-    CONF_LOGGING_DEBUG: "debug",
-    CONF_LOGGING_VERBOSE: "verbose",
+    logging.CRITICAL: "critical",
+    logging.WARNING: "warning",
+    logging.INFO: "info",
+    logging.DEBUG: "debug",
+    logging.VERBOSE: "verbose",
 }
 CONF_OBFUSCATE: Final = "obfuscate"
 # create a file with device info and communication tracing

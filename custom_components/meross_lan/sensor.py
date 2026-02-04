@@ -98,15 +98,15 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
     )
 
     DEVICECLASS_TO_UNIT_MAP = {
-        DeviceClass.POWER: me.MLEntity.hac.UnitOfPower.WATT,
-        DeviceClass.CURRENT: me.MLEntity.hac.UnitOfElectricCurrent.AMPERE,
-        DeviceClass.VOLTAGE: me.MLEntity.hac.UnitOfElectricPotential.VOLT,
-        DeviceClass.ENERGY: me.MLEntity.hac.UnitOfEnergy.WATT_HOUR,
-        DeviceClass.TEMPERATURE: me.MLEntity.hac.UnitOfTemperature.CELSIUS,
-        DEVICE_CLASS_TEMPERATURE_DELTA: me.MLEntity.hac.UnitOfTemperature.CELSIUS,
-        DeviceClass.HUMIDITY: me.MLEntity.hac.PERCENTAGE,
-        DeviceClass.BATTERY: me.MLEntity.hac.PERCENTAGE,
-        DeviceClass.ILLUMINANCE: me.MLEntity.hac.LIGHT_LUX,
+        DeviceClass.POWER: mlc.hac.UnitOfPower.WATT,
+        DeviceClass.CURRENT: mlc.hac.UnitOfElectricCurrent.AMPERE,
+        DeviceClass.VOLTAGE: mlc.hac.UnitOfElectricPotential.VOLT,
+        DeviceClass.ENERGY: mlc.hac.UnitOfEnergy.WATT_HOUR,
+        DeviceClass.TEMPERATURE: mlc.hac.UnitOfTemperature.CELSIUS,
+        DEVICE_CLASS_TEMPERATURE_DELTA: mlc.hac.UnitOfTemperature.CELSIUS,
+        DeviceClass.HUMIDITY: mlc.hac.PERCENTAGE,
+        DeviceClass.BATTERY: mlc.hac.PERCENTAGE,
+        DeviceClass.ILLUMINANCE: mlc.hac.LIGHT_LUX,
     }
 
     # we basically default Sensor.state_class to SensorStateClass.MEASUREMENT
@@ -291,7 +291,7 @@ class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
     key_value = mc.KEY_SIGNAL
 
     # HA core entity attributes:
-    _attr_native_unit_of_measurement = me.MLEntity.hac.PERCENTAGE
+    _attr_native_unit_of_measurement = mlc.hac.PERCENTAGE
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
     icon = "mdi:wifi"
 
@@ -304,7 +304,7 @@ class MLFilterMaintenanceSensor(MLNumericSensor):
     key_value = mc.KEY_LIFE
 
     # HA core entity attributes:
-    _attr_native_unit_of_measurement = me.MLEntity.hac.PERCENTAGE
+    _attr_native_unit_of_measurement = mlc.hac.PERCENTAGE
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
 
     def __init__(self, manager: "Device", channel):

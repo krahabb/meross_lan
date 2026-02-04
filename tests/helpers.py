@@ -4,7 +4,6 @@ from collections import namedtuple
 import contextlib
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
-import logging
 import re
 import time
 from typing import TYPE_CHECKING
@@ -28,13 +27,12 @@ from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.config_flow import ConfigFlow
 from custom_components.meross_lan.diagnostics import async_get_config_entry_diagnostics
 from custom_components.meross_lan.helpers import (
-    Loggable,
     device as mld,
     manager as mlm,
     meross_profile as mlp,
     mqtt_profile as mlq,
 )
-from custom_components.meross_lan.merossclient import cloudapi
+from custom_components.meross_lan.merossclient import cloudapi, logging
 from custom_components.meross_lan.merossclient.protocol import const as mc, md5hexdigest
 from custom_components.meross_lan.merossclient.protocol.message import json_loads
 import emulator
@@ -167,9 +165,9 @@ class LoggableMocker(contextlib.AbstractContextManager):
 
     def __init__(self, raise_on_log_exception=False):
         self.raise_on_log_exception = raise_on_log_exception
-        self._log_exception_old = Loggable.log_exception
+        self._log_exception_old = logging.Loggable.log_exception
         self._patch = patch.object(
-            Loggable,
+            logging.Loggable,
             "log_exception",
             autospec=True,
             side_effect=self._patch_log_exception,
@@ -184,7 +182,7 @@ class LoggableMocker(contextlib.AbstractContextManager):
 
     def _patch_log_exception(
         self,
-        loggable: Loggable,
+        loggable: logging.Loggable,
         level: int,
         exception: Exception,
         msg: str,

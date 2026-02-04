@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING
 
 from ..binary_sensor import MLBinarySensor
+from ..const import hac
 from ..helpers import entity as me
 from ..helpers.namespaces import mc, mn
 from ..number import MLConfigNumber
@@ -82,7 +83,7 @@ class PresenceConfigDistance(PresenceConfigNumberBase):
 
     # HA core entity attributes:
     _attr_device_class = MLConfigNumber.DeviceClass.DISTANCE
-    _attr_native_unit_of_measurement = MLConfigNumber.hac.UnitOfLength.METERS
+    _attr_native_unit_of_measurement = hac.UnitOfLength.METERS
     native_max_value = 12
     native_min_value = 0.1
     native_step = 0.1
@@ -166,7 +167,7 @@ class MLPresenceSensor(MLNumericSensor):
             entity_key=f"{self.entitykey}_distance",
             device_scale=1000,
             device_class=MLNumericSensor.DeviceClass.DISTANCE,
-            native_unit_of_measurement=MLNumericSensor.hac.UnitOfLength.METERS,
+            native_unit_of_measurement=hac.UnitOfLength.METERS,
             suggested_display_precision=2,
             name="Presence distance",
         )

@@ -9,9 +9,9 @@ from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.core import callback
 
 # import core modules instead of symbols to ease patching in a single place
-from . import Loggable, entity as me, manager as mlm
+from . import entity as me, manager as mlm
 from .. import const as mlc
-from ..merossclient import HostAddress, _BaseClient
+from ..merossclient import HostAddress, _BaseClient, logging
 from ..merossclient.mqttclient import MerossMQTTRateLimitException
 from ..merossclient.protocol import MerossKeyError, const as mc, namespaces as mn
 from ..merossclient.protocol.message import (
@@ -156,7 +156,7 @@ class ConnectionSensor(me.MEAlwaysAvailableMixin, MLDiagnosticSensor):
         self.flush_state()
 
 
-class MQTTConnection(Loggable):
+class MQTTConnection(logging.Loggable):
     """
     Base abstract class representing a connection to an MQTT
     broker. Historically, MQTT support was only through ComponentApi

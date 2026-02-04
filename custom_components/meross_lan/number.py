@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components import number
 
+from .const import hac
 from .helpers import entity as me
 
 if TYPE_CHECKING:
@@ -54,10 +55,10 @@ class MLNumber(me.MLNumericEntity, number.NumberEntity):
 
     DEVICECLASS_TO_UNIT_MAP = {
         None: None,
-        DEVICE_CLASS_DURATION: me.MLEntity.hac.UnitOfTime.SECONDS,
-        DeviceClass.HUMIDITY: me.MLEntity.hac.PERCENTAGE,
-        DeviceClass.TEMPERATURE: me.MLEntity.hac.UnitOfTemperature.CELSIUS,
-        DEVICE_CLASS_TEMPERATURE_DELTA: me.MLEntity.hac.UnitOfTemperature.CELSIUS,
+        DEVICE_CLASS_DURATION: hac.UnitOfTime.SECONDS,
+        DeviceClass.HUMIDITY: hac.PERCENTAGE,
+        DeviceClass.TEMPERATURE: hac.UnitOfTemperature.CELSIUS,
+        DEVICE_CLASS_TEMPERATURE_DELTA: hac.UnitOfTemperature.CELSIUS,
     }
 
     # HA core entity attributes:

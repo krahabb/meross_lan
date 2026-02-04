@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 
     from cloudapi import LatestVersionType
 
+    from .logging import LoggerType
     from .protocol.message import MerossResponse
     from .protocol.namespaces import Namespace
     from .protocol.types import (
@@ -46,13 +47,6 @@ if TYPE_CHECKING:
         hub as mt_h,
         mcu as mt_m,
     )
-
-    class LoggerT(Protocol):
-        """Protocol definition for logger-like instances used in the library."""
-
-        def getEffectiveLevel(self) -> int: ...
-        def isEnabledFor(self, level: int) -> bool: ...
-        def log(self, level: int, msg: str, *args, **kwargs) -> None: ...
 
 
 try:
@@ -661,7 +655,7 @@ class _BaseClient:
             timeout: NotRequired[float]
             descriptor: NotRequired[MerossDeviceDescriptor]
             loop: NotRequired[asyncio.AbstractEventLoop]
-            logger: NotRequired[LoggerT | None]
+            logger: NotRequired[LoggerType | None]
 
         class RequestArgs(TypedDict):
             timeout: NotRequired[float]
@@ -671,7 +665,7 @@ class _BaseClient:
         trigger_src: str  # default value in 'triggerSrc' header key
         timeout: float
         descriptor: MerossDeviceDescriptor | None
-        logger: LoggerT | None
+        logger: LoggerType | None
         loop: Final[asyncio.AbstractEventLoop]
 
     LOG_DUMP = 5  # logging level for raw messages dumping

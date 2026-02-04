@@ -17,7 +17,7 @@ from .protocol import const as mc, md5hexdigest
 if TYPE_CHECKING:
     from typing import ClassVar, NotRequired, Unpack
 
-    from . import LoggerT
+    from .logging import LoggerType
     from .protocol.message import MerossMessage
 
 
@@ -81,7 +81,7 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
         class RequestArgs(_BaseClient.RequestArgs):
             device_id: str
 
-        _logger: LoggerT | None  # override paho client attribute type-hint
+        _logger: LoggerType | None  # override paho client attribute type-hint
 
     MQTT_ERR_SUCCESS = mqtt.MQTT_ERR_SUCCESS
 
@@ -245,7 +245,7 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
 
     # interface: mqtt.Client
     @override
-    def enable_logger(self, logger: "LoggerT | None" = None) -> None:
+    def enable_logger(self, logger: "LoggerType | None" = None) -> None:
         """
         Our _BaseClient already provides a 'logger' attribute and it's going to override
         the paho client property.

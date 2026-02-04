@@ -2,10 +2,10 @@ import enum
 from time import time
 from typing import TYPE_CHECKING, override
 
+from . import MtsThermostatClimate, mc, mlc, mn_t
 from ...binary_sensor import MLBinarySensor
 from ...number import MLEmulatedNumber
 from ...sensor import MLDiagnosticSensor
-from . import MtsThermostatClimate, mc, mn_t
 
 if TYPE_CHECKING:
     from typing import Final
@@ -50,7 +50,7 @@ class Mts960Climate(MtsThermostatClimate):
 
         # HA core entity attributes:
         _attr_device_class = MLEmulatedNumber.DEVICE_CLASS_DURATION
-        _attr_native_unit_of_measurement = MLEmulatedNumber.hac.UnitOfTime.MINUTES
+        _attr_native_unit_of_measurement = mlc.hac.UnitOfTime.MINUTES
         native_max_value = 1440  # 1 day max duration (no real info just guessing)
         native_min_value = 1
         native_step = 1

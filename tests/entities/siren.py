@@ -1,8 +1,8 @@
+from homeassistant import const as hac
 from homeassistant.components import siren as haec
 
 from custom_components.meross_lan import siren
 from custom_components.meross_lan.merossclient.protocol import (
-    const as mc,
     namespaces as mn,
 )
 
@@ -20,8 +20,8 @@ class EntityTest(EntityComponentTest):
     }
 
     async def async_test_enabled_callback(self, entity: siren.MLSiren):
-        await self.async_service_call_check(haec.SERVICE_TURN_ON, entity.hac.STATE_ON)
-        await self.async_service_call_check(haec.SERVICE_TURN_OFF, entity.hac.STATE_OFF)
+        await self.async_service_call_check(haec.SERVICE_TURN_ON, hac.STATE_ON)
+        await self.async_service_call_check(haec.SERVICE_TURN_OFF, hac.STATE_OFF)
 
     async def async_test_disabled_callback(self, entity: siren.MLSiren):
         await entity.async_turn_on()
