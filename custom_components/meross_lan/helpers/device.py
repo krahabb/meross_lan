@@ -25,7 +25,6 @@ from ..const import (
     CONF_PROTOCOL_BLUETOOTH,
     CONF_PROTOCOL_HTTP,
     CONF_PROTOCOL_MQTT,
-    PARAM_HEADER_SIZE,
     PARAM_HEARTBEAT_PERIOD,
     PARAM_TIMESTAMP_TOLERANCE,
 )
@@ -514,7 +513,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         self.cloudpoll_requests = 0
         self.multiple_max = 0
         self._multiple_requests = []
-        self._multiple_response_size = PARAM_HEADER_SIZE
+        self._multiple_response_size = NamespaceHandler.HEADER_AVG_SIZE
         self._timezone_next_check = (
             0
             if mn.Appliance_System_Time in descriptor.ability
@@ -1440,7 +1439,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
             else 0
         )
         self._multiple_requests.clear()
-        self._multiple_response_size = PARAM_HEADER_SIZE
+        self._multiple_response_size = NamespaceHandler.HEADER_AVG_SIZE
 
     async def async_request_multiple(
         self, requests: "Iterable[MerossRequestType]", auto_handle: bool = True
@@ -1676,11 +1675,11 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
             else self.device_response_size_max
         )
 
-    async def _async_poll_multiple_flush(self):
+    async def async_poll_flush(self):
         multiple_requests = self._multiple_requests
         multiple_response_size = self._multiple_response_size
         self._multiple_requests = []
-        self._multiple_response_size = PARAM_HEADER_SIZE
+        self._multiple_response_size = NamespaceHandler.HEADER_AVG_SIZE
 
         requests_len = len(multiple_requests)
         while self.online and requests_len:
@@ -1797,7 +1796,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
             requests_len = len(multiple_requests)
             multiple_response_size = -1  # logging purpose
 
-    async def async_request_poll(self, handler: NamespaceHandler, /):
+    async def async_poll_request(self, handler: NamespaceHandler, /):
         handler.lastrequest = self._polling_epoch
         handler.polling_epoch_next = handler.lastrequest + handler.polling_period
         if (not self.multiple_max) or (
@@ -1819,16 +1818,16 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                 await handler.async_get_safe()
                 return
             # flush the pending multiple requests
-            await self._async_poll_multiple_flush()
+            await self.async_poll_flush()
             multiple_response_size = (
                 self._multiple_response_size + handler.polling_response_size
             )
         self._multiple_requests.append(handler)
         self._multiple_response_size = multiple_response_size
         if len(self._multiple_requests) >= self.multiple_max:
-            await self._async_poll_multiple_flush()
+            await self.async_poll_flush()
 
-    async def async_request_smartpoll(
+    async def async_poll_request_smart(
         self,
         handler: NamespaceHandler,
         *,
@@ -1845,7 +1844,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
             # the request would go over cloud mqtt but we've already queued some
             # and we could wait up to handler.polling_period_cloud
             return False
-        await self.async_request_poll(handler)
+        await self.async_poll_request(handler)
         return True
 
     def _poll(self, namespace: str | None = None):
@@ -2013,7 +2012,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
 
             # needed even if offline: it takes care of resetting the ns_multiple state
             if self._multiple_requests:
-                await self._async_poll_multiple_flush()
+                await self.async_poll_flush()
 
             # when create_diagnostic_entities is True, after onlining we'll dynamically
             # scan the abilities to look for 'unknown' namespaces (kind of like tracing)

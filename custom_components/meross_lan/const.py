@@ -244,7 +244,5 @@ PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT = 86400  # 1 day
 """timeout for querying cloud api deviceInfo endpoint"""
 PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT = 30
 """used to delay updated profile data to storage"""
-PARAM_HEADER_SIZE = 300
-"""(rough) estimate of the header part of any response"""
 PARAM_RESPONSE_SIZE_MAX = 3000
 """(rough) estimate of the allowed response size limit before overflow occurs (see #244)"""

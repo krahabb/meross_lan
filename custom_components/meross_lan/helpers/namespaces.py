@@ -161,6 +161,9 @@ class NamespaceHandler:
         type PollingStrategyFunc = Callable[["NamespaceHandler"], Coroutine]
         type ConfigType = tuple[int, int, int, PollingStrategyFunc | None]
 
+        HEADER_AVG_SIZE: Final[int]
+        """(rough) estimate of the header part of any response"""
+
         parsers: Final[dict[object, ParserFunc]]
         lastpush: JsonDict | None  # TODO: implement caching of all methods responses
         handler: HandlerFunc
@@ -195,6 +198,8 @@ class NamespaceHandler:
         def __call__(self, payload: "JsonMapping", /):
             for parser in self.parsers:
                 parser(payload)
+
+    HEADER_AVG_SIZE = 300
 
     __slots__ = (
         "device",
@@ -254,7 +259,7 @@ class NamespaceHandler:
         # by default we calculate 1 item/channel per payload but we should
         # refine this whenever needed
         self.polling_response_size = (
-            mlc.PARAM_HEADER_SIZE + self.polling_response_item_size
+            self.HEADER_AVG_SIZE + self.polling_response_item_size
         )
         self.polling_request_configure(
             mn.PayloadType.LIST_IDX_STRICT
@@ -337,19 +342,19 @@ class NamespaceHandler:
                 channel_payload.update(extra)
 
             self.polling_response_size = (
-                mlc.PARAM_HEADER_SIZE
+                self.HEADER_AVG_SIZE
                 + len(polling_request_channels) * self.polling_response_item_size
             )
         except AttributeError:
             # polling_request_channels not used for this ns
             self.polling_response_size = (
-                mlc.PARAM_HEADER_SIZE
+                self.HEADER_AVG_SIZE
                 + len(self.parsers) * self.polling_response_item_size
             )
 
     def polling_response_size_adj(self, item_count: int, /):
         self.polling_response_size = (
-            mlc.PARAM_HEADER_SIZE + item_count * self.polling_response_item_size
+            self.HEADER_AVG_SIZE + item_count * self.polling_response_item_size
         )
 
     def channels_to_poll(self):
@@ -780,13 +785,13 @@ class NamespaceHandler:
             # on MQTT no need for updates since they're being PUSHed
             if not self.polling_epoch_next:
                 # just when onlining...
-                await device.async_request_poll(self)
+                await device.async_poll_request(self)
             return
 
         # here we're missing PUSHed updates so we have to poll...
         if device._polling_epoch >= self.polling_epoch_next:
             # at start or periodically ask for NS_ALL..plain
-            await device.async_request_poll(self)
+            await device.async_poll_request(self)
             return
 
         # query specific namespaces instead of NS_ALL since we hope this is
@@ -801,7 +806,7 @@ class NamespaceHandler:
     async def async_poll_digest(self):
         """This is the policy to be used when async_poll_all turns to requesting single
         namespaces as appearing in the digest key of ns_all. See async_poll_all."""
-        await self.device.async_request_poll(self)
+        await self.device.async_poll_request(self)
 
     async def async_poll_default(self):
         """
@@ -813,7 +818,7 @@ class NamespaceHandler:
         """
         device = self.device
         if not (device._mqtt_active and self.polling_epoch_next):
-            await device.async_request_poll(self)
+            await device.async_poll_request(self)
 
     async def async_poll_smart(self):
         """
@@ -839,7 +844,7 @@ class NamespaceHandler:
             return
         """
         if device._polling_epoch >= self.polling_epoch_next:
-            if await device.async_request_smartpoll(self):
+            if await device.async_poll_request_smart(self):
                 return
 
         # Insert into the lazypoll_requests ordering by least recently polled
@@ -855,7 +860,7 @@ class NamespaceHandler:
         same queueing policy as async_poll_smart to don't overwhelm the cloud mqtt
         """
         if not self.polling_epoch_next:
-            await self.device.async_request_smartpoll(self)
+            await self.device.async_poll_request_smart(self)
 
     async def async_poll_chunked(self):
         """
@@ -873,12 +878,12 @@ class NamespaceHandler:
             # PUSHed when on MQTT
             return
 
-        size_available = device.polling_response_size_available - mlc.PARAM_HEADER_SIZE
+        size_available = device.polling_response_size_available - self.HEADER_AVG_SIZE
         if size_available < self.polling_response_item_size:
             if device._multiple_requests:
-                await device._async_poll_multiple_flush()
+                await device.async_poll_flush()
                 size_available = (
-                    device.polling_response_size_available - mlc.PARAM_HEADER_SIZE
+                    device.polling_response_size_available - self.HEADER_AVG_SIZE
                 )
             else:
                 device.log(
@@ -905,7 +910,7 @@ class NamespaceHandler:
         channels = iter(self.channels_to_poll())
         channels_payload = self.polling_request_channels
         channels_payload.clear()
-        self.polling_response_size = mlc.PARAM_HEADER_SIZE
+        self.polling_response_size = self.HEADER_AVG_SIZE
         while True:
             if size_available > self.polling_response_item_size:
                 try:
@@ -915,22 +920,22 @@ class NamespaceHandler:
                     continue
                 except StopIteration:
                     if channels_payload:
-                        await device.async_request_poll(self)
+                        await device.async_poll_request(self)
                     # no need to flush multiple since the polling loop
                     # will continue with standard handling
                     break
 
             if channels_payload:
-                await device.async_request_poll(self)
+                await device.async_poll_request(self)
             if device._multiple_requests:
                 # ensure we (eventually) flush multiple requests
-                await device._async_poll_multiple_flush()
+                await device.async_poll_flush()
 
             # reset for next chunk
             channels_payload.clear()
-            self.polling_response_size = mlc.PARAM_HEADER_SIZE
+            self.polling_response_size = self.HEADER_AVG_SIZE
             size_available = (
-                device.polling_response_size_available - mlc.PARAM_HEADER_SIZE
+                device.polling_response_size_available - self.HEADER_AVG_SIZE
             )
             if size_available < self.polling_response_item_size:
                 # This is pathological since we've just flushed everything
@@ -964,7 +969,7 @@ class NamespaceHandler:
             return
 
         if device._polling_epoch >= self.polling_epoch_next:
-            await device.async_request_smartpoll(self)
+            await device.async_poll_request_smart(self)
 
     async def async_trace(self, async_request_func: "AsyncRequestFunc", /):
         """

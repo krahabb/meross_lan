@@ -132,9 +132,10 @@ def digest_init_togglex(
     for _key in (mc.KEY_FAN, mc.KEY_GARAGEDOOR, mc.KEY_LIGHT):
         if _key in digest:
             for _key_digest in extract_dict_payloads(digest[_key]):
-                channel = _key_digest.get(mc.KEY_CHANNEL)
-                if channel in channels:
-                    channels.remove(channel)
+                try:
+                    channels.remove(_key_digest[mc.KEY_CHANNEL])
+                except KeyError:
+                    pass
 
     # the fan controller 'map100' doesn't expose a fan in digest but it has one at channel 0
     if (mn.Appliance_Control_Fan in device.descriptor.ability) and (
@@ -145,9 +146,8 @@ def digest_init_togglex(
         except KeyError:
             pass
 
-    ns = mn.Appliance_Control_ToggleX
-    handler = device.get_handler(ns)
+    handler = device.get_handler(mn.Appliance_Control_ToggleX)
     handler.register_entity_class(MLToggleX, channels)
     if device.descriptor.is_refoss:
-        handler.polling_request = mn.PayloadType.DICT_IDX_65535.build_get(ns)
+        handler.polling_request = mn.PayloadType.DICT_IDX_65535.build_get(handler.ns)
     return handler.parse_list, (handler,)

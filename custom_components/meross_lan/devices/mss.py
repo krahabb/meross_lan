@@ -429,12 +429,12 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         if not self._channels_to_poll:
             return
         self.polling_response_size = (
-            mlc.PARAM_HEADER_SIZE + 3 * self.polling_response_item_size
+            self.HEADER_AVG_SIZE + 3 * self.polling_response_item_size
         )
-        await self.device.async_request_poll(self)
+        await self.device.async_poll_request(self)
         self.polling_request_channels.append({})
         self.polling_response_size = (
-            mlc.PARAM_HEADER_SIZE + self.polling_response_item_size
+            self.HEADER_AVG_SIZE + self.polling_response_item_size
         )
         self.polling_strategy = ConsumptionHNamespaceHandler.async_poll_smartchunk  # type: ignore
 
@@ -453,7 +453,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
                 device._lazypoll_requests, self, key=lambda h: h.lastrequest - epoch
             )
         else:
-            await device.async_request_smartpoll(self)
+            await device.async_poll_request_smart(self)
 
 
 class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
