@@ -78,12 +78,8 @@ class HAMQTTConnection(mlq.MQTTConnection):
 
     def __init__(self, api: "ComponentApi"):
         self.is_cloud_connection = False
-        mlq.MQTTConnection.__init__(
-            self,
-            api,
-            HostAddress("homeassistant", 0),
-            mc.TOPIC_RESPONSE.format(mlc.DOMAIN),
-        )
+        self.topic_command = mc.TOPIC_REQUEST.format(mlc.DOMAIN)
+        mlq.MQTTConnection.__init__(self, HostAddress("homeassistant", 0), api)
         self._unsub_mqtt_subscribe = None
         self._unsub_mqtt_disconnected = None
         self._unsub_mqtt_connected = None
@@ -328,19 +324,12 @@ class ComponentApi(mlq.MQTTProfile):
 
         def __init__(self, api: "ComponentApi", address: str, flow_id: str, /):
             self.api = api
-            # TODO: integrate Loggable properly
-            self.getEffectiveLevel = api.getEffectiveLevel
-            self.isEnabledFor = api.isEnabledFor
             self.address = address
             self.uuid = None  # type: ignore
             self.device = None
             self._flow_id = flow_id
             m_bt.BluetoothClient.__init__(
-                self,
-                address,
-                from_=mlc.DOMAIN,
-                loop=api.hass.loop,
-                logger=self,
+                self, address, self, from_=mlc.DOMAIN, loop=api.hass.loop
             )
             self._bt_unavailable_unsub = ha_bt.async_track_unavailable(
                 api.hass, self._bt_unavailable, address, connectable=True
@@ -390,6 +379,7 @@ class ComponentApi(mlq.MQTTProfile):
                     await asyncio.sleep(30)
 
         async def async_shutdown(self):
+            await super().async_shutdown()
             self._bt_unavailable_unsub()
             del self.api._bt_devices[self.address]
             if self.device:
@@ -397,8 +387,10 @@ class ComponentApi(mlq.MQTTProfile):
                 self.device = None  # type: ignore
             else:
                 self._init_task.cancel()
-            if self.is_connected:
-                await self.disconnect()
+                try:
+                    await self._init_task
+                except:
+                    pass
 
         def attach(self, device: "Device"):
             if self.device:
@@ -410,19 +402,6 @@ class ComponentApi(mlq.MQTTProfile):
             assert self.device
             self.device.bt_detached()
             self.device = None  # type: ignore
-
-        def log(self, level: int, msg: str, *args, **kwargs):
-            self.api.log(level, f"BTDevice({self.address}): {msg}", *args, **kwargs)
-
-        def log_exception(
-            self, level: int, exception: Exception, msg: str, *args, **kwargs
-        ):
-            self.log(
-                level,
-                f"{exception.__class__.__name__}({str(exception)}) in {msg}",
-                *args,
-                **kwargs,
-            )
 
         """ REMOVE
         def update(self, info: ha_bt.BluetoothServiceInfoBleak):
@@ -574,8 +553,8 @@ class ComponentApi(mlq.MQTTProfile):
         self.is_cloud_profile = False
         mlq.MQTTProfile.__init__(
             self,
-            self,
             mlc.CONF_PROFILE_ID_LOCAL,
+            self,
             hass.config_entries.async_entry_for_domain_unique_id(
                 mlc.DOMAIN, mlc.DOMAIN
             ),
@@ -680,7 +659,7 @@ class ComponentApi(mlq.MQTTProfile):
                         method,
                         payload,
                         self.key if key is None else key,
-                        mqtt_connection.topic_response,
+                        mqtt_connection.topic_command,
                         trigger_src,
                         device_id,
                     )
@@ -715,8 +694,10 @@ class ComponentApi(mlq.MQTTProfile):
                         ),
                         MerossHttpClient(
                             host,
+                            self,
+                            from_=mlc.DOMAIN,
+                            trigger_src=self.__class__.__name__,
                             loop=hass.loop,
-                            logger=self,
                         ).async_request_raw,
                     )
 

@@ -4,7 +4,6 @@ for Meross devices.
 """
 
 import asyncio
-import logging
 import socket
 import sys
 from typing import TYPE_CHECKING, override
@@ -12,13 +11,14 @@ from typing import TYPE_CHECKING, override
 import aiohttp
 from yarl import URL
 
-from . import MEROSSDEBUG, _BaseClient
+from . import MEROSSDEBUG, _BaseClient, logging
 from .protocol import AESCipher, MerossKeyError, const as mc, md5hexdigest
 from .protocol.message import MerossMessage, MerossResponse
 
 if TYPE_CHECKING:
     from typing import ClassVar, NotRequired, Unpack
 
+    from .logging import LoggerType
     from .protocol.types import MerossHeaderType, MerossRequestType
 
 
@@ -87,7 +87,7 @@ class MerossHttpClient(_BaseClient):
             await MerossHttpClient._SESSION.close()
             MerossHttpClient._SESSION = None
 
-    __slots__ = _BaseClient.__SLOTS__ + (
+    __slots__ = _BaseClient._calc_slots(
         "_host",
         "_requesturl",
         "_session",
@@ -97,7 +97,9 @@ class MerossHttpClient(_BaseClient):
         "_key_header",
     )
 
-    def __init__(self, host: str, **kwargs: "Unpack[Args]"):
+    def __init__(
+        self, host: str, parent: "LoggerType | None" = None, /, **kwargs: "Unpack[Args]"
+    ):
         """
         host: the ip or hostname of the device
         kwargs:
@@ -116,7 +118,7 @@ class MerossHttpClient(_BaseClient):
         self._terminate_guard = 0
         self._cipher = None
         self._key_header = {}  # type: ignore
-        _BaseClient.__init__(self, **kwargs)
+        super().__init__(host, parent, **kwargs)
 
     @property
     def host(self):
@@ -137,10 +139,9 @@ class MerossHttpClient(_BaseClient):
         if self._terminate:
             raise TerminatedException
 
-    async def async_terminate(self):
-        """
-        Marks the client as 'terminating' and awaits for any pending request to finish
-        """
+    @override
+    async def async_shutdown(self):
+        await super().async_shutdown()
         self._terminate = True
         while self._terminate_guard:
             await asyncio.sleep(0.5)
@@ -150,17 +151,17 @@ class MerossHttpClient(_BaseClient):
         self, request: "MerossMessage", /, **kwargs: "Unpack[RequestArgs]"
     ) -> MerossResponse:
         self._check_terminated()
-        logger = self.logger
-        logid = None
         self._terminate_guard += 1
         try:
-            if logger and logger.isEnabledFor(self.LOG_DUMP):
+            if self.isEnabledFor(logging.VERBOSE):
                 # we catch the 'request' id before json dumping so
                 # to reasonably set the context before any exception
-                logid = f"MerossHttpClient({self._host}:{id(request)})"
+                logid = f"{self.__class__.__name__}({self._host}:{id(request)})"
+                logger = self.parent
                 logger.log(logging.DEBUG, "%s: HTTP Request (%s)", logid, request)
             else:
-                logger = None
+                logid = logger = None
+
             if MEROSSDEBUG:
                 MEROSSDEBUG.http_random_timeout()
 
@@ -206,7 +207,7 @@ class MerossHttpClient(_BaseClient):
                 response = _cipher.decript_text(response)
 
             if logger:
-                logger.log(self.LOG_DUMP, "%s: HTTP Response (%s)", logid, response)
+                logger.log(logging.VERBOSE, "%s: HTTP Response (%s)", logid, response)
             self._check_terminated()
             return MerossResponse(response)
         except Exception as e:
@@ -223,6 +224,7 @@ class MerossHttpClient(_BaseClient):
         finally:
             self._terminate_guard -= 1
 
+    @override
     async def async_request(
         self, *args: "Unpack[MerossRequestType]", **kwargs: "Unpack[RequestArgs]"
     ) -> MerossResponse:
@@ -238,14 +240,12 @@ class MerossHttpClient(_BaseClient):
                 if key is not None:
                     raise MerossKeyError(response)
                 # sign error... hack and fool
-                if self.logger:
-                    self.logger.log(
-                        logging.WARNING,
-                        "MerossHttpClient(%s): Key error on %s %s -> retrying with key-reply hack",
-                        self._host,
-                        args[1],
-                        args[0],
-                    )
+                self.log(
+                    logging.WARNING,
+                    "Key error on %s %s -> retrying with key-reply hack",
+                    args[1],
+                    args[0],
+                )
                 req_header = request.header
                 resp_header = response.header
                 req_header[mc.KEY_MESSAGEID] = resp_header[mc.KEY_MESSAGEID]

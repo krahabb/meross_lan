@@ -7,6 +7,7 @@ import re
 from time import time
 from typing import TYPE_CHECKING
 
+from . import logging
 from .protocol import (
     b64decode,
     b64encode,
@@ -344,6 +345,9 @@ class HostAddress:
         self.host = host
         self.port = port
 
+    def __hash__(self):
+        return hash((self.host, self.port))
+
     def __eq__(self, value):
         return (
             isinstance(value, HostAddress)
@@ -643,19 +647,18 @@ class MerossDeviceDescriptor:
         return upgrade_payload
 
 
-class _BaseClient:
+class _BaseClient(logging.Loggable):
     """Abstract base client providing common api for different transports (HTTP-MQTT-BT)."""
 
     if TYPE_CHECKING:
 
-        class Args(TypedDict):
+        class Args(logging.Loggable.Args):
             key: NotRequired[str]
             from_: NotRequired[str]
             trigger_src: NotRequired[str]
             timeout: NotRequired[float]
             descriptor: NotRequired[MerossDeviceDescriptor]
             loop: NotRequired[asyncio.AbstractEventLoop]
-            logger: NotRequired[LoggerType | None]
 
         class RequestArgs(TypedDict):
             timeout: NotRequired[float]
@@ -665,10 +668,8 @@ class _BaseClient:
         trigger_src: str  # default value in 'triggerSrc' header key
         timeout: float
         descriptor: MerossDeviceDescriptor | None
-        logger: LoggerType | None
         loop: Final[asyncio.AbstractEventLoop]
 
-    LOG_DUMP = 5  # logging level for raw messages dumping
     TIMEOUT_DEFAULT = 10
 
     # Using a 'placeholder' definition to ease including in diamond pattern hierarchies:
@@ -677,28 +678,19 @@ class _BaseClient:
         "key",
         "timeout",
         "descriptor",
-        "logger",
         "loop",
     )
 
-    @classmethod
-    def _calc_slots(cls, *slots: "Unpack[tuple[str, ...]]"):
-        _slots = set(slots)
-        for _base in cls.__mro__:
-            try:
-                _slots.update(_base.__SLOTS__)
-            except AttributeError:
-                pass
-        return _slots
-
-    def __init__(self, **kwargs: "Unpack[Args]"):
+    def __init__(
+        self, id, parent: "LoggerType | None" = None, /, **kwargs: "Unpack[Args]"
+    ):
         self.key = kwargs.pop("key", "")
         self.from_ = kwargs.pop("from_", mc.HEADER_FROM_DEFAULT)
         self.trigger_src = kwargs.pop("trigger_src", self.__class__.__name__)
         self.timeout = kwargs.pop("timeout", self.TIMEOUT_DEFAULT)
         self.descriptor = kwargs.pop("descriptor", None)
-        self.logger = kwargs.pop("logger", None)
         self.loop = kwargs.pop("loop", asyncio.get_running_loop())
+        super().__init__(id, parent or logging.getLogger(__name__), **kwargs)
 
     async def async_request_raw(
         self, request: MerossRequest, /, **kwargs: "Unpack[RequestArgs]"

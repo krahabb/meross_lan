@@ -57,7 +57,7 @@ class Mts960Climate(MtsThermostatClimate):
 
         def __init__(self, climate: "Mts960Climate", entity_key: str, /):
             MLEmulatedNumber.__init__(
-                self, climate.manager, climate.channel, entity_key=entity_key
+                self, climate.channel, climate.manager, entity_key=entity_key
             )
 
     if TYPE_CHECKING:
@@ -102,12 +102,12 @@ class Mts960Climate(MtsThermostatClimate):
         "_mts_timer_mode",
     )
 
-    def __init__(self, manager: "Device", channel: object, /):
+    def __init__(self, channel: int, manager: "Device", /):
         self._mts_working = None
         self._mts_timer_payload = None
         self._mts_timer_mode = None
-        super().__init__(manager, channel)
-        self.binary_sensor_plug_state = Mts960Climate.PlugState(manager, channel)
+        super().__init__(channel, manager)
+        self.binary_sensor_plug_state = Mts960Climate.PlugState(channel, manager)
         self.number_timer_down_duration = Mts960Climate.TimerConfigNumber(
             self, "timer_down_duration"
         )
@@ -393,7 +393,7 @@ class Mts960Climate(MtsThermostatClimate):
                 except KeyError as key_error:
                     if key_error.args[0] != key:
                         MLDiagnosticSensor(
-                            manager, channel, entity_key=key, native_value=native_value
+                            channel, manager, entity_key=key, native_value=native_value
                         )
 
         self.flush_state()

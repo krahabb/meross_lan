@@ -41,14 +41,14 @@ class MLButton(me.MEPartialAvailableMixin, me.MLEntity, button.ButtonEntity):
 
     def __init__(
         self,
+        channel: "me.ChannelType | None",
         manager: "EntityManager",
-        channel: object | None,
-        entitykey: str | None,
+        entitykey: str,
         press_func: "Callable[[], CoroutineType[Any, Any, None]]",
         **kwargs: "Unpack[MLButton.Args]",
     ):
         kwargs.setdefault("entity_key", entitykey)  # FIXME
-        super().__init__(manager, channel, **kwargs)
+        super().__init__(channel, manager, **kwargs)
         self.async_press = press_func
 
     async def async_shutdown(self):

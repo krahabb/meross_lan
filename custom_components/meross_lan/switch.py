@@ -72,8 +72,8 @@ class PhysicalLockSwitch(MLSwitch):
     ns = mn.Appliance_Control_PhysicalLock
     NS_CHANNELS = MLSwitch.NS_CHANNELS_SINGLE
 
-    def __init__(self, manager: "Device", channel, /):
-        MLSwitch.__init__(self, manager, channel)
+    def __init__(self, channel: int, manager: "Device", /):
+        MLSwitch.__init__(self, channel, manager)
         manager.register_parser_entity(self)
 
 
@@ -106,8 +106,8 @@ class MLToggleX(MLSwitch):
     _attr_device_class = MLSwitch.DeviceClass.OUTLET
     entity_category = None
 
-    def __init__(self, manager: "Device", channel, /):
-        MLSwitch.__init__(self, manager, channel)
+    def __init__(self, channel: int, manager: "Device", /):
+        MLSwitch.__init__(self, channel, manager)
         manager.register_parser_entity(self)
 
 

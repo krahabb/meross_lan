@@ -115,7 +115,7 @@ class Loggable(abc.ABC):
 
     if TYPE_CHECKING:
         id: Final[Any]
-        logger: LoggerType
+        parent: Final[LoggerType]
 
         class Args(TypedDict):
             pass
@@ -126,17 +126,27 @@ class Loggable(abc.ABC):
     WARNING = WARNING
     CRITICAL = CRITICAL
 
-    __SLOTS__ = ("id", "logtag", "logger")
+    __SLOTS__ = ("id", "logtag", "parent")
 
-    def __init__(self, parent: "LoggerType", id, /, **kwargs: "Unpack[Args]"):
+    @classmethod
+    def _calc_slots(cls, *slots: "Unpack[tuple[str, ...]]"):
+        _slots = set(slots)
+        for _base in cls.__mro__:
+            try:
+                _slots.update(_base.__SLOTS__)
+            except AttributeError:
+                pass
+        return _slots
+
+    def __init__(self, id, parent: "LoggerType", /, **kwargs: "Unpack[Args]"):
         self.id = id
-        self.logger = parent
+        self.parent = parent
         self.configure_logger()
-        self.log(self.DEBUG, "init")
+        self.log(VERBOSE, "init")
 
     async def async_shutdown(self):
         # mostly useful for multiple inheritance patterns
-        self.log(self.DEBUG, "async_shutdown")
+        self.log(VERBOSE, "async_shutdown")
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.id})"
@@ -145,14 +155,14 @@ class Loggable(abc.ABC):
         self.logtag = f"{self.__class__.__name__}({self.id})"
 
     def getEffectiveLevel(self):
-        return self.logger.getEffectiveLevel()
+        return self.parent.getEffectiveLevel()
 
     def isEnabledFor(self, level: int):
-        return self.logger.isEnabledFor(level)
+        return self.parent.isEnabledFor(level)
 
     def log(self, level: int, msg: str, *args, **kwargs):
         # TODO: use Logger.filter/formatter to accomplish this more elegantly
-        self.logger.log(level, f"{self.logtag}: {msg}", *args, **kwargs)
+        self.parent.log(level, f"{self.logtag}: {msg}", *args, **kwargs)
 
     def log_exception(
         self, level: int, exception: BaseException, msg: str, *args, **kwargs
@@ -172,4 +182,4 @@ class Loggable(abc.ABC):
             self.log_exception(self.WARNING, exception, msg, *args, **kwargs)
 
     def __del__(self):
-        self.log(self.DEBUG, "destroy")
+        self.log(VERBOSE, "destroy")

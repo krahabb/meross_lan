@@ -5,12 +5,13 @@ from ..select import MLConfigSelect
 
 if TYPE_CHECKING:
     from ..helpers.device import Device, DigestInitReturnType
+    from ..helpers.entity import ChannelType
 
 
 def digest_init_spray(device: "Device", digest) -> "DigestInitReturnType":
     """[{"channel": 0, "mode": 0, "lmTime": 1629035486, "lastMode": 1, "onoffTime": 1629035486}]"""
     for channel_digest in digest:
-        MLSpray(device, channel_digest[mc.KEY_CHANNEL])
+        MLSpray(channel_digest[mc.KEY_CHANNEL], device)
 
     handler = device.get_handler(mn.Appliance_Control_Spray)
     return handler.parse_list, (handler,)
@@ -35,6 +36,6 @@ class MLSpray(MLConfigSelect):
 
     entity_category = None
 
-    def __init__(self, manager: "Device", channel: object, /):
-        MLConfigSelect.__init__(self, manager, channel)
+    def __init__(self, channel: "ChannelType", manager: "Device", /):
+        MLConfigSelect.__init__(self, channel, manager)
         manager.register_parser_entity(self)

@@ -86,22 +86,17 @@ class MLSiren(me.MLBinaryEntity, siren.SirenEntity):
 
     __slots__ = ()
 
-    def __init__(
-        self,
-        manager: "Device",
-        channel: "Any | None" = None,
-        **kwargs: "Unpack[Args]",
-    ):
-        super().__init__(manager, channel, **kwargs)
+    def __init__(self, channel: int, manager: "Device", /, **kwargs: "Unpack[Args]"):
+        super().__init__(channel, manager, **kwargs)
         manager.register_parser_entity(self)
         if mn.Appliance_Config_Alarm in manager.descriptor.ability:
-            song_select = self.SongSelect(manager, channel)
+            song_select = self.SongSelect(channel, manager)
             self.available_tones = song_select.OPTIONS_MAP
             self.supported_features = self.SUPPORTED_FEATURES
             manager.get_handler(mn.Appliance_Config_Alarm).register_parsers(
-                self.EnableSwitch(manager, channel),
+                self.EnableSwitch(channel, manager),
                 song_select,
-                self.VolumeNumber(manager, channel),
+                self.VolumeNumber(channel, manager),
             )
         else:
             self.available_tones = {}

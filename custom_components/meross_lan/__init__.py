@@ -27,7 +27,9 @@ else:
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry[ConfigEntryManager]"
 ):
-    ComponentApi.ROOT_LOGGER.debug("async_setup_entry (entry_id:%s)", config_entry.entry_id)
+    ComponentApi.ROOT_LOGGER.debug(
+        "async_setup_entry (entry_id:%s)", config_entry.entry_id
+    )
 
     api = ComponentApi.get(hass)
 
@@ -39,7 +41,7 @@ async def async_setup_entry(
                 # this could happen when we add profile entries after boot
                 api.devices[device_id] = None
 
-            device = mld.Device(api, device_id, config_entry)
+            device = mld.Device(device_id, api, config_entry)
             try:
                 await device.async_init()
                 await device.async_setup_entry(hass, config_entry)
@@ -58,7 +60,7 @@ async def async_setup_entry(
             except KeyError:
                 # this could happen when we add entries after boot
                 api.profiles[profile_id] = None
-            profile = mlp.MerossProfile(api, profile_id, config_entry)
+            profile = mlp.MerossProfile(profile_id, api, config_entry)
             try:
                 await profile.async_init()
                 await profile.async_setup_entry(hass, config_entry)
@@ -89,12 +91,16 @@ async def async_setup_entry(
 async def async_unload_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry[ConfigEntryManager]"
 ) -> bool:
-    ComponentApi.ROOT_LOGGER.debug("async_unload_entry (entry_id:%s)", config_entry.entry_id)
+    ComponentApi.ROOT_LOGGER.debug(
+        "async_unload_entry (entry_id:%s)", config_entry.entry_id
+    )
     return await config_entry.runtime_data.async_unload_entry(hass, config_entry)
 
 
 async def async_remove_entry(hass: "HomeAssistant", config_entry: "ConfigEntry"):
-    ComponentApi.ROOT_LOGGER.debug("async_remove_entry (entry_id:%s)", config_entry.entry_id)
+    ComponentApi.ROOT_LOGGER.debug(
+        "async_remove_entry (entry_id:%s)", config_entry.entry_id
+    )
     api = ComponentApi.get(hass)
     match ConfigEntryType.get_type_and_id(config_entry.unique_id):
         case (ConfigEntryType.DEVICE, device_id):

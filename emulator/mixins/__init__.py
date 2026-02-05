@@ -938,14 +938,15 @@ class MerossEmulator:
         self.loop.call_soon_threadsafe(_mqtt_publish)
 
     def _mqtt_setup(self):
-        self.mqtt_client = mqtt_client = MerossMQTTDeviceClient(
+        broker = self.descriptor.main_broker
+        self.mqtt_client = mqtt_client = MerossMQTTDeviceClient(broker, None,
             key=self.key, uuid=self.uuid, user_id=self.descriptor.userId
         )
         mqtt_client.on_subscribe = self._mqttc_subscribe
         mqtt_client.on_disconnect = self._mqttc_disconnect
         mqtt_client.on_message = self._mqttc_message
         mqtt_client.suppress_exceptions = True
-        mqtt_client.safe_start(self.descriptor.main_broker)
+        mqtt_client.safe_start(broker)
 
     def _mqtt_shutdown(self):
         self.mqtt_client.safe_stop()

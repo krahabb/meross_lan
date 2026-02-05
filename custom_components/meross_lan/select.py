@@ -72,13 +72,17 @@ class MLConfigSelect(MLSelect):
     )
 
     def __init__(
-        self, manager: "BaseDevice", channel, **kwargs: "Unpack[MLSelect.Args]"
+        self,
+        channel: "me.ChannelType | None",
+        manager: "BaseDevice",
+        /,
+        **kwargs: "Unpack[MLSelect.Args]",
     ):
         self.current_option = None
         self.options_map = self.OPTIONS_MAP
         self.options = list(self.options_map.values())
         self.device_value = None
-        MLSelect.__init__(self, manager, channel, **kwargs)
+        MLSelect.__init__(self, channel, manager, **kwargs)
 
     def set_unavailable(self):
         self.device_value = None

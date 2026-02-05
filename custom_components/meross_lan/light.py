@@ -252,7 +252,7 @@ class MLLightBase(me.MLBinaryEntity, light.LightEntity):
     )
 
     def __init__(
-        self, manager: "Device", channel, effect_list: list[str] | None = None, /
+        self, channel: int, manager: "Device", effect_list: list[str] | None = None, /
     ):
         self._rgb_to_native = rgb_to_native
         self._native_to_rgb = native_to_rgb
@@ -270,7 +270,7 @@ class MLLightBase(me.MLBinaryEntity, light.LightEntity):
             self.supported_features = (
                 LightEntityFeature.EFFECT | LightEntityFeature.TRANSITION
             )
-        super().__init__(manager, channel)
+        super().__init__(channel, manager)
         manager.register_parser_entity(self)
 
     # interface: MLBinaryEntity
@@ -446,7 +446,7 @@ class MLLight(MLLightBase):
     )
 
     def __init__(
-        self, manager: "Device", channel, effect_list: list[str] | None = None
+        self, channel: int, manager: "Device", effect_list: list[str] | None = None
     ):
         # we'll use the (eventual) togglex payload to
         # see if we have to toggle the light by togglex or so
@@ -475,7 +475,7 @@ class MLLight(MLLightBase):
             else:
                 supported_color_modes.add(ColorMode.ONOFF)
 
-        MLLightBase.__init__(self, manager, channel, effect_list)
+        MLLightBase.__init__(self, channel, manager, effect_list)
         self.handler_togglex = manager.register_togglex_channel(self, True)
         self._togglex_auto = None if self.handler_togglex else False
 
@@ -632,9 +632,9 @@ class MLLightEffect(MLLight):
         "handler_light_effect",
     )
 
-    def __init__(self, manager: "Device", channel, /):
+    def __init__(self, channel: int, manager: "Device", /):
         self._light_effect_list: list[dict] = []
-        MLLight.__init__(self, manager, channel, [])
+        MLLight.__init__(self, channel, manager, [])
         self.handler_light_effect = NamespaceHandler(
             manager,
             mn.Appliance_Control_Light_Effect,
@@ -788,11 +788,11 @@ def digest_init_light(device: "Device", digest: dict, /) -> "DigestInitReturnTyp
     ability = device.descriptor.ability
 
     if mn.Appliance_Control_Light_Effect in ability:
-        MLLightEffect(device, digest[mc.KEY_CHANNEL])
+        MLLightEffect(digest[mc.KEY_CHANNEL], device)
     elif mn.Appliance_Control_Mp3 in ability:
-        MLLight(device, digest[mc.KEY_CHANNEL], mc.HP110A_LIGHT_EFFECT_LIST)
+        MLLight(digest[mc.KEY_CHANNEL], device, mc.HP110A_LIGHT_EFFECT_LIST)
     else:
-        MLLight(device, digest[mc.KEY_CHANNEL])
+        MLLight(digest[mc.KEY_CHANNEL], device)
     handler = device.ns_handlers[mn.Appliance_Control_Light]
     return handler.parse_dict, (handler,)
 

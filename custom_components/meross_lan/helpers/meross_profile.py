@@ -69,28 +69,24 @@ if TYPE_CHECKING:
         tokenRequestTime: float
 
 
-class MerossMQTTConnection(mlq.MQTTConnection, MerossMQTTAppClient):
-
-    # here we're acrobatically slottizing MerossMQTTAppClient
-    # since it cannot be slotted itself leading to multiple inheritance
-    # "forbidden" slots
+class MerossMQTTConnection(MerossMQTTAppClient, mlq.MQTTConnection):
 
     if TYPE_CHECKING:
         is_cloud_connection: Final[Literal[True]]
 
     __slots__ = MerossMQTTAppClient._calc_slots("_unsub_random_disconnect")
 
-    def __init__(self, profile: "MerossProfile", broker: "HostAddress"):
+    def __init__(self, broker: "HostAddress", profile: "MerossProfile"):
         self.is_cloud_connection = True
-        MerossMQTTAppClient.__init__(
-            self,
+        super().__init__(
+            broker,
+            profile,
             key=profile.key,
             app_id=profile.app_id,
             user_id=profile.userid,
             loop=profile.api.hass.loop,
             sslcontext=get_default_ssl_context(),
         )
-        mlq.MQTTConnection.__init__(self, profile, broker, self.topic_command)
 
         if MEROSSDEBUG:
 
@@ -146,12 +142,6 @@ class MerossMQTTConnection(mlq.MQTTConnection, MerossMQTTAppClient):
                 # enforce the state eventually cancelling queued, dropped...
                 sensor_connection.native_value = sensor_connection.STATE_CONNECTED
             sensor_connection.flush_state()
-
-    # interface: MerossMQTTAppClient
-    @override
-    def _easy_log(self, level, fmt: str, *args) -> None:
-        # TODO: obfuscate in case (paho logs the topics...)
-        self.log(self.DEBUG, f"PAHO-LOG{{%s}} -> {fmt}", level, *args)
 
 
 MerossMQTTConnection.SESSION_HANDLERS = {
@@ -219,9 +209,9 @@ class MerossProfile(mlq.MQTTProfile):
         "_device_info_time",
     )
 
-    def __init__(self, api: "ComponentApi", id: str, config_entry: "ConfigEntry", /):
+    def __init__(self, id: str, api: "ComponentApi", config_entry: "ConfigEntry", /):
         self.is_cloud_profile = True
-        mlq.MQTTProfile.__init__(self, api, id, config_entry)
+        mlq.MQTTProfile.__init__(self, id, api, config_entry)
         # state of the art for credentials is that they're mixed in
         # into the config_entry.data but this is prone to issues and confusing
         # so we 'might' decide to move them to a dict valued key in configentry.data
@@ -287,7 +277,7 @@ class MerossProfile(mlq.MQTTProfile):
 
         if mc.KEY_MQTTDOMAIN in self.config:
             broker = HostAddress.build(self.config[mc.KEY_MQTTDOMAIN])  # type: ignore
-            mqttconnection = MerossMQTTConnection(self, broker)
+            mqttconnection = MerossMQTTConnection(broker, self)
             mqttconnection.schedule_connect(broker)
 
         # compute the next cloud devlist query and setup the scheduled callback
@@ -484,7 +474,7 @@ class MerossProfile(mlq.MQTTProfile):
         try:
             return self.mqttconnections[str(broker)]  # type: ignore
         except KeyError:
-            return MerossMQTTConnection(self, broker)
+            return MerossMQTTConnection(broker, self)
 
     async def _async_get_mqttconnection(self, broker: HostAddress):
         """

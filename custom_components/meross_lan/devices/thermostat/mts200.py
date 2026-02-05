@@ -54,8 +54,8 @@ class Mts200Climate(MtsThermostatClimate):
         "_mts_summermode_supported",
     )
 
-    def __init__(self, manager: "Device", channel: object, /):
-        MtsThermostatClimate.__init__(self, manager, channel)
+    def __init__(self, channel: int, manager: "Device", /):
+        MtsThermostatClimate.__init__(self, channel, manager)
         self._mts_summermode = None
         self._mts_summermode_supported = (
             mn_t.Appliance_Control_Thermostat_SummerMode in manager.descriptor.ability

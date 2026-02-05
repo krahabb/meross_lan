@@ -39,8 +39,8 @@ class MLScreenBrightnessNumber(MLConfigNumber):
         self.key_value = key
         MLConfigNumber.__init__(
             self,
-            manager,
             0,
+            manager,
             entity_key=f"screenbrightness_{key}",
             name=f"Screen brightness ({key})",
         )
@@ -99,8 +99,8 @@ class MtsWarningSensor(MLEnumSensor):
         entity_key = f"{number_temperature.entitykey}_warning"
         MLEnumSensor.__init__(
             self,
-            number_temperature.manager,
             number_temperature.channel,
+            number_temperature.manager,
             entity_key=entity_key,
             native_value=native_value,
             translation_key=f"mts_{entity_key}",
@@ -115,8 +115,8 @@ class MtsConfigSwitch(MLSwitch):
         self.ns = number_temperature.ns
         MLSwitch.__init__(
             self,
-            number_temperature.manager,
             number_temperature.channel,
+            number_temperature.manager,
             entity_key=f"{number_temperature.entitykey}_switch",
             device_value=device_value,
             name=(f"{number_temperature.entitykey} Alarm").capitalize(),
@@ -142,8 +142,8 @@ class MtsCommonTemperatureNumber(MLConfigNumber):
     def __init__(self, climate: "MtsThermostatClimate", /):
         MLConfigNumber.__init__(
             self,
-            climate.manager,
             climate.channel,
+            climate.manager,
             entity_key=self.__class__.ns.slug_end,
             device_scale=climate.device_scale,
         )
@@ -250,8 +250,8 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
             self.sensor_external_temperature.update_device_value(current_temp)
         except AttributeError:
             self.sensor_external_temperature = MLTemperatureSensor(
-                self.manager,
                 self.channel,
+                self.manager,
                 entity_key="external sensor",
                 device_value=current_temp,
                 device_scale=self.device_scale,
@@ -271,7 +271,7 @@ class MtsWindowOpened(MLBinarySensor):
     _attr_device_class = MLBinarySensor.DeviceClass.WINDOW
 
     def __init__(self, climate: "MtsThermostatClimate", /):
-        MLBinarySensor.__init__(self, climate.manager, climate.channel)
+        MLBinarySensor.__init__(self, climate.channel, climate.manager)
         climate.manager.register_parser_entity(self)
 
 
@@ -283,7 +283,7 @@ class MtsExternalSensorSwitch(MLSwitch):
     key_value = mc.KEY_MODE
 
     def __init__(self, climate: "MtsThermostatClimate", /):
-        MLSwitch.__init__(self, climate.manager, climate.channel)
+        MLSwitch.__init__(self, climate.channel, climate.manager)
         climate.manager.register_parser_entity(self)
 
 
@@ -306,11 +306,11 @@ class MtsHoldAction(MLConfigSelect):
     __slots__ = ("number_time",)
 
     def __init__(self, climate: "MtsThermostatClimate", /):
-        MLConfigSelect.__init__(self, climate.manager, climate.channel)
+        MLConfigSelect.__init__(self, climate.channel, climate.manager)
         climate.manager.register_parser_entity(self)
         self.number_time = MLConfigNumber(
-            climate.manager,
             climate.channel,
+            climate.manager,
             entity_key="hold_action_time",
             device_scale=1,
             device_class=MLConfigNumber.DEVICE_CLASS_DURATION,
@@ -353,7 +353,7 @@ class MtsTempUnit(MLConfigSelect):
     manager: "Device"
 
     def __init__(self, climate: "MtsThermostatClimate", /):
-        MLConfigSelect.__init__(self, climate.manager, climate.channel)
+        MLConfigSelect.__init__(self, climate.channel, climate.manager)
         climate.manager.register_parser_entity(self)
 
 
@@ -413,8 +413,8 @@ class MtsThermostatClimate(MtsClimate):
             self.native_step = 0.1
             MtsCommonTemperatureNumber.__init__(self, climate)
 
-    def __init__(self, manager: "Device", channel, /):
-        MtsClimate.__init__(self, manager, channel)
+    def __init__(self, channel: int, manager: "Device", /):
+        MtsClimate.__init__(self, channel, manager)
         manager.register_parser_ex(
             self, self.ns, *self.OPTIONAL_NAMESPACES_INITIALIZERS
         )
@@ -509,7 +509,7 @@ def digest_init_thermostat(device: "Device", digest: dict) -> "DigestInitReturnT
 
         if climate_class := CLIMATE_INITIALIZERS.get(ns_key):
             for channel_digest in ns_digest:
-                climate_class(device, channel_digest[mc.KEY_CHANNEL])
+                climate_class(channel_digest[mc.KEY_CHANNEL], device)
 
     def digest_parse_thermostat(digest: dict):
         """

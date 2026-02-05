@@ -170,10 +170,10 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         """Plain MerossHttpClient. When using ensure the host/key are correctly set/refreshed."""
         return MerossHttpClient(
             "",
+            self.api,
             from_=mlc.DOMAIN,
             trigger_src=self.__class__.__name__,
             loop=self.hass.loop,
-            logger=self.api,
         )
 
     async def async_get_device_client(self, device_id: str) -> "_BaseClient | None":
@@ -190,8 +190,8 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                     return device._http_active
                 elif device._mqtt_publish:
                     return MQTTConnection.Client(
-                        device._mqtt_publish,
                         device_id,
+                        device._mqtt_publish,
                         key=self.device_config.get(mlc.CONF_KEY) or "",
                         trigger_src=self.__class__.__name__,
                     )
@@ -217,8 +217,8 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
             mqttconnections = await profile.get_or_create_mqttconnections(device_id)
             if mqttconnections:
                 return MQTTConnection.Client(
-                    mqttconnections[0],
                     device_id,
+                    mqttconnections[0],
                     key=device_config.get(mlc.CONF_KEY) or "",
                     trigger_src=self.__class__.__name__,
                 )
@@ -683,12 +683,13 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                     if server != device_server:
                         if check:
                             _mqttclient = MerossMQTTDeviceClient(
+                                server_address,
+                                api,
                                 key=key,
                                 uuid=device_id,
                                 user_id=user_id,
                                 loop=hass.loop,
                                 sslcontext=get_default_no_verify_ssl_context(),
-                                logger=api,
                             )
                             try:
                                 await asyncio.wait_for(

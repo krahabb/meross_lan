@@ -292,7 +292,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
                     if entity_class.MODEL == key_digest
                 ).__next__()
 
-        return SubDevice(self, subid, key_digest, entity_class)
+        return SubDevice(subid, self, key_digest, entity_class)
 
 
 class SubDevice(mld.BaseDevice, MLNumericSensor):
@@ -348,8 +348,8 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
 
     def __init__(
         self,
-        hub: HubMixin,
         subid: str,
+        hub: HubMixin,
         key_digest: str,
         entity_class: "type[SubDeviceEntity] | None",
         /,
@@ -366,8 +366,8 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
         # MLNumericSensor init (battery level) will pop device_entry from kwargs
         # so we need to ensure it's built after EntityManager base
         super().__init__(
-            hub,
             subid,
+            hub,
             device_entry=hub.api.device_registry.async_get_or_create(
                 config_entry_id=hub.config_entry.entry_id,
                 manufacturer=mc.MANUFACTURER,
@@ -379,7 +379,7 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
         )
         hub.register_parser_ex(self, *self.NS_SUBDEVICE)
         if entity_class:
-            subdev_entity = entity_class(self, subid)
+            subdev_entity = entity_class(subid, self)
             self._digest_parse = subdev_entity._parse
             hub.register_parser_ex(subdev_entity, entity_class.ns, *entity_class.NS_HUB)
         else:
@@ -567,11 +567,7 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
     def _parse_beep(self, payload: "mt_h.SubDevice_Beep", /):
         self.ns_handlers[mn_h.Appliance_Hub_SubDevice_Beep].swap_parsers(
             self,
-            HubBeep(
-                self,
-                self.id,
-                device_value=payload[mc.KEY_ONOFF],
-            ),
+            HubBeep(self.id, self, device_value=payload[mc.KEY_ONOFF]),
         )
 
     def _parse_version(self, payload: "mt_h.SubDevice_Version", /):
@@ -727,29 +723,29 @@ class SmokeAlarmSensor(SubDeviceEntity, MLEnumSensor):
         "sensor_interConn",
     )
 
-    def __init__(self, subdevice: "SubDevice", subid: str):
+    def __init__(self, subid: str, subdevice: "SubDevice", /):
         self.device_value = (
             None  # TODO: move to MLEnumSensor together with mapping capability
         )
-        super().__init__(subdevice, subid, translation_key="smoke_alarm_status")
+        super().__init__(subid, subdevice, translation_key="smoke_alarm_status")
         self.binary_sensor_alarm = MLBinarySensor(
-            subdevice,
             subid,
+            subdevice,
             entity_key=mc.KEY_ALARM,
             device_class=MLBinarySensor.DeviceClass.SAFETY,
         )
         self.binary_sensor_error = MLBinarySensor(
-            subdevice,
             subid,
+            subdevice,
             entity_key=mc.KEY_ERROR,
             device_class=MLBinarySensor.DeviceClass.PROBLEM,
         )
-        self.binary_sensor_muted = MLBinarySensor(subdevice, subid, entity_key="muted")
+        self.binary_sensor_muted = MLBinarySensor(subid, subdevice, entity_key="muted")
         self.sensor_interConn = MLEnumSensor(
-            subdevice, subid, entity_key=mc.KEY_INTERCONN
+            subid, subdevice, entity_key=mc.KEY_INTERCONN
         )
-        MLButton(subdevice, subid, "button_mute", self.async_mute, name="Mute")
-        MLButton(subdevice, subid, "button_test", self.async_test, name="Test")
+        MLButton(subid, subdevice, "button_mute", self.async_mute, name="Mute")
+        MLButton(subid, subdevice, "button_test", self.async_test, name="Test")
 
     def _parse(self, payload: "mt_h._smokeAlarm", /):
         self.device_value = value = payload[mc.KEY_STATUS]
@@ -845,9 +841,9 @@ class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
 
     __slots__ = ("sensor_humidity",)
 
-    def __init__(self, subdevice: "SubDevice", subid: str):
-        super().__init__(subdevice, subid)
-        self.sensor_humidity = MLHumiditySensor(subdevice, subid)
+    def __init__(self, subid: str, subdevice: "SubDevice", /):
+        super().__init__(subid, subdevice)
+        self.sensor_humidity = MLHumiditySensor(subid, subdevice)
 
     async def async_shutdown(self):
         await super().async_shutdown()
@@ -873,13 +869,13 @@ class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
         subdevice.manager.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
             self,
             MS100Sensor.AdjustTemperatureNumber(
-                subdevice,
                 subdevice.id,
+                subdevice,
                 device_value=payload[mc.KEY_TEMPERATURE],
             ),
             MS100Sensor.AdjustHumidityNumber(
-                subdevice,
                 subdevice.id,
+                subdevice,
                 device_value=payload[mc.KEY_HUMIDITY],
             ),
         )
@@ -925,9 +921,9 @@ class MS130Sensor(MS100Sensor):
 
     __slots__ = ("sensor_light",)
 
-    def __init__(self, subdevice: "SubDevice", subid: str):
-        super().__init__(subdevice, subid)
-        self.sensor_light = MLLightSensor(subdevice, subid)
+    def __init__(self, subid: str, subdevice: "SubDevice", /):
+        super().__init__(subid, subdevice)
+        self.sensor_light = MLLightSensor(subid, subdevice)
         subdevice.manager.get_handler(
             mn_h.Appliance_Control_Sensor_LatestX
         ).register_parser(
@@ -1074,9 +1070,9 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, MLSwitch):
 
     __slots__ = ("number_duration",)
 
-    def __init__(self, subdevice: "SubDevice", subid: str):
-        super().__init__(subdevice, subid)
-        self.number_duration = MstSwitch.WateringDurationNumber(subdevice, subid)
+    def __init__(self, subid: str, subdevice: "SubDevice", /):
+        super().__init__(subid, subdevice)
+        self.number_duration = MstSwitch.WateringDurationNumber(subid, subdevice)
 
     async def async_shutdown(self):
         await super().async_shutdown()

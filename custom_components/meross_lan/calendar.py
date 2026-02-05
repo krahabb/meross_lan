@@ -105,6 +105,7 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
     PLATFORM = calendar.DOMAIN
 
     # HA core entity attributes:
+    _attr_name = "Schedule"
     entity_category = me.MLEntity.EntityCategory.CONFIG
     supported_features = (
         calendar.CalendarEntityFeature.CREATE_EVENT
@@ -143,9 +144,7 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
         # shown/available in the calendar UI.
         self._schedule_entry_count_max = 0
         self._schedule_entry_count_min = 0
-        super().__init__(
-            climate.manager, climate.channel, entity_key=self.ns.key, name="Schedule"
-        )
+        super().__init__(climate.channel, climate.manager, entity_key=self.ns.key)
 
     # interface: MLEntity
     async def async_shutdown(self):

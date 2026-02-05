@@ -107,8 +107,8 @@ class EntityManager(logging.Loggable):
         "_tasks",
     )
 
-    def __init__(self, manager: "EntityManager", id: str, **kwargs: "Unpack[Args]"):
-        self.manager = manager
+    def __init__(self, id: str, manager: "EntityManager", **kwargs: "Unpack[Args]"):
+        self.manager = manager  # TODO: rename to parent
         self.api = manager.api
         self.online = self._attr_online
         self.device_entry = kwargs.get("device_entry")
@@ -116,7 +116,7 @@ class EntityManager(logging.Loggable):
         self.entities = {}
         self.objects = weakref.WeakSet()
         self._tasks = set()
-        super().__init__(manager, id, **kwargs)
+        super().__init__(id, manager, **kwargs)
 
     async def async_shutdown(self):
         """
@@ -286,8 +286,8 @@ class ConfigEntryManager(EntityManager):
 
     def __init__(
         self,
-        api: "ComponentApi",
         id: str,
+        api: "ComponentApi",
         config_entry: "ConfigEntry | None" = None,
         /,
         **kwargs: "Unpack[Args]",
@@ -316,7 +316,7 @@ class ConfigEntryManager(EntityManager):
         self._unsub_trace_endtime = None
         self._unsub_entry_reload = None
         self._unsub_entry_update_listener = None
-        super().__init__(api, id, **kwargs)
+        super().__init__(id, api, **kwargs)
 
     async def async_shutdown(self):
         """
@@ -759,6 +759,7 @@ class CloudApiClient(cloudapi.CloudApiClient, logging.Loggable):
     """
     A specialized cloudapi.CloudApiClient providing meross_lan style logging
     interface to the underlying cloudapi services.
+    TODO: refactor cloudapi.CloudApiClient to derive from Loggable and remove this
     """
 
     def __init__(
@@ -766,7 +767,7 @@ class CloudApiClient(cloudapi.CloudApiClient, logging.Loggable):
         manager: "ConfigEntryManager",
         credentials: "cloudapi.MerossCloudCredentials | None" = None,
     ):
-        logging.Loggable.__init__(self, manager, "")
+        logging.Loggable.__init__(self, "", manager)
         cloudapi.CloudApiClient.__init__(
             self,
             credentials=credentials,

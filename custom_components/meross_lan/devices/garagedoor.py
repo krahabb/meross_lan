@@ -45,7 +45,7 @@ class MLGarageTimeoutBinarySensor(me.MEPartialAvailableMixin, MLBinarySensor):
 
     def __init__(self, garage: "MLGarage", /):
         self.extra_state_attributes = {}
-        super().__init__(garage.manager, garage.channel, device_value=False)
+        super().__init__(garage.channel, garage.manager, device_value=False)
 
     def update_ok(self, was_closing, /):
         extra_state_attributes = self.extra_state_attributes
@@ -75,8 +75,8 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
 
     def __init__(
         self,
+        channel: int | None,
         manager: "Device",
-        channel,
         key: str,
         *,
         device_value=None,
@@ -84,8 +84,8 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
         self.key_value = key
         MLSwitch.__init__(
             self,
-            manager,
             channel,
+            manager,
             entity_key=f"config_{key}",
             device_value=device_value,
             name=key,
@@ -101,14 +101,14 @@ class MLGarageDoorEnableSwitch(MLGarageMultipleConfigSwitch):
 
     def __init__(
         self,
+        channel: int,
         manager: "Device",
-        channel,
         key: str,
         *,
         device_value=None,
     ):
         MLGarageMultipleConfigSwitch.__init__(
-            self, manager, channel, key, device_value=device_value
+            self, channel, manager, key, device_value=device_value
         )
         self._channel_enable(device_value)
 
@@ -173,8 +173,8 @@ class MLGarageMultipleConfigNumber(MLConfigNumber):
 
     def __init__(
         self,
+        channel: int | None,
         manager: "Device",
-        channel,
         key: str,
         **kwargs: "Unpack[MLConfigNumber.Args]",
     ):
@@ -184,7 +184,7 @@ class MLGarageMultipleConfigNumber(MLConfigNumber):
         kwargs["device_class"], kwargs["device_scale"] = (
             MLGarageMultipleConfigNumber.KEY_TO_DEVICE_CLASS_MAP.get(key, (None, 1))
         )
-        MLConfigNumber.__init__(self, manager, channel, **kwargs)
+        MLConfigNumber.__init__(self, channel, manager, **kwargs)
 
 
 class MLGarageConfigNumber(MLGarageMultipleConfigNumber):
@@ -214,8 +214,8 @@ class MLGarageEmulatedConfigNumber(MLEmulatedNumber):
     def __init__(self, garage: "MLGarage", key: str, /):
         MLEmulatedNumber.__init__(
             self,
-            garage.manager,
             garage.channel,
+            garage.manager,
             entity_key=f"config_{key}",
             device_value=garage._transition_duration,
             name=key,
@@ -225,6 +225,9 @@ class MLGarageEmulatedConfigNumber(MLEmulatedNumber):
 class MLGarage(MLCover):
 
     if TYPE_CHECKING:
+
+        channel: Final[int]  # type: ignore[override]
+
         CONFIG_KEY_TO_ENTITY_MAP: Final[dict[str, type[MLGarageMultipleConfigSwitch]]]
 
         binary_sensor_timeout: MLGarageTimeoutBinarySensor
@@ -261,7 +264,7 @@ class MLGarage(MLCover):
         "number_open_timeout",
     )
 
-    def __init__(self, manager: "Device", channel, /):
+    def __init__(self, channel: int, manager: "Device", /):
         self._config = {}
         self._transition_duration = (
             PARAM_GARAGEDOOR_TRANSITION_MAXDURATION
@@ -271,7 +274,7 @@ class MLGarage(MLCover):
         self.extra_state_attributes = {
             self.ATTR_TRANSITION_DURATION: self._transition_duration
         }
-        MLCover.__init__(self, manager, channel)
+        MLCover.__init__(self, channel, manager)
         ability = manager.descriptor.ability
         manager.register_parser_entity(self)
         manager.register_togglex_channel(self, False)
@@ -283,10 +286,10 @@ class MLGarage(MLCover):
             # We'll then override this initial guessing when we _parse_config
             # should those new keys appear
             self.number_close_timeout = MLGarageMultipleConfigNumber(
-                manager, channel, mc.KEY_SIGNALCLOSE
+                channel, manager, mc.KEY_SIGNALCLOSE
             )
             self.number_open_timeout = MLGarageMultipleConfigNumber(
-                manager, channel, mc.KEY_SIGNALOPEN
+                channel, manager, mc.KEY_SIGNALOPEN
             )
             manager.register_parser(self, mn.Appliance_GarageDoor_MultipleConfig)
         else:
@@ -464,7 +467,7 @@ class MLGarage(MLCover):
                         key, MLGarageMultipleConfigNumber
                     )
                     entity = entity_class(
-                        self.manager, self.channel, key, device_value=value
+                        self.channel, self.manager, key, device_value=value
                     )
                     if key == mc.KEY_DOORCLOSEDURATION:
                         self.number_close_timeout = entity  # type: ignore
@@ -575,8 +578,8 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
                 )
             except AttributeError:
                 self.number_signalDuration = MLGarageConfigNumber(
-                    self.device,
                     None,
+                    self.device,
                     mc.KEY_SIGNALDURATION,
                     device_value=payload[mc.KEY_SIGNALDURATION],
                 )
@@ -590,8 +593,8 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
                 )
             except AttributeError:
                 self.switch_buzzerEnable = MLGarageConfigSwitch(
-                    self.device,
                     None,
+                    self.device,
                     mc.KEY_BUZZERENABLE,
                     device_value=payload[mc.KEY_BUZZERENABLE],
                 )
@@ -606,8 +609,8 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
                 )
             except AttributeError:
                 self.number_doorOpenDuration = MLGarageConfigNumber(
-                    self.device,
                     None,
+                    self.device,
                     mc.KEY_DOOROPENDURATION,
                     device_value=payload[mc.KEY_DOOROPENDURATION],
                 )
@@ -635,8 +638,8 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
                 )
             except AttributeError:
                 self.number_doorCloseDuration = MLGarageConfigNumber(
-                    self.device,
                     None,
+                    self.device,
                     mc.KEY_DOORCLOSEDURATION,
                     device_value=payload[mc.KEY_DOORCLOSEDURATION],
                 )
@@ -688,7 +691,7 @@ def digest_init_garagedoor(device: "Device", digest: list, /) -> "DigestInitRetu
     handler = GarageDoorStateNamespaceHandler(device)
 
     for channel_digest in digest:
-        MLGarage(device, channel_digest[mc.KEY_CHANNEL])
+        MLGarage(channel_digest[mc.KEY_CHANNEL], device)
 
     if mn.Appliance_GarageDoor_Config in device.descriptor.ability:
         GarageDoorConfigNamespaceHandler(device)

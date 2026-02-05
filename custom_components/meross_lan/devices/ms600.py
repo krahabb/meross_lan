@@ -49,10 +49,10 @@ class PresenceConfigModeBase(PresenceConfigSelectBase):
         2: "2",
     }
 
-    def __init__(self, manager: "Device", channel: object, key: str):
+    def __init__(self, channel: "me.ChannelType", manager: "Device", key: str):
         self.key_value = key
         PresenceConfigSelectBase.__init__(
-            self, manager, channel, entity_key=f"presence_config_mode_{key}", name=key
+            self, channel, manager, entity_key=f"presence_config_mode_{key}", name=key
         )
 
 
@@ -112,10 +112,10 @@ class PresenceConfigMthX(PresenceConfigNumberBase):
     native_min_value = 1
     native_step = 1
 
-    def __init__(self, manager: "Device", channel, key: str, /):
+    def __init__(self, channel: "me.ChannelType", manager: "Device", key: str, /):
         self.key_value = key
         PresenceConfigNumberBase.__init__(
-            self, manager, channel, entity_key=f"presence_config_mthx_{key}", name=key
+            self, channel, manager, entity_key=f"presence_config_mthx_{key}", name=key
         )
 
 
@@ -123,17 +123,17 @@ class PresenceConfigMode(PresenceConfigModeBase):
 
     _entities: tuple[PresenceConfigBase, ...]
 
-    def __init__(self, manager: "Device", channel, /):
-        PresenceConfigModeBase.__init__(self, manager, channel, mc.KEY_WORKMODE)
+    def __init__(self, channel: "me.ChannelType", manager: "Device", /):
+        PresenceConfigModeBase.__init__(self, channel, manager, mc.KEY_WORKMODE)
         manager.get_handler(mn.Appliance_Control_Presence_Config).register_parsers(
             self,
-            PresenceConfigModeBase(manager, channel, mc.KEY_TESTMODE),
-            PresenceConfigNoBodyTime(manager, channel),
-            PresenceConfigDistance(manager, channel),
-            PresenceConfigSensitivity(manager, channel),
-            PresenceConfigMthX(manager, channel, mc.KEY_MTH1),
-            PresenceConfigMthX(manager, channel, mc.KEY_MTH2),
-            PresenceConfigMthX(manager, channel, mc.KEY_MTH3),
+            PresenceConfigModeBase(channel, manager, mc.KEY_TESTMODE),
+            PresenceConfigNoBodyTime(channel, manager),
+            PresenceConfigDistance(channel, manager),
+            PresenceConfigSensitivity(channel, manager),
+            PresenceConfigMthX(channel, manager, mc.KEY_MTH1),
+            PresenceConfigMthX(channel, manager, mc.KEY_MTH2),
+            PresenceConfigMthX(channel, manager, mc.KEY_MTH3),
         )
 
 
@@ -155,15 +155,15 @@ class MLPresenceSensor(MLNumericSensor):
 
     def __init__(
         self,
+        channel: "me.ChannelType",
         manager: "Device",
-        channel: object | None,
         /,
         **kwargs: "Unpack[MLNumericSensor.Args]",
     ):
-        MLNumericSensor.__init__(self, manager, channel, **kwargs)
+        MLNumericSensor.__init__(self, channel, manager, **kwargs)
         self.sensor_distance = MLNumericSensor(
-            manager,
             channel,
+            manager,
             entity_key=f"{self.entitykey}_distance",
             device_scale=1000,
             device_class=MLNumericSensor.DeviceClass.DISTANCE,
@@ -172,14 +172,14 @@ class MLPresenceSensor(MLNumericSensor):
             name="Presence distance",
         )
         self.binary_sensor_motion = MLBinarySensor(
-            manager,
             channel,
+            manager,
             entity_key=f"{self.entitykey}_motion",
             device_class=MLBinarySensor.DeviceClass.MOTION,
         )
         self.sensor_times = MLNumericSensor(
-            manager,
             channel,
+            manager,
             entity_key=f"{self.entitykey}_times",
             name="Presence times",
         )

@@ -40,8 +40,8 @@ class Mts300Climate(MtsThermostatClimate):
                 self.number_calibration_humi.update_device_value(humidity)
             except AttributeError:
                 self.number_calibration_humi = MLConfigNumber(
-                    self.manager,
                     self.channel,
+                    self.manager,
                     entity_key="humidity_calibration",
                     device_class=MLConfigNumber.DeviceClass.HUMIDITY,
                     device_scale=10,
@@ -188,8 +188,8 @@ class Mts300Climate(MtsThermostatClimate):
         "select_temp_association",
     ) + tuple(f"sensor_{_key}" for _key in ENTITY_DEFS)
 
-    def __init__(self, manager: "Device", channel, /, **kwargs):
-        super().__init__(manager, channel)
+    def __init__(self, channel: int, manager: "Device", /, **kwargs):
+        super().__init__(channel, manager)
         self.fan_mode = None
         self.fan_modes = self._attr_fan_modes
         self.target_temperature_high = None
@@ -199,14 +199,14 @@ class Mts300Climate(MtsThermostatClimate):
             setattr(
                 self,
                 f"sensor_{_key}",
-                _def.type(manager, channel, **_def.kwargs),
+                _def.type(channel, manager, **_def.kwargs),
             )
         self.sensor_current_humidity = MLHumiditySensor(
-            manager, channel, entity_registry_enabled_default=False
+            channel, manager, entity_registry_enabled_default=False
         )
         self.number_fan_hold = MLConfigNumber(
-            manager,
             channel,
+            manager,
             entity_key="fan_hold_time",
             device_class=MLConfigNumber.DEVICE_CLASS_DURATION,
             native_unit_of_measurement=mlc.hac.UnitOfTime.MINUTES,
@@ -216,8 +216,8 @@ class Mts300Climate(MtsThermostatClimate):
             self._async_request_value_number_fan_hold
         )
         self.switch_fan_hold = MLEmulatedSwitch(
-            manager,
             channel,
+            manager,
             entity_key="fan_hold_enable",
         )
         self.switch_fan_hold.async_turn_on = self._async_turn_on_switch_fan_hold
@@ -415,7 +415,7 @@ class Mts300Climate(MtsThermostatClimate):
             self.select_temp_association._parse(payload)
         except AttributeError:
             self.select_temp_association = Mts300Climate.SensorAssociationSelect(
-                self.manager, self.channel
+                self.channel, self.manager
             )
             self.select_temp_association._parse(payload)
 

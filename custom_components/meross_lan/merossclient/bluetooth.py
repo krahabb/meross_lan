@@ -1,12 +1,11 @@
 import asyncio
 import binascii
-import logging
 from typing import TYPE_CHECKING, override
 
 from bleak import BleakClient, uuids
 from bleak.backends.bluezdbus.client import BleakClientBlueZDBus
 
-from . import _BaseClient
+from . import _BaseClient, logging
 from .protocol import MerossError
 from .protocol.message import MerossResponse
 
@@ -26,6 +25,7 @@ if TYPE_CHECKING:
     from bleak.backends.device import BLEDevice
     from bleak.backends.service import BleakGATTService
 
+    from .logging import LoggerType
     from .protocol.message import MerossRequest
 
 BL_SERVICE_UUID = "0000a00a-0000-1000-8000-00805f9b34fb"
@@ -55,7 +55,7 @@ class BluetoothClient(_BaseClient, BleakClient):
     if TYPE_CHECKING:
 
         class Args(_BaseClient.Args):
-            pass
+            services: NotRequired[Iterable[str]]
 
         class ConnectArgs(TypedDict):
             dangerous_use_bleak_cache: NotRequired[bool]
@@ -78,7 +78,7 @@ class BluetoothClient(_BaseClient, BleakClient):
             await super().__aenter__()
             return self
 
-    __slots__ = _BaseClient.__SLOTS__ + (
+    __slots__ = _BaseClient._calc_slots(
         "_connect_lock",
         "_rx_buf",
         "_rx_frame_size",
@@ -93,7 +93,7 @@ class BluetoothClient(_BaseClient, BleakClient):
     def __init__(
         self,
         address_or_ble_device: "BLEDevice | str",
-        services: "Iterable[str] | None" = (BL_SERVICE_UUID,),
+        parent: "LoggerType | None" = None,
         *,
         winrt: "WinRTClientArgs" = {},
         backend: "type[BaseBleakClient] | None" = None,
@@ -103,11 +103,11 @@ class BluetoothClient(_BaseClient, BleakClient):
             self,
             address_or_ble_device,
             None,
-            services,
+            services=kwargs.pop("services", (BL_SERVICE_UUID,)),
             winrt=winrt,
             backend=backend,
         )
-        _BaseClient.__init__(self, **kwargs)
+        _BaseClient.__init__(self, self.address, parent, **kwargs)
         self._connect_lock = asyncio.Lock()
         self._rx_frame_size = 0
         self._rx_future = None
@@ -118,6 +118,11 @@ class BluetoothClient(_BaseClient, BleakClient):
         self._mtu_size = None
 
     # interface: BaseClient
+    @override
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        await self.disconnect()
+
     @override
     async def async_request_raw(
         self, request: "MerossRequest", /, **kwargs: "Unpack[RequestArgs]"
@@ -159,8 +164,7 @@ class BluetoothClient(_BaseClient, BleakClient):
                 ):
                     await self.write_gatt_char(self._char_write, chunk, response=False)
 
-                if self.logger:
-                    self.logger.log(logging.DEBUG, "Transmitted frame: %s", tx_frame)
+                self.log(logging.DEBUG, "Transmitted frame: %s", tx_frame)
 
                 return await self._rx_future
 
@@ -179,8 +183,6 @@ class BluetoothClient(_BaseClient, BleakClient):
                 if self.is_connected:
                     return True
 
-                logger = self.logger
-
                 await super().connect(**kwargs)
                 # Bad patch for bluez mtu_size (bad code always needs bad approaches)
                 # We'll cache the mtu_size assuming it will not change across reconnections
@@ -197,14 +199,12 @@ class BluetoothClient(_BaseClient, BleakClient):
                             self._mtu_size = _backend._mtu_size
                         except Exception as e:
                             _backend._mtu_size = 128
-                            if logger:
-                                logger.log(
-                                    logging.DEBUG,
-                                    "%s(%s) in BleakClientBlueZDBus._acquire_mtu(). Defaulting to %i",
-                                    type(e),
-                                    str(e),
-                                    _backend._mtu_size,
-                                )
+                            self.log_exception(
+                                logging.DEBUG,
+                                e,
+                                "BleakClientBlueZDBus._acquire_mtu(). Defaulting to %i",
+                                _backend._mtu_size,
+                            )
 
                 if not self._service:
                     service = self.services.get_service(BL_SERVICE_UUID)
@@ -255,8 +255,7 @@ class BluetoothClient(_BaseClient, BleakClient):
                 _backend.set_disconnected_callback(self._on_disconnected)
                 return True
             except Exception as e:
-                if logger:
-                    logger.log(logging.DEBUG, "%s(%s) in connect", type(e), str(e))
+                self.log_exception(logging.DEBUG, e, "connect")
                 if self.is_connected:
                     await super().disconnect()
                 raise e
@@ -264,39 +263,27 @@ class BluetoothClient(_BaseClient, BleakClient):
                 self._connect_lock.release()
 
     @override
-    async def disconnect(self) -> bool:
+    async def disconnect(self):
         async with self._connect_lock:
             if self.is_connected:
                 try:
                     await self._backend.stop_notify(self._char_notify)
                 except Exception as e:
-                    if self.logger:
-                        self.logger.log(
-                            logging.DEBUG, "%s(%s) in stop_notify", type(e), str(e)
-                        )
+                    self.log_exception(logging.DEBUG, e, "stop_notify")
                 await super().disconnect()
                 # self._on_disconnected()
-            return True
 
     # interface: self
     def _on_connected(self):
         """Placeholder member called when device is connected."""
-        if self.logger:
-            self.logger.log(
-                logging.DEBUG, "Bluetooth device %s connected", self.address
-            )
+        self.log(logging.DEBUG, "Connected")
 
     def _on_disconnected(self):
         """Placeholder member called when device is disconnected."""
-        if self.logger:
-            self.logger.log(
-                logging.DEBUG, "Bluetooth device %s disconnected", self.address
-            )
+        self.log(logging.DEBUG, "Disconnected")
 
     def _packet_handler(self, data: bytearray, /):
-        if logger := self.logger:
-            logger.log(logging.DEBUG, "Received %s", data)
-
+        self.log(logging.DEBUG, "Received %s", data)
         try:
             # TODO: improve framer resiliency ?
             if rx_frame_size := self._rx_frame_size:
@@ -321,8 +308,7 @@ class BluetoothClient(_BaseClient, BleakClient):
                     if crc32 == checksum:
                         self._frame_handler(rx_frame)
                     else:
-                        if logger:
-                            logger.log(logging.DEBUG, "Frame error: invalid checksum")
+                        self.log(logging.DEBUG, "Frame error: invalid checksum")
                         if self._rx_future:
                             self._rx_future.set_exception(
                                 BluetoothFrameError("Invalid checksum")
@@ -331,13 +317,12 @@ class BluetoothClient(_BaseClient, BleakClient):
 
                 if rx_frame_len > rx_frame_size:
                     self._rx_frame_size = 0
-                    if logger:
-                        logger.log(
-                            logging.DEBUG,
-                            "Frame error: received size = %i - expected size = %i",
-                            rx_frame_len,
-                            rx_frame_size,
-                        )
+                    self.log(
+                        logging.DEBUG,
+                        "Frame error: received size = %i - expected size = %i",
+                        rx_frame_len,
+                        rx_frame_size,
+                    )
                     if self._rx_future:
                         self._rx_future.set_exception(
                             BluetoothFrameError("Size mismatch")
@@ -351,21 +336,15 @@ class BluetoothClient(_BaseClient, BleakClient):
                         self._rx_frame_size = data[2] * 256 + data[3] + 10
                         self._rx_buf = data
                 except IndexError:
-                    if logger:
-                        logger.log(logging.DEBUG, "Frame error: packet too short")
+                    self.log(logging.DEBUG, "Frame error: packet too short")
                     if self._rx_future:
                         self._rx_future.set_exception(
                             BluetoothFrameError("Packet too short")
                         )
         except Exception as e:
-            if logger:
-                logger.log(
-                    logging.WARNING, "%s(%s) in _packet_handler", type(e), str(e)
-                )
+            self.log_exception(logging.WARNING, e, "_packet_handler")
 
     def _frame_handler(self, rx_frame: bytearray, /):
-        if self.logger:
-            self.logger.log(logging.DEBUG, "Received frame %s", rx_frame)
-
+        self.log(logging.DEBUG, "Received frame %s", rx_frame)
         if self._rx_future:
             self._rx_future.set_result(MerossResponse(rx_frame.decode()))

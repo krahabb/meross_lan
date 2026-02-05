@@ -77,12 +77,12 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                             entity_def = SensorLatestNamespaceHandler.ENTITY_DEFS[key]
                         except KeyError:
                             entity = MLNumericSensor(
-                                self.device, channel, entity_key=f"sensor_{key}"
+                                channel, self.device, entity_key=f"sensor_{key}"
                             )
                         else:
                             entity = entity_def.type(
-                                self.device,
                                 channel,
+                                self.device,
                                 entity_key=f"sensor_{key}",
                                 **entity_def.kwargs,
                             )
@@ -125,8 +125,8 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
             handler=self._handle_Appliance_Control_Sensor_LatestX,
         )
         if device.descriptor.type.startswith(mc.TYPE_MS600):
-            MLPresenceSensor(device, 0)
-            MLLightSensor(device, 0, entity_key="sensor_light")
+            MLPresenceSensor(0, device)
+            MLLightSensor(0, device, entity_key="sensor_light")
             self.polling_request_add_channel(
                 0, {mc.KEY_DATA: [mc.KEY_PRESENCE, mc.KEY_LIGHT]}
             )
@@ -149,12 +149,12 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
                         entity_def = SensorLatestXNamespaceHandler.ENTITY_DEFS[data_key]
                     except KeyError:
                         entity = MLNumericSensor(
-                            self.device, channel, entity_key=f"sensor_{data_key}"
+                            channel, self.device, entity_key=f"sensor_{data_key}"
                         )
                     else:
                         entity = entity_def.type(
-                            self.device,
                             channel,
+                            self.device,
                             entity_key=f"sensor_{data_key}",
                             **entity_def.kwargs,
                         )

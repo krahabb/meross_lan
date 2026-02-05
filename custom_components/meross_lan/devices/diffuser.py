@@ -75,7 +75,7 @@ def digest_init_diffuser(device: "Device", digest: dict) -> "DigestInitReturnTyp
                     except KeyError:
                         entity_def = DIFFUSER_SENSOR_ENTITY_DEFS[key]
                         entity = entity_def.type(
-                            device, None, entity_key=key, **entity_def.kwargs
+                            None, device, entity_key=key, **entity_def.kwargs
                         )
                     entity.update_device_value(value)
                 except KeyError:
@@ -114,9 +114,9 @@ class MLDiffuserLight(MLLightBase):
 
     ns = mn.Appliance_Control_Diffuser_Light
 
-    def __init__(self, manager: "Device", channel, /):
+    def __init__(self, channel: int, manager: "Device", /):
         self.supported_color_modes = {ColorMode.RGB}
-        MLLightBase.__init__(self, manager, channel, mc.DIFFUSER_LIGHT_MODE_LIST)
+        MLLightBase.__init__(self, channel, manager, mc.DIFFUSER_LIGHT_MODE_LIST)
 
     def _parse_light(self, payload, /):
         # taken from https://github.com/bwp91/homebridge-meross/blob/latest/lib/device/diffuser.js

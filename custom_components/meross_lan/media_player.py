@@ -68,13 +68,13 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
         "volume_level",
     )
 
-    def __init__(self, manager: "Device", channel, /, **kwargs):
+    def __init__(self, channel: "me.ChannelType", manager: "Device", /, **kwargs):
         self.is_volume_muted = None
         self.media_title = None
         self.media_track = None
         self.state = None
         self.volume_level = None
-        super().__init__(manager, channel, **kwargs)
+        super().__init__(channel, manager, **kwargs)
         manager.register_parser_entity(self)
 
     # interface: MLEntity

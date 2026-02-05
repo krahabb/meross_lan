@@ -41,6 +41,9 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
     if TYPE_CHECKING:
         manager: Device
 
+        class Args(MLNumericSensor.Args):
+            pass
+
         # not setting 'entity_key' in EntityDef will mark the entity as 'not required'
         # (see __init__)
         ENTITY_DEFS: ClassVar[dict[str, MLNumericSensor.EntityDef["MLNumericSensor"]]]
@@ -88,13 +91,7 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
         "sensor_power",
     )
 
-    def __init__(
-        self,
-        manager: "Device",
-        channel: object | None,
-        /,
-        **kwargs: "Unpack[ElectricitySensor.Args]",
-    ):
+    def __init__(self, channel, manager: "Device", /, **kwargs: "Unpack[Args]"):
         self._estimate = 0.0
         self._electricity_lastepoch = 0.0
         self._reset_unsub = None
@@ -102,13 +99,13 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
         self.sensor_consumptionx = manager.entities.get(ConsumptionXSensor.ENTITY_KEY)  # type: ignore
         # here entity_key is the 'legacy' EnergyEstimateSensor one to mantain compatibility
         kwargs["device_value"] = 0
-        super().__init__(manager, channel, **kwargs)
+        super().__init__(channel, manager, **kwargs)
         self._schedule_reset(dt_util.now())
         for entity_def in self.ENTITY_DEFS.values():
             if "entity_key" in entity_def.kwargs:
                 entity_def.type(
-                    manager,
                     channel,
+                    manager,
                     **entity_def.kwargs,
                 )
         self.sensor_power = manager.entities[
@@ -173,7 +170,7 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
                     kwargs = dict(entity_def.kwargs)
                     kwargs["entity_key"] = key
                     kwargs["device_value"] = payload[key]
-                    entity_def.type(self.manager, self.channel, **kwargs)
+                    entity_def.type(self.channel, self.manager, **kwargs)
 
         power = self.sensor_power.native_value
         # device.device_timestamp 'should be' current epoch of the message
@@ -236,19 +233,24 @@ def namespace_init_electricity(
     NamespaceHandler(
         device,
         ns,
-        handler=ElectricitySensor(device, None)._handle_Appliance_Control_Electricity,
+        handler=ElectricitySensor(None, device)._handle_Appliance_Control_Electricity,
     )
 
 
 class ElectricityXSensor(ElectricitySensor):
+
+    if TYPE_CHECKING:
+
+        class Args(ElectricitySensor.Args):
+            pass
 
     ns = mn.Appliance_Control_ElectricityX
 
     class MConsumeSensor(MLNumericSensor):
         manager: "Device"
 
-        def __init__(self, manager: "Device", channel, **kwargs):
-            MLNumericSensor.__init__(self, manager, channel, **kwargs)
+        def __init__(self, channel, manager: "Device", /, **kwargs):
+            MLNumericSensor.__init__(self, channel, manager, **kwargs)
             # TODO: in 6.x.x we should generalize this mechanism to any ns/device
             try:
                 handler_ch: "ConsumptionHNamespaceHandler" = manager.ns_handlers[
@@ -300,20 +302,18 @@ class ElectricityXSensor(ElectricitySensor):
         ),
     }
 
-    def __init__(
-        self,
-        manager: "Device",
-        channel: object,
-        /,
-        **kwargs: "Unpack[ElectricityXSensor.Args]",
-    ):
-        ElectricitySensor.__init__(self, manager, channel, **kwargs)
+    def __init__(self, channel, manager: "Device", /, **kwargs: "Unpack[Args]"):
+        ElectricitySensor.__init__(self, channel, manager, **kwargs)
         manager.register_parser_entity(self)
 
 
 class ConsumptionHSensor(MLNumericSensor):
 
     if TYPE_CHECKING:
+
+        class Args(MLNumericSensor.Args):
+            pass
+
         handler_ns: "ConsumptionHNamespaceHandler"
 
     ENTITY_KEY = mc.KEY_CONSUMPTIONH
@@ -323,11 +323,9 @@ class ConsumptionHSensor(MLNumericSensor):
     _attr_device_class = MLNumericSensor.DeviceClass.ENERGY
     _attr_suggested_display_precision = 0
 
-    def __init__(
-        self, manager: "Device", channel, /, **kwargs: "Unpack[ConsumptionHSensor.Args]"
-    ):
+    def __init__(self, channel, manager: "Device", /, **kwargs: "Unpack[Args]"):
         kwargs["name"] = "Consumption"
-        MLNumericSensor.__init__(self, manager, channel, **kwargs)
+        MLNumericSensor.__init__(self, channel, manager, **kwargs)
         manager.register_parser_entity(self)
 
     async def async_added_to_hass(self):
@@ -489,7 +487,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         "_tomorrow_midnight_epoch",
     )
 
-    def __init__(self, manager: "Device", channel, /):
+    def __init__(self, channel, manager: "Device", /):
         self.offset = 0
         self.reset_ts = 0
         self.energy_estimate = 0.0
@@ -507,7 +505,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         if sensor_energy_estimate:
             sensor_energy_estimate.sensor_consumptionx = self
         self.extra_state_attributes = {}
-        super().__init__(manager, channel)
+        super().__init__(channel, manager)
 
     # interface: MLEntity
     def set_unavailable(self):
@@ -715,8 +713,8 @@ class OverTempEnableSwitch(EntityNamespaceMixin, MLSwitch):
             self.sensor_overtemp_type.update_native_value(overtemp[mc.KEY_TYPE])
         except AttributeError:
             self.sensor_overtemp_type = MLEnumSensor(
-                self.manager,
                 self.channel,
+                self.manager,
                 entity_key="config_overtemp_type",
                 native_value=overtemp[mc.KEY_TYPE],
             )

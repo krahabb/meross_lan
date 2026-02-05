@@ -50,9 +50,15 @@ class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
 
     __slots__ = ("native_value",)
 
-    def __init__(self, manager: "EntityManager", channel, **kwargs: "Unpack[Args]"):
+    def __init__(
+        self,
+        channel: "me.ChannelType | None",
+        manager: "EntityManager",
+        /,
+        **kwargs: "Unpack[Args]",
+    ):
         self.native_value = kwargs.pop("native_value", None)
-        super().__init__(manager, channel, **kwargs)
+        super().__init__(channel, manager, **kwargs)
 
     def set_unavailable(self):
         self.native_value = None
@@ -125,7 +131,13 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
         "suggested_display_precision",
     )
 
-    def __init__(self, manager: "EntityManager", channel, **kwargs: "Unpack[Args]"):
+    def __init__(
+        self,
+        channel: "me.ChannelType | None",
+        manager: "EntityManager",
+        /,
+        **kwargs: "Unpack[Args]",
+    ):
         self.state_class = kwargs.pop(
             "state_class", None
         ) or self.DEVICECLASS_TO_STATECLASS_MAP.get(
@@ -135,7 +147,7 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
         self.suggested_display_precision = kwargs.pop(
             "suggested_display_precision", self._attr_suggested_display_precision
         )
-        super().__init__(manager, channel, **kwargs)
+        super().__init__(channel, manager, **kwargs)
 
 
 class MLHumiditySensor(MLNumericSensor):
@@ -227,7 +239,7 @@ class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
 
     def __init__(self, manager: "Device"):
         self.extra_state_attributes = {}
-        super().__init__(manager, None, native_value=ProtocolSensor.STATE_DISCONNECTED)
+        super().__init__(None, manager, native_value=ProtocolSensor.STATE_DISCONNECTED)
 
     def set_available(self):
         manager = self.manager
@@ -307,6 +319,6 @@ class MLFilterMaintenanceSensor(MLNumericSensor):
     _attr_native_unit_of_measurement = mlc.hac.PERCENTAGE
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
 
-    def __init__(self, manager: "Device", channel):
-        MLNumericSensor.__init__(self, manager, channel)
+    def __init__(self, channel, manager: "Device", /):
+        MLNumericSensor.__init__(self, channel, manager)
         manager.register_parser_entity(self)

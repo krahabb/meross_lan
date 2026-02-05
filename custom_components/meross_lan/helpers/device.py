@@ -72,7 +72,7 @@ if TYPE_CHECKING:
         control as mt_c,
     )
     from .component_api import ComponentApi
-    from .entity import MLEntity
+    from .entity import ChannelType, MLEntity
     from .meross_profile import DeviceInfoType, LatestVersionType
     from .mqtt_profile import MQTTConnection, MQTTProfile
     from .namespaces import NamespaceParser
@@ -110,9 +110,9 @@ class BaseDevice(mlm.EntityManager):
         "update_firmware",
     )
 
-    def __init__(self, parent: mlm.EntityManager, id: str, **kwargs: "Unpack[Args]"):
+    def __init__(self, id: str, parent: mlm.EntityManager, **kwargs: "Unpack[Args]"):
         self.update_firmware = None
-        super().__init__(parent, id, **kwargs)
+        super().__init__(id, parent, **kwargs)
 
     async def async_shutdown(self):
         await super().async_shutdown()
@@ -131,7 +131,7 @@ class BaseDevice(mlm.EntityManager):
         raise NotImplementedError("async_request")
 
     def parse_undefined_dict(
-        self, key_parent: str, payload: dict, channel: object | None, /
+        self, key_parent: str, payload: dict, channel: "ChannelType | None", /
     ):
         device_entities = self.entities
         excluded = (
@@ -165,13 +165,15 @@ class BaseDevice(mlm.EntityManager):
                 from ..sensor import MLDiagnosticSensor
 
                 MLDiagnosticSensor(
-                    self,
                     channel,
+                    self,
                     entity_key=f"{key_parent}_{key}",
                     native_value=value,
                 )
 
-    def parse_undefined_list(self, key_parent: str, payload: list, channel, /):
+    def parse_undefined_list(
+        self, key_parent: str, payload: list, channel: "ChannelType | None", /
+    ):
         pass
 
     @abc.abstractmethod
@@ -446,8 +448,8 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
 
     def __init__(
         self,
-        api: "ComponentApi",
         device_id: str,
+        api: "ComponentApi",
         config_entry: "ConfigEntry",
     ):
         if device_id != config_entry.data[mlc.CONF_DEVICE_ID]:
@@ -523,8 +525,8 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         self._diagnostics_build = False
 
         super().__init__(
-            api,
             device_id,
+            api,
             config_entry,
             device_entry=api.device_registry.async_get_or_create(
                 config_entry_id=config_entry.entry_id,
@@ -540,8 +542,8 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
 
         self.sensor_protocol = ProtocolSensor(self)
         MLPersistentButton(
-            self,
             None,
+            self,
             "button_refresh",
             self._async_button_refresh_press,
             name="Refresh",
@@ -549,8 +551,8 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
             entity_category=MLPersistentButton.EntityCategory.DIAGNOSTIC,
         )
         MLPersistentButton(
-            self,
             None,
+            self,
             "button_reload",
             self._async_button_reload_press,
             name="Reload",
@@ -719,6 +721,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
             else:
                 self._http = MerossHttpClient(
                     host,
+                    self,
                     key=self.key,
                     from_=mlc.DOMAIN,
                     trigger_src=self.__class__.__name__,
@@ -2151,7 +2154,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
             self.loggable_broker(mqtt_connection.broker),
         )
         self._mqtt_connection = mqtt_connection
-        self._topic_response = mqtt_connection.topic_response
+        self._topic_response = mqtt_connection.topic_command
         if mqtt_connection.mqtt_is_connected:
             self.mqtt_connected()
 

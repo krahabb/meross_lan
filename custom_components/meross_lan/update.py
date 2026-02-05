@@ -55,7 +55,7 @@ class MLUpdate(me.MEPartialAvailableMixin, me.MLEntity, update.UpdateEntity):
         self.installed_version, self.latest_version, self.release_summary = (
             manager.get_upgrade_info()
         )
-        super().__init__(manager, None)
+        super().__init__(None, manager)
 
     def update_info(self, /):
         self.installed_version, self.latest_version, self.release_summary = (

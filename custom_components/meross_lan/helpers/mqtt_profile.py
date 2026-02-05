@@ -113,9 +113,9 @@ class ConnectionSensor(me.MEAlwaysAvailableMixin, MLDiagnosticSensor):
             ConnectionSensor.ATTR_DROPPED: 0,
         }
         super().__init__(
-            connection.profile,
             None,
-            entity_key=connection.id,
+            connection.profile,
+            entity_key=str(connection.id),
             native_value=(
                 self.STATE_CONNECTED
                 if connection.mqtt_is_connected
@@ -218,6 +218,7 @@ class MQTTConnection(logging.Loggable):
         rethink all of the MQTT message transaction handling."""
 
         if TYPE_CHECKING:
+            parent: Final["MQTTConnection"]  # type: ignore
 
             class Args(_BaseClient.Args):
                 key: str  # override NotRequired
@@ -225,35 +226,34 @@ class MQTTConnection(logging.Loggable):
             class RequestArgs(_BaseClient.RequestArgs):
                 pass
 
-        __slots__ = _BaseClient._calc_slots(
-            "mqtt_connection",
-            "device_id",
-        )
+        __slots__ = _BaseClient._calc_slots("mqtt_connection")
 
         def __init__(
             self,
-            mqtt_connection: "MQTTConnection",
             device_id: str,
+            mqtt_connection: "MQTTConnection",
             **kwargs: "Unpack[Args]",
         ):
-            kwargs["from_"] = mqtt_connection.topic_response
-            super().__init__(**kwargs)
-            self.mqtt_connection = mqtt_connection
-            self.device_id = device_id
+            kwargs["from_"] = mqtt_connection.topic_command
+            super().__init__(device_id, **kwargs)
 
         @override
         async def async_request_raw(
             self, request: MerossRequest, /, **kwargs: "Unpack[RequestArgs]"
         ):
-            request.uuid = self.device_id
-            return await self.mqtt_connection.async_mqtt_request(request, self.timeout)
+            request.uuid = self.id
+            return await self.parent.async_mqtt_request(request, self.timeout)
 
     if TYPE_CHECKING:
+
+        class Args(logging.Loggable.Args):
+            pass
+
         _MQTT_DROP: Final
         _MQTT_PUBLISH: Final
         _MQTT_RECV: Final
 
-        SessionHandlersType = Mapping[
+        type SessionHandlersType = Mapping[
             str,
             Callable[[Self, MerossMessage], Awaitable[bool]],
         ]
@@ -262,8 +262,8 @@ class MQTTConnection(logging.Loggable):
         is_cloud_connection: bool
         profile: Final["MQTTProfile"]
         broker: Final[HostAddress]
-        topic_response: Final[str]
-        mqttdevices: Final[dict[str, "Device"]]
+        topic_command: str  # to be set in derived classes
+        mqttdevices: Final[dict[str, Device]]
         mqttdiscovering: Final[set[str]]
         session_handlers: SessionHandlersType
         sensor_connection: ConnectionSensor | None
@@ -279,10 +279,9 @@ class MQTTConnection(logging.Loggable):
 
     SESSION_HANDLERS = {}
 
-    __slots__ = (
+    __SLOTS__ = (
         "profile",
         "broker",
-        "topic_response",
         "mqttdevices",
         "mqttdiscovering",
         "session_handlers",
@@ -294,13 +293,16 @@ class MQTTConnection(logging.Loggable):
 
     def __init__(
         self,
-        profile: "MQTTProfile",
         broker: "HostAddress",
-        topic_response: str,
+        profile: "MQTTProfile",
+        /,
+        **kwargs: "Unpack[Args]",
     ):
-        self.profile = profile
-        self.broker = broker
-        self.topic_response = topic_response
+        # to be set in derived classes
+        assert self.is_cloud_connection is not None
+        assert self.topic_command
+        self.profile = profile  # TODO: use base parent
+        self.broker = broker  # TODO: use base id
         self.mqttdevices = {}
         self.mqttdiscovering = set()
         self.session_handlers = self.__class__.SESSION_HANDLERS
@@ -308,18 +310,12 @@ class MQTTConnection(logging.Loggable):
         # self.is_cloud_connection = False to be fixed in derived
         self._mqtt_transactions = {}
         self._mqtt_is_connected = False
-        super().__init__(profile, str(broker))
-        profile.mqttconnections[self.id] = self
+        super().__init__(broker, profile, **kwargs)
+        profile.mqttconnections[str(broker)] = self
         if profile.create_diagnostic_entities:
             ConnectionSensor(self)
 
     # interface: Loggable
-    def configure_logger(self):
-        self.logtag = (
-            f"{self.__class__.__name__}({self.profile.loggable_broker(self.broker)})"
-        )
-
-    # interface: self
     async def async_shutdown(self):
         await super().async_shutdown()
         for mqtt_transaction in self._mqtt_transactions.values():
@@ -331,6 +327,12 @@ class MQTTConnection(logging.Loggable):
         self.mqttdevices.clear()
         self.sensor_connection = None
 
+    def configure_logger(self):
+        self.logtag = (
+            f"{self.__class__.__name__}({self.profile.loggable_broker(self.broker)})"
+        )
+
+    # interface: self
     async def async_create_diagnostic_entities(self):
         if not self.sensor_connection:
             ConnectionSensor(self)
@@ -592,7 +594,7 @@ class MQTTConnection(logging.Loggable):
                         MerossRequest(
                             *mn.Appliance_System_Ability.request_default,
                             key,
-                            self.topic_response,
+                            self.topic_command,
                             self.__class__.__name__,
                             device_id,
                         ),
@@ -613,7 +615,7 @@ class MQTTConnection(logging.Loggable):
                         MerossRequest(
                             *mn.Appliance_System_All.request_default,
                             key,
-                            self.topic_response,
+                            self.topic_command,
                             self.__class__.__name__,
                             device_id,
                         ),
@@ -738,6 +740,7 @@ class MQTTProfile(mlm.ConfigEntryManager):
     if TYPE_CHECKING:
         is_cloud_profile: bool
         linkeddevices: Final[dict[str, Device]]
+        # TODO: put HostAddress as key in dict and make it hashable
         mqttconnections: Final[dict[str, MQTTConnection]]
 
     DEFAULT_PLATFORMS = mlm.ConfigEntryManager.DEFAULT_PLATFORMS | {
@@ -752,13 +755,13 @@ class MQTTProfile(mlm.ConfigEntryManager):
 
     def __init__(
         self,
-        api: "ComponentApi",
         id: str,
+        api: "ComponentApi",
         config_entry: "ConfigEntry | None" = None,
         /,
         **kwargs: "Unpack[MQTTProfile.Args]",
     ):
-        super().__init__(api, id, config_entry, **kwargs)
+        super().__init__(id, api, config_entry, **kwargs)
         self.linkeddevices = {}
         self.mqttconnections = {}
 

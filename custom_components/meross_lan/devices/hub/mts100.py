@@ -86,7 +86,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         "switch_patch_hvacaction",
     )
 
-    def __init__(self, subdevice: "SubDevice", subid: str, /):
+    def __init__(self, subid: str, subdevice: "SubDevice", /):
         self.extra_state_attributes = {}
         match subdevice.key_digest:
             case mc.TYPE_MTS100 | mc.TYPE_MTS100V3:
@@ -96,16 +96,16 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
                 # but we handle that option as possible though
                 self._parse = self._parse_mts150
 
-        super().__init__(subdevice, subid)
+        super().__init__(subid, subdevice)
         self.binary_sensor_window = MLBinarySensor(
-            subdevice,
             subid,
+            subdevice,
             entity_key=str(MLBinarySensor.DeviceClass.WINDOW),
             device_class=MLBinarySensor.DeviceClass.WINDOW,
         )
         self.switch_patch_hvacaction = MLEmulatedSwitch(
-            subdevice,
             subid,
+            subdevice,
             entity_key="patch_hvacaction",
             device_value=0,
         )

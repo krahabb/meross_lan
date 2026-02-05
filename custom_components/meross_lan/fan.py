@@ -63,11 +63,11 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
         "handler_togglex",
     )
 
-    def __init__(self, manager: "Device", channel, /):
+    def __init__(self, channel: int, manager: "Device", /):
         self.percentage = None
         self.speed_count = 1  # safe default: auto-inc when 'fan' payload updates
         self._saved_speed = 1
-        super().__init__(manager, channel)
+        super().__init__(channel, manager)
         manager.register_parser_entity(self)
         self.handler_togglex = manager.register_togglex_channel(self, True)
 
@@ -140,7 +140,7 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
 def digest_init_fan(device: "Device", digest, /) -> "DigestInitReturnType":
     """[{ "channel": 2, "speed": 3, "maxSpeed": 3 }]"""
     for channel_digest in digest:
-        MLFan(device, channel_digest[mc.KEY_CHANNEL])
+        MLFan(channel_digest[mc.KEY_CHANNEL], device)
     handler = device.get_handler(mn.Appliance_Control_Fan)
     return handler.parse_list, (handler,)
 
@@ -149,6 +149,6 @@ def namespace_init_fan(device: "Device", ns=mn.Appliance_Control_Fan, /):
     """Special care for NS_FAN since it might have been initialized in digest_init"""
     if mc.KEY_FAN not in device.descriptor.digest:
         # actually only map100 (so far)
-        MLFan(device, 0)
+        MLFan(0, device)
         # setup a polling strategy since state is not carried in digest
         device.get_handler(ns).polling_strategy = NamespaceHandler.async_poll_default

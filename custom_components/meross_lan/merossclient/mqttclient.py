@@ -81,8 +81,6 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
         class RequestArgs(_BaseClient.RequestArgs):
             device_id: str
 
-        _logger: LoggerType | None  # override paho client attribute type-hint
-
     MQTT_ERR_SUCCESS = mqtt.MQTT_ERR_SUCCESS
 
     STATE_CONNECTING = "connecting"
@@ -104,7 +102,6 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
         "_rl2_queues",
         "_stateext",
         "_subscribe_error",
-        "_subscribe_topics",
         "_future_connected",
         "_tasks",
         # mqtt.Client slots
@@ -188,17 +185,13 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
 
     def __init__(
         self,
+        id,
+        parent: "LoggerType | None",
+        /,
         client_id: str,
-        subscribe_topics: list[tuple[str, int]],
         **kwargs: "Unpack[Args]",
     ):
-        """
-        2025-02-28 paho-mqtt is now on v2... which has different callback signatures and
-        many other compatibility issues. The __init__ as is will select by default callback
-        v1 signatures since their implementation/execution is more performant.
-        Our callback signatures, nevertheless, are compatible with both versions so we can switch
-        to v2 if needed.
-        """
+        super().__init__(id, parent, **kwargs)
         try:
             mqtt.Client.__init__(
                 self,
@@ -208,7 +201,7 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
             )
         except:  # fallback to legacy (pre v2)
             mqtt.Client.__init__(self, client_id=client_id, protocol=mqtt.MQTTv311)
-        _BaseClient.__init__(self, **kwargs)
+
         self._lock_state = threading.Lock()
         """synchronize connect/disconnect (not contended by the mqtt thread)"""
         self._lock_queue = threading.Lock()
@@ -217,7 +210,6 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
         self._rl2_queues: dict[str, _MQTTRateLimiter] = {}
         self._stateext = self.STATE_DISCONNECTED
         self._subscribe_error = None
-        self._subscribe_topics = subscribe_topics
         if self.loop:
             # our async interface would fail or simply not work
             # without the loop but we don't want to disseminate
@@ -245,22 +237,11 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
 
     # interface: mqtt.Client
     @override
-    def enable_logger(self, logger: "LoggerType | None" = None) -> None:
-        """
-        Our _BaseClient already provides a 'logger' attribute and it's going to override
-        the paho client property.
-        We're providing this override in order to 'maintain' the paho interface behavior (enable logging)
-        """
-        if logger is None:
-            if self._logger is not None:
-                return
-            logger = logging.getLogger(__name__)
-        self.logger = self._logger = logger
+    def _easy_log(self, level, fmt: str, *args) -> None:
+        # TODO: obfuscate in case (paho logs the topics...)
+        self.log(self.DEBUG, f"PAHO-LOG{{%s}} -> {fmt}", level, *args)
 
-    @override
-    def disable_logger(self):
-        self.logger = self._logger = None
-
+    # interface: self
     @property
     def rl_dropped(self):
         return self._rl_dropped
@@ -436,7 +417,7 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
         pass
 
     def _mqttc_connect(self, *args):
-        self.subscribe(self._subscribe_topics)
+        pass  # subscription implemented in derived classes
 
     def _mqttc_subscribe(self, *args):
         """This is the standard version of the callback: called when we're not managed through a loop"""
@@ -492,18 +473,20 @@ class MerossMQTTAppClient(_MerossMQTTClient):
     )
 
     def __init__(
-        self, *, user_id: str, app_id: str | None = None, **kwargs: "Unpack[Args]"
+        self,
+        id,
+        parent: "LoggerType | None",
+        /,
+        user_id: str,
+        app_id: str | None = None,
+        **kwargs: "Unpack[Args]",
     ):
         if not app_id:
             app_id = _MerossMQTTClient.generate_app_id()
         self.app_id = app_id
         self.topic_command = f"/app/{user_id}-{app_id}/subscribe"
         self.topic_push = f"/app/{user_id}/subscribe"
-        super().__init__(
-            f"app:{app_id}",
-            [(self.topic_push, 1), (self.topic_command, 1)],
-            **kwargs,
-        )
+        super().__init__(id, parent, client_id=f"app:{app_id}", **kwargs)
         self.username_pw_set(user_id, md5hexdigest(user_id, self.key))
         try:
             self.tls_set_context(kwargs["sslcontext"])  # type: ignore
@@ -511,6 +494,10 @@ class MerossMQTTAppClient(_MerossMQTTClient):
             self.tls_set(
                 cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS_CLIENT
             )
+
+    @override
+    def _mqttc_connect(self, *args):
+        self.subscribe([(self.topic_push, 1), (self.topic_command, 1)])
 
 
 class MerossMQTTDeviceClient(_MerossMQTTClient):
@@ -535,7 +522,15 @@ class MerossMQTTDeviceClient(_MerossMQTTClient):
         "topic_subscribe",
     )
 
-    def __init__(self, *, user_id: str | int, uuid: str, **kwargs: "Unpack[Args]"):
+    def __init__(
+        self,
+        id,
+        parent: "LoggerType | None",
+        /,
+        user_id: str | int,
+        uuid: str,
+        **kwargs: "Unpack[Args]",
+    ):
         """
         userid: represents the user account id
         uuid: 16 bytes hex string (lowercase)
@@ -544,14 +539,20 @@ class MerossMQTTDeviceClient(_MerossMQTTClient):
         self.topic_subscribe = f"/appliance/{uuid}/subscribe"
         characters = string.ascii_letters + string.digits
         super().__init__(
-            f"fmware:{uuid}_{''.join(random.choices(characters, k=16))}",
-            [(self.topic_subscribe, 1)],
+            id,
+            parent,
+            client_id=f"fmware:{uuid}_{''.join(random.choices(characters, k=16))}",
             **kwargs,
         )
         macaddress = get_macaddress_from_uuid(uuid)
-        pwd = md5hexdigest(macaddress, self.key)
-        self.username_pw_set(macaddress, f"{user_id}_{pwd}")
+        self.username_pw_set(
+            macaddress, f"{user_id}_{md5hexdigest(macaddress, self.key)}"
+        )
         try:
             self.tls_set_context(kwargs["sslcontext"])  # type: ignore
         except KeyError:
             self.tls_set(cert_reqs=ssl.CERT_NONE, tls_version=ssl.PROTOCOL_TLSv1_2)
+
+    @override
+    def _mqttc_connect(self, *args):
+        self.subscribe([(self.topic_subscribe, 1)])

@@ -49,6 +49,7 @@ class MerossMessageType(TypedDict):
 type MerossRequestType = tuple[MerossNamespaceType, MerossMethodType, MerossPayloadType]
 type KeyType = Union[MerossHeaderType, str, None]
 type VersionTupleType = tuple[int, ...]
+type PayloadIndexType = int | str
 
 
 class ChannelPayload(TypedDict):
@@ -62,7 +63,7 @@ class ChannelPayload(TypedDict):
     As an internal convention, inherited types (i.e. specific ns payloads)
     are coded with a _C suffix."""
 
-    channel: Any
+    channel: PayloadIndexType
 
 
 class ChannelOnOff(ChannelPayload):

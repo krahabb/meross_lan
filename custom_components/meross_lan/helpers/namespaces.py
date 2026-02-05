@@ -369,7 +369,7 @@ class NamespaceHandler:
         for channel in (
             self.device.descriptor.channels if channels is None else channels
         ):
-            entity_class(self.device, channel)
+            entity_class(channel, self.device)
 
     def register_parser(
         self,
@@ -644,13 +644,13 @@ class NamespaceHandler:
 
         if self.entity_class:
             self.entity_class(
-                self.device, channel, entity_registry_enabled_default=True
+                channel, self.device, entity_registry_enabled_default=True
             )
         elif self.device.create_diagnostic_entities:
             from ..sensor import MLDiagnosticSensor
 
             self.register_parser(
-                MLDiagnosticSensor(self.device, channel, entity_key=self.ns.key)
+                MLDiagnosticSensor(channel, self.device, entity_key=self.ns.key)
             )
         else:
             self.parsers[channel] = self._parse_stub
@@ -1200,7 +1200,7 @@ class EntityNamespaceMixin(MLEntity if TYPE_CHECKING else object):
     @classmethod
     def namespace_init(cls, device: "Device", ns: mn.Namespace, /):
         assert ns is cls.ns
-        entity = cls(device, None)
+        entity = cls(None, device)
         entity.handler_ns = NamespaceHandler(device, ns, handler=entity._handle)
         entity.handler_ns.polling_strategy = None
         return entity

@@ -53,15 +53,15 @@ class MLTime(me.MLEntity, time.TimeEntity):
 
     def __init__(
         self,
+        channel: "Any | None",
         manager: "EntityManager",
-        channel: "Any | None" = None,
         **kwargs: "Unpack[Args]",
     ):
         self.native_value = kwargs.pop("native_value", None)
         self.device_scale = kwargs.pop("device_scale", 1)
         self.device_value_disabled = kwargs.pop("device_value_disabled", 0)
         self.device_value = kwargs.pop("device_value", None)
-        super().__init__(manager, channel, *kwargs)
+        super().__init__(channel, manager, **kwargs)
 
     def set_unavailable(self):
         self.device_value = None

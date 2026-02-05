@@ -35,9 +35,11 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.device_registry import DeviceEntry
 
-    from ..merossclient.protocol.types import JsonDict, JsonMapping
+    from ..merossclient.protocol.types import JsonDict, JsonMapping, PayloadIndexType
     from .device import BaseDevice, Device, MerossResponse
     from .manager import ConfigEntryManager, EntityManager
+
+    type ChannelType = PayloadIndexType
 
 
 #
@@ -101,7 +103,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         _parse_togglex: Callable[[JsonDict], Any]
 
         manager: EntityManager  # Final
-        channel: Final[object | None]
+        channel: Final[ChannelType | None]
         entitykey: Final[str | None]
         # used to speed-up checks if entity is enabled and loaded
         hass_connected: Final[bool]  # public ReadOnly attribute
@@ -187,7 +189,13 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         "has_entity_name",
     ) + NamespaceParser.__SLOTS__
 
-    def __init__(self, manager: "EntityManager", channel, /, **kwargs: "Unpack[Args]"):
+    def __init__(
+        self,
+        channel: "ChannelType | None",
+        manager: "EntityManager",
+        /,
+        **kwargs: "Unpack[Args]",
+    ):
         """
         - channel: historically used to create an unique id for this entity inside the device
         and also related to the physical channel used in various api for some kind of entities.
@@ -210,7 +218,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
             if entitykey is None
             else entitykey if channel is None else f"{channel}_{entitykey}"
         )
-        super().__init__(manager, id)
+        super().__init__(id, manager)
         # init before raising exceptions so that the Loggable is
         # setup before any exception is raised
         assert (
@@ -456,7 +464,13 @@ class MLBinaryEntity(MLEntity):
 
     __slots__ = ("is_on",)
 
-    def __init__(self, manager: "BaseDevice", channel, /, **kwargs: "Unpack[Args]"):
+    def __init__(
+        self,
+        channel: "ChannelType | None",
+        manager: "BaseDevice",
+        /,
+        **kwargs: "Unpack[Args]",
+    ):
         match kwargs.pop("device_value", None):
             case self.native_on:
                 self.is_on = True
@@ -464,7 +478,7 @@ class MLBinaryEntity(MLEntity):
                 self.is_on = False
             case _:
                 self.is_on = None
-        super().__init__(manager, channel, **kwargs)
+        super().__init__(channel, manager, **kwargs)
 
     def set_unavailable(self):
         self.is_on = None
@@ -530,7 +544,13 @@ class MLNumericEntity(MLEntity):
         "native_unit_of_measurement",
     )
 
-    def __init__(self, manager: "EntityManager", channel, /, **kwargs: "Unpack[Args]"):
+    def __init__(
+        self,
+        channel: "ChannelType | None",
+        manager: "EntityManager",
+        /,
+        **kwargs: "Unpack[Args]",
+    ):
         self.device_scale = kwargs.pop("device_scale", self._attr_device_scale)
         if "device_value" in kwargs:
             self.device_value = kwargs.pop("device_value")
@@ -548,7 +568,7 @@ class MLNumericEntity(MLEntity):
                 )
             )
 
-        super().__init__(manager, channel, **kwargs)
+        super().__init__(channel, manager, **kwargs)
 
     def set_unavailable(self):
         self.device_value = None
