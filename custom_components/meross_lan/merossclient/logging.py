@@ -33,6 +33,7 @@ INFO = logging.INFO
 WARNING = logging.WARNING
 CRITICAL = logging.CRITICAL
 
+Logger = logging.Logger
 getLevelName = logging.getLevelName
 
 

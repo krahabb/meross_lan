@@ -10,7 +10,7 @@ type JsonMapping = Mapping[str, Any]
 """Generic data-dict carried in Meross messages."""
 type JsonList = list[JsonDict]
 """Generic data-list carried in Meross messages."""
-type JsonType = Union[JsonDict, JsonList]
+type JsonType = Union[JsonDict, JsonList, str, int, float, bool, None]
 """Generic data-type carried in Meross messages."""
 
 type MerossNamespaceType = str

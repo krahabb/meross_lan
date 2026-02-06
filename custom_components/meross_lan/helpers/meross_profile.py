@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.core import callback
 from homeassistant.helpers import storage
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
 
 # import core modules instead of symbols to ease patching in a single place
@@ -160,11 +161,12 @@ class MerossProfileStore(storage.Store["MerossProfileStoreType"]):
         )
 
     async def async_remove_and_logout(self, credentials: "MerossCloudCredentials"):
-        from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
         await super().async_remove()
         await cloudapi.CloudApiClient(
-            credentials=credentials, session=async_get_clientsession(self.hass)
+            credentials["userid"],
+            credentials=credentials,
+            session=async_get_clientsession(self.hass),
         ).async_logout_safe()
 
 
@@ -220,7 +222,13 @@ class MerossProfile(mlq.MQTTProfile):
         # so we're putting the migration code in 5.0.0 but still not going
         # to change the version(s) in storage/config. At the moment I'm still very confused
         # and opting to keep the credentials where they are embedded in ConfigEntry
-        self.apiclient = mlm.CloudApiClient(self, self.config)
+        self.apiclient = cloudapi.CloudApiClient(
+            id,
+            self,
+            credentials=self.config,
+            session=async_get_clientsession(api.hass),
+            obfuscate_func=self.loggable_any,
+        )
         self._store = MerossProfileStore(api.hass, id)
         self._unsub_polling_query_device_info = None
 

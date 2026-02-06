@@ -19,6 +19,7 @@ from homeassistant.helpers import (
     device_registry as dr,
     selector,
 )
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 
 from . import const as mlc
@@ -28,7 +29,6 @@ from .helpers import (
     reverse_lookup,
 )
 from .helpers.component_api import ComponentApi
-from .helpers.manager import CloudApiClient
 from .helpers.mqtt_profile import MQTTConnection
 from .merossclient import (
     HostAddress,
@@ -343,7 +343,12 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                     # On first try we're not setting that (we don't ask the user) but
                     # if an MFA error arises we'll repeat the same step ('profile')
                     # with only the mfa code request field (like if it was an optional sub-step)
-                    cloudapiclient = CloudApiClient(api)
+                    cloudapiclient = cloudapi.CloudApiClient(
+                        "",
+                        api,
+                        session=async_get_clientsession(self.hass),
+                        obfuscate_func=api.loggable_any,
+                    )
                     try:
                         credentials = await cloudapiclient.async_signin(
                             profile_config[mlc.CONF_EMAIL],

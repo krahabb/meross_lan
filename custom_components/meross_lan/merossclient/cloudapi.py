@@ -1,19 +1,21 @@
 import asyncio
 from base64 import b64encode
-import logging
 from time import time
 import typing
 from uuid import uuid4
 
 import aiohttp
 
-from . import MEROSSDEBUG
+from . import MEROSSDEBUG, logging
 from .protocol import (
     MerossProtocolError,
     const as mc,
     md5hexdigest,
 )
 from .protocol.message import json_dumps, json_loads
+
+if typing.TYPE_CHECKING:
+    from .protocol.types import JsonMapping
 
 SECRET = "23x17ahWarFH6w29"
 
@@ -179,7 +181,7 @@ class CloudApiError(MerossProtocolError):
     signals an error when connecting to the public API endpoint
     """
 
-    def __init__(self, response: dict, reason: object | None = None):
+    def __init__(self, response: "JsonMapping", reason: object | None = None):
         self.apistatus = response.get(mc.KEY_APISTATUS)
         super().__init__(
             response,
@@ -205,43 +207,29 @@ CLOUDAPI_ERROR_MAP: dict[int | None, type[CloudApiError]] = {
 }
 
 
-LOGGER = None
-
-
-def enable_logger(logger: logging.Logger | None = None):
-    global LOGGER
-    LOGGER = logger.getChild("cloudapi") if logger else logging.getLogger(__name__)
-
-
-def disable_logger():
-    global LOGGER
-    LOGGER = None
-
-
 def _obfuscate_nothing(value: typing.Any) -> typing.Any:
     """placeholder obfuscation function: pass along to logger with no obfuscation"""
     return value
 
 
-_obfuscate_function_type = typing.Callable[[typing.Any], typing.Any]
+type _obfuscate_function_type = typing.Callable[[typing.Any], typing.Any]
 
 
 async def async_cloudapi_post(
     url_or_path: str,
-    data: dict,
+    data: "JsonMapping",
     *,
     credentials: MerossCloudCredentials | None = None,
     session: aiohttp.ClientSession | None = None,
-    logger: logging.Logger | None = None,
+    logger: "logging.LoggerType | None" = None,
     obfuscate_func: _obfuscate_function_type = _obfuscate_nothing,
-) -> dict:
+) -> "JsonMapping":
     """
     Low-level Meross cloud api query:
     When used to login to retrieve the MerossCloudCredentials url_or_path contains the full
     url of the api endpoint, while when used to access the endpoint with an access token (crdentials != None)
     it needs to be the path since the full url will be created from the credentials itself
     """
-    logger = logger or LOGGER
     try:
         if logger:
             logger.log(
@@ -364,7 +352,7 @@ async def async_cloudapi_signin(
     domain: str | None = None,
     mfa_code: str | None = None,
     session: aiohttp.ClientSession | None = None,
-    logger: logging.Logger | None = None,
+    logger: "logging.LoggerType | None" = None,
     obfuscate_func: _obfuscate_function_type = _obfuscate_nothing,
 ) -> MerossCloudCredentials:
     request_data = {
@@ -413,23 +401,28 @@ async def async_cloudapi_signin(
     return response_data
 
 
-class CloudApiClient:
+class CloudApiClient(logging.Loggable):
     """
     Object-like interface to ease mantaining cloud api connection state
     """
 
+    __slots__ = logging.Loggable._calc_slots("credentials", "_api_kwargs")
+
     def __init__(
         self,
+        id="",
+        parent: "logging.LoggerType | None" = None,
         *,
         credentials: MerossCloudCredentials | None = None,
         session: aiohttp.ClientSession | None = None,
-        logger: logging.Logger | None = None,
         obfuscate_func: _obfuscate_function_type = _obfuscate_nothing,
     ) -> None:
         self.credentials = credentials
-        self._cloudapi_session = session or aiohttp.ClientSession()
-        self._cloudapi_logger = logger
-        self._cloudapi_obfuscate_func = obfuscate_func
+        self._api_kwargs = {
+            "session": session or aiohttp.ClientSession(),
+            "obfuscate_func": obfuscate_func,
+        }
+        super().__init__(id, parent or logging.getLogger(__name__))
 
     async def async_signin(
         self,
@@ -443,9 +436,8 @@ class CloudApiClient:
         if MEROSSDEBUG and MEROSSDEBUG.cloudapi_login:
             if email == MEROSSDEBUG.cloudapi_login[mc.KEY_EMAIL]:
                 self.credentials = MEROSSDEBUG.cloudapi_login
-                return MEROSSDEBUG.cloudapi_login
-            response = {mc.KEY_APISTATUS: APISTATUS_WRONG_EMAIL}
-            raise CloudApiError(response)
+                return self.credentials
+            raise CloudApiError({mc.KEY_APISTATUS: APISTATUS_WRONG_EMAIL})
 
         self.credentials = await async_cloudapi_signin(
             email,
@@ -453,9 +445,8 @@ class CloudApiClient:
             region=region,
             domain=domain,
             mfa_code=mfa_code,
-            session=self._cloudapi_session,
-            logger=self._cloudapi_logger,
-            obfuscate_func=self._cloudapi_obfuscate_func,
+            **self._api_kwargs,
+            logger=self,
         )
         return self.credentials
 
@@ -471,9 +462,8 @@ class CloudApiClient:
             credentials[mc.KEY_EMAIL],
             password,
             domain=credentials.get(mc.KEY_DOMAIN),
-            session=self._cloudapi_session,
-            logger=self._cloudapi_logger,
-            obfuscate_func=self._cloudapi_obfuscate_func,
+            **self._api_kwargs,
+            logger=self,
         )
         if newcredentials[mc.KEY_USERID_] != credentials[mc.KEY_USERID_]:
             # why would this happen ? Nevertheless we want to be sure since
@@ -482,10 +472,9 @@ class CloudApiClient:
                 await async_cloudapi_post(
                     API_PROFILE_LOGOUT_PATH,
                     {},
+                    **self._api_kwargs,
                     credentials=newcredentials,
-                    session=self._cloudapi_session,
-                    logger=self._cloudapi_logger,
-                    obfuscate_func=self._cloudapi_obfuscate_func,
+                    logger=self,
                 )
             except Exception:
                 pass
@@ -497,27 +486,25 @@ class CloudApiClient:
         return newcredentials
 
     async def async_logout(self):
-        if credentials := self.credentials:
+        if self.credentials:
             await async_cloudapi_post(
                 API_PROFILE_LOGOUT_PATH,
                 {},
-                credentials=credentials,
-                session=self._cloudapi_session,
-                logger=self._cloudapi_logger,
-                obfuscate_func=self._cloudapi_obfuscate_func,
+                credentials=self.credentials,
+                logger=self,
+                **self._api_kwargs,
             )
             self.credentials = None
 
     async def async_logout_safe(self):
-        if credentials := self.credentials:
+        if self.credentials:
             try:
                 await async_cloudapi_post(
                     API_PROFILE_LOGOUT_PATH,
                     {},
-                    credentials=credentials,
-                    session=self._cloudapi_session,
-                    logger=self._cloudapi_logger,
-                    obfuscate_func=self._cloudapi_obfuscate_func,
+                    credentials=self.credentials,
+                    logger=self,
+                    **self._api_kwargs,
                 )
             except Exception:
                 # this is very broad and might catch errors at the http layer which
@@ -532,43 +519,43 @@ class CloudApiClient:
         """
         if MEROSSDEBUG and MEROSSDEBUG.cloudapi_device_devlist:
             return MEROSSDEBUG.cloudapi_device_devlist
-        response = await async_cloudapi_post(
-            API_DEVICE_DEVLIST_PATH,
-            {},
-            credentials=self.credentials,
-            session=self._cloudapi_session,
-            logger=self._cloudapi_logger,
-            obfuscate_func=self._cloudapi_obfuscate_func,
-        )
-        return response[mc.KEY_DATA]
+        return (
+            await async_cloudapi_post(
+                API_DEVICE_DEVLIST_PATH,
+                {},
+                credentials=self.credentials,
+                logger=self,
+                **self._api_kwargs,
+            )
+        )[mc.KEY_DATA]
 
     async def async_device_devinfo(self, uuid: str) -> DeviceInfoType:
         """
         given the uuid, returns the {devInfo}
         """
-        response = await async_cloudapi_post(
-            API_DEVICE_DEVINFO_PATH,
-            {mc.KEY_UUID: uuid},
-            credentials=self.credentials,
-            session=self._cloudapi_session,
-            logger=self._cloudapi_logger,
-            obfuscate_func=self._cloudapi_obfuscate_func,
-        )
-        return response[mc.KEY_DATA]
+        return (
+            await async_cloudapi_post(
+                API_DEVICE_DEVINFO_PATH,
+                {mc.KEY_UUID: uuid},
+                credentials=self.credentials,
+                logger=self,
+                **self._api_kwargs,
+            )
+        )[mc.KEY_DATA]
 
     async def async_device_devextrainfo(self) -> DeviceInfoType:
         """
         returns a list of all device types with their manuals download link
         """
-        response = await async_cloudapi_post(
-            API_DEVICE_DEVEXTRAINFO_PATH,
-            {},
-            credentials=self.credentials,
-            session=self._cloudapi_session,
-            logger=self._cloudapi_logger,
-            obfuscate_func=self._cloudapi_obfuscate_func,
-        )
-        return response[mc.KEY_DATA]
+        return (
+            await async_cloudapi_post(
+                API_DEVICE_DEVEXTRAINFO_PATH,
+                {},
+                credentials=self.credentials,
+                logger=self,
+                **self._api_kwargs,
+            )
+        )[mc.KEY_DATA]
 
     async def async_device_latestversion(self) -> list[LatestVersionType]:
         """
@@ -576,26 +563,26 @@ class CloudApiClient:
         """
         if MEROSSDEBUG and MEROSSDEBUG.cloudapi_device_latestversion:
             return MEROSSDEBUG.cloudapi_device_latestversion
-        response = await async_cloudapi_post(
-            API_DEVICE_LATESTVERSION_PATH,
-            {},
-            credentials=self.credentials,
-            session=self._cloudapi_session,
-            logger=self._cloudapi_logger,
-            obfuscate_func=self._cloudapi_obfuscate_func,
-        )
-        return response[mc.KEY_DATA]
+        return (
+            await async_cloudapi_post(
+                API_DEVICE_LATESTVERSION_PATH,
+                {},
+                credentials=self.credentials,
+                logger=self,
+                **self._api_kwargs,
+            )
+        )[mc.KEY_DATA]
 
     async def async_hub_getsubdevices(self, uuid: str) -> list[SubDeviceInfoType]:
         """
         given the uuid, returns the list of subdevices binded to the hub
         """
-        response = await async_cloudapi_post(
-            API_HUB_GETSUBDEVICES_PATH,
-            {mc.KEY_UUID: uuid},
-            credentials=self.credentials,
-            session=self._cloudapi_session,
-            logger=self._cloudapi_logger,
-            obfuscate_func=self._cloudapi_obfuscate_func,
-        )
-        return response[mc.KEY_DATA]
+        return (
+            await async_cloudapi_post(
+                API_HUB_GETSUBDEVICES_PATH,
+                {mc.KEY_UUID: uuid},
+                credentials=self.credentials,
+                logger=self,
+                **self._api_kwargs,
+            )
+        )[mc.KEY_DATA]

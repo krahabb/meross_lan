@@ -9,7 +9,6 @@ from homeassistant.components import persistent_notification as pn
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr, issue_registry as ir
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .. import const as mlc
 from ..const import (
@@ -19,7 +18,7 @@ from ..const import (
     CONF_PROTOCOL_AUTO,
     DOMAIN,
 )
-from ..merossclient import cloudapi, logging
+from ..merossclient import logging
 from ..merossclient.protocol.message import json_dumps
 from .obfuscate import (
     OBFUSCATE_DEVICE_ID_MAP,
@@ -753,25 +752,3 @@ class ConfigEntryManager(EntityManager):
         if self._unsub_entry_reload:
             self._unsub_entry_reload.cancel()
             self._unsub_entry_reload = None
-
-
-class CloudApiClient(cloudapi.CloudApiClient, logging.Loggable):
-    """
-    A specialized cloudapi.CloudApiClient providing meross_lan style logging
-    interface to the underlying cloudapi services.
-    TODO: refactor cloudapi.CloudApiClient to derive from Loggable and remove this
-    """
-
-    def __init__(
-        self,
-        manager: "ConfigEntryManager",
-        credentials: "cloudapi.MerossCloudCredentials | None" = None,
-    ):
-        logging.Loggable.__init__(self, "", manager)
-        cloudapi.CloudApiClient.__init__(
-            self,
-            credentials=credentials,
-            session=async_get_clientsession(manager.api.hass),
-            logger=self,  # type: ignore (Loggable almost duck-compatible with logging.Logger)
-            obfuscate_func=manager.loggable_any,
-        )
