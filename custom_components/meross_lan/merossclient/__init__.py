@@ -3,6 +3,7 @@ A collection of utilities to help managing the Meross device protocol
 """
 
 import asyncio
+from enum import StrEnum
 import re
 from time import time
 from typing import TYPE_CHECKING
@@ -647,7 +648,22 @@ class MerossDeviceDescriptor:
         return upgrade_payload
 
 
-class _BaseClient(logging.Loggable):
+class Transport(StrEnum):
+    AUTO = "auto"
+    MQTT = "mqtt"
+    HTTP = "http"
+    BLUETOOTH = "bluetooth"
+
+    @staticmethod
+    def from_str(label: str) -> "Transport":
+        label = label.lower()
+        for transport in Transport:
+            if transport.value == label:
+                return transport
+        return Transport.AUTO
+
+
+class MerossClient(logging.Loggable):
     """Abstract base client providing common api for different transports (HTTP-MQTT-BT)."""
 
     if TYPE_CHECKING:
@@ -663,12 +679,17 @@ class _BaseClient(logging.Loggable):
         class RequestArgs(TypedDict):
             timeout: NotRequired[float]
 
+        TRANSPORT: Final[Transport]
+
         key: str  # default key used to sign Meross protocol messages
         from_: str  # default value in 'from' header key
         trigger_src: str  # default value in 'triggerSrc' header key
         timeout: float
         descriptor: MerossDeviceDescriptor | None
         loop: Final[asyncio.AbstractEventLoop]
+
+    Transport = Transport
+    TRANSPORT = Transport.AUTO
 
     TIMEOUT_DEFAULT = 10
 

@@ -2,9 +2,9 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.exceptions import InvalidStateError
 
-from ..const import CONF_PROTOCOL_HTTP, PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT
 from ..cover import MLCover, cover
 from ..helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
+from ..merossclient import Transport
 from ..number import MLConfigNumber
 from ..switch import MLSwitch
 
@@ -289,7 +289,7 @@ class MLRollerShutter(MLCover):
                 if not self._transition_unsub:
                     # ensure we 'follow' cover movement
                     self._transition_unsub = self.manager.schedule_async_callback(
-                        PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT,
+                        mlc.PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT,
                         self._async_transition_callback,
                     )
             self.flush_state()
@@ -306,12 +306,12 @@ class MLRollerShutter(MLCover):
         not setup this at all."""
         manager = self.manager
         self._transition_unsub = manager.schedule_async_callback(
-            PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT,
+            mlc.PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT,
             self._async_transition_callback,
         )
-        if (
-            manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active
-        ) or (self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE):
+        if (manager.curr_protocol is Transport.HTTP and not manager._mqtt_active) or (
+            self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE
+        ):
             try:
                 if manager.multiple_max >= 2:
                     await manager.async_request_multiple(

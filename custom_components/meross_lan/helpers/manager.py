@@ -15,10 +15,9 @@ from ..const import (
     CONF_CREATE_DIAGNOSTIC_ENTITIES,
     CONF_KEY,
     CONF_OBFUSCATE,
-    CONF_PROTOCOL_AUTO,
     DOMAIN,
 )
-from ..merossclient import logging
+from ..merossclient import Transport, logging
 from ..merossclient.protocol.message import json_dumps
 from .obfuscate import (
     OBFUSCATE_DEVICE_ID_MAP,
@@ -685,13 +684,13 @@ class ConfigEntryManager(EntityManager):
         payload: "MerossPayloadType",
         namespace: str,
         method: str = "",
-        protocol: str = CONF_PROTOCOL_AUTO,
+        protocol: Transport = Transport.AUTO,
         rxtx: str = "",
         /,
     ):
         """
         A trace typically contains protocol transactions characterized by 'protocol' and 'rxtx'.
-        When (protocol == CONF_PROTOCOL_AUTO) it means the row contains 'extra' informations
+        When (protocol == Transport.AUTO) it means the row contains 'extra' informations
         like logs (see trace_log) or config, diagnostics, state, etc.
         """
         try:
@@ -721,7 +720,7 @@ class ConfigEntryManager(EntityManager):
             columns = [
                 strftime("%Y/%m/%d - %H:%M:%S", localtime(time())),
                 "",  # rxtx
-                CONF_PROTOCOL_AUTO,  # protocol
+                Transport.AUTO,  # protocol
                 "LOG",  # method
                 mlc.CONF_LOGGING_LEVEL_OPTIONS.get(level)
                 or logging.getLevelName(level),  # namespace

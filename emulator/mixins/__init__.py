@@ -19,8 +19,8 @@ from custom_components.meross_lan.merossclient import (
     update_dict_strict,
     update_dict_strict_by_key,
 )
-from custom_components.meross_lan.merossclient.httpclient import MerossHttpClient
-from custom_components.meross_lan.merossclient.mqttclient import MerossMQTTDeviceClient
+from custom_components.meross_lan.merossclient.httpclient import HttpClient
+from custom_components.meross_lan.merossclient.mqttclient import MQTTDeviceClient
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
@@ -365,12 +365,12 @@ class MerossEmulator:
                         pass
 
         self.topic_response = mc.TOPIC_RESPONSE.format(descriptor.uuid)
-        self.mqtt_client: MerossMQTTDeviceClient = None  # type: ignore
+        self.mqtt_client: MQTTDeviceClient = None  # type: ignore
         self.mqtt_connected = None
         self._scheduler_unsub = None
         self._tzinfo: ZoneInfo | None = None
         self._cipher = (
-            MerossHttpClient.Cipher(descriptor.uuid, key, descriptor.macAddress)
+            HttpClient.Cipher(descriptor.uuid, key, descriptor.macAddress)
             if mn.Appliance_Encrypt_ECDHE in descriptor.ability
             else None
         )
@@ -939,8 +939,8 @@ class MerossEmulator:
 
     def _mqtt_setup(self):
         broker = self.descriptor.main_broker
-        self.mqtt_client = mqtt_client = MerossMQTTDeviceClient(broker, None,
-            key=self.key, uuid=self.uuid, user_id=self.descriptor.userId
+        self.mqtt_client = mqtt_client = MQTTDeviceClient(
+            broker, None, key=self.key, uuid=self.uuid, user_id=self.descriptor.userId
         )
         mqtt_client.on_subscribe = self._mqttc_subscribe
         mqtt_client.on_disconnect = self._mqttc_disconnect

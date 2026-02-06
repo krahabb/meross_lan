@@ -22,7 +22,7 @@ from . import (
 from .. import const as mlc
 from ..helpers.obfuscate import OBFUSCATE_DEVICE_ID_MAP, obfuscated_dict
 from ..merossclient import MEROSSDEBUG, HostAddress, cloudapi, get_active_broker
-from ..merossclient.mqttclient import MerossMQTTAppClient
+from ..merossclient.mqttclient import MQTTAppClient
 from ..merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
@@ -70,12 +70,12 @@ if TYPE_CHECKING:
         tokenRequestTime: float
 
 
-class MerossMQTTConnection(MerossMQTTAppClient, mlq.MQTTConnection):
+class MerossMQTTConnection(MQTTAppClient, mlq.MQTTConnection):
 
     if TYPE_CHECKING:
         is_cloud_connection: Final[Literal[True]]
 
-    __slots__ = MerossMQTTAppClient._calc_slots("_unsub_random_disconnect")
+    __slots__ = MQTTAppClient._calc_slots("_unsub_random_disconnect")
 
     def __init__(self, broker: "HostAddress", profile: "MerossProfile"):
         self.is_cloud_connection = True
@@ -116,11 +116,11 @@ class MerossMQTTConnection(MerossMQTTAppClient, mlq.MQTTConnection):
         if self._unsub_random_disconnect:
             self._unsub_random_disconnect.cancel()
             self._unsub_random_disconnect = None
-        await MerossMQTTAppClient.async_shutdown(self)
+        await MQTTAppClient.async_shutdown(self)
         await mlq.MQTTConnection.async_shutdown(self)
 
     def get_rl_safe_delay(self, uuid: str):
-        return MerossMQTTAppClient.get_rl_safe_delay(self, uuid)
+        return MQTTAppClient.get_rl_safe_delay(self, uuid)
 
     @override
     async def _async_mqtt_publish(self, request: "MerossMessage"):
@@ -130,7 +130,7 @@ class MerossMQTTConnection(MerossMQTTAppClient, mlq.MQTTConnection):
 
     @callback
     def _mqtt_connected(self):
-        MerossMQTTAppClient._mqtt_connected(self)
+        MQTTAppClient._mqtt_connected(self)
         mlq.MQTTConnection._mqtt_connected(self)
 
     @callback
@@ -244,7 +244,7 @@ class MerossProfile(mlq.MQTTProfile):
         if data := await self._store.async_load():
             self._data = data
             if self.KEY_APP_ID not in data:
-                data[self.KEY_APP_ID] = MerossMQTTAppClient.generate_app_id()
+                data[self.KEY_APP_ID] = MQTTAppClient.generate_app_id()
             if type(data.get(self.KEY_DEVICE_INFO)) is not dict:
                 data[self.KEY_DEVICE_INFO] = {}
             self._device_info_time = data.get(self.KEY_DEVICE_INFO_TIME, 0.0)
@@ -274,7 +274,7 @@ class MerossProfile(mlq.MQTTProfile):
         else:
             self._device_info_time = 0.0
             self._data = {
-                self.KEY_APP_ID: MerossMQTTAppClient.generate_app_id(),
+                self.KEY_APP_ID: MQTTAppClient.generate_app_id(),
                 mc.KEY_TOKEN: self.config.get(mc.KEY_TOKEN),
                 self.KEY_DEVICE_INFO: {},
                 self.KEY_DEVICE_INFO_TIME: 0.0,

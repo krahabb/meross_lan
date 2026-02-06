@@ -22,9 +22,10 @@ from ..merossclient import (
     MEROSSDEBUG,
     HostAddress,
     MerossDeviceDescriptor,
+    Transport,
     bluetooth as m_bt,
 )
-from ..merossclient.httpclient import MerossHttpClient
+from ..merossclient.httpclient import HttpClient
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..merossclient.protocol.message import (
     MerossAckReply,
@@ -359,7 +360,7 @@ class ComponentApi(mlq.MQTTProfile):
                             config_entry = api.get_config_entry(uuid)
                             assert config_entry
                             conf_protocol = config_entry.data.get(mlc.CONF_PROTOCOL)
-                        if conf_protocol == mlc.CONF_PROTOCOL_BLUETOOTH:
+                        if conf_protocol == self.TRANSPORT:
                             # already configured to use BT
                             if device:
                                 self.attach(device)
@@ -570,9 +571,10 @@ class ComponentApi(mlq.MQTTProfile):
                 raise HomeAssistantError(
                     "Missing both device_id and host: provide at least one valid entry"
                 )
-            protocol = (
-                service_call.data.get(mlc.CONF_PROTOCOL) or mlc.CONF_PROTOCOL_AUTO
-            )
+            try:
+                protocol = Transport.from_str(service_call.data[mlc.CONF_PROTOCOL])
+            except KeyError:
+                protocol = Transport.AUTO
             namespace = service_call.data[mc.KEY_NAMESPACE]
             method = service_call.data.get(mc.KEY_METHOD, mc.METHOD_GET)
             key = service_call.data.get(mlc.CONF_KEY)
@@ -632,25 +634,25 @@ class ComponentApi(mlq.MQTTProfile):
                     ),
                     (
                         device.async_mqtt_request_raw
-                        if protocol == mlc.CONF_PROTOCOL_MQTT
+                        if protocol is Transport.MQTT
                         else (
                             device.async_http_request_raw
-                            if protocol == mlc.CONF_PROTOCOL_HTTP
+                            if protocol is Transport.HTTP
                             else device.async_request_raw
                         )
                     ),
                 )
 
             if device_id:
-                if (
-                    protocol in (mlc.CONF_PROTOCOL_AUTO, mlc.CONF_PROTOCOL_BLUETOOTH)
-                ) and (_bt_device := self.get_bt_device(device_id)):
+                if (protocol in (Transport.AUTO, Transport.BLUETOOTH)) and (
+                    _bt_device := self.get_bt_device(device_id)
+                ):
                     # check first since _async_device_request does not handle BT
                     return await _async_bluetooth_request(_bt_device)
                 if device := self.devices.get(device_id):
                     return await _async_device_request(device)
                 if (
-                    protocol in (mlc.CONF_PROTOCOL_AUTO, mlc.CONF_PROTOCOL_MQTT)
+                    protocol in (Transport.AUTO, Transport.MQTT)
                     and (mqtt_connection := self._mqtt_connection)
                     and mqtt_connection.mqtt_is_connected
                 ):
@@ -677,12 +679,12 @@ class ComponentApi(mlq.MQTTProfile):
                 for device in self.active_devices():
                     if device.host == host:
                         return await _async_device_request(device)
-                if (
-                    protocol in (mlc.CONF_PROTOCOL_AUTO, mlc.CONF_PROTOCOL_BLUETOOTH)
-                ) and (_bt_device := self._bt_devices.get(host)):
+                if (protocol in (Transport.AUTO, Transport.BLUETOOTH)) and (
+                    _bt_device := self._bt_devices.get(host)
+                ):
                     return await _async_bluetooth_request(_bt_device)
 
-                if protocol in (mlc.CONF_PROTOCOL_AUTO, mlc.CONF_PROTOCOL_HTTP):
+                if protocol in (Transport.AUTO, Transport.HTTP):
                     return await _wrap_response(
                         MerossRequest(
                             namespace,
@@ -692,7 +694,7 @@ class ComponentApi(mlq.MQTTProfile):
                             from_,
                             trigger_src,
                         ),
-                        MerossHttpClient(
+                        HttpClient(
                             host,
                             self,
                             from_=mlc.DOMAIN,
@@ -722,7 +724,7 @@ class ComponentApi(mlq.MQTTProfile):
             for bt_device in tuple(self._bt_devices.values()):
                 await bt_device.async_shutdown()
             await mlq.MQTTProfile.async_shutdown(self)
-            await MerossHttpClient.async_shutdown_session()
+            await HttpClient.async_shutdown_session()
             self._mqtt_connection = None
             del self.device_registry  # type: ignore
             del self.entity_registry  # type: ignore

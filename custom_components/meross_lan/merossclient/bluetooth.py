@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, override
 from bleak import BleakClient, uuids
 from bleak.backends.bluezdbus.client import BleakClientBlueZDBus
 
-from . import _BaseClient, logging
+from . import MerossClient, logging
 from .protocol import MerossError
 from .protocol.message import MerossResponse
 
@@ -50,18 +50,18 @@ class BluetoothFrameError(BluetoothError):
     pass
 
 
-class BluetoothClient(_BaseClient, BleakClient):
+class BluetoothClient(MerossClient, BleakClient):
 
     if TYPE_CHECKING:
 
-        class Args(_BaseClient.Args):
+        class Args(MerossClient.Args):
             services: NotRequired[Iterable[str]]
 
         class ConnectArgs(TypedDict):
             dangerous_use_bleak_cache: NotRequired[bool]
             timeout: NotRequired[float]
 
-        class RequestArgs(_BaseClient.RequestArgs):
+        class RequestArgs(MerossClient.RequestArgs):
             pass
 
         _connect_lock: Final[asyncio.Lock]
@@ -78,7 +78,9 @@ class BluetoothClient(_BaseClient, BleakClient):
             await super().__aenter__()
             return self
 
-    __slots__ = _BaseClient._calc_slots(
+    TRANSPORT = MerossClient.Transport.BLUETOOTH  # type: ignore[override]
+
+    __slots__ = MerossClient._calc_slots(
         "_connect_lock",
         "_rx_buf",
         "_rx_frame_size",
@@ -107,7 +109,7 @@ class BluetoothClient(_BaseClient, BleakClient):
             winrt=winrt,
             backend=backend,
         )
-        _BaseClient.__init__(self, self.address, parent, **kwargs)
+        MerossClient.__init__(self, self.address, parent, **kwargs)
         self._connect_lock = asyncio.Lock()
         self._rx_frame_size = 0
         self._rx_future = None

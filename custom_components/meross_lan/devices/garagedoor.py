@@ -5,14 +5,10 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.util.dt import now
 
 from ..binary_sensor import MLBinarySensor
-from ..const import (
-    CONF_PROTOCOL_HTTP,
-    PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
-    PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
-)
 from ..cover import MLCover
 from ..helpers import clamp, entity as me
 from ..helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
+from ..merossclient import Transport
 from ..number import MLConfigNumber, MLEmulatedNumber
 from ..switch import MLSwitch
 
@@ -267,8 +263,8 @@ class MLGarage(MLCover):
     def __init__(self, channel: int, manager: "Device", /):
         self._config = {}
         self._transition_duration = (
-            PARAM_GARAGEDOOR_TRANSITION_MAXDURATION
-            + PARAM_GARAGEDOOR_TRANSITION_MINDURATION
+            mlc.PARAM_GARAGEDOOR_TRANSITION_MAXDURATION
+            + mlc.PARAM_GARAGEDOOR_TRANSITION_MINDURATION
         ) / 2
         self._transition_start = 0.0
         self.extra_state_attributes = {
@@ -493,7 +489,7 @@ class MLGarage(MLCover):
     async def _async_transition_callback(self, /):
         self._transition_unsub = None
         manager = self.manager
-        if manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active:
+        if manager.curr_protocol is Transport.HTTP and not manager._mqtt_active:
             self.handler_ns.schedule_get(self.channel)
 
     async def _async_transition_end_callback(self, /):
@@ -535,8 +531,8 @@ class MLGarage(MLCover):
     def _update_transition_duration(self, transition_duration, /):
         self._transition_duration = clamp(
             transition_duration,
-            PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
-            PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
+            mlc.PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
+            mlc.PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
         )
         self.extra_state_attributes[self.ATTR_TRANSITION_DURATION] = (
             self._transition_duration

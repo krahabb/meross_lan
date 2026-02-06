@@ -154,16 +154,16 @@ def aioclient_mock(hass):
     with mock_aiohttp_client() as aioclient_mocker:
 
         from custom_components.meross_lan.merossclient.httpclient import (
-            MerossHttpClient,
+            HttpClient,
         )
 
         def create_session():
-            if not MerossHttpClient._SESSION:
-                MerossHttpClient._SESSION = aioclient_mocker.create_session(hass.loop)
-            return MerossHttpClient._SESSION
+            if not HttpClient._SESSION:
+                HttpClient._SESSION = aioclient_mocker.create_session(hass.loop)
+            return HttpClient._SESSION
 
         with patch(
-            "custom_components.meross_lan.merossclient.httpclient.MerossHttpClient._get_or_create_client_session",
+            "custom_components.meross_lan.merossclient.httpclient.HttpClient._get_or_create_client_session",
             side_effect=create_session,
         ):
             yield aioclient_mocker

@@ -18,6 +18,7 @@ from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.merossclient import (
+    Transport,
     cloudapi,
     fmt_macaddress,
 )
@@ -490,7 +491,7 @@ async def test_device_options_flow(request, hass: "HomeAssistant"):
         user_input = {
             mlc.CONF_HOST: device.host,
             mlc.CONF_KEY: "wrongkey",
-            mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_HTTP,
+            mlc.CONF_PROTOCOL: Transport.HTTP.value,
             mlc.CONF_POLLING_PERIOD: mlc.CONF_POLLING_PERIOD_DEFAULT,
         }
         result = await options_flow.async_configure(

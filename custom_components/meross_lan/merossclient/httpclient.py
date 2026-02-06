@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, override
 import aiohttp
 from yarl import URL
 
-from . import MEROSSDEBUG, _BaseClient, logging
+from . import MEROSSDEBUG, MerossClient, logging
 from .protocol import AESCipher, MerossKeyError, const as mc, md5hexdigest
 from .protocol.message import MerossMessage, MerossResponse
 
@@ -26,7 +26,7 @@ class TerminatedException(Exception):
     pass
 
 
-class MerossHttpClient(_BaseClient):
+class HttpClient(MerossClient):
 
     class Cipher(AESCipher):
         def __init__(self, uuid: str, key: str, mac: str, /):
@@ -36,10 +36,10 @@ class MerossHttpClient(_BaseClient):
 
     if TYPE_CHECKING:
 
-        class Args(_BaseClient.Args):
+        class Args(MerossClient.Args):
             session: NotRequired[aiohttp.ClientSession]
 
-        class RequestArgs(_BaseClient.RequestArgs):
+        class RequestArgs(MerossClient.RequestArgs):
             pass
 
         SESSION_MAXIMUM_CONNECTIONS: ClassVar
@@ -49,6 +49,8 @@ class MerossHttpClient(_BaseClient):
 
         _cipher: Cipher | None
         _key_header: MerossHeaderType
+
+    TRANSPORT = MerossClient.Transport.HTTP  # type: ignore[override]
 
     SESSION_MAXIMUM_CONNECTIONS = 50
     SESSION_MAXIMUM_CONNECTIONS_PER_HOST = 1
@@ -64,12 +66,12 @@ class MerossHttpClient(_BaseClient):
 
     @staticmethod
     def _get_or_create_client_session():
-        if not MerossHttpClient._SESSION:
-            MerossHttpClient._SESSION = aiohttp.ClientSession(
+        if not HttpClient._SESSION:
+            HttpClient._SESSION = aiohttp.ClientSession(
                 connector=aiohttp.TCPConnector(
                     family=socket.AF_INET,
-                    limit=MerossHttpClient.SESSION_MAXIMUM_CONNECTIONS,
-                    limit_per_host=MerossHttpClient.SESSION_MAXIMUM_CONNECTIONS_PER_HOST,
+                    limit=HttpClient.SESSION_MAXIMUM_CONNECTIONS,
+                    limit_per_host=HttpClient.SESSION_MAXIMUM_CONNECTIONS_PER_HOST,
                     ssl=False,
                 ),
                 headers={
@@ -77,17 +79,17 @@ class MerossHttpClient(_BaseClient):
                         aiohttp.__version__, sys.version_info
                     ),
                 },
-                timeout=MerossHttpClient.SESSION_TIMEOUT,
+                timeout=HttpClient.SESSION_TIMEOUT,
             )
-        return MerossHttpClient._SESSION
+        return HttpClient._SESSION
 
     @staticmethod
     async def async_shutdown_session():
-        if MerossHttpClient._SESSION:
-            await MerossHttpClient._SESSION.close()
-            MerossHttpClient._SESSION = None
+        if HttpClient._SESSION:
+            await HttpClient._SESSION.close()
+            HttpClient._SESSION = None
 
-    __slots__ = _BaseClient._calc_slots(
+    __slots__ = MerossClient._calc_slots(
         "_host",
         "_requesturl",
         "_session",
@@ -111,8 +113,8 @@ class MerossHttpClient(_BaseClient):
         self._host = host
         self._requesturl = URL(f"http://{host}/config")
         self._session = (
-            kwargs.pop("session", MerossHttpClient._SESSION)
-            or MerossHttpClient._get_or_create_client_session()
+            kwargs.pop("session", HttpClient._SESSION)
+            or HttpClient._get_or_create_client_session()
         )
         self._terminate = False
         self._terminate_guard = 0
@@ -130,7 +132,7 @@ class MerossHttpClient(_BaseClient):
         self._requesturl = URL(f"http://{value}/config")
 
     def enable_encryption(self, uuid: str, key: str, mac: str, /):
-        self._cipher = MerossHttpClient.Cipher(uuid, key, mac)
+        self._cipher = HttpClient.Cipher(uuid, key, mac)
 
     def disable_encryption(self):
         self._cipher = None

@@ -1,6 +1,5 @@
 import asyncio
 from collections import deque
-import logging
 import random
 import ssl
 import string
@@ -11,7 +10,7 @@ from uuid import uuid4
 
 import paho.mqtt.client as mqtt
 
-from . import HostAddress, _BaseClient, get_macaddress_from_uuid
+from . import HostAddress, MerossClient, get_macaddress_from_uuid
 from .protocol import const as mc, md5hexdigest
 
 if TYPE_CHECKING:
@@ -67,19 +66,21 @@ class _MQTTRateLimiter:
         self.t_queue: deque[float] = deque()
 
 
-class _MerossMQTTClient(_BaseClient, mqtt.Client):
+class _MQTTClient(MerossClient, mqtt.Client):
     """
-    Implements a rather abstract MQTT client used by both the MerossMQTTAppClient
-    and MerossMQTTDeviceClient.
+    Implements a rather abstract MQTT client used by both the MQTTAppClient
+    and MQTTDeviceClient.
     """
 
     if TYPE_CHECKING:
 
-        class Args(_BaseClient.Args):
+        class Args(MerossClient.Args):
             pass
 
-        class RequestArgs(_BaseClient.RequestArgs):
+        class RequestArgs(MerossClient.RequestArgs):
             device_id: str
+
+    TRANSPORT = MerossClient.Transport.MQTT  # type: ignore[override]
 
     MQTT_ERR_SUCCESS = mqtt.MQTT_ERR_SUCCESS
 
@@ -448,7 +449,7 @@ class _MerossMQTTClient(_BaseClient, mqtt.Client):
         self.loop.call_soon_threadsafe(self.mqtt_message, msg)
 
 
-class MerossMQTTAppClient(_MerossMQTTClient):
+class MQTTAppClient(_MQTTClient):
     """
     Implements an "App behaviored" MQTT client. This client connect to the Meross cloud
     brokers and behaves (or tries to) exactly as an App so that it can receive PUSHES
@@ -460,10 +461,10 @@ class MerossMQTTAppClient(_MerossMQTTClient):
 
     if TYPE_CHECKING:
 
-        class Args(_MerossMQTTClient.Args):
+        class Args(_MQTTClient.Args):
             sslcontext: NotRequired[ssl.SSLContext]
 
-        class RequestArgs(_MerossMQTTClient.RequestArgs):
+        class RequestArgs(_MQTTClient.RequestArgs):
             pass
 
     __SLOTS__ = (
@@ -482,7 +483,7 @@ class MerossMQTTAppClient(_MerossMQTTClient):
         **kwargs: "Unpack[Args]",
     ):
         if not app_id:
-            app_id = _MerossMQTTClient.generate_app_id()
+            app_id = _MQTTClient.generate_app_id()
         self.app_id = app_id
         self.topic_command = f"/app/{user_id}-{app_id}/subscribe"
         self.topic_push = f"/app/{user_id}/subscribe"
@@ -500,7 +501,7 @@ class MerossMQTTAppClient(_MerossMQTTClient):
         self.subscribe([(self.topic_push, 1), (self.topic_command, 1)])
 
 
-class MerossMQTTDeviceClient(_MerossMQTTClient):
+class MQTTDeviceClient(_MQTTClient):
     """
     Implements a "Device behaviored" MQTT client. This client connect to the Meross cloud
     brokers and behaves (or tries to) exactly as a device so that it can receive
@@ -511,13 +512,13 @@ class MerossMQTTDeviceClient(_MerossMQTTClient):
 
     if TYPE_CHECKING:
 
-        class Args(_MerossMQTTClient.Args):
+        class Args(_MQTTClient.Args):
             sslcontext: NotRequired[ssl.SSLContext]
 
-        class RequestArgs(_MerossMQTTClient.RequestArgs):
+        class RequestArgs(_MQTTClient.RequestArgs):
             pass
 
-    __slots__ = _MerossMQTTClient._calc_slots(
+    __slots__ = _MQTTClient._calc_slots(
         "topic_publish",
         "topic_subscribe",
     )

@@ -33,11 +33,12 @@ from .helpers.mqtt_profile import MQTTConnection
 from .merossclient import (
     HostAddress,
     MerossDeviceDescriptor,
+    Transport,
     cloudapi,
     fmt_macaddress,
 )
-from .merossclient.httpclient import MerossHttpClient
-from .merossclient.mqttclient import MerossMQTTDeviceClient
+from .merossclient.httpclient import HttpClient
+from .merossclient.mqttclient import MQTTDeviceClient
 from .merossclient.protocol import (
     MerossKeyError,
     const as mc,
@@ -55,7 +56,7 @@ if TYPE_CHECKING:
     from .helpers.device import Device
     from .helpers.manager import ConfigEntryManager
     from .helpers.mqtt_profile import MQTTConnection
-    from .merossclient import _BaseClient
+    from .merossclient import MerossClient
     from .merossclient.protocol import types as mt
 
 
@@ -168,7 +169,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
     @cached_property
     def http_client(self):
         """Plain MerossHttpClient. When using ensure the host/key are correctly set/refreshed."""
-        return MerossHttpClient(
+        return HttpClient(
             "",
             self.api,
             from_=mlc.DOMAIN,
@@ -176,7 +177,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
             loop=self.hass.loop,
         )
 
-    async def async_get_device_client(self, device_id: str) -> "_BaseClient | None":
+    async def async_get_device_client(self, device_id: str) -> "MerossClient | None":
         """Returns a suitable low level device client to query/configure the device.
         This instance must not be modified since it could be an active client used by a Device.
         """
@@ -687,7 +688,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                     server = str(server_address)
                     if server != device_server:
                         if check:
-                            _mqttclient = MerossMQTTDeviceClient(
+                            _mqttclient = MQTTDeviceClient(
                                 server_address,
                                 api,
                                 key=key,
@@ -958,13 +959,13 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
             device_config: mlc.DeviceConfigType
             if config_entry:
                 device_config = dict(config_entry.data)  # type: ignore
-                device_config[mlc.CONF_PROTOCOL] = mlc.CONF_PROTOCOL_BLUETOOTH
+                device_config[mlc.CONF_PROTOCOL] = Transport.BLUETOOTH
             else:
                 device_config = {
                     mlc.CONF_KEY: "",
                     mlc.CONF_DEVICE_ID: uuid,
                     mlc.CONF_PAYLOAD: descriptor.payload,
-                    mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_BLUETOOTH,
+                    mlc.CONF_PROTOCOL: Transport.BLUETOOTH,
                 }
                 self.clone_api_diagnostic_config(device_config)
 
@@ -1257,7 +1258,7 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                 device_config: mlc.DeviceConfigType
                 self.device_config = device_config = self.config  # type: ignore
                 self._is_bluetooth = (
-                    device_config.get(mlc.CONF_PROTOCOL) == mlc.CONF_PROTOCOL_BLUETOOTH
+                    device_config.get(mlc.CONF_PROTOCOL) == Transport.BLUETOOTH
                 )
                 assert device_id == device_config[mlc.CONF_DEVICE_ID]
                 try:
@@ -1343,9 +1344,9 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                         _host = user_input.get(mlc.CONF_HOST)
                         _key = user_input.get(mlc.CONF_KEY) or ""
                         _conf_protocol = (
-                            user_input.get(mlc.CONF_PROTOCOL) or mlc.CONF_PROTOCOL_AUTO
+                            user_input.get(mlc.CONF_PROTOCOL) or Transport.AUTO
                         )
-                        if _conf_protocol != mlc.CONF_PROTOCOL_HTTP:
+                        if _conf_protocol != Transport.HTTP:
                             try:
                                 (
                                     device_config_update,
@@ -1355,7 +1356,7 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                                 )
                             except Exception as e:
                                 inner_exception = e
-                        if _conf_protocol != mlc.CONF_PROTOCOL_MQTT:
+                        if _conf_protocol != Transport.MQTT:
                             if _try_host := (_host or device_descriptor.innerIp):
                                 try:
                                     (
@@ -1456,10 +1457,8 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
             config_schema[_optional(mlc.CONF_HOST, None, _host)] = str
             config_schema[_optional(mlc.CONF_KEY, None, _key)] = str
             config_schema[
-                _required(mlc.CONF_PROTOCOL, device_config, mlc.CONF_PROTOCOL_AUTO)
-            ] = vol.In(
-                (mlc.CONF_PROTOCOL_AUTO, mlc.CONF_PROTOCOL_HTTP, mlc.CONF_PROTOCOL_MQTT)
-            )
+                _required(mlc.CONF_PROTOCOL, device_config, Transport.AUTO)
+            ] = vol.In((Transport.AUTO, Transport.HTTP, Transport.MQTT))
         config_schema[
             _required(
                 mlc.CONF_POLLING_PERIOD, device_config, mlc.CONF_POLLING_PERIOD_DEFAULT

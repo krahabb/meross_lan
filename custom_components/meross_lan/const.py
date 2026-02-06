@@ -103,10 +103,6 @@ CONF_PAYLOAD: Final = hac.CONF_PAYLOAD
 CONF_HOST: Final = hac.CONF_HOST
 # protocol used to communicate with device
 CONF_PROTOCOL: Final = hac.CONF_PROTOCOL
-CONF_PROTOCOL_AUTO: Final = "auto"
-CONF_PROTOCOL_BLUETOOTH: Final = "bluetooth"
-CONF_PROTOCOL_MQTT: Final = "mqtt"
-CONF_PROTOCOL_HTTP: Final = "http"
 # general device state polling or whatever
 CONF_POLLING_PERIOD: Final = "polling_period"
 CONF_POLLING_PERIOD_MIN: Final = 5

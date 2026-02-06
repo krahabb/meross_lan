@@ -8,7 +8,7 @@ from pytest_homeassistant_custom_component.common import flush_store
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.helpers.meross_profile import MerossProfile
-from custom_components.meross_lan.merossclient import HostAddress, cloudapi
+from custom_components.meross_lan.merossclient import HostAddress, Transport, cloudapi
 from custom_components.meross_lan.merossclient.protocol import const as mc
 
 from . import const as tc, helpers
@@ -176,7 +176,7 @@ async def test_meross_profile_with_device(
                 tc.MOCK_PROFILE_CONFIG, model=mc.TYPE_MSS310
             ),
             data={
-                mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_AUTO,
+                mlc.CONF_PROTOCOL: Transport.AUTO.value,
             },
             auto_poll=True,
         ) as device_context,

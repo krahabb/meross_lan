@@ -11,7 +11,7 @@ from homeassistant.core import callback
 # import core modules instead of symbols to ease patching in a single place
 from . import entity as me, manager as mlm
 from .. import const as mlc
-from ..merossclient import HostAddress, _BaseClient, logging
+from ..merossclient import HostAddress, MerossClient, Transport, logging
 from ..merossclient.mqttclient import MerossMQTTRateLimitException
 from ..merossclient.protocol import MerossKeyError, const as mc, namespaces as mn
 from ..merossclient.protocol.message import (
@@ -212,7 +212,7 @@ class MQTTConnection(logging.Loggable):
             if not self.response_future.done():
                 self.cancel(True)
 
-    class Client(_BaseClient):
+    class Client(MerossClient):
         """Implements  a 'soft' client channel for a single device sharing
         a connection. This is actually only needed in ConfigFlow but we could
         rethink all of the MQTT message transaction handling."""
@@ -220,13 +220,13 @@ class MQTTConnection(logging.Loggable):
         if TYPE_CHECKING:
             parent: Final["MQTTConnection"]  # type: ignore
 
-            class Args(_BaseClient.Args):
+            class Args(MerossClient.Args):
                 key: str  # override NotRequired
 
-            class RequestArgs(_BaseClient.RequestArgs):
+            class RequestArgs(MerossClient.RequestArgs):
                 pass
 
-        __slots__ = _BaseClient._calc_slots("mqtt_connection")
+        __slots__ = MerossClient._calc_slots("mqtt_connection")
 
         def __init__(
             self,
@@ -486,7 +486,7 @@ class MQTTConnection(logging.Loggable):
             # device_id is not binded to this MQTTConnection
             if device := api.devices.get(device_id):
                 # check among current loaded devices if they could be re-binded
-                if device.conf_protocol is mlc.CONF_PROTOCOL_HTTP:
+                if device.conf_protocol is Transport.HTTP:
                     self.log(
                         self.DEBUG,
                         "Dropping MQTT received message for device uuid:%s since it is configured for HTTP only",
@@ -848,7 +848,7 @@ class MQTTProfile(mlm.ConfigEntryManager):
                 message.payload,
                 message.namespace,
                 message.method,
-                mlc.CONF_PROTOCOL_MQTT,
+                Transport.MQTT,
                 rxtx,
             )
         if self.isEnabledFor(self.VERBOSE):
@@ -856,7 +856,7 @@ class MQTTProfile(mlm.ConfigEntryManager):
                 self.VERBOSE,
                 "%s(%s) %s %s (uuid:%s messageId:%s) %s",
                 rxtx,
-                mlc.CONF_PROTOCOL_MQTT,
+                Transport.MQTT,
                 message.method,
                 message.namespace,
                 self.loggable_device_id(message.uuid),
@@ -872,7 +872,7 @@ class MQTTProfile(mlm.ConfigEntryManager):
                 self.DEBUG,
                 "%s(%s) %s %s (uuid:%s messageId:%s)",
                 rxtx,
-                mlc.CONF_PROTOCOL_MQTT,
+                Transport.MQTT,
                 message.method,
                 message.namespace,
                 self.loggable_device_id(message.uuid),

@@ -14,7 +14,6 @@ from freezegun.api import freeze_time
 from homeassistant import config_entries as ce, const as hac
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import entity_registry as er
-import pytest
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed_exact,
@@ -32,7 +31,7 @@ from custom_components.meross_lan.helpers import (
     meross_profile as mlp,
     mqtt_profile as mlq,
 )
-from custom_components.meross_lan.merossclient import cloudapi, logging
+from custom_components.meross_lan.merossclient import Transport, cloudapi, logging
 from custom_components.meross_lan.merossclient.protocol import const as mc, md5hexdigest
 from custom_components.meross_lan.merossclient.protocol.message import json_loads
 import emulator
@@ -744,7 +743,7 @@ def build_emulator_config_entry(
             mc.KEY_ALL: deepcopy(emulator.descriptor.all),
             mc.KEY_ABILITY: deepcopy(emulator.descriptor.ability),
         },
-        mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_HTTP,
+        mlc.CONF_PROTOCOL: Transport.HTTP.value,
         mlc.CONF_POLLING_PERIOD: tc.MOCK_POLLING_PERIOD,
         mlc.CONF_TRACE_TIMEOUT: tc.MOCK_TRACE_TIMEOUT,
         mlc.CONF_OBFUSCATE: False,
