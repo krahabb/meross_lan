@@ -73,7 +73,7 @@ if TYPE_CHECKING:
 class MerossMQTTConnection(MQTTAppClient, mlq.MQTTConnection):
 
     if TYPE_CHECKING:
-        is_cloud_connection: Final[Literal[True]]
+        is_cloud_connection: Final[Literal[True]]  # type: ignore[override]
 
     __slots__ = MQTTAppClient._calc_slots("_unsub_random_disconnect")
 
@@ -116,38 +116,32 @@ class MerossMQTTConnection(MQTTAppClient, mlq.MQTTConnection):
         if self._unsub_random_disconnect:
             self._unsub_random_disconnect.cancel()
             self._unsub_random_disconnect = None
-        await MQTTAppClient.async_shutdown(self)
-        await mlq.MQTTConnection.async_shutdown(self)
-
-    def get_rl_safe_delay(self, uuid: str):
-        return MQTTAppClient.get_rl_safe_delay(self, uuid)
+        await super().async_shutdown()
 
     @override
-    async def _async_mqtt_publish(self, request: "MerossMessage"):
+    async def _async_mqtt_publish(self, request: "MerossMessage", /):
         return await self.profile.api.hass.async_add_executor_job(
             self.rl_publish, request
         )
 
-    @callback
-    def _mqtt_connected(self):
-        MQTTAppClient._mqtt_connected(self)
-        mlq.MQTTConnection._mqtt_connected(self)
+    @override
+    def on_connect(self):
+        mlq.MQTTConnection.on_connect(self)
+        MQTTAppClient.on_connect(self)
 
-    @callback
-    def _mqtt_published(self):
+    on_diconnect = mlq.MQTTConnection.on_disconnect
+    on_message = mlq.MQTTConnection.on_message  # type: ignore
+
+    @override  # MQTTAppClient
+    def on_publish(self):
         if sensor_connection := self.sensor_connection:
             attrs = sensor_connection.extra_state_attributes
             attrs[sensor_connection.ATTR_DROPPED] = self.rl_dropped
             attrs[sensor_connection.ATTR_PUBLISHED] += 1
-            if self.mqtt_is_connected:
+            if self.is_connected:
                 # enforce the state eventually cancelling queued, dropped...
                 sensor_connection.native_value = sensor_connection.STATE_CONNECTED
             sensor_connection.flush_state()
-
-
-MerossMQTTConnection.SESSION_HANDLERS = {
-    mn.Appliance_System_Online: MerossMQTTConnection._handle_Appliance_System_Online,
-}
 
 
 class MerossProfileStore(storage.Store["MerossProfileStoreType"]):

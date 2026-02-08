@@ -829,12 +829,11 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
             # this means the device is not Meross cloud binded or the profile
             # is not configured/loaded at least according to our euristics.
             # We'll try HA broker if available
-            hamqttconnection = self.api.mqtt_connection
-            if not hamqttconnection.mqtt_is_connected:
+            if not self.api.mqtt_connection.is_connected:
                 raise Exception(
                     "No MQTT broker (either Meross cloud or HA local broker) available to connect"
                 )
-            mqttconnections.append(hamqttconnection)
+            mqttconnections.append(self.api.mqtt_connection)
 
         # acrobatic asyncio:
         # we expect only one of the mqttconnections to eventually
@@ -1133,7 +1132,7 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
         if await mqtt_connection.async_mqtt_subscribe():
             # ok, now pass along the discovering mqtt message so our ComponentApi state machine
             # gets to work on this
-            await mqtt_connection.async_mqtt_message(discovery_info)
+            mqtt_connection.on_message(discovery_info)
         # just in case, setup the MQTT Hub entry to enable the (default) device key configuration
         # if the entry hub is already configured this will disable the discovery
         # subscription (by returning 'already_configured') stopping any subsequent async_step_mqtt message:

@@ -291,7 +291,6 @@ class MerossEmulator:
 
     __slots__ = (
         "epoch",
-        "lock",
         "loop",
         "key",
         "descriptor",
@@ -306,7 +305,6 @@ class MerossEmulator:
     )
 
     def __init__(self, descriptor: MerossEmulatorDescriptor, key: str, /):
-        self.lock = threading.Lock()
         self.loop: asyncio.AbstractEventLoop = None  # type: ignore
         self.key = key
         self.descriptor = descriptor
@@ -453,21 +451,19 @@ class MerossEmulator:
                     raise Exception("Encryption required")
 
         self._log_message("RX", request.json)
-        with self.lock:
-            # guarantee thread safety by locking the whole message handling
-            self.update_epoch()
+        self.update_epoch()
 
-            if get_replykey(request.header, self.key) is not self.key:
-                response = MerossMessage.build(
-                    request.namespace,
-                    mc.METHOD_ERROR,
-                    {mc.KEY_ERROR: {mc.KEY_CODE: mc.ERROR_INVALIDKEY}},
-                    self.key,
-                    messageid=request.messageid,
-                    from_=self.topic_response,
-                )
-            else:
-                response = self._handle_message(request.header, request.payload)
+        if get_replykey(request.header, self.key) is not self.key:
+            response = MerossMessage.build(
+                request.namespace,
+                mc.METHOD_ERROR,
+                {mc.KEY_ERROR: {mc.KEY_CODE: mc.ERROR_INVALIDKEY}},
+                self.key,
+                messageid=request.messageid,
+                from_=self.topic_response,
+            )
+        else:
+            response = self._handle_message(request.header, request.payload)
 
         if response:
             response_json = response.json
@@ -700,31 +696,20 @@ class MerossEmulator:
                     # with our emulator like if it was the real device.
                     pass
                 case _:
-                    # Watchout since this might be the mqtt thread context.
-                    # We're then using call_soon_threadsafe to post-pone execution
-                    # in the main/loop thread
-                    def _restart_callback():
-                        if self.mqtt_client:
-                            self._mqtt_shutdown()
-                        with self.lock:  # likely unneed since the mqtt thread is over
-                            firmware = self.descriptor.firmware
-                            if mc.KEY_HOST in p_gateway:
-                                firmware[mc.KEY_SERVER] = p_gateway[mc.KEY_HOST]
-                                if mc.KEY_PORT in p_gateway:
-                                    firmware[mc.KEY_PORT] = p_gateway[mc.KEY_PORT]
-                            if mc.KEY_SECONDHOST in p_gateway:
-                                firmware[mc.KEY_SECONDSERVER] = p_gateway[
-                                    mc.KEY_SECONDHOST
-                                ]
-                                if mc.KEY_SECONDPORT in p_gateway:
-                                    firmware[mc.KEY_SECONDPORT] = p_gateway[
-                                        mc.KEY_SECONDPORT
-                                    ]
-                            firmware[mc.KEY_USERID] = p_key[mc.KEY_USERID]
-                            self.key = p_key[mc.KEY_KEY]
-                        self._mqtt_setup()
-
-                    self.loop.call_soon_threadsafe(_restart_callback)
+                    if self.mqtt_client:
+                        self._mqtt_shutdown()
+                    firmware = self.descriptor.firmware
+                    if mc.KEY_HOST in p_gateway:
+                        firmware[mc.KEY_SERVER] = p_gateway[mc.KEY_HOST]
+                        if mc.KEY_PORT in p_gateway:
+                            firmware[mc.KEY_PORT] = p_gateway[mc.KEY_PORT]
+                    if mc.KEY_SECONDHOST in p_gateway:
+                        firmware[mc.KEY_SECONDSERVER] = p_gateway[mc.KEY_SECONDHOST]
+                        if mc.KEY_SECONDPORT in p_gateway:
+                            firmware[mc.KEY_SECONDPORT] = p_gateway[mc.KEY_SECONDPORT]
+                    firmware[mc.KEY_USERID] = p_key[mc.KEY_USERID]
+                    self.key = p_key[mc.KEY_KEY]
+                    self._mqtt_setup()
 
         return mc.METHOD_SETACK, {}
 
@@ -942,52 +927,46 @@ class MerossEmulator:
         self.mqtt_client = mqtt_client = MQTTDeviceClient(
             broker, None, key=self.key, uuid=self.uuid, user_id=self.descriptor.userId
         )
-        mqtt_client.on_subscribe = self._mqttc_subscribe
-        mqtt_client.on_disconnect = self._mqttc_disconnect
-        mqtt_client.on_message = self._mqttc_message
-        mqtt_client.suppress_exceptions = True
+        mqtt_client.on_connect = self._mqtt_connect
+        mqtt_client.on_disconnect = self._mqtt_disconnect
+        mqtt_client.on_message = self._mqtt_message
         mqtt_client.safe_start(broker)
 
     def _mqtt_shutdown(self):
         self.mqtt_client.safe_stop()
-        with self.lock:
-            self.mqtt_client = None  # type: ignore
-            self.mqtt_connected = None
+        self.mqtt_client = None  # type: ignore
+        self.mqtt_connected = None
 
-    def _mqttc_subscribe(self, *args):
+    def _mqtt_connect(self, *args):
         mqtt_client = self.mqtt_client
-        mqtt_client._mqttc_subscribe(*args)
-        with self.lock:
-            self.mqtt_connected = mqtt_client
-            self.update_epoch()
-            self.descriptor.online[mc.KEY_STATUS] = mc.STATUS_ONLINE
-            # This is to start a kind of session establishment with
-            # Meross brokers. Check the SETACK reply to follow the state machine
-            message = MerossRequest(
-                mn.Appliance_Control_Bind,
-                mc.METHOD_SET,
-                {
-                    mn.Appliance_Control_Bind.key: {
-                        mc.KEY_BINDTIME: self.epoch,
-                        mc.KEY_TIME: self.descriptor.time,
-                        mc.KEY_HARDWARE: self.descriptor.hardware,
-                        mc.KEY_FIRMWARE: self.descriptor.firmware,
-                    }
-                },
-                self.key,
-                mqtt_client.topic_subscribe,
-                mc.HEADER_TRIGGERSRC_DEVBOOT,
-            ).json
-            self._log_message("TX(MQTT)", message)
-            mqtt_client.publish(mqtt_client.topic_publish, message)
+        self.mqtt_connected = mqtt_client
+        self.update_epoch()
+        self.descriptor.online[mc.KEY_STATUS] = mc.STATUS_ONLINE
+        # This is to start a kind of session establishment with
+        # Meross brokers. Check the SETACK reply to follow the state machine
+        message = MerossRequest(
+            mn.Appliance_Control_Bind,
+            mc.METHOD_SET,
+            {
+                mn.Appliance_Control_Bind.key: {
+                    mc.KEY_BINDTIME: self.epoch,
+                    mc.KEY_TIME: self.descriptor.time,
+                    mc.KEY_HARDWARE: self.descriptor.hardware,
+                    mc.KEY_FIRMWARE: self.descriptor.firmware,
+                }
+            },
+            self.key,
+            mqtt_client.topic_subscribe,
+            mc.HEADER_TRIGGERSRC_DEVBOOT,
+        ).json
+        self._log_message("TX(MQTT)", message)
+        mqtt_client.publish(mqtt_client.topic_publish, message)
 
-    def _mqttc_disconnect(self, *args):
-        self.mqtt_client._mqttc_disconnect(*args)
-        with self.lock:
-            self.mqtt_connected = None
-            self.descriptor.online[mc.KEY_STATUS] = mc.STATUS_NOTONLINE
+    def _mqtt_disconnect(self, *args):
+        self.mqtt_connected = None
+        self.descriptor.online[mc.KEY_STATUS] = mc.STATUS_NOTONLINE
 
-    def _mqttc_message(self, client: "mqtt.Client", userdata, msg: "mqtt.MQTTMessage"):
+    def _mqtt_message(self, msg: "mqtt.MQTTMessage"):
         request = MerossMessage.decode(msg.payload.decode("utf-8"))
         if response := self.handle(request):
-            client.publish(request.header[mc.KEY_FROM], response)
+            self.mqtt_client.publish(request.header[mc.KEY_FROM], response)

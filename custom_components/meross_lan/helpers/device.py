@@ -1849,7 +1849,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         self._polling_unsub = None
         self._polling_task = task = self.async_create_task(
             self._async_poll(namespace),
-            f"._async_poll({namespace})",
+            f"._poll({namespace})",
             False,
         )
         return task
@@ -2148,7 +2148,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         )
         self._mqtt_connection = mqtt_connection
         self._topic_response = mqtt_connection.topic_command
-        if mqtt_connection.mqtt_is_connected:
+        if mqtt_connection.is_connected:
             self.mqtt_connected()
 
     def mqtt_detached(self):

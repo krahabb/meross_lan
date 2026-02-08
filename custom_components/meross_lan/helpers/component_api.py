@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, override
 import zoneinfo
 
 from bleak.exc import BleakError
-from homeassistant.components import bluetooth as ha_bt
+from homeassistant.components import bluetooth as ha_bt, mqtt
 from homeassistant.core import SupportsResponse, callback
 from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.exceptions import HomeAssistantError
@@ -38,7 +38,6 @@ if TYPE_CHECKING:
 
     from typing import Callable, Final, Literal
 
-    from homeassistant.components.mqtt import async_publish as mqtt_async_publish
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import (
         CALLBACK_TYPE,
@@ -52,17 +51,12 @@ if TYPE_CHECKING:
     from .device import Device
     from .meross_profile import MerossProfile
 
-else:
-    # In order to avoid a static dependency we resolve these
-    # at runtime only when mqtt is actually needed in code
-    mqtt_async_publish = None
-
 
 class HAMQTTConnection(mlq.MQTTConnection):
 
     if TYPE_CHECKING:
-        is_cloud_connection: Final[Literal[False]]
-
+        is_cloud_connection: Final[Literal[False]]  # type: ignore[override]
+        topic_command: Final[str]  # type: ignore[override]
         _unsub_mqtt_subscribe: Callable | None
         _unsub_mqtt_disconnected: Callable | None
         _unsub_mqtt_connected: Callable | None
@@ -116,15 +110,17 @@ class HAMQTTConnection(mlq.MQTTConnection):
         await self.async_mqtt_unsubscribe()
         await super().async_shutdown()
 
+    @override
     def get_rl_safe_delay(self, uuid: str):
         return 0.0
 
     @override
-    async def _async_mqtt_publish(self, request: "MerossMessage"):
-        await mqtt_async_publish(
+    async def _async_mqtt_publish(self, request: "MerossMessage", /):
+        await mqtt.async_publish(
             self.profile.api.hass, mc.TOPIC_REQUEST.format(request.uuid), request.json
         )
-        self._mqtt_published()
+        if self.sensor_connection:
+            self.sensor_connection.inc_counter(self.sensor_connection.ATTR_PUBLISHED)
 
     # interface: self
     @property
@@ -141,21 +137,16 @@ class HAMQTTConnection(mlq.MQTTConnection):
         hass = self.profile.api.hass
         self._mqtt_subscribe_future = hass.loop.create_future()
         try:
-            from homeassistant.components import mqtt
-
-            global mqtt_async_publish
-            mqtt_async_publish = mqtt.async_publish
-
             self._unsub_mqtt_subscribe = await mqtt.async_subscribe(
-                hass, mc.TOPIC_DISCOVERY, self.async_mqtt_message
+                hass, mc.TOPIC_DISCOVERY, self.on_message
             )
 
             @callback
             def _connection_status_callback(connected: bool):
                 if connected:
-                    self._mqtt_connected()
+                    self.on_connect()
                 else:
-                    self._mqtt_disconnected()
+                    self.on_disconnect()
 
             try:
                 # HA core 2024.6
@@ -164,13 +155,13 @@ class HAMQTTConnection(mlq.MQTTConnection):
                 )
             except:
                 self._unsub_mqtt_disconnected = mqtt.async_dispatcher_connect(
-                    hass, mqtt.MQTT_DISCONNECTED, self._mqtt_disconnected  # type: ignore (removed in HA core 2024.6)
+                    hass, mqtt.MQTT_DISCONNECTED, self.on_disconnect  # type: ignore (removed in HA core 2024.6)
                 )
                 self._unsub_mqtt_connected = mqtt.async_dispatcher_connect(
-                    hass, mqtt.MQTT_CONNECTED, self._mqtt_connected  # type: ignore (removed in HA core 2024.6)
+                    hass, mqtt.MQTT_CONNECTED, self.on_connect  # type: ignore (removed in HA core 2024.6)
                 )
             if mqtt.is_connected(hass):
-                self._mqtt_connected()
+                self.on_connect()
             result = True
         except Exception as exception:
             self.log_exception(
@@ -194,15 +185,14 @@ class HAMQTTConnection(mlq.MQTTConnection):
         if self._unsub_mqtt_subscribe:
             self._unsub_mqtt_subscribe()
             self._unsub_mqtt_subscribe = None
-        if self._mqtt_is_connected:
-            self._mqtt_disconnected()
+        if self.is_connected:
+            self.on_disconnect()
 
     @callback
-    def _mqtt_connected(self):
+    def on_connect(self):
         """called when the underlying mqtt.Client connects to the broker"""
         # try to get the HA broker host address
         with self.exception_warning("async_mqtt_subscribe: recovering broker conf"):
-            from homeassistant.components import mqtt
 
             mqtt_data = self.profile.api.hass.data[mqtt.DATA_MQTT]
             if mqtt_data and mqtt_data.client:
@@ -211,7 +201,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
                 self.broker.port = conf.get(mlc.hac.CONF_PORT, mqtt.const.DEFAULT_PORT)
                 self.configure_logger()
 
-        super()._mqtt_connected()
+        super().on_connect()
 
     # these handlers are used to manage session establishment on MQTT.
     # They are typically sent by the device when they connect to the broker
@@ -220,7 +210,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
     # configured yet in meross_lan. When the device is configured, we still manage
     # these 'session messages' here but we'll forward them to the device too in order
     # to trigger all of the device connection management.
-    async def _handle_Appliance_Control_Bind(self, message: "MerossMessage"):
+    def _handle_Appliance_Control_Bind(self, message: "MerossMessage"):
         # this transaction appears when a device (firstly)
         # connects to an MQTT broker and tries to 'register'
         # itself. Our guess right now is to just SETACK
@@ -246,41 +236,48 @@ class HAMQTTConnection(mlq.MQTTConnection):
         else:
             key = self.profile.key
         if message.method == mc.METHOD_SET:
-            await self.async_mqtt_publish(
-                MerossAckReply(
-                    message,
-                    {},
-                    key,
-                    mc.TOPIC_RESPONSE.format(device_id),
+            self.profile.async_create_task(
+                self.async_mqtt_publish(
+                    MerossAckReply(
+                        message,
+                        {},
+                        key,
+                        mc.TOPIC_RESPONSE.format(device_id),
+                    ),
                 ),
+                "._handle_Appliance_Control_Bind",
             )
         # keep forwarding the message
         return False
 
-    async def _handle_Appliance_Control_ConsumptionConfig(
-        self, message: "MerossMessage"
-    ):
+    def _handle_Appliance_Control_ConsumptionConfig(self, message: "MerossMessage"):
         # this message is published by mss switches
         # and it appears newer mss315 could abort their connection
         # if not replied (see #346)
         if message.method == mc.METHOD_PUSH:
-            await self.async_mqtt_publish(
-                MerossPushReply(message, message.payload),
+            self.profile.async_create_task(
+                self.async_mqtt_publish(
+                    MerossPushReply(message, message.payload),
+                ),
+                "._handle_Appliance_Control_ConsumptionConfig",
             )
         # keep forwarding the message
         return False
 
-    async def _handle_Appliance_System_Clock(self, message: "MerossMessage"):
+    def _handle_Appliance_System_Clock(self, message: "MerossMessage"):
         # this is part of initial flow over MQTT
         # we'll try to set the correct time in order to avoid
         # having NTP opened to setup the device
         # Note: I actually see this NS only on mss310 plugs
         # (msl120j bulb doesnt have it)
         if message.method == mc.METHOD_PUSH:
-            await self.async_mqtt_publish(
-                MerossPushReply(
-                    message, {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}}
+            self.profile.async_create_task(
+                self.async_mqtt_publish(
+                    MerossPushReply(
+                        message, {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}}
+                    ),
                 ),
+                "._handle_Appliance_System_Clock",
             )
         # keep forwarding the message
         return False
@@ -290,8 +287,7 @@ HAMQTTConnection.SESSION_HANDLERS = {
     mn.Appliance_Control_Bind: HAMQTTConnection._handle_Appliance_Control_Bind,
     mn.Appliance_Control_ConsumptionConfig: HAMQTTConnection._handle_Appliance_Control_ConsumptionConfig,
     mn.Appliance_System_Clock: HAMQTTConnection._handle_Appliance_System_Clock,
-    mn.Appliance_System_Online: HAMQTTConnection._handle_Appliance_System_Online,
-}
+} | mlq.MQTTConnection.SESSION_HANDLERS  # type: ignore
 
 
 class ComponentApi(mlq.MQTTProfile):
@@ -330,7 +326,7 @@ class ComponentApi(mlq.MQTTProfile):
             self.device = None
             self._flow_id = flow_id
             m_bt.BluetoothClient.__init__(
-                self, address, self, from_=mlc.DOMAIN, loop=api.hass.loop
+                self, address, api, from_=mlc.DOMAIN, loop=api.hass.loop
             )
             self._bt_unavailable_unsub = ha_bt.async_track_unavailable(
                 api.hass, self._bt_unavailable, address, connectable=True
@@ -654,7 +650,7 @@ class ComponentApi(mlq.MQTTProfile):
                 if (
                     protocol in (Transport.AUTO, Transport.MQTT)
                     and (mqtt_connection := self._mqtt_connection)
-                    and mqtt_connection.mqtt_is_connected
+                    and mqtt_connection.is_connected
                 ):
                     service_response["request"] = request = MerossRequest(
                         namespace,

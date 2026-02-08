@@ -194,8 +194,8 @@ class ConsumptionXMixin(MerossEmulator if TYPE_CHECKING else object):
         # "Asia/Baku" GMT + 4
         self.set_timezone("Asia/Baku")
 
-    def _mqttc_subscribe(self, *args):
-        super()._mqttc_subscribe(*args)
+    def _mqtt_connect(self, *args):
+        super()._mqtt_connect(*args)
         # kind of Bind message..we're just interested in validating
         # the server code in meross_lan (it doesn't really check this
         # payload)

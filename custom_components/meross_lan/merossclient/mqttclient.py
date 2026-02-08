@@ -10,7 +10,7 @@ from uuid import uuid4
 
 import paho.mqtt.client as mqtt
 
-from . import HostAddress, MerossClient, get_macaddress_from_uuid
+from . import HostAddress, MerossClient, get_macaddress_from_uuid, logging
 from .protocol import const as mc, md5hexdigest
 
 if TYPE_CHECKING:
@@ -66,7 +66,7 @@ class _MQTTRateLimiter:
         self.t_queue: deque[float] = deque()
 
 
-class _MQTTClient(MerossClient, mqtt.Client):
+class _MQTTConnection(MerossClient):
     """
     Implements a rather abstract MQTT client used by both the MQTTAppClient
     and MQTTDeviceClient.
@@ -79,6 +79,8 @@ class _MQTTClient(MerossClient, mqtt.Client):
 
         class RequestArgs(MerossClient.RequestArgs):
             device_id: str
+
+        _mqttc: mqtt.Client
 
     TRANSPORT = MerossClient.Transport.MQTT  # type: ignore[override]
 
@@ -97,91 +99,13 @@ class _MQTTClient(MerossClient, mqtt.Client):
     # TODO: consider refactoring to remove  mqtt.Client from hierarchy and use a class member
     # since we're risking too much about overriding attributes..
     __SLOTS__ = (
+        "_mqttc",
         "_lock_state",
         "_lock_queue",
         "_rl_dropped",
         "_rl2_queues",
         "_stateext",
-        "_subscribe_error",
         "_future_connected",
-        "_tasks",
-        # mqtt.Client slots
-        "_manual_ack",
-        "_transport",
-        "_protocol",
-        "_userdata",
-        "_sock",
-        "_sockpairR",
-        "_sockpairW",
-        "_keepalive",
-        "_connect_timeout",
-        "_client_mode",
-        "_callback_api_version",
-        "_clean_start",
-        "_clean_session",
-        "_client_id",
-        "_username",
-        "_password",
-        "_in_packet",
-        "_out_packet",
-        "_last_msg_in",
-        "_last_msg_out",
-        "_reconnect_min_delay",
-        "_reconnect_max_delay",
-        "_reconnect_delay",
-        "_reconnect_on_failure",
-        "_ping_t",
-        "_last_mid",
-        "_state",
-        "_out_messages",
-        "_in_messages",
-        "_max_inflight_messages",
-        "_inflight_messages",
-        "_max_queued_messages",
-        "_connect_properties",
-        "_will_properties",
-        "_will",
-        "_will_topic",
-        "_will_payload",
-        "_will_qos",
-        "_will_retain",
-        "_on_message_filtered",
-        "_host",
-        "_port",
-        "_bind_address",
-        "_bind_port",
-        "_proxy",
-        "_in_callback_mutex",
-        "_callback_mutex",
-        "_msgtime_mutex",
-        "_out_message_mutex",
-        "_in_message_mutex",
-        "_reconnect_delay_mutex",
-        "_mid_generate_mutex",
-        "_thread",
-        "_thread_terminate",
-        "_ssl",
-        "_ssl_context",
-        "_tls_insecure",
-        "_logger",
-        "_registered_write",
-        "_on_log",
-        "_on_pre_connect",
-        "_on_connect",
-        "_on_connect_fail",
-        "_on_subscribe",
-        "_on_message",
-        "_on_publish",
-        "_on_unsubscribe",
-        "_on_disconnect",
-        "_on_socket_open",
-        "_on_socket_close",
-        "_on_socket_register_write",
-        "_on_socket_unregister_write",
-        "_websocket_path",
-        "_websocket_extra_headers",
-        "_mqttv5_first_connect",
-        "suppress_exceptions",
     )
 
     def __init__(
@@ -194,15 +118,14 @@ class _MQTTClient(MerossClient, mqtt.Client):
     ):
         super().__init__(id, parent, **kwargs)
         try:
-            mqtt.Client.__init__(
-                self,
+            _mqttc = mqtt.Client(
                 client_id=client_id,
                 protocol=mqtt.MQTTv311,
                 callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
             )
         except:  # fallback to legacy (pre v2)
-            mqtt.Client.__init__(self, client_id=client_id, protocol=mqtt.MQTTv311)
-
+            _mqttc = mqtt.Client(client_id=client_id, protocol=mqtt.MQTTv311)
+        self._mqttc = _mqttc
         self._lock_state = threading.Lock()
         """synchronize connect/disconnect (not contended by the mqtt thread)"""
         self._lock_queue = threading.Lock()
@@ -210,37 +133,22 @@ class _MQTTClient(MerossClient, mqtt.Client):
         self._rl_dropped = 0
         self._rl2_queues: dict[str, _MQTTRateLimiter] = {}
         self._stateext = self.STATE_DISCONNECTED
-        self._subscribe_error = None
-        if self.loop:
-            # our async interface would fail or simply not work
-            # without the loop but we don't want to disseminate
-            # checks here and there. Not setting this object property
-            # (_asyncio_loop) in this case will be enough for the interpreter
-            # to raise the missing attr exception and tell us we're doing it wrong
-            # Also type checking will benefit since the attr is expected to host
-            # a non null value
-            self._future_connected = None
-            self._tasks: list[asyncio.Task] = []
-            self.on_subscribe = self._mqttc_subscribe_loop
-            self.on_disconnect = self._mqttc_disconnect_loop
-            self.on_publish = self._mqttc_publish_loop
-            self.on_message = self._mqttc_message_loop
-        else:
-            self.on_subscribe = self._mqttc_subscribe
-            self.on_disconnect = self._mqttc_disconnect
-        self.on_connect = self._mqttc_connect
-        self.suppress_exceptions = True
+        self._future_connected = None
+        _mqttc.on_connect = self._mqttc_connect
+        _mqttc.on_subscribe = self._mqttc_subscribe
+        _mqttc.on_disconnect = self._mqttc_disconnect
+        _mqttc.on_message = self._mqttc_message
+        _mqttc.on_publish = self._mqttc_publish
+        _mqttc.suppress_exceptions = True
+        _mqttc._easy_log = self._easy_log
 
     async def async_shutdown(self):
+        await super().async_shutdown()
         await self.async_disconnect()
-        for task in self._tasks:
-            await task
 
-    # interface: mqtt.Client
-    @override
     def _easy_log(self, level, fmt: str, *args) -> None:
         # TODO: obfuscate in case (paho logs the topics...)
-        self.log(self.DEBUG, f"PAHO-LOG{{%s}} -> {fmt}", level, *args)
+        self.log(self.VERBOSE, f"PAHO-LOG{{%s}} -> {fmt}", level, *args)
 
     # interface: self
     @property
@@ -290,9 +198,9 @@ class _MQTTClient(MerossClient, mqtt.Client):
         succesfully subscribing (see _mqttc_connect and overrides)
         """
         with self._lock_state:
-            self.loop_stop()
-            self.connect_async(broker.host, broker.port)
-            self.loop_start()
+            self._mqttc.loop_stop()
+            self._mqttc.connect_async(broker.host, broker.port)
+            self._mqttc.loop_start()
             self._stateext = self.STATE_CONNECTING
 
     def safe_stop(self):
@@ -303,8 +211,8 @@ class _MQTTClient(MerossClient, mqtt.Client):
         """
         with self._lock_state:
             self._stateext = self.STATE_DISCONNECTING
-            self.disconnect()
-            self.loop_stop()
+            self._mqttc.disconnect()
+            self._mqttc.loop_stop()
             self._stateext = self.STATE_DISCONNECTED
 
     def get_rl_safe_delay(self, uuid: str):
@@ -371,85 +279,67 @@ class _MQTTClient(MerossClient, mqtt.Client):
                 break
 
             t_queue.append(t_now)
-            return mqtt.Client.publish(
-                self,
+            return self._mqttc.publish(
                 mc.TOPIC_REQUEST.format(request.uuid),
                 request.json,
             )
 
-    def _mqtt_connected(self):
+    def publish(self, topic: str, message: str):
+        self._mqttc.publish(topic, message)
+
+    def on_connect(self):
         """
         This is a placeholder method called by the asyncio implementation in the
-        main thread when the mqtt client is connected (subscribed)
+        main thread when the mqtt client is connected and has subscribed to the topics.
         """
         if self._future_connected:
             self._future_connected.set_result(True)
             self._future_connected = None
 
-    def _mqtt_disconnected(self):
+    def _mqttc_connect(self, *args):
+        pass  # subscription implemented in derived classes
+
+    def _mqttc_subscribe(self, *args):
+        """This is the asynced version of the callback: called when we're managed through a loop"""
+        self._stateext = self.STATE_CONNECTED
+        self.loop.call_soon_threadsafe(self.on_connect)
+
+    def on_disconnect(self):
         """
         This is a placeholder method called by the asyncio implementation in the
         main thread when the mqtt client is disconnected
         """
         pass
 
-    def _mqtt_published(self):
+    def _mqttc_disconnect(self, *args):
+        """This is the asynced version of the callback: called when we're managed through a loop"""
+        self._stateext = (
+            self.STATE_DISCONNECTED if self.state_inactive else self.STATE_RECONNECTING
+        )
+        self.loop.call_soon_threadsafe(self.on_disconnect)
+
+    def on_message(self, msg: mqtt.MQTTMessage):
+        """
+        This is a placeholder method called by the asyncio implementation in the
+        main thread when the mqtt client receives a message.
+        """
+        pass
+
+    def _mqttc_message(self, client, userdata, msg: mqtt.MQTTMessage):
+        self.loop.call_soon_threadsafe(self.on_message, msg)
+
+    def on_publish(self):
         """
         This is a placeholder method called by the asyncio implementation in the
         main thread when the mqtt client (actually) publishes a message
         """
         pass
 
-    def mqtt_message(self, msg: mqtt.MQTTMessage):
-        """
-        This is a placeholder method called by the asyncio implementation in the
-        main thread when the mqtt client receives a message. Defaults to creating
-        a task for processing the message in async_mqtt_message
-        """
-        task = self.loop.create_task(self.async_mqtt_message(msg))
-        self._tasks.append(task)
-        task.add_done_callback(self._tasks.remove)
-
-    async def async_mqtt_message(self, msg: mqtt.MQTTMessage):
-        """
-        This is a placeholder method called by the asyncio implementation in the
-        main thread when the mqtt client receives a message
-        """
-        pass
-
-    def _mqttc_connect(self, *args):
-        pass  # subscription implemented in derived classes
-
-    def _mqttc_subscribe(self, *args):
-        """This is the standard version of the callback: called when we're not managed through a loop"""
-        self._stateext = self.STATE_CONNECTED
-
-    def _mqttc_subscribe_loop(self, *args):
-        """This is the asynced version of the callback: called when we're managed through a loop"""
-        self._stateext = self.STATE_CONNECTED
-        self.loop.call_soon_threadsafe(self._mqtt_connected)
-
-    def _mqttc_disconnect(self, *args):
-        """This is the standard version of the callback: called when we're not managed through a loop"""
-        self._stateext = (
-            self.STATE_DISCONNECTED if self.state_inactive else self.STATE_RECONNECTING
-        )
-
-    def _mqttc_disconnect_loop(self, *args):
-        """This is the asynced version of the callback: called when we're managed through a loop"""
-        self._stateext = (
-            self.STATE_DISCONNECTED if self.state_inactive else self.STATE_RECONNECTING
-        )
-        self.loop.call_soon_threadsafe(self._mqtt_disconnected)
-
-    def _mqttc_publish_loop(self, *args):
-        self.loop.call_soon_threadsafe(self._mqtt_published)
-
-    def _mqttc_message_loop(self, client, userdata, msg: mqtt.MQTTMessage):
-        self.loop.call_soon_threadsafe(self.mqtt_message, msg)
+    def _mqttc_publish(self, *args):
+        self.loop.call_soon_threadsafe(self.on_publish)
 
 
-class MQTTAppClient(_MQTTClient):
+class MQTTAppClient(_MQTTConnection):
     """
     Implements an "App behaviored" MQTT client. This client connect to the Meross cloud
     brokers and behaves (or tries to) exactly as an App so that it can receive PUSHES
@@ -461,10 +351,10 @@ class MQTTAppClient(_MQTTClient):
 
     if TYPE_CHECKING:
 
-        class Args(_MQTTClient.Args):
+        class Args(_MQTTConnection.Args):
             sslcontext: NotRequired[ssl.SSLContext]
 
-        class RequestArgs(_MQTTClient.RequestArgs):
+        class RequestArgs(_MQTTConnection.RequestArgs):
             pass
 
     __SLOTS__ = (
@@ -483,25 +373,25 @@ class MQTTAppClient(_MQTTClient):
         **kwargs: "Unpack[Args]",
     ):
         if not app_id:
-            app_id = _MQTTClient.generate_app_id()
+            app_id = _MQTTConnection.generate_app_id()
         self.app_id = app_id
         self.topic_command = f"/app/{user_id}-{app_id}/subscribe"
         self.topic_push = f"/app/{user_id}/subscribe"
         super().__init__(id, parent, client_id=f"app:{app_id}", **kwargs)
-        self.username_pw_set(user_id, md5hexdigest(user_id, self.key))
+        self._mqttc.username_pw_set(user_id, md5hexdigest(user_id, self.key))
         try:
-            self.tls_set_context(kwargs["sslcontext"])  # type: ignore
+            self._mqttc.tls_set_context(kwargs["sslcontext"])  # type: ignore
         except KeyError:
-            self.tls_set(
+            self._mqttc.tls_set(
                 cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS_CLIENT
             )
 
     @override
     def _mqttc_connect(self, *args):
-        self.subscribe([(self.topic_push, 1), (self.topic_command, 1)])
+        self._mqttc.subscribe([(self.topic_push, 1), (self.topic_command, 1)])
 
 
-class MQTTDeviceClient(_MQTTClient):
+class MQTTDeviceClient(_MQTTConnection):
     """
     Implements a "Device behaviored" MQTT client. This client connect to the Meross cloud
     brokers and behaves (or tries to) exactly as a device so that it can receive
@@ -512,13 +402,13 @@ class MQTTDeviceClient(_MQTTClient):
 
     if TYPE_CHECKING:
 
-        class Args(_MQTTClient.Args):
+        class Args(_MQTTConnection.Args):
             sslcontext: NotRequired[ssl.SSLContext]
 
-        class RequestArgs(_MQTTClient.RequestArgs):
+        class RequestArgs(_MQTTConnection.RequestArgs):
             pass
 
-    __slots__ = _MQTTClient._calc_slots(
+    __slots__ = _MQTTConnection._calc_slots(
         "topic_publish",
         "topic_subscribe",
     )
@@ -546,14 +436,16 @@ class MQTTDeviceClient(_MQTTClient):
             **kwargs,
         )
         macaddress = get_macaddress_from_uuid(uuid)
-        self.username_pw_set(
+        self._mqttc.username_pw_set(
             macaddress, f"{user_id}_{md5hexdigest(macaddress, self.key)}"
         )
         try:
-            self.tls_set_context(kwargs["sslcontext"])  # type: ignore
+            self._mqttc.tls_set_context(kwargs["sslcontext"])  # type: ignore
         except KeyError:
-            self.tls_set(cert_reqs=ssl.CERT_NONE, tls_version=ssl.PROTOCOL_TLSv1_2)
+            self._mqttc.tls_set(
+                cert_reqs=ssl.CERT_NONE, tls_version=ssl.PROTOCOL_TLSv1_2
+            )
 
     @override
     def _mqttc_connect(self, *args):
-        self.subscribe([(self.topic_subscribe, 1)])
+        self._mqttc.subscribe([(self.topic_subscribe, 1)])
