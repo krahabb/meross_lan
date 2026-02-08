@@ -293,7 +293,7 @@ class ConfigEntryManager(EntityManager):
         self.config_entry = config_entry
         try:
             self.config = config = config_entry.data  # type: ignore
-            self.key = config.get(CONF_KEY, mlc.PARAM_DEFAULT_KEY)
+            self.key = config.get(CONF_KEY) or ""
             self.obfuscate = config.get(CONF_OBFUSCATE, True)
         except AttributeError:
             # this is the ComponentApi: ConfigEntry not configured..
