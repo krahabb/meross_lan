@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING
 
 from homeassistant.components import update
 from homeassistant.exceptions import HomeAssistantError
@@ -63,7 +63,7 @@ class MLUpdate(me.MEPartialAvailableMixin, me.MLEntity, update.UpdateEntity):
         )
         self.flush_state()
 
-    @override
+    @me.MLEntity.ha_action
     async def async_install(self, version: str | None, backup: bool, **kwargs):
         basedevice = self.manager
         if not basedevice.online:

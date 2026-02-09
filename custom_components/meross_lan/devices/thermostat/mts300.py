@@ -236,13 +236,13 @@ class Mts300Climate(MtsThermostatClimate):
         self._mts_work = None
         return super().set_unavailable()
 
-    @override
+    @MtsThermostatClimate.ha_action
     async def async_set_hvac_mode(self, hvac_mode: MtsThermostatClimate.HVACMode):
         await self.async_request_parse_ex(
             {mc.KEY_MODE: self.HVAC_MODE_TO_MODE_MAP[hvac_mode]}
         )
 
-    @override
+    @MtsThermostatClimate.ha_action
     async def async_set_temperature(self, **kwargs):
         format_temp = lambda t: round(t * self.device_scale)
 
@@ -278,7 +278,7 @@ class Mts300Climate(MtsThermostatClimate):
 
         await self.async_request_parse_ex(modeC_args)
 
-    @override
+    @MtsThermostatClimate.ha_action
     async def async_set_fan_mode(self, fan_mode: str, /):
         fan_speed = self.FAN_MODE_TO_FAN_SPEED_MAP[fan_mode]
         # actually we assume: (fan_speed != 0) <-> (fMode == mc.MTS300_FAN_MODE_ON)

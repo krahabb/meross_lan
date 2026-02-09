@@ -104,5 +104,6 @@ class MLConfigSelect(MLSelect):
             return True
 
     # interface: select.SelectEntity
+    @MLSelect.ha_action
     async def async_select_option(self, option: str):
         await self.async_request_value(reverse_lookup(self.options_map, option))

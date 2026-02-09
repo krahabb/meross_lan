@@ -207,7 +207,7 @@ class Mts960Climate(MtsThermostatClimate):
 
         super().flush_state()
 
-    @override
+    @MtsThermostatClimate.ha_action
     async def async_set_hvac_mode(self, hvac_mode: MtsThermostatClimate.HVACMode):
         match hvac_mode:
             case MtsThermostatClimate.HVACMode.OFF:
@@ -244,7 +244,7 @@ class Mts960Climate(MtsThermostatClimate):
                     }
                 )
 
-    @override
+    @MtsThermostatClimate.ha_action
     async def async_set_preset_mode(self, preset_mode: str):
         match preset_mode:
             case Mts960Climate.Preset.HEATING:
@@ -309,7 +309,7 @@ class Mts960Climate(MtsThermostatClimate):
                     },
                 )
 
-    @override
+    @MtsThermostatClimate.ha_action
     async def async_set_temperature(self, **kwargs):
         # bumps out of any timer/schedule mode and sets target temp
         # preserving heating/cooling mode

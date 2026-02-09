@@ -26,7 +26,7 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
         class Args(me.MLBinaryEntity.Args):
             pass
 
-        manager: "Device"
+        manager: Device
         handler_togglex: Final[NamespaceHandler | None]
 
         # HA core entity attributes:
@@ -87,13 +87,13 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
             return True
 
     # interface: fan.FanEntity
-    @override
-    async def async_set_percentage(self, percentage: int) -> None:
+    @me.MLBinaryEntity.ha_action
+    async def async_set_percentage(self, percentage: int):
         await self.async_request_parse_ex(
             {mc.KEY_SPEED: round(percentage * self.speed_count / 100)}
         )
 
-    @override
+    @me.MLBinaryEntity.ha_action
     async def async_turn_on(
         self, percentage: int | None = None, preset_mode: str | None = None, **kwargs
     ):
@@ -112,7 +112,7 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
             }
         )
 
-    @override
+    @me.MLBinaryEntity.ha_action
     async def async_turn_off(self, **kwargs):
         if self.handler_togglex:
             await self.handler_togglex.async_set({mc.KEY_ONOFF: 0}, self)

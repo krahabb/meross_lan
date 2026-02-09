@@ -515,7 +515,7 @@ class MLLight(MLLightBase):
         self.effect = self.effect_list[_light[mc.KEY_EFFECT]]  # type: ignore
 
     # interface: LightEntity
-    @override
+    @MLLightBase.ha_action
     async def async_turn_on(self, **kwargs):
         if self._t_unsub:
             self._transition_cancel()
@@ -563,7 +563,7 @@ class MLLight(MLLightBase):
         if _t_duration:
             self._transition_schedule(_t_duration)
 
-    @override
+    @MLLightBase.ha_action
     async def async_turn_off(self, **kwargs):
         await self.async_request_onoff(0)
 
@@ -677,7 +677,7 @@ class MLLightEffect(MLLight):
             self.color_mode = ColorMode.ONOFF
 
     # interface: LightEntity
-    @override
+    @MLLight.ha_action
     async def async_turn_on(self, **kwargs):
         if self._t_unsub:
             self._transition_cancel()

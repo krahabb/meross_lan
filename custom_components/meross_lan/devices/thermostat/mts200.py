@@ -82,6 +82,7 @@ class Mts200Climate(MtsThermostatClimate):
             self.hvac_action = MtsThermostatClimate.HVACAction.OFF
         MtsThermostatClimate.flush_state(self)
 
+    @MtsThermostatClimate.ha_action
     async def async_set_hvac_mode(self, hvac_mode: MtsThermostatClimate.HVACMode, /):
         if hvac_mode == MtsThermostatClimate.HVACMode.OFF:
             await self.async_request_onoff(0)
@@ -97,6 +98,7 @@ class Mts200Climate(MtsThermostatClimate):
 
         await self.async_request_onoff(1)
 
+    @MtsThermostatClimate.ha_action
     async def async_set_temperature(self, /, **kwargs):
         mode = self._mts_mode
         if self.SET_TEMP_FORCE_MANUAL_MODE or (mode == mc.MTS200_MODE_AUTO):

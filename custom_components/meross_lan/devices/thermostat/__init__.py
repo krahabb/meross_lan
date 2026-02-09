@@ -45,6 +45,7 @@ class MLScreenBrightnessNumber(MLConfigNumber):
             name=f"Screen brightness ({key})",
         )
 
+    @MLConfigNumber.ha_action
     async def async_set_native_value(self, value: float, /):
         """Override base async_set_native_value since it would round
         the value to an int (common device native type)."""

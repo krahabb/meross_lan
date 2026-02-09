@@ -320,6 +320,7 @@ class MLGarage(MLCover):
         await self.async_request_position(0)
 
     # interface: self
+    @MLCover.ha_action
     async def async_request_position(self, open_request: int, /):
         self._transition_cancel()
         response = await self.async_request_payload({self.key_value: open_request})

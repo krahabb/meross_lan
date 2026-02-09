@@ -104,13 +104,14 @@ class MLSiren(me.MLBinaryEntity, siren.SirenEntity):
                 siren.SirenEntityFeature.TURN_ON | siren.SirenEntityFeature.TURN_OFF
             )
 
+    @override
     async def async_request_value(self, device_value, /) -> None:
         await self.async_request_payload(
             {"event": {"security": {"value": device_value}}}
         )
         self.update_device_value(device_value)
 
-    @override
+    @me.MLBinaryEntity.ha_action
     async def async_turn_on(self, **kwargs):
         if kwargs:
             payload = {}

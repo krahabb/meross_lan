@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING
 
 from homeassistant.exceptions import InvalidStateError
 
@@ -94,6 +94,10 @@ class MLRollerShutter(MLCover):
         self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
         self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
 
+    def set_unavailable(self):
+        self._mrs_state = None
+        MLCover.set_unavailable(self)
+
     async def async_added_to_hass(self):
         await MLCover.async_added_to_hass(self)
         """
@@ -118,15 +122,13 @@ class MLRollerShutter(MLCover):
                     except KeyError:
                         pass
 
-    @override
+    # interface: cover.CoverEntity
     async def async_open_cover(self, **kwargs):
         await self.async_request_position(mc.ROLLERSHUTTER_POSITION_OPENED)
 
-    @override
     async def async_close_cover(self, **kwargs):
         await self.async_request_position(mc.ROLLERSHUTTER_POSITION_CLOSED)
 
-    @override
     async def async_set_cover_position(self, **kwargs):
         position = kwargs[cover.ATTR_POSITION]
         if (
@@ -164,19 +166,16 @@ class MLRollerShutter(MLCover):
                 timeout, self._async_transition_end_callback
             )
 
-    @override
     async def async_stop_cover(self, **kwargs):
         await self.async_request_position(mc.ROLLERSHUTTER_POSITION_STOP)
 
+    # interface: self
+    @MLCover.ha_action
     async def async_request_position(self, position: int):
         self._transition_cancel()
         await self.async_request_payload({self.key_value: position})
         self._transition_cancel()
         await self._async_transition_callback()
-
-    def set_unavailable(self):
-        self._mrs_state = None
-        MLCover.set_unavailable(self)
 
     def _parse_config(self, payload: dict):
         # payload = {"channel": 0, "signalOpen": 50000, "signalClose": 50000}

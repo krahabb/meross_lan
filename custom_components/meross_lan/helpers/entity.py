@@ -7,15 +7,18 @@ versioning
 from functools import cached_property, partial
 from typing import TYPE_CHECKING, final, override
 
+
 try:
     from homeassistant.components.recorder import get_instance as r_get_instance
     from homeassistant.components.recorder.history import get_last_state_changes
 except ImportError:
     get_last_state_changes = None
 
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity
 
 from .namespaces import NamespaceHandler, NamespaceParser, mc, mn
+from ..merossclient.protocol import MerossError
 
 if TYPE_CHECKING:
     from typing import (
@@ -130,6 +133,23 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         device_entry: DeviceEntry | None
         entity_registry_enabled_default: bool
         name: str | None
+
+    @staticmethod
+    def ha_action(func):
+        """
+        Decorator to wrap HA service calls and raise HomeAssistantError on failure.
+        This will prevent dumping the full stack trace in the logs and instead log a concise error message
+        on selected exceptions.
+        """
+
+        def _ha_action(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except MerossError as error:
+                # Meross protocol error, typically due to a device communication issue.
+                raise HomeAssistantError(str(error)) from error
+
+        return _ha_action
 
     class EntityDef[_T: MLEntity]:
         """Descriptor class used when populating maps used to dynamically instantiate (sensor)
@@ -504,9 +524,11 @@ class MLBinaryEntity(MLEntity):
             return True
 
     # provide a generalized toggle behavior for binary entities
+    @MLEntity.ha_action
     async def async_turn_on(self, **kwargs):
         await self.async_request_value(self.native_on)
 
+    @MLEntity.ha_action
     async def async_turn_off(self, **kwargs):
         await self.async_request_value(self.native_off)
 

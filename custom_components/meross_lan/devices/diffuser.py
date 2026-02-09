@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING
 
 from ..helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
 from ..light import (
@@ -135,7 +135,7 @@ class MLDiffuserLight(MLLightBase):
             self.flush_state()
 
     # interface: LightEntity
-    @override
+    @MLLightBase.ha_action
     async def async_turn_on(self, **kwargs):
         if self._t_unsub:
             self._transition_cancel()

@@ -542,15 +542,18 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         self.schedule.flush_state()
 
     # interface: ClimateEntity
+    @me.MLEntity.ha_action
     async def async_turn_on(self):
         await self.async_request_onoff(1)
 
+    @me.MLEntity.ha_action
     async def async_turn_off(self):
         await self.async_request_onoff(0)
 
     async def async_set_hvac_mode(self, hvac_mode: climate.HVACMode):
         raise NotImplementedError()
 
+    @me.MLEntity.ha_action
     async def async_set_preset_mode(self, preset_mode: str):
         mode = reverse_lookup(self.MTS_MODE_TO_PRESET_MAP, preset_mode)
         if mode is not None:

@@ -87,9 +87,11 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
         super().set_unavailable()
 
     # interface: MediaPlayerEntity
+    @me.MLEntity.ha_action
     async def async_mute_volume(self, mute):
         await self.async_request_parse_ex({mc.KEY_MUTE: 1 if mute else 0})
 
+    @me.MLEntity.ha_action
     async def async_set_volume_level(self, volume):
         await self.async_request_parse_ex(
             {
@@ -101,12 +103,15 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
             }
         )
 
+    @me.MLEntity.ha_action
     async def async_media_play(self):
         await self.async_request_parse_ex({mc.KEY_MUTE: 0})
 
+    @me.MLEntity.ha_action
     async def async_media_stop(self):
         await self.async_request_parse_ex({mc.KEY_MUTE: 1})
 
+    @me.MLEntity.ha_action
     async def async_media_previous_track(self):
         song = self.media_track
         await self.async_request_parse_ex(
@@ -119,6 +124,7 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
             }
         )
 
+    @me.MLEntity.ha_action
     async def async_media_next_track(self):
         song = self.media_track
         await self.async_request_parse_ex(
