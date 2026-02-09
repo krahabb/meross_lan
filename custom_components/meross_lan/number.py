@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 from homeassistant.components import number
 
 from .const import hac
-from .helpers import entity as me
+from .helpers.entity import MLNumericEntity
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final, NotRequired, Unpack
@@ -17,10 +17,12 @@ if TYPE_CHECKING:
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, number.DOMAIN)
+    MLNumericEntity.platform_setup_entry(
+        hass, config_entry, async_add_devices, number.DOMAIN
+    )
 
 
-class MLNumber(me.MLNumericEntity, number.NumberEntity):
+class MLNumber(MLNumericEntity, number.NumberEntity):
     """
     Base (abstract) ancestor for ML number entities. This has 2 specializations:
     - MLConfigNumber: for configuration parameters backed by a device namespace value.
@@ -30,7 +32,7 @@ class MLNumber(me.MLNumericEntity, number.NumberEntity):
 
     if TYPE_CHECKING:
 
-        class Args(me.MLNumericEntity.Args):
+        class Args(MLNumericEntity.Args):
             device_class: NotRequired[number.NumberDeviceClass | None]
 
         manager: "BaseDevice"
@@ -62,7 +64,7 @@ class MLNumber(me.MLNumericEntity, number.NumberEntity):
     }
 
     # HA core entity attributes:
-    entity_category = me.MLNumericEntity.EntityCategory.CONFIG
+    entity_category = MLNumericEntity.EntityCategory.CONFIG
     mode = number.NumberMode.BOX
     native_step = 1
 
@@ -119,7 +121,7 @@ class MLConfigNumber(MLNumber):
             return
 
 
-class MLEmulatedNumber(me.MEPartialAvailableMixin, MLNumber):
+class MLEmulatedNumber(MLNumber.PartialAvailableMixin, MLNumber):
     """
     Number entity not directly binded to a device parameter (like MLConfigNumber)
     but used to store in HA a bit of component configuration.

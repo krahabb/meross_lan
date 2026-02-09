@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components import cover
 
-from .helpers import entity as me
+from .helpers.entity import MLEntity
 
 if TYPE_CHECKING:
     import asyncio
@@ -12,14 +12,14 @@ if TYPE_CHECKING:
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, cover.DOMAIN)
+    MLEntity.platform_setup_entry(hass, config_entry, async_add_devices, cover.DOMAIN)
 
 
-class MLCover(me.MLEntity, cover.CoverEntity):
+class MLCover(MLEntity, cover.CoverEntity):
 
     if TYPE_CHECKING:
 
-        class Args(me.MLEntity.Args):
+        class Args(MLEntity.Args):
             device_class: NotRequired[cover.CoverDeviceClass | None]
 
         manager: "Device"

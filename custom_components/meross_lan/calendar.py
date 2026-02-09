@@ -14,7 +14,8 @@ from homeassistant.components.calendar.const import (
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt
 
-from .helpers import clamp, entity as me
+from .helpers import clamp
+from .helpers.entity import MLEntity
 from .merossclient.protocol import const as mc
 
 if TYPE_CHECKING:
@@ -35,7 +36,9 @@ if TYPE_CHECKING:
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, calendar.DOMAIN)
+    MLEntity.platform_setup_entry(
+        hass, config_entry, async_add_devices, calendar.DOMAIN
+    )
 
 
 MTS_SCHEDULE_WEEKDAY = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
@@ -92,10 +95,10 @@ class MtsScheduleEntry:
         )
 
 
-class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
+class MtsSchedule(MLEntity, calendar.CalendarEntity):
 
     if TYPE_CHECKING:
-        manager: "BaseDevice"
+        manager: BaseDevice
         climate: Final[MtsClimate]
         _payload_ns: MtsScheduleNativeType | None
         _schedule: MtsScheduleNativeType | None
@@ -106,7 +109,7 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
 
     # HA core entity attributes:
     _attr_name = "Schedule"
-    entity_category = me.MLEntity.EntityCategory.CONFIG
+    entity_category = MLEntity.EntityCategory.CONFIG
     supported_features = (
         calendar.CalendarEntityFeature.CREATE_EVENT
         | calendar.CalendarEntityFeature.DELETE_EVENT

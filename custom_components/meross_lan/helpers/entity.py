@@ -7,7 +7,6 @@ versioning
 from functools import cached_property, partial
 from typing import TYPE_CHECKING, final, override
 
-
 try:
     from homeassistant.components.recorder import get_instance as r_get_instance
     from homeassistant.components.recorder.history import get_last_state_changes
@@ -17,8 +16,8 @@ except ImportError:
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity
 
-from .namespaces import NamespaceHandler, NamespaceParser, mc, mn
 from ..merossclient.protocol import MerossError
+from .namespaces import NamespaceHandler, NamespaceParser, mc, mn
 
 if TYPE_CHECKING:
     from typing import (
@@ -43,21 +42,6 @@ if TYPE_CHECKING:
     from .manager import ConfigEntryManager, EntityManager
 
     type ChannelType = PayloadIndexType
-
-
-#
-# helper function to 'commonize' platform setup
-#
-def platform_setup_entry(
-    hass,
-    config_entry: "ConfigEntry[ConfigEntryManager]",
-    async_add_devices,
-    platform: str,
-):
-    manager = config_entry.runtime_data
-    manager.log(manager.DEBUG, "platform_setup_entry { platform: %s }", platform)
-    manager.platforms[platform] = async_add_devices
-    async_add_devices(manager.managed_entities(platform))
 
 
 class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
@@ -133,43 +117,6 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         device_entry: DeviceEntry | None
         entity_registry_enabled_default: bool
         name: str | None
-
-    @staticmethod
-    def ha_action(func):
-        """
-        Decorator to wrap HA service calls and raise HomeAssistantError on failure.
-        This will prevent dumping the full stack trace in the logs and instead log a concise error message
-        on selected exceptions.
-        """
-
-        def _ha_action(*args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except MerossError as error:
-                # Meross protocol error, typically due to a device communication issue.
-                raise HomeAssistantError(str(error)) from error
-
-        return _ha_action
-
-    class EntityDef[_T: MLEntity]:
-        """Descriptor class used when populating maps used to dynamically instantiate (sensor)
-        entities based on their appearance in a payload key."""
-
-        type: "Final[type[_T]]"
-        kwargs: "Final[Any]"
-
-        __slots__ = ("type", "kwargs")
-
-        def __init__(self, type: "type[_T]", **kwargs: "Unpack[MLEntity.Args]"):
-            self.type = type
-            self.kwargs = kwargs
-
-    @classmethod
-    def ENTITY_DEF(
-        cls,
-        **kwargs: "Unpack[Args]",
-    ) -> "MLEntity.EntityDef[Self]":
-        return MLEntity.EntityDef["Self"](cls, **kwargs)
 
     EntityCategory = entity.EntityCategory
 
@@ -333,6 +280,8 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         # we don't flush here since we'll wait for actual device readings
 
     def set_unavailable(self):
+        if self._attr_available:
+            return  # this entity is always available, no need to set unavailable
         self.available = False
         self._payload_ns = mn.EMPTY_DICT
         self.flush_state()
@@ -393,6 +342,35 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         key_value in class/instance definition to make it work."""
         self.update_device_value(payload[self.key_value])
 
+    @staticmethod
+    def platform_setup_entry(
+        hass,
+        config_entry: "ConfigEntry[ConfigEntryManager]",
+        async_add_devices,
+        platform: str,
+    ):
+        manager = config_entry.runtime_data
+        manager.log(manager.DEBUG, "platform_setup_entry { platform: %s }", platform)
+        manager.platforms[platform] = async_add_devices
+        async_add_devices(manager.managed_entities(platform))
+
+    @staticmethod
+    def ha_action(func):
+        """
+        Decorator to wrap HA service calls and raise HomeAssistantError on failure.
+        This will prevent dumping the full stack trace in the logs and instead log a concise error message
+        on selected exceptions.
+        """
+
+        def _ha_action(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except MerossError as error:
+                # Meross protocol error, typically due to a device communication issue.
+                raise HomeAssistantError(str(error)) from error
+
+        return _ha_action
+
     @classmethod
     def namespace_init(cls, device: "Device", ns: mn.Namespace, /):
         """Helper to register a specialized entity class to the proper namespace.
@@ -401,64 +379,71 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         assert ns is cls.ns
         NamespaceHandler(device, ns).register_entity_class(cls, cls.NS_CHANNELS)
 
+    class EntityDef[_T: MLEntity]:
+        """Descriptor class used when populating maps used to dynamically instantiate (sensor)
+        entities based on their appearance in a payload key."""
 
-class MEGroupListChannelMixin(MLEntity if TYPE_CHECKING else object):
-    """
-    Implementation for protocol method 'SET' on entities/namespaces backed by a channel
-    list and the actual entity value is embedded in a 'group' key (see Appliance.Config.DeviceCfg).
-    """
+        type: "Final[type[_T]]"
+        kwargs: "Final[Any]"
 
-    if TYPE_CHECKING:
-        manager: BaseDevice
-        key_group: str
+        __slots__ = ("type", "kwargs")
 
-    # interface: MLEntity
-    @override
-    async def async_request_value(self, device_value, /):
-        (
-            await self.manager.async_request(
-                *self.ns.request_set(
-                    {self.key_group: {self.key_value: device_value}}, self.channel
+        def __init__(self, type: "type[_T]", **kwargs: "Unpack[MLEntity.Args]"):
+            self.type = type
+            self.kwargs = kwargs
+
+    @classmethod
+    def ENTITY_DEF(
+        cls,
+        **kwargs: "Unpack[Args]",
+    ) -> "MLEntity.EntityDef[Self]":
+        return MLEntity.EntityDef["Self"](cls, **kwargs)
+
+    class PartialAvailableMixin:
+        """
+        Mixin class for entities which should be available when device is connected
+        but their state needs to be preserved since they're representing a state not directly
+        carried by the device ('emulated' configuration params like MLEmulatedNumber or so).
+        """
+
+        if TYPE_CHECKING:
+
+            def flush_state(self): ...
+
+        def set_available(self):
+            self.available = True
+            self.flush_state()
+
+        def set_unavailable(self):
+            self.available = False
+            self.flush_state()
+
+    class GroupListChannelMixin(NamespaceParser if TYPE_CHECKING else object):
+        """
+        Implementation for protocol method 'SET' on entities/namespaces backed by a channel
+        list and the actual entity value is embedded in a 'group' key (see Appliance.Config.DeviceCfg).
+        """
+
+        if TYPE_CHECKING:
+            manager: BaseDevice
+            key_group: str
+            key_value: str
+
+            def update_device_value(self, device_value, /) -> bool | None: ...
+
+        # interface: MLEntity
+        async def async_request_value(self, device_value, /):
+            (
+                await self.manager.async_request(
+                    *self.ns.request_set(
+                        {self.key_group: {self.key_value: device_value}}, self.channel
+                    )
                 )
             )
-        )
-        self.update_device_value(device_value)
+            self.update_device_value(device_value)
 
-    @override  # NamespaceParser
-    def _parse(self, payload, /):
-        self.update_device_value(payload[self.key_group][self.key_value])
-
-
-class MEAlwaysAvailableMixin(MLEntity if TYPE_CHECKING else object):
-    """
-    Mixin class for entities which should always be available
-    disregarding current device connection state.
-    """
-
-    # HA core entity attributes:
-    _attr_available = True
-
-    def set_available(self):
-        pass
-
-    def set_unavailable(self):
-        pass
-
-
-class MEPartialAvailableMixin(MLEntity if TYPE_CHECKING else object):
-    """
-    Mixin class for entities which should be available when device is connected
-    but their state needs to be preserved since they're representing a state not directly
-    carried by the device ('emulated' configuration params like MLEmulatedNumber or so).
-    """
-
-    def set_available(self):
-        self.available = True
-        self.flush_state()
-
-    def set_unavailable(self):
-        self.available = False
-        self.flush_state()
+        def _parse(self, payload, /):
+            self.update_device_value(payload[self.key_group][self.key_value])
 
 
 class MLBinaryEntity(MLEntity):

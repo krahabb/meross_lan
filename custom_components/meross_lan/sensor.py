@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 from homeassistant.components import sensor
 
 from . import const as mlc
-from .helpers import entity as me
+from .helpers.entity import MLEntity, MLNumericEntity
 from .helpers.namespaces import EntityNamespaceMixin, mc, mn
 from .merossclient import Transport
 from .merossclient.protocol.message import json_dumps
@@ -15,22 +15,23 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .helpers.device import Device
+    from .helpers.entity import ChannelType
     from .helpers.manager import EntityManager
 
 
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, sensor.DOMAIN)
+    MLEntity.platform_setup_entry(hass, config_entry, async_add_devices, sensor.DOMAIN)
 
 
-class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
+class MLEnumSensor(MLEntity, sensor.SensorEntity):
     """Specialization for sensor with ENUM device_class which allows to store
     anything as opposed to numeric sensor types which have units and so."""
 
     if TYPE_CHECKING:
 
-        class Args(me.MLEntity.Args):
+        class Args(MLEntity.Args):
             native_value: NotRequired[sensor.StateType]
             device_class: NotRequired[Never]
 
@@ -53,7 +54,7 @@ class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
 
     def __init__(
         self,
-        channel: "me.ChannelType | None",
+        channel: "ChannelType | None",
         manager: "EntityManager",
         /,
         **kwargs: "Unpack[Args]",
@@ -74,11 +75,11 @@ class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
     update_native_value = update_device_value
 
 
-class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
+class MLNumericSensor(MLNumericEntity, sensor.SensorEntity):
 
     if TYPE_CHECKING:
 
-        class Args(me.MLNumericEntity.Args):
+        class Args(MLNumericEntity.Args):
             device_class: NotRequired[sensor.SensorDeviceClass | None]
             state_class: NotRequired[sensor.SensorStateClass]
             suggested_display_precision: NotRequired[int]
@@ -134,7 +135,7 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
 
     def __init__(
         self,
-        channel: "me.ChannelType | None",
+        channel: "ChannelType | None",
         manager: "EntityManager",
         /,
         **kwargs: "Unpack[Args]",
@@ -208,7 +209,7 @@ class MLDiagnosticSensor(MLEnumSensor):
         self.update_native_value(json_dumps(payload))
 
 
-class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
+class ProtocolSensor(MLEnumSensor):
 
     if TYPE_CHECKING:
         manager: "Device"
@@ -222,6 +223,7 @@ class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
     ATTR_MQTT_BROKER = "mqtt_broker"
 
     # HA core entity attributes:
+    _attr_available = True
     _attr_entity_registry_enabled_default = False
     entity_category = MLEnumSensor.EntityCategory.DIAGNOSTIC
     options: list[str] = [

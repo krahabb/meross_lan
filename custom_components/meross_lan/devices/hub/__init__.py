@@ -6,7 +6,8 @@ from ...binary_sensor import MLBinarySensor
 from ...button import MLButton
 from ...calendar import MtsSchedule
 from ...climate import MtsClimate
-from ...helpers import device as mld, entity as me
+from ...helpers import device as mld
+from ...helpers.entity import MLEntity
 from ...helpers.namespaces import (
     POLLING_STRATEGY_CONF,
     NamespaceHandler,
@@ -42,7 +43,6 @@ if TYPE_CHECKING:
     )
 
     from ...helpers.device import Device, DigestInitReturnType, MerossMessage
-    from ...helpers.entity import MLEntity
     from ...helpers.meross_profile import DeviceInfoExtType
     from ...helpers.mqtt_profile import MQTTProfile
     from ...merossclient.cloudapi import SubDeviceInfoType
@@ -91,7 +91,7 @@ class HubSubIdChannelMixin(MLEntity if TYPE_CHECKING else object):
         self.update_device_value(device_value)
 
 
-class HubSubIdDeviceCfgMixin(me.MEGroupListChannelMixin):
+class HubSubIdDeviceCfgMixin(MLEntity.GroupListChannelMixin):
     """
     Mixin implementation for protocol method 'SET' on 'Appliance.Config.DeviceCfg'.
     """
@@ -412,7 +412,7 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
         )
 
     @override
-    def generate_unique_id(self, entity: me.MLEntity, /):
+    def generate_unique_id(self, entity: MLEntity, /):
         return f"{self.manager.id}_{entity.id}"
 
     # interface: BaseDevice
@@ -633,7 +633,7 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
             )
 
 
-class SubDeviceEntity(me.MLEntity):
+class SubDeviceEntity(MLEntity):
     """Base class for entities acting as the 'main target' of a subdevice namespace parsing.
     The design allows to easily link both digest parsing and *.All parsing to the
     default entity parsing stub (MLEntity._parse). This is a rather common pattern even

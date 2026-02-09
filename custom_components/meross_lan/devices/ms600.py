@@ -2,7 +2,6 @@ from typing import TYPE_CHECKING
 
 from ..binary_sensor import MLBinarySensor
 from ..const import hac
-from ..helpers import entity as me
 from ..helpers.namespaces import mc, mn
 from ..number import MLConfigNumber
 from ..select import MLConfigSelect
@@ -12,9 +11,10 @@ if TYPE_CHECKING:
     from typing import Final, Unpack
 
     from ..helpers.device import Device
+    from ..helpers.entity import ChannelType
 
 
-class PresenceConfigBase(me.MEGroupListChannelMixin):
+class PresenceConfigBase(MLConfigSelect.GroupListChannelMixin):
     """Mixin style base class for all of the entities managed in Appliance.Control.Presence.Config"""
 
     if TYPE_CHECKING:
@@ -24,7 +24,7 @@ class PresenceConfigBase(me.MEGroupListChannelMixin):
     ns = mn.Appliance_Control_Presence_Config
 
     # HA core entity attributes:
-    entity_category = me.MLEntity.EntityCategory.CONFIG
+    entity_category = MLConfigSelect.EntityCategory.CONFIG
 
     # TODO: generalize entitykey generation
 
@@ -49,7 +49,7 @@ class PresenceConfigModeBase(PresenceConfigSelectBase):
         2: "2",
     }
 
-    def __init__(self, channel: "me.ChannelType", manager: "Device", key: str):
+    def __init__(self, channel: "ChannelType", manager: "Device", key: str):
         self.key_value = key
         PresenceConfigSelectBase.__init__(
             self, channel, manager, entity_key=f"presence_config_mode_{key}", name=key
@@ -112,7 +112,7 @@ class PresenceConfigMthX(PresenceConfigNumberBase):
     native_min_value = 1
     native_step = 1
 
-    def __init__(self, channel: "me.ChannelType", manager: "Device", key: str, /):
+    def __init__(self, channel: "ChannelType", manager: "Device", key: str, /):
         self.key_value = key
         PresenceConfigNumberBase.__init__(
             self, channel, manager, entity_key=f"presence_config_mthx_{key}", name=key
@@ -123,7 +123,7 @@ class PresenceConfigMode(PresenceConfigModeBase):
 
     _entities: tuple[PresenceConfigBase, ...]
 
-    def __init__(self, channel: "me.ChannelType", manager: "Device", /):
+    def __init__(self, channel: "ChannelType", manager: "Device", /):
         PresenceConfigModeBase.__init__(self, channel, manager, mc.KEY_WORKMODE)
         manager.get_handler(mn.Appliance_Control_Presence_Config).register_parsers(
             self,
@@ -155,7 +155,7 @@ class MLPresenceSensor(MLNumericSensor):
 
     def __init__(
         self,
-        channel: "me.ChannelType",
+        channel: "ChannelType",
         manager: "Device",
         /,
         **kwargs: "Unpack[MLNumericSensor.Args]",

@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 from homeassistant.components import update
 from homeassistant.exceptions import HomeAssistantError
 
-from .helpers import entity as me
+from .helpers.entity import MLEntity
 from .merossclient.protocol import namespaces as mn
 
 if TYPE_CHECKING:
@@ -13,13 +13,13 @@ if TYPE_CHECKING:
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, update.DOMAIN)
+    MLEntity.platform_setup_entry(hass, config_entry, async_add_devices, update.DOMAIN)
 
 
-class MLUpdate(me.MEPartialAvailableMixin, me.MLEntity, update.UpdateEntity):
+class MLUpdate(MLEntity.PartialAvailableMixin, MLEntity, update.UpdateEntity):
     if TYPE_CHECKING:
 
-        class Args(me.MLEntity.Args):
+        class Args(MLEntity.Args):
             device_class: NotRequired[update.UpdateDeviceClass | None]
 
         manager: BaseDevice
@@ -38,7 +38,7 @@ class MLUpdate(me.MEPartialAvailableMixin, me.MLEntity, update.UpdateEntity):
     # HA core entity attributes:
     _attr_device_class = DeviceClass.FIRMWARE
     _attr_supported_features = update.UpdateEntityFeature.INSTALL
-    entity_category = me.MLEntity.EntityCategory.DIAGNOSTIC
+    entity_category = MLEntity.EntityCategory.DIAGNOSTIC
 
     __slots__ = (
         "installed_version",
@@ -63,7 +63,7 @@ class MLUpdate(me.MEPartialAvailableMixin, me.MLEntity, update.UpdateEntity):
         )
         self.flush_state()
 
-    @me.MLEntity.ha_action
+    @MLEntity.ha_action
     async def async_install(self, version: str | None, backup: bool, **kwargs):
         basedevice = self.manager
         if not basedevice.online:

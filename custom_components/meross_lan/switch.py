@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, override
 from homeassistant.components import switch
 
 from .const import hac
-from .helpers import entity as me
+from .helpers.entity import MLBinaryEntity
 from .helpers.namespaces import EntityNamespaceMixin, mc, mn
 from .merossclient import extract_dict_payloads
 
@@ -19,10 +19,12 @@ if TYPE_CHECKING:
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, switch.DOMAIN)
+    MLBinaryEntity.platform_setup_entry(
+        hass, config_entry, async_add_devices, switch.DOMAIN
+    )
 
 
-class MLSwitch(me.MLBinaryEntity, switch.SwitchEntity):
+class MLSwitch(MLBinaryEntity, switch.SwitchEntity):
     """
     Generic switch entity for meross_lan devices.
     This class is 'ready to use' for most of the devices toggleable features.
@@ -31,7 +33,7 @@ class MLSwitch(me.MLBinaryEntity, switch.SwitchEntity):
 
     if TYPE_CHECKING:
 
-        class Args(me.MLBinaryEntity.Args):
+        class Args(MLBinaryEntity.Args):
             device_class: NotRequired[switch.SwitchDeviceClass | None]
 
         # HA core entity attributes:
@@ -42,10 +44,10 @@ class MLSwitch(me.MLBinaryEntity, switch.SwitchEntity):
 
     # HA core entity attributes:
     _attr_device_class = switch.SwitchDeviceClass.SWITCH
-    entity_category = me.MLBinaryEntity.EntityCategory.CONFIG
+    entity_category = MLBinaryEntity.EntityCategory.CONFIG
 
 
-class MLEmulatedSwitch(me.MEPartialAvailableMixin, MLSwitch):
+class MLEmulatedSwitch(MLSwitch.PartialAvailableMixin, MLSwitch):
     """
     Switch entity not related to any device feature but used to configure
     behaviors for meross_lan entities.

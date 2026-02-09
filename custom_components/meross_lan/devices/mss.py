@@ -8,7 +8,6 @@ from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.util import dt as dt_util
 
 from .. import const as mlc
-from ..helpers import entity as me
 from ..helpers.namespaces import (
     POLLING_STRATEGY_CONF,
     EntityNamespaceMixin,
@@ -26,7 +25,7 @@ if TYPE_CHECKING:
     from ..merossclient.protocol import types as mt
 
 
-class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
+class ElectricitySensor(MLNumericSensor):
     """
     This sensor acts as the main parser for 'Electricity' and 'ElectricityX' namespaces
     taking care of power, current, voltage, etc, sensors for the same channel.
@@ -80,6 +79,7 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
     }
 
     # HA core entity attributes:
+    _attr_available = True
     _attr_device_class = MLNumericSensor.DeviceClass.ENERGY
     _attr_entity_registry_enabled_default = False
 

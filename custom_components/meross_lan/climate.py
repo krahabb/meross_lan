@@ -10,7 +10,8 @@ from homeassistant.util.unit_conversion import TemperatureConverter
 
 from .calendar import MtsSchedule
 from .const import hac
-from .helpers import entity as me, reverse_lookup
+from .helpers import reverse_lookup
+from .helpers.entity import MLEntity
 from .number import MLConfigNumber
 from .select import MLSelect
 from .sensor import MLTemperatureSensor
@@ -23,16 +24,17 @@ if TYPE_CHECKING:
     from homeassistant.helpers.event import EventStateChangedData
 
     from .helpers.device import BaseDevice, Device
+    from .helpers.entity import ChannelType
     from .helpers.namespaces import NamespaceHandler
 
 
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, climate.DOMAIN)
+    MLEntity.platform_setup_entry(hass, config_entry, async_add_devices, climate.DOMAIN)
 
 
-class MtsClimate(me.MLEntity, climate.ClimateEntity):
+class MtsClimate(MLEntity, climate.ClimateEntity):
 
     class Preset(enum.StrEnum):
         CUSTOM = "custom"
@@ -105,7 +107,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
 
         pass
 
-    class TrackSensorSelect(me.MEAlwaysAvailableMixin, MLSelect):
+    class TrackSensorSelect(MLSelect):
         """
         A select entity used to select among all temperature sensors in HA
         an entity to track so that the thermostat regulates T against
@@ -127,6 +129,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         TRACKING_DEADTIME = 60
 
         # HA core entity attributes:
+        _attr_available = True
         _attr_entity_registry_enabled_default = False
 
         __slots__ = (
@@ -486,7 +489,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         "sensor_current_temperature",
     )
 
-    def __init__(self, channel: "me.ChannelType", manager: "BaseDevice", /):
+    def __init__(self, channel: "ChannelType", manager: "BaseDevice", /):
         self.current_humidity = None
         self.current_temperature = None
         self.hvac_action = None
@@ -542,18 +545,18 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         self.schedule.flush_state()
 
     # interface: ClimateEntity
-    @me.MLEntity.ha_action
+    @MLEntity.ha_action
     async def async_turn_on(self):
         await self.async_request_onoff(1)
 
-    @me.MLEntity.ha_action
+    @MLEntity.ha_action
     async def async_turn_off(self):
         await self.async_request_onoff(0)
 
     async def async_set_hvac_mode(self, hvac_mode: climate.HVACMode):
         raise NotImplementedError()
 
-    @me.MLEntity.ha_action
+    @MLEntity.ha_action
     async def async_set_preset_mode(self, preset_mode: str):
         mode = reverse_lookup(self.MTS_MODE_TO_PRESET_MAP, preset_mode)
         if mode is not None:

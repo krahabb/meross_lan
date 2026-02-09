@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.components import fan
 
-from .helpers import entity as me
+from .helpers.entity import MLBinaryEntity
 from .helpers.namespaces import NamespaceHandler, mn
 from .merossclient.protocol import const as mc
 
@@ -13,17 +13,17 @@ if TYPE_CHECKING:
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, fan.DOMAIN)
+    MLBinaryEntity.platform_setup_entry(hass, config_entry, async_add_devices, fan.DOMAIN)
 
 
-class MLFan(me.MLBinaryEntity, fan.FanEntity):
+class MLFan(MLBinaryEntity, fan.FanEntity):
     """
     Fan entity for map100 Air Purifier (or any device implementing Appliance.Control.Fan)
     """
 
     if TYPE_CHECKING:
 
-        class Args(me.MLBinaryEntity.Args):
+        class Args(MLBinaryEntity.Args):
             pass
 
         manager: Device
@@ -87,13 +87,13 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
             return True
 
     # interface: fan.FanEntity
-    @me.MLBinaryEntity.ha_action
+    @MLBinaryEntity.ha_action
     async def async_set_percentage(self, percentage: int):
         await self.async_request_parse_ex(
             {mc.KEY_SPEED: round(percentage * self.speed_count / 100)}
         )
 
-    @me.MLBinaryEntity.ha_action
+    @MLBinaryEntity.ha_action
     async def async_turn_on(
         self, percentage: int | None = None, preset_mode: str | None = None, **kwargs
     ):
@@ -112,7 +112,7 @@ class MLFan(me.MLBinaryEntity, fan.FanEntity):
             }
         )
 
-    @me.MLBinaryEntity.ha_action
+    @MLBinaryEntity.ha_action
     async def async_turn_off(self, **kwargs):
         if self.handler_togglex:
             await self.handler_togglex.async_set({mc.KEY_ONOFF: 0}, self)

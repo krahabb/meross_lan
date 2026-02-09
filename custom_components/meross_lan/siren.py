@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.components import siren
 
-from .helpers import entity as me
+from .helpers.entity import MLBinaryEntity
 from .merossclient.protocol import const as mc, namespaces as mn
 from .number import MLConfigNumber
 from .select import MLConfigSelect
@@ -17,10 +17,10 @@ if TYPE_CHECKING:
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, siren.DOMAIN)
+    MLBinaryEntity.platform_setup_entry(hass, config_entry, async_add_devices, siren.DOMAIN)
 
 
-class MLSiren(me.MLBinaryEntity, siren.SirenEntity):
+class MLSiren(MLBinaryEntity, siren.SirenEntity):
     """
     This first implementation was mostly tailored to suit mts300 'fan hold time' feature
     We'll maybe generalize this platform when the need comes.
@@ -61,12 +61,12 @@ class MLSiren(me.MLBinaryEntity, siren.SirenEntity):
     if TYPE_CHECKING:
         manager: Device
 
-        class Args(me.MLBinaryEntity.Args):
+        class Args(MLBinaryEntity.Args):
             pass
 
     PLATFORM = siren.DOMAIN
     ns = mn.Appliance_Control_Alarm
-    NS_CHANNELS = me.MLBinaryEntity.NS_CHANNELS_SINGLE
+    NS_CHANNELS = MLBinaryEntity.NS_CHANNELS_SINGLE
     key_value = "event_security_value"
     ENTITY_KEY = f"{ns.slug}__event_security_value"
     native_on = 1
@@ -111,7 +111,7 @@ class MLSiren(me.MLBinaryEntity, siren.SirenEntity):
         )
         self.update_device_value(device_value)
 
-    @me.MLBinaryEntity.ha_action
+    @MLBinaryEntity.ha_action
     async def async_turn_on(self, **kwargs):
         if kwargs:
             payload = {}

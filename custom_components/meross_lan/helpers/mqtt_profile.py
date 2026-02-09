@@ -9,7 +9,7 @@ from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.core import callback
 
 # import core modules instead of symbols to ease patching in a single place
-from . import entity as me, manager as mlm
+from . import manager as mlm
 from .. import const as mlc
 from ..merossclient import HostAddress, MerossClient, Transport, logging
 from ..merossclient.mqttclient import MerossMQTTRateLimitException
@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from .device import Device
 
 
-class ConnectionSensor(me.MEAlwaysAvailableMixin, MLDiagnosticSensor):
+class ConnectionSensor(MLDiagnosticSensor):
 
     if TYPE_CHECKING:
         STATE_DISCONNECTED: Final
@@ -83,6 +83,7 @@ class ConnectionSensor(me.MEAlwaysAvailableMixin, MLDiagnosticSensor):
     ATTR_DROPPED = "dropped"
 
     # HA core entity attributes:
+    _attr_available = True
     _unrecorded_attributes = frozenset(
         {
             ATTR_DEVICES,

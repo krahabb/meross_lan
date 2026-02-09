@@ -7,7 +7,8 @@ from homeassistant.components.media_player.const import (
     MediaType,
 )
 
-from .helpers import clamp, entity as me
+from .helpers import clamp
+from .helpers.entity import MLEntity
 from .merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
@@ -17,20 +18,23 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .helpers.device import Device
+    from .helpers.entity import ChannelType
     from .merossclient.protocol.types import JsonDict
 
 
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, media_player.DOMAIN)
+    MLEntity.platform_setup_entry(
+        hass, config_entry, async_add_devices, media_player.DOMAIN
+    )
 
 
-class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
+class MLMp3Player(MLEntity, media_player.MediaPlayerEntity):
 
     if TYPE_CHECKING:
 
-        manager: "Device"
+        manager: Device
         # HA core entity attributes:
         _attr_device_class: Final[media_player.MediaPlayerDeviceClass]
         is_volume_muted: bool | None
@@ -68,7 +72,7 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
         "volume_level",
     )
 
-    def __init__(self, channel: "me.ChannelType", manager: "Device", /, **kwargs):
+    def __init__(self, channel: "ChannelType", manager: "Device", /, **kwargs):
         self.is_volume_muted = None
         self.media_title = None
         self.media_track = None
@@ -87,11 +91,11 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
         super().set_unavailable()
 
     # interface: MediaPlayerEntity
-    @me.MLEntity.ha_action
+    @MLEntity.ha_action
     async def async_mute_volume(self, mute):
         await self.async_request_parse_ex({mc.KEY_MUTE: 1 if mute else 0})
 
-    @me.MLEntity.ha_action
+    @MLEntity.ha_action
     async def async_set_volume_level(self, volume):
         await self.async_request_parse_ex(
             {
@@ -103,15 +107,15 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
             }
         )
 
-    @me.MLEntity.ha_action
+    @MLEntity.ha_action
     async def async_media_play(self):
         await self.async_request_parse_ex({mc.KEY_MUTE: 0})
 
-    @me.MLEntity.ha_action
+    @MLEntity.ha_action
     async def async_media_stop(self):
         await self.async_request_parse_ex({mc.KEY_MUTE: 1})
 
-    @me.MLEntity.ha_action
+    @MLEntity.ha_action
     async def async_media_previous_track(self):
         song = self.media_track
         await self.async_request_parse_ex(
@@ -124,7 +128,7 @@ class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
             }
         )
 
-    @me.MLEntity.ha_action
+    @MLEntity.ha_action
     async def async_media_next_track(self):
         song = self.media_track
         await self.async_request_parse_ex(

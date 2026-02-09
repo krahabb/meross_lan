@@ -15,8 +15,9 @@ from homeassistant.components.light import (
 import homeassistant.util.color as color_util
 
 from . import const as mlc
-from .helpers import clamp, entity as me
+from .helpers import clamp
 from .helpers.device import MerossMessage
+from .helpers.entity import MLBinaryEntity
 from .helpers.namespaces import EntityNamespaceMixin, NamespaceHandler, mc, mn
 
 if TYPE_CHECKING:
@@ -33,7 +34,7 @@ if TYPE_CHECKING:
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, light.DOMAIN)
+    MLBinaryEntity.platform_setup_entry(hass, config_entry, async_add_devices, light.DOMAIN)
 
 
 MSL_LUMINANCE_MIN = 1
@@ -167,7 +168,7 @@ def native_to_kelvin(temperature: int):
     )
 
 
-class MLLightBase(me.MLBinaryEntity, light.LightEntity):
+class MLLightBase(MLBinaryEntity, light.LightEntity):
     """
     base 'abstract' class for meross light entities handling
     either
@@ -177,13 +178,13 @@ class MLLightBase(me.MLBinaryEntity, light.LightEntity):
 
     if TYPE_CHECKING:
 
-        class Args(me.MLBinaryEntity.Args):
+        class Args(MLBinaryEntity.Args):
             pass
 
         EFFECT_OFF: Final
         T_RESOLUTION_MIN: Final[float]
 
-        manager: "Device"
+        manager: Device
 
         _t_unsub: asyncio.TimerHandle | None
         _t_begin: float
@@ -764,7 +765,7 @@ class MLLightEffect(MLLight):
             self.handler_light_effect.polling_period = mlc.PARAM_INFINITE_TIMEOUT
 
 
-class MLDNDLightEntity(EntityNamespaceMixin, me.MLBinaryEntity, light.LightEntity):
+class MLDNDLightEntity(EntityNamespaceMixin, MLBinaryEntity, light.LightEntity):
     """
     light entity representing the device DND feature usually implemented
     through a light feature (presence light or so)
@@ -779,7 +780,7 @@ class MLDNDLightEntity(EntityNamespaceMixin, me.MLBinaryEntity, light.LightEntit
 
     # HA core entity attributes:
     color_mode: ColorMode = ColorMode.ONOFF
-    entity_category = me.MLBinaryEntity.EntityCategory.CONFIG
+    entity_category = MLBinaryEntity.EntityCategory.CONFIG
     supported_color_modes: set[ColorMode] = {ColorMode.ONOFF}
 
 

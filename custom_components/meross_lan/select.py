@@ -2,7 +2,8 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components import select
 
-from .helpers import entity as me, reverse_lookup
+from .helpers import reverse_lookup
+from .helpers.entity import MLEntity
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar, Unpack
@@ -11,15 +12,16 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .helpers.device import BaseDevice
+    from .helpers.entity import ChannelType
 
 
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, select.DOMAIN)
+    MLEntity.platform_setup_entry(hass, config_entry, async_add_devices, select.DOMAIN)
 
 
-class MLSelect(me.MLEntity, select.SelectEntity):
+class MLSelect(MLEntity, select.SelectEntity):
     """Base 'abstract' class for both select entities representing a
     device config/option value (through MLConfigSelect) and
     emulated entities used to configure meross_lan (i.e. MtsTrackedSensor).
@@ -32,7 +34,7 @@ class MLSelect(me.MLEntity, select.SelectEntity):
         current_option: str | None
         options: list[str]
 
-    entity_category = me.MLEntity.EntityCategory.CONFIG
+    entity_category = MLEntity.EntityCategory.CONFIG
 
     __slots__ = (
         "current_option",
@@ -73,7 +75,7 @@ class MLConfigSelect(MLSelect):
 
     def __init__(
         self,
-        channel: "me.ChannelType | None",
+        channel: "ChannelType | None",
         manager: "BaseDevice",
         /,
         **kwargs: "Unpack[MLSelect.Args]",

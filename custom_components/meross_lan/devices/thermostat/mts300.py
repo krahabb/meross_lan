@@ -4,7 +4,6 @@ from homeassistant.components.climate import const as hacc
 
 from . import MtsThermostatClimate, mc, mlc, mn, mn_t
 from ...helpers import reverse_lookup
-from ...helpers.entity import MEGroupListChannelMixin
 from ...number import MLConfigNumber
 from ...select import MLConfigSelect
 from ...sensor import MLEnumSensor, MLHumiditySensor
@@ -62,7 +61,7 @@ class Mts300Climate(MtsThermostatClimate):
 
         # TODO: customize parsing of native payload since we have 2 temperatures
 
-    class SensorAssociationSelect(MEGroupListChannelMixin, MLConfigSelect):
+    class SensorAssociationSelect(MLConfigSelect.GroupListChannelMixin, MLConfigSelect):
         """
         Configures internal/external sensor association for temperature readings in mts300.
         """

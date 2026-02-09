@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components import button
 
-from .helpers import entity as me
+from .helpers.entity import MLEntity
 
 if TYPE_CHECKING:
     from types import CoroutineType
@@ -11,22 +11,23 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from .helpers.entity import ChannelType
     from .helpers.manager import EntityManager
 
 
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, button.DOMAIN)
+    MLEntity.platform_setup_entry(hass, config_entry, async_add_devices, button.DOMAIN)
 
 
-class MLButton(me.MEPartialAvailableMixin, me.MLEntity, button.ButtonEntity):
+class MLButton(MLEntity.PartialAvailableMixin, MLEntity, button.ButtonEntity):
     # MEPartialAvailableMixin is needed here since this entity state is not being updated
     # by our component. This will ensure (by default) the entity is available/unavailable
     # when the device is online/offline
     if TYPE_CHECKING:
 
-        class Args(me.MLEntity.Args):
+        class Args(MLEntity.Args):
             device_class: NotRequired[button.ButtonDeviceClass | None]
 
         # HA core entity attributes:
@@ -41,7 +42,7 @@ class MLButton(me.MEPartialAvailableMixin, me.MLEntity, button.ButtonEntity):
 
     def __init__(
         self,
-        channel: "me.ChannelType | None",
+        channel: "ChannelType | None",
         manager: "EntityManager",
         entitykey: str,
         press_func: "Callable[[], CoroutineType[Any, Any, None]]",
@@ -56,5 +57,7 @@ class MLButton(me.MEPartialAvailableMixin, me.MLEntity, button.ButtonEntity):
         return await super().async_shutdown()
 
 
-class MLPersistentButton(me.MEAlwaysAvailableMixin, MLButton):
-    pass
+class MLPersistentButton(MLButton):
+
+    # HA core entity attributes:
+    _attr_available = True

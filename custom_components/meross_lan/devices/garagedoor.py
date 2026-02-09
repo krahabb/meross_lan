@@ -6,7 +6,7 @@ from homeassistant.util.dt import now
 
 from ..binary_sensor import MLBinarySensor
 from ..cover import MLCover
-from ..helpers import clamp, entity as me
+from ..helpers import clamp
 from ..helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
 from ..merossclient import Transport
 from ..number import MLConfigNumber, MLEmulatedNumber
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from ..merossclient.protocol import types as mt
 
 
-class MLGarageTimeoutBinarySensor(me.MEPartialAvailableMixin, MLBinarySensor):
+class MLGarageTimeoutBinarySensor(MLBinarySensor.PartialAvailableMixin, MLBinarySensor):
 
     ENTITY_KEY = "problem"
 
