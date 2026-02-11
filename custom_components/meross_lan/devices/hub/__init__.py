@@ -599,7 +599,7 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
                 self.DEBUG,
                 "Handler undefined for namespace:%s payload:%s",
                 nh.ns,
-                self.manager.loggable_dict_str(payload),
+                _payload=payload,
                 timeout=14400,
             )
 
@@ -1147,7 +1147,7 @@ def digest_init_hub(
                 device.WARNING,
                 exception,
                 "digest_init_hub (payload: %s)",
-                device.loggable_dict_str(p_subdevice_digest),
+                _payload=p_subdevice_digest,
             )
 
     for subdevice_id, device_entry in registry_subdevices.items():

@@ -17,9 +17,9 @@ from . import (
     mqtt_profile as mlq,
 )
 from .. import const as mlc
-from ..helpers.obfuscate import OBFUSCATE_DEVICE_ID_MAP, obfuscated_dict
 from ..merossclient import HostAddress, cloudapi, get_active_broker
 from ..merossclient.client.mqtt import MQTTAppClient
+from ..merossclient.obfuscate import OBFUSCATE_DICT, OBFUSCATE_UUID_MAP
 from ..merossclient.protocol import const as mc
 
 if TYPE_CHECKING:
@@ -177,11 +177,7 @@ class MerossProfile(mlq.MQTTProfile):
         # to change the version(s) in storage/config. At the moment I'm still very confused
         # and opting to keep the credentials where they are embedded in ConfigEntry
         self.apiclient = cloudapi.CloudApiClient(
-            id,
-            self,
-            credentials=self.config,
-            session=async_get_clientsession(api.hass),
-            obfuscate_func=self.loggable_any,
+            id, self, credentials=self.config, session=async_get_clientsession(api.hass)
         )
         self._store = MerossProfileStore(api.hass, id)
         self._unsub_polling_query_device_info = None
@@ -261,6 +257,7 @@ class MerossProfile(mlq.MQTTProfile):
             self._unsub_polling_query_device_info.cancel()
             self._unsub_polling_query_device_info = None
         await super().async_shutdown()
+        await self.apiclient.async_shutdown()
         self.api.profiles[self.id] = None
 
     # interface: ConfigEntryManager
@@ -303,13 +300,13 @@ class MerossProfile(mlq.MQTTProfile):
     @override
     def loggable_diagnostic_state(self):
         if self.obfuscate:
-            store_data = obfuscated_dict(self._data)
+            store_data = OBFUSCATE_DICT(self._data)
             # the profile contains uuid as keys and obfuscation
             # is not smart enough (but OBFUSCATE_DEVICE_ID_MAP is already
             # filled with uuid(s) from the profile device_info(s) and
             # the device_info(s) were already obfuscated in data)
             store_data[MerossProfile.KEY_DEVICE_INFO] = {
-                OBFUSCATE_DEVICE_ID_MAP[device_id]: device_info
+                OBFUSCATE_UUID_MAP[device_id]: device_info
                 for device_id, device_info in store_data[
                     MerossProfile.KEY_DEVICE_INFO
                 ].items()
@@ -372,9 +369,9 @@ class MerossProfile(mlq.MQTTProfile):
             self.log_exception(
                 self.WARNING,
                 exception,
-                "attach_mqtt for device uuid:%s (%s)",
-                self.loggable_device_id(device.id),
+                "attach_mqtt for %s (uuid:%s)",
                 device.display_name,
+                uuid=device.id,
             )
             try:
                 # fallback if we have the KEY_MQTTDOMAIN
@@ -603,7 +600,7 @@ class MerossProfile(mlq.MQTTProfile):
                         self.log(
                             self.DEBUG,
                             "Querying hub subdevice list (uuid:%s)",
-                            self.loggable_device_id(device_id),
+                            uuid=device_id,
                         )
                         device_info[self.KEY_SUBDEVICE_INFO] = (
                             await self.apiclient.async_hub_getsubdevices(device_id)
@@ -615,7 +612,7 @@ class MerossProfile(mlq.MQTTProfile):
             self.log(
                 self.DEBUG,
                 "The uuid:%s has been removed from the cloud profile",
-                self.loggable_device_id(device_id),
+                uuid=device_id,
             )
             device_info_dict.pop(device_id)
             if device := self.linkeddevices.get(device_id):
@@ -641,7 +638,7 @@ class MerossProfile(mlq.MQTTProfile):
                 self.log(
                     self.DEBUG,
                     "Trying/Initiating discovery for (new) uuid:%s",
-                    self.loggable_device_id(device_id),
+                    uuid=device_id,
                 )
                 if self.api.get_config_flow(device_id):
                     continue  # device configuration already progressing

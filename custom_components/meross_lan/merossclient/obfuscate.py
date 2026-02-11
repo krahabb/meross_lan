@@ -1,38 +1,66 @@
 """
-    Obfuscation:
+Obfuscation:
 
-    working on a set of well-known keys to hide values from a structure
-    when logging/tracing.
-    The 'OBFUSCATE_KEYS' dict mandates which key values are patched and
-    how (ObfuscateRule). It generally mantains a set of obfuscated values stored in
-    the ObfuscateMap instance so that every time we obfuscate a key value,
-    we return the same (stable) obfuscation in order to correlate data in
-    traces and logs. Some keys are not cached/mapped and just 'redacted'
+working on a set of well-known keys to hide values from a structure
+when logging/tracing.
+The 'OBFUSCATE_KEYS' dict mandates which key values are patched and
+how (ObfuscateRule). It generally mantains a set of obfuscated values stored in
+the ObfuscateMap instance so that every time we obfuscate a key value,
+we return the same (stable) obfuscation in order to correlate data in
+traces and logs. Some keys are not cached/mapped and just 'redacted'
 """
 
 import re
-import typing
+from typing import TYPE_CHECKING
 
-from .. import const as mlc
-from ..merossclient.protocol import const as mc
+from .protocol import const as mc
+
+if TYPE_CHECKING:
+    from .protocol.types import JsonDict, JsonMapping
 
 
 class ObfuscateRule:
     """
-    Obfuscate data without caching and mapping. This is needed
-    for ever-varying key values like i.e. KEY_PARAMS (in cloudapi requests)
+    Obfuscate data based on the rule defined by the subclass implementation.
+    This is the base class for all obfuscation rules, which can be as simple
+    as a static redaction or as complex as a mapping with caching of obfuscated values.
     """
 
-    def obfuscate(self, value):
-        return "<redacted>"
+    def __call__(self, value): ...
 
     def clear(self):
         """Resets any cached data"""
         pass
 
 
+class ObfuscateAny(ObfuscateRule):
+    """
+    Obfuscate data without caching and mapping. This is needed
+    for ever-varying key values like i.e. KEY_PARAMS (in cloudapi requests)
+    """
+
+    def __call__(self, value):
+        if value.__class__ is dict:
+            return {key: self(value) for key, value in value.items()}
+        elif value.__class__ is list:
+            return [self(item) for item in value]
+        else:
+            return "<redacted>"
+
+
+class ObfuscateDict(ObfuscateRule):
+    """
+    Obfuscate dict values by applying obfuscation rules to the dict items.
+    This is needed for ever-varying key values like i.e. KEY_PARAMS (in cloudapi requests)
+    which are dicts with varying keys and values.
+    """
+
+    def __call__(self, value: "JsonMapping") -> "JsonDict":
+        return obfuscated_dict(value)
+
+
 class ObfuscateMap(ObfuscateRule, dict):
-    def obfuscate(self, value):
+    def __call__(self, value):
         """
         for every value we obfuscate, we'll keep
         a cache of 'unique' obfuscated values in order
@@ -60,7 +88,7 @@ class ObfuscateMap(ObfuscateRule, dict):
 
 
 class ObfuscateUserIdMap(ObfuscateMap):
-    def obfuscate(self, value: str | int):
+    def __call__(self, value: str | int):
         # terrible patch here since we want to match
         # values (userid) which are carried both as strings
         # (in mc.KEY_USERID_) and as int (in mc.KEY_USERID)
@@ -71,11 +99,11 @@ class ObfuscateUserIdMap(ObfuscateMap):
         except Exception:
             # but we play safe anyway
             pass
-        return super().obfuscate(value)
+        return super().__call__(value)
 
 
 class ObfuscateServerMap(ObfuscateMap):
-    def obfuscate(self, value: str):
+    def __call__(self, value: str):
         # mc.KEY_DOMAIN and mc.KEY_RESERVEDDOMAIN could
         # carry the protocol port embedded like: "server.domain.com:port"
         # so, in order to map to the same values as in mc.KEY_SERVER,
@@ -86,14 +114,14 @@ class ObfuscateServerMap(ObfuscateMap):
                 port = int(value[colon_index + 1 :])
                 return ":".join(
                     (
-                        OBFUSCATE_SERVER_MAP.obfuscate(host),
-                        OBFUSCATE_PORT_MAP.obfuscate(port),
+                        OBFUSCATE_SERVER_MAP(host),
+                        OBFUSCATE_PORT_MAP(port),
                     )
                 )
         except Exception:
             pass
 
-        return super().obfuscate(value)
+        return super().__call__(value)
 
     def clear(self):
         OBFUSCATE_PORT_MAP.clear()
@@ -106,7 +134,7 @@ class ObfuscateFrom(ObfuscateRule):
     or the "userid"
     """
 
-    def obfuscate(self, value: str):
+    def __call__(self, value: str):
         """
         Renders the obfuscated uuid in place like:
         "/appliance/###############################0/publish"
@@ -115,16 +143,14 @@ class ObfuscateFrom(ObfuscateRule):
         """
         # start by matching the eventual userid since the pattern is more specific
         if m := mc.RE_PATTERN_TOPIC_USERID.match(value):
-            return "".join(
-                (m.group(1), OBFUSCATE_USERID_MAP.obfuscate(m.group(2)), m.group(3))
-            )
+            return "".join((m.group(1), OBFUSCATE_USERID_MAP(m.group(2)), m.group(3)))
 
         # this is a 'broad matcher' capturing whatever looks like an UUID (32 alfanumerics)
         def _sub(match: re.Match):
             return "".join(
                 (
                     match.group(1),
-                    OBFUSCATE_DEVICE_ID_MAP.obfuscate(match.group(2)),
+                    OBFUSCATE_UUID_MAP(match.group(2)),
                     match.group(3),
                 )
             )
@@ -133,12 +159,13 @@ class ObfuscateFrom(ObfuscateRule):
 
     def clear(self):
         OBFUSCATE_USERID_MAP.clear()
-        OBFUSCATE_DEVICE_ID_MAP.clear()
+        OBFUSCATE_UUID_MAP.clear()
 
 
 # common (shared) obfuscation mappings for related keys
-OBFUSCATE_NO_MAP = ObfuscateRule()
-OBFUSCATE_DEVICE_ID_MAP = ObfuscateMap({})
+OBFUSCATE_ANY = ObfuscateAny()
+OBFUSCATE_DICT = ObfuscateDict()
+OBFUSCATE_UUID_MAP = ObfuscateMap({})
 OBFUSCATE_HOST_MAP = ObfuscateMap({})
 OBFUSCATE_USERID_MAP = ObfuscateUserIdMap({})
 OBFUSCATE_SERVER_MAP = ObfuscateServerMap({})
@@ -149,7 +176,7 @@ OBFUSCATE_KEYS: dict[str, ObfuscateRule] = {
     # devices uuid(s) is better obscured since knowing this
     # could allow malicious attempts at the public Meross mqtt to
     # correctly address the device (with some easy hacks on signing)
-    mc.KEY_UUID: OBFUSCATE_DEVICE_ID_MAP,
+    mc.KEY_UUID: OBFUSCATE_UUID_MAP,
     mc.KEY_FROM: ObfuscateFrom(),
     mc.KEY_MACADDRESS: ObfuscateMap({}),
     mc.KEY_WIFIMAC: ObfuscateMap({}),
@@ -179,8 +206,8 @@ OBFUSCATE_KEYS: dict[str, ObfuscateRule] = {
     mc.KEY_MQTTDOMAIN: OBFUSCATE_SERVER_MAP,  # MerossCloudCredentials
     mc.KEY_CLUSTER: ObfuscateMap({}),  # DeviceInfoType
     mc.KEY_RESERVEDDOMAIN: OBFUSCATE_SERVER_MAP,  # DeviceInfoType
-    mc.KEY_PARAMS: OBFUSCATE_NO_MAP,  # used in cloudapi POST request
-    "Authorization": OBFUSCATE_NO_MAP,  # used in cloudapi POST headers
+    mc.KEY_PARAMS: OBFUSCATE_ANY,  # used in cloudapi POST request
+    "Authorization": OBFUSCATE_ANY,  # used in cloudapi POST headers
     # subdevice(s) ids are hardly sensitive since they
     # cannot be accessed over the api without knowing the uuid
     # of the hub device (which is obfuscated indeed). Masking
@@ -188,15 +215,16 @@ OBFUSCATE_KEYS: dict[str, ObfuscateRule] = {
     # and dumped in traces
     # mc.KEY_SUBDEVICEID: {},
     #
-    # ConfigEntries keys
-    mlc.CONF_DEVICE_ID: OBFUSCATE_DEVICE_ID_MAP,
-    mlc.CONF_HOST: OBFUSCATE_HOST_MAP,
-    # mlc.CONF_KEY: OBFUSCATE_KEY_MAP,
-    mlc.CONF_CLOUD_KEY: OBFUSCATE_KEY_MAP,
-    mlc.CONF_PASSWORD: OBFUSCATE_NO_MAP,
+    # These keys are typically used in logging._Logger to match keyvalue arguments that need to be obfuscated when
+    # sent to the underlying Logger. Due to the hierarchical nature of logging.Loggable, this allows
+    # to control the effective obfuscation at an higher level in the Loggavles runtime instance tree.
+    # The logging code actually matches any key in OBFUSCATE_KEYS and applies the obfuscation rule to
+    # the value before sending it to the underlying Logger.
     #
-    # MerossProfile keys
-    "appId": ObfuscateMap({}),
+    "_message": OBFUSCATE_DICT,
+    "_header": OBFUSCATE_DICT,
+    "_payload": OBFUSCATE_DICT,
+    "_any": OBFUSCATE_ANY,  # catch-all for any key we may have missed and want to obfuscate in a generic way
 }
 
 
@@ -208,41 +236,24 @@ def obfuscated_list(data: list):
     return [
         (
             obfuscated_dict(value)
-            if isinstance(value, dict)
-            else obfuscated_list(value) if isinstance(value, list) else value
+            if value.__class__ is dict
+            else obfuscated_list(value) if value.__class__ is list else value
         )
         for value in data
     ]
 
 
-def obfuscated_dict(data: typing.Mapping[str, typing.Any]) -> dict[str, typing.Any]:
+def obfuscated_dict(data: "JsonMapping") -> "JsonDict":
     """Dictionary obfuscation based on the set keys defined in OBFUSCATE_KEYS."""
     return {
         key: (
             obfuscated_dict(value)
-            if isinstance(value, dict)
+            if value.__class__ is dict
             else (
                 obfuscated_list(value)
-                if isinstance(value, list)
-                else (
-                    OBFUSCATE_KEYS[key].obfuscate(value)
-                    if key in OBFUSCATE_KEYS
-                    else value
-                )
+                if value.__class__ is list
+                else (OBFUSCATE_KEYS[key](value) if key in OBFUSCATE_KEYS else value)
             )
         )
         for key, value in data.items()
     }
-
-
-def obfuscated_any(value):
-    """Generalized type-variant obfuscation. Simple objects (not dict/list) are obfuscated."""
-    return (
-        obfuscated_dict(value)
-        if isinstance(value, dict)
-        else (
-            obfuscated_list(value)
-            if isinstance(value, list)
-            else OBFUSCATE_NO_MAP.obfuscate(value)
-        )
-    )

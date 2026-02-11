@@ -161,6 +161,7 @@ class HttpClient(AbstractClient):
                 # to reasonably set the context before any exception
                 logid = f"{self.__class__.__name__}({self._host}:{id(request)})"
                 logger = self.parent
+                # TODO: obfuscate
                 logger.log(logging.DEBUG, "%s: HTTP Request (%s)", logid, request)
             else:
                 logid = logger = None
@@ -210,6 +211,7 @@ class HttpClient(AbstractClient):
                 response = _cipher.decript_text(response)
 
             if logger:
+                # TODO: obfuscate
                 logger.log(logging.VERBOSE, "%s: HTTP Response (%s)", logid, response)
             self._check_terminated()
             return MerossResponse(response)
@@ -254,7 +256,7 @@ class HttpClient(AbstractClient):
                 req_header[mc.KEY_MESSAGEID] = resp_header[mc.KEY_MESSAGEID]
                 req_header[mc.KEY_TIMESTAMP] = resp_header[mc.KEY_TIMESTAMP]
                 req_header[mc.KEY_SIGN] = resp_header[mc.KEY_SIGN]
-                delattr(request, "json")  # force re-compute of json
+                del request.json  # force re-compute of json
                 try:
                     response = await self.async_request_raw(request, **kwargs)
                 except TerminatedException:

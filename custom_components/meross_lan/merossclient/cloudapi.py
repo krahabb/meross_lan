@@ -207,14 +207,6 @@ CLOUDAPI_ERROR_MAP: dict[int | None, type[CloudApiError]] = {
 }
 
 
-def _obfuscate_nothing(value: typing.Any) -> typing.Any:
-    """placeholder obfuscation function: pass along to logger with no obfuscation"""
-    return value
-
-
-type _obfuscate_function_type = typing.Callable[[typing.Any], typing.Any]
-
-
 async def async_cloudapi_post(
     url_or_path: str,
     data: "JsonMapping",
@@ -222,13 +214,14 @@ async def async_cloudapi_post(
     credentials: MerossCloudCredentials | None = None,
     session: aiohttp.ClientSession | None = None,
     logger: "logging.LoggerType | None" = None,
-    obfuscate_func: _obfuscate_function_type = _obfuscate_nothing,
 ) -> "JsonMapping":
     """
     Low-level Meross cloud api query:
     When used to login to retrieve the MerossCloudCredentials url_or_path contains the full
     url of the api endpoint, while when used to access the endpoint with an access token (crdentials != None)
-    it needs to be the path since the full url will be created from the credentials itself
+    it needs to be the path since the full url will be created from the credentials itself.
+    - 'logger' must be either a logging.Loggable or a _Logger instance (obtained through logging.getLogger),
+    in order to correctly manage arguments obfuscation
     """
     try:
         if logger:
@@ -236,8 +229,8 @@ async def async_cloudapi_post(
                 logging.DEBUG,
                 "async_cloudapi_post:REQUEST url:%s data:%s credentials:%s",
                 url_or_path,
-                obfuscate_func(data),
-                obfuscate_func(credentials or {}),
+                _payload=data,
+                _any=credentials or {},
             )
 
         timestamp = int(time() * 1000)
@@ -266,8 +259,8 @@ async def async_cloudapi_post(
                 logging.DEBUG,
                 "async_cloudapi_post:POST url:%s request:%s headers:%s",
                 url_or_path,
-                obfuscate_func(json_request),
-                obfuscate_func(headers or {}),
+                _payload=json_request,
+                _any=headers or {},
             )
         async with asyncio.timeout(10):
             http_response = await (session or aiohttp.ClientSession()).post(
@@ -283,7 +276,7 @@ async def async_cloudapi_post(
                 logging.DEBUG,
                 "async_cloudapi_post:RECEIVE url:%s response:%s",
                 url_or_path,
-                obfuscate_func(text_response),
+                _any=text_response,
             )
 
         json_response = json_loads(text_response)
@@ -298,7 +291,7 @@ async def async_cloudapi_post(
                 logging.DEBUG,
                 "async_cloudapi_post:RESPONSE url:%s response:%s",
                 url_or_path,
-                obfuscate_func(json_response),
+                _payload=json_response,
             )
         return json_response
     except Exception as exception:
@@ -353,7 +346,6 @@ async def async_cloudapi_signin(
     mfa_code: str | None = None,
     session: aiohttp.ClientSession | None = None,
     logger: "logging.LoggerType | None" = None,
-    obfuscate_func: _obfuscate_function_type = _obfuscate_nothing,
 ) -> MerossCloudCredentials:
     request_data = {
         mc.KEY_EMAIL: email,
@@ -372,7 +364,6 @@ async def async_cloudapi_signin(
             credentials=None,
             session=session,
             logger=logger,
-            obfuscate_func=obfuscate_func,
         )
     except CloudApiRedirectError as error:
         response = await async_cloudapi_post(
@@ -381,7 +372,6 @@ async def async_cloudapi_signin(
             credentials=None,
             session=session,
             logger=logger,
-            obfuscate_func=obfuscate_func,
         )
 
     response_data = response[mc.KEY_DATA]
@@ -415,12 +405,10 @@ class CloudApiClient(logging.Loggable):
         *,
         credentials: MerossCloudCredentials | None = None,
         session: aiohttp.ClientSession | None = None,
-        obfuscate_func: _obfuscate_function_type = _obfuscate_nothing,
     ) -> None:
         self.credentials = credentials
         self._api_kwargs = {
             "session": session or aiohttp.ClientSession(),
-            "obfuscate_func": obfuscate_func,
         }
         super().__init__(id, parent)
 
@@ -462,7 +450,7 @@ class CloudApiClient(logging.Loggable):
             credentials[mc.KEY_EMAIL],
             password,
             domain=credentials.get(mc.KEY_DOMAIN),
-            **self._api_kwargs,
+            **self._api_kwargs,  # type: ignore
             logger=self,
         )
         if newcredentials[mc.KEY_USERID_] != credentials[mc.KEY_USERID_]:

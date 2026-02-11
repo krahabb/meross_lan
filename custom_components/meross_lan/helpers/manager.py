@@ -19,14 +19,18 @@ from ..const import (
 )
 from ..merossclient import logging
 from ..merossclient.client import Transport
-from ..merossclient.protocol.message import json_dumps
-from .obfuscate import (
-    OBFUSCATE_DEVICE_ID_MAP,
+from ..merossclient.obfuscate import (
+    OBFUSCATE_ANY,
+    OBFUSCATE_DICT,
+    OBFUSCATE_HOST_MAP,
+    OBFUSCATE_KEY_MAP,
+    OBFUSCATE_KEYS,
     OBFUSCATE_SERVER_MAP,
     OBFUSCATE_USERID_MAP,
-    obfuscated_any,
-    obfuscated_dict,
+    OBFUSCATE_UUID_MAP,
+    ObfuscateMap,
 )
+from ..merossclient.protocol.message import json_dumps
 
 if TYPE_CHECKING:
     import io
@@ -46,9 +50,22 @@ if TYPE_CHECKING:
     from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 
     from ..merossclient import HostAddress
+    from ..merossclient.logging import LoggerArgs
     from ..merossclient.protocol.types import MerossPayloadType
     from .component_api import ComponentApi
     from .entity import MLEntity
+
+OBFUSCATE_KEYS |= {
+    # ConfigEntries keys
+    mlc.CONF_DEVICE_ID: OBFUSCATE_UUID_MAP,
+    mlc.CONF_HOST: OBFUSCATE_HOST_MAP,
+    # mlc.CONF_KEY: OBFUSCATE_KEY_MAP,
+    mlc.CONF_CLOUD_KEY: OBFUSCATE_KEY_MAP,
+    mlc.CONF_PASSWORD: OBFUSCATE_ANY,
+    #
+    # MerossProfile keys
+    "appId": ObfuscateMap({}),
+}
 
 
 class EntityManager(logging.Loggable):
@@ -246,7 +263,7 @@ class ConfigEntryManager(EntityManager):
         config_entry: Final[ConfigEntry | None]
         config: Mapping[str, Any]
         key: str
-        logger: logging.logging.Logger
+        logger: logging._Logger
         _issues: set[str]  # BEWARE: on demand attribute
         _trace_file: io.TextIOWrapper | None
         _trace_future: asyncio.Future | None
@@ -355,13 +372,16 @@ class ConfigEntryManager(EntityManager):
         self.getEffectiveLevel = logger.getEffectiveLevel
         self.isEnabledFor = logger.isEnabledFor
 
-    def log(self, level: int, msg: str, *args, **kwargs):
+    def log(self, level: int, msg: str, *args, **kwargs: "Unpack[LoggerArgs]"):
         if self.isEnabledFor(level):
+            kwargs["obfuscate"] = self.obfuscate
             self.logger._log(level, msg, args, **kwargs)
+
         if self.is_tracing:
             self.trace_log(
                 level,
-                msg % args,
+                msg
+                % (args + logging.extract_obfuscated_kwargs(self.obfuscate, kwargs)),
             )
 
     # interface: EntityManager
@@ -440,12 +460,16 @@ class ConfigEntryManager(EntityManager):
         self.key = config.get(CONF_KEY) or ""
         self.obfuscate = config.get(CONF_OBFUSCATE, True)
         self.configure_logger()
-        if self.isEnabledFor(self.DEBUG):
-            self.log(
-                self.DEBUG,
+        if self.isEnabledFor(self.VERBOSE):
+            args = (old_config, config)
+            self.logger._log(
+                self.VERBOSE,
                 "Config updated: old=%s new=%s",
-                str(obfuscated_dict(old_config) if self.obfuscate else old_config),
-                str(obfuscated_dict(config) if self.obfuscate else config),
+                (
+                    tuple(str(OBFUSCATE_DICT(_c)) for _c in args)
+                    if self.obfuscate
+                    else args
+                ),
             )
         if config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES):
             await self.async_create_diagnostic_entities()
@@ -512,27 +536,9 @@ class ConfigEntryManager(EntityManager):
         raise NotImplementedError()
 
     @final
-    def loggable_any(self, value, /):
-        """
-        Conditionally obfuscate any type to send to logging/tracing.
-        use the typed versions to increase efficiency/context
-        """
-        return obfuscated_any(value) if self.obfuscate else value
-
-    @final
-    def loggable_dict(self, value: "Mapping[str, Any]", /):
-        """Conditionally obfuscate the dict values (based off OBFUSCATE_KEYS) to send to logging/tracing"""
-        return obfuscated_dict(value) if self.obfuscate else value
-
-    @final
-    def loggable_dict_str(self, value: "Mapping[str, Any]", /):
-        """Conditionally obfuscate the dict values (based off OBFUSCATE_KEYS) to send to logging/tracing"""
-        return str(obfuscated_dict(value) if self.obfuscate else value)
-
-    @final
     def loggable_config(self, /):
         """Return a 'loggable' version of the entry config (for diagnostic/logging purposes)"""
-        return obfuscated_dict(self.config) if self.obfuscate else dict(self.config)
+        return OBFUSCATE_DICT(self.config) if self.obfuscate else dict(self.config)
 
     def loggable_diagnostic_state(self, /):
         """Return a 'loggable' version of the entry state (for diagnostic/logging purposes)"""
@@ -541,27 +547,17 @@ class ConfigEntryManager(EntityManager):
     @final
     def loggable_broker(self, broker: "HostAddress | str", /):
         """Conditionally obfuscate the connection_id (which is a broker address host:port) to send to logging/tracing"""
-        return (
-            OBFUSCATE_SERVER_MAP.obfuscate(str(broker))
-            if self.obfuscate
-            else str(broker)
-        )
+        return OBFUSCATE_SERVER_MAP(str(broker)) if self.obfuscate else str(broker)
 
     @final
     def loggable_device_id(self, device_id: str, /):
         """Conditionally obfuscate the device_id to send to logging/tracing"""
-        return (
-            OBFUSCATE_DEVICE_ID_MAP.obfuscate(device_id)
-            if self.obfuscate
-            else device_id
-        )
+        return OBFUSCATE_UUID_MAP(device_id) if self.obfuscate else device_id
 
     @final
     def loggable_profile_id(self, profile_id: str | int, /):
         """Conditionally obfuscate the profile_id (which is the Meross account userId) to send to logging/tracing"""
-        return (
-            OBFUSCATE_USERID_MAP.obfuscate(profile_id) if self.obfuscate else profile_id
-        )
+        return OBFUSCATE_USERID_MAP(profile_id) if self.obfuscate else profile_id
 
     @property
     def is_tracing(self):
@@ -695,7 +691,7 @@ class ConfigEntryManager(EntityManager):
         like logs (see trace_log) or config, diagnostics, state, etc.
         """
         try:
-            data = self.loggable_dict(payload)
+            data = OBFUSCATE_DICT(payload) if self.obfuscate else payload
             columns = [
                 strftime("%Y/%m/%d - %H:%M:%S", localtime(epoch)),
                 rxtx,

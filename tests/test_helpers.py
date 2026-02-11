@@ -1,6 +1,6 @@
 """Test the .helpers module"""
 
-from custom_components.meross_lan.helpers import obfuscate
+from custom_components.meross_lan.merossclient import obfuscate
 from custom_components.meross_lan.merossclient.protocol import const as mc
 
 
@@ -24,6 +24,4 @@ def test_obfuscated_key():
         # clear the cached keys to 'stabilize' expected results
         obfuscate.OBFUSCATE_KEYS[key].clear()
         for src, result in samples.items():
-            assert (
-                obfuscate.obfuscated_dict({key: src})[key] == result
-            ), f"{key}: {src}"
+            assert obfuscate.obfuscated_dict({key: src})[key] == result, f"{key}: {src}"

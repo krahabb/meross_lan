@@ -8,8 +8,12 @@ import logging
 from time import time
 from typing import TYPE_CHECKING, override
 
+from .obfuscate import OBFUSCATE_KEYS
+
 if TYPE_CHECKING:
-    from typing import Any, Callable, Final, Protocol, TypedDict, Unpack
+    from typing import Any, Callable, Final, NotRequired, Protocol, TypedDict, Unpack
+
+    from .obfuscate import JsonMapping
 
     NOTSET: Final
     VERBOSE: Final
@@ -18,12 +22,26 @@ if TYPE_CHECKING:
     WARNING: Final
     CRITICAL: Final
 
+    class LoggerArgs(TypedDict):
+        timeout: NotRequired[int]
+        obfuscate: NotRequired[bool]
+        uuid: NotRequired[str | None]
+        server: NotRequired[str | None]
+        userid: NotRequired[str | int | None]
+        key: NotRequired[str | None]
+        _message: NotRequired[JsonMapping]
+        _header: NotRequired[JsonMapping]
+        _payload: NotRequired[JsonMapping]
+        _any: NotRequired[Any]
+
     class LoggerType(Protocol):
         """Protocol definition for logger-like instances used in the library."""
 
         def getEffectiveLevel(self) -> int: ...
         def isEnabledFor(self, level: int) -> bool: ...
-        def log(self, level: int, msg: str, *args, **kwargs) -> None: ...
+        def log(
+            self, level: int, msg: str, *args, **kwargs: Unpack[LoggerArgs]
+        ) -> None: ...
 
 
 NOTSET = logging.NOTSET
@@ -37,7 +55,7 @@ Logger = logging.Logger
 getLevelName = logging.getLevelName
 
 
-def getLogger(name):
+def getLogger(name) -> "_Logger":
     """
     Replaces the default Logger with our wrapped implementation:
     replace your logging.getLogger with helpers.getLogger et voilà
@@ -62,16 +80,51 @@ def getLogger(name):
                 {},
             )
 
-    return logger
+    return logger  # type: ignore[return-value]
+
+
+_EXCLUDED_LOG_KWARGS = {"timeout", "obfuscate"}
+
+
+def extract_obfuscated_kwargs(obfuscate: bool, kwargs: "LoggerArgs") -> tuple:
+    """ """
+
+    if obfuscate:
+
+        def _obfuscate(key, value):
+            try:
+                return OBFUSCATE_KEYS[key](value)
+            except KeyError:
+                return value
+
+        return tuple(
+            _obfuscate(_key, _value)
+            for _key, _value in kwargs.items()
+            if _key not in _EXCLUDED_LOG_KWARGS
+        )
+    else:
+        return tuple(
+            kwargs[_key] for _key in kwargs if _key not in _EXCLUDED_LOG_KWARGS
+        )
 
 
 class _Logger(logging.Logger if TYPE_CHECKING else object):
     """
-    This wrapper will 'filter' log messages and avoid
-    verbose over-logging for the same message by using a timeout
-    to prevent repeating the very same log before the timeout expires.
+    TODO: move this feature to standard logging/filter/formatter
+    This wrapper will 'filter' log messages to:
+    - avoid verbose over-logging for the same message by using a timeout
+        to prevent repeating the very same log before the timeout expires.
+    - obfuscate sensitive data in log messages by looking for specific keys
+        in the log call kwargs and obfuscating their values based on the
+        key value and the OBFUSCATE_KEYS rules.
     The implementation 'hacks' a standard Logger instance by mixin-ing
     """
+
+    if TYPE_CHECKING:
+
+        def log(
+            self, level: int, msg: str, *args, **kwargs: Unpack[LoggerArgs]
+        ) -> None: ...
 
     # default timeout: these can be overriden at the log call level
     # by passing in the 'timeout=' param
@@ -84,8 +137,11 @@ class _Logger(logging.Logger if TYPE_CHECKING else object):
     _CLASS_HOOKS = {}
 
     @override
-    def _log(self, level, msg, args, **kwargs):
-        if "timeout" in kwargs:
+    def _log(self, level, msg, args, **kwargs: "Unpack[LoggerArgs]"):
+
+        obfuscate = kwargs.pop("obfuscate", True)
+
+        try:
             timeout = kwargs.pop("timeout")
             epoch = time()
             trap_key = (msg, args)
@@ -95,13 +151,18 @@ class _Logger(logging.Logger if TYPE_CHECKING else object):
                         super()._log(
                             VERBOSE,
                             f"dropped log message for {msg}",
-                            args,
-                            **kwargs,
+                            args + extract_obfuscated_kwargs(obfuscate, kwargs),
                         )
                     return
             _Logger._LOGGER_TIMEOUTS[trap_key] = epoch
+        except KeyError:
+            pass
 
-        super()._log(level, msg, args, **kwargs)
+        super()._log(
+            level,
+            msg,
+            args + extract_obfuscated_kwargs(obfuscate, kwargs),
+        )
 
 
 class Loggable(metaclass=abc.ABCMeta):
@@ -181,12 +242,17 @@ class Loggable(metaclass=abc.ABCMeta):
     def isEnabledFor(self, level: int):
         return self.parent.isEnabledFor(level)
 
-    def log(self, level: int, msg: str, *args, **kwargs):
+    def log(self, level: int, msg: str, *args, **kwargs: "Unpack[LoggerArgs]"):
         # TODO: use Logger.filter/formatter to accomplish this more elegantly
         self.parent.log(level, f"{self.logtag}: {msg}", *args, **kwargs)
 
     def log_exception(
-        self, level: int, exception: BaseException, msg: str, *args, **kwargs
+        self,
+        level: int,
+        exception: BaseException,
+        msg: str,
+        *args,
+        **kwargs: "Unpack[LoggerArgs]",
     ):
         self.log(
             level,
@@ -196,7 +262,7 @@ class Loggable(metaclass=abc.ABCMeta):
         )
 
     @contextmanager
-    def exception_warning(self, msg: str, *args, **kwargs):
+    def exception_warning(self, msg: str, *args, **kwargs: "Unpack[LoggerArgs]"):
         try:
             yield
         except Exception as exception:

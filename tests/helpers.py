@@ -83,6 +83,7 @@ if TYPE_CHECKING:
 
     from custom_components.meross_lan.helpers.component_api import ComponentApi
     from custom_components.meross_lan.helpers.device import Device
+    from custom_components.meross_lan.merossclient.logging import LoggerArgs
     from custom_components.meross_lan.merossclient.protocol.message import (
         MerossMessage,
         MerossResponse,
@@ -506,8 +507,12 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
             (TypeError, None),
         ]
 
-        def log_exception(self, level, exception, msg, *args, **kwargs):
-            _msg = msg % args
+        def log_exception(
+            self, level, exception, msg, *args, **kwargs: "Unpack[LoggerArgs]"
+        ):
+            _msg = msg % (
+                args + logging.extract_obfuscated_kwargs(self.obfuscate, kwargs)
+            )
             for exc, pattern in self.__class__.RAISE_MESSAGES:
                 if (exc is None or isinstance(exception, exc)) and (
                     pattern is None or pattern.match(_msg)

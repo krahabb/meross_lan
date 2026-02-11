@@ -90,6 +90,8 @@ def _optional(key: str, config: "Mapping | None", default=None) -> vol.Marker:
 
 
 def _required(key: str, config: "Mapping | None", default=None) -> vol.Marker:
+    # FIXME: this is not working when the key is set in config with a Falsy value
+    # move to a better impl (maybe try/except)
     return vol.Required(
         key,
         description={
@@ -347,7 +349,6 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                         "",
                         api,
                         session=async_get_clientsession(self.hass),
-                        obfuscate_func=api.loggable_any,
                     )
                     try:
                         credentials = await cloudapiclient.async_signin(
@@ -734,16 +735,18 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                     api.log(
                         api.DEBUG,
                         "Initiating MQTT binding to %s (key=%s, user_id=%s)",
-                        api.loggable_broker(server),  # type: ignore
-                        api.loggable_any(key),
-                        api.loggable_profile_id(user_id),  # type: ignore
+                        server=server,
+                        key=key,
+                        userid=user_id,
                     )
                     response = await device_client.async_configure_mqtt(
                         **configure_mqtt_args
                     )
                     if response.method != mc.METHOD_SETACK:
                         raise Exception("Failed MQTT binding configuration")
-                    api.log(api.DEBUG, "MQTT binding to %s was succesfull", api.loggable_broker(server))  # type: ignore
+                    api.log(
+                        api.DEBUG, "MQTT binding to %s was succesfull", server=server
+                    )
                     device_config[mlc.CONF_KEY] = key  # type: ignore
 
                 if configure_wifi:
@@ -1036,7 +1039,7 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
                                         "DHCP updated (ip:%s mac:%s) for uuid:%s",
                                         host,
                                         macaddress,
-                                        api.loggable_device_id(entry_descriptor.uuid),
+                                        uuid=entry_descriptor.uuid,
                                     )
                                 else:
                                     api.log(
@@ -1045,17 +1048,17 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
                                         host,
                                         macaddress,
                                         api.loggable_device_id(_descriptor.uuid),
-                                        api.loggable_device_id(entry_descriptor.uuid),
+                                        uuid=entry_descriptor.uuid,
                                     )
 
-                            except Exception as error:
-                                api.log(
+                            except Exception as e:
+                                api.log_exception(
                                     api.WARNING,
-                                    "DHCP update error %s trying to identify uuid:%s at (ip:%s mac:%s)",
-                                    str(error),
-                                    api.loggable_device_id(entry_descriptor.uuid),
+                                    e,
+                                    "trying to identify (ip:%s mac:%s uuid:%s)",
                                     host,
                                     macaddress,
+                                    uuid=entry_descriptor.uuid,
                                 )
                         return self.async_abort(reason=FlowErrorKey.ALREADY_CONFIGURED)
 
@@ -1388,7 +1391,6 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                                     or len(device_entry.config_entries) > 1
                                 ):
                                     _area_id = device_entry.area_id
-                                    _name_by_user = device_entry.name_by_user
                                     dev_reg.async_remove_device(device_entry.id)
                                     dev_reg.async_get_or_create(
                                         config_entry_id=self.config_entry.entry_id,
@@ -1408,10 +1410,9 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                                     )
                                     api.log(
                                         api.WARNING,
-                                        "Device registry entry for %s (uuid:%s) was updated in order to fix it. The friendly name ('%s') has been lost and needs to be manually re-entered",
+                                        "Device registry entry for %s (uuid:%s) was updated in order to fix it",
                                         descriptor_update.productmodel,
-                                        api.loggable_device_id(device_id),
-                                        _name_by_user,
+                                        uuid=device_id,
                                     )
 
                             except Exception as error:
@@ -1420,7 +1421,7 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                                     error,
                                     "repairing device registry for %s (uuid:%s)",
                                     descriptor_update.productmodel,
-                                    api.loggable_device_id(device_id),
+                                    uuid=device_id,
                                 )
                             return self.finish_flow(device_config, True)
 

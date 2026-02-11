@@ -466,7 +466,7 @@ class NamespaceHandler:
             self.__class__.__name__,
             self.ns,
             function_name,
-            str(device.loggable_any(payload)),
+            _any=payload,
             timeout=604800,
         )
 
@@ -479,7 +479,7 @@ class NamespaceHandler:
             self.__class__.__name__,
             self.ns,
             self.parsers[payload[self.ns.key_idx]].__name__,
-            str(device.loggable_any(payload)),
+            _any=payload,
             timeout=14400,
         )
 
@@ -597,7 +597,7 @@ class NamespaceHandler:
                 "Handler undefined for method:%s namespace:%s payload:%s",
                 message.method,
                 message.namespace,
-                device.loggable_dict_str(message.payload),
+                _payload=message.payload,
                 timeout=14400,
             )
 
@@ -624,7 +624,7 @@ class NamespaceHandler:
             device.DEBUG,
             "Parser stub called on namespace:%s payload:%s",
             self.ns,
-            device.loggable_dict_str(payload),
+            _payload=payload,
             timeout=14400,
         )
 

@@ -17,14 +17,8 @@ from ..merossclient.client.mqtt import (
     MerossMQTTRateLimitException,
 )
 from ..merossclient.protocol import MerossKeyError, const as mc, namespaces as mn
-from ..merossclient.protocol.message import (
-    MerossRequest,
-    MerossResponse,
-    get_replykey,
-    json_dumps,
-)
+from ..merossclient.protocol.message import MerossRequest, MerossResponse, get_replykey
 from ..sensor import MLDiagnosticSensor
-from .obfuscate import obfuscated_dict
 
 if TYPE_CHECKING:
     import asyncio
@@ -199,11 +193,11 @@ class MQTTConnection(AbstractMQTTConnection):
             request = self.request
             mqtt_connection.log(
                 mqtt_connection.DEBUG,
-                "Cancelling mqtt transaction on %s %s (uuid:%s messageId:%s)",
+                "Cancelling mqtt transaction on %s %s (messageId:%s uuid:%s)",
                 request.method,
                 request.namespace,
-                mqtt_connection.parent.loggable_device_id(request.uuid),
                 request.messageid,
+                uuid=request.uuid,
             )
             self.response_future.cancel()
             if remove:
@@ -309,18 +303,18 @@ class MQTTConnection(AbstractMQTTConnection):
             self.log(
                 self.WARNING,
                 "MQTT publish rate-limit exceeded for device uuid:%s",
-                self.parent.loggable_device_id(message.uuid),
+                uuid=message.uuid,
             )
             raise
         except Exception as exception:
             self.log_exception(
                 self.DEBUG,
                 exception,
-                "async_publish_raw %s %s (uuid:%s messageId:%s)",
+                "async_publish_raw %s %s (messageId:%s uuid:%s)",
                 message.method,
                 message.namespace,
-                self.parent.loggable_device_id(message.uuid),
                 message.messageid,
+                uuid=message.uuid,
                 timeout=14400,
             )
             raise
@@ -459,7 +453,7 @@ class MQTTConnection(AbstractMQTTConnection):
                 self.WARNING,
                 e,
                 "async_try_discovery (uuid:%s)",
-                self.parent.loggable_device_id(device_id),
+                uuid=device_id,
                 timeout=14400,
             )
         finally:
@@ -544,7 +538,7 @@ class MQTTConnection(AbstractMQTTConnection):
                         e,
                         "async_mqtt_message session handler for namespace %s (uuid:%s)",
                         message.namespace,
-                        profile.loggable_device_id(device_id),
+                        uuid=device_id,
                         timeout=14400,
                     )
 
@@ -564,7 +558,7 @@ class MQTTConnection(AbstractMQTTConnection):
                     self.log(
                         self.DEBUG,
                         "Dropping MQTT received message for device uuid:%s since it is configured for HTTP only",
-                        profile.loggable_device_id(device_id),
+                        uuid=device_id,
                     )
                     return
                 if device._profile == profile:
@@ -579,7 +573,7 @@ class MQTTConnection(AbstractMQTTConnection):
                         self.log(
                             self.WARNING,
                             "Received MQTT message for device uuid:%s which cannot be registered for MQTT handling on this profile",
-                            profile.loggable_device_id(device_id),
+                            uuid=device_id,
                             timeout=14400,
                         )
                         return
@@ -620,13 +614,17 @@ class MQTTConnection(AbstractMQTTConnection):
                 # entry already present...skip discovery
                 self.log(
                     self.INFO,
-                    "Ignoring MQTT discovery for already configured uuid:%s (ConfigEntry is %s)",
-                    profile.loggable_device_id(device_id),
+                    "Ignoring MQTT discovery for %s uuid:%s",
                     (
                         "disabled"
                         if config_entry.disabled_by
-                        else "ignored" if config_entry.source == "ignore" else "unknown"
+                        else (
+                            "ignored"
+                            if config_entry.source == "ignore"
+                            else "configured"
+                        )
                     ),
+                    uuid=device_id,
                     timeout=28800,  # type: ignore
                 )
                 return
@@ -636,7 +634,7 @@ class MQTTConnection(AbstractMQTTConnection):
                 self.log(
                     self.DEBUG,
                     "Ignoring MQTT discovery for uuid:%s (ConfigFlow is in progress)",
-                    profile.loggable_device_id(device_id),
+                    uuid=device_id,
                     timeout=14400,  # type: ignore
                 )
                 return
@@ -646,7 +644,7 @@ class MQTTConnection(AbstractMQTTConnection):
                 self.log(
                     self.WARNING,
                     "Discovery key error for uuid:%s",
-                    profile.loggable_device_id(device_id),
+                    uuid=device_id,
                     timeout=300,
                 )
                 if key is not None:
@@ -799,27 +797,23 @@ class MQTTProfile(mlm.ConfigEntryManager):
         if self.isEnabledFor(self.VERBOSE):
             connection.log(
                 self.VERBOSE,
-                "%s(%s) %s %s (uuid:%s messageId:%s) %s",
+                "%s(%s) %s %s (messageId:%s uuid:%s) %s",
                 rxtx,
                 Transport.MQTT,
                 message.method,
                 message.namespace,
-                self.loggable_device_id(message.uuid),
                 message.messageid,
-                (
-                    json_dumps(obfuscated_dict(message))
-                    if self.obfuscate
-                    else message.json
-                ),
+                uuid=message.uuid,
+                _message=message,
             )
         elif self.isEnabledFor(self.DEBUG):
             connection.log(
                 self.DEBUG,
-                "%s(%s) %s %s (uuid:%s messageId:%s)",
+                "%s(%s) %s %s (messageId:%s, uuid:%s)",
                 rxtx,
                 Transport.MQTT,
                 message.method,
                 message.namespace,
-                self.loggable_device_id(message.uuid),
                 message.messageid,
+                uuid=message.uuid,
             )

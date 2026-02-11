@@ -24,17 +24,12 @@ from ..const import (
     PARAM_HEARTBEAT_PERIOD,
     PARAM_TIMESTAMP_TOLERANCE,
 )
-from ..helpers.obfuscate import obfuscated_dict
 from ..merossclient import DeviceDescriptor, get_active_broker, is_device_online
 from ..merossclient.client import Transport
 from ..merossclient.client.http import HttpClient, TerminatedException
+from ..merossclient.obfuscate import OBFUSCATE_DICT
 from ..merossclient.protocol import MerossError
-from ..merossclient.protocol.message import (
-    MerossMessage,
-    MerossRequest,
-    MerossResponse,
-    json_dumps,
-)
+from ..merossclient.protocol.message import MerossMessage, MerossRequest, MerossResponse
 from ..merossclient.protocol.namespaces import thermostat as mn_t
 from ..sensor import ProtocolSensor
 from ..update import MLUpdate
@@ -953,8 +948,9 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                     message.method,
                     message.namespace,
                     message.messageid,
-                    json_dumps(self.loggable_dict(message)),
                 ),
+                _message=message,
+                obfuscate=self.obfuscate,
             )
         elif logger.isEnabledFor(self.DEBUG):
             logger._log(
@@ -1055,7 +1051,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                     "lastrequest": handler.lastrequest,
                     "lastresponse": handler.lastresponse,
                     "lastpush": (
-                        obfuscated_dict(handler.lastpush)
+                        OBFUSCATE_DICT(handler.lastpush)
                         if (handler.lastpush and self.obfuscate)
                         else handler.lastpush
                     ),
@@ -1069,7 +1065,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                 for handler in self.ns_handlers.values()
             },
             "device_info": (
-                obfuscated_dict(device_info)
+                OBFUSCATE_DICT(device_info)
                 if self.obfuscate and device_info
                 else device_info
             ),
@@ -2137,11 +2133,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
     def mqtt_attached(self, mqtt_connection: "MQTTConnection", /):
         if self._mqtt_connection:
             self._mqtt_connection.detach(self)
-        self.log(
-            self.DEBUG,
-            "mqtt_attached to %s",
-            self.loggable_broker(mqtt_connection.id),
-        )
+        self.log(self.DEBUG, "mqtt_attached to %s", server=str(mqtt_connection.id))
         self._mqtt_connection = mqtt_connection
         self._topic_response = (
             mqtt_connection.from_
@@ -2152,9 +2144,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
     def mqtt_detached(self):
         assert self._mqtt_connection
         self.log(
-            self.DEBUG,
-            "mqtt_detached from %s",
-            self.loggable_broker(self._mqtt_connection.id),
+            self.DEBUG, "mqtt_detached from %s", server=str(self._mqtt_connection.id)
         )
         if self._mqtt_connected:
             self.mqtt_disconnected()
@@ -2163,11 +2153,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
     def mqtt_connected(self):
         _mqtt_connection = self._mqtt_connection
         assert _mqtt_connection
-        self.log(
-            self.DEBUG,
-            "mqtt_connected to %s",
-            self.loggable_broker(_mqtt_connection.id),
-        )
+        self.log(self.DEBUG, "mqtt_connected to %s", server=str(_mqtt_connection.id))
         self._mqtt_connected = _mqtt_connection
         self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT_BROKER)
         if _mqtt_connection.parent.allow_mqtt_publish:
@@ -2186,7 +2172,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         self.log(
             self.DEBUG,
             "mqtt_disconnected from %s",
-            self.loggable_broker(self._mqtt_connection.id),
+            server=str(self._mqtt_connection.id),
         )
         self._mqtt_connected = self._mqtt_publish = self._mqtt_active = None
         self.device_debug = None
@@ -2208,11 +2194,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         if self._profile:
             self._profile.unlink(self)
         self._profile = profile
-        self.log(
-            self.DEBUG,
-            "linked to profile:%s",
-            self.loggable_profile_id(profile.id),
-        )
+        self.log(self.DEBUG, "linked to profile:%s", userid=profile.id)
         self._check_protocol()
         if device_info := profile.get_device_info(self.id):
             self.update_device_info(device_info, profile)
@@ -2221,11 +2203,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         assert self._profile
         if self._mqtt_connection:
             self._mqtt_connection.detach(self)
-        self.log(
-            self.DEBUG,
-            "unlinked from profile:%s",
-            self.loggable_profile_id(self._profile.id),
-        )
+        self.log(self.DEBUG, "unlinked from profile:%s", userid=self._profile.id)
         self._profile = None
 
     def _receive(self, message: MerossResponse, protocol, /):
@@ -2292,7 +2270,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                     self.DEBUG,
                     "Received signature error: computed=%s, header=%s",
                     sign,
-                    self.loggable_dict_str(header),
+                    _header=header,
                 )
 
         if not self.online:
@@ -2332,7 +2310,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                     self.WARNING,
                     "Protocol error: namespace:%s payload:%s",
                     message.namespace,
-                    self.loggable_dict_str(message.payload),
+                    _payload=message.payload,
                     timeout=14400,
                 )
             return
@@ -2349,7 +2327,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                 self.log(
                     self.WARNING,
                     "Protocol error: received empty namespace (message: %s)",
-                    self.loggable_dict_str(message),
+                    _message=message,
                     timeout=14400,
                 )
                 return
