@@ -76,28 +76,34 @@ class FlowErrorKey(enum.StrEnum):
 
 class FlowError(Exception):
     def __init__(self, key: FlowErrorKey):
-        super().__init__(key)
+        Exception.__init__(self, key)
         self.key = key
 
 
-def _optional(key: str, config: "Mapping | None", default=None) -> vol.Marker:
-    return vol.Optional(
-        key,
-        description={
-            "suggested_value": (config and config.get(key, default)) or default
-        },
-    )
+def _optional(key: str, config, default=None):
+    try:
+        return vol.Optional(
+            key,
+            description={"suggested_value": config[key]},
+        )
+    except:
+        return vol.Optional(
+            key,
+            description={"suggested_value": default},
+        )
 
 
-def _required(key: str, config: "Mapping | None", default=None) -> vol.Marker:
-    # FIXME: this is not working when the key is set in config with a Falsy value
-    # move to a better impl (maybe try/except)
-    return vol.Required(
-        key,
-        description={
-            "suggested_value": (config and config.get(key, default)) or default
-        },
-    )
+def _required(key: str, config, default=None):
+    try:
+        return vol.Required(
+            key,
+            description={"suggested_value": config[key]},
+        )
+    except:
+        return vol.Required(
+            key,
+            description={"suggested_value": default},
+        )
 
 
 class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
