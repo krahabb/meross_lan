@@ -5,7 +5,7 @@ from homeassistant.components import sensor
 from . import const as mlc
 from .helpers.entity import MLEntity, MLNumericEntity
 from .helpers.namespaces import EntityNamespaceMixin, mc, mn
-from .merossclient import Transport
+from .merossclient.client import Transport
 from .merossclient.protocol.message import json_dumps
 
 if TYPE_CHECKING:

@@ -31,14 +31,14 @@ from .helpers import (
 from .helpers.component_api import ComponentApi
 from .helpers.mqtt_profile import MQTTConnection
 from .merossclient import (
+    DeviceDescriptor,
     HostAddress,
-    MerossDeviceDescriptor,
-    Transport,
     cloudapi,
     fmt_macaddress,
 )
-from .merossclient.httpclient import HttpClient
-from .merossclient.mqttclient import MQTTDeviceClient
+from .merossclient.client import Transport
+from .merossclient.client.http import HttpClient
+from .merossclient.client.mqtt import MQTTDeviceClient
 from .merossclient.protocol import (
     MerossKeyError,
     const as mc,
@@ -56,7 +56,7 @@ if TYPE_CHECKING:
     from .helpers.device import Device
     from .helpers.manager import ConfigEntryManager
     from .helpers.mqtt_profile import MQTTConnection
-    from .merossclient import MerossClient
+    from .merossclient.client import AbstractClient
     from .merossclient.protocol import types as mt
 
 
@@ -106,7 +106,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         _is_bluetooth: bool
         device_id: str
         device_config: mlc.DeviceConfigType
-        device_descriptor: MerossDeviceDescriptor
+        device_descriptor: DeviceDescriptor
         device_placeholders: dict[str, str]
 
         profile_config: mlc.ProfileConfigType
@@ -177,7 +177,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
             loop=self.hass.loop,
         )
 
-    async def async_get_device_client(self, device_id: str) -> "MerossClient | None":
+    async def async_get_device_client(self, device_id: str) -> "AbstractClient | None":
         """Returns a suitable low level device client to query/configure the device.
         This instance must not be modified since it could be an active client used by a Device.
         """
@@ -202,7 +202,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
             pass
 
         if self._is_bluetooth:
-            return api.get_bt_device(device_id)
+            return api.get_bt_client(device_id)
 
         device_config = self.device_config
         host = device_config.get(mlc.CONF_HOST)
@@ -210,7 +210,6 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
             http_client = self.http_client
             http_client.host = host
             http_client.key = device_config.get(mlc.CONF_KEY) or ""
-            http_client.descriptor = self.device_descriptor
             return http_client
 
         profile = api.profiles.get(self.device_descriptor.userId)
@@ -572,15 +571,17 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         # This should work as a fallback but is rather fragile since we don't know for
         # sure the effective address of the HA broker
         if not mqtt_connections and ha_mqtt_connection.mqtt_is_subscribed:
-            mqtt_connections[
-                f"HomeAssistant (mqtt://{ha_mqtt_connection.broker.host})"
-            ] = (ha_mqtt_connection, ha_mqtt_connection.broker, True)
+            mqtt_connections[f"HomeAssistant (mqtt://{ha_mqtt_connection.id.host})"] = (
+                ha_mqtt_connection,
+                ha_mqtt_connection.id,
+                True,
+            )
         # Add also Meross cloud bound device connections
         for _profile in api.active_profiles():
             for _broker, _mqtt_connection in _profile.mqttconnections.items():
                 mqtt_connections[f"{_profile.display_name} (mqtt://{_broker})"] = (
                     _mqtt_connection,
-                    _mqtt_connection.broker,
+                    _mqtt_connection.id,
                     False,
                 )
 
@@ -628,8 +629,8 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                                 api.WARNING,
                                 "Provided 'key' and 'userid' will be ignored when using a predefined connection",
                             )
-                        key = mqtt_connection.profile.key
-                        user_id = mqtt_connection.profile.userid
+                        key = mqtt_connection.parent.key
+                        user_id = mqtt_connection.parent.userid
                     except KeyError:
                         # or if manual entry
                         _match = re.match(
@@ -699,7 +700,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                             )
                             try:
                                 await asyncio.wait_for(
-                                    await _mqttclient.async_connect(server_address), 5
+                                    await _mqttclient.async_connect(), 5
                                 )
                             except Exception as e:
                                 api.log_exception(
@@ -790,7 +791,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
 
     async def _async_http_discovery(
         self, host: str, key: str | None
-    ) -> tuple[mlc.DeviceConfigType, MerossDeviceDescriptor]:
+    ) -> tuple[mlc.DeviceConfigType, DeviceDescriptor]:
         http_client = self.http_client
         http_client.host = host
         http_client.key = key or ""
@@ -806,8 +807,8 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         )
 
     async def _async_mqtt_discovery(
-        self, device_id: str, key: str, descriptor: MerossDeviceDescriptor | None
-    ) -> tuple[mlc.DeviceConfigType, MerossDeviceDescriptor]:
+        self, device_id: str, key: str, descriptor: DeviceDescriptor | None
+    ) -> tuple[mlc.DeviceConfigType, DeviceDescriptor]:
         mqttconnections: list[MQTTConnection] = []
         if descriptor:
             profile = self.api.profiles.get(descriptor.userId)
@@ -850,9 +851,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         ):
             try:
                 device_config = await identify_coro
-                return device_config, MerossDeviceDescriptor(
-                    device_config[mlc.CONF_PAYLOAD]
-                )
+                return device_config, DeviceDescriptor(device_config[mlc.CONF_PAYLOAD])
             except Exception as exception:
                 exceptions.append(exception)
 
@@ -944,7 +943,7 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
         """
         return await self._async_set_device_config(
             discovery_info,
-            MerossDeviceDescriptor(discovery_info[mlc.CONF_PAYLOAD]),
+            DeviceDescriptor(discovery_info[mlc.CONF_PAYLOAD]),
         )
 
     async def async_step_bluetooth(self, discovery_info: "BluetoothServiceInfoBleak"):
@@ -1006,7 +1005,7 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
                                 reason=FlowErrorKey.ALREADY_CONFIGURED
                             )
                         entry_data = entry.data
-                        entry_descriptor = MerossDeviceDescriptor(
+                        entry_descriptor = DeviceDescriptor(
                             entry_data[mlc.CONF_PAYLOAD]
                         )
                         if entry_descriptor.macAddress_fmt != macaddress_fmt:
@@ -1129,7 +1128,7 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
         # this call might not register because of errors or because of an overlapping
         # request from 'async_setup_entry' (we're preventing overlapped calls to MQTT
         # subscription)
-        if await mqtt_connection.async_mqtt_subscribe():
+        if await mqtt_connection.async_connect():
             # ok, now pass along the discovering mqtt message so our ComponentApi state machine
             # gets to work on this
             mqtt_connection.on_message(discovery_info)
@@ -1156,7 +1155,7 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
     async def _async_set_device_config(
         self,
         device_config: mlc.DeviceConfigType,
-        descriptor: MerossDeviceDescriptor,
+        descriptor: DeviceDescriptor,
     ):
         uuid = descriptor.uuid
         mac_address_fmt = descriptor.macAddress_fmt
@@ -1261,11 +1260,11 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                 )
                 assert device_id == device_config[mlc.CONF_DEVICE_ID]
                 try:
-                    device: Device = self.config_entry.runtime_data  # type: ignore
+                    device: "Device" = self.config_entry.runtime_data  # type: ignore
                     self.device_descriptor = device.descriptor
                 except AttributeError:
                     # if config not loaded the device is None
-                    self.device_descriptor = MerossDeviceDescriptor(
+                    self.device_descriptor = DeviceDescriptor(
                         device_config[mlc.CONF_PAYLOAD]
                     )
                 self.device_placeholders = {
@@ -1447,7 +1446,7 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
 
         config_schema = self._config_schema
         if _is_bluetooth:
-            _bt_device = api.get_bt_device(device_id)
+            _bt_device = api.get_bt_client(device_id)
             self.device_placeholders["host"] = (
                 f"BTDevice({_bt_device.address})" if _bt_device else "BTDevice(unknown)"
             )

@@ -8,7 +8,8 @@ from pytest_homeassistant_custom_component.common import flush_store
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.helpers.meross_profile import MerossProfile
-from custom_components.meross_lan.merossclient import HostAddress, Transport, cloudapi
+from custom_components.meross_lan.merossclient import HostAddress, cloudapi
+from custom_components.meross_lan.merossclient.client import Transport
 from custom_components.meross_lan.merossclient.protocol import const as mc
 
 from . import const as tc, helpers
@@ -62,10 +63,9 @@ async def test_meross_profile(
         safe_start_calls = []
         for expected_connection in expected_connections:
             broker = HostAddress.build(expected_connection)
-            connection_id = f"{broker.host}:{broker.port}"
-            mqttconnection = profile.mqttconnections[connection_id]
+            mqttconnection = profile.mqttconnections[f"{broker.host}:{broker.port}"]
             mqttconnections.remove(mqttconnection)
-            safe_start_calls.append(mock.call(mqttconnection, broker))
+            safe_start_calls.append(mock.call(mqttconnection))
         assert len(mqttconnections) == 0
         merossmqtt_mock.safe_start_mock.assert_has_calls(
             safe_start_calls,
@@ -137,9 +137,9 @@ async def test_meross_profile_cloudapi_offline(
         safe_start_calls = []
         for expected_connection in expected_connections:
             broker = HostAddress.build(expected_connection)
-            mqttconnection = profile.mqttconnections[str(broker)]
+            mqttconnection = profile.mqttconnections[f"{broker.host}:{broker.port}"]
             mqttconnections.remove(mqttconnection)
-            safe_start_calls.append(mock.call(mqttconnection, broker))
+            safe_start_calls.append(mock.call(mqttconnection))
         assert len(mqttconnections) == 0
         merossmqtt_mock.safe_start_mock.assert_has_calls(
             safe_start_calls,
@@ -209,15 +209,10 @@ async def test_meross_profile_with_device(
             mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT
         )
         mqttconnections = list(profile.mqttconnections.values())
+        assert mqttconnections[0].id == HostAddress(tc.MOCK_PROFILE_MSS310_DOMAIN, 443)
+        assert mqttconnections[1].id == HostAddress(tc.MOCK_PROFILE_MSH300_DOMAIN, 443)
         merossmqtt_mock.safe_start_mock.assert_has_calls(
-            [
-                mock.call(
-                    mqttconnections[0], HostAddress(tc.MOCK_PROFILE_MSS310_DOMAIN, 443)
-                ),
-                mock.call(
-                    mqttconnections[1], HostAddress(tc.MOCK_PROFILE_MSH300_DOMAIN, 443)
-                ),
-            ],
+            [mock.call(mqttconnections[0]), mock.call(mqttconnections[1])],
             any_order=True,
         )
         # check the device name was updated from cloudapi query

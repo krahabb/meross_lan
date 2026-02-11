@@ -17,11 +17,8 @@ except ImportError:
 from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
 
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.merossclient import (
-    Transport,
-    cloudapi,
-    fmt_macaddress,
-)
+from custom_components.meross_lan.merossclient import cloudapi, fmt_macaddress
+from custom_components.meross_lan.merossclient.client import Transport
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,

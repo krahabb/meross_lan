@@ -11,7 +11,7 @@ from custom_components.meross_lan.merossclient.protocol import (
     namespaces as mn,
 )
 
-from . import MerossEmulator
+from . import Emulator
 
 if TYPE_CHECKING:
     from typing import Final
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
         rollershutter as mt_rs,
     )
 
-    from . import MerossEmulatorDescriptor
+    from . import EmulatorDescriptor
 
 
 _SIGNAL_SCALE = 1000
@@ -111,7 +111,7 @@ class _Transition:
             )
 
 
-class RollerShutterMixin(MerossEmulator if TYPE_CHECKING else object):
+class RollerShutterMixin(Emulator if TYPE_CHECKING else object):
 
     # set open/close timeouts (in msec to align to device natives)
     # different so to test they're used correctly
@@ -120,13 +120,13 @@ class RollerShutterMixin(MerossEmulator if TYPE_CHECKING else object):
     # the internal sampling of the 'Transition'
     SIGNAL_TRANSITION_PERIOD = 1  # sec
 
-    NAMESPACES_DEFAULT: "MerossEmulator.NSDefault" = {
+    NAMESPACES_DEFAULT: "Emulator.NSDefault" = {
         mn.Appliance_RollerShutter_Adjust: (
-            MerossEmulator.NSDefaultMode.MixOut,
+            Emulator.NSDefaultMode.MixOut,
             {mc.KEY_CHANNEL: 0, mc.KEY_STATUS: 0},
         ),
         mn.Appliance_RollerShutter_Config: (
-            MerossEmulator.NSDefaultMode.MixIn,
+            Emulator.NSDefaultMode.MixIn,
             {
                 mc.KEY_CHANNEL: 0,
                 mc.KEY_SIGNALCLOSE: SIGNALCLOSE,
@@ -134,11 +134,11 @@ class RollerShutterMixin(MerossEmulator if TYPE_CHECKING else object):
             },
         ),
         mn.Appliance_RollerShutter_Position: (
-            MerossEmulator.NSDefaultMode.MixIn,
+            Emulator.NSDefaultMode.MixIn,
             {mc.KEY_CHANNEL: 0, mc.KEY_POSITION: mc.ROLLERSHUTTER_POSITION_CLOSED},
         ),
         mn.Appliance_RollerShutter_State: (
-            MerossEmulator.NSDefaultMode.MixIn,
+            Emulator.NSDefaultMode.MixIn,
             {mc.KEY_CHANNEL: 0, mc.KEY_STATE: mc.ROLLERSHUTTER_STATE_IDLE},
         ),
     }
@@ -150,7 +150,7 @@ class RollerShutterMixin(MerossEmulator if TYPE_CHECKING else object):
     # the internal sampling of the 'Transition'
     SIGNAL_TRANSITION_PERIOD = 1  # sec
 
-    def __init__(self, descriptor: "MerossEmulatorDescriptor", key: str):
+    def __init__(self, descriptor: "EmulatorDescriptor", key: str):
         super().__init__(descriptor, key)
         self._transitions: dict[int, _Transition] = {}
         self.has_native_position = descriptor.firmware_version >= (6, 6, 6)

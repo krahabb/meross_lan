@@ -77,7 +77,7 @@ async def async_setup_entry(
                 raise ConfigEntryError from error
 
         case (ConfigEntryType.HUB, _):
-            if not await api.mqtt_connection.async_mqtt_subscribe():
+            if not await api.mqtt_connection.async_connect():
                 raise ConfigEntryNotReady("MQTT unavailable")
             await api.async_setup_entry(hass, config_entry)
             return True

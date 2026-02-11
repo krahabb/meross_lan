@@ -18,14 +18,9 @@ from homeassistant.helpers import (
 # import core modules instead of symbols to ease patching in a single place
 from . import ConfigEntryType, manager as mlm, mqtt_profile as mlq
 from .. import const as mlc
-from ..merossclient import (
-    MEROSSDEBUG,
-    HostAddress,
-    MerossDeviceDescriptor,
-    Transport,
-    bluetooth as m_bt,
-)
-from ..merossclient.httpclient import HttpClient
+from ..merossclient import HostAddress
+from ..merossclient.client import Transport, bluetooth as m_bt
+from ..merossclient.client.http import HttpClient
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..merossclient.protocol.message import (
     MerossAckReply,
@@ -47,6 +42,7 @@ if TYPE_CHECKING:
     )
 
     from ..config_flow import ConfigFlow
+    from ..merossclient import DeviceDescriptor
     from ..merossclient.protocol.message import MerossMessage
     from .device import Device
     from .meross_profile import MerossProfile
@@ -56,85 +52,40 @@ class HAMQTTConnection(mlq.MQTTConnection):
 
     if TYPE_CHECKING:
         is_cloud_connection: Final[Literal[False]]  # type: ignore[override]
-        topic_command: Final[str]  # type: ignore[override]
         _unsub_mqtt_subscribe: Callable | None
         _unsub_mqtt_disconnected: Callable | None
         _unsub_mqtt_connected: Callable | None
         _mqtt_subscribe_future: asyncio.Future[bool] | None
-        _unsub_random_disconnect: asyncio.TimerHandle | None
 
     __slots__ = (
         "_unsub_mqtt_subscribe",
         "_unsub_mqtt_disconnected",
         "_unsub_mqtt_connected",
         "_mqtt_subscribe_future",
-        "_unsub_random_disconnect",
     )
 
     def __init__(self, api: "ComponentApi"):
         self.is_cloud_connection = False
-        self.topic_command = mc.TOPIC_REQUEST.format(mlc.DOMAIN)
-        mlq.MQTTConnection.__init__(self, HostAddress("homeassistant", 0), api)
+        mlq.MQTTConnection.__init__(
+            self,
+            HostAddress("homeassistant", 0),
+            api,
+            from_=mc.TOPIC_REQUEST.format(mlc.DOMAIN),
+        )
         self._unsub_mqtt_subscribe = None
         self._unsub_mqtt_disconnected = None
         self._unsub_mqtt_connected = None
         self._mqtt_subscribe_future = None
-        if MEROSSDEBUG:
 
-            async def _async_random_disconnect():
-                self._unsub_random_disconnect = api.schedule_async_callback(
-                    60, _async_random_disconnect
-                )
-                if self._mqtt_subscribe_future:
-                    return
-                elif self._unsub_mqtt_subscribe is None:
-                    if MEROSSDEBUG.mqtt_random_connect():
-                        self.log(self.DEBUG, "random connect")
-                        await self.async_mqtt_subscribe()
-                else:
-                    if MEROSSDEBUG.mqtt_random_disconnect():
-                        self.log(self.DEBUG, "random disconnect")
-                        await self.async_mqtt_unsubscribe()
-
-            self._unsub_random_disconnect = api.schedule_async_callback(
-                60, _async_random_disconnect
-            )
-        else:
-            self._unsub_random_disconnect = None
-
-    # interface: MQTTConnection
-    async def async_shutdown(self):
-        if self._unsub_random_disconnect:
-            self._unsub_random_disconnect.cancel()
-            self._unsub_random_disconnect = None
-        await self.async_mqtt_unsubscribe()
-        await super().async_shutdown()
-
-    @override
-    def get_rl_safe_delay(self, uuid: str):
-        return 0.0
-
-    @override
-    async def _async_mqtt_publish(self, request: "MerossMessage", /):
-        await mqtt.async_publish(
-            self.profile.api.hass, mc.TOPIC_REQUEST.format(request.uuid), request.json
-        )
-        if self.sensor_connection:
-            self.sensor_connection.inc_counter(self.sensor_connection.ATTR_PUBLISHED)
-
-    # interface: self
-    @property
-    def mqtt_is_subscribed(self):
-        return self._unsub_mqtt_subscribe is not None
-
-    async def async_mqtt_subscribe(self) -> bool:
+    @override  # MQTTConnection
+    async def async_connect(self, /):
         if self._unsub_mqtt_subscribe:
             return True
 
         if self._mqtt_subscribe_future:
             return await self._mqtt_subscribe_future
 
-        hass = self.profile.api.hass
+        hass = self.parent.api.hass
         self._mqtt_subscribe_future = hass.loop.create_future()
         try:
             self._unsub_mqtt_subscribe = await mqtt.async_subscribe(
@@ -162,18 +113,18 @@ class HAMQTTConnection(mlq.MQTTConnection):
                 )
             if mqtt.is_connected(hass):
                 self.on_connect()
-            result = True
         except Exception as exception:
-            self.log_exception(
-                self.WARNING, exception, "async_mqtt_subscribe", timeout=14400
+            self.log_exception(self.WARNING, exception, "async_connect", timeout=14400)
+        finally:
+            self._mqtt_subscribe_future.set_result(
+                self._unsub_mqtt_subscribe is not None
             )
-            result = False
+            self._mqtt_subscribe_future = None
 
-        self._mqtt_subscribe_future.set_result(result)
-        self._mqtt_subscribe_future = None
-        return result
+        return self._unsub_mqtt_subscribe is not None
 
-    async def async_mqtt_unsubscribe(self):
+    @override  # MQTTConnection
+    async def async_disconnect(self, /):
         if self._mqtt_subscribe_future:
             await self._mqtt_subscribe_future
         if self._unsub_mqtt_connected:
@@ -188,17 +139,30 @@ class HAMQTTConnection(mlq.MQTTConnection):
         if self.is_connected:
             self.on_disconnect()
 
+    @override  # MQTTConnection
+    async def _async_publish_raw(self, request: "MerossMessage", /):
+        await mqtt.async_publish(
+            self.parent.api.hass, mc.TOPIC_REQUEST.format(request.uuid), request.json
+        )
+        if self.sensor_connection:
+            self.sensor_connection.inc_counter(self.sensor_connection.ATTR_PUBLISHED)
+
+    # interface: self
+    @property
+    def mqtt_is_subscribed(self):
+        return self._unsub_mqtt_subscribe is not None
+
     @callback
     def on_connect(self):
         """called when the underlying mqtt.Client connects to the broker"""
         # try to get the HA broker host address
-        with self.exception_warning("async_mqtt_subscribe: recovering broker conf"):
+        with self.exception_warning("on_connect: recovering broker conf"):
 
-            mqtt_data = self.profile.api.hass.data[mqtt.DATA_MQTT]
+            mqtt_data = self.parent.api.hass.data[mqtt.DATA_MQTT]
             if mqtt_data and mqtt_data.client:
                 conf = mqtt_data.client.conf
-                self.broker.host = conf[mqtt.CONF_BROKER]
-                self.broker.port = conf.get(mlc.hac.CONF_PORT, mqtt.const.DEFAULT_PORT)
+                self.id.host = conf[mqtt.CONF_BROKER]
+                self.id.port = conf.get(mlc.hac.CONF_PORT, mqtt.const.DEFAULT_PORT)
                 self.configure_logger()
 
         super().on_connect()
@@ -223,7 +187,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
         # replicate this and the "from" field is set as ususal
 
         device_id = message.uuid
-        api = self.profile.api
+        api = self.parent.api
         if device_id in api.devices:
             if device := api.devices[device_id]:
                 key = device.key
@@ -232,12 +196,12 @@ class HAMQTTConnection(mlq.MQTTConnection):
                 if device_entry:
                     key = device_entry.data.get(mlc.CONF_KEY) or ""
                 else:
-                    key = self.profile.key
+                    key = self.parent.key
         else:
-            key = self.profile.key
+            key = self.parent.key
         if message.method == mc.METHOD_SET:
-            self.profile.async_create_task(
-                self.async_mqtt_publish(
+            self.parent.async_create_task(
+                self.async_publish_raw(
                     MerossAckReply(
                         message,
                         {},
@@ -255,8 +219,8 @@ class HAMQTTConnection(mlq.MQTTConnection):
         # and it appears newer mss315 could abort their connection
         # if not replied (see #346)
         if message.method == mc.METHOD_PUSH:
-            self.profile.async_create_task(
-                self.async_mqtt_publish(
+            self.parent.async_create_task(
+                self.async_publish_raw(
                     MerossPushReply(message, message.payload),
                 ),
                 "._handle_Appliance_Control_ConsumptionConfig",
@@ -271,8 +235,8 @@ class HAMQTTConnection(mlq.MQTTConnection):
         # Note: I actually see this NS only on mss310 plugs
         # (msl120j bulb doesnt have it)
         if message.method == mc.METHOD_PUSH:
-            self.profile.async_create_task(
-                self.async_mqtt_publish(
+            self.parent.async_create_task(
+                self.async_publish_raw(
                     MerossPushReply(
                         message, {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}}
                     ),
@@ -296,17 +260,17 @@ class ComponentApi(mlq.MQTTProfile):
     and MQTT discovery and message routing
     """
 
-    class BTDevice(m_bt.BluetoothClient):
+    class BTClient(m_bt.BluetoothClient):
         if TYPE_CHECKING:
             api: Final["ComponentApi"]
             address: Final[str]
             info: ha_bt.BluetoothServiceInfoBleak
-            descriptor: Final[MerossDeviceDescriptor]  # type: ignore
+            descriptor: Final[DeviceDescriptor]
             uuid: Final[str]  # BEWARE: not valid until _init_task done
             device: Final[Device | None]
             _flow_id: Final[str]
             _bt_unavailable_unsub: Final[CALLBACK_TYPE]
-            _init_task: asyncio.Task["ComponentApi.BTDevice"]
+            _init_task: asyncio.Task["ComponentApi.BTClient"]
 
         __slots__ = (
             "api",
@@ -322,7 +286,6 @@ class ComponentApi(mlq.MQTTProfile):
         def __init__(self, api: "ComponentApi", address: str, flow_id: str, /):
             self.api = api
             self.address = address
-            self.uuid = None  # type: ignore
             self.device = None
             self._flow_id = flow_id
             m_bt.BluetoothClient.__init__(
@@ -340,8 +303,8 @@ class ComponentApi(mlq.MQTTProfile):
             api = self.api
             while True:
                 try:
-                    descriptor = await self.async_identify()
-                    self.uuid = uuid = descriptor.uuid  # type: ignore
+                    self.descriptor = await self.async_identify()  # type: ignore
+                    self.uuid = uuid = self.descriptor.uuid  # type: ignore
                     for _bt_device in api._bt_devices.values():
                         if (_bt_device is not self) and (_bt_device.uuid == uuid):
                             # an existing device has a new bt address
@@ -475,7 +438,7 @@ class ComponentApi(mlq.MQTTProfile):
         _available_timezones: list[str] | None
         _zoneinfo: Final[dict[str, zoneinfo.ZoneInfo]]
 
-        _bt_devices: Final[dict[str, BTDevice]]
+        _bt_devices: Final[dict[str, BTClient]]
 
         # Overrides
         is_cloud_profile: Final[Literal[False]]
@@ -604,7 +567,7 @@ class ComponentApi(mlq.MQTTProfile):
                     )
                 return service_response
 
-            async def _async_bluetooth_request(bt_device: ComponentApi.BTDevice):
+            async def _async_bluetooth_request(bt_device: ComponentApi.BTClient):
                 return await _wrap_response(
                     MerossRequest(
                         namespace,
@@ -641,7 +604,7 @@ class ComponentApi(mlq.MQTTProfile):
 
             if device_id:
                 if (protocol in (Transport.AUTO, Transport.BLUETOOTH)) and (
-                    _bt_device := self.get_bt_device(device_id)
+                    _bt_device := self.get_bt_client(device_id)
                 ):
                     # check first since _async_device_request does not handle BT
                     return await _async_bluetooth_request(_bt_device)
@@ -657,13 +620,13 @@ class ComponentApi(mlq.MQTTProfile):
                         method,
                         payload,
                         self.key if key is None else key,
-                        mqtt_connection.topic_command,
+                        mqtt_connection.from_,
                         trigger_src,
                         device_id,
                     )
                     try:
                         service_response["response"] = (
-                            await mqtt_connection.async_mqtt_request(request)
+                            await mqtt_connection.async_request_raw(request)
                         )
                     except Exception as exception:
                         service_response["exception"] = (
@@ -730,16 +693,6 @@ class ComponentApi(mlq.MQTTProfile):
             hass.data.pop(mlc.DOMAIN)
 
         hass.bus.async_listen_once(mlc.hac.EVENT_HOMEASSISTANT_STOP, _async_terminate)
-        # REMOVE
-        if MEROSSDEBUG:
-
-            import habluetooth
-
-            habluetooth.wrappers._LOGGER.setLevel(ComponentApi.DEBUG)
-            from bleak.backends.bluezdbus.client import logger as _bluez_logger
-
-            _bluez_logger.setLevel(ComponentApi.DEBUG)
-
         hass.data[mlc.DOMAIN] = self
 
     # interface: ConfigEntryManager
@@ -882,7 +835,7 @@ class ComponentApi(mlq.MQTTProfile):
                     f".schedule_reload({entry.title},{entry_id})",
                 )
 
-    def get_bt_device(self, uuid: str):
+    def get_bt_client(self, uuid: str):
         for bt_device in self._bt_devices.values():
             if bt_device.uuid == uuid:
                 return bt_device
@@ -928,6 +881,6 @@ class ComponentApi(mlq.MQTTProfile):
                     service_info.manufacturer_data,
                 )
             """
-            bt_device = ComponentApi.BTDevice(self, bt_address, flow.flow_id)
+            bt_device = ComponentApi.BTClient(self, bt_address, flow.flow_id)
             bt_device.info = service_info
             return await bt_device._init_task

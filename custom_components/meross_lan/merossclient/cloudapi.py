@@ -422,7 +422,7 @@ class CloudApiClient(logging.Loggable):
             "session": session or aiohttp.ClientSession(),
             "obfuscate_func": obfuscate_func,
         }
-        super().__init__(id, parent or logging.getLogger(__name__))
+        super().__init__(id, parent)
 
     async def async_signin(
         self,

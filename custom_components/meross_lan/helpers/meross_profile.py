@@ -7,7 +7,6 @@ from contextlib import asynccontextmanager
 from time import time
 from typing import TYPE_CHECKING, override
 
-from homeassistant.core import callback
 from homeassistant.helpers import storage
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
@@ -16,14 +15,13 @@ from homeassistant.util import dt as dt_util
 from . import (
     datetime_from_epoch,
     get_default_ssl_context,
-    manager as mlm,
     mqtt_profile as mlq,
 )
 from .. import const as mlc
 from ..helpers.obfuscate import OBFUSCATE_DEVICE_ID_MAP, obfuscated_dict
-from ..merossclient import MEROSSDEBUG, HostAddress, cloudapi, get_active_broker
-from ..merossclient.mqttclient import MQTTAppClient
-from ..merossclient.protocol import const as mc, namespaces as mn
+from ..merossclient import HostAddress, cloudapi, get_active_broker
+from ..merossclient.client.mqtt import MQTTAppClient
+from ..merossclient.protocol import const as mc
 
 if TYPE_CHECKING:
     from typing import Final, Literal, NotRequired, TypedDict
@@ -70,12 +68,12 @@ if TYPE_CHECKING:
         tokenRequestTime: float
 
 
-class MerossMQTTConnection(MQTTAppClient, mlq.MQTTConnection):
+class MerossMQTTConnection(mlq.MQTTConnection, MQTTAppClient):
 
     if TYPE_CHECKING:
         is_cloud_connection: Final[Literal[True]]  # type: ignore[override]
 
-    __slots__ = MQTTAppClient._calc_slots("_unsub_random_disconnect")
+    __slots__ = MQTTAppClient._calc_slots()
 
     def __init__(self, broker: "HostAddress", profile: "MerossProfile"):
         self.is_cloud_connection = True
@@ -89,48 +87,11 @@ class MerossMQTTConnection(MQTTAppClient, mlq.MQTTConnection):
             sslcontext=get_default_ssl_context(),
         )
 
-        if MEROSSDEBUG:
-
-            @callback
-            async def _async_random_disconnect():
-                if self.state_inactive:
-                    if MEROSSDEBUG.mqtt_random_connect():
-                        self.log(self.DEBUG, "Random connect")
-                        await self.async_connect(self.broker)
-                else:
-                    if MEROSSDEBUG.mqtt_random_disconnect():
-                        self.log(self.DEBUG, "Random disconnect")
-                        await self.async_disconnect()
-                self._unsub_random_disconnect = profile.schedule_async_callback(
-                    60, _async_random_disconnect
-                )
-
-            self._unsub_random_disconnect = profile.schedule_async_callback(
-                60, _async_random_disconnect
-            )
-        else:
-            self._unsub_random_disconnect = None
-
-    # interface: MQTTConnection
-    async def async_shutdown(self):
-        if self._unsub_random_disconnect:
-            self._unsub_random_disconnect.cancel()
-            self._unsub_random_disconnect = None
-        await super().async_shutdown()
-
-    @override
-    async def _async_mqtt_publish(self, request: "MerossMessage", /):
-        return await self.profile.api.hass.async_add_executor_job(
+    @override  # MQTTConnection
+    async def _async_publish_raw(self, request: "MerossMessage", /):
+        return await self.parent.api.hass.async_add_executor_job(
             self.rl_publish, request
         )
-
-    @override
-    def on_connect(self):
-        mlq.MQTTConnection.on_connect(self)
-        MQTTAppClient.on_connect(self)
-
-    on_diconnect = mlq.MQTTConnection.on_disconnect
-    on_message = mlq.MQTTConnection.on_message  # type: ignore
 
     @override  # MQTTAppClient
     def on_publish(self):
@@ -280,7 +241,7 @@ class MerossProfile(mlq.MQTTProfile):
         if mc.KEY_MQTTDOMAIN in self.config:
             broker = HostAddress.build(self.config[mc.KEY_MQTTDOMAIN])  # type: ignore
             mqttconnection = MerossMQTTConnection(broker, self)
-            mqttconnection.schedule_connect(broker)
+            mqttconnection.schedule_connect()
 
         # compute the next cloud devlist query and setup the scheduled callback
         next_query_epoch = (
@@ -425,7 +386,7 @@ class MerossProfile(mlq.MQTTProfile):
         mqttconnection = self._get_mqttconnection(broker)
         mqttconnection.attach(device)
         if mqttconnection.state_inactive:
-            mqttconnection.schedule_connect(broker)
+            mqttconnection.schedule_connect()
 
     # interface: self
     @property
@@ -454,7 +415,7 @@ class MerossProfile(mlq.MQTTProfile):
                 return
             broker = HostAddress.build(domain)
             for mqttconnection in mqttconnections:
-                if mqttconnection.broker == broker:
+                if mqttconnection.id == broker:
                     return
             mqttconnection = await self._async_get_mqttconnection(broker)
             if mqttconnection:
@@ -492,7 +453,7 @@ class MerossProfile(mlq.MQTTProfile):
             else:
                 return None
         try:
-            await asyncio.wait_for(await mqttconnection.async_connect(broker), 5)
+            await asyncio.wait_for(await mqttconnection.async_connect(), 5)
             return mqttconnection
         except Exception as exception:
             self.log_exception(

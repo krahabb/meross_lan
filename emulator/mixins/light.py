@@ -12,11 +12,11 @@ from custom_components.meross_lan.merossclient.protocol import (
 )
 
 if TYPE_CHECKING:
-    from . import MerossEmulator, MerossEmulatorDescriptor
+    from . import Emulator, EmulatorDescriptor
 
 
-class LightMixin(MerossEmulator if TYPE_CHECKING else object):
-    def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
+class LightMixin(Emulator if TYPE_CHECKING else object):
+    def __init__(self, descriptor: "EmulatorDescriptor", key):
         super().__init__(descriptor, key)
 
         try:

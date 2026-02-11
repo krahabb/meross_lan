@@ -4,7 +4,7 @@ from homeassistant.exceptions import InvalidStateError
 
 from ..cover import MLCover, cover
 from ..helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
-from ..merossclient import Transport
+from ..merossclient.client import Transport
 from ..number import MLConfigNumber
 from ..switch import MLSwitch
 

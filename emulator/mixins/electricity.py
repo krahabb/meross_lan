@@ -10,15 +10,15 @@ from custom_components.meross_lan.merossclient.protocol import (
     namespaces as mn,
 )
 
-from . import MerossEmulator
+from . import Emulator
 
 if TYPE_CHECKING:
     from custom_components.meross_lan.merossclient.protocol.types import control as mt_c
 
-    from . import MerossEmulatorDescriptor
+    from . import EmulatorDescriptor
 
 
-class ElectricityMixin(MerossEmulator if TYPE_CHECKING else object):
+class ElectricityMixin(Emulator if TYPE_CHECKING else object):
 
     if TYPE_CHECKING:
         electricity: mt_c.Electricity_C
@@ -28,7 +28,7 @@ class ElectricityMixin(MerossEmulator if TYPE_CHECKING else object):
     # this is 'shared' with ConsumptionXMixin to control tests output
     power: int
 
-    def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
+    def __init__(self, descriptor: "EmulatorDescriptor", key):
         super().__init__(descriptor, key)
         self.payload_electricity = descriptor.namespaces[
             mn.Appliance_Control_Electricity
@@ -76,19 +76,19 @@ class ElectricityMixin(MerossEmulator if TYPE_CHECKING else object):
         return mc.METHOD_GETACK, self.payload_electricity
 
 
-class ElectricityXMixin(MerossEmulator if TYPE_CHECKING else object):
+class ElectricityXMixin(Emulator if TYPE_CHECKING else object):
 
     if TYPE_CHECKING:
         electricityx: list[mt_c.ElectricityX_C]
 
     VOLTAGEX_AVERAGE = 228000  # in millivolts
 
-    def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
+    def __init__(self, descriptor: "EmulatorDescriptor", key):
         super().__init__(descriptor, key)
 
         self.payload_electricityx = self.update_namespace_state(
             mn.Appliance_Control_ElectricityX,
-            MerossEmulator.NSDefaultMode.MixOut,
+            Emulator.NSDefaultMode.MixOut,
             [
                 {
                     "channel": channel,
@@ -137,14 +137,14 @@ class ElectricityXMixin(MerossEmulator if TYPE_CHECKING else object):
         return mc.METHOD_GETACK, self.payload_electricityx
 
 
-class ConsumptionHMixin(MerossEmulator if TYPE_CHECKING else object):
+class ConsumptionHMixin(Emulator if TYPE_CHECKING else object):
 
-    def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
+    def __init__(self, descriptor: "EmulatorDescriptor", key):
         super().__init__(descriptor, key)
 
         self.update_namespace_state(
             mn.Appliance_Control_ConsumptionH,
-            MerossEmulator.NSDefaultMode.MixOut,
+            Emulator.NSDefaultMode.MixOut,
             [
                 {
                     "channel": channel,
@@ -156,14 +156,14 @@ class ConsumptionHMixin(MerossEmulator if TYPE_CHECKING else object):
         )
 
 
-class ConsumptionXMixin(MerossEmulator if TYPE_CHECKING else object):
+class ConsumptionXMixin(Emulator if TYPE_CHECKING else object):
     # this is a static default but we're likely using
     # the current 'power' state managed by the ElectricityMixin
     power = 0.0  # in mW
 
     BUG_RESET = True
 
-    def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
+    def __init__(self, descriptor: "EmulatorDescriptor", key):
         super().__init__(descriptor, key)
         self.payload_consumptionx = descriptor.namespaces[
             mn.Appliance_Control_ConsumptionX

@@ -1,7 +1,6 @@
 import asyncio
 from enum import Enum
 from json import JSONDecodeError
-import threading
 from time import time
 import typing
 from typing import TYPE_CHECKING
@@ -10,7 +9,7 @@ from zoneinfo import ZoneInfo
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.merossclient import (
     HostAddress,
-    MerossDeviceDescriptor,
+    DeviceDescriptor,
     extract_dict_payloads,
     get_element_by_key,
     get_element_by_key_safe,
@@ -19,8 +18,8 @@ from custom_components.meross_lan.merossclient import (
     update_dict_strict,
     update_dict_strict_by_key,
 )
-from custom_components.meross_lan.merossclient.httpclient import HttpClient
-from custom_components.meross_lan.merossclient.mqttclient import MQTTDeviceClient
+from custom_components.meross_lan.merossclient.client.http import HttpClient
+from custom_components.meross_lan.merossclient.client.mqtt import MQTTDeviceClient
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
@@ -46,7 +45,7 @@ if TYPE_CHECKING:
     )
 
 
-class MerossEmulatorDescriptor(MerossDeviceDescriptor):
+class EmulatorDescriptor(DeviceDescriptor):
     namespaces: "dict[MerossNamespaceType, MerossPayloadType]"
 
     __slots__ = ("namespaces",)
@@ -231,7 +230,7 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
                             )
 
 
-class MerossEmulator:
+class Emulator:
     """
     Based off the knowledge inside the MerossEmulatorDescriptor
     this class tries to reply to an incoming request by looking
@@ -304,12 +303,12 @@ class MerossEmulator:
         "__dict__",
     )
 
-    def __init__(self, descriptor: MerossEmulatorDescriptor, key: str, /):
+    def __init__(self, descriptor: EmulatorDescriptor, key: str, /):
         self.loop: asyncio.AbstractEventLoop = None  # type: ignore
         self.key = key
         self.descriptor = descriptor
         self.namespaces = namespaces = descriptor.namespaces
-        namespaces_default: "MerossEmulator.NSDefault" = {}
+        namespaces_default: "Emulator.NSDefault" = {}
         namespaces_default_ignore = []
         for cls in self.__class__.mro():
             if cls is object:
@@ -882,7 +881,7 @@ class MerossEmulator:
                 channel = p_payload_channel[key_idx]
                 try:
                     p_channel_state = get_element_by_key(p_state, key_idx, channel)
-                    if nsdefaultmode is MerossEmulator.NSDefaultMode.MixIn:
+                    if nsdefaultmode is Emulator.NSDefaultMode.MixIn:
                         p_channel_state |= p_payload_channel
                     else:
                         p_channel_state |= p_payload_channel | p_channel_state
@@ -891,7 +890,7 @@ class MerossEmulator:
         else:
             assert type(payload) is dict
             try:
-                if nsdefaultmode is MerossEmulator.NSDefaultMode.MixIn:
+                if nsdefaultmode is Emulator.NSDefaultMode.MixIn:
                     p_namespace[ns.key] |= payload
                 else:
                     p_namespace[ns.key] = payload | p_namespace[ns.key]
@@ -915,12 +914,8 @@ class MerossEmulator:
             mqtt_client.topic_publish,
             mc.HEADER_TRIGGERSRC_DEVICE,
         ).json
-
-        def _mqtt_publish():
-            self._log_message("TX(MQTT)", message)
-            mqtt_client.publish(mqtt_client.topic_publish, message)
-
-        self.loop.call_soon_threadsafe(_mqtt_publish)
+        self._log_message("TX(MQTT)", message)
+        mqtt_client.publish(mqtt_client.topic_publish, message)
 
     def _mqtt_setup(self):
         broker = self.descriptor.main_broker
@@ -930,7 +925,7 @@ class MerossEmulator:
         mqtt_client.on_connect = self._mqtt_connect
         mqtt_client.on_disconnect = self._mqtt_disconnect
         mqtt_client.on_message = self._mqtt_message
-        mqtt_client.safe_start(broker)
+        mqtt_client.safe_start()
 
     def _mqtt_shutdown(self):
         self.mqtt_client.safe_stop()

@@ -6,18 +6,18 @@ from custom_components.meross_lan.merossclient.protocol import (
     namespaces as mn,
 )
 
-from . import MerossEmulator
+from . import Emulator
 
 
-class FanMixin(MerossEmulator if TYPE_CHECKING else object):
+class FanMixin(Emulator if TYPE_CHECKING else object):
 
-    NAMESPACES_DEFAULT: "MerossEmulator.NSDefault" = {
+    NAMESPACES_DEFAULT: "Emulator.NSDefault" = {
         mn.Appliance_Control_Fan: (
-            MerossEmulator.NSDefaultMode.MixOut,
+            Emulator.NSDefaultMode.MixOut,
             {mc.KEY_CHANNEL: 0, mc.KEY_SPEED: 0, mc.KEY_MAXSPEED: 4},
         ),
         mn.Appliance_Control_FilterMaintenance: (
-            MerossEmulator.NSDefaultMode.MixOut,
+            Emulator.NSDefaultMode.MixOut,
             {mc.KEY_CHANNEL: 0, mc.KEY_LIFE: 100, mc.KEY_LMTIME: 0},
         ),
     }

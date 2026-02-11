@@ -31,7 +31,8 @@ from custom_components.meross_lan.helpers import (
     meross_profile as mlp,
     mqtt_profile as mlq,
 )
-from custom_components.meross_lan.merossclient import Transport, cloudapi, logging
+from custom_components.meross_lan.merossclient import cloudapi, logging
+from custom_components.meross_lan.merossclient.client import Transport
 from custom_components.meross_lan.merossclient.protocol import const as mc, md5hexdigest
 from custom_components.meross_lan.merossclient.protocol.message import json_loads
 import emulator
@@ -86,7 +87,7 @@ if TYPE_CHECKING:
         MerossMessage,
         MerossResponse,
     )
-    from emulator import MerossEmulator
+    from emulator import Emulator
 
 LOGGER = logging.getLogger("meross_lan.tests")
 
@@ -666,7 +667,7 @@ def build_emulator(
     uuid: str = tc.MOCK_DEVICE_UUID,
     broker: str | None = None,
     userId: int | None = None,
-) -> "MerossEmulator":
+) -> "Emulator":
     # Watchout: this call will not use the uuid and key set
     # in the filename, just DEFAULT_UUID and DEFAULT_KEY
     return emulator.build_emulator(
@@ -683,7 +684,7 @@ def build_emulator_for_profile(
     *,
     model: str | None = None,
     device_id=tc.MOCK_DEVICE_UUID,
-) -> "MerossEmulator":
+) -> "Emulator":
     """
     This call will setup the emulator patching its configuration
     in order to be 'binded' to the provided cloud profile data.
@@ -725,7 +726,7 @@ def build_emulator_for_profile(
 
 
 def build_emulator_config_entry(
-    emulator: "MerossEmulator", config_data: "Mapping | None" = None
+    emulator: "Emulator", config_data: "Mapping | None" = None
 ):
     """
     Builds a consistent config_entry for an emulated device with HTTP communication.
@@ -767,7 +768,7 @@ def build_emulators(included_uuid: "Iterable[str] | None" = None):
 class EmulatorContext(contextlib.AbstractContextManager):
     def __init__(
         self,
-        emulator: "MerossEmulator | str",
+        emulator: "Emulator | str",
         aioclient_mock: "AiohttpClientMocker",
         *,
         frozen_time: "_TimeFactory | None" = None,
@@ -851,7 +852,7 @@ class DeviceContext(ConfigEntryMocker):
         self,
         request: "FixtureRequest",
         hass: "HomeAssistant",
-        emulator: "MerossEmulator | str",
+        emulator: "Emulator | str",
         **kwargs: "Unpack[Args]",
     ):
         if isinstance(emulator, str):
@@ -1098,18 +1099,18 @@ class CloudApiMocker(contextlib.AbstractContextManager):
 class MQTTConnectionMocker(contextlib.AbstractContextManager):
     def __init__(self, hass: "HomeAssistant"):
 
-        self.async_mqtt_publish_patcher = patch.object(
+        self.async_publish_raw_patcher = patch.object(
             mlq.MQTTConnection,
-            "async_mqtt_publish",
+            "async_publish_raw",
             autospec=True,
-            side_effect=self.async_mqtt_publish,
+            side_effect=self.async_publish_raw,
         )
 
-        self.async_mqtt_request_patcher = patch.object(
+        self.async_request_raw_patcher = patch.object(
             mlq.MQTTConnection,
-            "async_mqtt_request",
+            "async_request_raw",
             autospec=True,
-            side_effect=self.async_mqtt_request,
+            side_effect=self.async_request_raw,
         )
 
         async def _async_identify_device(
@@ -1136,26 +1137,26 @@ class MQTTConnectionMocker(contextlib.AbstractContextManager):
             side_effect=_async_identify_device,
         )
 
-    async def async_mqtt_request(
+    async def async_request_raw(
         self, mqttconnection: mlq.MQTTConnection, request: "MerossMessage"
     ) -> "MerossResponse":
         raise asyncio.TimeoutError()
 
-    async def async_mqtt_publish(
+    async def async_publish_raw(
         self, mqttconnection: mlq.MQTTConnection, request: "MerossMessage"
     ) -> None:
         return None
 
     def __enter__(self):
-        self.async_mqtt_publish_mock = self.async_mqtt_publish_patcher.start()
-        self.async_mqtt_request_mock = self.async_mqtt_request_patcher.start()
+        self.async_publish_raw_mock = self.async_publish_raw_patcher.start()
+        self.async_request_raw_mock = self.async_request_raw_patcher.start()
         self.async_identify_device_mock = self.async_identify_device_patcher.start()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.async_identify_device_patcher.stop()
-        self.async_mqtt_request_patcher.stop()
-        self.async_mqtt_publish_patcher.stop()
+        self.async_request_raw_patcher.stop()
+        self.async_publish_raw_patcher.stop()
         return None
 
 
@@ -1177,7 +1178,7 @@ class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
         if api and api._mqtt_connection:
             from homeassistant.components.mqtt.client import UNSUBSCRIBE_COOLDOWN
 
-            await api._mqtt_connection.async_mqtt_unsubscribe()
+            await api._mqtt_connection.async_disconnect()
             await asyncio.sleep(UNSUBSCRIBE_COOLDOWN)
 
         return None
@@ -1192,7 +1193,7 @@ class MerossMQTTMocker(MQTTConnectionMocker):
     def __init__(self, hass: "HomeAssistant"):
         super().__init__(hass)
 
-        def _safe_start(_self: mlp.MerossMQTTConnection, *args, **kwargs):
+        def _safe_start(_self: mlp.MerossMQTTConnection):
             """this runs in an executor"""
             _self._stateext = _self.STATE_CONNECTED
             hass.add_job(_self.on_connect)
@@ -1204,7 +1205,7 @@ class MerossMQTTMocker(MQTTConnectionMocker):
             side_effect=_safe_start,
         )
 
-        def _safe_stop(_self: mlp.MerossMQTTConnection, *args, **kwargs):
+        def _safe_stop(_self: mlp.MerossMQTTConnection):
             """this runs in an executor"""
             _self._stateext = _self.STATE_DISCONNECTED
             hass.add_job(_self.on_disconnect)

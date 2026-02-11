@@ -79,11 +79,16 @@ def skip_notifications_fixture():
 def disable_debug_fixture():
     """Disable development debug code so to test in a production env."""
     with (
-        patch("custom_components.meross_lan.helpers.meross_profile.MEROSSDEBUG", None),
-        patch("custom_components.meross_lan.helpers.component_api.MEROSSDEBUG", None),
         patch("custom_components.meross_lan.merossclient.MEROSSDEBUG", None),
         patch("custom_components.meross_lan.merossclient.cloudapi.MEROSSDEBUG", None),
-        patch("custom_components.meross_lan.merossclient.httpclient.MEROSSDEBUG", None),
+        patch(
+            "custom_components.meross_lan.merossclient.client.http.MEROSSDEBUG",
+            None,
+        ),
+        patch(
+            "custom_components.meross_lan.merossclient.client.mqtt.MEROSSDEBUG",
+            None,
+        ),
     ):
         yield
 
@@ -153,7 +158,7 @@ def aioclient_mock(hass):
 
     with mock_aiohttp_client() as aioclient_mocker:
 
-        from custom_components.meross_lan.merossclient.httpclient import (
+        from custom_components.meross_lan.merossclient.client.http import (
             HttpClient,
         )
 
@@ -163,7 +168,7 @@ def aioclient_mock(hass):
             return HttpClient._SESSION
 
         with patch(
-            "custom_components.meross_lan.merossclient.httpclient.HttpClient._get_or_create_client_session",
+            "custom_components.meross_lan.merossclient.client.http.HttpClient._get_or_create_client_session",
             side_effect=create_session,
         ):
             yield aioclient_mocker

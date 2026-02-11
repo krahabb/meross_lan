@@ -104,7 +104,7 @@ class _Logger(logging.Logger if TYPE_CHECKING else object):
         super()._log(level, msg, args, **kwargs)
 
 
-class Loggable(abc.ABC):
+class Loggable(metaclass=abc.ABCMeta):
     """
     Helper base class for logging instance name/id related info.
     Derived classes can customize this in different flavours:
@@ -129,6 +129,19 @@ class Loggable(abc.ABC):
 
     __SLOTS__ = ("id", "logtag", "parent")
 
+    @staticmethod
+    def abstract(func):
+        """Decorator to mark methods as abstract, without using ABCMeta."""
+        func.__isabstractmethod__ = True
+        # func.__call__ = lambda *args, **kwargs: NotImplemented
+        return abc.abstractmethod(func)
+
+    @staticmethod
+    def virtual(func):
+        """Decorator to mark methods as virtual, without using ABCMeta."""
+        func.__call__ = lambda *args, **kwargs: None
+        return func
+
     @classmethod
     def _calc_slots(cls, *slots: "Unpack[tuple[str, ...]]"):
         _slots = set(slots)
@@ -139,9 +152,13 @@ class Loggable(abc.ABC):
                 pass
         return _slots
 
-    def __init__(self, id, parent: "LoggerType", /, **kwargs: "Unpack[Args]"):
+    def __init__(
+        self, id, parent: "LoggerType | None" = None, /, **kwargs: "Unpack[Args]"
+    ):
         self.id = id
-        self.parent = parent
+        self.parent = parent or getLogger(
+            self.__class__.__module__ + "." + self.__class__.__name__
+        )
         self.configure_logger()
         self.log(VERBOSE, "init")
 

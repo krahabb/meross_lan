@@ -8,7 +8,7 @@ from ..binary_sensor import MLBinarySensor
 from ..cover import MLCover
 from ..helpers import clamp
 from ..helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
-from ..merossclient import Transport
+from ..merossclient.client import Transport
 from ..number import MLConfigNumber, MLEmulatedNumber
 from ..switch import MLSwitch
 

@@ -11,22 +11,23 @@ from typing import TYPE_CHECKING, override
 import aiohttp
 from yarl import URL
 
-from . import MEROSSDEBUG, MerossClient, logging
-from .protocol import AESCipher, MerossKeyError, const as mc, md5hexdigest
-from .protocol.message import MerossMessage, MerossResponse
+from . import AbstractClient
+from .. import MEROSSDEBUG, logging
+from ..protocol import AESCipher, MerossKeyError, const as mc, md5hexdigest
+from ..protocol.message import MerossMessage, MerossResponse
 
 if TYPE_CHECKING:
     from typing import ClassVar, NotRequired, Unpack
 
-    from .logging import LoggerType
-    from .protocol.types import MerossHeaderType, MerossRequestType
+    from ..logging import LoggerType
+    from ..protocol.types import MerossHeaderType, MerossRequestType
 
 
 class TerminatedException(Exception):
     pass
 
 
-class HttpClient(MerossClient):
+class HttpClient(AbstractClient):
 
     class Cipher(AESCipher):
         def __init__(self, uuid: str, key: str, mac: str, /):
@@ -36,10 +37,10 @@ class HttpClient(MerossClient):
 
     if TYPE_CHECKING:
 
-        class Args(MerossClient.Args):
+        class Args(AbstractClient.Args):
             session: NotRequired[aiohttp.ClientSession]
 
-        class RequestArgs(MerossClient.RequestArgs):
+        class RequestArgs(AbstractClient.RequestArgs):
             pass
 
         SESSION_MAXIMUM_CONNECTIONS: ClassVar
@@ -50,7 +51,7 @@ class HttpClient(MerossClient):
         _cipher: Cipher | None
         _key_header: MerossHeaderType
 
-    TRANSPORT = MerossClient.Transport.HTTP  # type: ignore[override]
+    TRANSPORT = AbstractClient.Transport.HTTP  # type: ignore[override]
 
     SESSION_MAXIMUM_CONNECTIONS = 50
     SESSION_MAXIMUM_CONNECTIONS_PER_HOST = 1
@@ -89,7 +90,7 @@ class HttpClient(MerossClient):
             await HttpClient._SESSION.close()
             HttpClient._SESSION = None
 
-    __slots__ = MerossClient._calc_slots(
+    __slots__ = AbstractClient._calc_slots(
         "_host",
         "_requesturl",
         "_session",

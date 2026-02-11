@@ -17,7 +17,8 @@ from ..const import (
     CONF_OBFUSCATE,
     DOMAIN,
 )
-from ..merossclient import Transport, logging
+from ..merossclient import logging
+from ..merossclient.client import Transport
 from ..merossclient.protocol.message import json_dumps
 from .obfuscate import (
     OBFUSCATE_DEVICE_ID_MAP,

@@ -58,7 +58,7 @@ from custom_components.meross_lan.merossclient.protocol.namespaces import (
     thermostat as mn_t,
 )
 
-from .mixins import MerossEmulator, MerossEmulatorDescriptor
+from .mixins import Emulator, EmulatorDescriptor
 
 if TYPE_CHECKING:
     from typing import Iterable
@@ -71,7 +71,7 @@ def build_emulator(
     uuid: str,
     broker: str | None = None,
     userId: int | None = None,
-) -> MerossEmulator:
+) -> Emulator:
     """
     Given a supported 'tracefile' (either a legacy trace .csv or a diagnostic .json)
     parse it and build the appropriate emulator instance with the give 'uuid' and 'key'
@@ -79,9 +79,7 @@ def build_emulator(
     as this appears to be consistent with real devices config
     """
     print(f"Initializing uuid({uuid}):", end="")
-    descriptor = MerossEmulatorDescriptor(
-        tracefile, uuid=uuid, broker=broker, userId=userId
-    )
+    descriptor = EmulatorDescriptor(tracefile, uuid=uuid, broker=broker, userId=userId)
     ability = descriptor.ability
     digest = descriptor.digest
     mixin_classes = []
@@ -139,7 +137,7 @@ def build_emulator(
 
         mixin_classes.append(PhysicalLockMixin)
 
-    mixin_classes.append(MerossEmulator)
+    mixin_classes.append(Emulator)
     # build a label to cache the set
     class_name = ""
     for m in mixin_classes:
@@ -230,7 +228,7 @@ def run(argv):
 
     app = web.Application()
 
-    def web_post_handler(emulator: MerossEmulator):
+    def web_post_handler(emulator: Emulator):
         async def _callback(request: web.Request) -> web.Response:
             try:
                 return web.Response(

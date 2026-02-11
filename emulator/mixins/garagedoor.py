@@ -15,10 +15,10 @@ from custom_components.meross_lan.merossclient.protocol import (
 )
 
 if TYPE_CHECKING:
-    from . import MerossEmulator
+    from . import Emulator
 
 
-class GarageDoorMixin(MerossEmulator if TYPE_CHECKING else object):
+class GarageDoorMixin(Emulator if TYPE_CHECKING else object):
 
     OPENDURATION = 2
     CLOSEDURATION = 10

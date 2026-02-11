@@ -25,13 +25,9 @@ from ..const import (
     PARAM_TIMESTAMP_TOLERANCE,
 )
 from ..helpers.obfuscate import obfuscated_dict
-from ..merossclient import (
-    MerossDeviceDescriptor,
-    Transport,
-    get_active_broker,
-    is_device_online,
-)
-from ..merossclient.httpclient import HttpClient, TerminatedException
+from ..merossclient import DeviceDescriptor, get_active_broker, is_device_online
+from ..merossclient.client import Transport
+from ..merossclient.client.http import HttpClient, TerminatedException
 from ..merossclient.protocol import MerossError
 from ..merossclient.protocol.message import (
     MerossMessage,
@@ -242,7 +238,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         this list will be excluded from enumeration since it's redundant/exposing sensitive info
         or simply crashes/hangs the device."""
 
-        descriptor: Final[MerossDeviceDescriptor]
+        descriptor: Final[DeviceDescriptor]
         tz: tzinfo
 
         # these are set from ConfigEntry
@@ -256,8 +252,8 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         device_timestamp: int
 
         _device_entries: dict[Any, dr.DeviceEntry]
-        _bluetooth: ComponentApi.BTDevice | None
-        _bluetooth_active: ComponentApi.BTDevice | None
+        _bluetooth: ComponentApi.BTClient | None
+        _bluetooth_active: ComponentApi.BTClient | None
         _http: HttpClient | None
         _http_active: HttpClient | None
         _http_lastrequest: float
@@ -461,7 +457,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                 "does not match the configured 'device_id'. "
                 "Please delete the entry and reconfigure it"
             )
-        descriptor = MerossDeviceDescriptor(config_entry.data[mlc.CONF_PAYLOAD])
+        descriptor = DeviceDescriptor(config_entry.data[mlc.CONF_PAYLOAD])
         if device_id != descriptor.uuid:
             # this could happen (#341 raised the suspect) if a working device
             # 'suddenly' starts talking with another one and doesn't recognize
@@ -689,7 +685,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
 
         if conf_protocol is Transport.BLUETOOTH:
             if not self._bluetooth:
-                if _bluetooth := self.api.get_bt_device(self.id):
+                if _bluetooth := self.api.get_bt_client(self.id):
                     _bluetooth.attach(self)
         elif self._bluetooth:
             self._bluetooth.detach()
@@ -779,7 +775,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                 _mqtt_connection.detach(self)
         else:
             if _mqtt_connection:
-                if _mqtt_connection.profile == _profile:
+                if _mqtt_connection.parent == _profile:
                     return
                 _mqtt_connection.detach(self)
 
@@ -1502,7 +1498,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
             if self._mqtt_publish.is_cloud_connection:
                 self.cloudpoll_requests += 1  # type: ignore
             return self._receive(
-                await self._mqtt_publish.async_mqtt_request(request), Transport.MQTT
+                await self._mqtt_publish.async_request_raw(request), Transport.MQTT
             )
         except Exception as e:
             if self._mqtt_publish:
@@ -2074,7 +2070,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
     def schedule_poll(self, task_name: str):
         self.async_create_task(self.async_poll_full(), task_name, False)
 
-    def bt_attached(self, bt_device: "ComponentApi.BTDevice", /):
+    def bt_attached(self, bt_device: "ComponentApi.BTClient", /):
         if self._bluetooth:
             if self._bluetooth is bt_device:
                 return
@@ -2144,10 +2140,12 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         self.log(
             self.DEBUG,
             "mqtt_attached to %s",
-            self.loggable_broker(mqtt_connection.broker),
+            self.loggable_broker(mqtt_connection.id),
         )
         self._mqtt_connection = mqtt_connection
-        self._topic_response = mqtt_connection.topic_command
+        self._topic_response = (
+            mqtt_connection.from_
+        )  # TODO: remove this _topic_response
         if mqtt_connection.is_connected:
             self.mqtt_connected()
 
@@ -2156,7 +2154,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         self.log(
             self.DEBUG,
             "mqtt_detached from %s",
-            self.loggable_broker(self._mqtt_connection.broker),
+            self.loggable_broker(self._mqtt_connection.id),
         )
         if self._mqtt_connected:
             self.mqtt_disconnected()
@@ -2168,11 +2166,11 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         self.log(
             self.DEBUG,
             "mqtt_connected to %s",
-            self.loggable_broker(_mqtt_connection.broker),
+            self.loggable_broker(_mqtt_connection.id),
         )
         self._mqtt_connected = _mqtt_connection
         self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT_BROKER)
-        if _mqtt_connection.profile.allow_mqtt_publish:
+        if _mqtt_connection.parent.allow_mqtt_publish:
             self._mqtt_publish = _mqtt_connection
             if not self.online:
                 self.schedule_poll("mqtt_connected")
@@ -2188,7 +2186,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         self.log(
             self.DEBUG,
             "mqtt_disconnected from %s",
-            self.loggable_broker(self._mqtt_connection.broker),
+            self.loggable_broker(self._mqtt_connection.id),
         )
         self._mqtt_connected = self._mqtt_publish = self._mqtt_active = None
         self.device_debug = None
@@ -2459,7 +2457,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         broker = get_active_broker(p_debug)
         mqtt_connection = self._mqtt_connection
         if mqtt_connection:
-            if mqtt_connection.broker.host == broker.host:
+            if mqtt_connection.id.host == broker.host:
                 if self._mqtt_connected and not self._mqtt_active:
                     self._mqtt_active = mqtt_connection
                     self.sensor_protocol.update_attr_active(Transport.MQTT)

@@ -17,7 +17,7 @@ from custom_components.meross_lan.merossclient.protocol.namespaces import (
     thermostat as mn_t,
 )
 
-from . import MerossEmulator
+from . import Emulator
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar, Mapping
@@ -27,18 +27,18 @@ if TYPE_CHECKING:
         thermostat as mt_t,
     )
 
-    from . import MerossEmulatorDescriptor
+    from . import EmulatorDescriptor
 
 
-class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
+class ThermostatMixin(Emulator if TYPE_CHECKING else object):
 
-    NAMESPACES_DEFAULT: "MerossEmulator.NSDefault" = {
+    NAMESPACES_DEFAULT: "Emulator.NSDefault" = {
         mn.Appliance_Control_TempUnit: (
-            MerossEmulator.NSDefaultMode.MixOut,
+            Emulator.NSDefaultMode.MixOut,
             {mc.KEY_CHANNEL: 0, "tempUnit": 1},
         ),
         mn_t.Appliance_Control_Thermostat_CtlRange: (
-            MerossEmulator.NSDefaultMode.MixOut,
+            Emulator.NSDefaultMode.MixOut,
             {
                 mc.KEY_CHANNEL: 0,
                 "max": 11000,
@@ -48,11 +48,11 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
             },
         ),
         mn_t.Appliance_Control_Thermostat_HoldAction: (
-            MerossEmulator.NSDefaultMode.MixOut,
+            Emulator.NSDefaultMode.MixOut,
             {mc.KEY_CHANNEL: 0, "mode": 0, "time": 0},
         ),
         mn_t.Appliance_Control_Thermostat_Timer: (
-            MerossEmulator.NSDefaultMode.MixOut,
+            Emulator.NSDefaultMode.MixOut,
             {
                 mc.KEY_CHANNEL: 0,
                 "type": mc.MTS960_TIMER_TYPE_COUNTDOWN,
@@ -105,7 +105,7 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
     CURRENT_TEMPERATURE_DELTA = 5  # amplitude (half)
     CURRENT_TEMPERATURE_PERIOD = 300  # period of full cycle (seconds)
 
-    def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
+    def __init__(self, descriptor: "EmulatorDescriptor", key):
         for _type in self.MAP_DEVICE:
             if descriptor.type.startswith(_type):
                 break
@@ -121,14 +121,14 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
         if ns in ability:
             self.update_namespace_state(
                 ns,
-                MerossEmulator.NSDefaultMode.MixOut,
+                Emulator.NSDefaultMode.MixOut,
                 self.MAP_DEVICE[_type][1],
             )
         ns = mn_t.Appliance_Control_Thermostat_DeadZone
         if ns in ability:
             self.update_namespace_state(
                 ns,
-                MerossEmulator.NSDefaultMode.MixOut,
+                Emulator.NSDefaultMode.MixOut,
                 {
                     "channel": 0,
                     "value": 0.5 * self.device_scale,
@@ -140,7 +140,7 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
         if ns in ability:
             self.update_namespace_state(
                 ns,
-                MerossEmulator.NSDefaultMode.MixOut,
+                Emulator.NSDefaultMode.MixOut,
                 {
                     "channel": 0,
                     "value": 0.5 * self.device_scale,
@@ -154,7 +154,7 @@ class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
         if ns in ability:
             self.update_namespace_state(
                 ns,
-                MerossEmulator.NSDefaultMode.MixOut,
+                Emulator.NSDefaultMode.MixOut,
                 {
                     "channel": 0,
                     "value": 32 * self.device_scale,
