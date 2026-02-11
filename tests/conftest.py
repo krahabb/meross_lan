@@ -32,7 +32,7 @@ pytest_plugins = "pytest_homeassistant_custom_component"
 # but we can't autouse a simple fixture for that since the recorder
 # need to be initialized first
 @pytest.fixture(autouse=True)
-def auto_enable(request: pytest.FixtureRequest):
+def auto_enable(request: pytest.FixtureRequest, disable_debug):
     """
     Special initialization fixture managing recorder mocking.
     For some tests we need a working recorder but recorder_mock
@@ -65,8 +65,8 @@ def auto_enable(request: pytest.FixtureRequest):
 # This fixture is used to prevent HomeAssistant from attempting to create and dismiss persistent
 # notifications. These calls would fail without this fixture since the persistent_notification
 # integration is never loaded during a test.
-@pytest.fixture(name="skip_notifications", autouse=True)
-def skip_notifications_fixture():
+@pytest.fixture(autouse=True)
+def skip_notifications():
     """Skip notification calls."""
     with (
         patch("homeassistant.components.persistent_notification.async_create"),
@@ -75,8 +75,8 @@ def skip_notifications_fixture():
         yield
 
 
-@pytest.fixture(name="disable_debug", autouse=True)
-def disable_debug_fixture():
+@pytest.fixture()
+def disable_debug():
     """Disable development debug code so to test in a production env."""
     with (
         patch("custom_components.meross_lan.merossclient.MEROSSDEBUG", None),
