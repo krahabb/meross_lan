@@ -9,7 +9,7 @@ from time import time
 from typing import TYPE_CHECKING, override
 
 if TYPE_CHECKING:
-    from typing import Any, Final, Protocol, TypedDict, Unpack
+    from typing import Any, Callable, Final, Protocol, TypedDict, Unpack
 
     NOTSET: Final
     VERBOSE: Final
@@ -118,6 +118,8 @@ class Loggable(metaclass=abc.ABCMeta):
         id: Final[Any]
         parent: Final[LoggerType]
 
+        time: Final[Callable[[], float]]
+
         class Args(TypedDict):
             pass
 
@@ -127,7 +129,7 @@ class Loggable(metaclass=abc.ABCMeta):
     WARNING = WARNING
     CRITICAL = CRITICAL
 
-    __SLOTS__ = ("id", "logtag", "parent")
+    __SLOTS__ = ("id", "logtag", "parent", "time")
 
     @staticmethod
     def abstract(func):
@@ -159,6 +161,7 @@ class Loggable(metaclass=abc.ABCMeta):
         self.parent = parent or getLogger(
             self.__class__.__module__ + "." + self.__class__.__name__
         )
+        self.time = time
         self.configure_logger()
         self.log(VERBOSE, "init")
 

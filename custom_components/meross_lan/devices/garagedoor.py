@@ -1,4 +1,3 @@
-from time import time
 from typing import TYPE_CHECKING, override
 
 from homeassistant.helpers import entity_registry as er
@@ -506,7 +505,7 @@ class MLGarage(MLCover):
             # If we're here, we still havent received a proper 'physical close'
             # because our configured closeduration is too short
             # or the garage didnt close at all
-            if self._transition_duration < (time() - self._transition_start):
+            if self._transition_duration < (self.time() - self._transition_start):
                 self._update_transition_duration(self._transition_duration + 1)
 
         self.is_closing = False

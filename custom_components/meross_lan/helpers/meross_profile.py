@@ -4,7 +4,6 @@ meross_lan module interface to access Meross Cloud services
 
 import asyncio
 from contextlib import asynccontextmanager
-from time import time
 from typing import TYPE_CHECKING, override
 
 from homeassistant.helpers import storage
@@ -247,7 +246,7 @@ class MerossProfile(mlq.MQTTProfile):
         next_query_epoch = (
             self._device_info_time + mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
         )
-        next_query_delay = next_query_epoch - time()
+        next_query_delay = next_query_epoch - self.time()
         if next_query_delay < mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT:
             # we'll give some breath to the init process
             next_query_delay = mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT
@@ -468,7 +467,7 @@ class MerossProfile(mlq.MQTTProfile):
         """
         try:
             data = self._data
-            if (_time := time()) < data[
+            if (_time := self.time()) < data[
                 self.KEY_TOKEN_REQUEST_TIME
             ] + mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT:
                 return None
@@ -531,7 +530,7 @@ class MerossProfile(mlq.MQTTProfile):
 
     def _need_query_device_info(self):
         return (
-            time() - self._device_info_time
+            self.time() - self._device_info_time
         ) > mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
 
     async def _async_query_device_info(self):
@@ -549,7 +548,7 @@ class MerossProfile(mlq.MQTTProfile):
                     self._device_info_time, dt_util.DEFAULT_TIME_ZONE
                 ).isoformat(),
             )
-            self._device_info_time = time()
+            self._device_info_time = self.time()
             if self.config.get(mlc.CONF_CHECK_FIRMWARE_UPDATES):
                 with self.exception_warning("_async_query_device_info - latestversion"):
                     self._data[self.KEY_LATEST_VERSION] = (

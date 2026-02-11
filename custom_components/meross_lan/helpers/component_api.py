@@ -1,6 +1,5 @@
 import asyncio
 import importlib
-from time import time
 from typing import TYPE_CHECKING, override
 import zoneinfo
 
@@ -238,7 +237,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
             self.parent.async_create_task(
                 self.async_publish_raw(
                     MerossPushReply(
-                        message, {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}}
+                        message, {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(self.time())}}
                     ),
                 ),
                 "._handle_Appliance_System_Clock",

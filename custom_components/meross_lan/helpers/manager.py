@@ -1,7 +1,7 @@
 import abc
 import asyncio
 import os
-from time import localtime, strftime, time
+from time import localtime, strftime
 from typing import TYPE_CHECKING, final
 import weakref
 
@@ -577,7 +577,7 @@ class ConfigEntryManager(EntityManager):
         """
         try:
             self.log(self.DEBUG, "Tracing start")
-            epoch = time()
+            epoch = self.time()
             hass = self.api.hass
 
             def _trace_open():
@@ -719,7 +719,7 @@ class ConfigEntryManager(EntityManager):
     def trace_log(self, level: int, msg: str, /):
         try:
             columns = [
-                strftime("%Y/%m/%d - %H:%M:%S", localtime(time())),
+                strftime("%Y/%m/%d - %H:%M:%S", localtime(self.time())),
                 "",  # rxtx
                 Transport.AUTO,  # protocol
                 "LOG",  # method

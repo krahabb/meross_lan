@@ -1,6 +1,5 @@
 import enum
 from functools import cached_property
-from time import time
 from typing import TYPE_CHECKING
 
 from homeassistant.components import climate, sensor
@@ -233,7 +232,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
             # invalidate each other and just apply the latest (supposedly stable) one.
             # See also https://github.com/krahabb/meross_lan/issues/593 for a particularly
             # difficult case (even tho a bit paroxysmal).
-            delay = time() - self._track_last_epoch
+            delay = self.time() - self._track_last_epoch
             self._track_unsub = self.manager.schedule_callback(
                 (
                     self.TRACKING_DELAY
@@ -368,7 +367,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
                         )
                         return
                     adjust_temperature = number_adjust_temperature.native_min_value
-                self._track_last_epoch = time()
+                self._track_last_epoch = self.time()
                 self.manager.async_create_task(
                     number_adjust_temperature.async_set_native_value(
                         adjust_temperature

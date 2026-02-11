@@ -1,5 +1,4 @@
 import enum
-from time import time
 from typing import TYPE_CHECKING, override
 
 from . import MtsThermostatClimate, mc, mlc, mn_t
@@ -276,7 +275,7 @@ class Mts960Climate(MtsThermostatClimate):
                 onduration = round(
                     self.number_timer_cycle_on_duration.native_value or 1
                 )
-                device_timestamp = round(time() - self.manager.device_timedelta)
+                device_timestamp = round(self.time() - self.manager.device_timedelta)
                 await self._async_request_timer(
                     mc.MTS960_TIMER_TYPE_CYCLE,
                     {
@@ -288,7 +287,7 @@ class Mts960Climate(MtsThermostatClimate):
                 )
             case Mts960Climate.Preset.TIMER_COUNTDOWN_ON:
                 duration = round(self.number_timer_down_duration.native_value or 1)
-                device_timestamp = round(time() - self.manager.device_timedelta)
+                device_timestamp = round(self.time() - self.manager.device_timedelta)
                 await self._async_request_timer(
                     mc.MTS960_TIMER_TYPE_COUNTDOWN,
                     {
@@ -299,7 +298,7 @@ class Mts960Climate(MtsThermostatClimate):
                 )
             case Mts960Climate.Preset.TIMER_COUNTDOWN_OFF:
                 duration = round(self.number_timer_down_duration.native_value or 1)
-                device_timestamp = round(time() - self.manager.device_timedelta)
+                device_timestamp = round(self.time() - self.manager.device_timedelta)
                 await self._async_request_timer(
                     mc.MTS960_TIMER_TYPE_COUNTDOWN,
                     {

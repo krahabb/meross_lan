@@ -1,7 +1,6 @@
 import abc
 import asyncio
 from contextlib import AbstractAsyncContextManager
-from time import time
 from typing import TYPE_CHECKING, override
 
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
@@ -470,7 +469,7 @@ class MQTTConnection(AbstractMQTTConnection):
     def _mqtt_transactions_clean(self):
         if self._mqtt_transactions:
             # check and cleanup stale transactions
-            epoch = time()
+            epoch = self.time()
             for mqtt_transaction in [
                 _t
                 for _t in self._mqtt_transactions.values()
@@ -790,7 +789,7 @@ class MQTTProfile(mlm.ConfigEntryManager):
     ):
         if self.is_tracing:
             self.trace(
-                time(),
+                self.time(),
                 message.payload,
                 message.namespace,
                 message.method,

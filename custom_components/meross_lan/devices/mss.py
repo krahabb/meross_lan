@@ -1,6 +1,5 @@
 from bisect import insort_right
 from datetime import datetime, timedelta
-from time import time
 from typing import TYPE_CHECKING, override
 
 from homeassistant.core import callback
@@ -536,7 +535,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
             # updated after the device midnight for today..else it is too
             # old to be good. Since we don't have actual device epoch we
             # 'guess' it is nicely synchronized so we'll use our time
-            devicetime = self.manager.get_device_datetime(time())
+            devicetime = self.manager.get_device_datetime(self.time())
             devicetime_today_midnight = datetime(
                 devicetime.year,
                 devicetime.month,
