@@ -312,69 +312,70 @@ async def _create_dhcp_discovery_flow(
         )
 
 
-async def test_dhcp_discovery_config_flow(hass: "HomeAssistant"):
-    result = await _create_dhcp_discovery_flow(
-        hass,
-        DhcpServiceInfo(
-            tc.MOCK_DEVICE_IP,
+async def test_dhcp_discovery_config_flow(hass: "HomeAssistant", aioclient_mock):
+    with helpers.EmulatorContext(mc.TYPE_MTS200, aioclient_mock) as emulator_context:
+        result = await _create_dhcp_discovery_flow(
+            hass,
+            DhcpServiceInfo(
+                emulator_context.host,
+                "",
+                fmt_macaddress(tc.MOCK_MACADDRESS),
+            ),
+        )
+        assert result, "Dhcp discovery didn't create the discovery flow"
+        assert result.get("step_id") == "device"
+
+
+async def test_dhcp_ignore_config_flow(hass: "HomeAssistant", aioclient_mock):
+    with helpers.EmulatorContext(mc.TYPE_MTS200, aioclient_mock) as emulator_context:
+        flow = hass.config_entries.flow
+
+        dhcp_service_info = DhcpServiceInfo(
+            emulator_context.host,
             "",
             fmt_macaddress(tc.MOCK_MACADDRESS),
-        ),
-    )
-    assert result, "Dhcp discovery didn't create the discovery flow"
-    assert result.get("step_id") == "device"
+        )
+        # create the initial discovery
+        result = await _create_dhcp_discovery_flow(hass, dhcp_service_info)
+        assert result, "Dhcp discovery didn't create the initial discovery flow"
+        assert result.get("step_id") == "device"
 
+        # now 'ignore' it
+        entry_unique_id = fmt_macaddress(tc.MOCK_MACADDRESS)
+        result = await flow.async_init(
+            mlc.DOMAIN,
+            context={"source": config_entries.SOURCE_IGNORE},
+            data={
+                "unique_id": entry_unique_id,
+                "title": "",
+            },
+        )
 
-async def test_dhcp_ignore_config_flow(hass: "HomeAssistant"):
+        assert not flow.async_progress_by_handler(mlc.DOMAIN)
 
-    flow = hass.config_entries.flow
+        # try dhcp rediscovery..should abort
+        result = await _create_dhcp_discovery_flow(hass, dhcp_service_info)
+        assert not result, "Dhcp discovery didn't ignored the discovery flow"
 
-    dhcp_service_info = DhcpServiceInfo(
-        tc.MOCK_DEVICE_IP,
-        "",
-        fmt_macaddress(tc.MOCK_MACADDRESS),
-    )
-    # create the initial discovery
-    result = await _create_dhcp_discovery_flow(hass, dhcp_service_info)
-    assert result, "Dhcp discovery didn't create the initial discovery flow"
-    assert result.get("step_id") == "device"
+        # now remove the ignored entry
+        ignored_entry = hass.config_entries.async_entry_for_domain_unique_id(
+            mlc.DOMAIN, entry_unique_id
+        )
+        assert ignored_entry
+        await hass.config_entries.async_remove(ignored_entry.entry_id)
+        await hass.async_block_till_done(wait_background_tasks=True)
 
-    # now 'ignore' it
-    entry_unique_id = fmt_macaddress(tc.MOCK_MACADDRESS)
-    result = await flow.async_init(
-        mlc.DOMAIN,
-        context={"source": config_entries.SOURCE_IGNORE},
-        data={
-            "unique_id": entry_unique_id,
-            "title": "",
-        },
-    )
+        """
+        I expect the DHCP re-discovery kicks in automatically but this check is not not
+        working...I'm giving up atm
+        has_progress = False
+        for progress in hass.config_entries.flow.async_progress_by_handler(mlc.DOMAIN):
+            assert progress.get("context", {}).get("unique_id") == entry_unique_id
+            assert progress.get("step_id") == "device"
+            has_progress = True
 
-    assert not flow.async_progress_by_handler(mlc.DOMAIN)
-
-    # try dhcp rediscovery..should abort
-    result = await _create_dhcp_discovery_flow(hass, dhcp_service_info)
-    assert not result, "Dhcp discovery didn't ignored the discovery flow"
-
-    # now remove the ignored entry
-    ignored_entry = hass.config_entries.async_entry_for_domain_unique_id(
-        mlc.DOMAIN, entry_unique_id
-    )
-    assert ignored_entry
-    await hass.config_entries.async_remove(ignored_entry.entry_id)
-    await hass.async_block_till_done(wait_background_tasks=True)
-
-    """
-    I expect the DHCP re-discovery kicks in automatically but this check is not not
-    working...I'm giving up atm
-    has_progress = False
-    for progress in hass.config_entries.flow.async_progress_by_handler(mlc.DOMAIN):
-        assert progress.get("context", {}).get("unique_id") == entry_unique_id
-        assert progress.get("step_id") == "device"
-        has_progress = True
-
-    assert has_progress, "unignored entry did not progress"
-    """
+        assert has_progress, "unignored entry did not progress"
+        """
 
 
 async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclient_mock):
