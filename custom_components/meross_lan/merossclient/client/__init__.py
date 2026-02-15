@@ -4,13 +4,13 @@ from typing import TYPE_CHECKING
 
 from .. import DeviceDescriptor, logging
 from ..protocol import (
-    b64decode,
-    b64encode,
+    a2b_base64,
+    b2a_base64,
     compute_wifix_password,
     const as mc,
     namespaces as mn,
 )
-from ..protocol.message import MerossRequest
+from ..protocol.message import MerossRequest, MerossResponse
 
 if TYPE_CHECKING:
     from typing import (
@@ -23,6 +23,7 @@ if TYPE_CHECKING:
         Mapping,
         NotRequired,
         Protocol,
+        Self,
         TypedDict,
         Unpack,
     )
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
     from cloudapi import LatestVersionType
 
     from ..logging import LoggerType
-    from ..protocol.message import MerossResponse
+    from ..protocol.message import MerossMessage
     from ..protocol.namespaces import Namespace
     from ..protocol.types import (
         JsonDict,
@@ -43,6 +44,11 @@ if TYPE_CHECKING:
         hub as mt_h,
         mcu as mt_m,
     )
+
+
+class Direction(StrEnum):
+    RX = "RX"
+    TX = "TX"
 
 
 class Transport(StrEnum):
@@ -73,8 +79,30 @@ class AbstractClient(logging.Loggable):
             timeout: NotRequired[float]
             loop: NotRequired[asyncio.AbstractEventLoop]
 
-        class RequestArgs(TypedDict):
+        class ConnectArgs(TypedDict):
             timeout: NotRequired[float]
+
+        class RequestRawArgs(TypedDict):
+            timeout: NotRequired[float]
+            uuid: NotRequired[str]
+
+        class RequestArgs(RequestRawArgs):
+            key: NotRequired[str]
+            from_: NotRequired[str]
+            trigger_src: NotRequired[str]
+
+        class ConfigureMQTTArgs(RequestArgs):
+            host: NotRequired[str]  # doesnt set broker if missing/empty
+            port: NotRequired[int]  # default: mc.MQTT_DEFAULT_PORT
+            new_key: NotRequired[str]  # default: actually configured key
+            userid: NotRequired[str]  # default: 0
+
+        class ConfigureWifiArgs(RequestArgs):
+            ssid: str
+            password: str
+
+        class ConfigureArgs(ConfigureMQTTArgs, ConfigureWifiArgs):
+            pass
 
         TRANSPORT: Final[Transport]
 
@@ -85,7 +113,11 @@ class AbstractClient(logging.Loggable):
         timeout: float
         loop: Final[asyncio.AbstractEventLoop]
 
+        is_connected: Final[bool]
+
+    Direction = Direction
     Transport = Transport
+
     TRANSPORT = Transport.AUTO
 
     TIMEOUT = 10
@@ -99,6 +131,7 @@ class AbstractClient(logging.Loggable):
         "descriptor",
         "timeout",
         "loop",
+        "is_connected",
     )
 
     def __init__(
@@ -110,21 +143,82 @@ class AbstractClient(logging.Loggable):
         self.descriptor = kwargs.pop("descriptor", None)
         self.timeout = kwargs.pop("timeout", self.TIMEOUT)
         self.loop = kwargs.pop("loop", asyncio.get_running_loop())
+        self.is_connected = False
         super().__init__(id, parent, **kwargs)
+
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        await self.async_disconnect()
+
+    @logging.abc.abstractmethod
+    async def async_connect(self, /, **kwargs: "Unpack[ConnectArgs]"): ...
+    @logging.abc.abstractmethod
+    async def async_disconnect(self, /): ...
 
     @logging.abc.abstractmethod
     async def async_request_raw(
-        self, request: MerossRequest, /, **kwargs: "Unpack[RequestArgs]"
-    ) -> "MerossResponse":
+        self, request: MerossRequest, /, **kwargs: "Unpack[RequestRawArgs]"
+    ) -> MerossResponse:
         """Low level request sending/receiving method to be implemented by
         transport-specific implementations."""
         ...
 
+    def on_connect(self, /):
+        """Signals client successful connection."""
+        self.is_connected = True  # type: ignore
+        self.log(logging.DEBUG, "Connected")
+
+    def on_disconnect(self, /):
+        """Signals client disconnection."""
+        self.is_connected = False  # type: ignore
+        self.log(logging.DEBUG, "Disconnected")
+
+    def on_tx(self, message: "MerossMessage", client: "Self", /):
+        """Signals client message transmission."""
+        client.log_message(message, Direction.TX)
+
+    def on_rx(self, raw: bytes | bytearray, client: "Self", /):
+        """Processes client raw message reception before returning from async_request_raw.
+        This could be overriden to implement more message processing in the receiving pipeline.
+        """
+        message = MerossResponse(raw.decode())
+        client.log_message(message, Direction.RX)
+        return message
+
+    def log_message(self, message: "MerossMessage", direction: Direction, /):
+        if self.isEnabledFor(logging.VERBOSE):
+            self.log(
+                logging.VERBOSE,
+                "%s(%s:%s) %s %s %s",
+                direction,
+                self.TRANSPORT,
+                message.messageid,
+                message.method,
+                message.namespace,
+                _message=message,
+            )
+        elif self.isEnabledFor(logging.DEBUG):
+            self.log(
+                logging.DEBUG,
+                "%s(%s:%s) %s %s",
+                direction,
+                self.TRANSPORT,
+                message.messageid,
+                message.method,
+                message.namespace,
+            )
+
     async def async_request(
         self, *args: "Unpack[MerossRequestType]", **kwargs: "Unpack[RequestArgs]"
-    ) -> "MerossResponse":
+    ):
         return await self.async_request_raw(
-            MerossRequest(*args, self.key, self.from_, self.trigger_src), **kwargs
+            MerossRequest(
+                *args,
+                kwargs.pop("key", self.key),
+                kwargs.pop("from_", self.from_),
+                kwargs.pop("trigger_src", self.trigger_src),
+            ),
+            **kwargs,
         )
 
     async def async_request_ns_payload(
@@ -136,8 +230,8 @@ class AbstractClient(logging.Loggable):
             .payload[ns.key]
         )
 
-    async def async_identify(self, *args, **kwargs: "Unpack[RequestArgs]"):
-        self.descriptor = DeviceDescriptor(
+    async def async_identify(self, /, **kwargs: "Unpack[RequestArgs]"):
+        return DeviceDescriptor(
             (
                 await self.async_request(
                     *mn.Appliance_System_All.request_default, **kwargs
@@ -153,7 +247,6 @@ class AbstractClient(logging.Loggable):
             .check()
             .payload
         )
-        return self.descriptor
 
     async def async_get_ssid_scan(
         self,
@@ -167,7 +260,7 @@ class AbstractClient(logging.Loggable):
         (see protocol.types.config.Wifi)."""
 
         p_wifilist: "mt_cf.WifiList" = await self.async_request_ns_payload(
-            mn.Appliance_Config_WifiList
+            mn.Appliance_Config_WifiList, **kwargs
         )
         if sort_key:
             p_wifilist = sorted(p_wifilist, key=lambda x: x[sort_key], reverse=True)
@@ -177,7 +270,7 @@ class AbstractClient(logging.Loggable):
             try:
                 # It looks like some ssid b64 encodings are 'weird' and we're unable to decode them as UTF-8
                 # strings
-                ssid = b64decode(wifi[mc.KEY_SSID]).rstrip(b"\0").decode()
+                ssid = a2b_base64(wifi[mc.KEY_SSID]).rstrip(b"\0").decode()
                 if ssid not in ssid_list:
                     ssid_list.append(ssid)
             except:
@@ -187,65 +280,72 @@ class AbstractClient(logging.Loggable):
 
     async def async_configure_mqtt(
         self,
-        *,
-        host: str = "",
-        port: int = mc.MQTT_DEFAULT_PORT,
-        key: str = "",
-        userid: str = "",  # will default to 0
-        **kwargs: "Unpack[RequestArgs]",
+        /,
+        **kwargs: "Unpack[ConfigureMQTTArgs]",
     ):
-        return await self.async_request(
-            mn.Appliance_Config_Key,
-            mc.METHOD_SET,
-            {
-                mn.Appliance_Config_Key.key: (
-                    {
-                        mc.KEY_GATEWAY: {
-                            mc.KEY_HOST: host,
-                            mc.KEY_PORT: port,
-                            mc.KEY_SECONDHOST: host,
-                            mc.KEY_SECONDPORT: port,
-                        },
-                        mc.KEY_KEY: key,
-                        mc.KEY_USERID: userid,
-                    }
-                    if host
-                    else {
-                        mc.KEY_KEY: key,
-                        mc.KEY_USERID: userid,
-                    }
-                ),
-            },
-        )
+        new_key = kwargs.pop("new_key", self.key)
+        userid = kwargs.pop("userid", "0")
+        try:
+            host = kwargs.pop("host")
+            port = kwargs.pop("port", mc.MQTT_DEFAULT_PORT)
+            return await self.async_request(
+                mn.Appliance_Config_Key,
+                mc.METHOD_SET,
+                {
+                    mn.Appliance_Config_Key.key: (
+                        {
+                            mc.KEY_GATEWAY: {
+                                mc.KEY_HOST: host,
+                                mc.KEY_PORT: port,
+                                mc.KEY_SECONDHOST: host,
+                                mc.KEY_SECONDPORT: port,
+                            },
+                            mc.KEY_KEY: new_key,
+                            mc.KEY_USERID: userid,
+                        }
+                    ),
+                },
+                **kwargs,
+            )
+        except KeyError:
+            return await self.async_request(
+                mn.Appliance_Config_Key,
+                mc.METHOD_SET,
+                {
+                    mn.Appliance_Config_Key.key: (
+                        {mc.KEY_KEY: new_key, mc.KEY_USERID: userid}
+                    ),
+                },
+                **kwargs,
+            )
 
     async def async_configure_wifi(
         self,
-        *,
-        ssid: str,
-        password: str,
-        **kwargs: "Unpack[RequestArgs]",
+        /,
+        **kwargs: "Unpack[ConfigureWifiArgs]",
     ):
         ns = mn.Appliance_Config_WifiX
         if (descriptor := self.descriptor) and (ns in descriptor.ability):
             password = compute_wifix_password(
-                password,
+                kwargs["password"],
                 descriptor.type,
                 descriptor.uuid,
                 descriptor.macAddress,
             )
         else:
             ns = mn.Appliance_Config_Wifi
-            password = b64encode(password.encode()).decode()
+            password = b2a_base64(kwargs["password"].encode()).decode()
 
         return await self.async_request(
             ns,
             mc.METHOD_SET,
             {
                 ns.key: {
-                    mc.KEY_SSID: b64encode(ssid.encode()).decode(),
+                    mc.KEY_SSID: b2a_base64(kwargs["ssid"].encode()).decode(),
                     mc.KEY_PASSWORD: password,
                 }
             },
+            **kwargs,
         )
 
     async def async_configure(
@@ -253,18 +353,19 @@ class AbstractClient(logging.Loggable):
         *,
         mqtt_host: str = "",
         mqtt_port: int = 8883,
-        key: str = "",
+        new_key: str = "",
         userid: str = "",
         wifi_ssid: str = "",
         wifi_password: str = "",
         **kwargs: "Unpack[RequestArgs]",
     ):
+        # TODO: refine better. Also add configuration for time/timezone
         if wifi_ssid:
             assert wifi_password, "Wifi password is required if ssid is set"
 
-        if mqtt_host or key or userid:
+        if mqtt_host or new_key or userid:
             await self.async_configure_mqtt(
-                host=mqtt_host, port=mqtt_port, key=key, userid=userid, **kwargs
+                host=mqtt_host, port=mqtt_port, new_key=new_key, userid=userid, **kwargs
             )
 
         if wifi_ssid:

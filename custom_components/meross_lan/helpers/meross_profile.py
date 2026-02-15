@@ -18,12 +18,12 @@ from . import (
 )
 from .. import const as mlc
 from ..merossclient import HostAddress, cloudapi, get_active_broker
-from ..merossclient.client.mqtt import MQTTAppClient
+from ..merossclient.client.mqtt import MQTTAppClient, MQTTRateLimitExceeded
 from ..merossclient.obfuscate import OBFUSCATE_DICT, OBFUSCATE_UUID_MAP
 from ..merossclient.protocol import const as mc
 
 if TYPE_CHECKING:
-    from typing import Final, Literal, NotRequired, TypedDict
+    from typing import Final, Literal, NotRequired, TypedDict, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -67,7 +67,7 @@ if TYPE_CHECKING:
         tokenRequestTime: float
 
 
-class MerossMQTTConnection(mlq.MQTTConnection, MQTTAppClient):
+class MerossMQTTConnection(MQTTAppClient, mlq.MQTTConnection):
 
     if TYPE_CHECKING:
         is_cloud_connection: Final[Literal[True]]  # type: ignore[override]
@@ -85,23 +85,6 @@ class MerossMQTTConnection(mlq.MQTTConnection, MQTTAppClient):
             loop=profile.api.hass.loop,
             sslcontext=get_default_ssl_context(),
         )
-
-    @override  # MQTTConnection
-    async def _async_publish_raw(self, request: "MerossMessage", /):
-        return await self.parent.api.hass.async_add_executor_job(
-            self.rl_publish, request
-        )
-
-    @override  # MQTTAppClient
-    def on_publish(self):
-        if sensor_connection := self.sensor_connection:
-            attrs = sensor_connection.extra_state_attributes
-            attrs[sensor_connection.ATTR_DROPPED] = self.rl_dropped
-            attrs[sensor_connection.ATTR_PUBLISHED] += 1
-            if self.is_connected:
-                # enforce the state eventually cancelling queued, dropped...
-                sensor_connection.native_value = sensor_connection.STATE_CONNECTED
-            sensor_connection.flush_state()
 
 
 class MerossProfileStore(storage.Store["MerossProfileStoreType"]):
@@ -236,8 +219,10 @@ class MerossProfile(mlq.MQTTProfile):
         if mc.KEY_MQTTDOMAIN in self.config:
             broker = HostAddress.build(self.config[mc.KEY_MQTTDOMAIN])  # type: ignore
             mqttconnection = MerossMQTTConnection(broker, self)
-            mqttconnection.schedule_connect()
-
+            try:
+                await mqttconnection.async_connect()
+            except Exception:
+                pass
         # compute the next cloud devlist query and setup the scheduled callback
         next_query_epoch = (
             self._device_info_time + mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
@@ -382,7 +367,9 @@ class MerossProfile(mlq.MQTTProfile):
         mqttconnection = self._get_mqttconnection(broker)
         mqttconnection.attach(device)
         if mqttconnection.state_inactive:
-            mqttconnection.schedule_connect()
+            self.async_create_task(
+                mqttconnection.async_connect(), "attach_mqtt.schedule_connect"
+            )
 
     # interface: self
     @property
@@ -449,12 +436,9 @@ class MerossProfile(mlq.MQTTProfile):
             else:
                 return None
         try:
-            await asyncio.wait_for(await mqttconnection.async_connect(), 5)
+            await mqttconnection.async_connect()
             return mqttconnection
-        except Exception as exception:
-            self.log_exception(
-                self.DEBUG, exception, "waiting to subscribe to %s", str(broker)
-            )
+        except:
             return None
 
     async def _async_token_refresh(self):

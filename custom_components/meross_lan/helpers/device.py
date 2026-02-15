@@ -1,4 +1,4 @@
-import abc
+from abc import abstractmethod
 import asyncio
 import bisect
 from datetime import UTC, tzinfo
@@ -25,7 +25,7 @@ from ..const import (
     PARAM_TIMESTAMP_TOLERANCE,
 )
 from ..merossclient import DeviceDescriptor, get_active_broker, is_device_online
-from ..merossclient.client import Transport
+from ..merossclient.client import Direction, Transport
 from ..merossclient.client.http import HttpClient, TerminatedException
 from ..merossclient.obfuscate import OBFUSCATE_DICT
 from ..merossclient.protocol import MerossError
@@ -168,23 +168,23 @@ class BaseDevice(mlm.EntityManager):
     ):
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def get_upgrade_payload(self, /) -> "mt_c.Upgrade":
         """Builds and returns the correct upgrade payload if an upgrade is available, otherwise returns None/empty dict."""
         raise NotImplementedError("get_upgrade_payload")
 
-    @abc.abstractmethod
+    @abstractmethod
     def get_upgrade_info(self, /) -> tuple[str | None, ...]:
         """If an update is available returns a tuple of (installed_version, latest_version, release_summary)"""
         raise NotImplementedError("get_upgrade_info")
 
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def tz(self, /) -> tzinfo:
         raise NotImplementedError("tz")
 
     @cached_property
-    @abc.abstractmethod
+    @abstractmethod
     def ns_handlers(self, /) -> "Mapping[str, NamespaceHandler]":
         raise NotImplementedError("ns_handlers")
 
@@ -1167,7 +1167,6 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                             self.key,
                             self._topic_response,
                             self.__class__.__name__,
-                            self.id,
                         )
                     )
                 except Exception:
@@ -1200,7 +1199,6 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                         self.key,
                         self._topic_response,
                         self.__class__.__name__,
-                        self.id,
                     )
                 )
             raise
@@ -1470,16 +1468,17 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         self, *request_args: "Unpack[MerossRequestType]"
     ) -> MerossResponse:
         request = MerossRequest(*request_args, "", mlc.DOMAIN, self.__class__.__name__)
-        self._trace_or_log(time(), request, Transport.BLUETOOTH, Device.TRACE_TX)
+        self._trace_or_log(time(), request, Transport.BLUETOOTH, Direction.TX)
         try:
+            assert self._bluetooth
             return self._receive(
-                await self._bluetooth.async_request_raw(request),  # type: ignore
+                await self._bluetooth.async_request_raw(request),
                 Transport.BLUETOOTH,
             )
         except Exception as e:
             if self._bluetooth:
                 self.log_exception(self.WARNING, e, "async_bluetooth_request")
-                await self._bluetooth.disconnect()
+                await self._bluetooth.async_disconnect()
             else:
                 self.log(
                     self.DEBUG,
@@ -1488,13 +1487,14 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
             raise
 
     async def async_mqtt_request_raw(self, request: MerossRequest, /) -> MerossResponse:
-        self._trace_or_log(time(), request, Transport.MQTT, Device.TRACE_TX)
+        self._trace_or_log(time(), request, Transport.MQTT, Direction.TX)
         try:
             assert self._mqtt_publish
             if self._mqtt_publish.is_cloud_connection:
                 self.cloudpoll_requests += 1  # type: ignore
             return self._receive(
-                await self._mqtt_publish.async_request_raw(request), Transport.MQTT
+                await self._mqtt_publish.async_request_raw(request, uuid=self.id),
+                Transport.MQTT,
             )
         except Exception as e:
             if self._mqtt_publish:
@@ -1517,7 +1517,6 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                 self.key,
                 self._topic_response,
                 self.__class__.__name__,
-                self.id,
             )
         )
 
@@ -1533,7 +1532,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
     async def async_http_request_raw(self, request: MerossRequest, /) -> MerossResponse:
         self._http_lastrequest = time()
         self._trace_or_log(
-            self._http_lastrequest, request, Transport.HTTP, self.TRACE_TX
+            self._http_lastrequest, request, Transport.HTTP, Direction.TX
         )
         try:
             assert self._http
@@ -1626,7 +1625,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         # since the device.id is being taken care of by the routing mechanism
         if self.id != response.uuid:
             # log received message since we're breaking the _receive pipeline here
-            self._trace_or_log(time(), response, Transport.HTTP, self.TRACE_RX)
+            self._trace_or_log(time(), response, Transport.HTTP, Direction.RX)
             try:
                 assert self._http
                 mismatched_payload_all = await self._http.async_request(
@@ -1945,29 +1944,15 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
                     for earliest_connect in asyncio.as_completed(tasks, timeout=5):
                         try:
                             ns_all_response = await earliest_connect
-                            # TODO:
-                            # we should leave'em so that transports can come online later
-                            # this code instead cancels the 'losers' immediately
-                            # since it actually doesn't work with tests (mqtt publish mocking is missing)
-                            # for task in tasks:
-                            #    task.cancel()
                             break
                         except Exception:
-                            ns_all_response = None
+                            pass
                     else:  # shouldnt be needed: just silences type-checker
-                        ns_all_response = None
+                        raise asyncio.TimeoutError("No response for NS_ALL polling")
                 elif coro_func:
-                    try:
-                        ns_all_response = await coro_func[0](
-                            *handler_all.polling_request
-                        )
-                    except Exception:
-                        ns_all_response = None
+                    ns_all_response = await coro_func[0](*handler_all.polling_request)
                 else:
                     raise asyncio.TimeoutError("No transport available for polling")
-
-                if not ns_all_response:
-                    raise asyncio.TimeoutError("No response for NS_ALL polling")
 
                 handler_all.handle_response(ns_all_response)
                 handler_all.polling_response_size = len(ns_all_response.json)
@@ -2126,7 +2111,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         # run this at the end so it will not double flush
         self.sensor_protocol.update_attr_inactive(Transport.BLUETOOTH)
 
-    def mqtt_receive(self, message: "MerossResponse", /):
+    def mqtt_receive(self, message: MerossResponse, /):
         assert self._mqtt_connected
         self._handle(self._receive(message, Transport.MQTT))
 
@@ -2211,7 +2196,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice):
         default (received) message handling entry point
         """
         self.lastresponse = epoch = time()
-        self._trace_or_log(epoch, message, protocol, self.TRACE_RX)
+        self._trace_or_log(epoch, message, protocol, Direction.RX)
         message.check()
         if protocol is Transport.HTTP:
             if not self._http_active:

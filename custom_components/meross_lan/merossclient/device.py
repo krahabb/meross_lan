@@ -3,8 +3,6 @@ from typing import TYPE_CHECKING
 from . import DeviceDescriptor
 from .client import AbstractClient
 from .protocol import (
-    b64decode,
-    b64encode,
     compute_wifix_password,
     const as mc,
     namespaces as mn,
@@ -51,9 +49,6 @@ class Device(AbstractClient):
         class Args(AbstractClient.Args):
             client: AbstractClient
 
-        class RequestArgs(AbstractClient.RequestArgs):
-            pass
-
         client: AbstractClient
         descriptor: DeviceDescriptor
 
@@ -65,6 +60,3 @@ class Device(AbstractClient):
         self.client = kwargs.pop("client")  # type: ignore
         super().__init__(id, parent, **kwargs)
         self.async_request_raw = self.client.async_request_raw
-
-    async def async_shutdown(self):
-        await super().async_shutdown()

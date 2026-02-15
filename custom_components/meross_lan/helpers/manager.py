@@ -1,4 +1,4 @@
-import abc
+from abc import abstractmethod
 import asyncio
 import os
 from time import localtime, strftime
@@ -206,7 +206,7 @@ class EntityManager(logging.Loggable):
 
     def schedule_async_callback(
         self, delay: float, target: "Callable[..., Coroutine]", *args
-    ) -> "asyncio.TimerHandle":
+    ):
         @callback
         def _callback(*_args):
             self.async_create_task(target(*_args), "._callback")
@@ -215,7 +215,7 @@ class EntityManager(logging.Loggable):
 
     def schedule_callback(
         self, delay: float, target: "Callable", *args
-    ) -> "asyncio.TimerHandle":
+    ):
         return self.api.hass.loop.call_later(delay, target, *args)
 
     @callback
@@ -256,8 +256,6 @@ class ConfigEntryManager(EntityManager):
 
     if TYPE_CHECKING:
 
-        TRACE_RX: Final
-        TRACE_TX: Final
         DEFAULT_PLATFORMS: ClassVar[EntityManager.PlatformsType]
 
         config_entry: Final[ConfigEntry | None]
@@ -274,9 +272,6 @@ class ConfigEntryManager(EntityManager):
 
         class Args(EntityManager.Args):
             pass
-
-    TRACE_RX = "RX"
-    TRACE_TX = "TX"
 
     DEFAULT_PLATFORMS = {}
     """Defined at the class level to preset a list of domains for entities
@@ -531,7 +526,7 @@ class ConfigEntryManager(EntityManager):
     def remove_issue(self, issue_key: str, issue_subkey: str = "", /):
         self.remove_issue_id(f"{issue_key}.{self.id}.{issue_subkey}")
 
-    @abc.abstractmethod
+    @abstractmethod
     def get_logger_name(self) -> str:
         raise NotImplementedError()
 

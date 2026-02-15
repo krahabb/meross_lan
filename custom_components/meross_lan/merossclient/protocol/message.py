@@ -200,11 +200,8 @@ class MerossRequest(MerossMessage):
         key: str = "",
         from_: str = mc.HEADER_FROM_DEFAULT,
         trigger_src: str = mc.HEADER_TRIGGERSRC_DEFAULT,
-        uuid: str | None = None,
         /,
     ):
-        if uuid:
-            self.uuid = uuid
         self.namespace = namespace
         self.method = method
         self.payload = payload

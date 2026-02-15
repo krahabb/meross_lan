@@ -12,9 +12,15 @@ import aiohttp
 from yarl import URL
 
 from . import AbstractClient
-from .. import MEROSSDEBUG, logging
-from ..protocol import AESCipher, MerossKeyError, const as mc, md5hexdigest
-from ..protocol.message import MerossMessage, MerossResponse
+from .. import MEROSSDEBUG
+from ..protocol import (
+    AESCipher,
+    MerossKeyError,
+    MerossTransportError,
+    const as mc,
+    md5hexdigest,
+)
+from ..protocol.message import MerossMessage
 
 if TYPE_CHECKING:
     from typing import ClassVar, NotRequired, Unpack
@@ -39,6 +45,9 @@ class HttpClient(AbstractClient):
 
         class Args(AbstractClient.Args):
             session: NotRequired[aiohttp.ClientSession]
+
+        class RequestRawArgs(AbstractClient.RequestRawArgs):
+            pass
 
         class RequestArgs(AbstractClient.RequestArgs):
             pass
@@ -142,29 +151,24 @@ class HttpClient(AbstractClient):
         if self._terminate:
             raise TerminatedException
 
+    @override  # AbstractClient
+    async def async_connect(self, /, **kwargs):
+        pass
+
     @override
-    async def async_shutdown(self):
-        await super().async_shutdown()
+    async def async_disconnect(self, /):
         self._terminate = True
         while self._terminate_guard:
             await asyncio.sleep(0.5)
 
     @override
     async def async_request_raw(
-        self, request: "MerossMessage", /, **kwargs: "Unpack[RequestArgs]"
-    ) -> MerossResponse:
+        self, request: MerossMessage, /, **kwargs: "Unpack[RequestRawArgs]"
+    ):
         self._check_terminated()
         self._terminate_guard += 1
         try:
-            if self.isEnabledFor(logging.VERBOSE):
-                # we catch the 'request' id before json dumping so
-                # to reasonably set the context before any exception
-                logid = f"{self.__class__.__name__}({self._host}:{id(request)})"
-                logger = self.parent
-                # TODO: obfuscate
-                logger.log(logging.DEBUG, "%s: HTTP Request (%s)", logid, request)
-            else:
-                logid = logger = None
+            self.on_tx(request, self)
 
             if MEROSSDEBUG:
                 MEROSSDEBUG.http_random_timeout()
@@ -205,26 +209,21 @@ class HttpClient(AbstractClient):
                         raise
 
             self._check_terminated()
+            if response.status < 400:
+                return self.on_rx(
+                    (
+                        _cipher.decript(await response.read())
+                        if _cipher
+                        else (await response.read())
+                    ),
+                    self,
+                )
             response.raise_for_status()
-            response = await response.text()
-            if _cipher:
-                response = _cipher.decript_text(response)
-
-            if logger:
-                # TODO: obfuscate
-                logger.log(logging.VERBOSE, "%s: HTTP Response (%s)", logid, response)
-            self._check_terminated()
-            return MerossResponse(response)
+            # we should never get here since raise_for_status raises for 4xx and 5xx
+            raise MerossTransportError(f"Unexpected response status {response.status}")
         except Exception as e:
             self._key_header = {}  # type: ignore
-            if logger:
-                logger.log(  # type: ignore
-                    logging.DEBUG,
-                    "%s: HTTP %s (%s)",
-                    logid,
-                    type(e).__name__,
-                    str(e),
-                )
+            self.log_exception(self.WARNING, e, "async_request_raw")
             raise
         finally:
             self._terminate_guard -= 1
@@ -232,7 +231,7 @@ class HttpClient(AbstractClient):
     @override
     async def async_request(
         self, *args: "Unpack[MerossRequestType]", **kwargs: "Unpack[RequestArgs]"
-    ) -> MerossResponse:
+    ):
         key = self.key
         request = (
             MerossMessage.build_keyhack(*args, self._key_header)
@@ -246,7 +245,7 @@ class HttpClient(AbstractClient):
                     raise MerossKeyError(response)
                 # sign error... hack and fool
                 self.log(
-                    logging.WARNING,
+                    self.WARNING,
                     "Key error on %s %s -> retrying with key-reply hack",
                     args[1],
                     args[0],

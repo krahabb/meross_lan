@@ -3,7 +3,7 @@ Meross protocol core types and helpers
 
 """
 
-from base64 import b64decode, b64encode
+from binascii import a2b_base64, b2a_base64
 from hashlib import md5
 from typing import TYPE_CHECKING
 
@@ -24,9 +24,19 @@ class MerossError(Exception):
     pass
 
 
+class MerossTransportError(MerossError):
+    """Signal a transport error like:
+    - connection error
+    - timeout
+    - unexpected disconnection
+    """
+
+    pass
+
+
 class MerossProtocolError(MerossError):
     """
-    signal a protocol error like:
+    signal an application protocol error like:
     - missing header keys
     - application layer ERROR(s)
 
@@ -83,12 +93,13 @@ class AESCipher(Cipher):
         buffer = text.encode()
         buffer += bytes(16 - (len(buffer) % 16))
         encryptor = self.encryptor()
-        return b64encode(encryptor.update(buffer) + encryptor.finalize()).decode()
+        return b2a_base64(encryptor.update(buffer) + encryptor.finalize()).decode()
+
+    def decript(self, data: bytes | bytearray):
+        decryptor = self.decryptor()
+        return (decryptor.update(a2b_base64(data)) + decryptor.finalize()).rstrip(
+            bytes(1)
+        )
 
     def decript_text(self, text: str):
-        decryptor = self.decryptor()
-        return (
-            (decryptor.update(b64decode(text)) + decryptor.finalize())
-            .rstrip(bytes(1))
-            .decode()
-        )
+        return self.decript(text.encode()).decode()

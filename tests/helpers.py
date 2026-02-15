@@ -1118,39 +1118,39 @@ class MQTTConnectionMocker(contextlib.AbstractContextManager):
             side_effect=self.async_request_raw,
         )
 
-        async def _async_identify_device(
-            _self: mlq.MQTTConnection, device_id: str, key: str
-        ) -> mlc.DeviceConfigType:
-            try:
-                device_info = tc.MOCK_CLOUDAPI_DEVICE_DEVLIST[device_id]
-                emulator = build_emulator_for_profile(
-                    tc.MOCK_PROFILE_CONFIG,
-                    model=device_info[mc.KEY_DEVICETYPE],
-                    device_id=device_id,
-                )
-                device_config = build_emulator_config_entry(emulator)
-                return device_config
-            except KeyError as e:
-                raise Exception(
-                    f"MQTTConnectionMocker: unknown device (uuid:{device_id})"
-                ) from e
-
         self.async_identify_device_patcher = patch.object(
             mlq.MQTTConnection,
             "async_identify_device",
             autospec=True,
-            side_effect=_async_identify_device,
+            side_effect=self.async_identify_device,
         )
 
     async def async_request_raw(
-        self, mqttconnection: mlq.MQTTConnection, request: "MerossMessage"
-    ) -> "MerossResponse":
+        self, mqttconnection: mlq.MQTTConnection, request: "MerossMessage", /, **kwargs
+    ):
         raise asyncio.TimeoutError()
 
     async def async_publish_raw(
-        self, mqttconnection: mlq.MQTTConnection, request: "MerossMessage"
-    ) -> None:
+        self, mqttconnection: mlq.MQTTConnection, request: "MerossMessage", /, **kwargs
+    ):
         return None
+
+    async def async_identify_device(
+        self, mqttconnection: mlq.MQTTConnection, device_id: str, key: str
+    ):
+        try:
+            device_info = tc.MOCK_CLOUDAPI_DEVICE_DEVLIST[device_id]
+            emulator = build_emulator_for_profile(
+                tc.MOCK_PROFILE_CONFIG,
+                model=device_info[mc.KEY_DEVICETYPE],
+                device_id=device_id,
+            )
+            device_config = build_emulator_config_entry(emulator)
+            return device_config, emulator.descriptor
+        except KeyError as e:
+            raise Exception(
+                f"MQTTConnectionMocker: unknown device (uuid:{device_id})"
+            ) from e
 
     def __enter__(self):
         self.async_publish_raw_mock = self.async_publish_raw_patcher.start()

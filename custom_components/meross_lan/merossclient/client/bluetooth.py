@@ -1,14 +1,12 @@
 import asyncio
-import binascii
+from binascii import crc32
 from typing import TYPE_CHECKING, override
 
 from bleak import BleakClient, uuids
 from bleak.backends.bluezdbus.client import BleakClientBlueZDBus
 
 from . import AbstractClient
-from .. import logging
 from ..protocol import MerossError
-from ..protocol.message import MerossResponse
 
 if TYPE_CHECKING:
     from typing import (
@@ -27,7 +25,7 @@ if TYPE_CHECKING:
     from bleak.backends.service import BleakGATTService
 
     from ..logging import LoggerType
-    from ..protocol.message import MerossRequest
+    from ..protocol.message import MerossMessage
 
 BL_SERVICE_UUID = "0000a00a-0000-1000-8000-00805f9b34fb"
 BL_SERVICE_CHAR_NOTIFY_UUID = "0000b003-0000-1000-8000-00805f9b34fb"
@@ -58,16 +56,15 @@ class BluetoothClient(AbstractClient, BleakClient):
         class Args(AbstractClient.Args):
             services: NotRequired[Iterable[str]]
 
-        class ConnectArgs(TypedDict):
-            dangerous_use_bleak_cache: NotRequired[bool]
-            timeout: NotRequired[float]
+        class ConnectArgs(AbstractClient.ConnectArgs):
+            pass
 
-        class RequestArgs(AbstractClient.RequestArgs):
+        class RequestRawArgs(AbstractClient.RequestRawArgs):
             pass
 
         _connect_lock: Final[asyncio.Lock]
         _rx_frame_size: int
-        _rx_future: asyncio.Future[MerossResponse] | None
+        _rx_future: asyncio.Future[bytearray] | None
         _tx_lock: Final[asyncio.Lock]
         _service: BleakGATTService | None
         _char_notify: BleakGATTCharacteristic
@@ -120,173 +117,159 @@ class BluetoothClient(AbstractClient, BleakClient):
         self._char_write = None  # type: ignore
         self._mtu_size = None
 
-    # interface: BaseClient
-    @override
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        await self.disconnect()
+    @override  # AbstractClient
+    async def async_connect(self, /, **kwargs: "Unpack[ConnectArgs]"):
+        try:
+            async with asyncio.timeout(kwargs.get("timeout", self.timeout)):
+                async with self._connect_lock:
+                    if self.is_connected:
+                        return
 
-    @override
-    async def async_request_raw(
-        self, request: "MerossRequest", /, **kwargs: "Unpack[RequestArgs]"
-    ) -> MerossResponse:
+                    # BEWARE: in HA the _backend is actively swapped and wrapped so
+                    # we cannot rely on it being the same across reconnections.
+                    await self.connect()
+                    _backend = self._backend
+                    # Bad patch for bluez mtu_size (bad code always needs bad approaches)
+                    # We'll cache the mtu_size assuming it will not change across reconnections
+                    if (
+                        isinstance(_backend, BleakClientBlueZDBus)
+                        and _backend._mtu_size is None
+                    ):
+                        if self._mtu_size:
+                            _backend._mtu_size = self._mtu_size
+                        else:
+                            try:
+                                await _backend._acquire_mtu()
+                                self._mtu_size = _backend._mtu_size
+                            except Exception as e:
+                                _backend._mtu_size = 128
+                                self.log_exception(
+                                    self.DEBUG,
+                                    e,
+                                    "BleakClientBlueZDBus._acquire_mtu(). Defaulting to %i",
+                                    _backend._mtu_size,
+                                )
 
-        # TODO: maybe add a retry loop
-        async with asyncio.timeout(kwargs.get("timeout", self.timeout)):
-
-            await self._tx_lock.acquire()
-
-            try:
-                if not self.is_connected:
-                    await self.connect(dangerous_use_bleak_cache=True, **kwargs)
-
-                self._rx_future = self.loop.create_future()
-                self._rx_frame_size = 0  # flush receive buffer
-                tx_frame = request.json.encode()
-                tx_frame_size = len(tx_frame)
-                crc32 = binascii.crc32(tx_frame)
-                tx_frame = bytes(
-                    (
-                        0x55,
-                        0xAA,
-                        tx_frame_size // 256,
-                        tx_frame_size % 256,
-                        *tx_frame,
-                        (crc32 >> 24) & 0xFF,
-                        (crc32 >> 16) & 0xFF,
-                        (crc32 >> 8) & 0xFF,
-                        crc32 & 0xFF,
-                        0xAA,
-                        0x55,
-                    )
-                )
-                chunk_size = self.mtu_size - 3
-                for chunk in (
-                    tx_frame[i : i + chunk_size]
-                    for i in range(0, len(tx_frame), chunk_size)
-                ):
-                    await self.write_gatt_char(self._char_write, chunk, response=False)
-
-                self.log(logging.DEBUG, "Transmitted frame: %s", tx_frame)
-
-                return await self._rx_future
-
-            finally:
-                self._rx_future = None
-                self._tx_lock.release()
-
-    # interface: BleakClient
-    @override
-    async def connect(self, **kwargs: "Unpack[ConnectArgs]") -> bool:
-
-        async with asyncio.timeout(kwargs.get("timeout", self.timeout)):
-
-            await self._connect_lock.acquire()
-            try:
-                if self.is_connected:
-                    return True
-
-                await super().connect(**kwargs)
-                # Bad patch for bluez mtu_size (bad code always needs bad approaches)
-                # We'll cache the mtu_size assuming it will not change across reconnections
-                _backend = self._backend
-                if (
-                    isinstance(_backend, BleakClientBlueZDBus)
-                    and _backend._mtu_size is None
-                ):
-                    if self._mtu_size:
-                        _backend._mtu_size = self._mtu_size
-                    else:
-                        try:
-                            await _backend._acquire_mtu()
-                            self._mtu_size = _backend._mtu_size
-                        except Exception as e:
-                            _backend._mtu_size = 128
-                            self.log_exception(
-                                logging.DEBUG,
-                                e,
-                                "BleakClientBlueZDBus._acquire_mtu(). Defaulting to %i",
-                                _backend._mtu_size,
+                    if not self._service:
+                        service = self.services.get_service(BL_SERVICE_UUID)
+                        if not service:
+                            raise BluetoothError(
+                                "Meross bluetooth service unavailable", BL_SERVICE_UUID
                             )
-
-                if not self._service:
-                    service = self.services.get_service(BL_SERVICE_UUID)
-                    if not service:
-                        raise BluetoothError(
-                            "Meross bluetooth service unavailable", BL_SERVICE_UUID
+                        _char_write = service.get_characteristic(
+                            BL_SERVICE_CHAR_WRITE_UUID
                         )
-
-                    _char_write = service.get_characteristic(BL_SERVICE_CHAR_WRITE_UUID)
-                    if not _char_write:
-                        raise BluetoothError(
-                            "Meross bluetooth write characteristic unavailable",
-                            BL_SERVICE_CHAR_WRITE_UUID,
+                        if not _char_write:
+                            raise BluetoothError(
+                                "Meross bluetooth write characteristic unavailable",
+                                BL_SERVICE_CHAR_WRITE_UUID,
+                            )
+                        _char_notify = service.get_characteristic(
+                            BL_SERVICE_CHAR_NOTIFY_UUID
                         )
-
-                    _char_notify = service.get_characteristic(
-                        BL_SERVICE_CHAR_NOTIFY_UUID
-                    )
-                    if not _char_notify:
-                        raise BluetoothError(
-                            "Meross bluetooth notify characteristic unavailable",
-                            BL_SERVICE_CHAR_NOTIFY_UUID,
+                        if not _char_notify:
+                            raise BluetoothError(
+                                "Meross bluetooth notify characteristic unavailable",
+                                BL_SERVICE_CHAR_NOTIFY_UUID,
+                            )
+                        # ENABLE NOTIFY CHAR
+                        write_enable_descr = _char_notify.get_descriptor(
+                            BL_SERVICE_CHAR_NOTIFY_DESCR_ENABLE_UUID
                         )
+                        if not write_enable_descr:
+                            raise BluetoothError(
+                                "Meross bluetooth notify enable descriptor unavailable",
+                                BL_SERVICE_CHAR_NOTIFY_DESCR_ENABLE_UUID,
+                            )
+                        self._service = service
+                        self._char_notify = _char_notify
+                        self._char_write = _char_write
 
-                    # ENABLE NOTIFY CHAR
-                    write_enable_descr = _char_notify.get_descriptor(
-                        BL_SERVICE_CHAR_NOTIFY_DESCR_ENABLE_UUID
-                    )
-                    if not write_enable_descr:
-                        raise BluetoothError(
-                            "Meross bluetooth notify enable descriptor unavailable",
-                            BL_SERVICE_CHAR_NOTIFY_DESCR_ENABLE_UUID,
+                    try:
+                        await _backend.start_notify(
+                            self._char_notify, self._packet_handler
                         )
+                    except:
+                        # nullify so next time we'll refresh
+                        self._service = None
+                        self._char_notify = None  # type: ignore
+                        self._char_write = None  # type: ignore
+                        raise
 
-                    self._service = service
-                    self._char_notify = _char_notify
-                    self._char_write = _char_write
+                    _backend.set_disconnected_callback(self.on_disconnect)
 
-                try:
-                    await _backend.start_notify(self._char_notify, self._packet_handler)
-                except:
-                    # nullify so next time we'll refresh
-                    self._service = None
-                    self._char_notify = None  # type: ignore
-                    self._char_write = None  # type: ignore
-                    raise
-                self._on_connected()
-                _backend.set_disconnected_callback(self._on_disconnected)
-                return True
-            except Exception as e:
-                self.log_exception(logging.DEBUG, e, "connect")
-                if self.is_connected:
-                    await super().disconnect()
-                raise e
-            finally:
-                self._connect_lock.release()
+        except Exception as e:
+            self.log_exception(self.WARNING, e, "async_connect")
+            await self.disconnect()
+            raise
+        else:
+            self.on_connect()
 
-    @override
-    async def disconnect(self):
+    @override  # AbstractClient
+    async def async_disconnect(self):
         async with self._connect_lock:
-            if self.is_connected:
+            if self._backend:
                 try:
                     await self._backend.stop_notify(self._char_notify)
                 except Exception as e:
-                    self.log_exception(logging.DEBUG, e, "stop_notify")
-                await super().disconnect()
-                # self._on_disconnected()
+                    self.log_exception(self.DEBUG, e, "stop_notify")
+                await self.disconnect()
+            if self.is_connected:
+                self.on_disconnect()
 
-    # interface: self
-    def _on_connected(self):
-        """Placeholder member called when device is connected."""
-        self.log(logging.DEBUG, "Connected")
+    @override  # AbstractClient
+    async def async_request_raw(
+        self, request: "MerossMessage", /, **kwargs: "Unpack[RequestRawArgs]"
+    ):
+        self.on_tx(request, self)
+        try:
+            async with asyncio.timeout(kwargs.get("timeout", self.timeout)):
+                async with self._tx_lock:
 
-    def _on_disconnected(self):
-        """Placeholder member called when device is disconnected."""
-        self.log(logging.DEBUG, "Disconnected")
+                    if not self.is_connected:
+                        await self.async_connect()
+
+                    self._rx_future = self.loop.create_future()
+                    self._rx_frame_size = 0  # flush receive buffer
+                    tx_frame = request.json.encode()
+                    tx_frame_size = len(tx_frame)
+                    checksum = crc32(tx_frame)
+                    tx_frame = bytes(
+                        (
+                            0x55,
+                            0xAA,
+                            tx_frame_size // 256,
+                            tx_frame_size % 256,
+                            *tx_frame,
+                            (checksum >> 24) & 0xFF,
+                            (checksum >> 16) & 0xFF,
+                            (checksum >> 8) & 0xFF,
+                            checksum & 0xFF,
+                            0xAA,
+                            0x55,
+                        )
+                    )
+                    chunk_size = self.mtu_size - 3
+                    for chunk in (
+                        tx_frame[i : i + chunk_size]
+                        for i in range(0, len(tx_frame), chunk_size)
+                    ):
+                        await self.write_gatt_char(
+                            self._char_write, chunk, response=False
+                        )
+
+                    self.log(self.VERBOSE, "Transmitted frame: %s", tx_frame)
+
+                    return self.on_rx(await self._rx_future, self)
+
+        except Exception as e:
+            self.log_exception(self.WARNING, e, "async_request_raw")
+            raise
+        finally:
+            self._rx_future = None
 
     def _packet_handler(self, data: bytearray, /):
-        self.log(logging.DEBUG, "Received %s", data)
+        self.log(self.VERBOSE, "Received %s", data)
         try:
             # TODO: improve framer resiliency ?
             if rx_frame_size := self._rx_frame_size:
@@ -307,21 +290,22 @@ class BluetoothClient(AbstractClient, BleakClient):
                         + (rx_frame[-6] << 24)
                     )
                     rx_frame = rx_frame[4:-6]
-                    crc32 = binascii.crc32(rx_frame)
-                    if crc32 == checksum:
-                        self._frame_handler(rx_frame)
+                    if crc32(rx_frame) == checksum:
+                        self.log(self.VERBOSE, "Received frame %s", rx_frame)
+                        if self._rx_future:
+                            self._rx_future.set_result(rx_frame)
                     else:
-                        self.log(logging.DEBUG, "Frame error: invalid checksum")
+                        self.log(self.DEBUG, "Frame error: invalid checksum")
                         if self._rx_future:
                             self._rx_future.set_exception(
-                                BluetoothFrameError("Invalid checksum")
+                                BluetoothFrameError("Received invalid checksum")
                             )
                     return
 
                 if rx_frame_len > rx_frame_size:
                     self._rx_frame_size = 0
                     self.log(
-                        logging.DEBUG,
+                        self.DEBUG,
                         "Frame error: received size = %i - expected size = %i",
                         rx_frame_len,
                         rx_frame_size,
@@ -339,15 +323,10 @@ class BluetoothClient(AbstractClient, BleakClient):
                         self._rx_frame_size = data[2] * 256 + data[3] + 10
                         self._rx_buf = data
                 except IndexError:
-                    self.log(logging.DEBUG, "Frame error: packet too short")
+                    self.log(self.DEBUG, "Frame error: packet too short")
                     if self._rx_future:
                         self._rx_future.set_exception(
                             BluetoothFrameError("Packet too short")
                         )
         except Exception as e:
-            self.log_exception(logging.WARNING, e, "_packet_handler")
-
-    def _frame_handler(self, rx_frame: bytearray, /):
-        self.log(logging.DEBUG, "Received frame %s", rx_frame)
-        if self._rx_future:
-            self._rx_future.set_result(MerossResponse(rx_frame.decode()))
+            self.log_exception(self.WARNING, e, "_packet_handler")

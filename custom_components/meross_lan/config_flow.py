@@ -622,7 +622,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                 if configure_wifi and not password:
                     raise ValueError("Password is required when SSID is provided")
 
-                configure_mqtt_args = {}
+                configure_mqtt_args: "AbstractClient.ConfigureMQTTArgs" = {}
                 if server and (server != device_server):
                     # user wants to configure new broker
                     try:
@@ -706,9 +706,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                                 sslcontext=get_default_no_verify_ssl_context(),
                             )
                             try:
-                                await asyncio.wait_for(
-                                    await _mqttclient.async_connect(), 5
-                                )
+                                await _mqttclient.async_connect()
                             except Exception as e:
                                 api.log_exception(
                                     api.WARNING,
@@ -724,7 +722,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
 
                         configure_mqtt_args["host"] = server_address.host
                         configure_mqtt_args["port"] = server_address.port
-                        configure_mqtt_args["key"] = key
+                        configure_mqtt_args["new_key"] = key
                         configure_mqtt_args["userid"] = user_id
 
                 if not configure_mqtt_args:
@@ -733,7 +731,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                     key = user_input.get(mc.KEY_KEY) or device_key
                     user_id = user_input.get(mc.KEY_USERID_) or device_userid
                     if (key != device_key) or (user_id != device_userid):
-                        configure_mqtt_args["key"] = key
+                        configure_mqtt_args["new_key"] = key
                         configure_mqtt_args["userid"] = str(user_id)
                         server = device_server
 
@@ -853,14 +851,13 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         # eventually collect the exceptions
         exceptions = []
         for identify_coro in asyncio.as_completed(
-            [
+            (
                 mqttconnection.async_identify_device(device_id, key or "")
                 for mqttconnection in mqttconnections
-            ]
+            )
         ):
             try:
-                device_config = await identify_coro
-                return device_config, DeviceDescriptor(device_config[mlc.CONF_PAYLOAD])
+                return await identify_coro
             except Exception as exception:
                 exceptions.append(exception)
 
