@@ -346,7 +346,7 @@ class MLGarage(MLCover):
         self.is_closed = not _open
         if p_state.get(mc.KEY_EXECUTE) and open_request != _open:
             manager = self.manager
-            self._transition_start = manager.lastresponse
+            self._transition_start = manager.last_rx_epoch
             if open_request:
                 self.is_closing = False
                 self.is_opening = True
@@ -425,7 +425,9 @@ class MLGarage(MLCover):
             # Also to note: if we're on HTTP this sampled time could happen anyway after the 'real'
             # state switched to 'closed' so we're likely going to measure in exceed of real transition duration
             if is_closed:
-                transition_duration = self.manager.lastresponse - self._transition_start
+                transition_duration = (
+                    self.manager.last_rx_epoch - self._transition_start
+                )
                 # autoregression filtering applying 20% of last updated sample
                 self._update_transition_duration(
                     int((4 * self._transition_duration + transition_duration) / 5)

@@ -164,7 +164,9 @@ class NamespaceHandler:
         """(rough) estimate of the header part of any response"""
 
         parsers: Final[dict[object, ParserFunc]]
-        lastpush: JsonDict | None  # TODO: implement caching of all methods responses
+        last_rx_push: (
+            JsonDict | None
+        )  # TODO: implement caching of all methods responses
         handler: HandlerFunc
         polling_strategy: PollingStrategyFunc | None
         polling_request: mt.MerossRequestType
@@ -206,9 +208,9 @@ class NamespaceHandler:
         "handler",
         "parsers",
         "entity_class",
-        "lastrequest",
-        "lastresponse",
-        "lastpush",
+        "last_poll_epoch",
+        "last_rx_epoch",
+        "last_rx_push",
         "polling_epoch_next",
         "polling_strategy",
         "polling_period",
@@ -239,8 +241,8 @@ class NamespaceHandler:
         )
         self.parsers = {}
         self.entity_class = None
-        self.lastresponse = self.lastrequest = self.polling_epoch_next = 0.0
-        self.lastpush = None
+        self.last_rx_epoch = self.last_poll_epoch = self.polling_epoch_next = 0.0
+        self.last_rx_push = None
 
         if _conf := config or POLLING_STRATEGY_CONF.get(ns):
             self.polling_period = _conf[0]
@@ -449,8 +451,8 @@ class NamespaceHandler:
         """
         # TODO: save all of the last sent/received payloads for a ns_handler
         # for diagnostics (GET/ACK/SET/PUSH/DEL)
-        self.lastresponse = self.device.lastresponse
-        self.polling_epoch_next = self.lastresponse + self.polling_period
+        self.last_rx_epoch = self.device.last_rx_epoch
+        self.polling_epoch_next = self.last_rx_epoch + self.polling_period
         try:
             self.handler(response)
         except Exception as exception:
@@ -829,7 +831,7 @@ class NamespaceHandler:
         be done. If it hasn't elapsed then they're eventually packed
         with the outgoing ns_multiple (lazy polling).
         This strategy should also avoid polling when MQTT is active if the namespace
-        supports PUSH or we have received at least one PUSH for it (lastpush).
+        supports PUSH or we have received at least one PUSH for it (last_rx_push).
         """
         device = self.device
         """ TODO: re-enable this optimization after testing. It looks like our 'knowledge' of
@@ -837,7 +839,7 @@ class NamespaceHandler:
         if (
             device._mqtt_active
             and self.polling_epoch_next
-            and (self.ns.payload_psh or self.lastpush)
+            and (self.ns.payload_psh or self.last_rx_push)
         ):
             # on MQTT no need for updates since they're being PUSHed
             return
@@ -848,7 +850,7 @@ class NamespaceHandler:
 
         # Insert into the lazypoll_requests ordering by least recently polled
         def _lazypoll_key(_handler: NamespaceHandler):
-            return _handler.lastrequest - device._polling_epoch
+            return _handler.last_poll_epoch - device._polling_epoch
 
         bisect.insort_right(device._lazypoll_requests, self, key=_lazypoll_key)
 
@@ -962,7 +964,7 @@ class NamespaceHandler:
         if (
             device._mqtt_active
             and self.polling_epoch_next
-            and (self.ns.has_psh or self.lastpush)
+            and (self.ns.has_psh or self.last_rx_push)
         ):
             # on MQTT no need for updates since they're being PUSHed
             return

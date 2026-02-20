@@ -205,7 +205,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
                 self._track_unsub.cancel()
                 self._track_unsub = None
 
-            if not self.manager.online or not self._tracking_state_change_unsub:
+            if not self.manager.is_connected or not self._tracking_state_change_unsub:
                 return
             tracked_state = self._tracking_state
             if not tracked_state:
@@ -598,7 +598,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
             # we'll speed up polling for the adjust/calibration ns
             try:
                 handler = self.handler_adjust
-                if handler.polling_epoch_next > (handler.device.lastresponse + 30):
+                if handler.polling_epoch_next > (handler.device.last_rx_epoch + 30):
                     handler.polling_epoch_next = 0.0
             except:
                 # in case the ns is not available for this device

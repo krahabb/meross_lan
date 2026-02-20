@@ -250,11 +250,7 @@ class AbstractMQTTConnection(AbstractClient):
             except (asyncio.CancelledError, AttributeError):
                 pass
         await super().async_shutdown()
-        for mqtt_transaction in self._transactions.values():
-            mqtt_transaction.cancel(False)
-        self._transactions.clear()
 
-    @AbstractClient.virtual
     def get_rl_safe_delay(self, uuid: str, /):
         return 0.0
 
@@ -285,19 +281,23 @@ class AbstractMQTTConnection(AbstractClient):
                 await self.async_publish_raw(request, **kwargs)
                 return await transaction.response_future
 
-    @AbstractClient.virtual
+    @override
+    def on_disconnect(self, /):
+        for mqtt_transaction in self._transactions.values():
+            mqtt_transaction.cancel(False)
+        self._transactions.clear()
+        super().on_disconnect()
+
     def on_message(self, mqtt_msg, /):
         """called when the underlying mqtt.Client receives a message."""
         # TODO: maybe reconcile with base on_rx
         pass
 
-    @AbstractClient.virtual
     def on_publish(self):
         """Called when the underlying mqtt.Client publishes a message."""
         # TODO: maybe reconcile with base on_tx
         pass
 
-    @AbstractClient.virtual
     def on_drop(self):
         """Called when the underlying mqtt.Client drops a message due to rate-limiting."""
         pass
@@ -490,7 +490,7 @@ class MQTTConnection(AbstractMQTTConnection):
         **kwargs: "Unpack[RequestRawArgs]",
     ):
         uuid = kwargs["uuid"]
-        self.on_tx(message, self)
+        self.on_tx(message)
         try:
             try:
                 _rl = self._rl_queues[uuid]

@@ -221,7 +221,7 @@ class BluetoothClient(AbstractClient, BleakClient):
     async def async_request_raw(
         self, request: "MerossMessage", /, **kwargs: "Unpack[RequestRawArgs]"
     ):
-        self.on_tx(request, self)
+        self.on_tx(request)
         try:
             async with asyncio.timeout(kwargs.get("timeout", self.timeout)):
                 async with self._tx_lock:
@@ -260,7 +260,7 @@ class BluetoothClient(AbstractClient, BleakClient):
 
                     self.log(self.VERBOSE, "Transmitted frame: %s", tx_frame)
 
-                    return self.on_rx(await self._rx_future, self)
+                    return self.on_rx_raw(await self._rx_future)
 
         except Exception as e:
             self.log_exception(self.WARNING, e, "async_request_raw")

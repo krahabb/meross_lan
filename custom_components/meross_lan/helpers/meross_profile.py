@@ -325,7 +325,7 @@ class MerossProfile(mlq.MQTTProfile):
     def attach_mqtt(self, device: "Device"):
         descr = device.descriptor
         try:
-            if device.online:
+            if device.is_connected:
                 if device.device_debug:
                     try:
                         broker = get_active_broker(device.device_debug)
@@ -599,8 +599,11 @@ class MerossProfile(mlq.MQTTProfile):
                 uuid=device_id,
             )
             device_info_dict.pop(device_id)
-            if device := self.linkeddevices.get(device_id):
-                self.unlink(device)
+            try:
+                self.linkeddevices.pop(device_id).profile_unlinked()
+            except KeyError as ke:
+                if ke.args[0] != device_id:
+                    raise
 
         if len(device_info_unknown):
             await self._process_device_info_unknown(device_info_unknown)

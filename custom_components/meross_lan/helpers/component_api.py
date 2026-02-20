@@ -149,7 +149,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
         /,
         **kwargs: "Unpack[HAMQTTConnection.RequestRawArgs]",
     ):
-        self.on_tx(message, self)
+        self.on_tx(message)
         try:
             await mqtt.async_publish(
                 self.parent.api.hass,
@@ -411,18 +411,6 @@ class ComponentApi(mlq.MQTTProfile):
             self.log(ComponentApi.DEBUG, "Updated service_info: %s", info)
         """
 
-        @override
-        def on_connect(self, /):
-            super().on_connect()
-            if self.device:
-                self.device.bt_connected()
-
-        @override
-        def on_disconnect(self):
-            super().on_disconnect()
-            if self.device:
-                self.device.bt_disconnected()
-
         @callback
         def _bt_unavailable(self, info: ha_bt.BluetoothServiceInfoBleak):
             self.log(self.DEBUG, "_bt_unavailable(info: %s)", info)
@@ -580,6 +568,7 @@ class ComponentApi(mlq.MQTTProfile):
             from_ = mlc.DOMAIN
             trigger_src = "service_request"
 
+            # TODO: rethink all this stuff after Device AbstractClient migration
             async def _wrap_response(request: MerossRequest, coro):
                 service_response["request"] = request
                 try:
@@ -604,24 +593,23 @@ class ComponentApi(mlq.MQTTProfile):
                 )
 
             async def _async_device_request(device: "Device"):
+                _client = device._clients.get(protocol) or device._clients.get(
+                    device.curr_protocol
+                )
+                if not _client:
+                    raise HomeAssistantError(
+                        f"Device {device.display_name} does not currently provide {protocol} connectivity"
+                    )
                 return await _wrap_response(
                     MerossRequest(
                         namespace,
                         method,
                         payload,
-                        device.key if key is None else key,
-                        device._topic_response,
+                        _client.key if key is None else key,
+                        _client.from_,
                         trigger_src,
                     ),
-                    (
-                        device.async_mqtt_request_raw
-                        if protocol is Transport.MQTT
-                        else (
-                            device.async_http_request_raw
-                            if protocol is Transport.HTTP
-                            else device.async_request_raw
-                        )
-                    ),
+                    _client.async_request_raw,
                 )
 
             if device_id:
@@ -680,7 +668,7 @@ class ComponentApi(mlq.MQTTProfile):
                             host,
                             self,
                             from_=mlc.DOMAIN,
-                            trigger_src=self.__class__.__name__,
+                            trigger_src=trigger_src,
                             loop=hass.loop,
                         ).async_request_raw,
                     )

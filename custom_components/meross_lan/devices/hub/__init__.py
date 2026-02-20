@@ -507,7 +507,7 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
         }
         """
         self._parse_online(payload)
-        if self.online:
+        if self.is_connected:
             self._digest_parse(payload[self.key_digest])
 
     def _parse_all(self, payload: dict, /):
@@ -541,7 +541,7 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
         """
 
         self._parse_online(payload[mc.KEY_ONLINE])
-        if self.online:
+        if self.is_connected:
             _excluded_keys = (mc.KEY_ID, mc.KEY_ONLINE)
             for _ in (
                 self._hub_parse(key, value)
@@ -558,10 +558,10 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
 
     def _parse_online(self, payload: "mt_h._Online", /):
         if payload[mc.KEY_STATUS] == mc.STATUS_ONLINE:
-            if not self.online:
+            if not self.is_connected:
                 self._set_online()
         else:
-            if self.online:
+            if self.is_connected:
                 self._set_offline()
 
     def _parse_beep(self, payload: "mt_h.SubDevice_Beep", /):
@@ -902,7 +902,7 @@ class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
         _poll_adjust |= bool(self.sensor_humidity.update_device_value(humidity))
         if _poll_adjust:
             handler = self.manager.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust]
-            if handler.lastrequest < (self.manager.manager.lastresponse - 30):
+            if handler.last_poll_epoch < (self.manager.manager.last_rx_epoch - 30):
                 handler.polling_epoch_next = 0.0
 
 

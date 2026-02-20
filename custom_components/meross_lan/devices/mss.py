@@ -447,7 +447,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         if _poll_epoch > epoch:
             # Insert into the lazypoll_requests ordering by least recently polled
             insort_right(
-                device._lazypoll_requests, self, key=lambda h: h.lastrequest - epoch
+                device._lazypoll_requests, self, key=lambda h: h.last_poll_epoch - epoch
             )
         else:
             await device.async_poll_request_smart(self)

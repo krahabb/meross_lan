@@ -71,6 +71,9 @@ class AbstractClient(logging.Loggable):
 
     if TYPE_CHECKING:
 
+        class Broadcast[*_argsT](logging.Loggable.Broadcast[*_argsT]):
+            pass
+
         class Args(logging.Loggable.Args):
             key: NotRequired[str]
             from_: NotRequired[str]
@@ -115,6 +118,16 @@ class AbstractClient(logging.Loggable):
 
         is_connected: Final[bool]
 
+        last_tx_message: MerossMessage | None
+        last_tx_epoch: float
+        last_rx_message: MerossMessage | None
+        last_rx_epoch: float
+
+        connect_broadcast: Final[Broadcast[(Self)]]
+        disconnect_broadcast: Final[Broadcast[(Self)]]
+        tx_broadcast: Final[Broadcast[(MerossMessage, Self)]]
+        rx_broadcast: Final[Broadcast[(MerossMessage, Self)]]
+
     Direction = Direction
     Transport = Transport
 
@@ -132,6 +145,14 @@ class AbstractClient(logging.Loggable):
         "timeout",
         "loop",
         "is_connected",
+        "last_tx_message",
+        "last_tx_epoch",
+        "last_rx_message",
+        "last_rx_epoch",
+        "connect_broadcast",
+        "disconnect_broadcast",
+        "tx_broadcast",
+        "rx_broadcast",
     )
 
     def __init__(
@@ -143,8 +164,16 @@ class AbstractClient(logging.Loggable):
         self.descriptor = kwargs.pop("descriptor", None)
         self.timeout = kwargs.pop("timeout", self.TIMEOUT)
         self.loop = kwargs.pop("loop", asyncio.get_running_loop())
-        self.is_connected = False
         super().__init__(id, parent, **kwargs)
+        self.is_connected = False
+        self.last_tx_message = None
+        self.last_tx_epoch = 0
+        self.last_rx_message = None
+        self.last_rx_epoch = 0
+        self.connect_broadcast = self.Broadcast(self)
+        self.disconnect_broadcast = self.Broadcast(self)
+        self.tx_broadcast = self.Broadcast(self)
+        self.rx_broadcast = self.Broadcast(self)
 
     async def async_shutdown(self):
         await super().async_shutdown()
@@ -166,32 +195,52 @@ class AbstractClient(logging.Loggable):
     def on_connect(self, /):
         """Signals client successful connection."""
         self.is_connected = True  # type: ignore
-        self.log(logging.DEBUG, "Connected")
+        self.log(logging.DEBUG, "connected")
+        self.connect_broadcast.broadcast(self)
 
     def on_disconnect(self, /):
         """Signals client disconnection."""
-        self.is_connected = False  # type: ignore
-        self.log(logging.DEBUG, "Disconnected")
+        self.is_connected = False  # type: ignore[assignment]
+        self.log(logging.DEBUG, "disconnected")
+        self.disconnect_broadcast.broadcast(self)
 
-    def on_tx(self, message: "MerossMessage", client: "Self", /):
+    def on_tx(self, message: "MerossMessage", *args):
         """Signals client message transmission."""
-        client.log_message(message, Direction.TX)
+        self.last_tx_message = message
+        self.last_tx_epoch = self.time()
+        # By design: we only log when no tx_broadcast listeners are present
+        # since we suppose that could be used to implement custom logging/trace behavior
+        if self.tx_broadcast:
+            self.tx_broadcast.broadcast(message, self)
+        else:
+            self.log_message(message, Direction.TX)
 
-    def on_rx(self, raw: bytes | bytearray, client: "Self", /):
+    def on_rx_raw(self, raw: bytes | bytearray, /):
         """Processes client raw message reception before returning from async_request_raw.
         This could be overriden to implement more message processing in the receiving pipeline.
         """
-        message = MerossResponse(raw.decode())
-        client.log_message(message, Direction.RX)
+        return self.on_rx(MerossResponse(raw.decode()))
+
+    def on_rx(self, message: "MerossMessage", *args):
+        """Signals client message reception. This is called by default by on_rx_raw after parsing the
+        raw message into a MerossMessage, but it could be called directly by transport implementations if needed.
+        """
+        self.last_rx_message = message
+        self.last_rx_epoch = self.time()
+        # By design: we only log when no rx_broadcast listeners are present
+        # since we suppose that could be used to implement custom logging/trace behavior
+        if self.rx_broadcast:
+            self.rx_broadcast.broadcast(message, self)
+        else:
+            self.log_message(message, Direction.RX)
         return message
 
     def log_message(self, message: "MerossMessage", direction: Direction, /):
         if self.isEnabledFor(logging.VERBOSE):
             self.log(
                 logging.VERBOSE,
-                "%s(%s:%s) %s %s %s",
+                "%s(%s) %s %s %s",
                 direction,
-                self.TRANSPORT,
                 message.messageid,
                 message.method,
                 message.namespace,
@@ -200,9 +249,8 @@ class AbstractClient(logging.Loggable):
         elif self.isEnabledFor(logging.DEBUG):
             self.log(
                 logging.DEBUG,
-                "%s(%s:%s) %s %s",
+                "%s(%s) %s %s",
                 direction,
-                self.TRANSPORT,
                 message.messageid,
                 message.method,
                 message.namespace,
@@ -228,6 +276,32 @@ class AbstractClient(logging.Loggable):
             (await self.async_request(*ns.request_default, **kwargs))
             .check()
             .payload[ns.key]
+        )
+
+    async def async_request_multiple(
+        self,
+        requests: "Iterable[MerossRequestType]",
+        /,
+        **kwargs: "Unpack[RequestArgs]",
+    ):
+        """Send requests in a single NS_APPLIANCE_CONTROL_MULTIPLE message."""
+        return await self.async_request(
+            mn.Appliance_Control_Multiple,
+            mc.METHOD_SET,
+            {
+                mn.Appliance_Control_Multiple.key: [
+                    {
+                        mc.KEY_HEADER: {
+                            mc.KEY_MESSAGEID: MerossRequest.generate_id(),
+                            mc.KEY_METHOD: request[1],
+                            mc.KEY_NAMESPACE: request[0],
+                        },
+                        mc.KEY_PAYLOAD: request[2],
+                    }
+                    for request in requests
+                ]
+            },
+            **kwargs,
         )
 
     async def async_identify(self, /, **kwargs: "Unpack[RequestArgs]"):

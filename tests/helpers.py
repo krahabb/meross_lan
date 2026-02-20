@@ -913,11 +913,11 @@ class DeviceContext(ConfigEntryMocker):
         if not self.config_entry_loaded:
             await self.async_setup()
         assert (device := self.device)
-        if not device.online:
+        if not device.is_connected:
             await self.time_mock.async_tick(
                 timedelta(seconds=mlc.PARAM_COLDSTARTPOLL_DELAY)
             )
-            assert device.online
+            assert device.is_connected
         return device
 
     async def async_setup(self):

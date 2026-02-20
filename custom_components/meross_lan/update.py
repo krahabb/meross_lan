@@ -66,7 +66,7 @@ class MLUpdate(MLEntity.PartialAvailableMixin, MLEntity, update.UpdateEntity):
     @MLEntity.ha_action
     async def async_install(self, version: str | None, backup: bool, **kwargs):
         basedevice = self.manager
-        if not basedevice.online:
+        if not basedevice.is_connected:
             raise HomeAssistantError("Device is offline")
         upgrade_payload = basedevice.get_upgrade_payload()
         if not upgrade_payload:

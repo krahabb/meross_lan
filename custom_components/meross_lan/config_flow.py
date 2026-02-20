@@ -193,14 +193,14 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         try:
             device = api.devices[device_id]
             if device:
-                if device._bluetooth:
-                    return device._bluetooth
-                elif device._http_active:
-                    return device._http_active
-                elif device._mqtt_publish:
+                if device.bluetooth:
+                    return device.bluetooth
+                elif device.http and device.http.is_connected:
+                    return device.http
+                elif device.mqtt:
                     return MQTTConnection.Client(
                         device_id,
-                        device._mqtt_publish,
+                        device.mqtt.connection,
                         key=self.device_config.get(mlc.CONF_KEY) or "",
                         trigger_src=self.__class__.__name__,
                     )
@@ -1551,7 +1551,7 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
             if user_input:
                 api = self.api
                 device = api.devices[self.device_id]
-                if not (device and device.online):
+                if not (device and device.is_connected):
                     raise FlowError(FlowErrorKey.CANNOT_CONNECT)
 
                 await device.async_unbind()

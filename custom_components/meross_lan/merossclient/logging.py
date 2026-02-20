@@ -8,6 +8,7 @@ import logging
 from time import time
 from typing import TYPE_CHECKING, override
 
+from . import broadcast
 from .obfuscate import OBFUSCATE_KEYS
 
 if TYPE_CHECKING:
@@ -173,14 +174,24 @@ class Loggable(metaclass=abc.ABCMeta):
     logging.
     - custom way by overriding 'log' like in 'Device' we can
     intercept log messages.
+    This class also adds a 'shutdown_broadcast' behavior that
+    can be listened to by any client class to be notified when the
+    Loggable is shutdown, so that they can perform cleanup if needed.
     """
+
+    class Broadcast[*_argsT](broadcast.Broadcast[*_argsT]):
+        """create a broadcast object with auto-shutdown support when the parent Loggable is shutdown."""
+
+        def __init__(self, loggable: "Loggable", /):
+            loggable.shutdown_broadcast.add(self.clear)
 
     if TYPE_CHECKING:
         id: Final[Any]
         parent: Final[LoggerType]
 
-        time: Final[Callable[[], float]]
+        shutdown_broadcast: broadcast.Broadcast[()]
 
+        def time(self) -> float: ...
         class Args(TypedDict):
             pass
 
@@ -190,20 +201,7 @@ class Loggable(metaclass=abc.ABCMeta):
     WARNING = WARNING
     CRITICAL = CRITICAL
 
-    __SLOTS__ = ("id", "logtag", "parent", "time")
-
-    @staticmethod
-    def abstract(func):
-        """Decorator to mark methods as abstract, without using ABCMeta."""
-        func.__isabstractmethod__ = True
-        # func.__call__ = lambda *args, **kwargs: NotImplemented
-        return abc.abstractmethod(func)
-
-    @staticmethod
-    def virtual(func):
-        """Decorator to mark methods as virtual, without using ABCMeta."""
-        func.__call__ = lambda *args, **kwargs: None
-        return func
+    __SLOTS__ = ("id", "logtag", "parent", "time", "shutdown_broadcast")
 
     @classmethod
     def _calc_slots(cls, *slots: "Unpack[tuple[str, ...]]"):
@@ -222,13 +220,17 @@ class Loggable(metaclass=abc.ABCMeta):
         self.parent = parent or getLogger(
             self.__class__.__module__ + "." + self.__class__.__name__
         )
+        self.shutdown_broadcast = broadcast.Broadcast()
         self.time = time
         self.configure_logger()
         self.log(VERBOSE, "init")
 
     async def async_shutdown(self):
-        # mostly useful for multiple inheritance patterns
         self.log(VERBOSE, "async_shutdown")
+        self.shutdown_broadcast.broadcast()
+        # Automatically cleans any listener so that they don't need to
+        # worry about deregistering.
+        self.shutdown_broadcast.clear()
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.id})"

@@ -88,7 +88,9 @@ class EntityManager(logging.Loggable):
         type PlatformsType = dict[str, Callable | None]
 
         api: Final[ComponentApi]
-        online: Final[bool]  # TODO: rename to available to mix with Entity.available
+        is_connected: Final[
+            bool
+        ]  # BEWARE: this property could mixin with AbstractClient in Device
         """Indicates if the manager is 'online' i.e. active (connected to device/cloud)."""
         device_entry: Final[dr.DeviceEntry | None]
         """Link to optional DeviceRegistry entry info."""
@@ -107,7 +109,7 @@ class EntityManager(logging.Loggable):
 
     IssueSeverity = ir.IssueSeverity
 
-    _attr_online: bool = True
+    _attr_is_connected: bool = True
 
     # slots for ConfigEntryManager are defined here since we would have some
     # multiple inheritance conflicts in Device
@@ -115,7 +117,7 @@ class EntityManager(logging.Loggable):
     __SLOTS__ = (
         "manager",
         "api",
-        "online",
+        "is_connected",
         "device_entry",
         "platforms",
         "entities",
@@ -126,7 +128,7 @@ class EntityManager(logging.Loggable):
     def __init__(self, id: str, manager: "EntityManager", **kwargs: "Unpack[Args]"):
         self.manager = manager  # TODO: rename to parent
         self.api = manager.api
-        self.online = self._attr_online
+        self.is_connected = self._attr_is_connected
         self.device_entry = kwargs.get("device_entry")
         assert hasattr(self, "platforms"), "platforms must be set in derived classes"
         self.entities = {}
@@ -213,15 +215,14 @@ class EntityManager(logging.Loggable):
 
         return self.api.hass.loop.call_later(delay, _callback, *args)
 
-    def schedule_callback(
-        self, delay: float, target: "Callable", *args
-    ):
+    def schedule_callback(self, delay: float, target: "Callable", *args):
         return self.api.hass.loop.call_later(delay, target, *args)
 
     @callback
     def async_create_task[_T](
         self, target: "Coroutine[Any, Any, _T]", name: str, eager_start: bool = True
     ):
+        # TODO: rename to create_task and add an exception wrapper.
         try:
             task = self.api.hass.async_create_task(
                 target, f"{self.logtag}{name}", eager_start
@@ -236,13 +237,13 @@ class EntityManager(logging.Loggable):
 
     def _set_online(self, /):
         self.log(self.DEBUG, "Back online!")
-        self.online = True  # type: ignore
+        self.is_connected = True  # type: ignore
         for entity in self.entities.values():
             entity.set_available()
 
     def _set_offline(self, /):
         self.log(self.DEBUG, "Going offline!")
-        self.online = False  # type: ignore
+        self.is_connected = False  # type: ignore
         for entity in self.entities.values():
             entity.set_unavailable()
 
@@ -676,7 +677,7 @@ class ConfigEntryManager(EntityManager):
         payload: "MerossPayloadType",
         namespace: str,
         method: str = "",
-        protocol: Transport = Transport.AUTO,
+        transport: Transport = Transport.AUTO,
         rxtx: str = "",
         /,
     ):
@@ -690,7 +691,7 @@ class ConfigEntryManager(EntityManager):
             columns = [
                 strftime("%Y/%m/%d - %H:%M:%S", localtime(epoch)),
                 rxtx,
-                protocol,
+                transport,
                 method,
                 namespace,
                 data,

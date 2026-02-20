@@ -475,9 +475,7 @@ class Emulator:
                 # - mss310:  2.9k
                 response_json = response_json[: self.MAXIMUM_RESPONSE_SIZE]
             self._log_message("TX", response_json)
-            if cipher:
-                return cipher.encript_text(response_json)
-            return response_json
+            return cipher.encript_text(response_json) if cipher else response_json
 
         return None
 

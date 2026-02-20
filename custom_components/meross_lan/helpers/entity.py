@@ -109,7 +109,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         # These may be customized here and there per class or instance
         assumed_state: bool = False
         entity_category: entity.EntityCategory | None
-        extra_state_attributes: dict[str, object]
+        extra_state_attributes: dict[str, Any]
         icon: str | None
         translation_key: str | None
         # These are actually per instance
@@ -197,7 +197,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
 
         self.hass_connected = False
 
-        self.available = self._attr_available or manager.online
+        self.available = self._attr_available or manager.is_connected
         self.device_class = kwargs.pop("device_class", self._attr_device_class)
         self.device_entry = kwargs.pop(
             "device_entry", None

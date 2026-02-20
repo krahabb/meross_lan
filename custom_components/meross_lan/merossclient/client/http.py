@@ -58,7 +58,9 @@ class HttpClient(AbstractClient):
         _SESSION: ClassVar[aiohttp.ClientSession | None]
 
         _cipher: Cipher | None
-        _key_header: MerossHeaderType
+        _key_header: (
+            MerossHeaderType  # TODO: REMOVE and use last_request/last_response instead
+        )
 
     TRANSPORT = AbstractClient.Transport.HTTP  # type: ignore[override]
 
@@ -138,8 +140,10 @@ class HttpClient(AbstractClient):
 
     @host.setter
     def host(self, value: str):
-        self._host = value
-        self._requesturl = URL(f"http://{value}/config")
+        if self._host != value:
+            self.id = value  # type: ignore (BOOM)
+            self._host = value
+            self._requesturl = URL(f"http://{value}/config")
 
     def enable_encryption(self, uuid: str, key: str, mac: str, /):
         self._cipher = HttpClient.Cipher(uuid, key, mac)
@@ -151,7 +155,7 @@ class HttpClient(AbstractClient):
         if self._terminate:
             raise TerminatedException
 
-    @override  # AbstractClient
+    @override
     async def async_connect(self, /, **kwargs):
         pass
 
@@ -160,6 +164,9 @@ class HttpClient(AbstractClient):
         self._terminate = True
         while self._terminate_guard:
             await asyncio.sleep(0.5)
+        if self.is_connected:
+            self.on_disconnect()
+        self._terminate = False
 
     @override
     async def async_request_raw(
@@ -168,7 +175,7 @@ class HttpClient(AbstractClient):
         self._check_terminated()
         self._terminate_guard += 1
         try:
-            self.on_tx(request, self)
+            self.on_tx(request)
 
             if MEROSSDEBUG:
                 MEROSSDEBUG.http_random_timeout()
@@ -210,14 +217,17 @@ class HttpClient(AbstractClient):
 
             self._check_terminated()
             if response.status < 400:
-                return self.on_rx(
+                if not self.is_connected:
+                    self.on_connect()
+                return self.on_rx_raw(
                     (
                         _cipher.decript(await response.read())
                         if _cipher
                         else (await response.read())
-                    ),
-                    self,
+                    )
                 )
+            if self.is_connected:
+                self.on_disconnect()
             response.raise_for_status()
             # we should never get here since raise_for_status raises for 4xx and 5xx
             raise MerossTransportError(f"Unexpected response status {response.status}")

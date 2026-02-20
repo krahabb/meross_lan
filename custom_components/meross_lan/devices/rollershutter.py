@@ -237,7 +237,7 @@ class MLRollerShutter(MLCover):
     def _parse_state(self, payload: "mt_rs.Status_C"):
         state = payload[mc.KEY_STATE]
         if not self._position_native_isgood:
-            epoch = self.manager.lastresponse
+            epoch = self.manager.last_rx_epoch
             if self.is_opening:
                 self.current_cover_position = round(
                     self._position_start

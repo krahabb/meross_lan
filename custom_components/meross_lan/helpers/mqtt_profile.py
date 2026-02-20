@@ -198,11 +198,11 @@ class MQTTConnection(AbstractMQTTConnection):
             ConnectionSensor(self)
 
     async def async_shutdown(self):
-        await super().async_shutdown()
         self.mqttdiscovering.clear()
         for device in self.mqttdevices.values():
             device.mqtt_detached()
         self.mqttdevices.clear()
+        await super().async_shutdown()
         self.sensor_connection = None
 
     @override  # Loggable
@@ -215,8 +215,6 @@ class MQTTConnection(AbstractMQTTConnection):
     @override
     def on_connect(self, /):
         super().on_connect()
-        for device in self.mqttdevices.values():
-            device.mqtt_connected()
         if self.sensor_connection:
             self.sensor_connection.update_native_value(ConnectionSensor.STATE_CONNECTED)
 
@@ -224,8 +222,6 @@ class MQTTConnection(AbstractMQTTConnection):
     @override
     def on_disconnect(self, /):
         super().on_disconnect()
-        for device in self.mqttdevices.values():
-            device.mqtt_disconnected()
         if self.sensor_connection:
             self.sensor_connection.update_native_value(
                 ConnectionSensor.STATE_DISCONNECTED
@@ -315,9 +311,10 @@ class MQTTConnection(AbstractMQTTConnection):
                         self.DEBUG,
                         "Dropping MQTT received message for device uuid:%s since it is configured for HTTP only",
                         uuid=uuid,
+                        timeout=86400,
                     )
                     return
-                if device._profile == profile:
+                if device.profile == profile:
                     self.attach(device)
                 else:
                     if (device.key != profile.key) or (
@@ -431,7 +428,7 @@ class MQTTConnection(AbstractMQTTConnection):
         if not self.sensor_connection:
             ConnectionSensor(self)
 
-    async def entry_update_listener(self, profile: "MQTTProfile"):
+    def entry_update_listener(self, profile: "MQTTProfile"):
         """Called by the ApiProfile to propagate config changes"""
         self.configure_logger()
         if self.sensor_connection:
@@ -448,18 +445,12 @@ class MQTTConnection(AbstractMQTTConnection):
             self.sensor_connection.update_devices()
 
     def detach(self, device: "Device", /):
-        device_id = device.id
-        assert device_id in self.mqttdevices, (
-            "unexpected MQTTConnection.detach",
-            device_id,
-        )
-
+        self.mqttdevices.pop(device.id)
         for mqtt_transaction in [
-            _t for _t in self._transactions.values() if _t.uuid == device_id
+            _t for _t in self._transactions.values() if _t.uuid == device.id
         ]:
             mqtt_transaction.cancel(True)
         device.mqtt_detached()
-        self.mqttdevices.pop(device_id)
         if self.sensor_connection:
             self.sensor_connection.update_devices()
 
@@ -576,18 +567,20 @@ class MQTTProfile(mlm.ConfigEntryManager):
         allow_mqtt_publish = config.get(mlc.CONF_ALLOW_MQTT_PUBLISH) or (
             self is self.api
         )
-        if allow_mqtt_publish != self.allow_mqtt_publish:
-            # device._mqtt_publish is rather 'passive' so
-            # we do some fast 'smart' updates:
-            if allow_mqtt_publish:
+        relink = allow_mqtt_publish != self.allow_mqtt_publish
+        if relink:
+            # temporarily unlink devices so that they'll be correctly re-linked
+            # with the new mqtt connection (or None)
+            for device in self.linkeddevices.values():
+                device.profile_unlinked()
+        try:
+            await super().entry_update_listener(hass, config_entry)
+            for mqttconnection in self.mqttconnections.values():
+                mqttconnection.entry_update_listener(self)
+        finally:
+            if relink:
                 for device in self.linkeddevices.values():
-                    device._mqtt_publish = device._mqtt_connected
-            else:
-                for device in self.linkeddevices.values():
-                    device._mqtt_publish = None
-        await super().entry_update_listener(hass, config_entry)
-        for mqttconnection in self.mqttconnections.values():
-            await mqttconnection.entry_update_listener(self)
+                    device.profile_linked(self)
 
     async def async_create_diagnostic_entities(self):
         await super().async_create_diagnostic_entities()
@@ -616,16 +609,12 @@ class MQTTProfile(mlm.ConfigEntryManager):
         return None
 
     def link(self, device: "Device"):
-        device_id = device.id
-        assert device_id not in self.linkeddevices
+        assert device.id not in self.linkeddevices
         device.profile_linked(self)
-        self.linkeddevices[device_id] = device
+        self.linkeddevices[device.id] = device
 
     def unlink(self, device: "Device"):
-        device_id = device.id
-        assert device_id in self.linkeddevices
-        device.profile_unlinked()
-        self.linkeddevices.pop(device_id)
+        self.linkeddevices.pop(device.id).profile_unlinked()
 
     @abstractmethod
     def attach_mqtt(self, device: "Device"):

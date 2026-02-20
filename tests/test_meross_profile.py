@@ -190,7 +190,7 @@ async def test_meross_profile_with_device(
         assert (device := device_context.device)
         assert (profile := api.profiles.get(tc.MOCK_PROFILE_ID))
 
-        assert device._profile is profile
+        assert device.profile is profile
         assert device._mqtt_connection in profile.mqttconnections.values()
 
         # The cloud MQTT connection is (or might be) done in an executor
@@ -237,15 +237,19 @@ async def test_meross_profile_with_device(
         update_firmware_state = hass.states.get(update_firmware.entity_id)
         assert update_firmware_state and update_firmware_state.state == "on"
 
-        # this condition needs testing after the mqtt client schedule_connect
+        # this conditions needs testing after the mqtt client schedule_connect
         # executor code has been done. No effort to reliably assert that
         # but at this point in time it should have run
-        assert device._mqtt_connected is device._mqtt_connection
-        # TODO: check the protocol switching?
+
+        # check correct binding for 'publishing' client (mock config allows publishing)
+        assert device.mqtt and device.http
+        # both clients should be connected
+        assert len(device._clients_connected) == 2
 
         # remove the cloud profile
         assert await profile_context.async_unload()
         assert api.profiles[tc.MOCK_PROFILE_ID] is None
-        assert device._profile is None
+        assert device.profile is None
         assert device._mqtt_connection is None
-        assert device._mqtt_connected is None
+        assert device.mqtt is None
+        assert len(device._clients_connected) == 1

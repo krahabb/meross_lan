@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from .helpers.device import Device
     from .helpers.entity import ChannelType
     from .helpers.manager import EntityManager
+    from .merossclient.client import AbstractClient
 
 
 async def async_setup_entry(
@@ -237,6 +238,14 @@ class ProtocolSensor(MLEnumSensor):
     def _get_attr_state(value):
         return ProtocolSensor.STATE_ACTIVE if value else ProtocolSensor.STATE_INACTIVE
 
+    @staticmethod
+    def _get_client_attr_state(client: "AbstractClient | None"):
+        return (
+            ProtocolSensor.STATE_ACTIVE
+            if client and client.is_connected
+            else ProtocolSensor.STATE_INACTIVE
+        )
+
     def __init__(self, manager: "Device"):
         self.extra_state_attributes = {}
         super().__init__(None, manager, native_value=ProtocolSensor.STATE_DISCONNECTED)
@@ -244,27 +253,28 @@ class ProtocolSensor(MLEnumSensor):
     def set_available(self):
         manager = self.manager
         self.native_value = manager.curr_protocol
-        attrs = self.extra_state_attributes
-        _get_attr_state = self._get_attr_state
-        if manager.conf_protocol is not manager.curr_protocol:
-            # this is to identify when conf_protocol is CONF_PROTOCOL_AUTO
-            # if conf_protocol is fixed we'll not set these attrs (redundant)
-            attrs[Transport.BLUETOOTH] = _get_attr_state(manager._bluetooth_active)
-            attrs[Transport.HTTP] = _get_attr_state(manager._http_active)
-            attrs[Transport.MQTT] = _get_attr_state(manager._mqtt_active)
-            attrs[self.ATTR_MQTT_BROKER] = _get_attr_state(manager._mqtt_connected)
+        if manager.conf_protocol is Transport.AUTO:
+            self.extra_state_attributes = {
+                _transport: self._get_client_attr_state(_client)
+                for _transport, _client in manager._clients.items()
+            } | {
+                self.ATTR_MQTT_BROKER: self._get_client_attr_state(
+                    manager._mqtt_connection
+                )
+            }
         self.flush_state()
 
     def set_unavailable(self):
-        self.native_value = ProtocolSensor.STATE_DISCONNECTED
-        if self.manager._mqtt_connection:
-            self.extra_state_attributes = {
-                self.ATTR_MQTT_BROKER: self._get_attr_state(
-                    self.manager._mqtt_connected
+        self.native_value = self.STATE_DISCONNECTED
+        self.extra_state_attributes = (
+            {
+                self.ATTR_MQTT_BROKER: self._get_client_attr_state(
+                    self.manager._mqtt_connection
                 )
             }
-        else:
-            self.extra_state_attributes = {}
+            if self.manager._mqtt_connection
+            else {}
+        )
         self.flush_state()
 
     # these smart updates are meant to only flush attrs
@@ -277,22 +287,14 @@ class ProtocolSensor(MLEnumSensor):
         attrs = self.extra_state_attributes
         if attrname in attrs:
             attrs[attrname] = self.STATE_ACTIVE
+            # TODO: maybe schedule a lazy update to avoid back-to-back
+            # flushes when multiple attrs are updated in a row?
             self.flush_state()
 
     def update_attr_inactive(self, attrname: str):
         attrs = self.extra_state_attributes
         if attrname in attrs:
             attrs[attrname] = self.STATE_INACTIVE
-            self.flush_state()
-
-    def update_attrs_inactive(self, *attrnames):
-        flush = False
-        attrs = self.extra_state_attributes
-        for attrname in attrnames:
-            if attrs.get(attrname) is self.STATE_ACTIVE:
-                attrs[attrname] = self.STATE_INACTIVE
-                flush = True
-        if flush:
             self.flush_state()
 
 
