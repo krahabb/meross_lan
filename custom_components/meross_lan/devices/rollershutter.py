@@ -308,7 +308,7 @@ class MLRollerShutter(MLCover):
             mlc.PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT,
             self._async_transition_callback,
         )
-        if (manager.curr_protocol is Transport.HTTP and not manager._mqtt_active) or (
+        if (manager.curr_protocol is Transport.HTTP and not manager.mqtt_active) or (
             self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE
         ):
             try:

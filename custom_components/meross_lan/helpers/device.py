@@ -404,8 +404,8 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
         _curr_client: AbstractClient | None
         bluetooth: Final[ComponentApi.BTClient | None]
         http: Final[Http | None]
-        _mqtt_connection: MQTTConnection | None
-        _mqtt_active: MQTTConnection | None
+        mqtt_connection: Final[MQTTConnection | None]
+        mqtt_active: MQTTConnection | None
         mqtt: Final[Mqtt | None]
         profile: Final[MQTTProfile | None]
         ns_handlers: Final[dict[str, NamespaceHandler]]
@@ -648,8 +648,8 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
         self._curr_client = None
         self.bluetooth = None
         self.http = None
-        self._mqtt_connection = None
-        self._mqtt_active = None
+        self.mqtt_connection = None
+        self.mqtt_active = None
         self.mqtt = None
         self.profile = None
         self.ns_handlers = {}
@@ -930,8 +930,8 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
         conf_protocol = self.conf_protocol
         if conf_protocol in (T_BLUETOOTH, T_HTTP):
             self.pref_protocol = conf_protocol
-            if self._mqtt_connection:
-                self._mqtt_connection.detach(self)
+            if self.mqtt_connection:
+                self.mqtt_connection.detach(self)
         else:
             _profile = self.profile
             if conf_protocol is T_AUTO:
@@ -947,9 +947,9 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
             else:  # T_MQTT
                 self.pref_protocol = conf_protocol
 
-            if self._mqtt_connection:
-                if self._mqtt_connection.parent != _profile:
-                    self._mqtt_connection.detach(self)
+            if self.mqtt_connection:
+                if self.mqtt_connection.parent != _profile:
+                    self.mqtt_connection.detach(self)
                     if _profile:
                         _profile.attach_mqtt(self)
             else:
@@ -1183,11 +1183,11 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
             "MQTT": {
                 "cloud_profile": profile and profile.is_cloud_profile,
                 "locally_active": self.mqtt_locallyactive,
-                "mqtt_connection": bool(self._mqtt_connection),
-                "mqtt_connected": self._mqtt_connection
-                and self._mqtt_connection.is_connected,
+                "mqtt_connection": bool(self.mqtt_connection),
+                "mqtt_connected": self.mqtt_connection
+                and self.mqtt_connection.is_connected,
                 "mqtt_publish": T_MQTT in self._clients,
-                "mqtt_active": bool(self._mqtt_active),
+                "mqtt_active": bool(self.mqtt_active),
             },
             "namespace_handlers": {
                 handler.ns: {
@@ -1310,7 +1310,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
         # no need super().on_disconnect()
         self._set_offline()
         self._curr_client = None
-        self._mqtt_active = None
+        self.mqtt_active = None
         self.device_debug = None
         for handler in self.ns_handlers.values():
             handler.polling_epoch_next = 0.0
@@ -1325,11 +1325,11 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
     def on_rx(self, message: "MerossMessage", client: "AbstractClient", /):
         self.last_rx_message = message
         self.last_rx_epoch = epoch = client.last_rx_epoch
-        protocol = client.TRANSPORT
-        self.log_message(message, Direction.RX, epoch, protocol)
+        transport = client.TRANSPORT
+        self.log_message(message, Direction.RX, epoch, transport)
         message.check()
-        if self.curr_protocol is not protocol:
-            if (self.pref_protocol is protocol) or (len(self._clients_connected) == 1):
+        if self.curr_protocol is not transport:
+            if (self.pref_protocol is transport) or (len(self._clients_connected) == 1):
                 self._switch_client(client)
 
         message_size = len(message.json)
@@ -1527,7 +1527,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
         """
         Reports if the device is actively paired to a Meross MQTT broker
         """
-        return self._mqtt_active and self._mqtt_active.is_cloud_connection
+        return self.mqtt_active and self.mqtt_active.is_cloud_connection
 
     @property
     def mqtt_locallyactive(self):
@@ -1538,7 +1538,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
         we should also check if the _mqtt_connection is 'publishable' but
         at the moment the ComponentApi MQTTConnection doesn't allow disabling it
         """
-        return self._mqtt_active and not self._mqtt_active.is_cloud_connection
+        return self.mqtt_active and not self.mqtt_active.is_cloud_connection
 
     @property
     def meross_binded(self):
@@ -1546,8 +1546,8 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
         Reports if the device own MQTT connection is active and likely Meross
         account binded.
         """
-        if self._mqtt_active:
-            return self._mqtt_active.is_cloud_connection
+        if self.mqtt_active:
+            return self.mqtt_active.is_cloud_connection
         # if we're not connected (either reason) check the internal
         # device state connection
         if not is_device_online(self.descriptor.system):
@@ -1965,7 +1965,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
                             )
                             namespace = self.handler_all.ns
                         except Exception:
-                            self._mqtt_active = None
+                            self.mqtt_active = None
                             self.device_debug = None
                         # going on could eventually try/switch to HTTP
                     elif epoch > self._timezone_next_check:
@@ -2157,8 +2157,8 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
 
     def mqtt_receive(self, message: MerossResponse, /):
         """Message processing entry point for MQTT (PUSH) messages."""
-        assert self._mqtt_connection
-        self._mqtt_active = self._mqtt_connection
+        assert self.mqtt_connection
+        self.mqtt_active = self.mqtt_connection
         if not self.is_connected:
             self.on_connect()
             if self._polling_unsub:
@@ -2166,12 +2166,12 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
                 self._polling_unsub = self.schedule_callback(
                     0, self._poll, message.namespace
                 )
-        self.on_rx(message, self._mqtt_connection)
+        self.on_rx(message, self.mqtt_connection)
         self._handle(message)
 
     def mqtt_attached(self, client: "MQTTConnection", /):
-        if self._mqtt_connection:
-            self._mqtt_connection.detach(self)
+        if self.mqtt_connection:
+            self.mqtt_connection.detach(self)
         if client.parent.allow_mqtt_publish:
             # attaching the 'writable' client will already log the 'attached..'
             self._client_attached(Device.Mqtt(self, client))
@@ -2185,14 +2185,14 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
                     "MQTT connection doesn't allow publishing - device will not be able send commands",
                     timeout=14400,
                 )
-        self._mqtt_connection = client
+        self.mqtt_connection = client  # type: ignore[assignment]
         client.connect_broadcast.add(self.mqtt_connected)
         client.disconnect_broadcast.add(self.mqtt_disconnected)
         if client.is_connected:
             self.mqtt_connected(client)
 
     def mqtt_detached(self):
-        client = self._mqtt_connection
+        client = self.mqtt_connection
         assert client
         if client.is_connected:
             self.mqtt_disconnected(client)
@@ -2200,13 +2200,11 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
             self._client_detached(self.mqtt)
         else:
             self.log(
-                self.DEBUG,
-                "mqtt_connection: detached from %s",
-                server=str(client.id),
+                self.DEBUG, "mqtt_connection: detached from %s", server=str(client.id)
             )
         client.connect_broadcast.remove(self.mqtt_connected)
         client.disconnect_broadcast.remove(self.mqtt_disconnected)
-        self._mqtt_connection = None
+        self.mqtt_connection = None  # type: ignore[assignment]
 
     def mqtt_connected(self, client: "MQTTConnection", /):
         if self.mqtt:
@@ -2220,7 +2218,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
             self.mqtt.on_disconnect()
         else:
             self.log(self.DEBUG, "mqtt_connection: disconnected")
-        self._mqtt_active = None
+        self.mqtt_active = None
         self.device_debug = None
         self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_MQTT_BROKER)
 
@@ -2228,7 +2226,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
         assert self.profile is not profile
         if self.profile:
             self.profile.unlink(self)
-        self.profile = profile # type: ignore[assignment]
+        self.profile = profile  # type: ignore[assignment]
         self.log(self.DEBUG, "linked to profile:%s", userid=profile.id)
         self._check_protocol()
         if device_info := profile.get_device_info(self.id):
@@ -2236,10 +2234,10 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
 
     def profile_unlinked(self):
         assert self.profile
-        if self._mqtt_connection:
-            self._mqtt_connection.detach(self)
+        if self.mqtt_connection:
+            self.mqtt_connection.detach(self)
         self.log(self.DEBUG, "unlinked from profile:%s", userid=self.profile.id)
-        self.profile = None # type: ignore[assignment]
+        self.profile = None  # type: ignore[assignment]
 
     def _handle(self, message: MerossMessage, /):
         # This is almost superseeded by direct NamespaceHandler request/dispatching
@@ -2357,10 +2355,10 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
             self.schedule_entry_update(False)
 
         if self.conf_protocol is T_AUTO:
-            if self._mqtt_active:
+            if self.mqtt_active:
                 if not is_device_online(descr.system):
                     self.device_debug = None
-                    self._mqtt_active = None
+                    self.mqtt_active = None
             elif is_device_online(descr.system):
                 if not self.device_debug:
                     self.get_handler(mn.Appliance_System_Debug).schedule_get()
@@ -2389,11 +2387,11 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
         # we're then going to inspect the device reported broker and see if
         # our config allow to connect
         self.device_debug = message.payload[mc.KEY_DEBUG]
-        if mqtt_connection := self._mqtt_connection:
+        if mqtt_connection := self.mqtt_connection:
             broker = get_active_broker(self.device_debug)
             if mqtt_connection.id.host == broker.host:
-                if mqtt_connection.is_connected and not self._mqtt_active:
-                    self._mqtt_active = mqtt_connection
+                if mqtt_connection.is_connected and not self.mqtt_active:
+                    self.mqtt_active = mqtt_connection
                     if self.curr_protocol is not self.pref_protocol:
                         try:
                             self._switch_client(

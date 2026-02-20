@@ -333,7 +333,7 @@ class MQTTConnection(AbstractMQTTConnection):
                     profile.link(device)
                     # profile.link will attach to the mqtt broker known to the device cfg..
                     # we'll ensure that (in case device cfg is stale) we're correctly binded here
-                    if device._mqtt_connection != self:
+                    if device.mqtt_connection != self:
                         self.attach(device)
 
                 device.mqtt_receive(message)

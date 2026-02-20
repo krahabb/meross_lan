@@ -259,7 +259,7 @@ class ProtocolSensor(MLEnumSensor):
                 for _transport, _client in manager._clients.items()
             } | {
                 self.ATTR_MQTT_BROKER: self._get_client_attr_state(
-                    manager._mqtt_connection
+                    manager.mqtt_connection
                 )
             }
         self.flush_state()
@@ -269,10 +269,10 @@ class ProtocolSensor(MLEnumSensor):
         self.extra_state_attributes = (
             {
                 self.ATTR_MQTT_BROKER: self._get_client_attr_state(
-                    self.manager._mqtt_connection
+                    self.manager.mqtt_connection
                 )
             }
-            if self.manager._mqtt_connection
+            if self.manager.mqtt_connection
             else {}
         )
         self.flush_state()

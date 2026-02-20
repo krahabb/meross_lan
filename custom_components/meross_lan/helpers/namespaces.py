@@ -782,7 +782,7 @@ class NamespaceHandler:
         NS_MULTIPLE, it will likely do more queries though but this is unlikely)
         """
         device = self.device
-        if device._mqtt_active:
+        if device.mqtt_active:
             # on MQTT no need for updates since they're being PUSHed
             if not self.polling_epoch_next:
                 # just when onlining...
@@ -818,7 +818,7 @@ class NamespaceHandler:
         we like to re-query the full state (even on MQTT)
         """
         device = self.device
-        if not (device._mqtt_active and self.polling_epoch_next):
+        if not (device.mqtt_active and self.polling_epoch_next):
             await device.async_poll_request(self)
 
     async def async_poll_smart(self):
@@ -874,7 +874,7 @@ class NamespaceHandler:
         response buffer in one go and avoid all of this mess.
         """
         device = self.device
-        if device._mqtt_active and (device._polling_epoch < self.polling_epoch_next):
+        if device.mqtt_active and (device._polling_epoch < self.polling_epoch_next):
             # this check is the same as async_poll_default where we expect this ns to be
             # PUSHed when on MQTT
             return
@@ -962,7 +962,7 @@ class NamespaceHandler:
         """
         device = self.device
         if (
-            device._mqtt_active
+            device.mqtt_active
             and self.polling_epoch_next
             and (self.ns.has_psh or self.last_rx_push)
         ):

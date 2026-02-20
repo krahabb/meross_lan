@@ -191,7 +191,7 @@ async def test_meross_profile_with_device(
         assert (profile := api.profiles.get(tc.MOCK_PROFILE_ID))
 
         assert device.profile is profile
-        assert device._mqtt_connection in profile.mqttconnections.values()
+        assert device.mqtt_connection in profile.mqttconnections.values()
 
         # The cloud MQTT connection is (or might be) done in an executor
         # so we cannot reliably validate this condition. Later on it should
@@ -250,6 +250,6 @@ async def test_meross_profile_with_device(
         assert await profile_context.async_unload()
         assert api.profiles[tc.MOCK_PROFILE_ID] is None
         assert device.profile is None
-        assert device._mqtt_connection is None
+        assert device.mqtt_connection is None
         assert device.mqtt is None
         assert len(device._clients_connected) == 1

@@ -491,7 +491,7 @@ class MLGarage(MLCover):
     async def _async_transition_callback(self, /):
         self._transition_unsub = None
         manager = self.manager
-        if manager.curr_protocol is Transport.HTTP and not manager._mqtt_active:
+        if manager.curr_protocol is Transport.HTTP and not manager.mqtt_active:
             self.handler_ns.schedule_get(self.channel)
 
     async def _async_transition_end_callback(self, /):
