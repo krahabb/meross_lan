@@ -287,9 +287,7 @@ class ProtocolSensor(MLEnumSensor):
         attrs = self.extra_state_attributes
         if attrname in attrs:
             attrs[attrname] = self.STATE_ACTIVE
-            # TODO: maybe schedule a lazy update to avoid back-to-back
-            # flushes when multiple attrs are updated in a row?
-            self.flush_state()
+            self.schedule_flush_state()
 
     def update_attr_inactive(self, attrname: str):
         attrs = self.extra_state_attributes
