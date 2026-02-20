@@ -1030,13 +1030,6 @@ class NamespaceHandler:
                     case _:
                         await async_request_func(*self.polling_request)
 
-                if ns.payload_get is not mn.PayloadType.EMPTY:
-                    # Beside what is being stated by our grammar, it might be we've
-                    # always probed this ns with the wrong GET payload. According
-                    # to knowledge from Meross App analisys many if not all should
-                    # instead work with a plain empty GET payload.
-                    await _async_wrapped_get({})
-
             except Exception:
                 # TODO: log exception?
                 pass
