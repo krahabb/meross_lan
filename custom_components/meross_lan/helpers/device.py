@@ -212,7 +212,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
                 key=device.key,
                 from_=mlc.DOMAIN,
                 trigger_src=device.__class__.__name__,
-                loop=device.api.hass.loop,
+                loop=device.loop,
             )
 
         def configure_logger(self, /):
@@ -317,7 +317,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
                 device,
                 key=device.key,
                 from_=connection.from_,
-                loop=device.api.hass.loop,
+                loop=device.loop,
             )
 
         def configure_logger(self, /):
@@ -1140,7 +1140,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
 
         # reset and restart with a debug tracing to build the diagnostics
         self._trace_data = [mlc.CONF_TRACE_COLUMNS]
-        self._trace_future = future = self.api.hass.loop.create_future()
+        self._trace_future = future = self.loop.create_future()
         await self.async_trace_open()
         return await future
 
@@ -1660,9 +1660,7 @@ class Device(mlm.ConfigEntryManager, BaseDevice, AbstractClient):
                         *mn.Appliance_System_Ability.request_default
                     )
                 ).payload[mc.KEY_ABILITY]
-            self.api.hass.config_entries.async_update_entry(
-                self.config_entry, data=data
-            )
+            self.api.config_entries.async_update_entry(self.config_entry, data=data)
 
         # we also take the time to sync our tz to the device timezone
         tzname = self.descriptor.timezone

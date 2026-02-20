@@ -118,8 +118,7 @@ class HubNamespaceHandler(NamespaceHandler):
     """
     This namespace handler must be used to handle all of the Appliance.Hub.xxx namespaces
     since the payload parsing would just be the same where the data are just forwarded to the
-    relevant subdevice instance. (TODO) This class could/should be removed in favor of the base class
-    indexed parsing but this will need some work...
+    relevant subdevice instance.
     """
 
     device: "HubMixin"

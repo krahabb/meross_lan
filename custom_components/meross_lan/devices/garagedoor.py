@@ -678,7 +678,6 @@ class GarageDoorStateNamespaceHandler(NamespaceHandler):
             # As we know it now, this namespace accepts this queries:
             # - single channel in a DICT_C_STRICT
             # - all channels in an empty dict (only confirmed in 4.0.0+ fw)
-            # TODO: we might check if dict with {"channel": -1 or 65535} works too...(like refoss queries)
             device.ns_handlers[mn.Appliance_System_All].polling_period = 0
 
 

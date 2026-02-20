@@ -175,6 +175,14 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         return ComponentApi.get(self.hass)
 
     @cached_property
+    def config_entries(self):
+        return self.api.config_entries
+
+    @cached_property
+    def flow_manager(self):
+        return self.api.flow_manager
+
+    @cached_property
     def http_client(self):
         """Plain MerossHttpClient. When using ensure the host/key are correctly set/refreshed."""
         return HttpClient(
@@ -404,10 +412,10 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                 unique_id = f"profile.{profile_config[mc.KEY_USERID_]}"
                 profile_flow = api.get_config_flow(unique_id)
                 if profile_flow and (profile_flow["flow_id"] != self.flow_id):
-                    hass.config_entries.flow.async_abort(profile_flow["flow_id"])
+                    self.flow_manager.async_abort(profile_flow["flow_id"])
                 profile_entry = api.get_config_entry(unique_id)
                 if profile_entry:
-                    hass.config_entries.async_update_entry(
+                    self.config_entries.async_update_entry(
                         profile_entry,
                         data=profile_config,
                     )
@@ -422,7 +430,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                     if self._is_keyerror:
                         # this flow is managing a device but since the profile
                         # entry is new, we'll directly setup that
-                        await hass.config_entries.async_add(
+                        await self.config_entries.async_add(
                             # there's a bad compatibility issue between core 2024.1 and
                             # previous versions up to latest 2023 on ConfigEntry. Namely:
                             # previous core versions used positional args in ConfigEntry
@@ -998,7 +1006,7 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
         macaddress = discovery_info.macaddress
         macaddress_fmt = fmt_macaddress(macaddress)
         # check if the device is already registered
-        config_entries = self.hass.config_entries
+        config_entries = self.config_entries
         try:
             for entry in config_entries.async_entries(mlc.DOMAIN):
                 match ConfigEntryType.get_type_and_id(entry.unique_id):
@@ -1100,7 +1108,7 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
             )
             # forgive and continue if we cant discover the device...let the user work it out
 
-        for progress in config_entries.flow.async_progress_by_handler(
+        for progress in self.flow_manager.async_progress_by_handler(
             self.handler,
             include_uninitialized=True,
         ):
@@ -1108,7 +1116,7 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
                 continue
             try:
                 if progress["context"]["unique_id"] == macaddress_fmt:  # type: ignore
-                    config_entries.flow.async_abort(progress["flow_id"])
+                    self.flow_manager.async_abort(progress["flow_id"])
             except Exception:
                 pass
 
@@ -1167,8 +1175,7 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
         mac_address_fmt = descriptor.macAddress_fmt
         # The approach here is to abort any previous flow for the
         # same uuid/macaddress and keep flowing only the last (current)
-        flowmanager = self.hass.config_entries.flow
-        for progress in flowmanager.async_progress_by_handler(
+        for progress in self.flow_manager.async_progress_by_handler(
             self.handler,
             include_uninitialized=True,
         ):
@@ -1176,7 +1183,7 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
                 continue
             try:
                 if progress["context"]["unique_id"] in (uuid, mac_address_fmt):  # type: ignore
-                    flowmanager.async_abort(progress["flow_id"])
+                    self.flow_manager.async_abort(progress["flow_id"])
             except Exception:
                 pass
 
@@ -1558,7 +1565,7 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                 action = user_input[KEY_ACTION]
                 if action == KEY_ACTION_DISABLE:
                     api.async_create_task(
-                        self.hass.config_entries.async_set_disabled_by(
+                        self.config_entries.async_set_disabled_by(
                             self.config_entry_id,
                             ce.ConfigEntryDisabler.USER,
                         ),
@@ -1567,7 +1574,7 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                     )
                 elif action == KEY_ACTION_DELETE:
                     api.async_create_task(
-                        self.hass.config_entries.async_remove(self.config_entry_id),
+                        self.config_entries.async_remove(self.config_entry_id),
                         f".OptionsFlow.async_remove",
                         eager_start=False,
                     )
@@ -1594,7 +1601,7 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
         reload: bool = False,
     ):
         """Used in OptionsFlow to terminate and exit (with save)."""
-        self.hass.config_entries.async_update_entry(self.config_entry, data=config)
+        self.config_entries.async_update_entry(self.config_entry, data=config)
         if reload:
             self.api.schedule_entry_reload(self.config_entry_id)
         return self.async_create_entry(data=None)  # type: ignore

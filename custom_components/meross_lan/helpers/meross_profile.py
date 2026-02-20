@@ -473,7 +473,7 @@ class MerossProfile(mlq.MQTTProfile):
                 profile_config = dict(profile_entry.data)
                 profile_config.update(credentials)
                 # watchout: this will in turn call self.entry_update_listener
-                self.api.hass.config_entries.async_update_entry(
+                self.api.config_entries.async_update_entry(
                     profile_entry,
                     data=profile_config,
                 )

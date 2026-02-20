@@ -441,11 +441,11 @@ class ComponentApi(mlq.MQTTProfile):
         device_registry: Final[dr.DeviceRegistry]
         entity_registry: Final[er.EntityRegistry]
         issue_registry: Final[ir.IssueRegistry]
-        # TODO: cache configentries and/or loop accessor?
+        config_entries: Final
+        flow_manager: Final
 
         _mqtt_connection: HAMQTTConnection | None
 
-        _deviceclasses: Final[dict[str, type[Device]]]
         _available_timezones: list[str] | None
         _zoneinfo: Final[dict[str, zoneinfo.ZoneInfo]]
 
@@ -462,8 +462,9 @@ class ComponentApi(mlq.MQTTProfile):
         "device_registry",
         "entity_registry",
         "issue_registry",
+        "config_entries",
+        "flow_manager",
         "_mqtt_connection",
-        "_deviceclasses",
         "_available_timezones",
         "_zoneinfo",
         "_import_module_lock",
@@ -507,13 +508,14 @@ class ComponentApi(mlq.MQTTProfile):
         self.device_registry = dr.async_get(hass)
         self.entity_registry = er.async_get(hass)
         self.issue_registry = ir.async_get(hass)
+        self.config_entries = hass.config_entries
+        self.flow_manager = hass.config_entries.flow
         self._mqtt_connection = None
-        self._deviceclasses = {}
         self._available_timezones = None
         self._zoneinfo = {}
         self._import_module_lock = asyncio.Lock()
         self._import_module_cache = {}
-        for config_entry in hass.config_entries.async_entries(mlc.DOMAIN):
+        for config_entry in self.config_entries.async_entries(mlc.DOMAIN):
             match ConfigEntryType.get_type_and_id(config_entry.unique_id):
                 case (ConfigEntryType.DEVICE, device_id):
                     self.devices[device_id] = None
@@ -526,7 +528,7 @@ class ComponentApi(mlq.MQTTProfile):
             self,
             mlc.CONF_PROFILE_ID_LOCAL,
             self,
-            hass.config_entries.async_entry_for_domain_unique_id(
+            self.config_entries.async_entry_for_domain_unique_id(
                 mlc.DOMAIN, mlc.DOMAIN
             ),
         )
@@ -568,7 +570,6 @@ class ComponentApi(mlq.MQTTProfile):
             from_ = mlc.DOMAIN
             trigger_src = "service_request"
 
-            # TODO: rethink all this stuff after Device AbstractClient migration
             async def _wrap_response(request: MerossRequest, coro):
                 service_response["request"] = request
                 try:
@@ -613,13 +614,12 @@ class ComponentApi(mlq.MQTTProfile):
                 )
 
             if device_id:
+                if device := self.devices.get(device_id):
+                    return await _async_device_request(device)
                 if (protocol in (Transport.AUTO, Transport.BLUETOOTH)) and (
                     _bt_device := self.get_bt_client(device_id)
                 ):
-                    # check first since _async_device_request does not handle BT
                     return await _async_bluetooth_request(_bt_device)
-                if device := self.devices.get(device_id):
-                    return await _async_device_request(device)
                 if (
                     protocol in (Transport.AUTO, Transport.MQTT)
                     and (mqtt_connection := self._mqtt_connection)
@@ -653,7 +653,6 @@ class ComponentApi(mlq.MQTTProfile):
                     _bt_device := self._bt_devices.get(host)
                 ):
                     return await _async_bluetooth_request(_bt_device)
-
                 if protocol in (Transport.AUTO, Transport.HTTP):
                     return await _wrap_response(
                         MerossRequest(
@@ -699,6 +698,8 @@ class ComponentApi(mlq.MQTTProfile):
             del self.device_registry  # type: ignore
             del self.entity_registry  # type: ignore
             del self.issue_registry  # type: ignore
+            del self.config_entries  # type: ignore
+            del self.flow_manager  # type: ignore
             del self.hass  # type: ignore
             del self.api  # type: ignore
             hass.data.pop(mlc.DOMAIN)
@@ -753,9 +754,8 @@ class ComponentApi(mlq.MQTTProfile):
             self._mqtt_connection = mqtt_connection = HAMQTTConnection(self)
         return mqtt_connection
 
-    async def async_available_timezones(self):
-        timezones = self._available_timezones
-        if not timezones:
+    async def async_available_timezones(self) -> list[str]:
+        if self._available_timezones is None:
 
             def _load():
                 """
@@ -766,13 +766,14 @@ class ComponentApi(mlq.MQTTProfile):
                 return sorted(zoneinfo.available_timezones())
 
             try:
-                timezones = await self.hass.async_add_executor_job(_load)
+                self._available_timezones = await self.hass.async_add_executor_job(
+                    _load
+                )
             except Exception as e:
                 self.log_exception(self.WARNING, e, "retrieving available timezones")
-                timezones = []
-            self._available_timezones = timezones
+                return []
 
-        return timezones
+        return self._available_timezones  # type: ignore
 
     async def async_load_zoneinfo(self, key: str):
         """
@@ -811,18 +812,18 @@ class ComponentApi(mlq.MQTTProfile):
     def get_config_entry(self, unique_id: str):
         """Gets the configured entry if it exists."""
         try:
-            return self.hass.config_entries.async_entry_for_domain_unique_id(
+            return self.config_entries.async_entry_for_domain_unique_id(
                 mlc.DOMAIN, unique_id
             )
         except AttributeError:
-            for config_entry in self.hass.config_entries.async_entries(mlc.DOMAIN):
+            for config_entry in self.config_entries.async_entries(mlc.DOMAIN):
                 if config_entry.unique_id == unique_id:
                     return config_entry
             return None
 
     def get_config_flow(self, unique_id: str):
         """Returns the current flow (in progres) if any."""
-        for progress in self.hass.config_entries.flow.async_progress_by_handler(
+        for progress in self.flow_manager.async_progress_by_handler(
             mlc.DOMAIN,
             include_uninitialized=True,
             match_context={"unique_id": unique_id},
@@ -835,14 +836,13 @@ class ComponentApi(mlq.MQTTProfile):
         eagerly executed (or not)."""
         try:
             # should work straight...
-            self.hass.config_entries.async_schedule_reload(entry_id)
+            self.config_entries.async_schedule_reload(entry_id)
         except AttributeError:
             """Pre HA core 2024.2 compatibility layer"""
-            config_entries = self.hass.config_entries
-            if entry := config_entries.async_get_entry(entry_id):
+            if entry := self.config_entries.async_get_entry(entry_id):
                 entry.async_cancel_retry_setup()
                 self.async_create_task(
-                    config_entries.async_reload(entry_id),
+                    self.config_entries.async_reload(entry_id),
                     f".schedule_reload({entry.title},{entry_id})",
                 )
 

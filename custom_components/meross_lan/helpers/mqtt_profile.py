@@ -198,7 +198,6 @@ class MQTTConnection(AbstractMQTTConnection):
             ConnectionSensor(self)
 
     async def async_shutdown(self):
-        self.mqttdiscovering.clear()
         for device in self.mqttdevices.values():
             device.mqtt_detached()
         self.mqttdevices.clear()
@@ -352,7 +351,7 @@ class MQTTConnection(AbstractMQTTConnection):
                 # not really needed but we would like to always have the
                 # MQTT hub entry in case so if the user removed that..retrigger
                 profile.async_create_task(
-                    api.hass.config_entries.flow.async_init(
+                    api.flow_manager.async_init(
                         mlc.DOMAIN,
                         context={"source": "hub"},
                         data=None,
@@ -481,7 +480,7 @@ class MQTTConnection(AbstractMQTTConnection):
             device_config, descriptor = await self.async_identify_device(
                 uuid, self.parent.key
             )
-            return await self.parent.api.hass.config_entries.flow.async_init(
+            return await self.parent.api.flow_manager.async_init(
                 mlc.DOMAIN,
                 context={"source": SOURCE_INTEGRATION_DISCOVERY},
                 data=device_config,

@@ -110,7 +110,6 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
             device_value=0,
         )
         self.switch_patch_hvacaction.register_state_callback(self.flush_state)
-        # ns registration. TODO: move (maybe) to MtsClimate base class once Hub subdevice ns handling is sorted out
         for _entity in (self.number_adjust_temperature, self.schedule):
             subdevice.manager.register_parser_entity(_entity)
 
