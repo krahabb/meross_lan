@@ -368,11 +368,12 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
                         return
                     adjust_temperature = number_adjust_temperature.native_min_value
                 self._track_last_epoch = self.time()
-                self.manager.async_create_task(
+                self.manager.create_task(
                     number_adjust_temperature.async_set_native_value(
                         adjust_temperature
                     ),
                     f"MtsTrackedSensor._track(adjust_temperature={adjust_temperature} [{climate.temperature_unit}])",
+                    eager_start=True,
                 )
                 self.log(
                     self.DEBUG,

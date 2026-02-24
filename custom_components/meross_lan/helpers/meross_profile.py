@@ -18,7 +18,7 @@ from . import (
 )
 from .. import const as mlc
 from ..merossclient import HostAddress, cloudapi, get_active_broker
-from ..merossclient.client.mqtt import MQTTAppClient, MQTTRateLimitExceeded
+from ..merossclient.client.mqtt import MQTTAppClient
 from ..merossclient.obfuscate import OBFUSCATE_DICT, OBFUSCATE_UUID_MAP
 from ..merossclient.protocol import const as mc
 
@@ -69,20 +69,16 @@ if TYPE_CHECKING:
 
 class MerossMQTTConnection(MQTTAppClient, mlq.MQTTConnection):
 
-    if TYPE_CHECKING:
-        is_cloud_connection: Final[Literal[True]]  # type: ignore[override]
-
     __slots__ = MQTTAppClient._calc_slots()
 
     def __init__(self, broker: "HostAddress", profile: "MerossProfile"):
-        self.is_cloud_connection = True
         super().__init__(
             broker,
             profile,
             key=profile.key,
             app_id=profile.app_id,
             user_id=profile.userid,
-            loop=profile.api.hass.loop,
+            loop=profile.loop,
             sslcontext=get_default_ssl_context(),
         )
 
@@ -130,6 +126,7 @@ class MerossProfile(mlq.MQTTProfile):
         # Overrides
         config: ProfileConfigType
         is_cloud_profile: Final[Literal[True]]
+        mqttconnections: Final[dict[str, MerossMQTTConnection]]  # type: ignore[override]
 
     KEY_APP_ID = "appId"
     KEY_DEVICE_INFO = "deviceInfo"
@@ -217,8 +214,9 @@ class MerossProfile(mlq.MQTTProfile):
             }
 
         if mc.KEY_MQTTDOMAIN in self.config:
-            broker = HostAddress.build(self.config[mc.KEY_MQTTDOMAIN])  # type: ignore
-            mqttconnection = MerossMQTTConnection(broker, self)
+            mqttconnection = MerossMQTTConnection(
+                HostAddress.build(self.config[mc.KEY_MQTTDOMAIN]), self
+            )
             try:
                 await mqttconnection.async_connect()
             except Exception:
@@ -322,19 +320,19 @@ class MerossProfile(mlq.MQTTProfile):
         return self._data[self.KEY_LATEST_VERSION_HISTORY]
 
     @override
-    def attach_mqtt(self, device: "Device"):
-        descr = device.descriptor
+    def get_connection(self, device: "Device"):
         try:
             if device.is_connected:
                 if device.device_debug:
                     try:
                         broker = get_active_broker(device.device_debug)
                     except Exception:
-                        broker = descr.main_broker
+                        broker = device.descriptor.main_broker
                 else:
-                    broker = descr.main_broker
+                    broker = device.descriptor.main_broker
             else:
                 # decide which broker to connect to based off the most recent info
+                descr = device.descriptor
                 device_info = self._data[self.KEY_DEVICE_INFO][device.id]
                 timestamp_fw = descr.time.get(mc.KEY_TIMESTAMP, 0)
                 timestamp_di = self._data[self.KEY_DEVICE_INFO_TIME]
@@ -365,11 +363,13 @@ class MerossProfile(mlq.MQTTProfile):
                 return
 
         mqttconnection = self._get_mqttconnection(broker)
-        mqttconnection.attach(device)
         if mqttconnection.state_inactive:
-            self.async_create_task(
-                mqttconnection.async_connect(), "attach_mqtt.schedule_connect"
+            self.create_task(
+                mqttconnection.async_connect(),
+                "attach_mqtt.schedule_connect",
+                eager_start=True,
             )
+        return mqttconnection
 
     # interface: self
     @property
@@ -412,13 +412,13 @@ class MerossProfile(mlq.MQTTProfile):
 
         return mqttconnections
 
-    def _get_mqttconnection(self, broker: HostAddress) -> MerossMQTTConnection:
+    def _get_mqttconnection(self, broker: HostAddress):
         """
         Returns an existing connection from the managed pool or create one and add
         to the mqttconnections pool. The connection state is not ensured.
         """
         try:
-            return self.mqttconnections[str(broker)]  # type: ignore
+            return self.mqttconnections[str(broker)]
         except KeyError:
             return MerossMQTTConnection(broker, self)
 

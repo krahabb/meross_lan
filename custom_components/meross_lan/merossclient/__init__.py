@@ -449,6 +449,8 @@ class DeviceDescriptor:
         firmwareVersion: str
         time: dict
         timezone: str | None
+        is_hub: bool
+        subdevices: list[mt_h.Digest_SubDevice] | None
         # computed cached helpers
         productname: str
         productnametype: str
@@ -456,7 +458,6 @@ class DeviceDescriptor:
         type_subtype: tuple[str, str]
         is_refoss: bool
         firmware_version: VersionTupleType
-
         # devices with additional mcu firmware
         mcu: mt_m.Firmware | JsonDict | None
 
@@ -494,6 +495,10 @@ class DeviceDescriptor:
         "firmwareVersion": lambda _self: _self.firmware.get(mc.KEY_VERSION, ""),
         mc.KEY_TIME: lambda _self: _self.system.get(mc.KEY_TIME, {}),
         mc.KEY_TIMEZONE: lambda _self: _self.time.get(mc.KEY_TIMEZONE),
+        "is_hub": lambda _self: mc.KEY_HUB in _self.digest,
+        "subdevices": lambda _self: (
+            _self.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE] if _self.is_hub else None
+        ),
         "productname": lambda _self: get_productname(_self.type),
         "productnametype": lambda _self: get_productnametype(_self.type),
         "productmodel": lambda _self: f"{_self.type} {_self.hardware.get(mc.KEY_VERSION, '')}",

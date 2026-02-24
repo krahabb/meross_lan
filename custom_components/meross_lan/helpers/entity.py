@@ -16,8 +16,9 @@ except ImportError:
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity
 
+from ..merossclient.device import NamespaceParser
 from ..merossclient.protocol import MerossError
-from .namespaces import NamespaceHandler, NamespaceParser, mc, mn
+from .namespaces import NamespaceHandler, mc, mn
 
 if TYPE_CHECKING:
     from typing import (
@@ -40,6 +41,7 @@ if TYPE_CHECKING:
     from ..merossclient.protocol.types import JsonDict, JsonMapping, PayloadIndexType
     from .device import BaseDevice, Device, MerossResponse
     from .manager import ConfigEntryManager, EntityManager
+    from .namespaces import NamespaceHandler
 
     type ChannelType = PayloadIndexType
 
@@ -86,6 +88,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         is_diagnostic: ClassVar[bool]
         """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
 
+        handler_ns: NamespaceHandler  # override NamespaceParser typing
         key_value: str  # defaulted to 'value'
         _parse_togglex: Callable[[JsonDict], Any]
 

@@ -34,7 +34,9 @@ if TYPE_CHECKING:
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    MLBinaryEntity.platform_setup_entry(hass, config_entry, async_add_devices, light.DOMAIN)
+    MLBinaryEntity.platform_setup_entry(
+        hass, config_entry, async_add_devices, light.DOMAIN
+    )
 
 
 MSL_LUMINANCE_MIN = 1
@@ -354,7 +356,10 @@ class MLLightBase(MLBinaryEntity, light.LightEntity):
         the call frequency in case we're on cloud MQTT
         """
         if self.manager.meross_binded:
-            # 'saturate' the resolution of the callback
+            # Saturate the resolution of the callback
+            # to avoid excessive MQTT traffic when on cloud MQTT
+            # This is applied even if we're using HTTP to send commands
+            # since they'll likely create MQTT PUSH messages from the device.
             _t_resolution = max(10, self._t_resolution)
         else:
             _t_resolution = self._t_resolution

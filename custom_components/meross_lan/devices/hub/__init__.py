@@ -15,7 +15,11 @@ from ...helpers.namespaces import (
     mc,
     mn,
 )
-from ...merossclient import get_productname, get_subdevice_key_digest, versiontuple
+from ...merossclient import (
+    device,
+    get_productname,
+    get_subdevice_key_digest,
+)
 from ...merossclient.protocol.namespaces import hub as mn_h
 from ...number import MLConfigNumber
 from ...sensor import (
@@ -294,7 +298,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
         return SubDevice(subid, self, key_digest, entity_class)
 
 
-class SubDevice(mld.BaseDevice, MLNumericSensor):
+class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
     """
     Class for a physical subdevice registered with a Hub device.
     This class acts as a 'container' for the actual entities implemented for the device
@@ -334,15 +338,10 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
         mn_h.Appliance_Hub_SubDevice_Version,
     )
 
-    __slots__ = (
-        (
-            "async_request",
-            "key_digest",
-            "model",
-            "_digest_parse",
-        )
-        + mld.BaseDevice.__SLOTS__
-        + mld.mlm.EntityManager.__SLOTS__
+    __slots__ = mld.BaseDevice._calc_slots(
+        "key_digest",
+        "model",
+        "_digest_parse",
     )
 
     def __init__(
@@ -355,8 +354,6 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
     ):
         # fix some base attributes...TODO: this needs to be better addressed
         self.platforms = hub.platforms
-        self.async_request = hub.async_request
-        self.ns_handlers = hub.ns_handlers
         # In order to keep compatibility with existing code
         # until we find a clear solution for id/channel/entity_key
         # we save subid for safe use whenever we need a 'clear' device subid
@@ -414,36 +411,10 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
     def generate_unique_id(self, entity: MLEntity, /):
         return f"{self.manager.id}_{entity.id}"
 
-    # interface: BaseDevice
-    @override
-    def get_upgrade_payload(self, /) -> "mt_c.Upgrade":
-        # start from hub upgrade payload (eventually)
-        upgrade_payload = self.manager.get_upgrade_payload()
-        latest_version = self.latest_version
-        if versiontuple(latest_version[mc.KEY_VERSION]) > versiontuple(
-            self.device_entry.sw_version or latest_version[mc.KEY_VERSION]
-        ):
-            upgrade_payload["subdev"] = [
-                {
-                    "devid": self.id,
-                    mc.KEY_URL: latest_version[mc.KEY_URL],
-                    mc.KEY_MD5: latest_version[mc.KEY_MD5],
-                }
-            ]
-        return upgrade_payload
-
-    @override
-    def get_upgrade_info(self, /):
-        return (
-            self.device_entry.sw_version,
-            self.latest_version.get(mc.KEY_VERSION),
-            self.latest_version.get(mc.KEY_DESCRIPTION),
-        )
-
     @property
     @override
-    def tz(self):
-        return self.manager.tz
+    def firmware_version(self, /) -> str:
+        return self.device_entry.sw_version or self.latest_version[mc.KEY_VERSION]
 
     # interface: MLEntity
     @cached_property
@@ -455,12 +426,12 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
 
     @override
     def set_available(self):
-        self._set_online()
+        self.on_connect()
         super().set_available()
 
     @override
     def set_unavailable(self):
-        self._set_offline()
+        self.on_disconnect()
         super().set_unavailable()
 
     # interface: self
@@ -558,10 +529,10 @@ class SubDevice(mld.BaseDevice, MLNumericSensor):
     def _parse_online(self, payload: "mt_h._Online", /):
         if payload[mc.KEY_STATUS] == mc.STATUS_ONLINE:
             if not self.is_connected:
-                self._set_online()
+                self.on_connect()
         else:
             if self.is_connected:
-                self._set_offline()
+                self.on_disconnect()
 
     def _parse_beep(self, payload: "mt_h.SubDevice_Beep", /):
         self.ns_handlers[mn_h.Appliance_Hub_SubDevice_Beep].swap_parsers(
@@ -1198,9 +1169,10 @@ def digest_init_hub(
                     severity=device.IssueSeverity.WARNING,
                     translation_placeholders={"device_name": subdevice.display_name},
                 )
-                device.async_create_task(
+                device.create_task(
                     subdevice.async_shutdown(),
                     f"{subdevice.__class__.__name__}.async_shutdown()",
+                    eager_start=True,
                 )
 
     ability = device.descriptor.ability

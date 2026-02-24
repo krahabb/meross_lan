@@ -1,4 +1,3 @@
-import asyncio
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -13,10 +12,12 @@ from ..protocol import (
 from ..protocol.message import MerossRequest, MerossResponse
 
 if TYPE_CHECKING:
+    from types import CoroutineType
     from typing import (
         Any,
         Callable,
         ClassVar,
+        Coroutine,
         Final,
         Generator,
         Iterable,
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
 
     from cloudapi import LatestVersionType
 
+    from ..device import Device
     from ..logging import LoggerType
     from ..protocol.message import MerossMessage
     from ..protocol.namespaces import Namespace
@@ -37,6 +39,7 @@ if TYPE_CHECKING:
         JsonDict,
         JsonList,
         JsonMapping,
+        MerossPayloadType,
         MerossRequestType,
         VersionTupleType,
         config as mt_cf,
@@ -71,7 +74,7 @@ class AbstractClient(logging.Loggable):
 
     if TYPE_CHECKING:
 
-        class Broadcast[*_argsT](logging.Loggable.Broadcast[*_argsT]):
+        class Broadcast[_T, *_argsT](logging.Loggable.Broadcast[_T, *_argsT]):
             pass
 
         class Args(logging.Loggable.Args):
@@ -80,7 +83,6 @@ class AbstractClient(logging.Loggable):
             trigger_src: NotRequired[str]
             descriptor: NotRequired[DeviceDescriptor]
             timeout: NotRequired[float]
-            loop: NotRequired[asyncio.AbstractEventLoop]
 
         class ConnectArgs(TypedDict):
             timeout: NotRequired[float]
@@ -93,6 +95,10 @@ class AbstractClient(logging.Loggable):
             key: NotRequired[str]
             from_: NotRequired[str]
             trigger_src: NotRequired[str]
+
+        type AsyncRequestFunc = Callable[
+            [str, str, MerossPayloadType], CoroutineType[Any, Any, MerossMessage]
+        ]
 
         class ConfigureMQTTArgs(RequestArgs):
             host: NotRequired[str]  # doesnt set broker if missing/empty
@@ -109,24 +115,29 @@ class AbstractClient(logging.Loggable):
 
         TRANSPORT: Final[Transport]
 
-        key: str  # default key used to sign Meross protocol messages
-        from_: str  # default value in 'from' header key
-        trigger_src: str  # default value in 'triggerSrc' header key
+        # defaults for message construction
+        key: str
+        from_: str
+        trigger_src: str
+
         descriptor: DeviceDescriptor | None
         timeout: float
-        loop: Final[asyncio.AbstractEventLoop]
 
         is_connected: Final[bool]
-
         last_tx_message: MerossMessage | None
         last_tx_epoch: float
         last_rx_message: MerossMessage | None
         last_rx_epoch: float
 
-        connect_broadcast: Final[Broadcast[(Self)]]
-        disconnect_broadcast: Final[Broadcast[(Self)]]
-        tx_broadcast: Final[Broadcast[(MerossMessage, Self)]]
-        rx_broadcast: Final[Broadcast[(MerossMessage, Self)]]
+        connect_broadcast: Final[Broadcast[None, Self]]
+        disconnect_broadcast: Final[Broadcast[None, Self]]
+        tx_broadcast: Final[Broadcast[None, MerossMessage, Self]]
+        rx_broadcast: Final[Broadcast[MerossMessage, MerossMessage, Self]]
+
+        device: Final[Device]  # type: ignore[assignment]
+        """Instance of device this client is attached to. This is set only by the Device.add_client
+        (thorough on_device_add) and Device.remove_client methods, so it should be considered read-only
+        for client implementations."""
 
     Direction = Direction
     Transport = Transport
@@ -143,7 +154,6 @@ class AbstractClient(logging.Loggable):
         "trigger_src",
         "descriptor",
         "timeout",
-        "loop",
         "is_connected",
         "last_tx_message",
         "last_tx_epoch",
@@ -153,6 +163,7 @@ class AbstractClient(logging.Loggable):
         "disconnect_broadcast",
         "tx_broadcast",
         "rx_broadcast",
+        "device",
     )
 
     def __init__(
@@ -163,7 +174,6 @@ class AbstractClient(logging.Loggable):
         self.trigger_src = kwargs.pop("trigger_src", self.__class__.__name__)
         self.descriptor = kwargs.pop("descriptor", None)
         self.timeout = kwargs.pop("timeout", self.TIMEOUT)
-        self.loop = kwargs.pop("loop", asyncio.get_running_loop())
         super().__init__(id, parent, **kwargs)
         self.is_connected = False
         self.last_tx_message = None
@@ -176,32 +186,29 @@ class AbstractClient(logging.Loggable):
         self.rx_broadcast = self.Broadcast(self)
 
     async def async_shutdown(self):
-        await super().async_shutdown()
+        try:
+            self.device.remove_client(self)
+        except AttributeError:
+            pass  # might be not linked ...
+
         await self.async_disconnect()
+        await super().async_shutdown()
 
     @logging.abc.abstractmethod
     async def async_connect(self, /, **kwargs: "Unpack[ConnectArgs]"): ...
     @logging.abc.abstractmethod
     async def async_disconnect(self, /): ...
 
-    @logging.abc.abstractmethod
-    async def async_request_raw(
-        self, request: MerossRequest, /, **kwargs: "Unpack[RequestRawArgs]"
-    ) -> MerossResponse:
-        """Low level request sending/receiving method to be implemented by
-        transport-specific implementations."""
-        ...
-
     def on_connect(self, /):
         """Signals client successful connection."""
         self.is_connected = True  # type: ignore
-        self.log(logging.DEBUG, "connected")
+        self.log(logging.DEBUG, "Connected")
         self.connect_broadcast.broadcast(self)
 
     def on_disconnect(self, /):
         """Signals client disconnection."""
         self.is_connected = False  # type: ignore[assignment]
-        self.log(logging.DEBUG, "disconnected")
+        self.log(logging.DEBUG, "Disconnected")
         self.disconnect_broadcast.broadcast(self)
 
     def on_tx(self, message: "MerossMessage", *args):
@@ -255,6 +262,30 @@ class AbstractClient(logging.Loggable):
                 message.method,
                 message.namespace,
             )
+
+    def on_device_add(self, device: "Device"):
+        """Called when a client is being added to a device (add_client)."""
+        try:
+            # play it safe ...
+            self.device.remove_client(self)
+        except AttributeError:
+            pass
+        self.device = device  # type: ignore[assignment]
+        self.logtag = self.TRANSPORT
+
+    def on_device_remove(self, device: "Device"):
+        """Called when a client is being removed from a device (remove_client)."""
+        assert self.device is device, "Removing device that is not currently linked"
+        del self.device  # type: ignore[assignment]
+        self.configure_logger()
+
+    @logging.abc.abstractmethod
+    async def async_request_raw(
+        self, request: MerossRequest, /, **kwargs: "Unpack[RequestRawArgs]"
+    ) -> MerossResponse:
+        """Low level request sending/receiving method to be implemented by
+        transport-specific implementations."""
+        ...
 
     async def async_request(
         self, *args: "Unpack[MerossRequestType]", **kwargs: "Unpack[RequestArgs]"

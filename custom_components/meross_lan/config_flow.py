@@ -193,32 +193,25 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
             loop=self.hass.loop,
         )
 
-    async def async_get_device_client(self, device_id: str) -> "AbstractClient | None":
+    async def async_get_device_client(self, uuid: str) -> "AbstractClient | None":
         """Returns a suitable low level device client to query/configure the device.
         This instance must not be modified since it could be an active client used by a Device.
         """
         api = self.api
         try:
-            device = api.devices[device_id]
+            device = api.devices[uuid]
             if device:
-                if device.bluetooth:
-                    return device.bluetooth
-                elif device.http and device.http.is_connected:
-                    return device.http
-                elif device.mqtt:
-                    return MQTTConnection.Client(
-                        device_id,
-                        device.mqtt.connection,
-                        key=self.device_config.get(mlc.CONF_KEY) or "",
-                        trigger_src=self.__class__.__name__,
-                    )
+                if device._clients_connected:
+                    return next(iter(device._clients_connected.values()))
+                elif device._clients:
+                    return next(iter(device._clients.values()))
                 else:
                     return None
         except KeyError:
             pass
 
         if self._is_bluetooth:
-            return api.get_bt_client(device_id)
+            return api.get_bt_client(uuid)
 
         device_config = self.device_config
         host = device_config.get(mlc.CONF_HOST)
@@ -230,13 +223,13 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
 
         profile = api.profiles.get(self.device_descriptor.userId)
         if profile and profile.allow_mqtt_publish:
-            mqttconnections = await profile.get_or_create_mqttconnections(device_id)
+            mqttconnections = await profile.get_or_create_mqttconnections(uuid)
             if mqttconnections:
                 return MQTTConnection.Client(
-                    device_id,
                     mqttconnections[0],
+                    api,
+                    uuid=uuid,
                     key=device_config.get(mlc.CONF_KEY) or "",
-                    trigger_src=self.__class__.__name__,
                 )
 
         return None
@@ -576,7 +569,11 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         mqtt_connections: dict[str, tuple["MQTTConnection", HostAddress, bool]] = {}
         ha_mqtt_connection = api.mqtt_connection
         for _device in api.active_devices():
-            if _device.mqtt_locallyactive:
+            if (
+                _device.mqtt
+                and _device.mqtt.is_connected
+                and (_device.mqtt.connection is ha_mqtt_connection)
+            ):
                 _broker = _device.descriptor.main_broker
                 mqtt_connections[f"HomeAssistant (mqtt://{_broker})"] = (
                     ha_mqtt_connection,
@@ -1564,19 +1561,17 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                 await device.async_unbind()
                 action = user_input[KEY_ACTION]
                 if action == KEY_ACTION_DISABLE:
-                    api.async_create_task(
+                    api.create_task(
                         self.config_entries.async_set_disabled_by(
                             self.config_entry_id,
                             ce.ConfigEntryDisabler.USER,
                         ),
                         f".OptionsFlow.async_set_disabled_by",
-                        eager_start=False,
                     )
                 elif action == KEY_ACTION_DELETE:
-                    api.async_create_task(
+                    api.create_task(
                         self.config_entries.async_remove(self.config_entry_id),
                         f".OptionsFlow.async_remove",
-                        eager_start=False,
                     )
                 return self.async_create_entry(data=None)  # type: ignore
 
@@ -1603,5 +1598,5 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
         """Used in OptionsFlow to terminate and exit (with save)."""
         self.config_entries.async_update_entry(self.config_entry, data=config)
         if reload:
-            self.api.schedule_entry_reload(self.config_entry_id)
+            self.config_entries.async_schedule_reload(self.config_entry_id)
         return self.async_create_entry(data=None)  # type: ignore

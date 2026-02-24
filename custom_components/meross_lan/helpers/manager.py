@@ -2,7 +2,7 @@ from abc import abstractmethod
 import asyncio
 import os
 from time import localtime, strftime
-from typing import TYPE_CHECKING, final
+from typing import TYPE_CHECKING, final, override
 import weakref
 
 from homeassistant.components import persistent_notification as pn
@@ -99,7 +99,6 @@ class EntityManager(logging.Loggable):
         entities: Final[dict[object, MLEntity]]
         objects: Final[weakref.WeakSet]
         """Keeps track of some object instances (for debugging) built and managed by this EntityManager."""
-        _tasks: set[asyncio.Future]
 
         class Args(logging.Loggable.Args):
             device_entry: NotRequired[dr.DeviceEntry | None]
@@ -122,7 +121,6 @@ class EntityManager(logging.Loggable):
         "platforms",
         "entities",
         "objects",
-        "_tasks",
     )
 
     def __init__(self, id: str, manager: "EntityManager", **kwargs: "Unpack[Args]"):
@@ -133,7 +131,6 @@ class EntityManager(logging.Loggable):
         assert hasattr(self, "platforms"), "platforms must be set in derived classes"
         self.entities = {}
         self.objects = weakref.WeakSet()
-        self._tasks = set()
         super().__init__(id, manager, **kwargs)
 
     async def async_shutdown(self):
@@ -147,26 +144,10 @@ class EntityManager(logging.Loggable):
         """
         await super().async_shutdown()
 
-        for task in tuple(self._tasks):
-            if task.done():
-                continue
-            self.log(self.DEBUG, "Shutting down pending task %s", task)
-            task.cancel("ConfigEntryManager shutdown")
-            try:
-                async with asyncio.timeout(0.5):
-                    await task
-            except asyncio.CancelledError:
-                continue
-            except Exception as exception:
-                self.log_exception(
-                    self.WARNING, exception, "cancelling task %s during shutdown", task
-                )
         for entity in tuple(self.entities.values()):
             # async_shutdown will pop out of self.entities
             await entity.async_shutdown()
 
-        if self._tasks:
-            self.log(self.DEBUG, "Some tasks were not shutdown %s", self._tasks)
         self.log(
             self.DEBUG,
             "EntityManager.async_shutdown complete (objects: %s)",
@@ -206,46 +187,21 @@ class EntityManager(logging.Loggable):
         """
         return self.device_entry
 
-    def schedule_async_callback(
-        self, delay: float, target: "Callable[..., Coroutine]", *args
+    @override
+    def create_task[_T](
+        self, target: "Coroutine[Any, Any, _T]", name: str, eager_start: bool = False
     ):
-        @callback
-        def _callback(*_args):
-            self.async_create_task(target(*_args), "._callback")
-
-        return self.api.hass.loop.call_later(delay, _callback, *args)
-
-    def schedule_callback(self, delay: float, target: "Callable", *args):
-        return self.api.hass.loop.call_later(delay, target, *args)
-
-    @callback
-    def async_create_task[_T](
-        self, target: "Coroutine[Any, Any, _T]", name: str, eager_start: bool = True
-    ):
-        # TODO: rename to create_task and add an exception wrapper.
+        task = self.api.hass.async_create_task(
+            target, f"{self.logtag}{name}", eager_start=eager_start
+        )
+        if eager_start and task.done():
+            return task
         try:
-            task = self.api.hass.async_create_task(
-                target, f"{self.logtag}{name}", eager_start
-            )
-        except TypeError:  # older api compatibility fallback (likely pre core 2024.3)
-            task = self.api.hass.async_create_task(target, f"{self.logtag}{name}")
-            eager_start = False
-        if not (eager_start and task.done()):
             self._tasks.add(task)
-            task.add_done_callback(self._tasks.remove)
+        except AttributeError:
+            self._tasks = {task}
+        task.add_done_callback(self._done_task_callback)
         return task
-
-    def _set_online(self, /):
-        self.log(self.DEBUG, "Back online!")
-        self.is_connected = True  # type: ignore
-        for entity in self.entities.values():
-            entity.set_available()
-
-    def _set_offline(self, /):
-        self.log(self.DEBUG, "Going offline!")
-        self.is_connected = False  # type: ignore
-        for entity in self.entities.values():
-            entity.set_unavailable()
 
 
 class ConfigEntryManager(EntityManager):
@@ -328,6 +284,7 @@ class ConfigEntryManager(EntityManager):
         self._unsub_trace_endtime = None
         self._unsub_entry_reload = None
         self._unsub_entry_update_listener = None
+        kwargs.setdefault("loop", api.hass.loop)
         super().__init__(id, api, **kwargs)
 
     async def async_shutdown(self):
@@ -340,8 +297,8 @@ class ConfigEntryManager(EntityManager):
         usually referred to inside the polling /parsing code)
         """
         self._cleanup_subscriptions()  # extra-safety cleanup: shouldnt be loaded/listened at this point
-        await super().async_shutdown()
         await self.async_destroy_diagnostic_entities()
+        await super().async_shutdown()
         if self.is_tracing:
             self.trace_close()
 
@@ -444,7 +401,7 @@ class ConfigEntryManager(EntityManager):
         assert self.config_entry
         self._unsub_entry_reload = self.schedule_callback(
             delay,
-            self.api.schedule_entry_reload,
+            self.api.config_entries.async_schedule_reload,
             self.config_entry.entry_id,
         )
 

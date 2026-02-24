@@ -3,6 +3,7 @@ Logging utilities for merossclient library.
 """
 
 import abc
+import asyncio
 from contextlib import contextmanager
 import logging
 from time import time
@@ -12,7 +13,16 @@ from . import broadcast
 from .obfuscate import OBFUSCATE_KEYS
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Final, NotRequired, Protocol, TypedDict, Unpack
+    from typing import (
+        Any,
+        Callable,
+        Coroutine,
+        Final,
+        NotRequired,
+        Protocol,
+        TypedDict,
+        Unpack,
+    )
 
     from .obfuscate import JsonMapping
 
@@ -179,7 +189,7 @@ class Loggable(metaclass=abc.ABCMeta):
     Loggable is shutdown, so that they can perform cleanup if needed.
     """
 
-    class Broadcast[*_argsT](broadcast.Broadcast[*_argsT]):
+    class Broadcast[_ret, *_argsT](broadcast.Broadcast[_ret, *_argsT]):
         """create a broadcast object with auto-shutdown support when the parent Loggable is shutdown."""
 
         def __init__(self, loggable: "Loggable", /):
@@ -188,12 +198,15 @@ class Loggable(metaclass=abc.ABCMeta):
     if TYPE_CHECKING:
         id: Final[Any]
         parent: Final[LoggerType]
+        loop: Final[asyncio.AbstractEventLoop]
+        shutdown_broadcast: broadcast.Broadcast[None]
+        async_shutdown_broadcast: broadcast.Broadcast[Coroutine[Any, Any, None]]
 
-        shutdown_broadcast: broadcast.Broadcast[()]
+        _tasks: set[asyncio.Future]
 
         def time(self) -> float: ...
         class Args(TypedDict):
-            pass
+            loop: NotRequired[asyncio.AbstractEventLoop]
 
     VERBOSE = VERBOSE
     DEBUG = DEBUG
@@ -201,7 +214,16 @@ class Loggable(metaclass=abc.ABCMeta):
     WARNING = WARNING
     CRITICAL = CRITICAL
 
-    __SLOTS__ = ("id", "logtag", "parent", "time", "shutdown_broadcast")
+    __SLOTS__ = (
+        "id",
+        "logtag",
+        "parent",
+        "loop",
+        "time",
+        "shutdown_broadcast",
+        "async_shutdown_broadcast",
+        "_tasks",
+    )
 
     @classmethod
     def _calc_slots(cls, *slots: "Unpack[tuple[str, ...]]"):
@@ -220,16 +242,61 @@ class Loggable(metaclass=abc.ABCMeta):
         self.parent = parent or getLogger(
             self.__class__.__module__ + "." + self.__class__.__name__
         )
+        self.loop = (
+            kwargs.pop("loop", None)
+            or getattr(parent, "loop", None)
+            or asyncio.get_event_loop()
+        )
         self.shutdown_broadcast = broadcast.Broadcast()
+        self.async_shutdown_broadcast = broadcast.Broadcast()
         self.time = time
         self.configure_logger()
         self.log(VERBOSE, "init")
 
     async def async_shutdown(self):
         self.log(VERBOSE, "async_shutdown")
+
+        try:
+            for task in tuple(self._tasks):
+                if task.done():
+                    continue
+                self.log(self.DEBUG, "Shutting down pending task %r", task)
+                task.cancel(f"{self} shutdown")
+                try:
+                    async with asyncio.timeout(0.5):
+                        await task
+                except asyncio.CancelledError:
+                    continue
+                except Exception as exception:
+                    self.log_exception(
+                        self.WARNING,
+                        exception,
+                        "cancelling task %r during %r shutdown",
+                        task,
+                        self,
+                    )
+
+            if self._tasks:
+                self.log(
+                    self.WARNING,
+                    "Some tasks were not properly shutdown %s in %r",
+                    self._tasks,
+                    self,
+                )
+
+        except AttributeError:
+            pass  # might be not initialized ...
+
+        if self.async_shutdown_broadcast:
+            # create a copy since the shutdown callbacks would typically
+            # remove themselves from the broadcast
+            for _listener in tuple(self.async_shutdown_broadcast):
+                await _listener()
+            self.async_shutdown_broadcast.clear()
+        # broadcast and clear at the end since this
+        # will also cleanup the Broadcast objects linked to this Loggable
+        # see Loggable.Broadcast class.
         self.shutdown_broadcast.broadcast()
-        # Automatically cleans any listener so that they don't need to
-        # worry about deregistering.
         self.shutdown_broadcast.clear()
 
     def __repr__(self):
@@ -269,6 +336,49 @@ class Loggable(metaclass=abc.ABCMeta):
             yield
         except Exception as exception:
             self.log_exception(self.WARNING, exception, msg, *args, **kwargs)
+
+    def create_task[_T](
+        self, coro: "Coroutine[Any, Any, _T]", name: str, eager_start: bool = False
+    ):
+        if eager_start:
+            # WARNING: direct Task creation should be avoided in favor of asyncio dedicated apis.
+            # In 3.14 this will be possible with create_task(..., eager_start=True)
+            task = asyncio.Task(
+                coro, loop=self.loop, name=f"{self.logtag}{name}", eager_start=True
+            )
+            if task.done():
+                return task
+        else:
+            task = self.loop.create_task(coro, name=f"{self.logtag}{name}")
+        try:
+            self._tasks.add(task)
+        except AttributeError:
+            self._tasks = {task}
+        task.add_done_callback(self._done_task_callback)
+        return task
+
+    def _done_task_callback(self, task: asyncio.Future):
+        try:
+            task.result()
+        except (asyncio.CancelledError, Exception) as e:
+            self.log_exception(
+                self.DEBUG,
+                e,
+                "Task %r",
+                task,
+            )
+        self._tasks.remove(task)
+
+    def schedule_async_callback(
+        self, delay: float, target: "Callable[..., Coroutine]", *args
+    ):
+        def _callback(*_args):
+            self.create_task(target(*_args), "._callback", eager_start=True)
+
+        return self.loop.call_later(delay, _callback, *args)
+
+    def schedule_callback(self, delay: float, target: "Callable", *args):
+        return self.loop.call_later(delay, target, *args)
 
     def __del__(self):
         self.log(VERBOSE, "destroy")

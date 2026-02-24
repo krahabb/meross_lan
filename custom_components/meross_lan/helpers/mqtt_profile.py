@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from ..merossclient import HostAddress
     from ..merossclient.client import Direction
     from ..merossclient.cloudapi import DeviceInfoType, LatestVersionType
+    from ..merossclient.logging import Loggable
     from ..merossclient.protocol.message import MerossMessage
     from .component_api import ComponentApi
     from .device import Device
@@ -98,7 +99,7 @@ class ConnectionSensor(MLDiagnosticSensor):
         self.extra_state_attributes = {
             ConnectionSensor.ATTR_DEVICES: {
                 device.id: device.display_name
-                for device in connection.mqttdevices.values()
+                for device in connection._client_devices.values()
             },
             ConnectionSensor.ATTR_RECEIVED: 0,
             ConnectionSensor.ATTR_PUBLISHED: 0,
@@ -134,7 +135,7 @@ class ConnectionSensor(MLDiagnosticSensor):
         # to the underlying hass.state and updates were missing
         self.extra_state_attributes[ConnectionSensor.ATTR_DEVICES] = {
             device.id: device.display_name
-            for device in self.connection.mqttdevices.values()
+            for device in self.connection._client_devices.values()
         }
         self.flush_state()
 
@@ -151,9 +152,75 @@ class MQTTConnection(AbstractMQTTConnection):
     merosss cloud mqtt)
     """
 
+    class Client(AbstractMQTTConnection.Client):
+        """Implements  a 'soft' client for a single device over an MQTTConnection."""
+
+        if TYPE_CHECKING:
+            id: Final[HostAddress]  # type: ignore[override]
+            device: Final[Device]  # type: ignore[override]
+            connection: Final["MQTTConnection"]  # type: ignore[override]
+
+            is_cloud: Final[bool]
+            can_publish: Final[bool]
+
+            class ConnectArgs(AbstractMQTTConnection.Client.ConnectArgs):
+                pass
+
+            class RequestRawArgs(AbstractMQTTConnection.Client.RequestRawArgs):
+                pass
+
+        __slots__ = (
+            "is_cloud",
+            "can_publish",
+        )
+
+        def __init__(
+            self,
+            connection: "MQTTConnection",
+            parent: "Loggable",
+            /,
+            uuid: str,
+            key: str,
+        ):
+            self.is_cloud = connection.parent.api is not connection.parent
+            self.can_publish = False
+            super().__init__(
+                connection.id,
+                parent,
+                connection=connection,
+                uuid=uuid,
+                key=key,
+                loop=connection.loop,
+            )
+
+        @override
+        def on_connection_connect(self, client: "MQTTConnection", /):
+            self.can_publish = self.connection.parent.allow_mqtt_publish  # type: ignore
+            super().on_connection_connect(client)
+
+        @override
+        def on_connection_disconnect(self, client: "MQTTConnection", /):
+            self.can_publish = False  # type: ignore
+            super().on_connection_disconnect(client)
+
+        @override
+        def on_async_mqtt_message(self, message: "MerossMessage", /):
+            """Message processing entry point for MQTT (PUSH) messages."""
+            super().on_async_mqtt_message(message)
+            device = self.device
+            if not device.is_connected:
+                device.on_connect()
+                if device._polling_unsub:
+                    device._polling_unsub.cancel()
+                    device._polling_unsub = device.schedule_callback(
+                        0, device._poll, message.namespace
+                    )
+            device._handle(message)
+
     if TYPE_CHECKING:
 
         parent: Final["MQTTProfile"]  # type: ignore[override]
+        _client_devices: Final[dict[str, Device]]  # type: ignore[override]
 
         class Args(AbstractMQTTConnection.Args):
             pass
@@ -164,17 +231,14 @@ class MQTTConnection(AbstractMQTTConnection):
         ]
 
         SESSION_HANDLERS: ClassVar[SessionHandlersType]
-        is_cloud_connection: Final[bool]  # type: ignore
-        mqttdevices: Final[dict[str, Device]]
+
         mqttdiscovering: Final[set[str]]
         session_handlers: SessionHandlersType
         sensor_connection: ConnectionSensor | None
 
     __SLOTS__ = (
-        "mqttdevices",
         "mqttdiscovering",
         "session_handlers",
-        "is_cloud_connection",
         "sensor_connection",
     )
 
@@ -185,9 +249,6 @@ class MQTTConnection(AbstractMQTTConnection):
         /,
         **kwargs: "Unpack[Args]",
     ):
-        # to be set in derived classes
-        assert self.is_cloud_connection is not None
-        self.mqttdevices = {}
         self.mqttdiscovering = set()
         self.session_handlers = self.__class__.SESSION_HANDLERS
         self.sensor_connection = None
@@ -196,11 +257,11 @@ class MQTTConnection(AbstractMQTTConnection):
         profile.mqttconnections[str(broker)] = self
         if profile.create_diagnostic_entities:
             ConnectionSensor(self)
+        if not profile.allow_mqtt_publish:
+            # install a method override to forcibly disable MQTT publish
+            self.async_publish_raw = MQTTConnection._async_publish_raw_disabled
 
     async def async_shutdown(self):
-        for device in self.mqttdevices.values():
-            device.mqtt_detached()
-        self.mqttdevices.clear()
         await super().async_shutdown()
         self.sensor_connection = None
 
@@ -294,7 +355,7 @@ class MQTTConnection(AbstractMQTTConnection):
             # then route to the device if already binded (should be the common case
             # when PUSH messages are broadcasted by the device)
             try:
-                self.mqttdevices[uuid].mqtt_receive(message)
+                self._client_devices[uuid].mqtt.on_async_mqtt_message(message)  # type: ignore[union-attr]
                 return
             except KeyError as key_error:
                 if key_error.args[0] != uuid:
@@ -314,7 +375,7 @@ class MQTTConnection(AbstractMQTTConnection):
                     )
                     return
                 if device.profile == profile:
-                    self.attach(device)
+                    client = self.attach(device)
                 else:
                     if (device.key != profile.key) or (
                         device.descriptor.userId != profile.id
@@ -332,10 +393,14 @@ class MQTTConnection(AbstractMQTTConnection):
                     profile.link(device)
                     # profile.link will attach to the mqtt broker known to the device cfg..
                     # we'll ensure that (in case device cfg is stale) we're correctly binded here
-                    if device.mqtt_connection != self:
-                        self.attach(device)
+                    client = device.mqtt
+                    if client is None:
+                        client = self.attach(device)
+                    elif client.connection != self:
+                        device.remove_client(client)
+                        client = self.attach(device)
 
-                device.mqtt_receive(message)
+                client.on_async_mqtt_message(message)
                 return
 
             # the device is not configured: proceed to discovery in case
@@ -350,13 +415,14 @@ class MQTTConnection(AbstractMQTTConnection):
             ):
                 # not really needed but we would like to always have the
                 # MQTT hub entry in case so if the user removed that..retrigger
-                profile.async_create_task(
+                profile.create_task(
                     api.flow_manager.async_init(
                         mlc.DOMAIN,
                         context={"source": "hub"},
                         data=None,
                     ),
                     ".async_init(hub)",
+                    eager_start=True,
                 )
 
             if config_entry := (
@@ -401,9 +467,10 @@ class MQTTConnection(AbstractMQTTConnection):
                 if key is not None:
                     return
 
-            profile.async_create_task(
+            profile.create_task(
                 self.async_try_discovery(uuid),
                 f".async_try_discovery({uuid})",
+                eager_start=True,
             )
 
     @override
@@ -433,25 +500,25 @@ class MQTTConnection(AbstractMQTTConnection):
         if self.sensor_connection:
             self.sensor_connection.configure_logger()
 
-    def attach(self, device: "Device", /):
-        assert device.id not in self.mqttdevices, (
-            "unexpected MQTTConnection.attach",
-            device.id,
-        )
-        device.mqtt_attached(self)
-        self.mqttdevices[device.id] = device
-        if self.sensor_connection:
-            self.sensor_connection.update_devices()
+        if not profile.allow_mqtt_publish:
+            # install a method override to forcibly disable MQTT publish
+            self.async_publish_raw = MQTTConnection._async_publish_raw_disabled
+        else:
+            # restore class method
+            try:
+                del self.async_publish_raw
+            except AttributeError:
+                pass
 
-    def detach(self, device: "Device", /):
-        self.mqttdevices.pop(device.id)
-        for mqtt_transaction in [
-            _t for _t in self._transactions.values() if _t.uuid == device.id
-        ]:
-            mqtt_transaction.cancel(True)
-        device.mqtt_detached()
-        if self.sensor_connection:
-            self.sensor_connection.update_devices()
+        can_publish = self.is_connected and profile.allow_mqtt_publish
+        for device in self._client_devices.values():
+            assert device.mqtt is not None
+            device.mqtt.can_publish = can_publish  # type: ignore
+
+    def attach(self, device: "Device", /):
+        client = MQTTConnection.Client(self, device, uuid=device.id, key=device.key)
+        device.add_client(client)
+        return client
 
     async def async_identify_device(self, uuid: str, key: str, /):
         """
@@ -496,6 +563,10 @@ class MQTTConnection(AbstractMQTTConnection):
             return None
         finally:
             self.mqttdiscovering.remove(uuid)
+
+    @staticmethod
+    async def _async_publish_raw_disabled(message: "MerossMessage", /, **kwargs):
+        raise ValueError("MQTT publish is not allowed by configuration")
 
     def _handle_Appliance_System_Online(self, message: "MerossMessage", /):
         """
@@ -561,25 +632,9 @@ class MQTTProfile(mlm.ConfigEntryManager):
         await super().async_shutdown()
 
     async def entry_update_listener(self, hass, config_entry: "ConfigEntry"):
-        config = config_entry.data
-        # the ComponentApi always enable (independent of config) mqtt publish
-        allow_mqtt_publish = config.get(mlc.CONF_ALLOW_MQTT_PUBLISH) or (
-            self is self.api
-        )
-        relink = allow_mqtt_publish != self.allow_mqtt_publish
-        if relink:
-            # temporarily unlink devices so that they'll be correctly re-linked
-            # with the new mqtt connection (or None)
-            for device in self.linkeddevices.values():
-                device.profile_unlinked()
-        try:
-            await super().entry_update_listener(hass, config_entry)
-            for mqttconnection in self.mqttconnections.values():
-                mqttconnection.entry_update_listener(self)
-        finally:
-            if relink:
-                for device in self.linkeddevices.values():
-                    device.profile_linked(self)
+        await super().entry_update_listener(hass, config_entry)
+        for mqttconnection in self.mqttconnections.values():
+            mqttconnection.entry_update_listener(self)
 
     async def async_create_diagnostic_entities(self):
         await super().async_create_diagnostic_entities()
@@ -588,8 +643,8 @@ class MQTTProfile(mlm.ConfigEntryManager):
 
     # interface: self
     @property
-    def allow_mqtt_publish(self):
-        return self.config.get(mlc.CONF_ALLOW_MQTT_PUBLISH)
+    def allow_mqtt_publish(self) -> bool:
+        return bool(self.config.get(mlc.CONF_ALLOW_MQTT_PUBLISH))
 
     @property
     @abstractmethod
@@ -616,5 +671,5 @@ class MQTTProfile(mlm.ConfigEntryManager):
         self.linkeddevices.pop(device.id).profile_unlinked()
 
     @abstractmethod
-    def attach_mqtt(self, device: "Device"):
+    def get_connection(self, device: "Device") -> "MQTTConnection":
         pass

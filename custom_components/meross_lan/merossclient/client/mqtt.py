@@ -17,8 +17,9 @@ from .. import MEROSSDEBUG, HostAddress, get_macaddress_from_uuid
 from ..protocol import const as mc, md5hexdigest
 
 if TYPE_CHECKING:
-    from typing import ClassVar, Final, NotRequired, Unpack
+    from typing import ClassVar, Final, Never, NotRequired, Unpack
 
+    from ..device import Device
     from ..logging import LoggerType
     from ..protocol.message import MerossMessage, MerossRequest, MerossResponse
 
@@ -104,10 +105,10 @@ class AbstractMQTTConnection(AbstractClient):
             connection._transactions[request.messageid] = self
 
         def cancel(self, remove: bool = True):
-            mqtt_connection = self.connection
+            connection = self.connection
             request = self.request
-            mqtt_connection.log(
-                mqtt_connection.DEBUG,
+            connection.log(
+                connection.DEBUG,
                 "Cancelling mqtt transaction on %s %s (messageId:%s uuid:%s)",
                 request.method,
                 request.namespace,
@@ -116,7 +117,7 @@ class AbstractMQTTConnection(AbstractClient):
             )
             self.response_future.cancel()
             if remove:
-                mqtt_connection._transactions.pop(request.messageid)
+                connection._transactions.pop(request.messageid)
 
         async def __aenter__(self):
             return self
@@ -126,14 +127,20 @@ class AbstractMQTTConnection(AbstractClient):
                 self.cancel(True)
 
     class Client(AbstractClient):
-        """Implements  a 'soft' client for a single device over an MQTTConnection."""
+        """Implements  a 'soft' client for a single device over an MQTTConnection. This class uses
+        an AbstractMQTTConnection to actually communicate with a specific device (by uuid) and can
+        be directly used as is (i.e. connected to AbstractMQTTConnection) to provide simple 'client-like' behavior
+        or, can be added as a client to a Device (Device.add_client) in order to provide the MQTT transport
+        for the device. The framework is designed to allow multiple MQTTClients to be connected to the same
+        MQTTConnection (i.e. multiple devices over the same MQTT connection) and manage the routing of messages
+        and connection state accordingly. Multiple clients for the same uuid might be used against the same
+        connection but only 1 device binded client per uuid is allowed (see AbstractMQTTConnection._client_devices).
+        """
 
         if TYPE_CHECKING:
-            id: Final[str]  # type: ignore[override]
-            parent: Final["AbstractMQTTConnection"]  # type: ignore
-
+            # id: Final[str]  # type: ignore[override]
             class Args(AbstractClient.Args):
-                key: str  # override NotRequired
+                pass
 
             class ConnectArgs(AbstractClient.ConnectArgs):
                 pass
@@ -141,28 +148,43 @@ class AbstractMQTTConnection(AbstractClient):
             class RequestRawArgs(AbstractClient.RequestRawArgs):
                 pass
 
+            uuid: Final[str]  # type: ignore[override]
+            connection: Final["AbstractMQTTConnection"]
+
         TRANSPORT = AbstractClient.Transport.MQTT  # type: ignore[override]
-        __slots__ = AbstractClient._calc_slots()
+        __slots__ = AbstractClient._calc_slots("uuid", "connection")
 
         def __init__(
             self,
+            id,
+            parent: "LoggerType",
+            /,
             uuid: str,
             connection: "AbstractMQTTConnection",
             **kwargs: "Unpack[Args]",
         ):
-            kwargs["key"] = kwargs.get("key", connection.key)
+            self.uuid = uuid
+            self.connection = connection
+            for _arg in ("key", "trigger_src", "timeout", "loop"):
+                kwargs.setdefault(_arg, getattr(connection, _arg))  # type: ignore
             kwargs["from_"] = connection.from_
-            super().__init__(uuid, connection, **kwargs)
-            # TODO: manage connection state change in parent
+            super().__init__(id, parent, **kwargs)
+            connection.connect_broadcast.add(self.on_connection_connect)
+            connection.disconnect_broadcast.add(self.on_connection_disconnect)
+            connection.async_shutdown_broadcast.add(self.async_shutdown)
             if connection.is_connected:
-                self.on_connect()
+                self.on_connection_connect(connection)
+
+        async def async_shutdown(self):
+            self.connection.connect_broadcast.remove(self.on_connection_connect)
+            self.connection.disconnect_broadcast.remove(self.on_connection_disconnect)
+            self.connection.async_shutdown_broadcast.remove(self.async_shutdown)
+            await super().async_shutdown()
 
         @override
         async def async_connect(self, /, **kwargs: "Unpack[ConnectArgs]"):
-            if not self.parent.is_connected:
-                await self.parent.async_connect(**kwargs)
-            if not self.is_connected:
-                self.on_connect()
+            if not self.connection.is_connected:
+                await self.connection.async_connect(**kwargs)
 
         @override
         async def async_disconnect(self):
@@ -171,11 +193,76 @@ class AbstractMQTTConnection(AbstractClient):
             # we don't disconnect the parent connection since other clients might be using it
 
         @override
+        def on_connect(self):
+            super().on_connect()
+            try:
+                self.device.mqtt_active = True  # type: ignore[assignment]
+            except AttributeError:
+                pass
+
+        @override
+        def on_disconnect(self):
+            super().on_disconnect()
+            try:
+                self.device.mqtt_active = False  # type: ignore[assignment]
+            except AttributeError:
+                pass
+
+        @override
+        def on_device_add(self, device: "Device"):
+            """Called when a client is being added to a device (Device.add_client)."""
+            uuid = device.descriptor.uuid
+            assert uuid == self.uuid
+            assert uuid not in self.connection._client_devices
+            super().on_device_add(device)
+            self.connection._client_devices[uuid] = device
+            if self.is_connected:
+                device.mqtt_active = True  # type: ignore[assignment]
+
+        @override
+        def on_device_remove(self, device: "Device"):
+            """Called when a client is being removed from a device (Device.remove_client)."""
+            uuid = device.descriptor.uuid
+            super().on_device_remove(device)
+            self.connection._client_devices.pop(uuid)
+            for mqtt_transaction in [
+                _t for _t in self.connection._transactions.values() if _t.uuid == uuid
+            ]:
+                mqtt_transaction.cancel(True)
+            device.mqtt_active = False  # type: ignore[assignment]
+
+        @override
         async def async_request_raw(
             self, request: "MerossRequest", /, **kwargs: "Unpack[RequestRawArgs]"
         ):
-            kwargs["uuid"] = self.id
-            return await self.parent.async_request_raw(request, **kwargs)
+            self.on_tx(request)
+            kwargs["uuid"] = self.uuid
+            try:
+                response = await self.connection.async_request_raw(request, **kwargs)
+            except asyncio.TimeoutError:
+                if self.is_connected:
+                    self.on_disconnect()
+                raise
+            if not self.is_connected:
+                self.on_connect()
+            return self.on_rx(response)
+
+        # interface: self
+        def on_connection_connect(self, client: "AbstractMQTTConnection", /):
+            # We'll consider the client 'connected' only when the device at the other
+            # end is correctly replying to our requests and/or pushing async messages.
+            pass
+
+        def on_connection_disconnect(self, client: "AbstractMQTTConnection", /):
+            if self.is_connected:
+                self.on_disconnect()
+
+        def on_async_mqtt_message(self, message: "MerossMessage", /):
+            """Called by AbstractMQTTConnection when it receives an async message (PUSH) for this device
+            if it has an MQTT client connected."""
+            if not self.is_connected:
+                self.on_connect()
+            self.on_rx(message)
 
     if TYPE_CHECKING:
 
@@ -193,6 +280,8 @@ class AbstractMQTTConnection(AbstractClient):
         class RequestArgs(RequestRawArgs, AbstractClient.RequestArgs):
             pass
 
+        _client_devices: Final[dict[str, Device]]
+
         rl_dropped: Final[int]
         """counter of messages dropped due to rate-limiting, used for diagnostics and testing."""
         _transactions: Final[dict[str, Transaction]]
@@ -204,9 +293,9 @@ class AbstractMQTTConnection(AbstractClient):
 
     __SLOTS__ = (
         "rl_dropped",
+        "_client_devices",
         "_transactions",
         "_random_disconnect_unsub",
-        "_random_disconnect_task",
     )
 
     def __init__(
@@ -218,6 +307,7 @@ class AbstractMQTTConnection(AbstractClient):
     ):
         super().__init__(broker, parent, **kwargs)
         self.rl_dropped = 0
+        self._client_devices = {}
         self._transactions = {}
 
         if MEROSSDEBUG:
@@ -229,29 +319,29 @@ class AbstractMQTTConnection(AbstractClient):
                 if self.is_connected:
                     if MEROSSDEBUG.mqtt_random_disconnect():
                         self.log(self.DEBUG, "random disconnect")
-                        self._random_disconnect_task = self.loop.create_task(
-                            self.async_disconnect()
+                        self.create_task(
+                            self.async_disconnect(),
+                            "random disconnect",
+                            eager_start=True,
                         )
                 else:
                     if MEROSSDEBUG.mqtt_random_connect():
                         self.log(self.DEBUG, "random connect")
-                        self._random_disconnect_task = self.loop.create_task(
-                            self.async_connect()
+                        self.create_task(
+                            self.async_connect(), "random connect", eager_start=True
                         )
 
             self._random_disconnect_unsub = self.loop.call_later(60, _random_disconnect)
 
-    async def async_shutdown(self):
-        if MEROSSDEBUG:
-            self._random_disconnect_unsub.cancel()
-            try:
-                self._random_disconnect_task.cancel()
-                await self._random_disconnect_task
-            except (asyncio.CancelledError, AttributeError):
-                pass
-        await super().async_shutdown()
+            def _cleanup_random_disconnect():
+                self._random_disconnect_unsub.cancel()
+
+            self.shutdown_broadcast.add(_cleanup_random_disconnect)
 
     def get_rl_safe_delay(self, uuid: str, /):
+        """Returns the 'safe delay' after which we should not incur rate-limiting.
+        This is useful to 'plan' mqtt send when these could/should be delayed
+        and has a rather stochastic connotation."""
         return 0.0
 
     @abstractmethod
@@ -450,11 +540,6 @@ class MQTTConnection(AbstractMQTTConnection):
 
     @override
     def get_rl_safe_delay(self, uuid: str, /):
-        """
-        Returns the 'safe delay' after which we should not incur rate-limiting.
-        This is useful to 'plan' mqtt send when these could/should be delayed
-        and has a rather stochastic connotation.
-        """
         try:
             t_queue = self._rl_queues[uuid].t_queue
         except KeyError:

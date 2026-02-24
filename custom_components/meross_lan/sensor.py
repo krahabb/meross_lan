@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from .helpers.device import Device
     from .helpers.entity import ChannelType
     from .helpers.manager import EntityManager
+    from .helpers.mqtt_profile import MQTTConnection
     from .merossclient.client import AbstractClient
 
 
@@ -251,49 +252,59 @@ class ProtocolSensor(MLEnumSensor):
         super().__init__(None, manager, native_value=ProtocolSensor.STATE_DISCONNECTED)
 
     def set_available(self):
-        manager = self.manager
-        self.native_value = manager.curr_protocol
-        if manager.conf_protocol is Transport.AUTO:
-            self.extra_state_attributes = {
-                _transport: self._get_client_attr_state(_client)
-                for _transport, _client in manager._clients.items()
-            } | {
-                self.ATTR_MQTT_BROKER: self._get_client_attr_state(
-                    manager.mqtt_connection
-                )
-            }
+        self.native_value = self.manager.transport
         self.flush_state()
 
     def set_unavailable(self):
         self.native_value = self.STATE_DISCONNECTED
-        self.extra_state_attributes = (
-            {
-                self.ATTR_MQTT_BROKER: self._get_client_attr_state(
-                    self.manager.mqtt_connection
-                )
-            }
-            if self.manager.mqtt_connection
-            else {}
-        )
         self.flush_state()
 
-    # these smart updates are meant to only flush attrs
-    # when they are already present..i.e. meaning the device
-    # conf_protocol is CONF_PROTOCOL_AUTO
-    # call them 'before' connecting the device so they'll not flush
-    # and the full state will be flushed by the update_connected call
-    # and call them 'after' any eventual disconnection for the same reason
-    def update_attr_active(self, attrname: str):
-        attrs = self.extra_state_attributes
-        if attrname in attrs:
-            attrs[attrname] = self.STATE_ACTIVE
-            self.schedule_flush_state()
+    # callbacks from Device._clients connect/disconnect events
+    def on_client_add(self, client: "AbstractClient", /):
+        client.connect_broadcast.add(self.on_client_connect)
+        client.disconnect_broadcast.add(self.on_client_disconnect)
+        self.extra_state_attributes[client.TRANSPORT] = self._get_client_attr_state(
+            client
+        )
+        if client.TRANSPORT is Transport.MQTT:
+            connection: "MQTTConnection" = client.connection  # type: ignore
+            connection.connect_broadcast.add(self.on_broker_connect)
+            connection.disconnect_broadcast.add(self.on_broker_disconnect)
+            self.extra_state_attributes[self.ATTR_MQTT_BROKER] = (
+                self._get_client_attr_state(connection)
+            )
+            if sensor := connection.sensor_connection:
+                sensor.update_devices()
+        self.schedule_flush_state()
 
-    def update_attr_inactive(self, attrname: str):
-        attrs = self.extra_state_attributes
-        if attrname in attrs:
-            attrs[attrname] = self.STATE_INACTIVE
-            self.flush_state()
+    def on_client_remove(self, client: "AbstractClient", /):
+        client.connect_broadcast.remove(self.on_client_connect)
+        client.disconnect_broadcast.remove(self.on_client_disconnect)
+        self.extra_state_attributes.pop(client.TRANSPORT)
+        if client.TRANSPORT is Transport.MQTT:
+            connection: "MQTTConnection" = client.connection  # type: ignore
+            connection.connect_broadcast.remove(self.on_broker_connect)
+            connection.disconnect_broadcast.remove(self.on_broker_disconnect)
+            self.extra_state_attributes.pop(self.ATTR_MQTT_BROKER)
+            if sensor := connection.sensor_connection:
+                sensor.update_devices()
+        self.schedule_flush_state()
+
+    def on_client_connect(self, client: "AbstractClient", /):
+        self.extra_state_attributes[client.TRANSPORT] = self.STATE_ACTIVE
+        self.schedule_flush_state()
+
+    def on_client_disconnect(self, client: "AbstractClient", /):
+        self.extra_state_attributes[client.TRANSPORT] = self.STATE_INACTIVE
+        self.schedule_flush_state()
+
+    def on_broker_connect(self, connection: "MQTTConnection", /):
+        self.extra_state_attributes[self.ATTR_MQTT_BROKER] = self.STATE_ACTIVE
+        self.schedule_flush_state()
+
+    def on_broker_disconnect(self, connection: "MQTTConnection", /):
+        self.extra_state_attributes[self.ATTR_MQTT_BROKER] = self.STATE_INACTIVE
+        self.schedule_flush_state()
 
 
 class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):

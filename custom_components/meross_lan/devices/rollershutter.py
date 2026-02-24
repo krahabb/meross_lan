@@ -308,12 +308,12 @@ class MLRollerShutter(MLCover):
             mlc.PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT,
             self._async_transition_callback,
         )
-        if (manager.curr_protocol is Transport.HTTP and not manager.mqtt_active) or (
+        if (manager.transport is Transport.HTTP and not manager.mqtt_active) or (
             self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE
         ):
             try:
                 if manager.multiple_max >= 2:
-                    await manager.async_request_multiple(
+                    await manager.async_handle_request_multiple(
                         (
                             mn.Appliance_RollerShutter_State.request_default,
                             mn.Appliance_RollerShutter_Position.request_default,

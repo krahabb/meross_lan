@@ -4,13 +4,18 @@ from typing import TYPE_CHECKING
 from unittest import mock
 
 from homeassistant.helpers import device_registry as dr
+import paho.mqtt.client as paho_mqtt
 from pytest_homeassistant_custom_component.common import flush_store
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.helpers.meross_profile import MerossProfile
 from custom_components.meross_lan.merossclient import HostAddress, cloudapi
 from custom_components.meross_lan.merossclient.client import Transport
-from custom_components.meross_lan.merossclient.protocol import const as mc
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
+from custom_components.meross_lan.merossclient.protocol.message import MerossMessage
 
 from . import const as tc, helpers
 
@@ -191,7 +196,9 @@ async def test_meross_profile_with_device(
         assert (profile := api.profiles.get(tc.MOCK_PROFILE_ID))
 
         assert device.profile is profile
-        assert device.mqtt_connection in profile.mqttconnections.values()
+        assert (
+            device.mqtt and device.mqtt.connection
+        ) in profile.mqttconnections.values()
 
         # The cloud MQTT connection is (or might be) done in an executor
         # so we cannot reliably validate this condition. Later on it should
@@ -241,15 +248,39 @@ async def test_meross_profile_with_device(
         # executor code has been done. No effort to reliably assert that
         # but at this point in time it should have run
 
-        # check correct binding for 'publishing' client (mock config allows publishing)
-        assert device.mqtt and device.http
-        # both clients should be connected
+        # check correct transports/clients state (mock config allows publishing)
+        assert device.http and device.http.is_connected
+        assert (
+            device.mqtt
+            and device.mqtt.connection.is_connected
+            and not device.mqtt.is_connected
+        )
+        assert device.mqtt and device.mqtt.can_publish
+        assert len(device._clients_connected) == 1
+        assert not device.mqtt_active
+
+        # simulate async PUSH message from the device mqtt connection
+        mqttconnection = device.mqtt.connection
+        message = MerossMessage.build(
+            mn.Appliance_Control_ToggleX,
+            mc.METHOD_PUSH,
+            {mn.Appliance_Control_ToggleX.key: [{"channel": 0, "onoff": 1}]},
+            device.key,
+            from_=mc.TOPIC_RESPONSE.format(device.id),
+        )
+        mqtt_message = paho_mqtt.MQTTMessage()
+        mqtt_message.payload = message.json.encode()
+        mqttconnection.on_message(mqtt_message)
+        assert device.mqtt and device.mqtt.is_connected
         assert len(device._clients_connected) == 2
+        assert device.mqtt_active
+
+        # both clients should be connected
 
         # remove the cloud profile
         assert await profile_context.async_unload()
         assert api.profiles[tc.MOCK_PROFILE_ID] is None
         assert device.profile is None
-        assert device.mqtt_connection is None
         assert device.mqtt is None
         assert len(device._clients_connected) == 1
+        assert not device.mqtt_active

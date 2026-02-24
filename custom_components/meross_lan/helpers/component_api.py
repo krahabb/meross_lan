@@ -54,7 +54,6 @@ class HAMQTTConnection(mlq.MQTTConnection):
         class ConnectArgs(mlq.MQTTConnection.ConnectArgs):
             pass
 
-        is_cloud_connection: Final[Literal[False]]  # type: ignore[override]
         _unsub_mqtt_subscribe: Callable | None
         _unsub_mqtt_disconnected: Callable | None
         _unsub_mqtt_connected: Callable | None
@@ -68,7 +67,6 @@ class HAMQTTConnection(mlq.MQTTConnection):
     )
 
     def __init__(self, api: "ComponentApi", /):
-        self.is_cloud_connection = False
         mlq.MQTTConnection.__init__(
             self,
             HostAddress("homeassistant", 0),
@@ -223,7 +221,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
         else:
             key = self.parent.key
         if message.method == mc.METHOD_SET:
-            self.parent.async_create_task(
+            self.parent.create_task(
                 self.async_publish_raw(
                     MerossAckReply(
                         message,
@@ -234,6 +232,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
                     uuid=uuid,
                 ),
                 "._handle_Appliance_Control_Bind",
+                eager_start=True,
             )
         # keep forwarding the message
         return False
@@ -243,12 +242,13 @@ class HAMQTTConnection(mlq.MQTTConnection):
         # and it appears newer mss315 could abort their connection
         # if not replied (see #346)
         if message.method == mc.METHOD_PUSH:
-            self.parent.async_create_task(
+            self.parent.create_task(
                 self.async_publish_raw(
                     MerossPushReply(message, message.payload),
                     uuid=message.uuid,
                 ),
                 "._handle_Appliance_Control_ConsumptionConfig",
+                eager_start=True,
             )
         # keep forwarding the message
         return False
@@ -260,7 +260,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
         # Note: I actually see this NS only on mss310 plugs
         # (msl120j bulb doesnt have it)
         if message.method == mc.METHOD_PUSH:
-            self.parent.async_create_task(
+            self.parent.create_task(
                 self.async_publish_raw(
                     MerossPushReply(
                         message, {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(self.time())}}
@@ -268,6 +268,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
                     uuid=message.uuid,
                 ),
                 "._handle_Appliance_System_Clock",
+                eager_start=True,
             )
         # keep forwarding the message
         return False
@@ -288,22 +289,20 @@ class ComponentApi(mlq.MQTTProfile):
 
     class BTClient(m_bt.BluetoothClient):
         if TYPE_CHECKING:
-            api: Final["ComponentApi"]
+            parent: "ComponentApi | Device"  # type: ignore[override]
+            api: Final["ComponentApi"]  # type: ignore[override]
+            descriptor: Final[DeviceDescriptor]  # type: ignore[override]
             address: Final[str]
             info: ha_bt.BluetoothServiceInfoBleak
-            descriptor: Final[DeviceDescriptor]
             uuid: Final[str]  # BEWARE: not valid until _init_task done
-            device: Final[Device | None]
             _flow_id: Final[str]
             _bt_unavailable_unsub: Final[CALLBACK_TYPE]
             _init_task: asyncio.Task["ComponentApi.BTClient"]
 
         __slots__ = (
-            "api",
             "address",
             "info",
             "uuid",
-            "device",
             "_flow_id",
             "_bt_unavailable_unsub",
             "_init_task",
@@ -312,17 +311,16 @@ class ComponentApi(mlq.MQTTProfile):
         def __init__(self, api: "ComponentApi", address: str, flow_id: str, /):
             self.api = api
             self.address = address
-            self.device = None
             self._flow_id = flow_id
             m_bt.BluetoothClient.__init__(
-                self, address, api, from_=mlc.DOMAIN, loop=api.hass.loop
+                self, address, api, from_=mlc.DOMAIN, loop=api.loop
             )
             self._bt_unavailable_unsub = ha_bt.async_track_unavailable(
                 api.hass, self._bt_unavailable, address, connectable=True
             )
             api._bt_devices[address] = self
-            self._init_task = api.async_create_task(
-                self._async_init(), f"BTDevice({address})._async_init", False
+            self._init_task = api.create_task(
+                self._async_init(), f"BTDevice({address})._async_init"
             )
 
         async def _async_init(self):
@@ -348,7 +346,7 @@ class ComponentApi(mlq.MQTTProfile):
                         if conf_protocol == self.TRANSPORT:
                             # already configured to use BT
                             if device:
-                                self.attach(device)
+                                device.add_client(self)
                             raise AbortFlow("already_configured")
                     except KeyError:
                         # device not configured yet..proceed with ConfigFlow
@@ -373,20 +371,17 @@ class ComponentApi(mlq.MQTTProfile):
                     pass
             await super().async_shutdown()
             del self.api._bt_devices[self.address]
-            if self.device:
-                self.device.bt_detached()
-                self.device = None  # type: ignore
 
-        def attach(self, device: "Device"):
-            if self.device:
-                self.device.bt_detached()
-            device.bt_attached(self)
-            self.device = device  # type: ignore
+        @override
+        def on_device_add(self, device: "Device"):
+            # we're using a 'dirty' fix to redirect bt logs to the device itself
+            self.parent = device
+            super().on_device_add(device)
 
-        def detach(self):
-            assert self.device
-            self.device.bt_detached()
-            self.device = None  # type: ignore
+        @override
+        def on_device_remove(self, device: "Device"):
+            super().on_device_remove(device)
+            self.parent = self.api
 
         """ REMOVE
         def update(self, info: ha_bt.BluetoothServiceInfoBleak):
@@ -414,7 +409,9 @@ class ComponentApi(mlq.MQTTProfile):
         @callback
         def _bt_unavailable(self, info: ha_bt.BluetoothServiceInfoBleak):
             self.log(self.DEBUG, "_bt_unavailable(info: %s)", info)
-            self.api.async_create_task(self.async_shutdown(), "_bt_unavailable")
+            self.api.create_task(
+                self.async_shutdown(), "_bt_unavailable", eager_start=True
+            )
 
     if TYPE_CHECKING:
         hass: Final[HomeAssistant]
@@ -595,7 +592,7 @@ class ComponentApi(mlq.MQTTProfile):
 
             async def _async_device_request(device: "Device"):
                 _client = device._clients.get(protocol) or device._clients.get(
-                    device.curr_protocol
+                    device.transport
                 )
                 if not _client:
                     raise HomeAssistantError(
@@ -724,6 +721,14 @@ class ComponentApi(mlq.MQTTProfile):
     def get_logger_name(self) -> str:
         return "api"
 
+    @override
+    async def async_setup_entry(
+        self, hass: "HomeAssistant", config_entry: "ConfigEntry"
+    ):
+        self.config_entry = config_entry  # type: ignore
+        await self.entry_update_listener(hass, config_entry)
+        await mlq.MQTTProfile.async_setup_entry(self, hass, config_entry)
+
     # interface: MQTTProfile
     @property
     @override
@@ -736,16 +741,8 @@ class ComponentApi(mlq.MQTTProfile):
         return "0"
 
     @override
-    def attach_mqtt(self, device: "Device"):
-        self.mqtt_connection.attach(device)
-
-    @override
-    async def async_setup_entry(
-        self, hass: "HomeAssistant", config_entry: "ConfigEntry"
-    ):
-        self.config_entry = config_entry  # type: ignore
-        await self.entry_update_listener(hass, config_entry)
-        await mlq.MQTTProfile.async_setup_entry(self, hass, config_entry)
+    def get_connection(self, device: "Device"):
+        return self.mqtt_connection
 
     # interface: self
     @property
@@ -830,21 +827,6 @@ class ComponentApi(mlq.MQTTProfile):
         ):
             return progress
         return None
-
-    def schedule_entry_reload(self, entry_id: str):
-        """Reloads an entry. Due to the nature of hass tasks api this could be
-        eagerly executed (or not)."""
-        try:
-            # should work straight...
-            self.config_entries.async_schedule_reload(entry_id)
-        except AttributeError:
-            """Pre HA core 2024.2 compatibility layer"""
-            if entry := self.config_entries.async_get_entry(entry_id):
-                entry.async_cancel_retry_setup()
-                self.async_create_task(
-                    self.config_entries.async_reload(entry_id),
-                    f".schedule_reload({entry.title},{entry_id})",
-                )
 
     def get_bt_client(self, uuid: str):
         for bt_device in self._bt_devices.values():
