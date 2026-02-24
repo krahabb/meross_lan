@@ -1,4 +1,3 @@
-import copy
 import dataclasses
 from datetime import datetime, timedelta
 import re
@@ -244,13 +243,15 @@ class MtsSchedule(MLEntity, calendar.CalendarEntity):
         # unpack our schedule struct to be compliant with the device payload:
         # the weekday_schedule must contain between _schedule_entry_count_min and
         # _schedule_entry_count_max
+        _schedule_entry_count_max = self._schedule_entry_count_max
+        _schedule_entry_count_min = self._schedule_entry_count_min
         for weekday, weekday_schedule in self._schedule.items():
             schedule_entry_count = len(weekday_schedule)
-            if schedule_entry_count > self._schedule_entry_count_max:
+            if _schedule_entry_count_max and (
+                schedule_entry_count > _schedule_entry_count_max
+            ):
                 raise Exception("Too many elements in the schedule")
-            schedule_items_missing = (
-                self._schedule_entry_count_min - schedule_entry_count
-            )
+            schedule_items_missing = _schedule_entry_count_min - schedule_entry_count
             if schedule_items_missing > 0:
                 # our working schedule contains less entries than requested by MTS
                 weekday_schedule = list(weekday_schedule)
