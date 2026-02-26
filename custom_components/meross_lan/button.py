@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING
 
 from homeassistant.components import button
+from homeassistant.util import slugify
 
 from .helpers.entity import MLEntity
 
@@ -28,6 +29,7 @@ class MLButton(MLEntity.PartialAvailableMixin, MLEntity, button.ButtonEntity):
     if TYPE_CHECKING:
 
         class Args(MLEntity.Args):
+            name: str  # Override
             device_class: NotRequired[button.ButtonDeviceClass | None]
 
         # HA core entity attributes:
@@ -44,17 +46,16 @@ class MLButton(MLEntity.PartialAvailableMixin, MLEntity, button.ButtonEntity):
         self,
         channel: "ChannelType | None",
         manager: "EntityManager",
-        entitykey: str,
         press_func: "Callable[[], CoroutineType[Any, Any, None]]",
         **kwargs: "Unpack[MLButton.Args]",
     ):
-        kwargs.setdefault("entity_key", entitykey)  # FIXME
+        kwargs.setdefault("entity_key", f"button_{slugify(kwargs['name'])}")
         super().__init__(channel, manager, **kwargs)
         self.async_press = press_func
 
     async def async_shutdown(self):
-        self.async_press = None  # type: ignore BOOM!
-        return await super().async_shutdown()
+        del self.async_press
+        await super().async_shutdown()
 
 
 class MLPersistentButton(MLButton):

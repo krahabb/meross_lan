@@ -713,8 +713,8 @@ class SmokeAlarmSensor(SubDeviceEntity, MLEnumSensor):
         self.sensor_interConn = MLEnumSensor(
             subid, subdevice, entity_key=mc.KEY_INTERCONN
         )
-        MLButton(subid, subdevice, "button_mute", self.async_mute, name="Mute")
-        MLButton(subid, subdevice, "button_test", self.async_test, name="Test")
+        MLButton(subid, subdevice, self.async_mute, name="Mute")
+        MLButton(subid, subdevice, self.async_test, name="Test")
 
     def _parse(self, payload: "mt_h._smokeAlarm", /):
         self.device_value = value = payload[mc.KEY_STATUS]

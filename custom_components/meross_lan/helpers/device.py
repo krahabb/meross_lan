@@ -516,8 +516,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         MLPersistentButton(
             None,
             self,
-            "button_refresh",
-            self._async_button_refresh_press,
+            self.async_poll_full,
             name="Refresh",
             device_class=MLPersistentButton.DeviceClass.RESTART,
             entity_category=MLPersistentButton.EntityCategory.DIAGNOSTIC,
@@ -525,7 +524,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         MLPersistentButton(
             None,
             self,
-            "button_reload",
             self._async_button_reload_press,
             name="Reload",
             device_class=MLPersistentButton.DeviceClass.RESTART,
@@ -1849,10 +1847,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         # check for firmware updates too
         if latest_version := profile.get_latest_version(*self.descriptor.type_subtype):
             self.update_latest_version(latest_version)
-
-    async def _async_button_refresh_press(self):
-        """Forces a full poll."""
-        await self.async_poll_full()
 
     async def _async_button_reload_press(self):
         """Reload the config_entry."""
