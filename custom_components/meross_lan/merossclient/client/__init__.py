@@ -271,12 +271,14 @@ class AbstractClient(logging.Loggable):
         except AttributeError:
             pass
         self.device = device  # type: ignore[assignment]
-        self.logtag = self.TRANSPORT
+        self.logtag = self.TRANSPORT.upper()
+        self.log(self.DEBUG, "Added client for %s", server=self.id)
 
     def on_device_remove(self, device: "Device"):
         """Called when a client is being removed from a device (remove_client)."""
         assert self.device is device, "Removing device that is not currently linked"
         del self.device  # type: ignore[assignment]
+        self.log(self.DEBUG, "Removed client")
         self.configure_logger()
 
     @logging.abc.abstractmethod

@@ -15,6 +15,7 @@ from .protocol import (
 from .protocol.message import MerossMessage
 
 if TYPE_CHECKING:
+    from asyncio import Task, TimerHandle
     from typing import (
         Any,
         Callable,
@@ -50,6 +51,12 @@ if TYPE_CHECKING:
         hub as mt_h,
         mcu as mt_m,
     )
+
+Transport = AbstractClient.Transport
+T_AUTO = Transport.AUTO
+T_BLUETOOTH = Transport.BLUETOOTH
+T_HTTP = Transport.HTTP
+T_MQTT = Transport.MQTT
 
 
 class NamespaceParser(logging.Loggable):
@@ -764,13 +771,13 @@ class NamespaceHandler:
             # on MQTT no need for updates since they're being PUSHed
             return
         """
-        if device._polling_epoch >= self.polling_epoch_next:
+        if device.polling_epoch >= self.polling_epoch_next:
             if await device.async_poll_request_smart(self):
                 return
 
         # Insert into the lazypoll_requests ordering by least recently polled
         def _lazypoll_key(_handler: NamespaceHandler):
-            return _handler.last_poll_epoch - device._polling_epoch
+            return _handler.last_poll_epoch - device.polling_epoch
 
         insort_right(device._lazypoll_requests, self, key=_lazypoll_key)
 
@@ -794,7 +801,7 @@ class NamespaceHandler:
         response buffer in one go and avoid all of this mess.
         """
         device = self.device
-        if device.mqtt_active and (device._polling_epoch < self.polling_epoch_next):
+        if device.mqtt_active and (device.polling_epoch < self.polling_epoch_next):
             # this check is the same as async_poll_default where we expect this ns to be
             # PUSHed when on MQTT
             return
@@ -882,7 +889,7 @@ class NamespaceHandler:
             # on MQTT no need for updates since they're being PUSHed
             return
 
-        if device._polling_epoch >= self.polling_epoch_next:
+        if device.polling_epoch >= self.polling_epoch_next:
             await device.async_poll_request_smart(self)
 
     async def async_trace(self, async_request_func: "Device.AsyncRequestFunc", /):
@@ -1138,8 +1145,6 @@ class Device(PhysicalDevice):
 
     if TYPE_CHECKING:
 
-        Transport = AbstractClient.Transport
-
         class Args(AbstractClient.Args):
             descriptor: NotRequired[DeviceDescriptor]
 
@@ -1154,12 +1159,15 @@ class Device(PhysicalDevice):
         way, when we're working only with standard devices we don't need to import the namespaces
         only relevant to hubs."""
 
-        _clients: Final[dict[Transport, AbstractClient]]
-        _clients_connected: Final[dict[Transport, AbstractClient]]
-        client: Final[AbstractClient | None]
-        """Currently active client i.e. the client used by default for requests."""
+        # Configuration
+        preferred_transport: Transport
+        polling_period: int
+
+        # State
         transport: Final[Transport]
         """Currently active transport. This is a proxy for self.client.transport."""
+        client: Final[AbstractClient | None]
+        """Currently active client i.e. the client used by default for requests."""
         bluetooth: Final[BluetoothClient | None]
         http: Final[HttpClient | None]
         mqtt: Final[AbstractMQTTConnection.Client | None]
@@ -1167,6 +1175,8 @@ class Device(PhysicalDevice):
         """MQTT application layer is fully connected i.e. we receive valid data from the remote end.
         This attribute works as a proxy for the actual MQTT client connection state (is_connected) and
         need to be kept in sync (This is mostly accomplished in AbstractMQTTConnection.Client)."""
+        _clients: Final[dict[Transport, AbstractClient]]
+        _clients_connected: Final[dict[Transport, AbstractClient]]
 
         ns_handlers: Final[dict[str, NamespaceHandler]]
         handler_all: Final[NamespaceHandler]
@@ -1179,21 +1189,27 @@ class Device(PhysicalDevice):
         _multiple_requests: list[NamespaceHandler]
         _multiple_response_size: int
 
-        _polling_epoch: float
+        _polling_delay: int
+        _polling_unsub: TimerHandle | None
+        _polling_task: Task | None
+        polling_epoch: Final[float]
+        """Time of current/last polling cycle epoch."""
         _lazypoll_requests: list[NamespaceHandler]
 
-    TRANSPORT = AbstractClient.Transport.AUTO  # type: ignore[override]
+    HEARTBEAT_TIMEOUT = 300
+    TRANSPORT = T_AUTO  # type: ignore[override]
     NAMESPACES = mn.NAMESPACES
 
     __SLOTS__ = (
-        "_clients",
-        "_clients_connected",
+        "preferred_transport",
+        "polling_period" "transport",
         "client",
-        "transport",
         "bluetooth",
         "http",
         "mqtt",
         "mqtt_active",
+        "_clients",
+        "_clients_connected",
         "ns_handlers",
         "handler_all",
         "tz",
@@ -1202,7 +1218,10 @@ class Device(PhysicalDevice):
         "multiple_max",
         "_multiple_requests",
         "_multiple_response_size",
-        "_polling_epoch",
+        "_polling_delay",
+        "_polling_unsub",
+        "_polling_task",
+        "polling_epoch",
         "_lazypoll_requests",
     )
 
@@ -1210,14 +1229,14 @@ class Device(PhysicalDevice):
         self, id, parent: "LoggerType | None" = None, **kwargs: "Unpack[Args]"
     ):
         super().__init__(id, parent, **kwargs)
-        self._clients = {}
-        self._clients_connected = {}
+        self.transport = self.preferred_transport = self.TRANSPORT
         self.client = None
-        self.transport = self.TRANSPORT
         self.bluetooth = None
         self.http = None
         self.mqtt = None
         self.mqtt_active = False
+        self._clients = {}
+        self._clients_connected = {}
         self.ns_handlers = {}
         self.handler_all = self._create_handler(mn.Appliance_System_All)
         self.tz = UTC
@@ -1234,10 +1253,13 @@ class Device(PhysicalDevice):
         self._multiple_requests = []
         self._multiple_response_size = NamespaceHandler.HEADER_AVG_SIZE
         self._lazypoll_requests = []
-        self._polling_epoch = self.time()
+        self._polling_unsub = None
+        self._polling_task = None
+        self.polling_epoch = self.time()
 
     @override
     async def async_shutdown(self):
+        await self.async_poll_stop()
         await super().async_shutdown()
         # Clients will be forcibly disconnected/shutdown at this point since the base class shutdown
         # will disconnect the device and so trigger the clients disconnect logic.
@@ -1246,9 +1268,9 @@ class Device(PhysicalDevice):
             await client.async_shutdown()
         for handler in self.ns_handlers.values():
             handler.shutdown()
-        del self.ns_handlers  # type: ignore
+        self.ns_handlers.clear()
         del self.handler_all  # type: ignore
-        del self._lazypoll_requests
+        self._lazypoll_requests.clear()
 
     # interface: AbstractClient
     @override
@@ -1290,6 +1312,11 @@ class Device(PhysicalDevice):
         assert (
             not self.is_connected
         ), "disconnect failed: still connected to some transports"
+
+    @override
+    def on_connect(self, /):
+        super().on_connect()
+        self._polling_delay = self.polling_period
 
     @override
     def on_disconnect(self, /):
@@ -1408,12 +1435,6 @@ class Device(PhysicalDevice):
         client.on_device_add(self)
         setattr(self, client.TRANSPORT, client)
         self._clients[client.TRANSPORT] = client
-        self.log(
-            self.DEBUG,
-            "%s: added client for %s",
-            client.TRANSPORT,
-            server=str(client.id),
-        )
         client.connect_broadcast.add(self.on_client_connect)
         client.disconnect_broadcast.add(self.on_client_disconnect)
         client.tx_broadcast.add(self.on_tx)
@@ -1428,12 +1449,6 @@ class Device(PhysicalDevice):
         client.on_device_remove(self)
         self._clients.pop(client.TRANSPORT)
         setattr(self, client.TRANSPORT, None)
-        self.log(
-            self.DEBUG,
-            "%s: removed client for %s",
-            client.TRANSPORT,
-            server=str(client.id),
-        )
         if client.is_connected:
             self.on_client_disconnect(client)
         client.connect_broadcast.remove(self.on_client_connect)
@@ -1522,6 +1537,121 @@ class Device(PhysicalDevice):
         self._multiple_requests.clear()
         self._multiple_response_size = NamespaceHandler.HEADER_AVG_SIZE
 
+    def _poll(self, namespace: str | None = None):
+        self._polling_unsub = None
+        self._polling_task = task = self.create_task(
+            self._async_poll(namespace), f"._poll({namespace})", eager_start=False
+        )
+        return task
+
+    async def _async_poll(self, namespace: str | None):
+        self.polling_epoch = epoch = self.time()  # type: ignore[assignment]
+        self.log(self.DEBUG, "Polling begin")
+        try:
+            if self.is_connected and (
+                (self.last_rx_epoch > self.last_tx_epoch)
+                or ((epoch - self.last_tx_epoch) < (self.polling_period - 2))
+            ):
+                # perform some heartbeats in case
+                if (
+                    (http := self.http)
+                    and (self.client is not http)
+                    and (self.preferred_transport is T_HTTP)
+                    and ((epoch - http.last_tx_epoch) > self.HEARTBEAT_TIMEOUT)
+                ):
+                    try:
+                        self.handler_all.handle_response(
+                            await http.async_request(*self.handler_all.polling_request)
+                        )
+                        namespace = self.handler_all.ns
+                    except Exception:
+                        pass
+
+                if (
+                    (mqtt := self.mqtt)
+                    and mqtt.connection.can_publish
+                    and ((epoch - mqtt.last_rx_epoch) > self.HEARTBEAT_TIMEOUT)
+                ):
+                    try:
+                        self.handler_all.handle_response(
+                            await mqtt.async_request(*self.handler_all.polling_request)
+                        )
+                        namespace = self.handler_all.ns
+                    except Exception:
+                        pass
+
+            else:  # offline or 'likely' offline (failed last request)
+                namespace = (await self.async_connect()).namespace
+
+            """
+            When 'namespace' is not 'None' it represents the device coming online
+            following a succesful received message. This is likely to be 'NS_ALL'.
+            If we're connected to an MQTT broker anyway it could be any 'PUSH' message.
+            We'll use _queued_smartpoll_requests to track how many polls went through
+            over MQTT for this cycle in order to only send 1 for each if we're
+            binded to a cloud MQTT broker (in order to reduce bursts).
+            If a poll request is discarded because of this, it should go through
+            on the next polling cycle. This will 'spread' smart requests over
+            subsequent polls
+            """
+            self._lazypoll_requests.clear()
+            # self.ns_handlers could change at any time due to async
+            # message parsing (handlers might be dynamically created by then)
+            for handler in [
+                handler
+                for handler in self.ns_handlers.values()
+                if (handler.ns != namespace)
+            ]:
+                if handler.polling_strategy:
+                    await handler.polling_strategy(handler)
+                    if not self.is_connected:
+                        break  # do not return: do the flush first!
+
+            # needed even if offline: it takes care of resetting the ns_multiple state
+            if self._multiple_requests:
+                await self.async_poll_flush()
+
+        except asyncio.CancelledError:
+            self.log(self.DEBUG, "Polling cancelled")
+            raise
+        except asyncio.TimeoutError:
+            if self.is_connected:
+                self.on_disconnect()
+            elif self._polling_delay < self.HEARTBEAT_TIMEOUT:
+                self._polling_delay += self.polling_period
+            else:
+                self._polling_delay = self.HEARTBEAT_TIMEOUT
+        except Exception as e:
+            self.log_exception(self.WARNING, e, "_async_poll")
+        finally:
+            self._polling_task = None
+
+        self._polling_unsub = self.schedule_callback(
+            self._polling_delay, self._poll, None
+        )
+        self.log(self.DEBUG, "Polling end")
+
+    async def async_poll_stop(self):
+        """Ensure we're not polling nor any schedule is in place."""
+        if self._polling_unsub:
+            self._polling_unsub.cancel()
+            self._polling_unsub = None
+        elif self._polling_task:
+            self._polling_task.cancel("async_poll_stop")
+            try:
+                await self._polling_task
+            except asyncio.CancelledError:
+                pass
+
+    async def async_poll_full(self):
+        """Stops an ongoing poll if any and executes a full poll (like when onlining)."""
+        await self.async_poll_stop()
+        # BEWARE/TODO: this might overlap with async_shutdown and is not protected.
+        for handler in self.ns_handlers.values():
+            handler.polling_epoch_next = 0.0
+        # this will also restart/schedule the cycle
+        await self._poll()
+
     async def async_poll_flush(self):
         multiple_requests = self._multiple_requests
         multiple_response_size = self._multiple_response_size
@@ -1540,7 +1670,7 @@ class Device(PhysicalDevice):
                     if (
                         handler.polling_response_size + multiple_response_size
                     ) < self.device_response_size_max:
-                        handler.last_poll_epoch = self._polling_epoch
+                        handler.last_poll_epoch = self.polling_epoch
                         handler.polling_epoch_next = (
                             handler.last_poll_epoch + handler.polling_period
                         )
@@ -1643,7 +1773,7 @@ class Device(PhysicalDevice):
             multiple_response_size = -1  # logging purpose
 
     async def async_poll_request(self, handler: NamespaceHandler, /):
-        handler.last_poll_epoch = self._polling_epoch
+        handler.last_poll_epoch = self.polling_epoch
         handler.polling_epoch_next = handler.last_poll_epoch + handler.polling_period
         if (not self.multiple_max) or (
             handler.polling_response_size >= self.device_response_size_max
@@ -1675,7 +1805,7 @@ class Device(PhysicalDevice):
 
     async def async_poll_request_smart(self, handler: NamespaceHandler, /):
         if self.should_limit_cloud_polling and (
-            (self._polling_epoch - handler.last_poll_epoch)
+            (self.polling_epoch - handler.last_poll_epoch)
             < handler.polling_period_cloud
         ):
             assert self.mqtt
@@ -1688,6 +1818,23 @@ class Device(PhysicalDevice):
             return False
         await self.async_poll_request(handler)
         return True
+
+    async def async_unbind(self):
+        """
+        WARNING!!!
+        Hardware reset to factory default: the device will unpair itself from
+        the (cloud) broker and then reboot, ready to be initialized/paired.
+        This coroutine will likely raise an exception (server connection reset or timeout)
+        """
+        # in case we're connected to a broker we'll use that since
+        # it appears the (cloud) broker session level will take care of also removing
+        # the device from its list, thus totally cancelling it from the Meross account
+        if self.mqtt and self.mqtt.is_connected:
+            return await self.mqtt.async_request(
+                *mn.Appliance_Control_Unbind.request_default
+            )
+        # else go with whatever transport: the device will reset it's configuration
+        return await self.async_request(*mn.Appliance_Control_Unbind.request_default)
 
 
 class SubDevice(PhysicalDevice):

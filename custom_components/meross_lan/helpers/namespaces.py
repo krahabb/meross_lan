@@ -158,7 +158,7 @@ class NamespaceHandler(device.NamespaceHandler):
             return
 
         # here we're missing PUSHed updates so we have to poll...
-        if device._polling_epoch >= self.polling_epoch_next:
+        if device.polling_epoch >= self.polling_epoch_next:
             # at start or periodically ask for NS_ALL..plain
             await device.async_poll_request(self)
             return

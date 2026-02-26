@@ -72,6 +72,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
             HostAddress("homeassistant", 0),
             api,
             from_=mc.TOPIC_REQUEST.format(mlc.DOMAIN),
+            loop=api.loop,
         )
         self._unsub_mqtt_subscribe = None
         self._unsub_mqtt_disconnected = None
@@ -449,7 +450,6 @@ class ComponentApi(mlq.MQTTProfile):
         _bt_devices: Final[dict[str, BTClient]]
 
         # Overrides
-        is_cloud_profile: Final[Literal[False]]
 
     __slots__ = (
         "hass",
@@ -520,7 +520,6 @@ class ComponentApi(mlq.MQTTProfile):
                     self.profiles[profile_id] = None
         self._bt_devices = {}
         self.api = self  # type: ignore
-        self.is_cloud_profile = False
         mlq.MQTTProfile.__init__(
             self,
             mlc.CONF_PROFILE_ID_LOCAL,
@@ -730,6 +729,11 @@ class ComponentApi(mlq.MQTTProfile):
         await mlq.MQTTProfile.async_setup_entry(self, hass, config_entry)
 
     # interface: MQTTProfile
+    @property
+    @override
+    def is_cloud_profile(self) -> bool:
+        return False
+
     @property
     @override
     def allow_mqtt_publish(self):

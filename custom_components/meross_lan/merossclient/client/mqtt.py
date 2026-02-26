@@ -152,7 +152,10 @@ class AbstractMQTTConnection(AbstractClient):
             connection: Final["AbstractMQTTConnection"]
 
         TRANSPORT = AbstractClient.Transport.MQTT  # type: ignore[override]
-        __slots__ = AbstractClient._calc_slots("uuid", "connection")
+        __slots__ = AbstractClient._calc_slots(
+            "uuid",
+            "connection",
+        )
 
         def __init__(
             self,
@@ -267,9 +270,13 @@ class AbstractMQTTConnection(AbstractClient):
     if TYPE_CHECKING:
 
         id: Final[HostAddress]  # type: ignore[override]
+        is_cloud: Final[bool]
+        allow_publish: Final[bool]
+        can_publish: Final[bool]  # connected and allowed to publish
 
         class Args(AbstractClient.Args):
-            pass
+            is_cloud: NotRequired[bool]
+            allow_publish: NotRequired[bool]
 
         class ConnectArgs(AbstractClient.ConnectArgs):
             pass
@@ -292,6 +299,9 @@ class AbstractMQTTConnection(AbstractClient):
     TIMEOUT = 5
 
     __SLOTS__ = (
+        "is_cloud",
+        "allow_publish",
+        "can_publish",
         "rl_dropped",
         "_client_devices",
         "_transactions",
@@ -305,10 +315,16 @@ class AbstractMQTTConnection(AbstractClient):
         /,
         **kwargs: "Unpack[Args]",
     ):
-        super().__init__(broker, parent, **kwargs)
+        self.is_cloud = kwargs.pop("is_cloud", True)
+        self.allow_publish = kwargs.pop("allow_publish", True)
+        self.can_publish = False
         self.rl_dropped = 0
         self._client_devices = {}
         self._transactions = {}
+        super().__init__(broker, parent, **kwargs)
+        if not self.allow_publish:
+            # install a method override to forcibly disable MQTT publish
+            self.async_publish_raw = MQTTConnection._async_publish_raw_disabled
 
         if MEROSSDEBUG:
 
@@ -372,10 +388,16 @@ class AbstractMQTTConnection(AbstractClient):
                 return await transaction.response_future
 
     @override
+    def on_connect(self, /):
+        self.can_publish = self.allow_publish  # type: ignore[assignment]
+        super().on_connect()
+
+    @override
     def on_disconnect(self, /):
         for mqtt_transaction in self._transactions.values():
             mqtt_transaction.cancel(False)
         self._transactions.clear()
+        self.can_publish = False  # type: ignore[assignment]
         super().on_disconnect()
 
     def on_message(self, mqtt_msg, /):
@@ -402,6 +424,10 @@ class AbstractMQTTConnection(AbstractClient):
                 if (epoch - _t.request.header[mc.KEY_TIMESTAMP]) > 15
             ]:
                 mqtt_transaction.cancel(True)
+
+    @staticmethod
+    async def _async_publish_raw_disabled(message: "MerossMessage", /, **kwargs):
+        raise ValueError("MQTT publish is not allowed by configuration")
 
 
 class MQTTConnection(AbstractMQTTConnection):

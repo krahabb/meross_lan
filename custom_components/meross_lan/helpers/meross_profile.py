@@ -75,11 +75,10 @@ class MerossMQTTConnection(MQTTAppClient, mlq.MQTTConnection):
         super().__init__(
             broker,
             profile,
-            key=profile.key,
             app_id=profile.app_id,
             user_id=profile.userid,
-            loop=profile.loop,
             sslcontext=get_default_ssl_context(),
+            loop=profile.loop,
         )
 
 
@@ -125,7 +124,6 @@ class MerossProfile(mlq.MQTTProfile):
 
         # Overrides
         config: ProfileConfigType
-        is_cloud_profile: Final[Literal[True]]
         mqttconnections: Final[dict[str, MerossMQTTConnection]]  # type: ignore[override]
 
     KEY_APP_ID = "appId"
@@ -146,7 +144,6 @@ class MerossProfile(mlq.MQTTProfile):
     )
 
     def __init__(self, id: str, api: "ComponentApi", config_entry: "ConfigEntry", /):
-        self.is_cloud_profile = True
         mlq.MQTTProfile.__init__(self, id, api, config_entry)
         # state of the art for credentials is that they're mixed in
         # into the config_entry.data but this is prone to issues and confusing
@@ -371,6 +368,16 @@ class MerossProfile(mlq.MQTTProfile):
             )
         return mqttconnection
 
+    @property
+    @override
+    def is_cloud_profile(self) -> bool:
+        return True
+
+    @property
+    @override
+    def userid(self):
+        return self.config[mc.KEY_USERID_]
+
     # interface: self
     @property
     def app_id(self):
@@ -379,11 +386,6 @@ class MerossProfile(mlq.MQTTProfile):
     @property
     def token_is_valid(self):
         return bool(self._data.get(mc.KEY_TOKEN))
-
-    @property
-    @override
-    def userid(self):
-        return self.config[mc.KEY_USERID_]
 
     async def get_or_create_mqttconnections(self, device_id: str):
         """

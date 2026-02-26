@@ -255,7 +255,7 @@ async def test_meross_profile_with_device(
             and device.mqtt.connection.is_connected
             and not device.mqtt.is_connected
         )
-        assert device.mqtt and device.mqtt.can_publish
+        assert device.mqtt and device.mqtt.connection.can_publish
         assert len(device._clients_connected) == 1
         assert not device.mqtt_active
 

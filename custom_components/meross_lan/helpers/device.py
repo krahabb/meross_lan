@@ -295,10 +295,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         def get_handler(self, ns: mn.Namespace) -> NamespaceHandler: ...
 
         # these are set from ConfigEntry
-        polling_period: int
-        _polling_delay: int
         conf_protocol: Transport
-        pref_protocol: Transport
         host: str | None
 
         device_timestamp: int
@@ -307,11 +304,9 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         profile: Final[MQTTProfile | None]
         digest_parsers: Final[dict[str, DigestParseFunc]]
         digest_pollers: Final[set[device.NamespaceHandler]]
-        _polling_unsub: TimerHandle | None
-        _polling_task: Task | None
-        _timezone_next_check: float
         _trace_ability_callback_unsub: TimerHandle | None
-        _diagnostics_build: bool
+        _check_device_timerules_unsub: TimerHandle  # dynamic
+        _async_create_diagnostic_entities_task: Task  # dynamic
 
         # entities
         sensor_protocol: ProtocolSensor
@@ -427,10 +422,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
     }
 
     __slots__ = device.Device._calc_slots(
-        "polling_period",
-        "_polling_delay",
         "conf_protocol",
-        "pref_protocol",
         "host",
         "_device_entries",
         "_async_entry_update_unsub",
@@ -442,11 +434,9 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         "_profile",
         "digest_parsers",
         "digest_pollers",
-        "_polling_unsub",
-        "_polling_task",
-        "_timezone_next_check",
+        "_check_device_timerules_unsub",
         "_trace_ability_callback_unsub",
-        "_diagnostics_build",
+        "_async_create_diagnostic_entities_task",
         "sensor_protocol",
     )
 
@@ -476,24 +466,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                 "the configuration by hitting 'Configure' "
                 "in the integration configuration page"
             )
-        self._async_entry_update_unsub = None
-        self.device_debug = None
-        self.device_timestamp = 0
-        self.device_timedelta = 0
-        self.device_timedelta_log_epoch = 0
-        self.device_timedelta_config_epoch = 0
-        self.profile = None
-        self.digest_parsers = {}
-        self.digest_pollers = set()
-        self._polling_unsub = None
-        self._polling_task = None
-        self._timezone_next_check = (
-            0
-            if mn.Appliance_System_Time in descriptor.ability
-            else mlc.PARAM_INFINITE_TIMEOUT
-        )
-        self._trace_ability_callback_unsub = None
-        self._diagnostics_build = False
 
         super().__init__(
             device_id,
@@ -513,6 +485,20 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             key=config_entry.data.get(mlc.CONF_KEY) or "",  # type: ignore[argument]
             descriptor=descriptor,  # type: ignore[argument],
         )
+        self._async_entry_update_unsub = None
+        self.device_debug = None
+        self.device_timestamp = 0
+        self.device_timedelta = 0
+        self.device_timedelta_log_epoch = 0
+        self.device_timedelta_config_epoch = 0
+        self.profile = None
+        self.digest_parsers = {}
+        self.digest_pollers = set()
+        if mn.Appliance_System_Time in descriptor.ability:
+            self._check_device_timerules_unsub = self.schedule_async_callback(
+                60, self.check_device_timerules
+            )
+        self._trace_ability_callback_unsub = None
 
         self.sensor_protocol = ProtocolSensor(self)
         MLPersistentButton(
@@ -632,14 +618,17 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         # here we'll register mqtt listening (in case) and start polling after
         # the states have been eventually restored (some entities need this)
         self._check_protocol_ext()
-        self._polling_unsub = self.schedule_callback(0, self._poll, None)
+        self._poll()
 
     async def async_shutdown(self):
         self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
+        try:
+            self._check_device_timerules_unsub.cancel()
+        except AttributeError:
+            pass
         if self._async_entry_update_unsub:
             self._async_entry_update_unsub.cancel()
             self._async_entry_update_unsub = None
-        await self.async_poll_stop()
         if self.bluetooth:
             # bluetooth client is managed by ComponentApi so we dont shutdown it
             # (super().async_shutdown will also shutdown clients) but just unlink it from the device
@@ -647,8 +636,8 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         await super().async_shutdown()
         if self.profile:
             self.profile.unlink(self)
-        del self.digest_parsers  # type: ignore
-        del self.digest_pollers  # type: ignore
+        self.digest_parsers.clear()
+        self.digest_pollers.clear()
         del self.sensor_protocol
         self.api.devices[self.id] = None
         self.log(  # REMOVE
@@ -660,9 +649,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         """
         common properties caches, read from ConfigEntry on __init__ or when a configentry updates
         """
-        if self._polling_task:
-            await self._polling_task
-
         config = self.config
         # map CONF_PROTOCOL value to a const symbol in order to use 'is' in Device code checks
         try:
@@ -714,7 +700,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         self.host = host
         http = self.http
         if host and (self.conf_protocol in (T_AUTO, T_HTTP)):
-            # we need http: setup/update
             if http:
                 http.host = host
                 http.key = self.key
@@ -728,13 +713,12 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                     loop=self.loop,
                 )
                 self.add_client(http)
-
             if mn.Appliance_Encrypt_ECDHE in self.descriptor.ability:
                 http.enable_encryption(self.id, self.key, self.descriptor.macAddress)
             else:
                 http.disable_encryption()
         elif http:
-            await http.async_shutdown()
+            self.remove_client(http)
 
     def _check_protocol_ext(self):
         api = self.api
@@ -758,24 +742,12 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
         conf_protocol = self.conf_protocol
         if conf_protocol in (T_BLUETOOTH, T_HTTP):
-            self.pref_protocol = conf_protocol
+            self.preferred_transport = conf_protocol
             if self.mqtt:
                 self.remove_client(self.mqtt)
         else:
             _profile = self.profile
-            if conf_protocol is T_AUTO:
-                # When using Transport.AUTO we try to use our 'preferred' (pref_protocol).
-                # When binded to a cloud_profile always prefer http since it will avoid excessive
-                # MQTT traffic and related cloud 'issues' like rate-limiting
-                if self.config.get(CONF_HOST) or (
-                    _profile and _profile.is_cloud_profile
-                ):
-                    self.pref_protocol = T_HTTP
-                else:
-                    self.pref_protocol = T_MQTT
-            else:  # T_MQTT
-                self.pref_protocol = conf_protocol
-
+            # assert profile ?
             if self.mqtt:
                 if self.mqtt.connection.parent != _profile:
                     self.remove_client(self.mqtt)
@@ -785,11 +757,29 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                 if _profile:
                     _profile.get_connection(self).attach(self)
 
-        if self.transport is not self.pref_protocol:
+            if conf_protocol is T_AUTO:
+                # When using Transport.AUTO we try to use our 'preferred' transport.
+                # When binded to a cloud_profile always prefer http since it will avoid excessive
+                # MQTT traffic and related cloud 'issues' like rate-limiting
+                if self.config.get(CONF_HOST) or (
+                    self.mqtt and self.mqtt.connection.is_cloud
+                ):
+                    self.preferred_transport = T_HTTP
+                else:
+                    self.preferred_transport = T_MQTT
+            else:  # T_MQTT
+                self.preferred_transport = conf_protocol
+
+        if self.transport is not self.preferred_transport:
             try:
-                self._switch_client(self._clients_connected[self.pref_protocol])
+                self._switch_client(self._clients_connected[self.preferred_transport])
             except KeyError:
-                pass
+                self.log(
+                    self.WARNING,
+                    "Preferred transport {%s} not available, current transport is {%s}",
+                    self.preferred_transport,
+                    self.transport,
+                )
 
     # interface: EntityManager
     @override
@@ -829,6 +819,9 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
     async def entry_update_listener(
         self, hass: "HomeAssistant", config_entry: "ConfigEntry"
     ):
+        # TODO: remove hot-stage updating and always fully reload
+        # removing this feature overall will greatly simplify the whole code base
+        # and avoid possible re-entrance issues
         ability_old = self.descriptor.ability
         ability_new = config_entry.data[mc.KEY_PAYLOAD][mc.KEY_ABILITY]
         if ability_old != ability_new:
@@ -844,21 +837,30 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             self.schedule_reload()
             return
 
+        await self.async_poll_stop()
         await super().entry_update_listener(hass, config_entry)
         await self._async_update_config()
-        self._check_protocol_ext()
-
-        # config_entry update might come from DHCP or OptionsFlowHandler address update
-        # so we'll eventually retry querying the device
-        if not self.is_connected:
-            self.schedule_poll("entry_update_listener")
+        self.start()
 
     async def async_create_diagnostic_entities(self):
-        self._diagnostics_build = True  # set a flag cause we'll lazy scan/build
+        try:
+            self._async_create_diagnostic_entities_task.cancel()
+            await self._async_create_diagnostic_entities_task
+        except (asyncio.CancelledError, Exception):
+            pass  # might be AttributeError i.e. never created or already finished
+        self._async_create_diagnostic_entities_task = self.create_task(
+            self._async_create_diagnostic_entities(),
+            "async_create_diagnostic_entities",
+        )
         await super().async_create_diagnostic_entities()
 
     async def async_destroy_diagnostic_entities(self, remove: bool = False):
-        self._diagnostics_build = False
+        try:
+            self._async_create_diagnostic_entities_task.cancel()
+            await self._async_create_diagnostic_entities_task
+        except (asyncio.CancelledError, Exception):
+            pass  # might be AttributeError i.e. never created or already finished
+
         for namespace_handler in self.ns_handlers.values():
             if (
                 namespace_handler.polling_strategy
@@ -866,6 +868,50 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             ):
                 namespace_handler.polling_strategy = None
         await super().async_destroy_diagnostic_entities(remove)
+
+    async def _async_create_diagnostic_entities(self):
+        # when create_diagnostic_entities is True, we'll schedule this task
+        # that will try at its best to stay alive and finish the abilities scan
+        # pausing now and then when offline and/or to not interleave with polling.
+        self.log(self.DEBUG, "Diagnostic entities scan begin")
+        try:
+            abilities = iter(self.descriptor.ability)
+            while True:
+                if (
+                    ns_handler := self._trace_ability_next(abilities)
+                ) and not ns_handler.polling_strategy:
+                    while True:
+                        # synchronize to polling loop
+                        if self._polling_unsub:
+                            # not polling now
+                            if self.is_connected:
+                                await ns_handler.async_get_safe()
+                                break  # go on to next ability
+                            else:
+                                # when offline, holds a bit until next poll cycle to
+                                # try to catch the device online again
+                                await asyncio.sleep(
+                                    3 + self._polling_unsub.when() - self.loop.time()
+                                )
+                        elif self._polling_task:
+                            # polling right now...await ends
+                            try:
+                                await self._polling_task
+                            except asyncio.CancelledError:
+                                pass
+                        else:
+                            # not polling but no schedule either (maybe shutdown?)...just wait a bit and retry
+                            await asyncio.sleep(3)
+        except asyncio.CancelledError:
+            self.log(self.DEBUG, "Diagnostic entities scan cancelled")
+            raise
+        except StopIteration:
+            self.log(self.DEBUG, "Diagnostic entities scan end")
+        except Exception as e:
+            self.log_exception(self.WARNING, e, "Diagnostic entities scan")
+            raise
+        finally:
+            del self._async_create_diagnostic_entities_task
 
     @override
     def get_logger_name(self) -> str:
@@ -955,7 +1001,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             await self.async_poll_full()
             try:
                 abilities = iter(self.descriptor.ability)
-                while self.is_connected and self.is_tracing:
+                while http.is_connected and self.is_tracing:
                     if ns_handler := self._trace_ability_next(abilities):
                         await ns_handler.async_trace(http.async_request)
                 self._trace_data = None
@@ -996,8 +1042,8 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         return {
             "class": type(self).__name__,
             "conf_protocol": self.conf_protocol,
-            "pref_protocol": self.pref_protocol,
-            "curr_protocol": self.transport,
+            "preferred_transport": self.preferred_transport,
+            "transport": self.transport,
             "polling_period": self.polling_period,
             "device_response_size_min": self.device_response_size_min,
             "device_response_size_max": self.device_response_size_max,
@@ -1013,7 +1059,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                 "cloud_profile": profile and profile.is_cloud_profile,
                 "mqtt_connection": bool(self.mqtt),
                 "mqtt_connected": self.mqtt and self.mqtt.connection.is_connected,
-                "mqtt_publish": self.mqtt and self.mqtt.can_publish,
+                "mqtt_publish": self.mqtt and self.mqtt.connection.can_publish,
                 "mqtt_active": self.mqtt_active,
             },
             "namespace_handlers": {
@@ -1051,14 +1097,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         else:
             return await super().async_get_diagnostics()
 
-    # interface: BaseDevice
-
     # interface: AbstractClient
-    @override
-    def on_connect(self, /):
-        super().on_connect()
-        self._polling_delay = self.polling_period
-
     @override
     def on_disconnect(self, /):
         super().on_disconnect()
@@ -1083,7 +1122,9 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         self.log_message(message, Direction.RX, epoch, transport)
         message.check()
         if self.transport is not transport:
-            if (self.pref_protocol is transport) or (len(self._clients_connected) == 1):
+            if (self.preferred_transport is transport) or (
+                len(self._clients_connected) == 1
+            ):
                 self._switch_client(client)
 
         header = message.header
@@ -1099,9 +1140,9 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         # TODO: move this check to only relevant devices (i.e. metering plugs)
         if abs(self.device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
             _log_this = True
-            if (
-                self.mqtt
-                and (not self.mqtt.is_cloud)
+            if (  # TODO: refine this check
+                (mqtt := self.mqtt)
+                and (not mqtt.connection.is_cloud)
                 and (mn.Appliance_System_Clock in self.descriptor.ability)
             ):
                 # only deal with time related settings when devices are un-paired
@@ -1111,9 +1152,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                     # 30 minutes 'cooldown' in order to avoid restarting
                     # the procedure too often
                     self.create_task(
-                        self.mqtt.async_request(
-                            *mn.Appliance_System_Clock.request_default
-                        ),
+                        mqtt.async_request(*mn.Appliance_System_Clock.request_default),
                         "._config_device_timestamp",
                         eager_start=True,
                     )
@@ -1174,10 +1213,10 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         if logger.isEnabledFor(self.VERBOSE):
             logger._log(
                 self.VERBOSE,
-                "%s(%s:%s) %s %s %s",
+                "%s: %s(%s) %s %s %s",
                 (
+                    transport.upper(),
                     direction,
-                    transport,
                     message.messageid,
                     message.method,
                     message.namespace,
@@ -1188,13 +1227,13 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         elif logger.isEnabledFor(self.DEBUG):
             logger._log(
                 self.DEBUG,
-                "%s(%s) %s %s (messageId:%s)",
+                "%s: %s(%s) %s %s",
                 (
+                    transport.upper(),
                     direction,
-                    transport,
+                    message.messageid,
                     message.method,
                     message.namespace,
-                    message.messageid,
                 ),
             )
 
@@ -1215,6 +1254,19 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         if self.is_connected:
             self.sensor_protocol.set_available()
 
+    @override
+    async def async_poll_full(self):
+        # TODO: we need to override here because we still don't have a clear way to avoid
+        # re-entrance issues in polling management
+        await self.async_poll_stop()
+        # before retriggering ensure we're not overlapping with device shutdown
+        if self.config_entry.state is ConfigEntryState.LOADED:
+            self.device_debug = None
+            for handler in self.ns_handlers.values():
+                handler.polling_epoch_next = 0.0
+            # this will also restart/schedule the cycle
+            await self._poll()
+
     # interface: self
     @property
     def meross_binded(self):
@@ -1223,7 +1275,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         account binded.
         """
         if (mqtt := self.mqtt) and mqtt.is_connected:
-            return mqtt.is_cloud
+            return mqtt.connection.is_cloud
         # if we're not connected (either reason) check the internal
         # device state connection
         if not is_device_online(self.descriptor.system):
@@ -1321,22 +1373,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         else:
             self.tz = UTC
 
-    async def async_unbind(self):
-        """
-        WARNING!!!
-        Hardware reset to factory default: the device will unpair itself from
-        the (cloud) broker and then reboot, ready to be initialized/paired
-        """
-        # in case we're connected to a cloud broker we'll use that since
-        # it appears the broker session level will take care of also removing
-        # the device from its list, thus totally cancelling it from the Meross account
-        if self.mqtt and self.mqtt.is_cloud:
-            return await self.mqtt.async_request(
-                *mn.Appliance_Control_Unbind.request_default
-            )
-        # else go with whatever transport: the device will reset it's configuration
-        return await self.async_request(*mn.Appliance_Control_Unbind.request_default)
-
     async def async_handle_request_multiple(
         self, requests: "Iterable[MerossRequestType]"
     ) -> MerossResponse:
@@ -1349,183 +1385,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         for message in response.payload[mc.KEY_MULTIPLE]:
             self._handle(MerossMessage(message))
         return response
-
-    def _poll(self, namespace: str | None = None):
-        self._polling_unsub = None
-        self._polling_task = task = self.create_task(
-            self._async_poll(namespace),
-            f"._poll({namespace})",
-        )
-        return task
-
-    async def _async_poll(self, namespace: str | None):
-        self._polling_epoch = epoch = time()
-        self.log(self.DEBUG, "Polling begin")
-        try:
-            # We're 'strictly' online when the device 'was' online and last request
-            # got succesfully replied.
-            # When last request(s) somewhat failed we'll probe NS_ALL before stating it is really
-            # unreachable. This kind of probing is the same done when the device is (definitely)
-            # offline.
-            if self.is_connected and (
-                (self.last_rx_epoch > self.last_tx_epoch)
-                or ((epoch - self.last_tx_epoch) < (self.polling_period - 2))
-            ):
-                # when mqtt is working as a fallback for HTTP
-                # we should periodically check if http comes back
-                # in case our self.pref_protocol is HTTP.
-                # when self.pref_protocol is MQTT we don't care
-                # since we'll just try the switch when mqtt fails
-                if (
-                    (http := self.http)
-                    and (self.client is not http)
-                    and (self.pref_protocol is T_HTTP)
-                    and ((epoch - http.last_tx_epoch) > PARAM_HEARTBEAT_PERIOD)
-                ):
-                    try:
-                        self.handler_all.handle_response(
-                            await http.async_request(*self.handler_all.polling_request)
-                        )
-                        namespace = self.handler_all.ns
-                        # going on, should the http come online, the next
-                        # poll cycle will be 'smart' again, skipping
-                        # state updates coming through mqtt (since we're still
-                        # connected) but now requesting over http as preferred.
-                        # Also, we're forcibly passing namespace = NS_ALL to
-                        # tell the self._async_request_updates we've already polled that
-                    except Exception:
-                        pass
-
-                if (mqtt := self.mqtt) and mqtt.can_publish:
-                    # implement an heartbeat since mqtt might
-                    # be unused for quite a bit
-                    if (epoch - mqtt.last_rx_epoch) > PARAM_HEARTBEAT_PERIOD:
-                        try:
-                            self.handler_all.handle_response(
-                                await mqtt.async_request(
-                                    *self.handler_all.polling_request
-                                )
-                            )
-                            namespace = self.handler_all.ns
-                        except Exception:
-                            pass
-                        # going on could eventually try/switch to HTTP
-                    elif epoch > self._timezone_next_check:
-                        # when on local mqtt we have the responsibility for
-                        # setting the device timezone/dst transition times
-                        # but this is a process potentially consuming a lot
-                        # (checking future DST) so we'll be lazy on this by
-                        # scheduling not so often and depending on a bunch of
-                        # side conditions (like the device being time-aligned)
-                        self._timezone_next_check = (
-                            epoch + mlc.PARAM_TIMEZONE_CHECK_NOTOK_PERIOD
-                        )
-                        if abs(self.device_timedelta) < PARAM_TIMESTAMP_TOLERANCE:
-                            with self.exception_warning("_check_device_timerules"):
-                                if self._check_device_timerules():
-                                    # timezone trans not good..fix and check again soon
-                                    await self.async_config_device_timezone(
-                                        self.descriptor.timezone
-                                    )
-                                else:  # timezone trans good..check again in more time
-                                    self._timezone_next_check = (
-                                        epoch + mlc.PARAM_TIMEZONE_CHECK_OK_PERIOD
-                                    )
-
-            else:  # offline or 'likely' offline (failed last request)
-                namespace = (await self.async_connect()).namespace
-
-            """
-            When 'namespace' is not 'None' it represents the device coming online
-            following a succesful received message. This is likely to be 'NS_ALL'.
-            If we're connected to an MQTT broker anyway it could be any 'PUSH' message.
-            We'll use _queued_smartpoll_requests to track how many polls went through
-            over MQTT for this cycle in order to only send 1 for each if we're
-            binded to a cloud MQTT broker (in order to reduce bursts).
-            If a poll request is discarded because of this, it should go through
-            on the next polling cycle. This will 'spread' smart requests over
-            subsequent polls
-            """
-            self._lazypoll_requests.clear()
-            # self.ns_handlers could change at any time due to async
-            # message parsing (handlers might be dynamically created by then)
-            for handler in [
-                handler
-                for handler in self.ns_handlers.values()
-                if (handler.ns != namespace)
-            ]:
-                if handler.polling_strategy:
-                    await handler.polling_strategy(handler)
-                    if not self.is_connected:
-                        break  # do not return: do the flush first!
-
-            # needed even if offline: it takes care of resetting the ns_multiple state
-            if self._multiple_requests:
-                await self.async_poll_flush()
-
-            # when create_diagnostic_entities is True, after onlining we'll dynamically
-            # scan the abilities to look for 'unknown' namespaces (kind of like tracing)
-            # and try to build diagnostic entitities out of that
-            if self._diagnostics_build and self.is_connected:
-                self._diagnostics_build = False
-                self.log(self.DEBUG, "Diagnostic scan begin")
-                try:
-                    abilities = iter(self.descriptor.ability)
-                    while self.is_connected:
-                        if (
-                            ns_handler := self._trace_ability_next(abilities)
-                        ) and not ns_handler.polling_strategy:
-                            await ns_handler.async_get_safe()
-                except StopIteration:
-                    self.log(self.DEBUG, "Diagnostic scan end")
-                except Exception as e:
-                    self.log_exception(self.WARNING, e, "diagnostic scan")
-
-        except asyncio.CancelledError:
-            self.log(self.DEBUG, "Polling cancelled")
-            raise
-        except asyncio.TimeoutError:
-            if self.is_connected:
-                self.on_disconnect()
-            elif self._polling_delay < PARAM_HEARTBEAT_PERIOD:
-                self._polling_delay += self.polling_period
-            else:
-                self._polling_delay = PARAM_HEARTBEAT_PERIOD
-        except Exception as e:
-            self.log_exception(self.WARNING, e, "_async_poll")
-        finally:
-            self._polling_task = None
-
-        self._polling_unsub = self.schedule_callback(
-            self._polling_delay, self._poll, None
-        )
-        self.log(self.DEBUG, "Polling end")
-
-    async def async_poll_stop(self):
-        """Ensure we're not polling nor any schedule is in place."""
-        if self._polling_unsub:
-            self._polling_unsub.cancel()
-            self._polling_unsub = None
-        elif self._polling_task:
-            self._polling_task.cancel("async_poll_stop")
-            try:
-                await self._polling_task
-            except asyncio.CancelledError:
-                pass
-
-    async def async_poll_full(self):
-        """Stops an ongoing poll if any and executes a full poll (like when onlining)."""
-        await self.async_poll_stop()
-        # before retriggering ensure we're not overlapping with device shutdown
-        if self.config_entry.state is ConfigEntryState.LOADED:
-            self.device_debug = None
-            for handler in self.ns_handlers.values():
-                handler.polling_epoch_next = 0.0
-            # this will also restart/schedule the cycle
-            await self._poll()
-
-    def schedule_poll(self, task_name: str):
-        self.create_task(self.async_poll_full(), task_name)
 
     def profile_linked(self, profile: "MQTTProfile", /):
         assert self.profile is not profile
@@ -1678,9 +1537,9 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                 self.log_exception(
                     self.WARNING,
                     e,
-                    "parsing digest '%s' with parser '%s'",
+                    "parsing digest '%s' with parser '%r'",
                     key_digest,
-                    self.digest_parsers[key_digest].__name__,
+                    self.digest_parsers.get(key_digest),
                 )
 
     def _handle_Appliance_System_Clock(self, message: MerossMessage, /):
@@ -1698,14 +1557,14 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             if mqtt.id.host == broker.host:
                 if mqtt.connection.is_connected and not mqtt.is_connected:
                     mqtt.on_connect()
-                    if self.transport is not self.pref_protocol:
+                    if self.transport is not self.preferred_transport:
                         try:
                             self._switch_client(
-                                self._clients_connected[self.pref_protocol]
+                                self._clients_connected[self.preferred_transport]
                             )
                         except KeyError:
                             pass
-            elif mqtt.is_cloud:
+            elif mqtt.connection.is_cloud:
                 self.remove_client(mqtt)
 
     def _handle_Appliance_System_Online(self, message: MerossMessage, /):
@@ -1804,6 +1663,27 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
         return False
 
+    async def check_device_timerules(self, /):
+        # when on local mqtt we have the responsibility for
+        # setting the device timezone/dst transition times
+        # but this is a process potentially consuming a lot
+        # (checking future DST) so we'll be lazy on this by
+        # scheduling not so often and depending on a bunch of
+        # side conditions (like the device being time-aligned)
+        delay = mlc.PARAM_TIMEZONE_CHECK_NOTOK_PERIOD
+
+        if abs(self.device_timedelta) < PARAM_TIMESTAMP_TOLERANCE:
+            with self.exception_warning("check_device_timerules"):
+                if self._check_device_timerules():
+                    # timezone trans not good..fix and check again soon
+                    await self.async_config_device_timezone(self.descriptor.timezone)
+                else:  # timezone trans good..check again in more time
+                    delay = mlc.PARAM_TIMEZONE_CHECK_OK_PERIOD
+
+        self._check_device_timerules_unsub = self.schedule_async_callback(
+            delay, self.check_device_timerules
+        )
+
     def check_device_timezone(self, /):
         """
         Verifies the device timezone has the same utc offset as HA local timezone.
@@ -1823,7 +1703,12 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         )
 
     async def async_config_device_timezone(self, tzname: str | None):
-        # assert self.mqtt_locallyactive
+        if not self.mqtt or self.mqtt.connection.is_cloud:
+            # TODO: This check is just a safety feature to not
+            # pollute devices which might in general be Meross cloud account bound.
+            # We need to finally fix the DST table lookup so that we provide a reliable api
+            return False
+
         timerules: list[list[int]]
         if tzname:
             # we'll look through the list of transition times for current tz

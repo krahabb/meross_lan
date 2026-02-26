@@ -392,7 +392,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         # assert not already present ?
         insort_right(
             self._channels_to_poll,
-            (self.device._polling_epoch + delay, channel),
+            (self.device.polling_epoch + delay, channel),
             key=lambda ctp: ctp[0],
         )
 
@@ -409,11 +409,11 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         channels_to_poll = self._channels_to_poll
         for i in range(len(channels_to_poll)):
             if channels_to_poll[i][1] == channel:
-                if channels_to_poll[i][0] > self.device._polling_epoch:
+                if channels_to_poll[i][0] > self.device.polling_epoch:
                     del channels_to_poll[i]
                     insort_right(
                         channels_to_poll,
-                        (self.device._polling_epoch, channel),
+                        (self.device.polling_epoch, channel),
                         key=lambda ctp: ctp[0],
                     )
                 return
@@ -443,7 +443,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         _poll_epoch, channel = self._channels_to_poll[0]
         self.polling_request_channels[0][self.ns.key_idx] = channel
         device = self.device
-        epoch = device._polling_epoch
+        epoch = device.polling_epoch
         if _poll_epoch > epoch:
             # Insert into the lazypoll_requests ordering by least recently polled
             insort_right(
