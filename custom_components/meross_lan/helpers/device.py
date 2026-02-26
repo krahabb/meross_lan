@@ -784,7 +784,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
         if self.transport is not self.preferred_transport:
             try:
-                self._switch_client(self._clients_connected[self.preferred_transport])
+                self._switch_client(self._clients[self.preferred_transport])
             except KeyError:
                 self.log(
                     self.WARNING,
