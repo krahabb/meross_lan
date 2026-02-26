@@ -1,6 +1,5 @@
 """Constants for the Meross IoT local LAN integration."""
 
-import enum
 from typing import TYPE_CHECKING, Final, NotRequired, TypedDict
 
 from homeassistant import const as hac
@@ -13,13 +12,6 @@ if TYPE_CHECKING:
 
 
 DOMAIN: Final = "meross_lan"
-
-
-class DeviceType(enum.Enum):
-    DEVICE = 1
-    HUB = 2
-    SUBDEVICE = 3
-
 
 #########################
 # common ConfigEntry keys

@@ -6,7 +6,6 @@ a dedicated unit for each of them would increase the number of small modules.
 
 from typing import TYPE_CHECKING
 
-from .. import const as mlc
 from ..climate import MtsClimate
 from ..helpers.namespaces import NamespaceHandler, mn
 from ..merossclient.protocol import const as mc
@@ -181,5 +180,5 @@ def namespace_init_sensor_latestx(
 ):
     # Hub(s) have a different ns handler so far
     # TODO: try to reconcile in a single handler
-    if device.DEVICE_TYPE is mlc.DeviceType.DEVICE:
+    if not device.descriptor.is_hub:
         SensorLatestXNamespaceHandler(device, ns)

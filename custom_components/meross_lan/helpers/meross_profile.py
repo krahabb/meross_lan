@@ -16,7 +16,7 @@ from . import (
     mqtt_profile as mlq,
 )
 from .. import const as mlc
-from ..merossclient import HostAddress, cloudapi, get_active_broker, datetime_from_epoch
+from ..merossclient import HostAddress, cloudapi, datetime_from_epoch, get_active_broker
 from ..merossclient.client.mqtt import MQTTAppClient
 from ..merossclient.obfuscate import OBFUSCATE_DICT, OBFUSCATE_UUID_MAP
 from ..merossclient.protocol import const as mc
@@ -578,7 +578,7 @@ class MerossProfile(mlq.MQTTProfile):
                     continue
                 if not device:  # device unloaded
                     continue
-                if device.DEVICE_TYPE is mlc.DeviceType.HUB:
+                if device.descriptor.is_hub:
                     async with self._async_credentials_manager(
                         "_async_query_subdevices"
                     ) as credentials:

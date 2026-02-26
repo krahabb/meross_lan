@@ -1,10 +1,9 @@
 from importlib import import_module
-import re
 from typing import TYPE_CHECKING
 
 from homeassistant.helpers.entity import STATE_UNAVAILABLE
 
-from custom_components.meross_lan.devices.hub import HubMixin, mlc
+from custom_components.meross_lan.devices.hub import HubMixin
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
@@ -203,17 +202,13 @@ async def test_entities(
                     await _async_test_entities(
                         device, expected, unexpected, unavailable
                     )
+                    assert device.descriptor.is_hub == ishub
                     if ishub:
-                        assert isinstance(device, HubMixin) and (
-                            device.DEVICE_TYPE is mlc.DeviceType.HUB
-                        )
+                        assert isinstance(device, HubMixin)
                         for subdevice in device.subdevices:
-                            assert subdevice.DEVICE_TYPE is mlc.DeviceType.SUBDEVICE
                             await _async_test_entities(
                                 subdevice, expected, unexpected, unavailable
                             )
-                    else:
-                        assert device.DEVICE_TYPE is mlc.DeviceType.DEVICE
 
                     if unexpected:
                         unexpected_summary[device_name] = unexpected

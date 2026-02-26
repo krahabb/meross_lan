@@ -185,7 +185,6 @@ class HubMixin(Device if TYPE_CHECKING else object):
         # so we just override this to make the linter happy
         entities: Final[dict[str, "SubDevice"]]  # type: ignore[override]
 
-    DEVICE_TYPE = mlc.DeviceType.HUB
     NAMESPACES = mn.HUB_NAMESPACES
 
     # TODO: skip caching add_entity callback and directly access core component method
@@ -323,7 +322,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
         The default implementation will just try the 'smart logic' parser by inspecting the
         class methods or building diagnostic entities in case."""
 
-    DEVICE_TYPE = mlc.DeviceType.SUBDEVICE
 
     # MLNumericSensor attributes
     # ENTITY_KEY = mc.KEY_BATTERY

@@ -169,7 +169,8 @@ class Device(PhysicalDevice):
 
     __SLOTS__ = (
         "preferred_transport",
-        "polling_period" "transport",
+        "polling_period",
+        "transport",
         "client",
         "bluetooth",
         "http",

@@ -91,7 +91,6 @@ class BaseDevice(mlm.EntityManager, device.PhysicalDevice):
     """
 
     if TYPE_CHECKING:
-        DEVICE_TYPE: ClassVar[mlc.DeviceType]
 
         update_firmware: MLUpdate | None
         # Overrides
@@ -340,8 +339,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
     @staticmethod
     def namespace_init_empty(device: "Device", namespace: mn.Namespace):
         pass
-
-    DEVICE_TYPE = mlc.DeviceType.DEVICE
 
     DIGEST_INIT = {
         mc.KEY_FAN: ".fan",
