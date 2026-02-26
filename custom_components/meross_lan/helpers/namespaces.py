@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, override
 
 from .. import const as mlc
-from ..merossclient import device
+from ..merossclient.device import handler
 from ..merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
@@ -9,14 +9,13 @@ if TYPE_CHECKING:
 
     from ..merossclient.protocol import types as mt
     from ..merossclient.protocol.message import MerossMessage, MerossResponse
-    from ..merossclient.protocol.types import JsonDict, JsonMapping, MerossRequestType
     from .device import Device
     from .entity import MLEntity
 
     POLLING_STRATEGY_CONF: Final[dict[mn.Namespace, "NamespaceHandler.ConfigType"]]
 
 
-class NamespaceHandler(device.NamespaceHandler):
+class NamespaceHandler(handler.NamespaceHandler):
     """
     This is the root class for somewhat dynamic namespace handlers.
     Every device keeps its own list of method handlers indexed through
@@ -37,9 +36,6 @@ class NamespaceHandler(device.NamespaceHandler):
 
         device: "Device"
         entity_class: type["MLEntity"] | None
-        last_rx_push: (
-            JsonDict | None
-        )  # TODO: implement caching of all methods responses
 
     DEFAULT_CONFIG = (
         mlc.PARAM_DIAGNOSTIC_UPDATE_PERIOD,
@@ -48,10 +44,7 @@ class NamespaceHandler(device.NamespaceHandler):
         None,
     )
 
-    __slots__ = (
-        "entity_class",
-        "last_rx_push",
-    )
+    __slots__ = ("entity_class",)
 
     def __init__(
         self,
@@ -69,7 +62,6 @@ class NamespaceHandler(device.NamespaceHandler):
             config=config or POLLING_STRATEGY_CONF.get(ns, self.DEFAULT_CONFIG),
         )
         self.entity_class = None
-        self.last_rx_push = None
 
     def register_entity_class(
         self, entity_class: type["MLEntity"], channels: "Iterable[int] | None", /
@@ -201,19 +193,6 @@ class EntityNamespaceMixin(MLEntity if TYPE_CHECKING else object):
 
     def _handle(self, message: "MerossMessage", /):
         self._parse(message.payload[self.ns.key])
-
-
-class VoidNamespaceHandler(NamespaceHandler):
-    """Utility class to manage namespaces which should be 'ignored' i.e. we're aware
-    of their existence but we don't process them at the device level. This class in turn
-    just provides an empty handler and so suppresses any log too (for unknown namespaces)
-    done by the base default handling."""
-
-    def __init__(self, device: "Device", ns: mn.Namespace, /):
-        NamespaceHandler.__init__(self, device, ns, handler=self._handle_void)
-
-    def _handle_void(self, message: "MerossMessage", /):
-        pass
 
 
 """

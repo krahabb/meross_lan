@@ -16,9 +16,9 @@ except ImportError:
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity
 
-from ..merossclient.device import NamespaceParser
-from ..merossclient.protocol import MerossError
-from .namespaces import NamespaceHandler, mc, mn
+from ..merossclient.device.handler import NamespaceParser
+from ..merossclient.protocol import MerossError, const as mc, namespaces as mn
+from .namespaces import NamespaceHandler
 
 if TYPE_CHECKING:
     from typing import (

@@ -11,15 +11,14 @@ from ...helpers.entity import MLEntity
 from ...helpers.namespaces import (
     POLLING_STRATEGY_CONF,
     NamespaceHandler,
-    VoidNamespaceHandler,
-    mc,
-    mn,
 )
 from ...merossclient import (
     device,
     get_productname,
     get_subdevice_key_digest,
 )
+from ...merossclient.device.handler import VoidNamespaceHandler
+from ...merossclient.protocol import const as mc, namespaces as mn
 from ...merossclient.protocol.namespaces import hub as mn_h
 from ...number import MLConfigNumber
 from ...sensor import (

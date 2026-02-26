@@ -12,12 +12,11 @@ from homeassistant.util import dt as dt_util
 
 # import core modules instead of symbols to ease patching in a single place
 from . import (
-    datetime_from_epoch,
     get_default_ssl_context,
     mqtt_profile as mlq,
 )
 from .. import const as mlc
-from ..merossclient import HostAddress, cloudapi, get_active_broker
+from ..merossclient import HostAddress, cloudapi, get_active_broker, datetime_from_epoch
 from ..merossclient.client.mqtt import MQTTAppClient
 from ..merossclient.obfuscate import OBFUSCATE_DICT, OBFUSCATE_UUID_MAP
 from ..merossclient.protocol import const as mc

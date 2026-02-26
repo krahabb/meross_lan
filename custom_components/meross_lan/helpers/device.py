@@ -10,7 +10,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util, slugify
 
 # import core modules instead of symbols to ease patching in a single place
-from . import datetime_from_epoch, manager as mlm
+from . import manager as mlm
 from .. import const as mlc
 from ..button import MLPersistentButton
 
@@ -18,19 +18,24 @@ from ..button import MLPersistentButton
 from ..const import (
     CONF_HOST,
     CONF_PAYLOAD,
-    PARAM_HEARTBEAT_PERIOD,
     PARAM_TIMESTAMP_TOLERANCE,
 )
-from ..merossclient import DeviceDescriptor, device, get_active_broker, is_device_online
+from ..merossclient import (
+    DeviceDescriptor,
+    datetime_from_epoch,
+    device,
+    get_active_broker,
+    is_device_online,
+)
 from ..merossclient.client import AbstractClient, Direction, Transport
 from ..merossclient.client.http import HttpClient
 from ..merossclient.obfuscate import OBFUSCATE_DICT
-from ..merossclient.protocol import MerossError
+from ..merossclient.protocol import MerossError, const as mc, namespaces as mn
 from ..merossclient.protocol.message import MerossMessage, MerossResponse
 from ..merossclient.protocol.namespaces import thermostat as mn_t
 from ..sensor import ProtocolSensor
 from ..update import MLUpdate
-from .namespaces import NamespaceHandler, mc, mn
+from .namespaces import NamespaceHandler
 
 if TYPE_CHECKING:
     from asyncio import Future, Task, TimerHandle
@@ -173,6 +178,17 @@ class BaseDevice(mlm.EntityManager, device.PhysicalDevice):
         self, key_parent: str, payload: list, channel: "ChannelType | None", /
     ):
         pass
+
+
+_IGNORED_NAMESPACES_CFG = (".merossclient.device.handler", "VoidNamespaceHandler")
+_IGNORED_NAMESPACES = (
+    mn.Appliance_Config_Info,
+    mn.Appliance_Control_Bind,
+    mn.Appliance_Control_ConsumptionConfig,
+    mn.Appliance_System_Clock,
+    mn.Appliance_System_Online,
+    mn.Appliance_System_Report,
+)
 
 
 class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
@@ -343,10 +359,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
     NAMESPACE_INIT = {
         mn.Appliance_Config_OverTemp: (".devices.mss", "OverTempEnableSwitch"),
         mn.Appliance_Control_Alarm: (".siren", "MLSiren"),
-        mn.Appliance_Control_ConsumptionConfig: (
-            ".helpers.namespaces",
-            "VoidNamespaceHandler",
-        ),
         mn.Appliance_Control_Electricity: (
             ".devices.mss",
             "namespace_init_electricity",
@@ -398,7 +410,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         ),
         mn.Appliance_System_DNDMode: (".light", "MLDNDLightEntity"),
         mn.Appliance_System_Runtime: (".sensor", "MLSignalStrengthSensor"),
-    }
+    } | {_ns: _IGNORED_NAMESPACES_CFG for _ns in _IGNORED_NAMESPACES}
 
     TRACE_ABILITY_EXCLUDE = (
         mn.Appliance_System_Ability,
@@ -618,7 +630,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         # here we'll register mqtt listening (in case) and start polling after
         # the states have been eventually restored (some entities need this)
         self._check_protocol_ext()
-        self._poll()
+        self._polling_unsub = self.schedule_callback(0, self._poll, None)
 
     async def async_shutdown(self):
         self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
@@ -1268,29 +1280,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             await self._poll()
 
     # interface: self
-    @property
-    def meross_binded(self):
-        """
-        Reports if the device own MQTT connection is active and likely Meross
-        account binded.
-        """
-        if (mqtt := self.mqtt) and mqtt.is_connected:
-            return mqtt.connection.is_cloud
-        # if we're not connected (either reason) check the internal
-        # device state connection
-        if not is_device_online(self.descriptor.system):
-            return False
-        # the device is connected to its own broker..assume
-        # it is a Meross cloud one
-        return True
-
-    def get_device_datetime(self, epoch, /):
-        """
-        given the epoch (utc timestamp) returns the datetime
-        in device local timezone
-        """
-        return datetime_from_epoch(epoch, self.tz)
-
     def register_parser_entity(self, entity: "MLEntity", /):
         self.get_handler(entity.ns).register_parser(entity)
 
@@ -1471,14 +1460,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         the namespace enters the message handling flow)"""
         return NamespaceHandler(self, ns)
 
-    def _handle_Appliance_Config_Info(self, message: MerossMessage, /):
-        """{"info":{"homekit":{"model":"MSH300HK","sn":"#","category":2,"setupId":"#","setupCode":"#","uuid":"#","token":"#"}}}"""
-        pass
-
-    def _handle_Appliance_Control_Bind(self, message: MerossMessage, /):
-        # already processed by the MQTTConnection session manager
-        pass
-
     def _handle_Appliance_Mcu_Firmware(self, message: MerossMessage, /):
         self.descriptor.mcu = message.payload[mc.KEY_FIRMWARE]
         if self.update_firmware:
@@ -1542,10 +1523,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                     self.digest_parsers.get(key_digest),
                 )
 
-    def _handle_Appliance_System_Clock(self, message: MerossMessage, /):
-        # already processed by the MQTTConnection session manager
-        pass
-
     def _handle_Appliance_System_Debug(self, message: MerossMessage, /):
         # this ns is queried when we're HTTP connected and the device reports it is
         # also MQTT connected but meross_lan has no confirmation (_mqtt_active == None)
@@ -1566,15 +1543,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                             pass
             elif mqtt.connection.is_cloud:
                 self.remove_client(mqtt)
-
-    def _handle_Appliance_System_Online(self, message: MerossMessage, /):
-        # already processed by the MQTTConnection session manager
-        pass
-
-    def _handle_Appliance_System_Report(self, message: MerossMessage, /):
-        # No clue: sent (MQTT PUSH) by the device on initial connection
-        # TODO: move these empty stubs to VoidHandlers on a lazy basis
-        pass
 
     def _handle_Appliance_System_Time(self, message: MerossMessage, /):
         self.descriptor.update_time(message.payload[mc.KEY_TIME])
