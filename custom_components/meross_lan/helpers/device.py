@@ -855,23 +855,18 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         self.start()
 
     async def async_create_diagnostic_entities(self):
-        try:
-            self._async_create_diagnostic_entities_task.cancel()
-            await self._async_create_diagnostic_entities_task
-        except (asyncio.CancelledError, Exception):
-            pass  # might be AttributeError i.e. never created or already finished
-        self._async_create_diagnostic_entities_task = self.create_task(
-            self._async_create_diagnostic_entities(),
-            "async_create_diagnostic_entities",
-        )
         await super().async_create_diagnostic_entities()
 
     async def async_destroy_diagnostic_entities(self, remove: bool = False):
         try:
-            self._async_create_diagnostic_entities_task.cancel()
-            await self._async_create_diagnostic_entities_task
-        except (asyncio.CancelledError, Exception):
-            pass  # might be AttributeError i.e. never created or already finished
+            if self._async_create_diagnostic_entities_task.cancel():
+                try:
+                    await self._async_create_diagnostic_entities_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+            del self._async_create_diagnostic_entities_task
+        except AttributeError:
+            pass
 
         for namespace_handler in self.ns_handlers.values():
             if (
@@ -888,23 +883,16 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         self.log(self.DEBUG, "Diagnostic entities scan begin")
         try:
             abilities = iter(self.descriptor.ability)
-            while True:
+            while self.is_connected:
                 if (
                     ns_handler := self._trace_ability_next(abilities)
                 ) and not ns_handler.polling_strategy:
-                    while True:
+                    while self.is_connected:
                         # synchronize to polling loop
                         if self._polling_unsub:
                             # not polling now
-                            if self.is_connected:
-                                await ns_handler.async_get_safe()
-                                break  # go on to next ability
-                            else:
-                                # when offline, holds a bit until next poll cycle to
-                                # try to catch the device online again
-                                await asyncio.sleep(
-                                    3 + self._polling_unsub.when() - self.loop.time()
-                                )
+                            await ns_handler.async_get_safe()
+                            break
                         elif self._polling_task:
                             # polling right now...await ends
                             try:
@@ -913,17 +901,16 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                                 pass
                         else:
                             # not polling but no schedule either (maybe shutdown?)...just wait a bit and retry
-                            await asyncio.sleep(3)
+                            await asyncio.sleep(0)
+            raise Exception("Device disconnected")
         except asyncio.CancelledError:
             self.log(self.DEBUG, "Diagnostic entities scan cancelled")
             raise
         except StopIteration:
             self.log(self.DEBUG, "Diagnostic entities scan end")
         except Exception as e:
-            self.log_exception(self.WARNING, e, "Diagnostic entities scan")
+            self.log_exception(self.WARNING, e, "diagnostic entities scan")
             raise
-        finally:
-            del self._async_create_diagnostic_entities_task
 
     @override
     def get_logger_name(self) -> str:
@@ -1110,6 +1097,26 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             return await super().async_get_diagnostics()
 
     # interface: AbstractClient
+    @override
+    def on_connect(self, /):
+        super().on_connect()
+        if self.config.get(mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES):
+            try:
+                self._async_create_diagnostic_entities_task.result()
+                # no exception..it was correctly finished..nothing to do
+            except (
+                AttributeError,
+                asyncio.CancelledError,
+                Exception,
+                asyncio.InvalidStateError,
+            ) as e:
+                if type(e) is asyncio.InvalidStateError:
+                    self._async_create_diagnostic_entities_task.cancel()
+                self._async_create_diagnostic_entities_task = self.create_task(
+                    self._async_create_diagnostic_entities(),
+                    "async_create_diagnostic_entities",
+                )
+
     @override
     def on_disconnect(self, /):
         super().on_disconnect()
