@@ -322,7 +322,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
         The default implementation will just try the 'smart logic' parser by inspecting the
         class methods or building diagnostic entities in case."""
 
-
     # MLNumericSensor attributes
     # ENTITY_KEY = mc.KEY_BATTERY
     _attr_device_class = MLNumericSensor.DeviceClass.BATTERY
@@ -1222,7 +1221,7 @@ POLLING_STRATEGY_CONF.update(
             NamespaceHandler.async_poll_smart,
         ),
         mn_h.Appliance_Hub_Mts100_All: (
-            mlc.PARAM_HEARTBEAT_PERIOD,
+            device.Device.HEARTBEAT_TIMEOUT,
             mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
             350,
             NamespaceHandler.async_poll_chunked,
@@ -1234,13 +1233,13 @@ POLLING_STRATEGY_CONF.update(
             NamespaceHandler.async_poll_chunked,
         ),
         mn_h.Appliance_Hub_Sensor_Adjust: (
-            mlc.PARAM_HEARTBEAT_PERIOD,
+            device.Device.HEARTBEAT_TIMEOUT,
             mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
             60,
             NamespaceHandler.async_poll_smart,
         ),
         mn_h.Appliance_Hub_Sensor_All: (
-            mlc.PARAM_HEARTBEAT_PERIOD,
+            device.Device.HEARTBEAT_TIMEOUT,
             mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
             250,
             NamespaceHandler.async_poll_chunked,

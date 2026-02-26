@@ -162,7 +162,7 @@ SERVICE_REQUEST = "request"
 """name of the general purpose device send request service exposed by meross_lan"""
 CONF_NOTIFYRESPONSE = "notifyresponse"
 """key used in service 'request' call"""
-CONF_PROFILE_ID_LOCAL: Final = ""
+CONF_PROFILE_ID_LOCAL: Final = "api"
 """label for ComponentApi as a 'fake' cloud profile"""
 
 #
@@ -184,10 +184,6 @@ PARAM_INFINITE_TIMEOUT = 2147483647  # inifinite epoch (2038 bug?)
 """the (infinite) timeout in order to disable timed schedules"""
 PARAM_COLDSTARTPOLL_DELAY = 2
 """(maximum) delay of initial poll after device setup"""
-PARAM_UNAVAILABILITY_TIMEOUT = 20
-"""number of seconds since last inquiry/response to consider the device unavailable"""
-PARAM_HEARTBEAT_PERIOD = 295  # TODO: use merossclient.Device.HEARTBEAT_TIMEOUT instead of this and remove it from consts
-"""whatever the connection state periodically inquire the device is available"""
 PARAM_TIMEZONE_CHECK_OK_PERIOD = 604800
 """period between checks of timezone infos on locally mqtt binded devices"""
 PARAM_TIMEZONE_CHECK_NOTOK_PERIOD = 86400
@@ -226,5 +222,3 @@ PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT = 86400  # 1 day
 """timeout for querying cloud api deviceInfo endpoint"""
 PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT = 30
 """used to delay updated profile data to storage"""
-PARAM_RESPONSE_SIZE_MAX = 3000
-"""(rough) estimate of the allowed response size limit before overflow occurs (see #244)"""

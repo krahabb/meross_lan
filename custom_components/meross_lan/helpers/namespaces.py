@@ -34,7 +34,7 @@ class NamespaceHandler(handler.NamespaceHandler):
 
     if TYPE_CHECKING:
 
-        device: "Device"
+        device: Device
         entity_class: type["MLEntity"] | None
 
     DEFAULT_CONFIG = (
@@ -173,7 +173,7 @@ class EntityNamespaceMixin(MLEntity if TYPE_CHECKING else object):
     """
 
     if TYPE_CHECKING:
-        manager: "Device"
+        manager: Device
 
     @classmethod
     def namespace_init(cls, device: "Device", ns: mn.Namespace, /):
@@ -220,7 +220,7 @@ this 'kind of overflow' is not happening on MQTT responses though.
 """
 POLLING_STRATEGY_CONF = {
     mn.Appliance_System_All: (
-        mlc.PARAM_HEARTBEAT_PERIOD,
+        300,
         0,
         700,
         NamespaceHandler.async_poll_all,
