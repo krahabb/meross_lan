@@ -181,7 +181,7 @@ POLLING_STRATEGY_CONF.update(
     {
         mn.Appliance_Control_Diffuser_Sensor: (
             mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-            mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
+            mlc.PARAM_SENSOR_SLOW_CLOUD_UPDATE_PERIOD,
             100,
             NamespaceHandler.async_poll_smart,
         ),

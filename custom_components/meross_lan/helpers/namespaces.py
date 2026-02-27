@@ -39,7 +39,7 @@ class NamespaceHandler(handler.NamespaceHandler):
 
     DEFAULT_CONFIG = (
         mlc.PARAM_DIAGNOSTIC_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUD_UPDATE_PERIOD,
         50,
         None,
     )
@@ -190,74 +190,74 @@ POLLING_STRATEGY_CONF = {
     ),  # TODO: add expected size definition to mn.Namespace class grammar
     mn.Appliance_System_DNDMode: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUD_UPDATE_PERIOD,
         20,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_System_Runtime: (
         mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUD_UPDATE_PERIOD,
         30,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Config_Alarm: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUD_UPDATE_PERIOD,
         44,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Config_Sensor_Association: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUD_UPDATE_PERIOD,
         30,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Alarm: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUD_UPDATE_PERIOD,
         40,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Fan: (
         0,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUD_UPDATE_PERIOD,
         20,
         None,
     ),
     mn.Appliance_Control_FilterMaintenance: (
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUD_UPDATE_PERIOD,
+        mlc.PARAM_CLOUD_UPDATE_PERIOD,
         35,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Light_Effect: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUD_UPDATE_PERIOD,
         1550,  # based on a standard effects list
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Mp3: (0, 0, 80, NamespaceHandler.async_poll_default),
     mn.Appliance_Control_PhysicalLock: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUD_UPDATE_PERIOD,
         35,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Presence_Config: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUD_UPDATE_PERIOD,
         260,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Sensor_Latest: (
         mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
-        mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
+        mlc.PARAM_SENSOR_SLOW_CLOUD_UPDATE_PERIOD,
         80,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Sensor_LatestX: (
         mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUD_UPDATE_PERIOD,
         220,
         NamespaceHandler.async_poll_smart,
     ),

@@ -531,19 +531,19 @@ POLLING_STRATEGY_CONF.update(
     {
         mn.Appliance_Control_Screen_Brightness: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_CLOUD_UPDATE_PERIOD,
             70,
             NamespaceHandler.async_poll_smart,
         ),
         mn.Appliance_Control_TempUnit: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_CLOUD_UPDATE_PERIOD,
             30,
             NamespaceHandler.async_poll_smart,
         ),
         mn_t.Appliance_Control_Thermostat_Calibration: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_CLOUD_UPDATE_PERIOD,
             80,
             NamespaceHandler.async_poll_smart,
         ),
@@ -555,19 +555,19 @@ POLLING_STRATEGY_CONF.update(
         ),
         mn_t.Appliance_Control_Thermostat_DeadZone: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_CLOUD_UPDATE_PERIOD,
             80,
             NamespaceHandler.async_poll_smart,
         ),
         mn_t.Appliance_Control_Thermostat_Frost: (
             mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-            mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
+            mlc.PARAM_SENSOR_SLOW_CLOUD_UPDATE_PERIOD,
             80,
             NamespaceHandler.async_poll_smart,
         ),
         mn_t.Appliance_Control_Thermostat_HoldAction: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_CLOUD_UPDATE_PERIOD,
             30,
             NamespaceHandler.async_poll_smart,
         ),
@@ -579,7 +579,7 @@ POLLING_STRATEGY_CONF.update(
         ),
         mn_t.Appliance_Control_Thermostat_Overheat: (
             mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-            mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
+            mlc.PARAM_SENSOR_SLOW_CLOUD_UPDATE_PERIOD,
             140,
             NamespaceHandler.async_poll_smart,
         ),
@@ -591,19 +591,19 @@ POLLING_STRATEGY_CONF.update(
         ),
         mn_t.Appliance_Control_Thermostat_Schedule: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_CLOUD_UPDATE_PERIOD,
             550,
             NamespaceHandler.async_poll_smart,
         ),
         mn_t.Appliance_Control_Thermostat_ScheduleB: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_CLOUD_UPDATE_PERIOD,
             550,
             NamespaceHandler.async_poll_smart,
         ),
         mn_t.Appliance_Control_Thermostat_Sensor: (
             mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-            mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
+            mlc.PARAM_SENSOR_SLOW_CLOUD_UPDATE_PERIOD,
             40,
             NamespaceHandler.async_poll_smart,
         ),

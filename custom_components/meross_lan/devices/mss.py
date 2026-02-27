@@ -725,31 +725,31 @@ POLLING_STRATEGY_CONF.update(
     {
         mn.Appliance_Config_OverTemp: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_CLOUD_UPDATE_PERIOD,
             40,
             NamespaceHandler.async_poll_smart,
         ),
         mn.Appliance_Control_ConsumptionH: (
             mlc.PARAM_ENERGY_UPDATE_PERIOD,
-            mlc.PARAM_ENERGY_UPDATE_CLOUD_PERIOD,
+            mlc.PARAM_ENERGY_CLOUD_UPDATE_PERIOD,
             1900,
             NamespaceHandler.async_poll_smart,
         ),
         mn.Appliance_Control_ConsumptionX: (
             mlc.PARAM_ENERGY_UPDATE_PERIOD,
-            mlc.PARAM_ENERGY_UPDATE_CLOUD_PERIOD,
+            mlc.PARAM_ENERGY_CLOUD_UPDATE_PERIOD,
             53,
             NamespaceHandler.async_poll_smart,
         ),
         mn.Appliance_Control_Electricity: (
             mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
-            mlc.PARAM_SENSOR_FAST_UPDATE_CLOUD_PERIOD,
+            mlc.PARAM_SENSOR_FAST_CLOUD_UPDATE_PERIOD,
             130,
             NamespaceHandler.async_poll_smart,
         ),
         mn.Appliance_Control_ElectricityX: (
             mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
-            mlc.PARAM_SENSOR_FAST_UPDATE_CLOUD_PERIOD,
+            mlc.PARAM_SENSOR_FAST_CLOUD_UPDATE_PERIOD,
             100,
             NamespaceHandler.async_poll_smart,
         ),

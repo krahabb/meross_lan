@@ -394,13 +394,13 @@ POLLING_STRATEGY_CONF.update(
     {
         mn.Appliance_RollerShutter_Adjust: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_CLOUD_UPDATE_PERIOD,
             35,
             NamespaceHandler.async_poll_smart,
         ),
         mn.Appliance_RollerShutter_Config: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+            mlc.PARAM_CLOUD_UPDATE_PERIOD,
             70,
             NamespaceHandler.async_poll_smart,
         ),
