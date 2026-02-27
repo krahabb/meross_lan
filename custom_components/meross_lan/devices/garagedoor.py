@@ -14,8 +14,8 @@ from ..switch import MLSwitch
 if TYPE_CHECKING:
     from typing import Final, Unpack
 
-    from ..helpers.device import Device, DigestInitReturnType, MerossMessage
-    from ..merossclient.protocol import types as mt
+    from ..helpers.device import Device, MerossMessage
+    from ..merossclient.protocol.types import JsonList
 
 
 class MLGarageTimeoutBinarySensor(MLBinarySensor.PartialAvailableMixin, MLBinarySensor):
@@ -681,7 +681,9 @@ class GarageDoorStateNamespaceHandler(NamespaceHandler):
             device.ns_handlers[mn.Appliance_System_All].polling_period = 0
 
 
-def digest_init_garagedoor(device: "Device", digest: list, /) -> "DigestInitReturnType":
+def digest_init_garagedoor(
+    device: "Device", digest: "JsonList", /
+) -> "Device.DigestInitReturnType":
     device.platforms.setdefault(MLConfigNumber.PLATFORM, None)
     device.platforms.setdefault(MLSwitch.PLATFORM, None)
 

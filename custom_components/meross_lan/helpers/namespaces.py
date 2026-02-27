@@ -127,43 +127,6 @@ class NamespaceHandler(handler.NamespaceHandler):
 
         self.parsers[channel](p_channel)
 
-    async def async_poll_all(self):
-        """
-        This is a special policy for NS_ALL.
-        It is basically an 'async_poll_default' policy so it kicks-in whenever we poll
-        the state in 'device._async_request_updates' but contrary to 'legacy' behavior
-        where NS_ALL was always polled (unless mqtt active).
-        This will alternate polling NS_ALL to the group of namespaces responsible for
-        the state carried in 'digest'. This is an improvement since NS_ALL, even if carrying
-        the whole state in one query, might be huge (because of the 'time' key) but also because
-        most of its data are pretty static (never or seldom changing) info of the device.
-        This new policy will interleave querying NS_ALL once in a while with smaller direct
-        equivalent queries for the state carried in digest. (If the device doesn't support
-        NS_MULTIPLE, it will likely do more queries though but this is unlikely)
-        """
-        device = self.device
-        if device.mqtt_active:
-            # on MQTT no need for updates since they're being PUSHed
-            if not self.polling_epoch_next:
-                # just when onlining...
-                await device.async_poll_request(self)
-            return
-
-        # here we're missing PUSHed updates so we have to poll...
-        if device.polling_epoch >= self.polling_epoch_next:
-            # at start or periodically ask for NS_ALL..plain
-            await device.async_poll_request(self)
-            return
-
-        # query specific namespaces instead of NS_ALL since we hope this is
-        # better (less overhead/http sessions) together with ns_multiple packing
-        for handler in device.digest_pollers:
-            if handler.parsers:
-                # don't query if digest key/namespace hasn't any entity registered
-                # this also prevents querying a somewhat 'malformed' ToggleX reply
-                # appearing in an mrs100 (#447)
-                await device.async_poll_request(handler)
-
 
 class EntityNamespaceMixin(MLEntity if TYPE_CHECKING else object):
     """
@@ -219,13 +182,12 @@ as reported in #244 (here the buffer limit was around 4000 chars). From limited 
 this 'kind of overflow' is not happening on MQTT responses though.
 """
 POLLING_STRATEGY_CONF = {
-    mn.Appliance_System_All: (
-        300,
+    mn.Appliance_System_Debug: (
         0,
-        700,
-        NamespaceHandler.async_poll_all,
-    ),
-    mn.Appliance_System_Debug: (0, 0, 1600, None),
+        0,
+        1600,
+        None,
+    ),  # TODO: add expected size definition to mn.Namespace class grammar
     mn.Appliance_System_DNDMode: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,

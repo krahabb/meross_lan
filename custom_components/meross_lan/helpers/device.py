@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import device_registry as dr
-from homeassistant.util import dt as dt_util, slugify
+from homeassistant.util import dt as dt_util
 
 # import core modules instead of symbols to ease patching in a single place
 from . import manager as mlm
@@ -22,6 +22,7 @@ from ..const import (
 )
 from ..merossclient import (
     DeviceDescriptor,
+    async_load_zoneinfo,
     datetime_from_epoch,
     device,
     get_active_broker,
@@ -69,19 +70,6 @@ if TYPE_CHECKING:
     from .entity import ChannelType, MLEntity
     from .meross_profile import DeviceInfoType, LatestVersionType
     from .mqtt_profile import MQTTConnection, MQTTProfile
-
-    type DigestParseFunc = Callable[[JsonDict], None] | Callable[[JsonList], None]
-    type DigestInitReturnType = tuple[
-        DigestParseFunc, Iterable[device.NamespaceHandler]
-    ]
-    type DigestInitFunc = Callable[[Device, Any], DigestInitReturnType]
-    type NamespaceInitFunc = Callable[[Device, mn.Namespace], None]
-
-
-T_AUTO = Transport.AUTO
-T_BLUETOOTH = Transport.BLUETOOTH
-T_HTTP = Transport.HTTP
-T_MQTT = Transport.MQTT
 
 
 class BaseDevice(mlm.EntityManager, device.PhysicalDevice):
@@ -272,35 +260,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         config_entry: Final[ConfigEntry]  # type: ignore[override]
         config: mlc.DeviceConfigType
 
-        DIGEST_INIT: Final[dict[str, Any]]
-        """ Static dict of 'digest initialization function(s)'.
-        This is built on demand during Device init whenever a new digest key
-        is encountered. This static dict in turn is used to setup the Device instance
-        'digest_handlers' dict which contains a lookup to the digest parsing function when
-        an Appliance.System.All message is received/parsed.
-        The 'digest initialization function' will (at device init time) parse the digest to
-        setup the dedicated entities for the particular digest key.
-        The definition of this init function is looked up at runtime by an algorithm that:
-        - looks-up if the digest key is in DIGEST_INITIALIZERS where it'll find either the
-        function or the (str) module coordinates of the init function for the digest key.
-        - if not configured, the algorithm will try load the module in meross_lan/devices
-        with the same name as the digest key.
-        - if any is not found we'll set a 'digest_init_empty' function in order to not
-        repeat the lookup process. That function will just pass so that the key
-        init/parsing will not harm."""
-        NAMESPACE_INIT: Final[dict[mn.Namespace, Any]]
-        """ Static dict of namespace initialization functions. This will be looked up
-        and matched against the current device abilities (at device init time) and
-        usually setups a dedicated namespace handler and/or a dedicated entity.
-        As far as the initialization functions are looked up in related modules,
-        they'll be cached in the dict.
-        Namespace handlers will be initialized in the order as they appear in the dict
-        and this could have consequences in the order of polls."""
-        TRACE_ABILITY_EXCLUDE: ClassVar[tuple[str, ...]]
-        """ When tracing we enumerate appliance abilities to get insights on payload structures
-        this list will be excluded from enumeration since it's redundant/exposing sensitive info
-        or simply crashes/hangs the device."""
-
         descriptor: Final[DeviceDescriptor]  # type: ignore[override]
         bluetooth: Final[ComponentApi.BTClient | None]  # type: ignore[override]
         http: Final[Http | None]  # type: ignore[override]
@@ -317,8 +276,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
         _device_entries: dict[Any, dr.DeviceEntry]
         profile: Final[MQTTProfile | None]
-        digest_parsers: Final[dict[str, DigestParseFunc]]
-        digest_pollers: Final[set[device.NamespaceHandler]]
         _trace_ability_callback_unsub: TimerHandle | None
         _check_device_timerules_unsub: TimerHandle  # dynamic
         _async_create_diagnostic_entities_task: Task  # dynamic
@@ -326,33 +283,20 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         # entities
         sensor_protocol: ProtocolSensor
 
-    @staticmethod
-    def digest_parse_empty(digest: dict | list):
-        pass
-
-    @staticmethod
-    def digest_init_empty(
-        device: "Device", digest: dict | list
-    ) -> "DigestInitReturnType":
-        return Device.digest_parse_empty, ()
-
-    @staticmethod
-    def namespace_init_empty(device: "Device", namespace: mn.Namespace):
-        pass
-
+    DIGEST_INIT_PACKAGE = "custom_components.meross_lan"
     DIGEST_INIT = {
         mc.KEY_FAN: ".fan",
         mc.KEY_HUB: ".devices.hub",
         mc.KEY_LIGHT: ".light",
         "light.effect": ".light",
-        mc.KEY_TIMER: digest_init_empty,
-        mc.KEY_TIMERX: digest_init_empty,
+        mc.KEY_TIMER: device.Device.digest_init_empty,
+        mc.KEY_TIMERX: device.Device.digest_init_empty,
         mc.KEY_TOGGLE: ".switch",
         mc.KEY_TOGGLEX: ".switch",
-        mc.KEY_TRIGGER: digest_init_empty,
-        mc.KEY_TRIGGERX: digest_init_empty,
+        mc.KEY_TRIGGER: device.Device.digest_init_empty,
+        mc.KEY_TRIGGERX: device.Device.digest_init_empty,
     }
-
+    NAMESPACE_INIT_PACKAGE = DIGEST_INIT_PACKAGE
     NAMESPACE_INIT = {
         mn.Appliance_Config_OverTemp: (".devices.mss", "OverTempEnableSwitch"),
         mn.Appliance_Control_Alarm: (".siren", "MLSiren"),
@@ -441,8 +385,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         "device_timedelta_log_epoch",
         "device_timedelta_config_epoch",
         "_profile",
-        "digest_parsers",
-        "digest_pollers",
         "_check_device_timerules_unsub",
         "_trace_ability_callback_unsub",
         "_async_create_diagnostic_entities_task",
@@ -501,14 +443,22 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         self.device_timedelta_log_epoch = 0
         self.device_timedelta_config_epoch = 0
         self.profile = None
-        self.digest_parsers = {}
-        self.digest_pollers = set()
         if mn.Appliance_System_Time in descriptor.ability:
             self._check_device_timerules_unsub = self.schedule_async_callback(
                 60, self.check_device_timerules
             )
         self._trace_ability_callback_unsub = None
 
+        NamespaceHandler(
+            self,
+            mn.Appliance_System_All,
+            config=(
+                self.HEARTBEAT_TIMEOUT,
+                0,
+                700,
+                NamespaceHandler.async_poll_all,
+            ),
+        )
         self.sensor_protocol = ProtocolSensor(self)
         MLPersistentButton(
             None,
@@ -527,98 +477,10 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             entity_category=MLPersistentButton.EntityCategory.DIAGNOSTIC,
         )
 
+    @override
     async def async_init(self):
-
         await self._async_update_config()
-
-        descriptor = self.descriptor
-        if tzname := descriptor.timezone:
-            # self.tz defaults to UTC on init
-            with self.exception_warning(
-                "loading timezone(%s) - check your python environment",
-                tzname,
-                timeout=14400,
-            ):
-                self.tz = await self.api.async_load_zoneinfo(tzname)
-
-        for key_digest, _digest in (
-            descriptor.digest.items() or descriptor.control.items()
-        ):
-            # older firmwares (MSS110 with 1.1.28) look like
-            # carrying 'control' instead of 'digest'
-            try:
-                try:
-                    self.digest_parsers[key_digest], _digest_pollers = (
-                        Device.DIGEST_INIT[key_digest](self, _digest)
-                    )
-                except (KeyError, TypeError):
-                    # KeyError: key is unknown to our code (fallback to lookup ".devices.{key_digest}")
-                    # TypeError: key is a string containing the module path
-                    key_slug = slugify(key_digest)
-                    _module_path = Device.DIGEST_INIT.get(
-                        key_digest, f".devices.{key_slug}"
-                    )
-                    if type(_module_path) is not str:
-                        # This means we catched an error inside the digest init func
-                        raise
-                    try:
-                        digest_init_func: "DigestInitFunc" = getattr(
-                            await self.api.async_import_module(_module_path),
-                            f"digest_init_{key_slug}",
-                        )
-                    except Exception as exception:
-                        self.log_exception(
-                            self.WARNING,
-                            exception,
-                            "loading digest initializer for key '%s'",
-                            key_digest,
-                        )
-                        digest_init_func = Device.digest_init_empty
-                    Device.DIGEST_INIT[key_digest] = digest_init_func
-                    self.digest_parsers[key_digest], _digest_pollers = digest_init_func(
-                        self, _digest
-                    )
-                self.digest_pollers.update(_digest_pollers)
-
-            except Exception as exception:
-                self.log_exception(
-                    self.WARNING, exception, "initializing digest key '%s'", key_digest
-                )
-                self.digest_parsers[key_digest] = Device.digest_parse_empty
-
-        ability = descriptor.ability
-        for ns, ns_init_func in self.NAMESPACE_INIT.items():
-            if ns not in ability:
-                continue
-            try:
-                try:
-                    ns_init_func(self, ns)
-                except TypeError:
-                    try:
-                        ns_init_func = getattr(
-                            await self.api.async_import_module(ns_init_func[0]),
-                            ns_init_func[1],
-                        )
-                    except Exception as exception:
-                        self.log_exception(
-                            self.WARNING,
-                            exception,
-                            "loading namespace initializer for %s",
-                            ns,
-                        )
-                        Device.NAMESPACE_INIT[ns] = Device.namespace_init_empty
-                    else:
-                        try:
-                            ns_init_func = ns_init_func.namespace_init
-                        except AttributeError:
-                            pass
-                        Device.NAMESPACE_INIT[ns] = ns_init_func
-                        ns_init_func(self, ns)
-
-            except Exception as exception:
-                self.log_exception(
-                    self.WARNING, exception, "initializing namespace %s", ns
-                )
+        await super().async_init()
 
     def start(self):
         # called by async_setup_entry after the entities have been registered
@@ -643,8 +505,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         await super().async_shutdown()
         if self.profile:
             self.profile.unlink(self)
-        self.digest_parsers.clear()
-        self.digest_pollers.clear()
         del self.sensor_protocol
         self.api.devices[self.id] = None
         self.log(  # REMOVE
@@ -661,7 +521,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         try:
             conf_protocol = Transport.from_str(config[mlc.CONF_PROTOCOL])  # type: ignore
         except KeyError:
-            conf_protocol = T_AUTO
+            conf_protocol = Transport.AUTO
         self.conf_protocol = conf_protocol
         self.polling_period = (
             config.get(mlc.CONF_POLLING_PERIOD) or mlc.CONF_POLLING_PERIOD_DEFAULT
@@ -676,7 +536,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         if self.mqtt:  # just to be sure key is sync'd
             self.mqtt.key = self.key
 
-        if conf_protocol is T_BLUETOOTH:
+        if conf_protocol is Transport.BLUETOOTH:
             if not self.bluetooth:
                 if _bluetooth := self.api.get_bt_client(self.id):
                     self.add_client(_bluetooth)
@@ -706,7 +566,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
         self.host = host
         http = self.http
-        if host and (self.conf_protocol in (T_AUTO, T_HTTP)):
+        if host and (self.conf_protocol in (Transport.AUTO, Transport.HTTP)):
             if http:
                 http.host = host
                 http.key = self.key
@@ -748,7 +608,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         """called whenever the configuration or the profile linking changes to fix transports"""
 
         conf_protocol = self.conf_protocol
-        if conf_protocol in (T_BLUETOOTH, T_HTTP):
+        if conf_protocol in (Transport.BLUETOOTH, Transport.HTTP):
             self.preferred_transport = conf_protocol
             if self.mqtt:
                 self.remove_client(self.mqtt)
@@ -764,17 +624,17 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                 if _profile:
                     _profile.get_connection(self).attach(self)
 
-            if conf_protocol is T_AUTO:
+            if conf_protocol is Transport.AUTO:
                 # When using Transport.AUTO we try to use our 'preferred' transport.
                 # When binded to a cloud_profile always prefer http since it will avoid excessive
                 # MQTT traffic and related cloud 'issues' like rate-limiting
                 if self.config.get(CONF_HOST) or (
                     self.mqtt and self.mqtt.connection.is_cloud
                 ):
-                    self.preferred_transport = T_HTTP
+                    self.preferred_transport = Transport.HTTP
                 else:
-                    self.preferred_transport = T_MQTT
-            else:  # T_MQTT
+                    self.preferred_transport = Transport.MQTT
+            else:
                 self.preferred_transport = conf_protocol
 
         if self.transport is not self.preferred_transport:
@@ -1042,12 +902,12 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             "device_response_size_min": self.device_response_size_min,
             "device_response_size_max": self.device_response_size_max,
             "BLUETOOTH": {
-                "bluetooth": T_BLUETOOTH in self._clients,
-                "bluetooth_active": T_BLUETOOTH in self._clients_connected,
+                "bluetooth": bool(self.bluetooth),
+                "bluetooth_active": self.bluetooth and self.bluetooth.is_connected,
             },
             "HTTP": {
-                "http": T_HTTP in self._clients,
-                "http_active": T_HTTP in self._clients_connected,
+                "http": bool(self.http),
+                "http_active": self.http and self.http.is_connected,
             },
             "MQTT": {
                 "cloud_profile": profile and profile.is_cloud_profile,
@@ -1360,7 +1220,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                 tzname,
                 timeout=14400,
             ):
-                self.tz = await self.api.async_load_zoneinfo(tzname)
+                self.tz = await async_load_zoneinfo(tzname)
         else:
             self.tz = UTC
 
@@ -1503,7 +1363,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         elif oldtimezone != descr.timezone:
             self.schedule_entry_update(False)
 
-        if self.conf_protocol is T_AUTO:
+        if self.conf_protocol is Transport.AUTO:
             if (mqtt := self.mqtt) and mqtt.is_connected:
                 if not is_device_online(descr.system):
                     mqtt.on_disconnect()
@@ -1689,7 +1549,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             tzname = {"AEST": "Australia/Brisbane"}.get(tzname, tzname)
 
             try:
-                tz = await self.api.async_load_zoneinfo(tzname)
+                tz = await async_load_zoneinfo(tzname)
             except Exception as e:
                 self.log_exception(
                     self.WARNING,

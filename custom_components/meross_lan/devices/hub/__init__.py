@@ -45,7 +45,7 @@ if TYPE_CHECKING:
         Unpack,
     )
 
-    from ...helpers.device import Device, DigestInitReturnType, MerossMessage
+    from ...helpers.device import Device, MerossMessage
     from ...helpers.meross_profile import DeviceInfoExtType
     from ...helpers.mqtt_profile import MQTTProfile
     from ...merossclient.cloudapi import SubDeviceInfoType
@@ -163,7 +163,7 @@ class HubNamespaceHandler(NamespaceHandler):
                     subdevice._unknown_ns_parse(self, payload)
                 else:
                     # force a rescan since we discovered a new subdevice
-                    hub.handler_all.polling_epoch_next = 0.0
+                    hub.ns_handlers[mn.Appliance_System_All].polling_epoch_next = 0.0
             except Exception as e:
                 if type(payload) is str:  # enumerating dict keys
                     # This could happen when the main payload is not a list of subdevices
@@ -1057,7 +1057,7 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, MLSwitch):
 
 def digest_init_hub(
     device: "HubMixin", digest: "mt_h.Digest_Hub", /
-) -> "DigestInitReturnType":
+) -> "Device.DigestInitReturnType":
 
     # This is a trick to dynamically mixin the HubMixin capabilities
     # into the device instance. Historically we were mixing HubMixin

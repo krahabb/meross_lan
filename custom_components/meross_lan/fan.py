@@ -9,11 +9,14 @@ from .merossclient.protocol import const as mc
 if TYPE_CHECKING:
     from typing import Final
 
-    from .helpers.device import Device, DigestInitReturnType
+    from .helpers.device import Device
+    from .merossclient.protocol.types import JsonList
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
-    MLBinaryEntity.platform_setup_entry(hass, config_entry, async_add_devices, fan.DOMAIN)
+    MLBinaryEntity.platform_setup_entry(
+        hass, config_entry, async_add_devices, fan.DOMAIN
+    )
 
 
 class MLFan(MLBinaryEntity, fan.FanEntity):
@@ -137,7 +140,9 @@ class MLFan(MLBinaryEntity, fan.FanEntity):
             self.flush_state()
 
 
-def digest_init_fan(device: "Device", digest, /) -> "DigestInitReturnType":
+def digest_init_fan(
+    device: "Device", digest: "JsonList", /
+) -> "Device.DigestInitReturnType":
     """[{ "channel": 2, "speed": 3, "maxSpeed": 3 }]"""
     for channel_digest in digest:
         MLFan(channel_digest[mc.KEY_CHANNEL], device)

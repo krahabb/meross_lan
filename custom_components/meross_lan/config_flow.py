@@ -33,6 +33,7 @@ from .helpers.mqtt_profile import MQTTConnection
 from .merossclient import (
     DeviceDescriptor,
     HostAddress,
+    async_available_timezones,
     cloudapi,
     fmt_macaddress,
 )
@@ -1478,7 +1479,7 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
         if mn.Appliance_System_Time in ability:
             config_schema[
                 _optional(mc.KEY_TIMEZONE, None, device_descriptor.timezone)
-            ] = vol.In(await api.async_available_timezones())
+            ] = vol.In(await async_available_timezones())
         self._setup_entitymanager_schema(config_schema, device_config)
         return self.async_show_form_with_errors(
             "device",

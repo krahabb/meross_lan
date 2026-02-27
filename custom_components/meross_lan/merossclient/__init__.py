@@ -4,14 +4,17 @@ A collection of utilities to help managing the Meross device protocol
 
 import asyncio
 from datetime import UTC, datetime
+import importlib
 import re
 from time import gmtime, time
 from typing import TYPE_CHECKING
+import zoneinfo
 
 from .protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
     from datetime import tzinfo
+    from types import ModuleType
     from typing import (
         Any,
         Callable,
@@ -39,6 +42,10 @@ if TYPE_CHECKING:
         mcu as mt_m,
     )
 
+    _ASYNC_LOCK: Final[asyncio.Lock]
+    _AVAILABLE_TIMEZONES: Final[list[str]]
+    _ZONEINFO: Final[dict[str, zoneinfo.ZoneInfo]]
+    _IMPORT_MODULE_CACHE: Final[dict[str, ModuleType]]
 
 try:
     import json
@@ -317,11 +324,85 @@ def datetime_from_epoch(epoch, tz: "tzinfo | None"):
         return datetime(y, m, d, hh, mm, min(ss, 59), 0, UTC).astimezone(tz)
 
 
+def simple_slug(value: str):
+    """A very simple slugify implementation to avoid the overhead of a full slugify library.
+    This is intended to work on slugification of meross symbols appearing in protocol payloads.
+    """
+    return value.lower().replace(".", "_")
+
+
 def versiontuple(version: str) -> "VersionTupleType":
     """
     Splits a version string like "1.2.3" into a tuple of integers (1,2,3)
     """
     return tuple(map(int, version.split(".")))
+
+
+_ASYNC_LOCK = asyncio.Lock()
+_AVAILABLE_TIMEZONES = []
+
+
+async def async_available_timezones():
+    if _AVAILABLE_TIMEZONES:
+        return _AVAILABLE_TIMEZONES
+
+    def _load():
+        """
+        These functions will use low levels imports and HA core 2024.5
+        complains about executing it in the main loop thread. We'll
+        so run these in an executor
+        """
+        return sorted(zoneinfo.available_timezones())
+
+    async with _ASYNC_LOCK:
+        if not _AVAILABLE_TIMEZONES:
+            _AVAILABLE_TIMEZONES.extend(
+                await asyncio.get_event_loop().run_in_executor(None, _load)
+            )
+
+    return _AVAILABLE_TIMEZONES
+
+
+_ZONEINFO = {}
+
+
+async def async_load_zoneinfo(key: str, /):
+    """
+    Creates a ZoneInfo instance from an executor.
+    HA core 2024.5 might complain if ZoneInfo needs to load files (no cache hit)
+    so we have to always demand this to an executor because the 'decision' to
+    load is embedded inside the ZoneInfo initialization.
+    A bit cumbersome though..
+    """
+    try:
+        return _ZONEINFO[key]
+    except KeyError:
+        _ZONEINFO[key] = tz = await asyncio.get_event_loop().run_in_executor(
+            None,
+            zoneinfo.ZoneInfo,
+            key,
+        )
+        return tz
+
+
+_IMPORT_MODULE_CACHE = {}
+
+
+async def async_import_module(name: str, package="merossclient", /):
+    f_name = f"{package}.{name}"
+    try:
+        return _IMPORT_MODULE_CACHE[f_name]
+    except KeyError:
+        async with _ASYNC_LOCK:
+            # check (again) the module was not asyncronously loaded when waiting the lock
+            try:
+                return _IMPORT_MODULE_CACHE[f_name]
+            except KeyError:
+                module = await asyncio.get_event_loop().run_in_executor(
+                    None, importlib.import_module, name, package
+                )
+                _IMPORT_MODULE_CACHE[f_name] = module
+                return module
 
 
 class HostAddress:

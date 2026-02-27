@@ -1,7 +1,5 @@
 import asyncio
-import importlib
 from typing import TYPE_CHECKING, override
-import zoneinfo
 
 from bleak.exc import BleakError
 from homeassistant.components import bluetooth as ha_bt, mqtt
@@ -444,9 +442,6 @@ class ComponentApi(mlq.MQTTProfile):
 
         _mqtt_connection: HAMQTTConnection | None
 
-        _available_timezones: list[str] | None
-        _zoneinfo: Final[dict[str, zoneinfo.ZoneInfo]]
-
         _bt_devices: Final[dict[str, BTClient]]
 
         # Overrides
@@ -462,10 +457,6 @@ class ComponentApi(mlq.MQTTProfile):
         "config_entries",
         "flow_manager",
         "_mqtt_connection",
-        "_available_timezones",
-        "_zoneinfo",
-        "_import_module_lock",
-        "_import_module_cache",
         "_bt_devices",
     )
 
@@ -508,10 +499,6 @@ class ComponentApi(mlq.MQTTProfile):
         self.config_entries = hass.config_entries
         self.flow_manager = hass.config_entries.flow
         self._mqtt_connection = None
-        self._available_timezones = None
-        self._zoneinfo = {}
-        self._import_module_lock = asyncio.Lock()
-        self._import_module_cache = {}
         for config_entry in self.config_entries.async_entries(mlc.DOMAIN):
             match ConfigEntryType.get_type_and_id(config_entry.unique_id):
                 case (ConfigEntryType.DEVICE, device_id):
@@ -754,61 +741,6 @@ class ComponentApi(mlq.MQTTProfile):
         if not (mqtt_connection := self._mqtt_connection):
             self._mqtt_connection = mqtt_connection = HAMQTTConnection(self)
         return mqtt_connection
-
-    async def async_available_timezones(self) -> list[str]:
-        if self._available_timezones is None:
-
-            def _load():
-                """
-                These functions will use low levels imports and HA core 2024.5
-                complains about executing it in the main loop thread. We'll
-                so run these in an executor
-                """
-                return sorted(zoneinfo.available_timezones())
-
-            try:
-                self._available_timezones = await self.hass.async_add_executor_job(
-                    _load
-                )
-            except Exception as e:
-                self.log_exception(self.WARNING, e, "retrieving available timezones")
-                return []
-
-        return self._available_timezones  # type: ignore
-
-    async def async_load_zoneinfo(self, key: str):
-        """
-        Creates a ZoneInfo instance from an executor.
-        HA core 2024.5 might complain if ZoneInfo needs to load files (no cache hit)
-        so we have to always demand this to an executor because the 'decision' to
-        load is embedded inside the ZoneInfo initialization.
-        A bit cumbersome though..
-        """
-        try:
-            return self._zoneinfo[key]
-        except KeyError:
-            self._zoneinfo[key] = tz = await self.hass.async_add_executor_job(
-                zoneinfo.ZoneInfo,
-                key,
-            )
-            return tz
-
-    async def async_import_module(self, name: str):
-        try:
-            return self._import_module_cache[name]
-        except KeyError:
-            async with self._import_module_lock:
-                # check (again) the module was not asyncronously loaded when waiting the lock
-                try:
-                    return self._import_module_cache[name]
-                except KeyError:
-                    module = await self.hass.async_add_executor_job(
-                        importlib.import_module,
-                        name,
-                        "custom_components.meross_lan",
-                    )
-                    self._import_module_cache[name] = module
-                    return module
 
     def get_config_entry(self, unique_id: str):
         """Gets the configured entry if it exists."""

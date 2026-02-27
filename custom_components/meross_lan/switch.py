@@ -13,7 +13,8 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .helpers.device import Device, DigestInitReturnType
+    from .helpers.device import Device
+    from .merossclient.protocol.types import JsonDict, JsonList
 
 
 async def async_setup_entry(
@@ -94,7 +95,9 @@ class MLToggle(EntityNamespaceMixin, MLSwitch):
     entity_category = None
 
 
-def digest_init_toggle(device: "Device", digest: dict, /) -> "DigestInitReturnType":
+def digest_init_toggle(
+    device: "Device", digest: "JsonDict", /
+) -> "Device.DigestInitReturnType":
     """{"onoff": 0, "lmTime": 1645391086}"""
     toggle = MLToggle.namespace_init(device, mn.Appliance_Control_Toggle)
     return toggle._parse, (device.ns_handlers[mn.Appliance_Control_Toggle],)
@@ -114,8 +117,8 @@ class MLToggleX(MLSwitch):
 
 
 def digest_init_togglex(
-    device: "Device", togglex_digest: list, /
-) -> "DigestInitReturnType":
+    device: "Device", togglex_digest: "JsonList", /
+) -> "Device.DigestInitReturnType":
     # We don't initialize every switch/ToggleX here since the digest reported channels
     # might be mapped to more specialized entities:
     # this is true for lights (MLLight), garageDoor (MLGarage) and fan (MLFan) though

@@ -12,15 +12,9 @@ from ...switch import MLSwitch
 if TYPE_CHECKING:
     from typing import Any, Callable, ClassVar, Final, Unpack
 
-    from ...helpers.device import (
-        Device,
-        DigestInitReturnType,
-        DigestParseFunc,
-        MerossMessage,
-    )
-    from ...merossclient.protocol import types as mt
+    from ...helpers.device import Device, MerossMessage
     from ...merossclient.protocol.namespaces import Namespace
-    from ...merossclient.protocol.types import thermostat as mt_t
+    from ...merossclient.protocol.types import JsonDict, thermostat as mt_t
 
 
 class MLScreenBrightnessNumber(MLConfigNumber):
@@ -481,11 +475,13 @@ DIGEST_KEY_TO_NAMESPACE: dict[str, "Namespace"] = {
 # to be PUSHED when over MQTT. The rest are either 'never seen' or 'not pushed'
 
 
-def digest_init_thermostat(device: "Device", digest: dict) -> "DigestInitReturnType":
+def digest_init_thermostat(
+    device: "Device", digest: "JsonDict", /
+) -> "Device.DigestInitReturnType":
 
     ability = device.descriptor.ability
 
-    digest_parsers: dict[str, "DigestParseFunc"] = {}
+    digest_parsers: dict[str, "Device.DigestParseFunc"] = {}
     digest_pollers: set["NamespaceHandler"] = set()
 
     for ns_key, ns_digest in digest.items():
@@ -512,7 +508,7 @@ def digest_init_thermostat(device: "Device", digest: dict) -> "DigestInitReturnT
             for channel_digest in ns_digest:
                 climate_class(channel_digest[mc.KEY_CHANNEL], device)
 
-    def digest_parse_thermostat(digest: dict):
+    def digest_parse_thermostat(digest: "JsonDict", /):
         """
         MTS200 typically carries:
         {

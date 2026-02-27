@@ -4,11 +4,14 @@ from ..merossclient.protocol import const as mc, namespaces as mn
 from ..select import MLConfigSelect
 
 if TYPE_CHECKING:
-    from ..helpers.device import Device, DigestInitReturnType
+    from ..helpers.device import Device
     from ..helpers.entity import ChannelType
+    from ..merossclient.protocol.types import JsonList
 
 
-def digest_init_spray(device: "Device", digest) -> "DigestInitReturnType":
+def digest_init_spray(
+    device: "Device", digest: "JsonList", /
+) -> "Device.DigestInitReturnType":
     """[{"channel": 0, "mode": 0, "lmTime": 1629035486, "lastMode": 1, "onoffTime": 1629035486}]"""
     for channel_digest in digest:
         MLSpray(channel_digest[mc.KEY_CHANNEL], device)

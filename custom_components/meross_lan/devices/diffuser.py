@@ -20,9 +20,8 @@ from .spray import MLSpray
 if TYPE_CHECKING:
     from typing import Final
 
-    from ..helpers.device import Device, DigestInitReturnType, MerossMessage
-    from ..merossclient.protocol import types as mt
-    from ..sensor import MLNumericSensor
+    from ..helpers.device import Device, MerossMessage
+    from ..merossclient.protocol.types import JsonDict
 
     DIFFUSER_SENSOR_ENTITY_DEFS: Final
 
@@ -32,7 +31,9 @@ DIFFUSER_SENSOR_ENTITY_DEFS = {
 }
 
 
-def digest_init_diffuser(device: "Device", digest: dict) -> "DigestInitReturnType":
+def digest_init_diffuser(
+    device: "Device", digest: "JsonDict", /
+) -> "Device.DigestInitReturnType":
     """
     {
         "type": "mod100",

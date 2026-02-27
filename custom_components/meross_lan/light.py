@@ -26,9 +26,8 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .helpers.device import Device, DigestInitReturnType
-    from .merossclient.protocol import types as mt
-    from .merossclient.protocol.types import JsonDict
+    from .helpers.device import Device
+    from .merossclient.protocol.types import JsonDict, JsonList
 
 
 async def async_setup_entry(
@@ -789,7 +788,9 @@ class MLDNDLightEntity(EntityNamespaceMixin, MLBinaryEntity, light.LightEntity):
     supported_color_modes: set[ColorMode] = {ColorMode.ONOFF}
 
 
-def digest_init_light(device: "Device", digest: dict, /) -> "DigestInitReturnType":
+def digest_init_light(
+    device: "Device", digest: "JsonDict", /
+) -> "Device.DigestInitReturnType":
 
     ability = device.descriptor.ability
 
@@ -804,8 +805,8 @@ def digest_init_light(device: "Device", digest: dict, /) -> "DigestInitReturnTyp
 
 
 def digest_init_light_effect(
-    device: "Device", digest: list, /
-) -> "DigestInitReturnType":
+    device: "Device", digest: "JsonList", /
+) -> "Device.DigestInitReturnType":
     # This is a 'new' (2025-06-17) key appearing in msl320cpr digest.
     # The key itself is 'light.entity' and carries the effect list
     # (same as ns Appliance.Control.Light.Effect)
