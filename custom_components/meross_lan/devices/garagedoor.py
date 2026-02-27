@@ -703,13 +703,11 @@ POLLING_STRATEGY_CONF.update(
         mn.Appliance_GarageDoor_Config: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            110,
             NamespaceHandler.async_poll_smart,
         ),
         mn.Appliance_GarageDoor_MultipleConfig: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            140,
             NamespaceHandler.async_poll_smart,
         ),
     }

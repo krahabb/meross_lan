@@ -455,7 +455,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             config=(
                 self.HEARTBEAT_TIMEOUT,
                 0,
-                700,
                 NamespaceHandler.async_poll_all,
             ),
         )

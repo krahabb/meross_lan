@@ -179,10 +179,19 @@ class MLDiffuserSpray(MLSpray):
 
 POLLING_STRATEGY_CONF.update(
     {
+        mn.Appliance_Control_Diffuser_Light: (
+            mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
+            mlc.PARAM_SENSOR_FAST_CLOUD_UPDATE_PERIOD,
+            None,  # digest payload
+        ),
+        mn.Appliance_Control_Diffuser_Spray: (
+            mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
+            mlc.PARAM_SENSOR_FAST_CLOUD_UPDATE_PERIOD,
+            None,  # digest payload
+        ),
         mn.Appliance_Control_Diffuser_Sensor: (
             mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
             mlc.PARAM_SENSOR_SLOW_CLOUD_UPDATE_PERIOD,
-            100,
             NamespaceHandler.async_poll_smart,
         ),
     }

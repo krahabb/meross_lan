@@ -170,7 +170,7 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
                         self.polling_response_size = (
                             self.HEADER_AVG_SIZE
                             + len(polling_request_channels)
-                            * self.polling_response_item_size
+                            * ns.payload_item_size
                         )
                 entity._parse(data_value[0])
 

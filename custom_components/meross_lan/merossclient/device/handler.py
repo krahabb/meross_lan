@@ -159,7 +159,7 @@ class NamespaceHandler:
         type HandlerFunc = Callable[[MerossMessage], None]
         type ParserFunc = Callable[[JsonMapping], None]
         type PollingStrategyFunc = Callable[[Self], Coroutine]
-        type ConfigType = tuple[int, int, int, PollingStrategyFunc | None]
+        type ConfigType = tuple[int, int, PollingStrategyFunc | None]
 
         DEFAULT_CONFIG: ClassVar[ConfigType]
         HEADER_AVG_SIZE: Final[int]
@@ -206,7 +206,6 @@ class NamespaceHandler:
     DEFAULT_CONFIG = (
         0,
         0,
-        50,
         None,
     )
 
@@ -223,7 +222,6 @@ class NamespaceHandler:
         "polling_strategy",
         "polling_period",
         "polling_period_cloud",
-        "polling_response_item_size",
         "polling_response_size",
         "polling_request",
         "polling_request_channels",
@@ -253,13 +251,10 @@ class NamespaceHandler:
         config = config or self.DEFAULT_CONFIG
         self.polling_period = config[0]
         self.polling_period_cloud = config[1]
-        self.polling_response_item_size = config[2]
-        self.polling_strategy = config[3]
+        self.polling_strategy = config[2]
         # by default we calculate 1 item/channel per payload but we should
         # refine this whenever needed
-        self.polling_response_size = (
-            self.HEADER_AVG_SIZE + self.polling_response_item_size
-        )
+        self.polling_response_size = self.HEADER_AVG_SIZE + ns.payload_item_size
         self.last_rx_push = None
         self.polling_request_configure(
             mn.PayloadType.LIST_IDX_STRICT
@@ -695,18 +690,17 @@ class NamespaceHandler:
 
             self.polling_response_size = (
                 self.HEADER_AVG_SIZE
-                + len(polling_request_channels) * self.polling_response_item_size
+                + len(polling_request_channels) * self.ns.payload_item_size
             )
         except AttributeError:
             # polling_request_channels not used for this ns
             self.polling_response_size = (
-                self.HEADER_AVG_SIZE
-                + len(self.parsers) * self.polling_response_item_size
+                self.HEADER_AVG_SIZE + len(self.parsers) * self.ns.payload_item_size
             )
 
     def polling_response_size_adj(self, item_count: int, /):
         self.polling_response_size = (
-            self.HEADER_AVG_SIZE + item_count * self.polling_response_item_size
+            self.HEADER_AVG_SIZE + item_count * self.ns.payload_item_size
         )
 
     def channels_to_poll(self):
@@ -786,8 +780,9 @@ class NamespaceHandler:
             # PUSHed when on MQTT
             return
 
+        payload_item_size = self.ns.payload_item_size
         size_available = device.polling_response_size_available - self.HEADER_AVG_SIZE
-        if size_available < self.polling_response_item_size:
+        if size_available < payload_item_size:
             if device._multiple_requests:
                 await device.async_poll_flush()
                 size_available = (
@@ -817,11 +812,11 @@ class NamespaceHandler:
         channels_payload.clear()
         self.polling_response_size = self.HEADER_AVG_SIZE
         while True:
-            if size_available > self.polling_response_item_size:
+            if size_available > payload_item_size:
                 try:
                     channels_payload.append({self.ns.key_idx: next(channels)})
-                    size_available -= self.polling_response_item_size
-                    self.polling_response_size += self.polling_response_item_size
+                    size_available -= payload_item_size
+                    self.polling_response_size += payload_item_size
                     continue
                 except StopIteration:
                     if channels_payload:
@@ -842,7 +837,7 @@ class NamespaceHandler:
             size_available = (
                 device.polling_response_size_available - self.HEADER_AVG_SIZE
             )
-            if size_available < self.polling_response_item_size:
+            if size_available < payload_item_size:
                 # This is pathological since we've just flushed everything
                 device.log(
                     device.WARNING,

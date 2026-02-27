@@ -1193,67 +1193,56 @@ POLLING_STRATEGY_CONF.update(
         mn_h.Appliance_Config_DeviceCfg: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            100,
             NamespaceHandler.async_poll_smart,
         ),
         mn_h.Appliance_Control_Sensor_LatestX: (
             mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            220,
             NamespaceHandler.async_poll_smart,
         ),
         mn_h.Appliance_Control_Water: (
             0,
             0,
-            50,
             NamespaceHandler.async_poll_default,
         ),
         mn_h.Appliance_Hub_Battery: (
             3600,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            40,
             NamespaceHandler.async_poll_smart,
         ),
         mn_h.Appliance_Hub_Mts100_Adjust: (
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            40,
             NamespaceHandler.async_poll_smart,
         ),
         mn_h.Appliance_Hub_Mts100_All: (
             device.Device.HEARTBEAT_TIMEOUT,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            350,
             NamespaceHandler.async_poll_chunked,
         ),
         mn_h.Appliance_Hub_Mts100_ScheduleB: (
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            500,
             NamespaceHandler.async_poll_chunked,
         ),
         mn_h.Appliance_Hub_Sensor_Adjust: (
             device.Device.HEARTBEAT_TIMEOUT,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            60,
             NamespaceHandler.async_poll_smart,
         ),
         mn_h.Appliance_Hub_Sensor_All: (
             device.Device.HEARTBEAT_TIMEOUT,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            250,
             NamespaceHandler.async_poll_chunked,
         ),
         mn_h.Appliance_Hub_SubDevice_Beep: (
             0,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            35,
             NamespaceHandler.async_poll_smart,
         ),
         mn_h.Appliance_Hub_SubDevice_Version: (
             0,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            55,
             NamespaceHandler.async_poll_once,
         ),
     }

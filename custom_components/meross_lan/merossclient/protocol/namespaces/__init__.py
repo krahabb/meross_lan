@@ -93,6 +93,7 @@ class _NamespacesMap(dict):
             return Namespace(
                 name,
                 _slug_split(name.split(".")[-1]),
+                -1,
                 _heuristic_args(name, {"map": self}),
             )
 
@@ -124,6 +125,7 @@ class _HubNamespacesMap(dict):
             return Namespace(
                 name,
                 _slug_split(name.split(".")[-1]),
+                -1,
                 _heuristic_args(name, {"map": self}),
             )
 
@@ -334,6 +336,11 @@ class Namespace(str):
         """If not None Namespace supports DELETE verb with this payload type."""
         payload_psh: Final[PayloadType]  # type: ignore
         """If not None Namespace supports PUSH verb with this payload type."""
+        payload_item_size: Final[int]  # type: ignore
+        """The average size of an item in the payload list/dict. This might be used to estimate the size of the response."""
+        indexed: Final[bool]
+        """Indicates if the namespace uses indexed payloads for any verb. This is typically true for 'index based' namespaces."""
+
         is_thermostat: Final[bool]  # type: ignore
         grammar: Final[Grammar]  # type: ignore
         """The grammar stability level for this namespace."""
@@ -345,6 +352,8 @@ class Namespace(str):
         "payload_set",
         "payload_del",
         "payload_psh",
+        "payload_item_size",
+        "indexed",
         "is_thermostat",
         "grammar",
         "__dict__",
@@ -387,11 +396,13 @@ class Namespace(str):
             return Namespace(
                 name,
                 _slug_split(name.split(".")[-1]),
+                -1,
                 _heuristic_args(name, {"map": map}),
             )
         return Namespace(
             name,
             Namespace.infer_key(name, payload),
+            -1,
             _heuristic_args(name, {"map": map}),
         )
 
@@ -399,11 +410,14 @@ class Namespace(str):
         cls,
         name: str,
         key: str,
+        payload_item_size: int,
         *args: "Args",
     ):
         return str.__new__(cls, name)
 
-    def __init__(self, name: str, key: str, *args: "Namespace.Args"):
+    def __init__(
+        self, name: str, key: str, payload_item_size: int, *args: "Namespace.Args"
+    ):
         # We accept multiple args dicts so that we can build complex definitions
         # by composing small 'chunks' like ARGS_GET, ARGS_NO_GET, etc.
         # This also allows us to centralize here the defaults for parameters
@@ -425,12 +439,15 @@ class Namespace(str):
         self.payload_set = kwargs.get("payload_set") or PayloadType.UNSUPPORTED
         self.payload_del = kwargs.get("payload_del") or PayloadType.UNSUPPORTED
         self.payload_psh = kwargs.get("payload_psh") or PayloadType.UNSUPPORTED
-
-        if self.indexed:
+        self.payload_item_size = payload_item_size
+        if self.payload_get.indexed or self.payload_set.indexed:
             if not self.key_idx:
                 raise ValueError(
                     f"Namespace {self} uses indexed payloads but has no key_idx defined."
                 )
+            self.indexed = True
+        else:
+            self.indexed = False
 
         assert (
             self.payload_psh in PUSH_PAYLOADS
@@ -465,12 +482,6 @@ class Namespace(str):
     @cached_property
     def has_del(self) -> bool:
         return self.payload_del is not PayloadType.UNSUPPORTED
-
-    @cached_property
-    def indexed(self) -> bool:
-        """Indicates if the namespace uses indexed payloads for any verb.
-        This is typically true for 'index based' namespaces."""
-        return self.payload_get.indexed or self.payload_set.indexed
 
     @cached_property
     def request_default(self) -> "MerossRequestType":
@@ -559,27 +570,30 @@ PSQ: "ns.Args" = {"payload_psh": PayloadType.PUSH_QUERY}
 # Moreover, for some namespaces, the euristics about 'namespace key' and payload structure are not
 # good so we must fix those beforehand.
 Appliance_Config_Alarm = ns(
-    "Appliance.Config.Alarm", mc.KEY_CONFIG, G_LI, S_LI, PSQ, IDX_C, EXP
+    "Appliance.Config.Alarm", mc.KEY_CONFIG, 44, G_LI, S_LI, PSQ, IDX_C, EXP
 )
 Appliance_Config_DeviceCfg = ns(
-    "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, G_LIS, S_LI, IDX_C, PSH
+    "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, -1, G_LIS, S_LI, IDX_C, PSH
 )
-Appliance_Config_Info = ns("Appliance.Config.Info", mc.KEY_INFO, G_E, S_D, PSQ)
-Appliance_Config_Key = ns("Appliance.Config.Key", mc.KEY_KEY, S_D)
-Appliance_Config_Matter = ns("Appliance.Config.Matter", mc.KEY_CONFIG, PSQ)
-Appliance_Config_NtpSite = ns("Appliance.Config.NtpSite", mc.KEY_CONFIG)
-Appliance_Config_OverTemp = ns("Appliance.Config.OverTemp", mc.KEY_OVERTEMP, G_E, S_D)
+Appliance_Config_Info = ns("Appliance.Config.Info", mc.KEY_INFO, -1, G_E, S_D, PSQ)
+Appliance_Config_Key = ns("Appliance.Config.Key", mc.KEY_KEY, -1, S_D)
+Appliance_Config_Matter = ns("Appliance.Config.Matter", mc.KEY_CONFIG, -1, PSQ)
+Appliance_Config_NtpSite = ns("Appliance.Config.NtpSite", mc.KEY_CONFIG, -1)
+Appliance_Config_OverTemp = ns(
+    "Appliance.Config.OverTemp", mc.KEY_OVERTEMP, 40, G_E, S_D
+)
 Appliance_Config_StandbyKiller = ns(
-    "Appliance.Config.StandbyKiller", mc.KEY_CONFIG, G_LIS, S_LI, PSQ, IDX_C
+    "Appliance.Config.StandbyKiller", mc.KEY_CONFIG, -1, G_LIS, S_LI, PSQ, IDX_C
 )  # according to Meross app could also support subId indexing
-Appliance_Config_Trace = ns("Appliance.Config.Trace", "trace", G_D)
-Appliance_Config_Wifi = ns("Appliance.Config.Wifi", mc.KEY_WIFI, S_D)
-Appliance_Config_WifiList = ns("Appliance.Config.WifiList", "wifiList", G_E)
-Appliance_Config_WifiX = ns("Appliance.Config.WifiX", mc.KEY_WIFI, S_D)
+Appliance_Config_Trace = ns("Appliance.Config.Trace", "trace", -1, G_D)
+Appliance_Config_Wifi = ns("Appliance.Config.Wifi", mc.KEY_WIFI, -1, S_D)
+Appliance_Config_WifiList = ns("Appliance.Config.WifiList", "wifiList", -1, G_E)
+Appliance_Config_WifiX = ns("Appliance.Config.WifiX", mc.KEY_WIFI, -1, S_D)
 
 Appliance_Config_Sensor_Association = ns(
     "Appliance.Config.Sensor.Association",
     mc.KEY_CONFIG,
+    30,
     G_LIS,
     S_LI,
     PSQ,
@@ -587,181 +601,200 @@ Appliance_Config_Sensor_Association = ns(
 )
 
 Appliance_Control_Alarm = ns(
-    "Appliance.Control.Alarm", mc.KEY_ALARM, G_LI, S_LI, IDX_C
+    "Appliance.Control.Alarm", mc.KEY_ALARM, 40, G_LI, S_LI, IDX_C
 )  # mst100/ms130 actually only seen in hub
 Appliance_Control_AlertConfig = ns(
-    "Appliance.Control.AlertConfig", mc.KEY_CONFIG, G_LIS, S_LI, PSQ, IDX_C
+    "Appliance.Control.AlertConfig", mc.KEY_CONFIG, -1, G_LIS, S_LI, PSQ, IDX_C
 )  # mts300 support the full set of verbs - em06 also exposes it but that's likely different
 Appliance_Control_AlertReport = ns(
-    "Appliance.Control.AlertReport", mc.KEY_ALERT, G_LIS, S_LI, IDX_C, EXP
+    "Appliance.Control.AlertReport", mc.KEY_ALERT, -1, G_LIS, S_LI, IDX_C, EXP
 )
-Appliance_Control_Beep = ns("Appliance.Control.Beep", mc.KEY_ALARM, G_LIS, S_LI, IDX_C)
-Appliance_Control_Bind = ns("Appliance.Control.Bind", mc.KEY_BIND)
+Appliance_Control_Beep = ns(
+    "Appliance.Control.Beep", mc.KEY_ALARM, -1, G_LIS, S_LI, IDX_C
+)
+Appliance_Control_Bind = ns("Appliance.Control.Bind", mc.KEY_BIND, -1)
 Appliance_Control_ChangeWifi = ns(
-    "Appliance.Control.ChangeWiFi", mc.KEY_
+    "Appliance.Control.ChangeWiFi", mc.KEY_, -1
 )  # unknown payload
 Appliance_Control_CloudEvent = ns(
-    "Appliance.Control.CloudEvent", mc.KEY_
+    "Appliance.Control.CloudEvent", mc.KEY_, -1
 )  # unknown payload
 Appliance_Control_ConsumptionConfig = ns(
-    "Appliance.Control.ConsumptionConfig", mc.KEY_CONFIG, G_E, PSH
+    "Appliance.Control.ConsumptionConfig", mc.KEY_CONFIG, -1, G_E, PSH
 )
 Appliance_Control_ConsumptionH = ns(
-    "Appliance.Control.ConsumptionH", mc.KEY_CONSUMPTIONH, G_LIS, D_LI, IDX_C
+    "Appliance.Control.ConsumptionH", mc.KEY_CONSUMPTIONH, 1900, G_LIS, D_LI, IDX_C
 )
 Appliance_Control_ConsumptionX = ns(
-    "Appliance.Control.ConsumptionX", mc.KEY_CONSUMPTIONX, G_E, PSH
+    "Appliance.Control.ConsumptionX", mc.KEY_CONSUMPTIONX, 53, G_E, PSH
 )
 Appliance_Control_Diffuser_Light = ns(
-    "Appliance.Control.Diffuser.Light", mc.KEY_LIGHT, G_E, S_LI, PSQ, IDX_C
+    "Appliance.Control.Diffuser.Light", mc.KEY_LIGHT, 110, G_E, S_LI, PSQ, IDX_C
 )
 Appliance_Control_Diffuser_Sensor = ns(
-    "Appliance.Control.Diffuser.Sensor", mc.KEY_, G_E, PSH
+    "Appliance.Control.Diffuser.Sensor", mc.KEY_, 100, G_E, PSH
 )  # this ns has no ns_key in payload response
 Appliance_Control_Diffuser_Spray = ns(
-    "Appliance.Control.Diffuser.Spray", mc.KEY_SPRAY, G_E, S_LI, PSH, IDX_C
+    "Appliance.Control.Diffuser.Spray", mc.KEY_SPRAY, 55, G_E, S_LI, PSH, IDX_C
 )
 Appliance_Control_Electricity = ns(
-    "Appliance.Control.Electricity", mc.KEY_ELECTRICITY, G_E, PSH
+    "Appliance.Control.Electricity", mc.KEY_ELECTRICITY, 130, G_E, PSH
 )
 Appliance_Control_ElectricityX = ns(
     "Appliance.Control.ElectricityX",
     mc.KEY_ELECTRICITY,
+    100,
     G_DI65535,
     PSH,
     IDX_C | EXP,
 )
-Appliance_Control_Fan = ns("Appliance.Control.Fan", mc.KEY_FAN, G_LIS, S_LI, IDX_C)
+Appliance_Control_Fan = ns("Appliance.Control.Fan", mc.KEY_FAN, 20, G_LIS, S_LI, IDX_C)
 Appliance_Control_Fan_BtnConfig = ns(
-    "Appliance.Control.Fan.BtnConfig", mc.KEY_CONFIG, G_LIS, S_LI, PSQ, IDX_C
+    "Appliance.Control.Fan.BtnConfig", mc.KEY_CONFIG, -1, G_LIS, S_LI, PSQ, IDX_C
 )
 Appliance_Control_Fan_Config = ns(
-    "Appliance.Control.Fan.Config", mc.KEY_CONFIG, G_LIS, S_LI, PSQ, IDX_C
+    "Appliance.Control.Fan.Config", mc.KEY_CONFIG, -1, G_LIS, S_LI, PSQ, IDX_C
 )
 Appliance_Control_FilterMaintenance = ns(
-    "Appliance.Control.FilterMaintenance", mc.KEY_FILTER, G_LIS, S_LI, PSQ, IDX_C
+    "Appliance.Control.FilterMaintenance", mc.KEY_FILTER, 35, G_LIS, S_LI, PSQ, IDX_C
 )
-Appliance_Control_Light = ns("Appliance.Control.Light", mc.KEY_LIGHT, G_E, S_DI, IDX_C)
+Appliance_Control_Light = ns(
+    "Appliance.Control.Light", mc.KEY_LIGHT, -1, G_E, S_DI, IDX_C
+)
 Appliance_Control_Light_Effect = ns(
-    "Appliance.Control.Light.Effect", mc.KEY_EFFECT, G_E, S_LI, D_LI, IDX_ID
+    "Appliance.Control.Light.Effect", mc.KEY_EFFECT, 1550, G_E, S_LI, D_LI, IDX_ID
 )
-Appliance_Control_Mp3 = ns("Appliance.Control.Mp3", mc.KEY_MP3, G_DI, S_DI, IDX_C)
-Appliance_Control_McuUpgrade = ns("Appliance.Control.McuUpgrade", mc.KEY_)
-Appliance_Control_Multiple = ns("Appliance.Control.Multiple", mc.KEY_MULTIPLE, S_D)
-Appliance_Control_OverTemp = ns("Appliance.Control.OverTemp", mc.KEY_OVERTEMP, PSH)
+Appliance_Control_Mp3 = ns("Appliance.Control.Mp3", mc.KEY_MP3, 80, G_DI, S_DI, IDX_C)
+Appliance_Control_McuUpgrade = ns("Appliance.Control.McuUpgrade", mc.KEY_, -1)
+Appliance_Control_Multiple = ns("Appliance.Control.Multiple", mc.KEY_MULTIPLE, -1, S_D)
+Appliance_Control_OverTemp = ns("Appliance.Control.OverTemp", mc.KEY_OVERTEMP, -1, PSH)
 Appliance_Control_PhysicalLock = ns(
-    "Appliance.Control.PhysicalLock", mc.KEY_LOCK, G_LIS, S_LI, PSQ, IDX_C
+    "Appliance.Control.PhysicalLock", mc.KEY_LOCK, 35, G_LIS, S_LI, PSQ, IDX_C
 )
 Appliance_Control_Presence_Config = ns(
-    "Appliance.Control.Presence.Config", mc.KEY_CONFIG, G_LIS, S_LI, IDX_C
+    "Appliance.Control.Presence.Config", mc.KEY_CONFIG, 260, G_LIS, S_LI, IDX_C
 )
 Appliance_Control_Presence_Study = ns(
-    "Appliance.Control.Presence.Study", mc.KEY_CONFIG, G_LIS, S_LI, PSQ, IDX_C
+    "Appliance.Control.Presence.Study", mc.KEY_CONFIG, -1, G_LIS, S_LI, PSQ, IDX_C
 )
 Appliance_Control_Screen_Brightness = ns(
-    "Appliance.Control.Screen.Brightness", mc.KEY_BRIGHTNESS, G_LIS, S_LI, PSH, IDX_C
+    "Appliance.Control.Screen.Brightness",
+    mc.KEY_BRIGHTNESS,
+    70,
+    G_LIS,
+    S_LI,
+    PSH,
+    IDX_C,
 )
 # Appliance.Control.Sensor.* appear on both regular devices (ms600) and hub/subdevices (ms130)
 # To distinguish the grammar between regular devices and hubs we save different definitions
 # in NAMESPACES (for regular devices) and in HUB_NAMESPACES (for hubs).
 Appliance_Control_Sensor_Association = ns(
-    "Appliance.Control.Sensor.Association", mc.KEY_CONTROL, G_LI, IDX_C
+    "Appliance.Control.Sensor.Association", mc.KEY_CONTROL, -1, G_LI, IDX_C
 )  # mts300 works: though it seems this ns just returns (in a GET) the list of keys it supports (a kind of grammar).
 # We could setup an heuristic handler alone which queries this ns once and then setups some 'config entities'
 # working on Appliance.Config.Sensor.Association (which looks like the effective configuration).
 Appliance_Control_Sensor_History = ns(
-    "Appliance.Control.Sensor.History", mc.KEY_HISTORY, G_LIS, D_LI, IDX_C
+    "Appliance.Control.Sensor.History", mc.KEY_HISTORY, -1, G_LIS, D_LI, IDX_C
 )  # history of sensor values
 Appliance_Control_Sensor_Latest = ns(
-    "Appliance.Control.Sensor.Latest", mc.KEY_LATEST, G_LIS, PSH, IDX_C
+    "Appliance.Control.Sensor.Latest", mc.KEY_LATEST, 80, G_LIS, PSH, IDX_C
 )  # carrying miscellaneous sensor values (temp/humi)
 Appliance_Control_Sensor_HistoryX = ns(
-    "Appliance.Control.Sensor.HistoryX", mc.KEY_HISTORY, G_LIDS, D_LI, IDX_C
+    "Appliance.Control.Sensor.HistoryX", mc.KEY_HISTORY, -1, G_LIDS, D_LI, IDX_C
 )  # cannot get query to work...it might look like LatestX
 Appliance_Control_Sensor_LatestX = ns(
-    "Appliance.Control.Sensor.LatestX", mc.KEY_LATEST, G_LIDS, PSH, IDX_C
+    "Appliance.Control.Sensor.LatestX", mc.KEY_LATEST, 220, G_LIDS, PSH, IDX_C
 )
 Appliance_Control_Spray = ns(
-    "Appliance.Control.Spray", mc.KEY_SPRAY, G_D, S_DI, PSH, IDX_C
+    "Appliance.Control.Spray", mc.KEY_SPRAY, -1, G_D, S_DI, PSH, IDX_C
 )
 Appliance_Control_TempUnit = ns(
-    "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, G_LIS, S_LI, IDX_C
+    "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, 30, G_LIS, S_LI, IDX_C
 )
 Appliance_Control_Timer = ns(
-    "Appliance.Control.Timer", mc.KEY_TIMER, G_E, S_DI, D_DI, IDX_ID
+    "Appliance.Control.Timer", mc.KEY_TIMER, -1, G_E, S_DI, D_DI, IDX_ID
 )
 Appliance_Control_TimerX = ns(
-    "Appliance.Control.TimerX", mc.KEY_TIMERX, G_DI, S_DI, D_DI, IDX_ID
+    "Appliance.Control.TimerX", mc.KEY_TIMERX, -1, G_DI, S_DI, D_DI, IDX_ID
 )
-Appliance_Control_Toggle = ns("Appliance.Control.Toggle", mc.KEY_TOGGLE, G_D, S_D, PSH)
+Appliance_Control_Toggle = ns(
+    "Appliance.Control.Toggle", mc.KEY_TOGGLE, 40, G_D, S_D, PSH
+)
 Appliance_Control_ToggleX = ns(
-    "Appliance.Control.ToggleX", mc.KEY_TOGGLEX, G_DI, S_DI, PSH, IDX_C
+    "Appliance.Control.ToggleX", mc.KEY_TOGGLEX, 55, G_DI, S_DI, PSH, IDX_C
 )
 Appliance_Control_Trigger = ns(
-    "Appliance.Control.Trigger", mc.KEY_TRIGGER, G_E, S_DI, D_DI, PSH, IDX_ID
+    "Appliance.Control.Trigger", mc.KEY_TRIGGER, -1, G_E, S_DI, D_DI, PSH, IDX_ID
 )
 Appliance_Control_TriggerX = ns(
-    "Appliance.Control.TriggerX", mc.KEY_TRIGGERX, G_DI, S_DI, D_DI, PSH, IDX_ID
+    "Appliance.Control.TriggerX", mc.KEY_TRIGGERX, -1, G_DI, S_DI, D_DI, PSH, IDX_ID
 )
-Appliance_Control_Unbind = ns("Appliance.Control.Unbind", mc.KEY_, PSQ)
+Appliance_Control_Unbind = ns("Appliance.Control.Unbind", mc.KEY_, -1, PSQ)
 Appliance_Control_Upgrade = ns(
-    "Appliance.Control.Upgrade", "upgrade", S_D
+    "Appliance.Control.Upgrade", "upgrade", -1, S_D
 )  # TODO? (check app)
-Appliance_Control_Weather = ns("Appliance.Control.Weather", mc.KEY_)
+Appliance_Control_Weather = ns("Appliance.Control.Weather", mc.KEY_, -1)
 
-Appliance_Digest_TimerX = ns("Appliance.Digest.TimerX", mc.KEY_DIGEST, G_E)
-Appliance_Digest_TriggerX = ns("Appliance.Digest.TriggerX", mc.KEY_DIGEST, G_E)
+Appliance_Digest_TimerX = ns("Appliance.Digest.TimerX", mc.KEY_DIGEST, -1, G_E)
+Appliance_Digest_TriggerX = ns("Appliance.Digest.TriggerX", mc.KEY_DIGEST, -1, G_E)
 
-Appliance_Encrypt_Suite = ns("Appliance.Encrypt.Suite", mc.KEY_, G_E)
-Appliance_Encrypt_ECDHE = ns("Appliance.Encrypt.ECDHE", "ecdhe", S_D)
+Appliance_Encrypt_Suite = ns("Appliance.Encrypt.Suite", mc.KEY_, -1, G_E)
+Appliance_Encrypt_ECDHE = ns("Appliance.Encrypt.ECDHE", "ecdhe", -1, S_D)
 
-Appliance_GarageDoor_Config = ns("Appliance.GarageDoor.Config", mc.KEY_CONFIG, G_E, S_D)
+Appliance_GarageDoor_Config = ns(
+    "Appliance.GarageDoor.Config", mc.KEY_CONFIG, 110, G_E, S_D
+)
 Appliance_GarageDoor_MultipleConfig = ns(
-    "Appliance.GarageDoor.MultipleConfig", mc.KEY_CONFIG, G_LIS, S_LI, IDX_C
+    "Appliance.GarageDoor.MultipleConfig", mc.KEY_CONFIG, 140, G_LIS, S_LI, IDX_C
 )
 Appliance_GarageDoor_State = ns(
-    "Appliance.GarageDoor.State", mc.KEY_STATE, G_DIS, S_DI, IDX_C, EXP
+    "Appliance.GarageDoor.State", mc.KEY_STATE, -1, G_DIS, S_DI, IDX_C, EXP
 )
 
 
-Appliance_Mcu_Firmware = ns("Appliance.Mcu.Firmware", mc.KEY_FIRMWARE, G_E)
-Appliance_Mcu_Upgrade = ns("Appliance.Mcu.Upgrade", mc.KEY_UPGRADE, S_D)
+Appliance_Mcu_Firmware = ns("Appliance.Mcu.Firmware", mc.KEY_FIRMWARE, 80, G_E)
+Appliance_Mcu_Upgrade = ns("Appliance.Mcu.Upgrade", mc.KEY_UPGRADE, -1, S_D)
 
 # Smart cherub HP110A TODO: try implement features for these namespaces
 Appliance_Mcu_Hp110_Favorite = ns(
-    "Appliance.Mcu.Hp110.Favorite", "favorite", G_DIS, S_DI, IDX_ID
+    "Appliance.Mcu.Hp110.Favorite", "favorite", -1, G_DIS, S_DI, IDX_ID
 )
-Appliance_Mcu_Hp110_Firmware = ns("Appliance.Mcu.Hp110.Firmware", mc.KEY_FIRMWARE, G_E)
+Appliance_Mcu_Hp110_Firmware = ns(
+    "Appliance.Mcu.Hp110.Firmware", mc.KEY_FIRMWARE, 80, G_E
+)
 Appliance_Mcu_Hp110_Lock = ns(
-    "Appliance.Mcu.Hp110.Lock", mc.KEY_LOCK, G_E, S_D  # TODO: easy implement
+    "Appliance.Mcu.Hp110.Lock", mc.KEY_LOCK, -1, G_E, S_D  # TODO: easy implement
 )
-Appliance_Mcu_Hp110_Preview = ns("Appliance.Mcu.Hp110.Preview", "preview", S_D)
+Appliance_Mcu_Hp110_Preview = ns("Appliance.Mcu.Hp110.Preview", "preview", -1, S_D)
 
 
 Appliance_RollerShutter_Adjust = ns(
-    "Appliance.RollerShutter.Adjust", mc.KEY_ADJUST, S_DI, PSQ, IDX_C
+    "Appliance.RollerShutter.Adjust", mc.KEY_ADJUST, 35, S_DI, PSQ, IDX_C
 )  # maybe SET supported too and/or GET with EMPTY
 Appliance_RollerShutter_Config = ns(
-    "Appliance.RollerShutter.Config", mc.KEY_CONFIG, G_LI, S_DI, IDX_C
+    "Appliance.RollerShutter.Config", mc.KEY_CONFIG, 70, G_LI, S_DI, IDX_C
 )
 Appliance_RollerShutter_Position = ns(
-    "Appliance.RollerShutter.Position", mc.KEY_POSITION, G_LI, S_DI, PSH, IDX_C
+    "Appliance.RollerShutter.Position", mc.KEY_POSITION, 50, G_LI, S_DI, PSH, IDX_C
 )
 Appliance_RollerShutter_State = ns(
-    "Appliance.RollerShutter.State", mc.KEY_STATE, G_LI, PSH, IDX_C
+    "Appliance.RollerShutter.State", mc.KEY_STATE, 40, G_LI, PSH, IDX_C
 )
 
-Appliance_System_Ability = ns("Appliance.System.Ability", mc.KEY_ABILITY, G_E)
-Appliance_System_All = ns("Appliance.System.All", mc.KEY_ALL, G_E)
-Appliance_System_Clock = ns("Appliance.System.Clock", mc.KEY_CLOCK, PSQ)
-Appliance_System_Debug = ns("Appliance.System.Debug", mc.KEY_DEBUG, G_E)
-Appliance_System_DNDMode = ns("Appliance.System.DNDMode", mc.KEY_DNDMODE, G_E, S_D)
-Appliance_System_Factory = ns("Appliance.System.Factory", "factory", G_D, S_D)
-Appliance_System_Firmware = ns("Appliance.System.Firmware", mc.KEY_FIRMWARE, G_E)
-Appliance_System_Hardware = ns("Appliance.System.Hardware", mc.KEY_HARDWARE, G_E)
-Appliance_System_Log = ns("Appliance.System.Log", mc.KEY_)  # unknown payload
-Appliance_System_Online = ns("Appliance.System.Online", mc.KEY_ONLINE, G_E, PSH)
-Appliance_System_Report = ns("Appliance.System.Report", mc.KEY_REPORT, PSH)
-Appliance_System_Runtime = ns("Appliance.System.Runtime", mc.KEY_RUNTIME, G_E)
-Appliance_System_Time = ns("Appliance.System.Time", mc.KEY_TIME, G_E, S_D, PSH)
-Appliance_System_Position = ns("Appliance.System.Position", mc.KEY_POSITION, G_E, S_D)
+Appliance_System_Ability = ns("Appliance.System.Ability", mc.KEY_ABILITY, -1, G_E)
+Appliance_System_All = ns("Appliance.System.All", mc.KEY_ALL, 700, G_E)
+Appliance_System_Clock = ns("Appliance.System.Clock", mc.KEY_CLOCK, -1, PSQ)
+Appliance_System_Debug = ns("Appliance.System.Debug", mc.KEY_DEBUG, 1600, G_E)
+Appliance_System_DNDMode = ns("Appliance.System.DNDMode", mc.KEY_DNDMODE, 30, G_E, S_D)
+Appliance_System_Factory = ns("Appliance.System.Factory", "factory", -1, G_D, S_D)
+Appliance_System_Firmware = ns("Appliance.System.Firmware", mc.KEY_FIRMWARE, -1, G_E)
+Appliance_System_Hardware = ns("Appliance.System.Hardware", mc.KEY_HARDWARE, -1, G_E)
+Appliance_System_Log = ns("Appliance.System.Log", mc.KEY_, -1)  # unknown payload
+Appliance_System_Online = ns("Appliance.System.Online", mc.KEY_ONLINE, -1, G_E, PSH)
+Appliance_System_Report = ns("Appliance.System.Report", mc.KEY_REPORT, -1, PSH)
+Appliance_System_Runtime = ns("Appliance.System.Runtime", mc.KEY_RUNTIME, 30, G_E)
+Appliance_System_Time = ns("Appliance.System.Time", mc.KEY_TIME, -1, G_E, S_D, PSH)
+Appliance_System_Position = ns(
+    "Appliance.System.Position", mc.KEY_POSITION, -1, G_E, S_D
+)

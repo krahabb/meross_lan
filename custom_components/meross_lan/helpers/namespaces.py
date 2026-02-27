@@ -40,7 +40,6 @@ class NamespaceHandler(handler.NamespaceHandler):
     DEFAULT_CONFIG = (
         mlc.PARAM_DIAGNOSTIC_UPDATE_PERIOD,
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        50,
         None,
     )
 
@@ -164,104 +163,78 @@ The configuration is set in the tuple as:
 (
     polling_period,
     polling_period_cloud,
-    response_item_size,
     strategy
 )
 see the NamespaceHandler class for the meaning of these values
-The 'response_size' is a conservative (in excess) estimate of the
-expected response size for the whole message (header itself weights around 300 bytes).
-Some payloads would depend on the number of channels/subdevices available
-and the configured number would just be a base size (minimum) while
-the 'response_item_size' value must be multiplied for the number of channels/subdevices
-and will be used to adjust the actual 'response_size' at runtime in the relative strategy.
-This parameter in turn will be used to split expected huge payload requests/responses
-in Appliance.Control.Multiple since it appears the HTTP interface has an outbound
-message size limit around 3000 chars/bytes (on a legacy mss310) and this would lead to a malformed (truncated)
-response. This issue also appeared on hubs when querying for a big number of subdevices
-as reported in #244 (here the buffer limit was around 4000 chars). From limited testing
-this 'kind of overflow' is not happening on MQTT responses though.
 """
 POLLING_STRATEGY_CONF = {
     mn.Appliance_System_Debug: (
         0,
         0,
-        1600,
         None,
     ),  # TODO: add expected size definition to mn.Namespace class grammar
     mn.Appliance_System_DNDMode: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        20,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_System_Runtime: (
         mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        30,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Config_Alarm: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        44,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Config_Sensor_Association: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        30,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Alarm: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        40,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Fan: (
         0,
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        20,
         None,
     ),
     mn.Appliance_Control_FilterMaintenance: (
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        35,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Light_Effect: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        1550,  # based on a standard effects list
         NamespaceHandler.async_poll_smart,
     ),
-    mn.Appliance_Control_Mp3: (0, 0, 80, NamespaceHandler.async_poll_default),
+    mn.Appliance_Control_Mp3: (0, 0, NamespaceHandler.async_poll_default),
     mn.Appliance_Control_PhysicalLock: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        35,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Presence_Config: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        260,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Sensor_Latest: (
         mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
         mlc.PARAM_SENSOR_SLOW_CLOUD_UPDATE_PERIOD,
-        80,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Sensor_LatestX: (
         mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        220,
         NamespaceHandler.async_poll_smart,
     ),
-    mn.Appliance_Control_Toggle: (0, 0, 40, NamespaceHandler.async_poll_default),
-    mn.Appliance_Mcu_Firmware: (0, 0, 80, NamespaceHandler.async_poll_once),
-    mn.Appliance_Mcu_Hp110_Firmware: (0, 0, 80, NamespaceHandler.async_poll_once),
+    mn.Appliance_Control_Toggle: (0, 0, NamespaceHandler.async_poll_default),
+    mn.Appliance_Mcu_Firmware: (0, 0, NamespaceHandler.async_poll_once),
+    mn.Appliance_Mcu_Hp110_Firmware: (0, 0, NamespaceHandler.async_poll_once),
 }
