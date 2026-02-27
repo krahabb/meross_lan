@@ -795,13 +795,12 @@ def digest_init_light(
     ability = device.descriptor.ability
 
     if mn.Appliance_Control_Light_Effect in ability:
-        MLLightEffect(digest[mc.KEY_CHANNEL], device)
+        light = MLLightEffect(digest[mc.KEY_CHANNEL], device)
     elif mn.Appliance_Control_Mp3 in ability:
-        MLLight(digest[mc.KEY_CHANNEL], device, mc.HP110A_LIGHT_EFFECT_LIST)
+        light = MLLight(digest[mc.KEY_CHANNEL], device, mc.HP110A_LIGHT_EFFECT_LIST)
     else:
-        MLLight(digest[mc.KEY_CHANNEL], device)
-    handler = device.ns_handlers[mn.Appliance_Control_Light]
-    return handler.parse_dict, (handler,)
+        light = MLLight(digest[mc.KEY_CHANNEL], device)
+    return light.handler_ns.parse_dict, (light.handler_ns,)
 
 
 def digest_init_light_effect(

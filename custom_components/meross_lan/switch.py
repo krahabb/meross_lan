@@ -100,7 +100,7 @@ def digest_init_toggle(
 ) -> "Device.DigestInitReturnType":
     """{"onoff": 0, "lmTime": 1645391086}"""
     toggle = MLToggle.namespace_init(device, mn.Appliance_Control_Toggle)
-    return toggle._parse, (device.ns_handlers[mn.Appliance_Control_Toggle],)
+    return toggle._parse, (toggle.handler_ns,)
 
 
 class MLToggleX(MLSwitch):

@@ -575,9 +575,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
             # so our multiple requests are more reliable. If anything
             # goes wrong, the Device multiple payload managment
             # is smart enough to adapt to wrong estimates
-            device.ns_handlers[
-                mn.Appliance_Control_ConsumptionX
-            ].polling_response_size_adj(len(days))
+            self.handler_ns.polling_response_size_adj(len(days))
             # catch the device starting a new day since our last update (yesterday)
             devtime = device.get_device_datetime(device.device_timestamp)
             devtime_today_midnight = datetime(
