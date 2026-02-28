@@ -52,15 +52,15 @@ class HAMQTTConnection(mlq.MQTTConnection):
         class ConnectArgs(mlq.MQTTConnection.ConnectArgs):
             pass
 
-        _unsub_mqtt_subscribe: Callable | None
-        _unsub_mqtt_disconnected: Callable | None
-        _unsub_mqtt_connected: Callable | None
+        _mqtt_subscribe_unsub: Callable | None
+        _mqtt_disconnected_unsub: Callable | None
+        _mqtt_connected_unsub: Callable | None
         _mqtt_subscribe_future: asyncio.Future[bool] | None
 
     __slots__ = (
-        "_unsub_mqtt_subscribe",
-        "_unsub_mqtt_disconnected",
-        "_unsub_mqtt_connected",
+        "_mqtt_subscribe_unsub",
+        "_mqtt_disconnected_unsub",
+        "_mqtt_connected_unsub",
         "_mqtt_subscribe_future",
     )
 
@@ -72,14 +72,14 @@ class HAMQTTConnection(mlq.MQTTConnection):
             from_=mc.TOPIC_REQUEST.format(mlc.DOMAIN),
             loop=api.loop,
         )
-        self._unsub_mqtt_subscribe = None
-        self._unsub_mqtt_disconnected = None
-        self._unsub_mqtt_connected = None
+        self._mqtt_subscribe_unsub = None
+        self._mqtt_disconnected_unsub = None
+        self._mqtt_connected_unsub = None
         self._mqtt_subscribe_future = None
 
     @override  # MQTTConnection
     async def async_connect(self, /, **kwargs: "Unpack[ConnectArgs]"):
-        if self._unsub_mqtt_subscribe:
+        if self._mqtt_subscribe_unsub:
             return True
 
         if self._mqtt_subscribe_future:
@@ -88,7 +88,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
         hass = self.parent.api.hass
         self._mqtt_subscribe_future = hass.loop.create_future()
         try:
-            self._unsub_mqtt_subscribe = await mqtt.async_subscribe(
+            self._mqtt_subscribe_unsub = await mqtt.async_subscribe(
                 hass, mc.TOPIC_DISCOVERY, self.on_message
             )
 
@@ -101,14 +101,14 @@ class HAMQTTConnection(mlq.MQTTConnection):
 
             try:
                 # HA core 2024.6
-                self._unsub_mqtt_connected = mqtt.async_subscribe_connection_status(
+                self._mqtt_connected_unsub = mqtt.async_subscribe_connection_status(
                     hass, _connection_status_callback
                 )
             except:
-                self._unsub_mqtt_disconnected = mqtt.async_dispatcher_connect(
+                self._mqtt_disconnected_unsub = mqtt.async_dispatcher_connect(
                     hass, mqtt.MQTT_DISCONNECTED, self.on_disconnect  # type: ignore (removed in HA core 2024.6)
                 )
-                self._unsub_mqtt_connected = mqtt.async_dispatcher_connect(
+                self._mqtt_connected_unsub = mqtt.async_dispatcher_connect(
                     hass, mqtt.MQTT_CONNECTED, self.on_connect  # type: ignore (removed in HA core 2024.6)
                 )
             if mqtt.is_connected(hass):
@@ -117,25 +117,25 @@ class HAMQTTConnection(mlq.MQTTConnection):
             self.log_exception(self.WARNING, exception, "async_connect", timeout=14400)
         finally:
             self._mqtt_subscribe_future.set_result(
-                self._unsub_mqtt_subscribe is not None
+                self._mqtt_subscribe_unsub is not None
             )
             self._mqtt_subscribe_future = None
 
-        return self._unsub_mqtt_subscribe is not None
+        return self._mqtt_subscribe_unsub is not None
 
     @override  # MQTTConnection
     async def async_disconnect(self, /):
         if self._mqtt_subscribe_future:
             await self._mqtt_subscribe_future
-        if self._unsub_mqtt_connected:
-            self._unsub_mqtt_connected()
-            self._unsub_mqtt_connected = None
-        if self._unsub_mqtt_disconnected:
-            self._unsub_mqtt_disconnected()
-            self._unsub_mqtt_disconnected = None
-        if self._unsub_mqtt_subscribe:
-            self._unsub_mqtt_subscribe()
-            self._unsub_mqtt_subscribe = None
+        if self._mqtt_connected_unsub:
+            self._mqtt_connected_unsub()
+            self._mqtt_connected_unsub = None
+        if self._mqtt_disconnected_unsub:
+            self._mqtt_disconnected_unsub()
+            self._mqtt_disconnected_unsub = None
+        if self._mqtt_subscribe_unsub:
+            self._mqtt_subscribe_unsub()
+            self._mqtt_subscribe_unsub = None
         if self.is_connected:
             self.on_disconnect()
 
@@ -170,7 +170,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
     # interface: self
     @property
     def mqtt_is_subscribed(self):
-        return self._unsub_mqtt_subscribe is not None
+        return self._mqtt_subscribe_unsub is not None
 
     @callback
     def on_connect(self, /):

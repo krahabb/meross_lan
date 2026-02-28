@@ -223,9 +223,9 @@ class ConfigEntryManager(EntityManager):
         _trace_file: io.TextIOWrapper | None
         _trace_future: asyncio.Future | None
         _trace_data: list | None
-        _unsub_trace_endtime: asyncio.TimerHandle | None
-        _unsub_entry_reload: asyncio.TimerHandle | None
-        _unsub_entry_update_listener: CALLBACK_TYPE | None
+        _trace_close_unsub: asyncio.TimerHandle | None
+        _entry_reload_unsub: asyncio.TimerHandle | None
+        _entry_update_listener_unsub: CALLBACK_TYPE | None
 
         class Args(EntityManager.Args):
             pass
@@ -244,9 +244,9 @@ class ConfigEntryManager(EntityManager):
             "_trace_file",
             "_trace_future",
             "_trace_data",
-            "_unsub_trace_endtime",
-            "_unsub_entry_reload",
-            "_unsub_entry_update_listener",
+            "_trace_close_unsub",
+            "_entry_reload_unsub",
+            "_entry_update_listener_unsub",
         )
         + EntityManager.__SLOTS__
         + logging.Loggable.__SLOTS__
@@ -281,9 +281,9 @@ class ConfigEntryManager(EntityManager):
         self._trace_file = None
         self._trace_future = None
         self._trace_data = None
-        self._unsub_trace_endtime = None
-        self._unsub_entry_reload = None
-        self._unsub_entry_update_listener = None
+        self._trace_close_unsub = None
+        self._entry_reload_unsub = None
+        self._entry_update_listener_unsub = None
         kwargs.setdefault("loop", api.hass.loop)
         super().__init__(id, api, **kwargs)
 
@@ -373,7 +373,7 @@ class ConfigEntryManager(EntityManager):
         await hass.config_entries.async_forward_entry_setups(
             config_entry, self.platforms.keys()
         )
-        self._unsub_entry_update_listener = config_entry.add_update_listener(
+        self._entry_update_listener_unsub = config_entry.add_update_listener(
             self.entry_update_listener
         )
 
@@ -396,10 +396,10 @@ class ConfigEntryManager(EntityManager):
         config_entries.async_schedule_reload is now 'eager' and
         it might execute synchronously leading to unintended semantics.
         """
-        if self._unsub_entry_reload:
-            self._unsub_entry_reload.cancel()
+        if self._entry_reload_unsub:
+            self._entry_reload_unsub.cancel()
         assert self.config_entry
-        self._unsub_entry_reload = self.schedule_callback(
+        self._entry_reload_unsub = self.schedule_callback(
             delay,
             self.api.config_entries.async_schedule_reload,
             self.config_entry.entry_id,
@@ -547,10 +547,10 @@ class ConfigEntryManager(EntityManager):
 
             @callback
             def _trace_close_callback():
-                self._unsub_trace_endtime = None
+                self._trace_close_unsub = None
                 self.trace_close()
 
-            self._unsub_trace_endtime = self.schedule_callback(
+            self._trace_close_unsub = self.schedule_callback(
                 self.config.get(mlc.CONF_TRACE_TIMEOUT)
                 or mlc.CONF_TRACE_TIMEOUT_DEFAULT,
                 _trace_close_callback,
@@ -606,9 +606,9 @@ class ConfigEntryManager(EntityManager):
             self._trace_file = None
             self.log(self.DEBUG, "Tracing end")
 
-        if self._unsub_trace_endtime:
-            self._unsub_trace_endtime.cancel()
-            self._unsub_trace_endtime = None
+        if self._trace_close_unsub:
+            self._trace_close_unsub.cancel()
+            self._trace_close_unsub = None
         if self._trace_future:
             self._trace_future.set_result(self._trace_data)
             self._trace_future = None
@@ -695,9 +695,9 @@ class ConfigEntryManager(EntityManager):
         }
 
     def _cleanup_subscriptions(self, /):
-        if self._unsub_entry_update_listener:
-            self._unsub_entry_update_listener()
-            self._unsub_entry_update_listener = None
-        if self._unsub_entry_reload:
-            self._unsub_entry_reload.cancel()
-            self._unsub_entry_reload = None
+        if self._entry_update_listener_unsub:
+            self._entry_update_listener_unsub()
+            self._entry_update_listener_unsub = None
+        if self._entry_reload_unsub:
+            self._entry_reload_unsub.cancel()
+            self._entry_reload_unsub = None
