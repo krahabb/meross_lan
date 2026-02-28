@@ -417,7 +417,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                 "the configuration by hitting 'Configure' "
                 "in the integration configuration page"
             )
-
         super().__init__(
             device_id,
             api,
@@ -475,18 +474,30 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             device_class=MLPersistentButton.DeviceClass.RESTART,
             entity_category=MLPersistentButton.EntityCategory.DIAGNOSTIC,
         )
-
-    @override
-    async def async_init(self):
-        await self._async_update_config()
-        await super().async_init()
+        self._update_config()
 
     def start(self):
-        # called by async_setup_entry after the entities have been registered
-        # here we'll register mqtt listening (in case) and start polling after
-        # the states have been eventually restored (some entities need this)
-        self._check_protocol_ext()
-        self._polling_unsub = self.schedule_callback(0, self._poll, None)
+        # Called by async_setup_entry after the entities have been registered
+        # or after a config change. Here we'll register mqtt bindings,
+        # fix transports according to the current configuration and profile
+        # linking, and finally (re)start polling.
+        try:
+            profile = self.api.profiles[self.descriptor.userId]
+            if profile and (profile.key != self.key):
+                profile = self.api
+        except KeyError:
+            profile = self.api
+        if self.profile == profile:
+            self._check_protocol()
+        else:
+            if self.profile:
+                self.profile.unlink(self)
+            if profile:
+                profile.link(self)
+                # _check_protocol already called
+            else:
+                self._check_protocol()
+        self.polling_start()
 
     async def async_shutdown(self):
         self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
@@ -511,7 +522,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         )
 
     # miscellaneous internals to prepare/refresh internal config
-    async def _async_update_config(self):
+    def _update_config(self):
         """
         common properties caches, read from ConfigEntry on __init__ or when a configentry updates
         """
@@ -530,8 +541,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         self._polling_delay = self.polling_period
 
         self.enable_multiple(not config.get(mlc.CONF_DISABLE_MULTIPLE))
-
-        await self._async_update_host()
+        self._update_host(config.get(CONF_HOST) or self.descriptor.innerIp)
         if self.mqtt:  # just to be sure key is sync'd
             self.mqtt.key = self.key
 
@@ -556,12 +566,10 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                 },
             )
 
-    async def _async_update_host(self):
-        host = self.config.get(CONF_HOST)
-        if not host:
-            host = self.descriptor.innerIp
-            if host == "0.0.0.0":  # unbinded device
-                host = None
+    def _update_host(self, host: str | None):
+        # host could be either from config or from descriptor as a fallback
+        if host == "0.0.0.0":  # unbinded device reports this in descriptor
+            host = None
 
         self.host = host
         http = self.http
@@ -586,26 +594,8 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         elif http:
             self.remove_client(http)
 
-    def _check_protocol_ext(self):
-        api = self.api
-        try:
-            profile = api.profiles[self.descriptor.userId]
-            if profile and (profile.key != self.key):
-                profile = api
-        except KeyError:
-            profile = api
-        if self.profile != profile:
-            if self.profile:
-                self.profile.unlink(self)
-            if profile:
-                profile.link(self)
-                # _check_protocol already called
-                return
-        self._check_protocol()
-
     def _check_protocol(self):
-        """called whenever the configuration or the profile linking changes to fix transports"""
-
+        """called whenever the configuration or the profile linking changes to fix transports."""
         conf_protocol = self.conf_protocol
         if conf_protocol in (Transport.BLUETOOTH, Transport.HTTP):
             self.preferred_transport = conf_protocol
@@ -703,9 +693,8 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             self.schedule_reload()
             return
 
-        await self.async_poll_stop()
         await super().entry_update_listener(hass, config_entry)
-        await self._async_update_config()
+        self._update_config()
         self.start()
 
     async def async_create_diagnostic_entities(self):
@@ -737,26 +726,14 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         self.log(self.DEBUG, "Diagnostic entities scan begin")
         try:
             abilities = iter(self.descriptor.ability)
-            while self.is_connected:
+            while True:
                 if (
                     ns_handler := self._trace_ability_next(abilities)
                 ) and not ns_handler.polling_strategy:
-                    while self.is_connected:
-                        # synchronize to polling loop
-                        if self._polling_unsub:
-                            # not polling now
-                            await ns_handler.async_get_safe()
-                            break
-                        elif self._polling_task:
-                            # polling right now...await ends
-                            try:
-                                await self._polling_task
-                            except asyncio.CancelledError:
-                                pass
-                        else:
-                            # not polling but no schedule either (maybe shutdown?)...just wait a bit and retry
-                            await asyncio.sleep(0)
-            raise Exception("Device disconnected")
+                    async with self.polling_lock:
+                        if not self.is_connected:
+                            raise Exception("Device disconnected")
+                        await ns_handler.async_get_safe()
         except asyncio.CancelledError:
             self.log(self.DEBUG, "Diagnostic entities scan cancelled")
             raise
@@ -1129,16 +1106,8 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
     @override
     async def async_poll_full(self):
-        # TODO: we need to override here because we still don't have a clear way to avoid
-        # re-entrance issues in polling management
-        await self.async_poll_stop()
-        # before retriggering ensure we're not overlapping with device shutdown
-        if self.config_entry.state is ConfigEntryState.LOADED:
-            self.device_debug = None
-            for handler in self.ns_handlers.values():
-                handler.polling_epoch_next = 0.0
-            # this will also restart/schedule the cycle
-            await self._poll()
+        self.device_debug = None
+        await super().async_poll_full()
 
     # interface: self
     def register_parser_entity(self, entity: "MLEntity", /):
@@ -1354,11 +1323,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             if self.update_firmware:
                 self.update_firmware.update_info()
             if not self.config.get(CONF_HOST):
-                self.create_task(
-                    self._async_update_host(),
-                    "_handle_Appliance_System_All._async_update_host",
-                    eager_start=True,
-                )
+                self._update_host(descr.innerIp)
         elif oldtimezone != descr.timezone:
             self.schedule_entry_update(False)
 

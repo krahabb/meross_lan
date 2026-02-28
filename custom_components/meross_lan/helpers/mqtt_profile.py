@@ -194,9 +194,7 @@ class MQTTConnection(AbstractMQTTConnection):
             device = self.device
             if not device.is_connected:
                 device.on_connect()
-                if device._polling_unsub:
-                    device._polling_unsub.cancel()
-                    device._poll(message.namespace)
+                device.polling_start()
             device._handle(message)
 
     if TYPE_CHECKING:

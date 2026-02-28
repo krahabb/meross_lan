@@ -199,6 +199,7 @@ class Device(PhysicalDevice):
         _polling_delay: int
         _polling_unsub: TimerHandle | None
         _polling_task: Task | None
+        polling_lock: asyncio.Lock
         polling_epoch: Final[float]
         """Time of current/last polling cycle epoch."""
         _lazypoll_requests: list[NamespaceHandler]
@@ -251,6 +252,7 @@ class Device(PhysicalDevice):
         "_polling_delay",
         "_polling_unsub",
         "_polling_task",
+        "_polling_lock",
         "polling_epoch",
         "_lazypoll_requests",
     )
@@ -286,6 +288,7 @@ class Device(PhysicalDevice):
         self._lazypoll_requests = []
         self._polling_unsub = None
         self._polling_task = None
+        self.polling_lock = asyncio.Lock()
         self.polling_epoch = self.time()
 
     async def async_init(self):
@@ -383,7 +386,7 @@ class Device(PhysicalDevice):
 
     @override
     async def async_shutdown(self):
-        await self.async_poll_stop()
+        self.polling_stop()
         await super().async_shutdown()
         # Clients will be forcibly disconnected/shutdown at this point since the base class shutdown
         # will disconnect the device and so trigger the clients disconnect logic.
@@ -685,122 +688,122 @@ class Device(PhysicalDevice):
         self._multiple_requests.clear()
         self._multiple_response_size = NamespaceHandler.HEADER_AVG_SIZE
 
-    def _poll(self, namespace: str | None = None):
-        self._polling_unsub = None
-        self._polling_task = task = self.create_task(
-            self._async_poll(namespace), f"._poll({namespace})", eager_start=False
-        )
-        return task
+    def polling_start(self):
+        """Starts scheduling the polling task. This will be automatically
+        re-scheduled until polling_stop is called which will cancel the schedule
+        and any ongoing polling task.
+        When called while a schedule is already in place, it'll be cancelled and re-started immediately.
+        """
+        self._polling_delay = self.polling_period
+        if self._polling_unsub:
+            self._polling_unsub.cancel()
+        return self._polling()
 
-    async def _async_poll(self, namespace: str | None):
-        self.polling_epoch = epoch = self.time()  # type: ignore[assignment]
-        self.log(self.DEBUG, "Polling begin")
-        try:
-            if self.is_connected and (
-                (self.last_rx_epoch > self.last_tx_epoch)
-                or ((epoch - self.last_tx_epoch) < (self.polling_period - 2))
-            ):
-                # perform some heartbeats in case
-                if (
-                    (http := self.http)
-                    and (self.client is not http)
-                    and (self.preferred_transport is Transport.HTTP)
-                    and ((epoch - http.last_tx_epoch) > self.HEARTBEAT_TIMEOUT)
-                ):
-                    try:
-                        handler_all = self.get_handler(mn.Appliance_System_All)
-                        handler_all.handle_response(
-                            await http.async_request(*handler_all.polling_request)
-                        )
-                        namespace = handler_all.ns
-                    except Exception:
-                        pass
-
-                if (
-                    (mqtt := self.mqtt)
-                    and mqtt.connection.can_publish
-                    and ((epoch - mqtt.last_rx_epoch) > self.HEARTBEAT_TIMEOUT)
-                ):
-                    try:
-                        handler_all = self.get_handler(mn.Appliance_System_All)
-                        handler_all.handle_response(
-                            await mqtt.async_request(*handler_all.polling_request)
-                        )
-                        namespace = handler_all.ns
-                    except Exception:
-                        pass
-
-            else:  # offline or 'likely' offline (failed last request)
-                namespace = (await self.async_connect()).namespace
-
-            """
-            When 'namespace' is not 'None' it represents the device coming online
-            following a succesful received message. This is likely to be 'NS_ALL'.
-            If we're connected to an MQTT broker anyway it could be any 'PUSH' message.
-            We'll use _queued_smartpoll_requests to track how many polls went through
-            over MQTT for this cycle in order to only send 1 for each if we're
-            binded to a cloud MQTT broker (in order to reduce bursts).
-            If a poll request is discarded because of this, it should go through
-            on the next polling cycle. This will 'spread' smart requests over
-            subsequent polls
-            """
-            self._lazypoll_requests.clear()
-            # self.ns_handlers could change at any time due to async
-            # message parsing (handlers might be dynamically created by then)
-            for handler in [
-                handler
-                for handler in self.ns_handlers.values()
-                if (handler.ns != namespace)
-            ]:
-                if handler.polling_strategy:
-                    await handler.polling_strategy(handler)
-                    if not self.is_connected:
-                        break  # do not return: do the flush first!
-
-            # needed even if offline: it takes care of resetting the ns_multiple state
-            if self._multiple_requests:
-                await self.async_poll_flush()
-
-        except asyncio.CancelledError:
-            self.log(self.DEBUG, "Polling cancelled")
-            raise
-        except asyncio.TimeoutError:
-            if self.is_connected:
-                self.on_disconnect()
-            elif self._polling_delay < self.HEARTBEAT_TIMEOUT:
-                self._polling_delay += self.polling_period
-            else:
-                self._polling_delay = self.HEARTBEAT_TIMEOUT
-        except Exception as e:
-            self.log_exception(self.WARNING, e, "_async_poll")
-        finally:
-            self._polling_task = None
-
-        self._polling_unsub = self.schedule_callback(
-            self._polling_delay, self._poll, None
-        )
-        self.log(self.DEBUG, "Polling end")
-
-    async def async_poll_stop(self):
-        """Ensure we're not polling nor any schedule is in place."""
+    def polling_stop(self):
+        """Stops the polling schedule and cancels any ongoing polling task."""
         if self._polling_unsub:
             self._polling_unsub.cancel()
             self._polling_unsub = None
         elif self._polling_task:
-            self._polling_task.cancel("async_poll_stop")
+            self._polling_task.cancel("polling_stop")
+
+    def _polling(self, /):
+        self._polling_unsub = self.schedule_callback(self._polling_delay, self._polling)
+        self._polling_task = task = self.create_task(
+            self.async_poll(), f"._polling", eager_start=False
+        )
+        return task
+
+    async def async_poll(self, /):
+        async with self.polling_lock:
+            self.polling_epoch = epoch = self.time()  # type: ignore[assignment]
+            self.log(self.DEBUG, "Polling begin")
             try:
-                await self._polling_task
+                if self.is_connected and (
+                    (self.last_rx_epoch > self.last_tx_epoch)
+                    or ((epoch - self.last_tx_epoch) < (self.polling_period - 2))
+                ):
+                    # perform some heartbeats in case
+                    if (
+                        (http := self.http)
+                        and (self.client is not http)
+                        and (self.preferred_transport is Transport.HTTP)
+                        and ((epoch - http.last_tx_epoch) > self.HEARTBEAT_TIMEOUT)
+                    ):
+                        try:
+                            handler_all = self.get_handler(mn.Appliance_System_All)
+                            handler_all.handle_response(
+                                await http.async_request(*handler_all.polling_request)
+                            )
+                        except Exception:
+                            pass
+
+                    if (
+                        (mqtt := self.mqtt)
+                        and mqtt.connection.can_publish
+                        and ((epoch - mqtt.last_rx_epoch) > self.HEARTBEAT_TIMEOUT)
+                    ):
+                        try:
+                            handler_all = self.get_handler(mn.Appliance_System_All)
+                            handler_all.handle_response(
+                                await mqtt.async_request(*handler_all.polling_request)
+                            )
+                        except Exception:
+                            pass
+
+                else:  # offline or 'likely' offline (failed last request)
+                    await self.async_connect()
+
+                """
+                When 'namespace' is not 'None' it represents the device coming online
+                following a succesful received message. This is likely to be 'NS_ALL'.
+                If we're connected to an MQTT broker anyway it could be any 'PUSH' message.
+                We'll use _queued_smartpoll_requests to track how many polls went through
+                over MQTT for this cycle in order to only send 1 for each if we're
+                binded to a cloud MQTT broker (in order to reduce bursts).
+                If a poll request is discarded because of this, it should go through
+                on the next polling cycle. This will 'spread' smart requests over
+                subsequent polls
+                """
+                self._lazypoll_requests.clear()
+                # self.ns_handlers could change at any time due to async
+                # message parsing (handlers might be dynamically created by then)
+                for handler in [handler for handler in self.ns_handlers.values()]:
+                    if handler.polling_strategy:
+                        await handler.polling_strategy(handler)
+                        if not self.is_connected:
+                            break  # do not return: do the flush first!
+
+                # needed even if offline: it takes care of resetting the ns_multiple state
+                if self._multiple_requests:
+                    await self.async_poll_flush()
+
             except asyncio.CancelledError:
-                pass
+                self.log(self.DEBUG, "Polling cancelled")
+                raise
+            except asyncio.TimeoutError:
+                if self.is_connected:
+                    self.on_disconnect()
+                elif self._polling_delay < self.HEARTBEAT_TIMEOUT:
+                    self._polling_delay += self.polling_period
+                else:
+                    self._polling_delay = self.HEARTBEAT_TIMEOUT
+            except Exception as e:
+                self.log_exception(self.WARNING, e, "async_poll")
+            finally:
+                self._polling_task = None
+            self.log(self.DEBUG, "Polling end")
 
     async def async_poll_full(self):
-        """Stops an ongoing poll if any and executes a full poll (like when onlining)."""
-        await self.async_poll_stop()
-        # BEWARE/TODO: this might overlap with async_shutdown and is not protected.
+        """Perform a 'full' namespaces poll like when onlining i.e. without any lazy optimization."""
+        if self._polling_unsub:  # eventually reschedule from now on
+            self._polling_unsub.cancel()
+            self._polling_unsub = self.schedule_callback(
+                self._polling_delay, self._polling
+            )
         for handler in self.ns_handlers.values():
             handler.polling_epoch_next = 0.0
-        # this will also restart/schedule the cycle
-        await self._poll()
+        await self.async_poll()
 
     async def async_poll_flush(self):
         multiple_requests = self._multiple_requests

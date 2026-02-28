@@ -953,14 +953,11 @@ class DeviceContext(ConfigEntryMocker):
     async def async_poll_single(self):
         """Advances the time mocker up to the next polling cycle and executes it."""
         assert self.device._polling_unsub
-        dt = self.time_mock.tick(
-            self.device._polling_unsub.when() - self.hass.loop.time()
-        )
+        self.time_mock.tick(self.device._polling_unsub.when() - self.hass.loop.time())
         task = self.device._polling_task
         assert task
         await task
         assert self.device._polling_unsub, task.exception()
-        return dt
 
     async def async_poll_timeout(
         self,
@@ -977,7 +974,8 @@ class DeviceContext(ConfigEntryMocker):
             )
 
         while dt_now < timeout:
-            dt_now = await self.async_poll_single()
+            await self.async_poll_single()
+            dt_now = self.time_mock()
 
 
 class CloudApiMocker(contextlib.AbstractContextManager):
