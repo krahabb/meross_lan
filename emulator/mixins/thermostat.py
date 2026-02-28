@@ -56,7 +56,7 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
             {
                 mc.KEY_CHANNEL: 0,
                 "type": mc.MTS960_TIMER_TYPE_COUNTDOWN,
-                "down": {"onoff": 0, "duration": 0, "end": 0},
+                "down": {"onoff": mc.MTS960_ONOFF_OFF, "duration": 0, "end": 0},
             },
         ),
     }

@@ -134,72 +134,82 @@ class Mts960Climate(MtsThermostatClimate):
     # interface: MtsThermostatClimate
     def flush_state(self):
         if self._mts_onoff:
-            match self._mts_mode:
-                case mc.MTS960_MODE_HEAT_COOL:
-                    match self._mts_working:
-                        case mc.MTS960_WORKING_HEAT:
-                            self.preset_mode = Mts960Climate.Preset.HEATING
-                            self.hvac_mode = MtsThermostatClimate.HVACMode.HEAT
-                            self.hvac_action = (
-                                MtsThermostatClimate.HVACAction.HEATING
-                                if self._mts_active
-                                else MtsThermostatClimate.HVACAction.IDLE
-                            )
-                        case mc.MTS960_WORKING_COOL:
-                            self.preset_mode = Mts960Climate.Preset.COOLING
-                            self.hvac_mode = MtsThermostatClimate.HVACMode.COOL
-                            self.hvac_action = (
-                                MtsThermostatClimate.HVACAction.COOLING
-                                if self._mts_active
-                                else MtsThermostatClimate.HVACAction.IDLE
-                            )
-                        case _:
-                            self.preset_mode = None
-                            self.hvac_mode = None
-                            self.hvac_action = None
-                            # TODO: log warning?
-                case mc.MTS960_MODE_SCHEDULE:
-                    self.hvac_mode = MtsThermostatClimate.HVACMode.AUTO
-                    match self._mts_working:
-                        case mc.MTS960_WORKING_HEAT:
-                            self.preset_mode = Mts960Climate.Preset.SCHEDULE_HEATING
-                            self.hvac_action = (
-                                MtsThermostatClimate.HVACAction.HEATING
-                                if self._mts_active
-                                else MtsThermostatClimate.HVACAction.IDLE
-                            )
-                        case mc.MTS960_WORKING_COOL:
-                            self.preset_mode = Mts960Climate.Preset.SCHEDULE_COOLING
-                            self.hvac_action = (
-                                MtsThermostatClimate.HVACAction.COOLING
-                                if self._mts_active
-                                else MtsThermostatClimate.HVACAction.IDLE
-                            )
-                        case _:
-                            self.preset_mode = None
-                            self.hvac_action = None
-                            # TODO: log warning?
-                case mc.MTS960_MODE_TIMER:
-                    match self._mts_timer_mode:
-                        case (mc.MTS960_TIMER_TYPE_CYCLE, _):
-                            self.preset_mode = Mts960Climate.Preset.TIMER_CYCLE
-                        case (mc.MTS960_TIMER_TYPE_COUNTDOWN, mc.MTS960_ONOFF_OFF):
-                            self.preset_mode = Mts960Climate.Preset.TIMER_COUNTDOWN_OFF
-                        case (mc.MTS960_TIMER_TYPE_COUNTDOWN, mc.MTS960_ONOFF_ON):
-                            self.preset_mode = Mts960Climate.Preset.TIMER_COUNTDOWN_ON
-                        case _:
-                            self.preset_mode = None
-                    self.hvac_mode = MtsThermostatClimate.HVACMode.FAN_ONLY
-                    self.hvac_action = (
-                        MtsThermostatClimate.HVACAction.FAN
-                        if self._mts_active
-                        else MtsThermostatClimate.HVACAction.IDLE
-                    )
-                case _:
-                    self.preset_mode = None
-                    self.hvac_mode = None
-                    self.hvac_action = None
-                    # TODO: log warning?
+            try:
+                match self._mts_mode:
+                    case mc.MTS960_MODE_HEAT_COOL:
+                        match self._mts_working:
+                            case mc.MTS960_WORKING_HEAT:
+                                self.preset_mode = Mts960Climate.Preset.HEATING
+                                self.hvac_mode = MtsThermostatClimate.HVACMode.HEAT
+                                self.hvac_action = (
+                                    MtsThermostatClimate.HVACAction.HEATING
+                                    if self._mts_active
+                                    else MtsThermostatClimate.HVACAction.IDLE
+                                )
+                            case mc.MTS960_WORKING_COOL:
+                                self.preset_mode = Mts960Climate.Preset.COOLING
+                                self.hvac_mode = MtsThermostatClimate.HVACMode.COOL
+                                self.hvac_action = (
+                                    MtsThermostatClimate.HVACAction.COOLING
+                                    if self._mts_active
+                                    else MtsThermostatClimate.HVACAction.IDLE
+                                )
+                            case _:
+                                raise ValueError(
+                                    f"Unknown MTS960 working mode: {self._mts_working}"
+                                )
+                    case mc.MTS960_MODE_SCHEDULE:
+                        match self._mts_working:
+                            case mc.MTS960_WORKING_HEAT:
+                                self.preset_mode = Mts960Climate.Preset.SCHEDULE_HEATING
+                                self.hvac_action = (
+                                    MtsThermostatClimate.HVACAction.HEATING
+                                    if self._mts_active
+                                    else MtsThermostatClimate.HVACAction.IDLE
+                                )
+                            case mc.MTS960_WORKING_COOL:
+                                self.preset_mode = Mts960Climate.Preset.SCHEDULE_COOLING
+                                self.hvac_action = (
+                                    MtsThermostatClimate.HVACAction.COOLING
+                                    if self._mts_active
+                                    else MtsThermostatClimate.HVACAction.IDLE
+                                )
+                            case _:
+                                raise ValueError(
+                                    f"Unknown MTS960 working mode: {self._mts_working}"
+                                )
+                        self.hvac_mode = MtsThermostatClimate.HVACMode.AUTO
+                    case mc.MTS960_MODE_TIMER:
+                        match self._mts_timer_mode:
+                            case (mc.MTS960_TIMER_TYPE_CYCLE, _):
+                                self.preset_mode = Mts960Climate.Preset.TIMER_CYCLE
+                            case (mc.MTS960_TIMER_TYPE_COUNTDOWN, mc.MTS960_ONOFF_OFF):
+                                self.preset_mode = (
+                                    Mts960Climate.Preset.TIMER_COUNTDOWN_OFF
+                                )
+                            case (mc.MTS960_TIMER_TYPE_COUNTDOWN, mc.MTS960_ONOFF_ON):
+                                self.preset_mode = (
+                                    Mts960Climate.Preset.TIMER_COUNTDOWN_ON
+                                )
+                            case _:
+                                raise ValueError(
+                                    f"Unknown MTS960 timer mode: {self._mts_timer_mode}"
+                                )
+                        self.hvac_mode = MtsThermostatClimate.HVACMode.FAN_ONLY
+                        self.hvac_action = (
+                            MtsThermostatClimate.HVACAction.FAN
+                            if self._mts_active
+                            else MtsThermostatClimate.HVACAction.IDLE
+                        )
+                    case _:
+                        raise ValueError(f"Unknown MTS960 mode: {self._mts_mode}")
+            except Exception as e:
+                self.preset_mode = None
+                self.hvac_mode = None
+                self.hvac_action = None
+                self.log_exception(
+                    self.WARNING, e, "sending state to HomeAssistant", timeout=14400
+                )
         else:
             self.hvac_mode = MtsThermostatClimate.HVACMode.OFF
             self.hvac_action = MtsThermostatClimate.HVACAction.OFF
