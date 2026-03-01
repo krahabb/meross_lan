@@ -1352,10 +1352,10 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                         descriptor_update = None
                         _host = user_input.get(mlc.CONF_HOST)
                         _key = user_input.get(mlc.CONF_KEY) or ""
-                        _conf_protocol = (
+                        _conf_transport = (
                             user_input.get(mlc.CONF_PROTOCOL) or Transport.AUTO
                         )
-                        if _conf_protocol != Transport.HTTP:
+                        if _conf_transport != Transport.HTTP:
                             try:
                                 (
                                     device_config_update,
@@ -1365,7 +1365,7 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                                 )
                             except Exception as e:
                                 inner_exception = e
-                        if _conf_protocol != Transport.MQTT:
+                        if _conf_transport != Transport.MQTT:
                             if _try_host := (_host or device_descriptor.innerIp):
                                 try:
                                     (

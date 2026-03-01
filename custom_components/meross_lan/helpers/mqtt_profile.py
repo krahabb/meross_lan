@@ -1,7 +1,6 @@
 from abc import abstractmethod
 from typing import TYPE_CHECKING, override
 
-from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.core import callback
 
@@ -349,12 +348,12 @@ class MQTTConnection(AbstractMQTTConnection):
             # device_id is not binded to this MQTTConnection
             if device := api.devices.get(uuid):
                 # check among current loaded devices if they could be re-binded
-                if device.conf_protocol not in (Transport.AUTO, Transport.MQTT):
+                if device.configured_transport not in (Transport.AUTO, Transport.MQTT):
                     self.log(
                         self.DEBUG,
                         "Dropping MQTT message for device '%s' since its transport is set to '%s'",
                         device.display_name,
-                        device.conf_protocol,
+                        device.configured_transport,
                         timeout=86400,
                     )
                     return
@@ -577,7 +576,7 @@ class MQTTProfile(mlm.ConfigEntryManager):
         mqttconnections: Final[dict[str, MQTTConnection]]
 
     DEFAULT_PLATFORMS = mlm.ConfigEntryManager.DEFAULT_PLATFORMS | {
-        SENSOR_DOMAIN: None,
+        ConnectionSensor.PLATFORM: None,
     }
 
     __slots__ = (

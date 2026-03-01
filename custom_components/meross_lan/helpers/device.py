@@ -1,12 +1,10 @@
 from abc import abstractmethod
 import asyncio
 from bisect import bisect_right
-from datetime import UTC
 from json import JSONDecodeError
 from time import time
 from typing import TYPE_CHECKING, override
 
-from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
 
@@ -15,11 +13,6 @@ from . import manager as mlm
 from .. import const as mlc
 from ..button import MLPersistentButton
 
-# only import those 'often used' symbols to get a tiny bit of speed improvement
-from ..const import (
-    CONF_HOST,
-    CONF_PAYLOAD,
-)
 from ..merossclient import (
     DeviceDescriptor,
     datetime_from_epoch,
@@ -55,7 +48,6 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from ..merossclient import HostAddress
     from ..merossclient.protocol.types import (
         JsonDict,
         JsonList,
@@ -272,7 +264,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         def get_handler(self, ns: mn.Namespace) -> NamespaceHandler: ...
 
         # these are set from ConfigEntry
-        conf_protocol: Transport
+        configured_transport: Transport
         host: str | None
 
         # Device inner timestamp handling for time-sensitive features
@@ -397,7 +389,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
     }
 
     __slots__ = device.Device._calc_slots(
-        "conf_protocol",
+        "conf_transport",
         "host",
         "_device_entries",
         "_async_entry_update_unsub",
@@ -543,10 +535,10 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         config = self.config
         # map CONF_PROTOCOL value to a const symbol in order to use 'is' in Device code checks
         try:
-            conf_protocol = Transport.from_str(config[mlc.CONF_PROTOCOL])  # type: ignore
+            conf_transport = Transport.from_str(config[mlc.CONF_PROTOCOL])  # type: ignore
         except KeyError:
-            conf_protocol = Transport.AUTO
-        self.conf_protocol = conf_protocol
+            conf_transport = Transport.AUTO
+        self.configured_transport = conf_transport
         self.polling_period = (
             config.get(mlc.CONF_POLLING_PERIOD) or mlc.CONF_POLLING_PERIOD_DEFAULT
         )
@@ -555,11 +547,11 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         self._polling_delay = self.polling_period
 
         self.enable_multiple(not config.get(mlc.CONF_DISABLE_MULTIPLE))
-        self._update_host(config.get(CONF_HOST) or self.descriptor.innerIp)
+        self._update_host(config.get(mlc.CONF_HOST) or self.descriptor.innerIp)
         if self.mqtt:  # just to be sure key is sync'd
             self.mqtt.key = self.key
 
-        if conf_protocol is Transport.BLUETOOTH:
+        if conf_transport is Transport.BLUETOOTH:
             if not self.bluetooth:
                 if _bluetooth := self.api.get_bt_client(self.id):
                     self.add_client(_bluetooth)
@@ -587,7 +579,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
         self.host = host
         http = self.http
-        if host and (self.conf_protocol in (Transport.AUTO, Transport.HTTP)):
+        if host and (self.configured_transport in (Transport.AUTO, Transport.HTTP)):
             if http:
                 http.host = host
                 http.key = self.key
@@ -610,9 +602,9 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
     def _check_protocol(self):
         """called whenever the configuration or the profile linking changes to fix transports."""
-        conf_protocol = self.conf_protocol
-        if conf_protocol in (Transport.BLUETOOTH, Transport.HTTP):
-            self.preferred_transport = conf_protocol
+        conf_transport = self.configured_transport
+        if conf_transport in (Transport.BLUETOOTH, Transport.HTTP):
+            self.preferred_transport = conf_transport
             if self.mqtt:
                 self.remove_client(self.mqtt)
         else:
@@ -627,29 +619,38 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                 if _profile:
                     _profile.get_connection(self).attach(self)
 
-            if conf_protocol is Transport.AUTO:
+            if conf_transport is Transport.AUTO:
                 # When using Transport.AUTO we try to use our 'preferred' transport.
                 # When binded to a cloud_profile always prefer http since it will avoid excessive
                 # MQTT traffic and related cloud 'issues' like rate-limiting
-                if self.config.get(CONF_HOST) or (
+                if self.config.get(mlc.CONF_HOST) or (
                     self.mqtt and self.mqtt.connection.is_cloud
                 ):
                     self.preferred_transport = Transport.HTTP
                 else:
                     self.preferred_transport = Transport.MQTT
             else:
-                self.preferred_transport = conf_protocol
+                self.preferred_transport = conf_transport
 
         if self.transport is not self.preferred_transport:
-            try:
-                self._switch_client(self._clients[self.preferred_transport])
-            except KeyError:
-                self.log(
-                    self.WARNING,
-                    "Preferred transport {%s} not available, current transport is {%s}",
-                    self.preferred_transport,
-                    self.transport,
-                )
+            if self.is_connected:
+                try:
+                    self._switch_client(
+                        self._clients_connected[self.preferred_transport]
+                    )
+                except KeyError:
+                    # preferred transport not connected: leave current transport whatever
+                    pass
+            else:
+                try:
+                    self._switch_client(self._clients[self.preferred_transport])
+                except KeyError:
+                    self.log(
+                        self.WARNING,
+                        "Preferred transport {%s} not available, current transport is {%s}",
+                        self.preferred_transport,
+                        self.transport,
+                    )
 
     # interface: EntityManager
     @override
@@ -885,7 +886,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                     break
         return {
             "class": type(self).__name__,
-            "conf_protocol": self.conf_protocol,
+            "configured_transport": self.configured_transport,
             "preferred_transport": self.preferred_transport,
             "transport": self.transport,
             "polling_period": self.polling_period,
@@ -1166,11 +1167,11 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         with self.exception_warning("_async_entry_update"):
             data = dict(self.config_entry.data)
             data[mlc.CONF_TIMESTAMP] = time()  # force ConfigEntry update..
-            data[CONF_PAYLOAD][mc.KEY_ALL] = self.descriptor.all
+            data[mlc.CONF_PAYLOAD][mc.KEY_ALL] = self.descriptor.all
             if query_abilities:
                 # fw update or whatever might have modified the device abilities.
                 # we refresh the abilities list before saving the new config_entry
-                data[CONF_PAYLOAD][mc.KEY_ABILITY] = (
+                data[mlc.CONF_PAYLOAD][mc.KEY_ABILITY] = (
                     await self.async_request(
                         *mn.Appliance_System_Ability.request_default
                     )
@@ -1310,12 +1311,12 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             self.schedule_entry_update(True)
             if self.update_firmware:
                 self.update_firmware.update_info()
-            if not self.config.get(CONF_HOST):
+            if not self.config.get(mlc.CONF_HOST):
                 self._update_host(descr.innerIp)
         elif oldtimezone != descr.timezone:
             self.schedule_entry_update(False)
 
-        if self.conf_protocol is Transport.AUTO:
+        if self.configured_transport is Transport.AUTO:
             if (mqtt := self.mqtt) and mqtt.is_connected:
                 if not is_device_online(descr.system):
                     mqtt.on_disconnect()
