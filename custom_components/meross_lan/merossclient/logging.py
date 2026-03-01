@@ -9,7 +9,7 @@ import logging
 from time import time
 from typing import TYPE_CHECKING, override
 
-from . import broadcast
+from . import async_load_zoneinfo, broadcast
 from .obfuscate import OBFUSCATE_KEYS
 
 if TYPE_CHECKING:
@@ -379,6 +379,19 @@ class Loggable(metaclass=abc.ABCMeta):
 
     def schedule_callback(self, delay: float, target: "Callable", *args):
         return self.loop.call_later(delay, target, *args)
+
+    async def async_load_zoneinfo(self, tzname: str, /):
+        try:
+            return await async_load_zoneinfo(tzname)
+        except Exception as e:
+            self.log_exception(
+                self.WARNING,
+                e,
+                "loading timezone(%s) - check your python environment",
+                tzname,
+                timeout=14400,
+            )
+            raise
 
     def __del__(self):
         self.log(VERBOSE, "destroy")

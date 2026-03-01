@@ -1,7 +1,8 @@
+from bisect import bisect_right
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from .. import DeviceDescriptor, logging
+from .. import DeviceDescriptor, datetime_from_epoch, logging
 from ..protocol import (
     a2b_base64,
     b2a_base64,
@@ -46,6 +47,7 @@ if TYPE_CHECKING:
         control as mt_c,
         hub as mt_h,
         mcu as mt_m,
+        system as mt_s,
     )
 
 
@@ -425,6 +427,80 @@ class AbstractClient(logging.Loggable):
                 },
                 **kwargs,
             )
+
+    async def async_configure_timezone(self, tzname: str | None):
+
+        if tzname:
+            # we'll look through the list of transition times for current tz
+            # and provide the actual (last past daylight) and the next to the
+            # appliance so it knows how and when to offset utc to localtime
+
+            # brutal patch for missing tz names (AEST #402)
+            tzname = {"AEST": "Australia/Brisbane"}.get(tzname, tzname)
+            timestamp = int(self.time())
+            p_time: "mt_s.Time"
+
+            try:
+
+                def _build_timerules() -> list["mt_s._Timerule"]:
+
+                    import pytz
+
+                    tz_pytz = pytz.timezone(tzname)
+                    if isinstance(tz_pytz, pytz.tzinfo.DstTzInfo):
+
+                        def _timerule_from_pytz(idx: int) -> "mt_s._Timerule":
+                            _transition_info = tz_pytz._transition_info[idx]  # type: ignore
+                            return [
+                                int(tz_pytz._utc_transition_times[idx].timestamp()),  # type: ignore
+                                int(_transition_info[0].total_seconds()),
+                                1 if _transition_info[1].total_seconds() else 0,
+                            ]
+
+                        # _utc_transition_times are naive UTC datetimes
+                        idx = bisect_right(
+                            tz_pytz._utc_transition_times,  # type: ignore
+                            datetime_from_epoch(timestamp, None),
+                        )
+                        # idx would be the next transition offset index
+                        if idx == 0:
+                            # this means that the current timestamp is before the first transition time in tz_pytz
+                            # so we take the first transition as 'current' and we build the timerules list starting from it
+                            utcoffset = tz_pytz.utcoffset(
+                                datetime_from_epoch(timestamp, None)
+                            )
+                            utcoffset = utcoffset.seconds if utcoffset else 0
+                            timerules = [[timestamp, utcoffset, 0]]
+                            timerules += [_timerule_from_pytz(_idx) for _idx in range(min(19, len(tz_pytz._transition_info)))]  # type: ignore
+                            return timerules
+                        else:
+                            return [_timerule_from_pytz(_idx) for _idx in range(idx - 1, max(idx + 19, len(tz_pytz._transition_info)))]  # type: ignore
+
+                    elif isinstance(tz_pytz, pytz.tzinfo.StaticTzInfo):
+                        utcoffset = tz_pytz.utcoffset(None)
+                        utcoffset = utcoffset.seconds if utcoffset else 0
+                        return [[timestamp, utcoffset, 0]]
+                    else:
+                        raise Exception("Unknown pytz tz type")
+
+                p_time = {
+                    mc.KEY_TIMEZONE: tzname,
+                    mc.KEY_TIMERULE: await self.loop.run_in_executor(
+                        None, _build_timerules
+                    ),
+                }
+
+            except Exception as exception:
+                raise Exception(
+                    "Error building timezone rules for timezone '%s'" % tzname
+                ) from exception
+
+        else:
+            p_time = {mc.KEY_TIMEZONE: "", mc.KEY_TIMERULE: []}
+
+        await self.async_request(*mn.Appliance_System_Time.request_set(p_time))
+        if self.descriptor:
+            self.descriptor.update_time(p_time)
 
     async def async_configure_wifi(
         self,

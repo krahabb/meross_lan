@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, override
 from .. import (
     DeviceDescriptor,
     async_import_module,
-    async_load_zoneinfo,
     datetime_from_epoch,
     is_device_online,
     simple_slug,
@@ -293,16 +292,9 @@ class Device(PhysicalDevice):
 
     async def async_init(self):
 
-        descriptor = self.descriptor
-        if tzname := descriptor.timezone:
-            # self.tz defaults to UTC on init
-            with self.exception_warning(
-                "loading timezone(%s) - check your python environment",
-                tzname,
-                timeout=14400,
-            ):
-                self.tz = await async_load_zoneinfo(tzname)
+        await self._async_init_zoneinfo()
 
+        descriptor = self.descriptor
         for key_digest, _digest in (
             descriptor.digest.items() or descriptor.control.items()
         ):
@@ -384,6 +376,15 @@ class Device(PhysicalDevice):
                     self.WARNING, exception, "initializing namespace %s", ns
                 )
 
+    async def _async_init_zoneinfo(self, /):
+        if tzname := self.descriptor.timezone:
+            try:
+                self.tz = await self.async_load_zoneinfo(tzname)
+            except Exception:
+                self.tz = UTC
+        else:
+            self.tz = UTC
+
     @override
     async def async_shutdown(self):
         self.polling_stop()
@@ -399,6 +400,8 @@ class Device(PhysicalDevice):
         self.digest_parsers.clear()
         self.digest_pollers.clear()
         self._lazypoll_requests.clear()
+        # This must be by design
+        assert self.is_connected is False, "Device shutdown failed: still connected"
 
     # interface: AbstractClient
     @override
@@ -719,10 +722,7 @@ class Device(PhysicalDevice):
             self.polling_epoch = epoch = self.time()  # type: ignore[assignment]
             self.log(self.DEBUG, "Polling begin")
             try:
-                if self.is_connected and (
-                    (self.last_rx_epoch > self.last_tx_epoch)
-                    or ((epoch - self.last_tx_epoch) < (self.polling_period - 2))
-                ):
+                if self.is_connected:
                     # perform some heartbeats in case
                     if (
                         (http := self.http)
@@ -751,7 +751,7 @@ class Device(PhysicalDevice):
                         except Exception:
                             pass
 
-                else:  # offline or 'likely' offline (failed last request)
+                else:  # offline
                     await self.async_connect()
 
                 """
@@ -1013,6 +1013,11 @@ class SubDevice(PhysicalDevice):
         kwargs["timeout"] = parent.timeout
         kwargs["loop"] = parent.loop
         super().__init__(id, parent, **kwargs)
+
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        del self.async_request
+        del self.ns_handlers
 
     # interface: AbstractClient
     @override

@@ -40,6 +40,7 @@ if TYPE_CHECKING:
         control as mt_c,
         hub as mt_h,
         mcu as mt_m,
+        system as mt_s,
     )
 
     _ASYNC_LOCK: Final[asyncio.Lock]
@@ -676,8 +677,8 @@ class DeviceDescriptor:
             except Exception:
                 pass
 
-    def update_time(self, p_time: "JsonDict"):
-        self.system[mc.KEY_TIME] |= p_time
+    def update_time(self, p_time: "mt_s.Time"):
+        self.system[mc.KEY_TIME] = p_time
         for key in (mc.KEY_TIME, mc.KEY_TIMEZONE):
             try:
                 delattr(self, key)

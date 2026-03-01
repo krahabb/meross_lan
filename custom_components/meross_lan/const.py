@@ -184,14 +184,6 @@ PARAM_INFINITE_TIMEOUT = 2147483647  # inifinite epoch (2038 bug?)
 """the (infinite) timeout in order to disable timed schedules"""
 PARAM_COLDSTARTPOLL_DELAY = 2
 """(maximum) delay of initial poll after device setup"""
-PARAM_TIMEZONE_CHECK_OK_PERIOD = 604800
-"""period between checks of timezone infos on locally mqtt binded devices"""
-PARAM_TIMEZONE_CHECK_NOTOK_PERIOD = 86400
-"""period between checks of failing timezone infos on locally mqtt binded devices"""
-PARAM_TIMESTAMP_TOLERANCE = 5
-"""max device timestamp diff against our and trigger warning and (eventually) fix it"""
-PARAM_TRACING_ABILITY_POLL_TIMEOUT = 2
-"""used to delay the iteration of abilities while tracing"""
 PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT = 2
 """used when polling the cover state to monitor an ongoing transition"""
 PARAM_CLOUD_UPDATE_PERIOD = 1195

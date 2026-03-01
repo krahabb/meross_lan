@@ -338,6 +338,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
         "key_digest",
         "model",
         "_digest_parse",
+        "enable_check_device_time",
     )
 
     def __init__(
@@ -349,6 +350,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
         /,
     ):
         # fix some base attributes...TODO: this needs to be better addressed
+        self.enable_check_device_time = hub.enable_check_device_time
         self.platforms = hub.platforms
         # In order to keep compatibility with existing code
         # until we find a clear solution for id/channel/entity_key
@@ -385,8 +387,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
     async def async_shutdown(self):
         # fool the python inheritance pattern
         await super().async_shutdown()
-        del self.async_request
-        del self.ns_handlers
+        del self.enable_check_device_time
         del self._digest_parse  # type: ignore[assignment]
         for _parse_method in tuple(
             _p for _p in self.__dict__ if _p.startswith("_parse_")
@@ -407,6 +408,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
     def generate_unique_id(self, entity: MLEntity, /):
         return f"{self.manager.id}_{entity.id}"
 
+    # interface: PhysicalDevice
     @property
     @override
     def firmware_version(self, /) -> str:

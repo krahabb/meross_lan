@@ -9,7 +9,6 @@ from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.diagnostics import async_get_device_diagnostics
-from custom_components.meross_lan.merossclient.protocol import const as mc
 
 from tests import const as tc, helpers
 
@@ -49,7 +48,7 @@ async def _async_run_tracing(
     manager = entry_mock.manager
     await time_mock.async_warp(
         tc.MOCK_TRACE_TIMEOUT,
-        tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
+        tick=tc.MOCK_TRACE_TIMEOUT // 10,
     )
     assert not manager._trace_file
 
@@ -98,7 +97,9 @@ async def test_device_diagnostics(request, hass: "HomeAssistant"):
             request, hass, emulator, auto_poll=True, data=CONFIG_ENTRY_DATA
         ) as context:
 
-            context.time_mock.warp(tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT)
+            context.time_mock.warp(
+                tick=context.device.PARAM_TRACING_ABILITY_POLL_TIMEOUT
+            )
             try:
                 diagnostic = await async_get_device_diagnostics(
                     hass, context.config_entry, None
@@ -128,7 +129,7 @@ async def test_device_tracing(request, hass: "HomeAssistant"):
             device = context.device
             async for time in context.time_mock.async_warp_iterator(
                 tc.MOCK_TRACE_TIMEOUT,
-                tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
+                tick=device.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
             ):
                 if not device._trace_ability_callback_unsub:
                     device.trace_close()

@@ -70,3 +70,11 @@ class Debug(TypedDict):
     network: Debug_Network
     cloud: Debug_Cloud
     hub: NotRequired[Debug_Hub]
+
+
+type _Timerule = list[int]  # [timestamp, offset, dst]
+
+
+class Time(TypedDict):
+    timezone: str  # Europe/Rome
+    timeRule: list[_Timerule]

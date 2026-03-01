@@ -147,6 +147,7 @@ class MtsSchedule(MLEntity, calendar.CalendarEntity):
         self._schedule_entry_count_max = 0
         self._schedule_entry_count_min = 0
         super().__init__(climate.channel, climate.manager, entity_key=self.ns.key)
+        climate.manager.enable_check_device_time()
 
     # interface: MLEntity
     async def async_shutdown(self):
@@ -609,9 +610,6 @@ class MtsSchedule(MLEntity, calendar.CalendarEntity):
             payload = native_schedule | payload
             if payload == native_schedule:
                 return
-        else:
-            # onlining case: we have no previous schedule
-            self.handler_ns.device.check_device_timezone()
 
         self._payload_ns = payload
         if mc.KEY_SECTION in payload:

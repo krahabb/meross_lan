@@ -1,3 +1,4 @@
+from abc import abstractmethod
 import asyncio
 from bisect import bisect_right
 from datetime import UTC
@@ -18,11 +19,9 @@ from ..button import MLPersistentButton
 from ..const import (
     CONF_HOST,
     CONF_PAYLOAD,
-    PARAM_TIMESTAMP_TOLERANCE,
 )
 from ..merossclient import (
     DeviceDescriptor,
-    async_load_zoneinfo,
     datetime_from_epoch,
     device,
     get_active_broker,
@@ -112,6 +111,10 @@ class BaseDevice(mlm.EntityManager, device.PhysicalDevice):
             entity.set_unavailable()
 
     # interface: self
+    @abstractmethod
+    def enable_check_device_time(self, /):
+        pass
+
     def update_latest_version(self, latest_version: "LatestVersionType"):
         # TODO: add the update invocation path for Hub Subdevices.
         self.latest_version = latest_version
@@ -272,16 +275,35 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         conf_protocol: Transport
         host: str | None
 
+        # Device inner timestamp handling for time-sensitive features
+        # These are mostly needed to ensure reliable working for metering plugs and
+        # scheduled device features.
         device_timestamp: int
+        """Device actual estimated timestamp as extracted from last rx message."""
+        device_timedelta: float
+        """Device timestamp delta against local time (device_timestamp - local_time)."""
+        _check_device_time_unsub: TimerHandle | None  # dynamic
+        """Scheduled 'on-demand' device time check. This is only created when enable_device_time_check is called."""
 
         _device_entries: dict[Any, dr.DeviceEntry]
         profile: Final[MQTTProfile | None]
         _trace_ability_callback_unsub: TimerHandle | None
-        _check_device_timerules_unsub: TimerHandle  # dynamic
+
         _async_create_diagnostic_entities_task: Task  # dynamic
 
         # entities
         sensor_protocol: ProtocolSensor
+
+    PARAM_DEVICE_TIMESTAMP_TOLERANCE = 5
+    """Max device timestamp diff against HA to trigger warning and (eventually) fix it."""
+    PARAM_CHECK_DEVICE_TIME_START_DELAY = 60
+    """Delay after which the device time check procedure starts since device connection.
+    This is needed to allow the internal device timestamp estimations to stabilize."""
+    PARAM_CHECK_DEVICE_TIME_REPEAT_DELAY = 86400
+    """Delay between consecutive device time checks (after initial 'cold' check)."""
+    PARAM_CHECK_DEVICE_TIMEZONE_FUTURE_DELTA = 86400
+    PARAM_TRACING_ABILITY_POLL_TIMEOUT = 2
+    """Used to delay the iteration of abilities scan while tracing."""
 
     DIGEST_INIT_PACKAGE = "custom_components.meross_lan"
     DIGEST_INIT = {
@@ -382,10 +404,10 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         "device_debug",
         "device_timestamp",
         "device_timedelta",
+        "_check_device_time_unsub",
         "device_timedelta_log_epoch",
         "device_timedelta_config_epoch",
         "_profile",
-        "_check_device_timerules_unsub",
         "_trace_ability_callback_unsub",
         "_async_create_diagnostic_entities_task",
         "sensor_protocol",
@@ -442,10 +464,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         self.device_timedelta_log_epoch = 0
         self.device_timedelta_config_epoch = 0
         self.profile = None
-        if mn.Appliance_System_Time in descriptor.ability:
-            self._check_device_timerules_unsub = self.schedule_async_callback(
-                60, self.check_device_timerules
-            )
         self._trace_ability_callback_unsub = None
 
         NamespaceHandler(
@@ -501,10 +519,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
     async def async_shutdown(self):
         self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
-        try:
-            self._check_device_timerules_unsub.cancel()
-        except AttributeError:
-            pass
         if self._async_entry_update_unsub:
             self._async_entry_update_unsub.cancel()
             self._async_entry_update_unsub = None
@@ -750,7 +764,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
     @override
     def _trace_opened(self, epoch: float):
         self._trace_ability_callback_unsub = self.schedule_async_callback(
-            mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
+            self.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
             self._async_trace_ability,
             iter(self.descriptor.ability),
         )
@@ -801,11 +815,11 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
         if self.mqtt and (self.client is self.mqtt):
             timeout = (
-                mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT
+                self.PARAM_TRACING_ABILITY_POLL_TIMEOUT
                 + self.mqtt.connection.get_rl_safe_delay(self.id)
             )
         else:
-            timeout = mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT
+            timeout = self.PARAM_TRACING_ABILITY_POLL_TIMEOUT
         self._trace_ability_callback_unsub = self.schedule_async_callback(
             timeout,
             self._async_trace_ability,
@@ -931,6 +945,15 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
     @override
     def on_connect(self, /):
         super().on_connect()
+        try:
+            if self._check_device_time_unsub:
+                self._check_device_time_unsub.cancel()
+            self._check_device_time_unsub = self.schedule_callback(
+                self.PARAM_CHECK_DEVICE_TIME_START_DELAY, self._check_device_time
+            )
+        except AttributeError:
+            pass  # enable_device_time_check not called so we don't install the check.
+
         if self.config.get(mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES):
             try:
                 self._async_create_diagnostic_entities_task.result()
@@ -952,6 +975,12 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
     def on_disconnect(self, /):
         super().on_disconnect()
         self.device_debug = None
+        try:
+            if self._check_device_time_unsub:
+                self._check_device_time_unsub.cancel()
+                self._check_device_time_unsub = None
+        except AttributeError:
+            pass  # check never installed
 
     @override
     def on_tx(self, message: "MerossMessage", client: "AbstractClient", /):
@@ -977,65 +1006,27 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             ):
                 self._switch_client(client)
 
-        header = message.header
         # we'll use the device timestamp to 'align' our time to the device one
         # this is useful for metered plugs reporting timestamped energy consumption
         # and we want to 'translate' this timings in our (local) time.
         # We ignore delays below PARAM_TIMESTAMP_TOLERANCE since
         # we'll always be a bit late in processing
-        self.device_timestamp = header[mc.KEY_TIMESTAMP]
+        self.device_timestamp = message.header[mc.KEY_TIMESTAMP]
         self.device_timedelta = (
             9 * self.device_timedelta + (epoch - self.device_timestamp)
         ) / 10
-        # TODO: move this check to only relevant devices (i.e. metering plugs)
-        if abs(self.device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
-            _log_this = True
-            if (  # TODO: refine this check
-                (mqtt := self.mqtt)
-                and (not mqtt.connection.is_cloud)
-                and (mn.Appliance_System_Clock in self.descriptor.ability)
-            ):
-                # only deal with time related settings when devices are un-paired
-                # from the meross cloud
-                last_config_delay = epoch - self.device_timedelta_config_epoch
-                if last_config_delay > 1800:
-                    # 30 minutes 'cooldown' in order to avoid restarting
-                    # the procedure too often
-                    self.create_task(
-                        mqtt.async_request(*mn.Appliance_System_Clock.request_default),
-                        "._config_device_timestamp",
-                        eager_start=True,
-                    )
-                    self.device_timedelta_config_epoch = epoch
-                    _log_this = False
-                elif last_config_delay < 30:
-                    # 30 sec 'deadzone' where we allow the timestamp
-                    # transaction to complete (should really be like few seconds)
-                    _log_this = False
-            if (
-                _log_this and (epoch - self.device_timedelta_log_epoch) > 604800
-            ):  # 1 week lockout
-                # log this only if we're not in the cooldown period and we haven't
-                # logged about this recently (i.e. in the last week)
-                self.device_timedelta_log_epoch = epoch
-                self.log(
-                    self.WARNING,
-                    "Incorrect timestamp: %d seconds behind HA (%d on average)",
-                    int(epoch - self.device_timestamp),
-                    int(self.device_timedelta),
-                )
 
         if self.isEnabledFor(self.DEBUG):
             # it appears sometimes the devices
             # send an incorrect signature hash
             # but at the moment this is unlikely to be critical
             sign = message.compute_signature(self.key)
-            if sign != header[mc.KEY_SIGN]:
+            if sign != message.header[mc.KEY_SIGN]:
                 self.log(
                     self.DEBUG,
                     "Received signature error: computed=%s, header=%s",
                     sign,
-                    _header=header,
+                    _header=message.header,
                 )
 
     @override
@@ -1086,6 +1077,12 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                     message.namespace,
                 ),
             )
+
+    @override
+    async def async_configure_timezone(self, tzname: str | None):
+        await super().async_configure_timezone(tzname)
+        self.schedule_entry_update(False)
+        self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
 
     # interface: device.Device
     @override
@@ -1181,16 +1178,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             self.api.config_entries.async_update_entry(self.config_entry, data=data)
 
         # we also take the time to sync our tz to the device timezone
-        tzname = self.descriptor.timezone
-        if tzname:
-            with self.exception_warning(
-                "loading timezone(%s) - check your python environment",
-                tzname,
-                timeout=14400,
-            ):
-                self.tz = await async_load_zoneinfo(tzname)
-        else:
-            self.tz = UTC
+        await self._async_init_zoneinfo()
 
     async def async_handle_request_multiple(
         self, requests: "Iterable[MerossRequestType]"
@@ -1424,7 +1412,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                 return True
             # actual device time is covered but we also check if the device timerules
             # are ok in the near future
-            timestamp_future = timestamp + mlc.PARAM_TIMEZONE_CHECK_OK_PERIOD
+            timestamp_future = timestamp + self.PARAM_CHECK_DEVICE_TIMEZONE_FUTURE_DELTA
             # we have to search (again) in the timerules but we do some
             # short-circuit checks to see if epoch_future is still
             # contained in current timerule
@@ -1457,159 +1445,100 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
         return False
 
-    async def check_device_timerules(self, /):
-        # when on local mqtt we have the responsibility for
-        # setting the device timezone/dst transition times
-        # but this is a process potentially consuming a lot
-        # (checking future DST) so we'll be lazy on this by
-        # scheduling not so often and depending on a bunch of
-        # side conditions (like the device being time-aligned)
-        delay = mlc.PARAM_TIMEZONE_CHECK_NOTOK_PERIOD
-
-        if abs(self.device_timedelta) < PARAM_TIMESTAMP_TOLERANCE:
-            with self.exception_warning("check_device_timerules"):
-                if self._check_device_timerules():
-                    # timezone trans not good..fix and check again soon
-                    await self.async_config_device_timezone(self.descriptor.timezone)
-                else:  # timezone trans good..check again in more time
-                    delay = mlc.PARAM_TIMEZONE_CHECK_OK_PERIOD
-
-        self._check_device_timerules_unsub = self.schedule_async_callback(
-            delay, self.check_device_timerules
-        )
-
-    def check_device_timezone(self, /):
-        """
-        Verifies the device timezone has the same utc offset as HA local timezone.
-        This is expecially sensible when the device has 'Consumption' or
-        schedules (calendar entities) in order to align device local time to
-        what is expected in HA.
-        """
-        ha_now = dt_util.now()
-        device_now = ha_now.astimezone(self.tz)
-        if ha_now.utcoffset() == device_now.utcoffset():
-            self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
-            return
-        self.create_issue(
-            mlc.ISSUE_DEVICE_TIMEZONE,
-            severity=self.IssueSeverity.WARNING,
-            translation_placeholders={"device_name": self.display_name},
-        )
-
-    async def async_config_device_timezone(self, tzname: str | None):
-        if not self.mqtt or self.mqtt.connection.is_cloud:
-            # TODO: This check is just a safety feature to not
-            # pollute devices which might in general be Meross cloud account bound.
-            # We need to finally fix the DST table lookup so that we provide a reliable api
-            return False
-
-        timerules: list[list[int]]
-        if tzname:
-            # we'll look through the list of transition times for current tz
-            # and provide the actual (last past daylight) and the next to the
-            # appliance so it knows how and when to offset utc to localtime
-
-            # brutal patch for missing tz names (AEST #402)
-            tzname = {"AEST": "Australia/Brisbane"}.get(tzname, tzname)
-
-            try:
-                tz = await async_load_zoneinfo(tzname)
-            except Exception as e:
-                self.log_exception(
+    def _check_device_time(self, /):
+        """This is a scheduled task that runs every now and then when the device is connected
+        to check the device time configuration and state.
+        -> Checks device current timestamp (epoch) is aligned to HA. This is especially important
+        for devices with 'Consumption' or schedules (calendar entities) in order to align device
+        local time to what is expected in HA.
+        -> Checks the device timezone has the same utc offset as HA local timezone.
+        -> Checks if the device timezone transition times are still correctly set."""
+        # The device timestamp is usually unaligned when it cannot reach NTP service.
+        # It seemed some devices could allow NTP sync through a simple MQTT transaction.
+        if abs(self.device_timedelta) > self.PARAM_DEVICE_TIMESTAMP_TOLERANCE:
+            _log_this = True
+            epoch = self.last_rx_epoch
+            # only apply the time-sync procedure when locally mqtt binded
+            if (
+                (mqtt := self.mqtt)
+                and mqtt.connection.can_publish  # online and allow_publish
+                and (not mqtt.connection.is_cloud)
+                and (mn.Appliance_System_Clock in self.descriptor.ability)
+            ):
+                last_config_delay = epoch - self.device_timedelta_config_epoch
+                if last_config_delay > 1800:
+                    # 30 minutes 'cooldown' in order to avoid restarting
+                    # the procedure too often
+                    self.create_task(
+                        mqtt.async_request(*mn.Appliance_System_Clock.request_default),
+                        ".check_device_time",
+                        eager_start=True,
+                    )
+                    self.device_timedelta_config_epoch = epoch
+                    _log_this = False
+                elif last_config_delay < 30:
+                    # 30 sec 'deadzone' where we allow the timestamp
+                    # transaction to complete (should really be like few seconds)
+                    _log_this = False
+            if (
+                _log_this and (epoch - self.device_timedelta_log_epoch) > 604800
+            ):  # 1 week lockout
+                self.device_timedelta_log_epoch = epoch
+                self.log(
                     self.WARNING,
-                    e,
-                    "loading timezone(%s) - check your python environment",
-                    tzname,
-                    timeout=14400,
+                    "Incorrect timestamp: %d seconds behind HA (%d on average)",
+                    int(epoch - self.device_timestamp),
+                    int(self.device_timedelta),
                 )
-                return False
-
-            timestamp = self.device_timestamp
-
-            try:
-
-                def _build_timerules():
-                    try:
-                        import pytz
-
-                        tz_pytz = pytz.timezone(tzname)
-                        if isinstance(tz_pytz, pytz.tzinfo.DstTzInfo):
-                            timerules = []
-                            # _utc_transition_times are naive UTC datetimes
-                            idx = bisect_right(
-                                tz_pytz._utc_transition_times,  # type: ignore
-                                datetime_from_epoch(timestamp, None),
-                            )
-                            # idx would be the next transition offset index
-                            _transition_info = tz_pytz._transition_info[idx - 1]  # type: ignore
-                            timerules.append(
-                                [
-                                    int(tz_pytz._utc_transition_times[idx - 1].timestamp()),  # type: ignore
-                                    int(_transition_info[0].total_seconds()),
-                                    1 if _transition_info[1].total_seconds() else 0,
-                                ]
-                            )
-                            # check the _transition_info has data beyond idx else
-                            # the timezone has likely stopped 'transitioning'
-                            if idx < len(tz_pytz._transition_info):  # type: ignore
-                                _transition_info = tz_pytz._transition_info[idx]  # type: ignore
-                                timerules.append(
-                                    [
-                                        int(tz_pytz._utc_transition_times[idx].timestamp()),  # type: ignore
-                                        int(_transition_info[0].total_seconds()),
-                                        1 if _transition_info[1].total_seconds() else 0,
-                                    ]
-                                )
-                            return timerules
-                        elif isinstance(tz_pytz, pytz.tzinfo.StaticTzInfo):
-                            utcoffset = tz_pytz.utcoffset(None)
-                            utcoffset = utcoffset.seconds if utcoffset else 0
-                            return [[timestamp, utcoffset, 0]]
-
-                    except Exception as exception:
-                        self.log_exception(
-                            self.WARNING,
-                            exception,
-                            "using pytz to build timezone(%s) ",
-                            tzname,
-                            timeout=14400,
-                        )
-
-                    # if pytz fails we'll fall-back to some euristics
-                    device_datetime = datetime_from_epoch(timestamp, tz)
-                    utcoffset = tz.utcoffset(device_datetime)
-                    utcoffset = utcoffset.seconds if utcoffset else 0
-                    return [[timestamp, utcoffset, 1 if tz.dst(device_datetime) else 0]]
-
-                timerules = await self.api.hass.async_add_executor_job(_build_timerules)
-
-            except Exception as exception:
-                self.log_exception(
-                    self.WARNING,
-                    exception,
-                    "building timezone(%s) info for %s",
-                    tzname,
-                    mn.Appliance_System_Time,
-                )
-                timerules = [
-                    [0, 0, 0],
-                    [timestamp + mlc.PARAM_TIMEZONE_CHECK_OK_PERIOD, 0, 1],
-                ]
-
-            p_time = {
-                mc.KEY_TIMEZONE: tzname,
-                mc.KEY_TIMERULE: timerules,
-            }
         else:
-            p_time = {
-                mc.KEY_TIMEZONE: "",
-                mc.KEY_TIMERULE: [],
-            }
+            # only apply the timezone rules check/fix procedure when locally mqtt binded
+            if (
+                (mqtt := self.mqtt)
+                and mqtt.connection.can_publish  # online and allow_publish
+                and (not mqtt.connection.is_cloud)
+                and (mn.Appliance_System_Time in self.descriptor.ability)
+            ):
+                with self.exception_warning("check_device_timerules"):
+                    if self._check_device_timerules():
+                        # timezone trans not good..fix and check again soon
+                        self.create_task(
+                            self.async_configure_timezone(self.descriptor.timezone),
+                            ".check_device_time",
+                            eager_start=True,
+                        )
+        # Verifies the device timezone has the same utc offset as HA local timezone.
+        # This is expecially sensible when the device has 'Consumption' or
+        # schedules (calendar entities) in order to align device local time to
+        # what is expected in HA.
+        ha_now = dt_util.now()
+        if ha_now.utcoffset() == ha_now.astimezone(self.tz).utcoffset():
+            self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
+        else:
+            self.create_issue(
+                mlc.ISSUE_DEVICE_TIMEZONE,
+                severity=self.IssueSeverity.WARNING,
+                translation_placeholders={"device_name": self.display_name},
+            )
 
-        await self.async_request(*mn.Appliance_System_Time.request_set(p_time))
-        self.descriptor.update_time(p_time)
-        self.schedule_entry_update(False)
-        self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
+        self._check_device_time_unsub = self.schedule_callback(
+            self.PARAM_CHECK_DEVICE_TIME_REPEAT_DELAY, self._check_device_time
+        )
+
+    @override
+    def enable_check_device_time(self, /):
+        """Public method to trigger the device time check procedure. If already in place, it will be restarted."""
+        try:
+            if self._check_device_time_unsub:
+                self._check_device_time_unsub.cancel()
+        except AttributeError:
+            pass
+        self._check_device_time_unsub = (
+            self.schedule_callback(
+                self.PARAM_CHECK_DEVICE_TIME_START_DELAY, self._check_device_time
+            )
+            if self.is_connected
+            else None
+        )
 
     def _process_uuid_mismatch(
         self, response_uuid: str, payload_all: "MerossPayloadType | None"

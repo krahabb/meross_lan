@@ -1442,7 +1442,7 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                     and device
                     and (timezone != descriptor_update.timezone)
                 ):
-                    await device.async_config_device_timezone(timezone)
+                    await device.async_configure_timezone(timezone)
 
                 # cleanup keys which might wrongly have been persisted
                 device_config.pop(mlc.CONF_CLOUD_KEY, None)

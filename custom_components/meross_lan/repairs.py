@@ -43,7 +43,7 @@ class DeviceTimeZoneRepairFlow(SimpleRepairFlow):
             )
             try:
                 device: "Device" = getattr(config_entry, "runtime_data")
-                await device.async_config_device_timezone(
+                await device.async_configure_timezone(
                     getattr(dt_util.DEFAULT_TIME_ZONE, "key")
                 )
                 return self.async_create_entry(data={})

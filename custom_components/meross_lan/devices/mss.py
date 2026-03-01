@@ -110,6 +110,9 @@ class ElectricitySensor(MLNumericSensor):
         self.sensor_power = manager.entities[
             mc.KEY_POWER if channel is None else f"{channel}_{mc.KEY_POWER}"
         ]  # type: ignore
+        # We enable the internal device time checks since the device could report
+        # 0 power readings when not able to sync time and/or correctly configured
+        manager.enable_check_device_time()
 
     async def async_shutdown(self):
         if self._reset_unsub:
@@ -174,6 +177,8 @@ class ElectricitySensor(MLNumericSensor):
         power = self.sensor_power.native_value
         # device.device_timestamp 'should be' current epoch of the message
         try:
+            # TODO: add a check for 'excessive' timestamp diff and maybe log a
+            # warning about possible device time issues (since this is critical for the estimate reliability)
             de = (
                 (last_power + power)  # type: ignore
                 * (device.device_timestamp - self._electricity_lastepoch)
@@ -186,13 +191,7 @@ class ElectricitySensor(MLNumericSensor):
             self.update_native_value(int(self._estimate))
         except TypeError:
             # This is only expected when either last_power or power is None.
-            # It should happen once after onlining or when the device
-            # is not providing power readings for some reason.
-            if not power:
-                # might be an indication of issue #367 where the problem lies in missing
-                # device timezone configuration. This check is mostly about (power == 0)
-                # i.e. a formally good reading but likely indication of misbehaving device
-                device.check_device_timezone()
+            # It should happen once after onlining.
             if (last_power is not None) and (power is not None):
                 raise
 
@@ -379,6 +378,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         NamespaceHandler.__init__(self, device, ns)
         self.register_entity_class(ConsumptionHSensor, device.descriptor.channels)
         self.polling_strategy = ConsumptionHNamespaceHandler.async_poll_probe  # type: ignore
+        device.enable_check_device_time()
 
     @override
     def polling_request_add_channel(
@@ -503,6 +503,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
             sensor_energy_estimate.sensor_consumptionx = self
         self.extra_state_attributes = {}
         super().__init__(channel, manager)
+        manager.enable_check_device_time()
 
     # interface: MLEntity
     def set_unavailable(self):
@@ -569,7 +570,6 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
     def _handle(self, message: "MerossMessage", /):
         device = self.manager
         days = message.payload[mc.KEY_CONSUMPTIONX]
-
         if device.device_timestamp > self._tomorrow_midnight_epoch:
             # we're optimizing the payload response_size calculation
             # so our multiple requests are more reliable. If anything
