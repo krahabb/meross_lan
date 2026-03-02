@@ -99,7 +99,7 @@ def digest_init_toggle(
     device: "Device", digest: "JsonDict", /
 ) -> "Device.DigestInitReturnType":
     """{"onoff": 0, "lmTime": 1645391086}"""
-    toggle = MLToggle.namespace_init(device, mn.Appliance_Control_Toggle)
+    toggle = MLToggle.namespace_init(mn.Appliance_Control_Toggle, device)
     return toggle._parse, (toggle.handler_ns,)
 
 
@@ -155,5 +155,5 @@ def digest_init_togglex(
     handler = device.get_handler(mn.Appliance_Control_ToggleX)
     handler.register_entity_class(MLToggleX, channels)
     if device.descriptor.is_refoss:
-        handler.polling_request = mn.PayloadType.DICT_IDX_65535.build_get(handler.ns)
+        handler.polling_request = mn.PayloadType.DICT_IDX_65535.build_get(handler.id)
     return handler.parse_list, (handler,)

@@ -124,10 +124,10 @@ class HubNamespaceHandler(NamespaceHandler):
     relevant subdevice instance.
     """
 
-    device: "HubMixin"
+    parent: "HubMixin"  # type: ignore[override]
 
-    def __init__(self, device, ns, /):
-        NamespaceHandler.__init__(self, device, ns, handler=self._handle_list)
+    def __init__(self, ns: "Namespace", device: "HubMixin", /):
+        NamespaceHandler.__init__(self, ns, device, handler=self._handle_list)
 
     def _handle_list(self, message: "MerossMessage"):
         """Generalized Hub namespace dispatcher to subdevices.
@@ -135,10 +135,10 @@ class HubNamespaceHandler(NamespaceHandler):
         the base NamespaceHandler implementation where possible.
         Migration will be done ns by ns so we'll have some ns with 'parsers'
         while some other will still work through this generalized handler."""
-        hub = self.device
+        hub = self.parent
         subdevices_parsed = set()
-        key_idx = self.ns.key_idx
-        for payload in message.payload[self.ns.key]:
+        key_idx = self.id.key_idx
+        for payload in message.payload[self.id.key]:
             try:
                 subdevice_id = payload[key_idx]
                 if subdevice_id in subdevices_parsed:
@@ -158,7 +158,7 @@ class HubNamespaceHandler(NamespaceHandler):
                     def _unknown_ns_parse(_payload):
                         subdevice._unknown_ns_parse(self, _payload)
 
-                    setattr(subdevice, f"_parse_{self.ns.slug_end}", _unknown_ns_parse)
+                    setattr(subdevice, f"_parse_{self.id.slug_end}", _unknown_ns_parse)
                     self.register_parser(subdevice)
                     subdevice._unknown_ns_parse(self, payload)
                 else:
@@ -218,7 +218,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
             # Newer devices (2024) started using namespaces/payload indexed by 'subid'
             # and 'channel'. These will be handled by the base class NamespaceHandler
             # using SubDevice/Entity as NamespaceParser.
-            return HubNamespaceHandler(self, ns)
+            return HubNamespaceHandler(ns, self)
         else:
             return super()._create_handler(ns)
 
@@ -561,12 +561,12 @@ class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
             # implementation in helpers/namespaces.py where both values are concatenated.
             # Using ns.key should be more consistent with how the Hub subdevices
             # usually report their payloads in *.All and *.Digest.
-            self.parse_undefined_dict(nh.ns.key, payload, self.id)
+            self.parse_undefined_dict(nh.id.key, payload, self.id)
         else:
             self.log(
                 self.DEBUG,
                 "Handler undefined for namespace:%s payload:%s",
-                nh.ns,
+                nh.id,
                 _payload=payload,
                 timeout=14400,
             )
@@ -1176,8 +1176,8 @@ def digest_init_hub(
     ability = device.descriptor.ability
     if mn_h.Appliance_Digest_Hub in ability:
         NamespaceHandler(
-            device,
             mn_h.Appliance_Digest_Hub,
+            device,
             handler=lambda message: digest_parse_hub(message.payload[mc.KEY_HUB]),
         )
     for ns in (
@@ -1185,7 +1185,7 @@ def digest_init_hub(
         mn_h.Appliance_Hub_SubdeviceList,
     ):
         if ns in ability:
-            VoidNamespaceHandler(device, ns)
+            VoidNamespaceHandler(ns, device)
 
     return digest_parse_hub, ()
 

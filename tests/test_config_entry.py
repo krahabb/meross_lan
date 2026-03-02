@@ -78,12 +78,12 @@ async def test_device_entry(request, hass: "HomeAssistant"):
             # try to ensure some 'formal' consistency in ns configuration
             for handler in device.ns_handlers.values():
                 assert (
-                    handler.ns in ability
-                ), f"Namespace {handler.ns} has no ability declared"
+                    handler.id in ability
+                ), f"Namespace {handler.id} has no ability declared"
                 assert (
-                    handler.ns.payload_get is not mn.PayloadType.LIST_IDX_STRICT
+                    handler.id.payload_get is not mn.PayloadType.LIST_IDX_STRICT
                 ) or handler.polling_request_channels, (
-                    f"Incorrect config for {handler.ns} namespace"
+                    f"Incorrect config for {handler.id} namespace"
                 )
 
 

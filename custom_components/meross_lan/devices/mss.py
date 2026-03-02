@@ -225,12 +225,10 @@ class ElectricitySensor(MLNumericSensor):
         self._schedule_reset(_now)
 
 
-def namespace_init_electricity(
-    device: "Device", ns=mn.Appliance_Control_Electricity, /
-):
+def namespace_init_electricity(ns: mn.Namespace, device: "Device", /):
     NamespaceHandler(
-        device,
         ns,
+        device,
         handler=ElectricitySensor(None, device)._handle_Appliance_Control_Electricity,
     )
 
@@ -373,9 +371,9 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
 
     __slots__ = ("_channels_to_poll",)
 
-    def __init__(self, device: "Device", ns=mn.Appliance_Control_ConsumptionH, /):
+    def __init__(self, ns: "mn.Namespace", device: "Device", /):
         self._channels_to_poll = []
-        NamespaceHandler.__init__(self, device, ns)
+        NamespaceHandler.__init__(self, ns, device)
         self.register_entity_class(ConsumptionHSensor, device.descriptor.channels)
         self.polling_strategy = ConsumptionHNamespaceHandler.async_poll_probe  # type: ignore
         device.enable_check_device_time()
@@ -392,7 +390,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         # assert not already present ?
         insort_right(
             self._channels_to_poll,
-            (self.device.polling_epoch + delay, channel),
+            (self.parent.polling_epoch + delay, channel),
             key=lambda ctp: ctp[0],
         )
 
@@ -409,11 +407,11 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         channels_to_poll = self._channels_to_poll
         for i in range(len(channels_to_poll)):
             if channels_to_poll[i][1] == channel:
-                if channels_to_poll[i][0] > self.device.polling_epoch:
+                if channels_to_poll[i][0] > self.parent.polling_epoch:
                     del channels_to_poll[i]
                     insort_right(
                         channels_to_poll,
-                        (self.device.polling_epoch, channel),
+                        (self.parent.polling_epoch, channel),
                         key=lambda ctp: ctp[0],
                     )
                 return
@@ -426,11 +424,11 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         if not self._channels_to_poll:
             return
         self.polling_response_size = (
-            self.HEADER_AVG_SIZE + 3 * self.ns.payload_item_size
+            self.HEADER_AVG_SIZE + 3 * self.id.payload_item_size
         )
-        await self.device.async_poll_request(self)
+        await self.parent.async_poll_request(self)
         self.polling_request_channels.append({})
-        self.polling_response_size = self.HEADER_AVG_SIZE + self.ns.payload_item_size
+        self.polling_response_size = self.HEADER_AVG_SIZE + self.id.payload_item_size
         self.polling_strategy = ConsumptionHNamespaceHandler.async_poll_smartchunk  # type: ignore
 
     async def async_poll_smartchunk(self):
@@ -439,8 +437,8 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         if not self._channels_to_poll:
             return
         _poll_epoch, channel = self._channels_to_poll[0]
-        self.polling_request_channels[0][self.ns.key_idx] = channel
-        device = self.device
+        self.polling_request_channels[0][self.id.key_idx] = channel
+        device = self.parent
         epoch = device.polling_epoch
         if _poll_epoch > epoch:
             # Insert into the lazypoll_requests ordering by least recently polled

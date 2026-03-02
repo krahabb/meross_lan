@@ -641,8 +641,8 @@ class MLLightEffect(MLLight):
         self._light_effect_list: list[dict] = []
         MLLight.__init__(self, channel, manager, [])
         self.handler_light_effect = NamespaceHandler(
-            manager,
             mn.Appliance_Control_Light_Effect,
+            manager,
             handler=self._handle_Appliance_Control_Light_Effect,
         )
         if manager.descriptor.type.startswith(mc.TYPE_MSL320_PRO):

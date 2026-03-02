@@ -150,7 +150,7 @@ def digest_init_fan(
     return handler.parse_list, (handler,)
 
 
-def namespace_init_fan(device: "Device", ns=mn.Appliance_Control_Fan, /):
+def namespace_init_fan(ns: mn.Namespace, device: "Device", /):
     """Special care for NS_FAN since it might have been initialized in digest_init"""
     if mc.KEY_FAN not in device.descriptor.digest:
         # actually only map100 (so far)

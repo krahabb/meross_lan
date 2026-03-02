@@ -39,11 +39,11 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
         mc.KEY_LIGHT: MLLightSensor.ENTITY_DEF(),  # just guessed (2024/09)
     }
 
-    def __init__(self, device: "Device", ns=mn.Appliance_Control_Sensor_Latest, /):
+    def __init__(self, ns: mn.Namespace, device: "Device", /):
         NamespaceHandler.__init__(
             self,
-            device,
             ns,
+            device,
             handler=self._handle_Appliance_Control_Sensor_Latest,
         )
         self.polling_request_add_channel(0)
@@ -60,7 +60,7 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
             ]
         }
         """
-        entities = self.device.entities
+        entities = self.parent.entities
         for p_channel in message.payload[mc.KEY_LATEST]:
             channel = p_channel[mc.KEY_CHANNEL]
             for p_value in p_channel[mc.KEY_VALUE]:
@@ -76,12 +76,12 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                             entity_def = SensorLatestNamespaceHandler.ENTITY_DEFS[key]
                         except KeyError:
                             entity = MLNumericSensor(
-                                channel, self.device, entity_key=f"sensor_{key}"
+                                channel, self.parent, entity_key=f"sensor_{key}"
                             )
                         else:
                             entity = entity_def.type(
                                 channel,
-                                self.device,
+                                self.parent,
                                 entity_key=f"sensor_{key}",
                                 **entity_def.kwargs,
                             )
@@ -116,11 +116,11 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
 
     __slots__ = ()
 
-    def __init__(self, device: "Device", ns=mn.Appliance_Control_Sensor_LatestX, /):
+    def __init__(self, ns: mn.Namespace, device: "Device", /):
         NamespaceHandler.__init__(
             self,
-            device,
             ns,
+            device,
             handler=self._handle_Appliance_Control_Sensor_LatestX,
         )
         if device.descriptor.type.startswith(mc.TYPE_MS600):
@@ -133,9 +133,9 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
             self.polling_request_add_channel(0, {mc.KEY_DATA: []})
 
     def _handle_Appliance_Control_Sensor_LatestX(self, message: "MerossMessage", /):
-        ns = self.ns
+        ns = self.id
         key_idx = ns.key_idx
-        entities = self.device.entities
+        entities = self.parent.entities
         p_channel: "mt_s.LatestXResponse_C"
         for p_channel in message.payload[ns.key]:
             channel: int = p_channel[key_idx]
@@ -148,12 +148,12 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
                         entity_def = SensorLatestXNamespaceHandler.ENTITY_DEFS[data_key]
                     except KeyError:
                         entity = MLNumericSensor(
-                            channel, self.device, entity_key=f"sensor_{data_key}"
+                            channel, self.parent, entity_key=f"sensor_{data_key}"
                         )
                     else:
                         entity = entity_def.type(
                             channel,
-                            self.device,
+                            self.parent,
                             entity_key=f"sensor_{data_key}",
                             **entity_def.kwargs,
                         )
@@ -169,16 +169,13 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
                         )
                         self.polling_response_size = (
                             self.HEADER_AVG_SIZE
-                            + len(polling_request_channels)
-                            * ns.payload_item_size
+                            + len(polling_request_channels) * ns.payload_item_size
                         )
                 entity._parse(data_value[0])
 
 
-def namespace_init_sensor_latestx(
-    device: "Device", ns=mn.Appliance_Control_Sensor_LatestX, /
-):
+def namespace_init_sensor_latestx(ns: mn.Namespace, device: "Device", /):
     # Hub(s) have a different ns handler so far
     # TODO: try to reconcile in a single handler
     if not device.descriptor.is_hub:
-        SensorLatestXNamespaceHandler(device, ns)
+        SensorLatestXNamespaceHandler(ns, device)

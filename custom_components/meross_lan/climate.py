@@ -24,7 +24,6 @@ if TYPE_CHECKING:
 
     from .helpers.device import BaseDevice, Device
     from .helpers.entity import ChannelType
-    from .helpers.namespaces import NamespaceHandler
 
 
 async def async_setup_entry(
@@ -599,7 +598,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
             # we'll speed up polling for the adjust/calibration ns
             try:
                 handler = self.handler_adjust
-                if handler.polling_epoch_next > (handler.device.last_rx_epoch + 30):
+                if handler.polling_epoch_next > (handler.parent.last_rx_epoch + 30):
                     handler.polling_epoch_next = 0.0
             except:
                 # in case the ns is not available for this device

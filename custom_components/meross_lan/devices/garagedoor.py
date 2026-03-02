@@ -561,8 +561,8 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
         self.number_doorCloseDuration = None  # type: ignore
         NamespaceHandler.__init__(
             self,
-            device,
             mn.Appliance_GarageDoor_Config,
+            device,
             handler=self._handle_Appliance_GarageDoor_Config,
         )
 
@@ -577,7 +577,7 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
             except AttributeError:
                 self.number_signalDuration = MLGarageConfigNumber(
                     None,
-                    self.device,
+                    self.parent,
                     mc.KEY_SIGNALDURATION,
                     device_value=payload[mc.KEY_SIGNALDURATION],
                 )
@@ -592,7 +592,7 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
             except AttributeError:
                 self.switch_buzzerEnable = MLGarageConfigSwitch(
                     None,
-                    self.device,
+                    self.parent,
                     mc.KEY_BUZZERENABLE,
                     device_value=payload[mc.KEY_BUZZERENABLE],
                 )
@@ -608,14 +608,14 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
             except AttributeError:
                 self.number_doorOpenDuration = MLGarageConfigNumber(
                     None,
-                    self.device,
+                    self.parent,
                     mc.KEY_DOOROPENDURATION,
                     device_value=payload[mc.KEY_DOOROPENDURATION],
                 )
         else:
             # no config for KEY_DOOROPENDURATION: we'll let every channel manage it's own
             if not self.number_doorOpenDuration:  # use as a guard...
-                device = self.device
+                device = self.parent
                 for channel_digest in device.descriptor.digest[mc.KEY_GARAGEDOOR]:
                     garage: MLGarage = device.entities[channel_digest[mc.KEY_CHANNEL]]  # type: ignore
                     # in case MULTIPLECONFIG is supported this code does nothing
@@ -637,14 +637,14 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
             except AttributeError:
                 self.number_doorCloseDuration = MLGarageConfigNumber(
                     None,
-                    self.device,
+                    self.parent,
                     mc.KEY_DOORCLOSEDURATION,
                     device_value=payload[mc.KEY_DOORCLOSEDURATION],
                 )
         else:
             # no config for KEY_DOORCLOSEDURATION: we'll let every channel manage it's own
             if not self.number_doorCloseDuration:  # use as a guard...
-                device = self.device
+                device = self.parent
                 for channel_digest in device.descriptor.digest[mc.KEY_GARAGEDOOR]:
                     garage: MLGarage = device.entities[channel_digest[mc.KEY_CHANNEL]]  # type: ignore
                     # in case MULTIPLECONFIG is supported this code does nothing
@@ -662,7 +662,7 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
 class GarageDoorStateNamespaceHandler(NamespaceHandler):
 
     def __init__(self, device: "Device", /):
-        NamespaceHandler.__init__(self, device, mn.Appliance_GarageDoor_State)
+        NamespaceHandler.__init__(self, mn.Appliance_GarageDoor_State, device)
         descriptor = device.descriptor
         if descriptor.type.startswith(mc.TYPE_MSG200) and (
             descriptor.firmware_version <= (4, 2, 1)

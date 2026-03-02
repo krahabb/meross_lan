@@ -35,13 +35,11 @@ if TYPE_CHECKING:
     )
 
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
     from homeassistant.helpers.device_registry import DeviceEntry
 
     from ..merossclient.protocol.types import JsonDict, JsonMapping, PayloadIndexType
     from .device import BaseDevice, Device, MerossResponse
     from .manager import ConfigEntryManager, EntityManager
-    from .namespaces import NamespaceHandler
 
     type ChannelType = PayloadIndexType
 
@@ -391,12 +389,12 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         return _ha_action
 
     @classmethod
-    def namespace_init(cls, device: "Device", ns: mn.Namespace, /):
+    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
         """Helper to register a specialized entity class to the proper namespace.
         This is going to be used on Device initialization fo various entities sharing
         common semantics in namespace parsing/handling."""
         assert ns is cls.ns
-        NamespaceHandler(device, ns).register_entity_class(cls, cls.NS_CHANNELS)
+        NamespaceHandler(ns, device).register_entity_class(cls, cls.NS_CHANNELS)
 
     class EntityDef[_T: MLEntity]:
         """Descriptor class used when populating maps used to dynamically instantiate (sensor)

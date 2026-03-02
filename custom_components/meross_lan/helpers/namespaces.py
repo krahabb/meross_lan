@@ -33,8 +33,7 @@ class NamespaceHandler(handler.NamespaceHandler):
     """
 
     if TYPE_CHECKING:
-
-        device: Device
+        parent: Final[Device]  # type: ignore[override]
         entity_class: type["MLEntity"] | None
 
     DEFAULT_CONFIG = (
@@ -47,16 +46,16 @@ class NamespaceHandler(handler.NamespaceHandler):
 
     def __init__(
         self,
-        device: "Device",
         ns: "mn.Namespace",
+        device: "Device",
         /,
         *,
         handler: "NamespaceHandler.HandlerFunc | None" = None,
         config: "NamespaceHandler.ConfigType | None" = None,
     ):
         super().__init__(
-            device,
             ns,
+            device,
             handler=handler,
             config=config or POLLING_STRATEGY_CONF.get(ns, self.DEFAULT_CONFIG),
         )
@@ -68,19 +67,19 @@ class NamespaceHandler(handler.NamespaceHandler):
         # TODO: rename to parser_class and move to base
         self.entity_class = entity_class
         self.handler = self._handle_list
-        self.device.platforms.setdefault(entity_class.PLATFORM)
+        self.parent.platforms.setdefault(entity_class.PLATFORM)
         for channel in (
-            self.device.descriptor.channels if channels is None else channels
+            self.parent.descriptor.channels if channels is None else channels
         ):
-            entity_class(channel, self.device)
+            entity_class(channel, self.parent)
 
     @override
     def _handle_undefined(self, message: "MerossMessage", /):
-        device = self.device
+        device = self.parent
         if device.create_diagnostic_entities:
             # since we're parsing an unknown namespace, our euristic about
             # the key_namespace might be wrong so we use another euristic
-            ns = self.ns
+            ns = self.id
             if not self.polling_strategy:
                 self.polling_strategy = NamespaceHandler.async_poll_diagnostic
             for _key, _payload in message.payload.items():
@@ -106,20 +105,20 @@ class NamespaceHandler(handler.NamespaceHandler):
 
     @override
     def _handle_missing_parser(self, p_channel: dict, ke: KeyError, /):
-        channel = p_channel[self.ns.key_idx]
+        channel = p_channel[self.id.key_idx]
         if channel in self.parsers:
             self.log_parser_exception(ke, p_channel)
             return
 
         if self.entity_class:
             self.entity_class(
-                channel, self.device, entity_registry_enabled_default=True
+                channel, self.parent, entity_registry_enabled_default=True
             )
-        elif self.device.create_diagnostic_entities:
+        elif self.parent.create_diagnostic_entities:
             from ..sensor import MLDiagnosticSensor
 
             self.register_parser(
-                MLDiagnosticSensor(channel, self.device, entity_key=self.ns.key)
+                MLDiagnosticSensor(channel, self.parent, entity_key=self.id.key)
             )
         else:
             self.parsers[channel] = self._parse_stub
@@ -138,10 +137,10 @@ class EntityNamespaceMixin(MLEntity if TYPE_CHECKING else object):
         manager: Device
 
     @classmethod
-    def namespace_init(cls, device: "Device", ns: mn.Namespace, /):
+    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
         assert ns is cls.ns
         entity = cls(None, device)
-        entity.handler_ns = NamespaceHandler(device, ns, handler=entity._handle)
+        entity.handler_ns = NamespaceHandler(ns, device, handler=entity._handle)
         entity.handler_ns.polling_strategy = None
         return entity
 

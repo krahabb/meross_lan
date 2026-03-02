@@ -12,7 +12,6 @@ from homeassistant.util import dt as dt_util
 from . import manager as mlm
 from .. import const as mlc
 from ..button import MLPersistentButton
-
 from ..merossclient import (
     DeviceDescriptor,
     datetime_from_epoch,
@@ -459,8 +458,8 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         self._trace_ability_callback_unsub = None
 
         NamespaceHandler(
-            self,
             mn.Appliance_System_All,
+            self,
             config=(
                 self.HEARTBEAT_TIMEOUT,
                 0,
@@ -800,7 +799,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             if self.is_connected and not self._polling_task:
                 while not (ns_handler := self._trace_ability_next(abilities)):
                     continue
-                self.log(self.DEBUG, "Tracing %s ability", ns_handler.ns)
+                self.log(self.DEBUG, "Tracing %s ability", ns_handler.id)
                 await ns_handler.async_trace(self.async_request)
         except StopIteration:
             self.log(self.DEBUG, "Tracing abilities end")
@@ -908,7 +907,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                 "mqtt_active": self.mqtt_active,
             },
             "namespace_handlers": {
-                handler.ns: {
+                handler.id: {
                     "last_poll_epoch": handler.last_poll_epoch,
                     "last_rx_epoch": handler.last_rx_epoch,
                     "lastpush": (
@@ -1253,7 +1252,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         """Called by the base device message parsing chain when a new
         NamespaceHandler need to be defined (This happens the first time
         the namespace enters the message handling flow)"""
-        return NamespaceHandler(self, ns)
+        return NamespaceHandler(ns, self)
 
     def _handle_Appliance_Mcu_Firmware(self, message: MerossMessage, /):
         self.descriptor.mcu = message.payload[mc.KEY_FIRMWARE]

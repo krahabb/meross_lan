@@ -57,11 +57,11 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
         "number_brightness_standby",
     )
 
-    def __init__(self, device: "Device", ns=mn.Appliance_Control_Screen_Brightness, /):
+    def __init__(self, ns: "mn.Namespace", device: "Device", /):
         NamespaceHandler.__init__(
             self,
-            device,
             ns,
+            device,
             handler=self._handle_Appliance_Control_Screen_Brightness,
         )
         self.polling_request_add_channel(0)

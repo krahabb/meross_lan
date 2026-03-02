@@ -1,10 +1,10 @@
 from bisect import insort_right
-from functools import cached_property
 from typing import TYPE_CHECKING, override
 
 from .. import logging, merge_dicts
 from ..protocol import const as mc, namespaces as mn
 from ..protocol.message import MerossMessage
+from .parser import NamespaceParser
 
 if TYPE_CHECKING:
     from typing import (
@@ -34,110 +34,7 @@ if TYPE_CHECKING:
     )
 
 
-class NamespaceParser(logging.Loggable):
-    """
-    Represents the final 'parser' of a message after 'handling' in NamespaceHandler.
-    In this model, NamespaceHandler is responsible for unpacking those messages
-    who are intended to be delivered to different entities based off some indexing
-    keys. These are typically: "channel", "Id", "subId" depending on the namespace itself.
-    The class implementing the NamespaceParser protocol needs to expose that key value as a
-    property with the same name. 99% of the time the class is a MLEntity with its "channel"
-    property but the implementation allows more versatility.
-    The protocol implementation needs to also expose a proper _parse_{key_namespace}
-    (see NamespaceHandler.register_parser).
-    """
-
-    if TYPE_CHECKING:
-        # These properties must be implemented in derived classes according to the
-        # namespace payload syntax. NamespaceHandler will lookup any of these when
-        # establishing the link between the handler and the parser
-        manager: "Device"  # used for async_request and ns_handlers access
-        ns: mn.Namespace  # same (only MLEntity for now)
-        channel: int | str  # the channel/id/subId key value according to the namespace
-
-        _payload_ns: JsonDict  # the last parsed payload
-        _namespace_handlers: set[
-            "NamespaceHandler"
-        ]  # multiple ns could forward to this parser
-
-    # using class-level defaults here until we build a proper hierarchy
-    # with specialized __init__
-    _payload_ns = mn.EMPTY_DICT  # class-level default
-    _namespace_handlers = None  # type: ignore
-
-    __SLOTS__ = ()
-
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        try:
-            for handler in self._namespace_handlers:
-                _dispatcher: NamespaceHandler._DispatcherParser = handler.parsers[self.channel]  # type: ignore
-                if type(_dispatcher) is NamespaceHandler._DispatcherParser:
-                    # remove from dispatcher
-                    _dispatcher.parsers.remove(
-                        getattr(self, f"_parse_{handler.ns.slug_end}", self._parse)
-                    )
-                    if not _dispatcher.parsers:
-                        del handler.parsers[self.channel]
-                else:
-                    del handler.parsers[self.channel]
-            self._namespace_handlers = None  # type: ignore
-            del self.handler_ns
-        except (TypeError, AttributeError):  # never registered
-            pass
-        assert self._namespace_handlers is None
-
-    @cached_property
-    def handler_ns(self):
-        # TODO: define a more consistent interface
-        # This is right now a brutal hack to automagically provide ns_handler property
-        # to entities which might not need to be registered parsers but still need to access
-        # the NamespaceHandler to issue device requests. Most of the times these are entities
-        # where ns parsing is delegated to a container object/handler which is then dispatching
-        # updates without using the NamespaceHandler inner mechanisms.
-        return self.manager.ns_handlers[self.ns]
-
-    async def async_request_payload(self, payload: "JsonDict", /):
-        return await self.manager.async_request(
-            *self.ns.request_set(payload, self.channel)
-        )
-
-    async def async_request_parse(self, payload: "JsonDict", /):
-        response = await self.async_request_payload(payload)
-        # TODO: consider maybe a dedicated _parse_set_xxxx method?
-        # also, most namespaces SETACK replies are empty dicts
-        # so we just dispatch the request payload (which might be a
-        # subset of the whole GET payload).
-        # Some namespaces though might return different payloads on SETACK
-        # GarageDoor.State or mts100.Temperature
-        getattr(self, f"_parse_{self.ns.slug_end}", self._parse)(payload)
-        return response
-
-    async def async_request_parse_ex(self, payload: "JsonDict", /):
-        response = await self.async_request_payload(payload)
-        getattr(self, f"_parse_{self.ns.slug_end}", self._parse)(
-            merge_dicts(dict(self._payload_ns), payload)
-        )
-        return response
-
-    def _parse(self, payload: "JsonMapping", /):
-        """Default payload message parser. This is invoked automatically
-        when the parser is registered to a NamespaceHandler for a given namespace
-        and no 'better' _parse_xxxx has been defined. See NamespaceHandler.register.
-        At this root level, coming here is likely an error but this feature
-        (default parser) is being leveraged to setup a default parsing route for some
-        specific class of entities instead of having to define a specific _parse_xxxx.
-        This is useful for generalized sensor classes which are just mapped to a single
-        namespace."""
-        self.log(
-            self.WARNING,
-            "Parsing undefined for payload:(%s)",
-            _payload=payload,
-            timeout=14400,
-        )
-
-
-class NamespaceHandler:
+class NamespaceHandler(logging.Loggable):
     """
     This is the root class for somewhat dynamic namespace handlers.
     Every device keeps its own list of method handlers indexed through
@@ -155,7 +52,6 @@ class NamespaceHandler:
     """
 
     if TYPE_CHECKING:
-
         type HandlerFunc = Callable[[MerossMessage], None]
         type ParserFunc = Callable[[JsonMapping], None]
         type PollingStrategyFunc = Callable[[Self], Coroutine]
@@ -164,6 +60,9 @@ class NamespaceHandler:
         DEFAULT_CONFIG: ClassVar[ConfigType]
         HEADER_AVG_SIZE: Final[int]
         """(rough) estimate of the header part of any response"""
+
+        parent: Final["Device"]  # type: ignore[override]
+        id: Final[mn.Namespace]  # type: ignore[override]
 
         parsers: Final[dict[object, ParserFunc]]
         handler: HandlerFunc
@@ -175,34 +74,6 @@ class NamespaceHandler:
         last_rx_push: JsonDict | None
         # TODO: implement caching of all methods responses
 
-    class _DispatcherParser:
-        """Small helper class to implement dispatching the same payload to
-        multiple registered NamespaceParsers.
-        By default (and historically), only a single parser is registered to
-        receive a (channel) payload when dispatching message data for a namespace.
-        When needed though, we might want to dispatch the same payload to multiple
-        Parsers/Entities. This is typically needed when we have multiple data field in a payload
-        each one binded or needed to be forwarded to a different entity.
-        The single parser model overcomes this by installing a parser that subsequently
-        dispatches the data to the multiple entities. This helper class simplifies
-        and generalizes this pattern by automatically creating the 'dispatcher parser'
-        responsible to deliver data to multiple entities."""
-
-        if TYPE_CHECKING:
-            type ParsersContainer = list["NamespaceHandler.ParserFunc"]
-            parsers: Final[ParsersContainer]
-
-        __slots__ = ("parsers",)
-
-        def __init__(
-            self, parsers: "Iterable[NamespaceHandler.ParserFunc] | None" = None, /
-        ):
-            self.parsers = list(parsers) if parsers is not None else []
-
-        def __call__(self, payload: "JsonMapping", /):
-            for parser in self.parsers:
-                parser(payload)
-
     DEFAULT_CONFIG = (
         0,
         0,
@@ -211,9 +82,7 @@ class NamespaceHandler:
 
     HEADER_AVG_SIZE = 300
 
-    __slots__ = (
-        "device",
-        "ns",
+    __slots__ = logging.Loggable._calc_slots(
         "handler",
         "parsers",
         "last_rx_epoch",
@@ -230,8 +99,8 @@ class NamespaceHandler:
 
     def __init__(
         self,
-        device: "Device",
         ns: "mn.Namespace",
+        device: "Device",
         /,
         *,
         handler: "HandlerFunc | None" = None,
@@ -241,8 +110,7 @@ class NamespaceHandler:
             "Namespace already registered",
             ns,
         )
-        self.device = device
-        self.ns = ns
+        super().__init__(ns, device)
         self.handler = handler or getattr(
             device, f"_handle_{ns.replace('.', '_')}", self._handle_undefined
         )
@@ -266,12 +134,11 @@ class NamespaceHandler:
     def shutdown(self):
         """Cleanup possible circular references."""
         del self.handler  # especially this one
-        del self.device
         assert not self.parsers, "parsers should have been cleared before shutdown"
 
     def register_parser(
         self,
-        parser: "NamespaceParser",
+        parser: NamespaceParser,
         extra: "MerossPayloadType" = mn.EMPTY_DICT,
         /,
     ):
@@ -282,7 +149,7 @@ class NamespaceHandler:
         channel = parser.channel
         assert channel not in self.parsers, "Parser already registered for channel"
         self.parsers[channel] = getattr(
-            parser, f"_parse_{self.ns.slug_end}", parser._parse
+            parser, f"_parse_{self.id.slug_end}", parser._parse
         )
 
         if not parser._namespace_handlers:
@@ -291,15 +158,15 @@ class NamespaceHandler:
         self.polling_request_add_channel(channel, extra)
         self.handler = self._handle_list
 
-    def register_parsers(self, *parsers: "NamespaceParser"):
+    def register_parsers(self, *parsers: NamespaceParser):
         """Registers a whole set of parsers at once for the same channel payload.
         This will automatically install a dispatcher. This feature is useful to avoid having
         to define a dedicated parser class just to dispatch data to multiple entities.
         This will in turn remove the need for references that need to be maintained."""
         channel = parsers[0].channel
         assert channel not in self.parsers, "Parser already registered for channel"
-        self.parsers[channel] = _dispatcher = NamespaceHandler._DispatcherParser()
-        _parser_method_name = f"_parse_{self.ns.slug_end}"
+        self.parsers[channel] = _dispatcher = NamespaceParser.Dispatcher()
+        _parser_method_name = f"_parse_{self.id.slug_end}"
         for parser in parsers:
             assert parser.channel == channel, "All parsers must have the same channel"
             if not parser._namespace_handlers:
@@ -311,13 +178,13 @@ class NamespaceHandler:
         self.polling_request_add_channel(channel)
         self.handler = self._handle_list
 
-    def swap_parsers(self, old: "NamespaceParser", *parsers: "NamespaceParser"):
+    def swap_parsers(self, old: NamespaceParser, *parsers: NamespaceParser):
         if len(parsers) == 1:
             parser = parsers[0]
             assert old.channel == parser.channel, "channel mismatch"
             old._namespace_handlers.remove(self)
             self.parsers[parser.channel] = getattr(
-                parser, f"_parse_{self.ns.slug_end}", parser._parse
+                parser, f"_parse_{self.id.slug_end}", parser._parse
             )
             if not parser._namespace_handlers:
                 parser._namespace_handlers = set()
@@ -325,10 +192,8 @@ class NamespaceHandler:
         else:
             # install a dispatcher
             old._namespace_handlers.remove(self)
-            self.parsers[old.channel] = _dispatcher = (
-                NamespaceHandler._DispatcherParser()
-            )
-            _parser_method_name = f"_parse_{self.ns.slug_end}"
+            self.parsers[old.channel] = _dispatcher = NamespaceParser.Dispatcher()
+            _parser_method_name = f"_parse_{self.id.slug_end}"
             for parser in parsers:
                 assert (
                     parser.channel == old.channel
@@ -347,36 +212,24 @@ class NamespaceHandler:
         """
         # TODO: save all of the last sent/received payloads for a ns_handler
         # for diagnostics (GET/ACK/SET/PUSH/DEL)
-        self.last_rx_epoch = self.device.last_rx_epoch
+        self.last_rx_epoch = self.parent.last_rx_epoch
         self.polling_epoch_next = self.last_rx_epoch + self.polling_period
         try:
             self.handler(response)
         except Exception as exception:
-            self.log_exception(exception, self.handler.__name__, response.payload)
-
-    def log_exception(self, exception: Exception, function_name: str, payload, /):
-        # TODO: migrate to Loggable so we have more flexibility in logging
-        device = self.device
-        device.log_exception(
-            device.WARNING,
-            exception,
-            "%s(%s).%s: payload=%s",
-            self.__class__.__name__,
-            self.ns,
-            function_name,
-            _any=payload,
-            timeout=604800,
-        )
+            self.log_exception(
+                self.WARNING,
+                exception,
+                "handle_response (payload: %s)",
+                _payload=response.payload,
+            )
 
     def log_parser_exception(self, exception: Exception, payload, /):
-        device = self.device
-        device.log_exception(
-            device.WARNING,
+        self.log_exception(
+            self.WARNING,
             exception,
-            "%s(%s).%s: payload=%s",
-            self.__class__.__name__,
-            self.ns,
-            self.parsers[payload[self.ns.key_idx]].__name__,
+            "parser function '%s': payload=%s",
+            self.parsers[payload[self.id.key_idx]].__name__,
             _any=payload,
             timeout=14400,
         )
@@ -393,8 +246,8 @@ class NamespaceHandler:
         for the channel (KeyError) or when the payload is not a list (TypeError).
         These will be managed so that they'll don't recur anymore.
         """
-        key_idx = self.ns.key_idx
-        for p_channel in message.payload[self.ns.key]:
+        key_idx = self.id.key_idx
+        for p_channel in message.payload[self.id.key]:
             try:
                 self.parsers[p_channel[key_idx]](p_channel)
             except KeyError as ke:
@@ -415,11 +268,11 @@ class NamespaceHandler:
         This handler si optimized for dict payloads:
         "payload": { "key_namespace": {"channel":...., ...} }
         """
-        payload = message.payload[self.ns.key]
+        payload = message.payload[self.id.key]
         try:
-            self.parsers[payload[self.ns.key_idx]](payload)
+            self.parsers[payload[self.id.key_idx]](payload)
         except KeyError as ke:
-            if ke.args[0] == self.ns.key_idx:
+            if ke.args[0] == self.id.key_idx:
                 # might be expected for ns with no channels
                 # for example EntityNamespaceMixin
                 self.parsers[None](payload)
@@ -442,19 +295,19 @@ class NamespaceHandler:
         payloads without the "channel" key (see namespace Toggle)
         which will default forwarding to channel == None
         """
-        payload = message.payload[self.ns.key]
+        payload = message.payload[self.id.key]
         if type(payload) is dict:
             try:
-                self.parsers[payload[self.ns.key_idx]](payload)
+                self.parsers[payload[self.id.key_idx]](payload)
             except KeyError as ke:
-                if ke.args[0] == self.ns.key_idx:
+                if ke.args[0] == self.id.key_idx:
                     # might be expected for ns with no channels
                     # for example EntityNamespaceMixin
                     self.parsers[None](payload)
                 else:
                     self._handle_missing_parser(payload, ke)
         else:
-            key_idx = self.ns.key_idx
+            key_idx = self.id.key_idx
             for p_channel in payload:
                 try:
                     self.parsers[p_channel[key_idx]](p_channel)
@@ -463,20 +316,15 @@ class NamespaceHandler:
                 except Exception as e:
                     self.log_parser_exception(e, p_channel)
 
-    def _handle_undefined(self, message: MerossMessage, /):
-        self.device.log(
-            self.device.DEBUG,
-            "Handler undefined for method:%s namespace:%s payload:%s",
-            message.method,
-            message.namespace,
-            _payload=message.payload,
-            timeout=14400,
+    def _handle_undefined(self, msg: MerossMessage, /):
+        self.log(
+            self.DEBUG, "Handler undefined (message:%s)", _message=msg, timeout=14400
         )
 
     def parse_list(self, digest: list, /):
         """twin method for _handle_list (same job - different context).
         Used when parsing digest(s) in NS_ALL"""
-        key_idx = self.ns.key_idx
+        key_idx = self.id.key_idx
         for p_channel in digest:
             try:
                 self.parsers[p_channel[key_idx]](p_channel)
@@ -488,14 +336,12 @@ class NamespaceHandler:
     def parse_dict(self, digest: dict, /):
         """twin method for _handle_dict (same job - different context).
         Used when parsing digest(s) in NS_ALL"""
-        self.parsers[digest[self.ns.key_idx]](digest)
+        self.parsers[digest[self.id.key_idx]](digest)
 
     def _parse_stub(self, payload, /):
-        device = self.device
-        device.log(
-            device.DEBUG,
-            "Parser stub called on namespace:%s payload:%s",
-            self.ns,
+        self.log(
+            self.DEBUG,
+            "Called parser stub (payload: %s)",
             _payload=payload,
             timeout=14400,
         )
@@ -509,7 +355,7 @@ class NamespaceHandler:
         # - no parser registered for this channel -> create parser if possible
         # - KeyError in parser function
         """
-        channel = p_channel[self.ns.key_idx]
+        channel = p_channel[self.id.key_idx]
         if channel in self.parsers:
             self.log_parser_exception(ke, p_channel)
             return
@@ -525,12 +371,12 @@ class NamespaceHandler:
         if channel is None the whole namespace is requested.
         """
         if channels:
-            ns = self.ns
-            response = await self.device.async_request(
+            ns = self.id
+            response = await self.parent.async_request(
                 *ns.payload_get.build_get(ns, *channels)
             )
         else:
-            response = await self.device.async_request(*self.polling_request)
+            response = await self.parent.async_request(*self.polling_request)
 
         self.handle_response(response)
         return response
@@ -545,7 +391,7 @@ class NamespaceHandler:
         try:
             return await self.async_get(*channels)
         except Exception as e:
-            self.log_exception(e, "async_get", None)
+            self.log_exception(self.WARNING, e, "async_get_safe")
 
     def schedule_get(
         self,
@@ -556,8 +402,8 @@ class NamespaceHandler:
         Helper to schedule a straigth query to get the whole namespace payload.
         This shouldnt be used for namespaces that don't support GET.
         """
-        self.device.create_task(
-            self.async_get_safe(*channels), task_name or self.ns, eager_start=True
+        self.parent.create_task(
+            self.async_get_safe(*channels), task_name or self.id, eager_start=True
         )
 
     async def async_set(
@@ -574,8 +420,8 @@ class NamespaceHandler:
         If parser is provided, it will be called back on its _parse method and
         the SET command payload will be automatically set to the parser's channel.
         """
-        ns = self.ns
-        response = await self.device.async_request(
+        ns = self.id
+        response = await self.parent.async_request(
             *ns.request_set(payload, parser.channel if parser else None)
         )
         if parser:
@@ -608,9 +454,9 @@ class NamespaceHandler:
         it would be easy to update it (when invoking NamespaceHandler.handler) in get requests
         and use it when issuing set requests.
         """
-        ns = self.ns
+        ns = self.id
         assert ns.payload_set is mn.PayloadType.LIST_IDX, "Only LIST_C supported here"
-        response = await self.device.async_request(
+        response = await self.parent.async_request(
             *ns.request_set(payload, parser.channel)
         )
         try:
@@ -634,7 +480,7 @@ class NamespaceHandler:
         in async_trace for example) because the polling_request_channels might have
         already been set and this method would override them losing channels.
         """
-        ns = self.ns
+        ns = self.id
         _payload_type = payload_type or ns.payload_get
         if (_payload_type is mn.PayloadType.LIST_IDX_STRICT) or (
             _payload_type is mn.PayloadType.LIST_IDX_DATA_STRICT
@@ -670,7 +516,7 @@ class NamespaceHandler:
         # the ns need it. Also adjusts the estimated polling_response_size.
         try:
             polling_request_channels = self.polling_request_channels
-            key_idx = self.ns.key_idx
+            key_idx = self.id.key_idx
             for channel_payload in polling_request_channels:
                 if channel_payload[key_idx] == channel:
                     break
@@ -690,17 +536,17 @@ class NamespaceHandler:
 
             self.polling_response_size = (
                 self.HEADER_AVG_SIZE
-                + len(polling_request_channels) * self.ns.payload_item_size
+                + len(polling_request_channels) * self.id.payload_item_size
             )
         except AttributeError:
             # polling_request_channels not used for this ns
             self.polling_response_size = (
-                self.HEADER_AVG_SIZE + len(self.parsers) * self.ns.payload_item_size
+                self.HEADER_AVG_SIZE + len(self.parsers) * self.id.payload_item_size
             )
 
     def polling_response_size_adj(self, item_count: int, /):
         self.polling_response_size = (
-            self.HEADER_AVG_SIZE + item_count * self.ns.payload_item_size
+            self.HEADER_AVG_SIZE + item_count * self.id.payload_item_size
         )
 
     def channels_to_poll(self):
@@ -718,7 +564,7 @@ class NamespaceHandler:
         - unless the 'polling_epoch_next' is 0 which means we're re-onlining the device and so
         we like to re-query the full state (even on MQTT)
         """
-        device = self.device
+        device = self.parent
         if not (device.mqtt_active and self.polling_epoch_next):
             await device.async_poll_request(self)
 
@@ -734,7 +580,7 @@ class NamespaceHandler:
         This strategy should also avoid polling when MQTT is active if the namespace
         supports PUSH or we have received at least one PUSH for it (last_rx_push).
         """
-        device = self.device
+        device = self.parent
         """ TODO: re-enable this optimization after testing. It looks like our 'knowledge' of
         PUSHed namespaces is not perfect yet and we're skipping needed polls (#607 #609).
         if (
@@ -762,7 +608,7 @@ class NamespaceHandler:
         same queueing policy as async_poll_smart to don't overwhelm the cloud mqtt
         """
         if not self.polling_epoch_next:
-            await self.device.async_poll_request_smart(self)
+            await self.parent.async_poll_request_smart(self)
 
     async def async_poll_chunked(self):
         """
@@ -774,13 +620,13 @@ class NamespaceHandler:
         whenever the number of registered parsers is small enough to fit into the device
         response buffer in one go and avoid all of this mess.
         """
-        device = self.device
+        device = self.parent
         if device.mqtt_active and (device.polling_epoch < self.polling_epoch_next):
             # this check is the same as async_poll_default where we expect this ns to be
             # PUSHed when on MQTT
             return
 
-        payload_item_size = self.ns.payload_item_size
+        payload_item_size = self.id.payload_item_size
         size_available = device.polling_response_size_available - self.HEADER_AVG_SIZE
         if size_available < payload_item_size:
             if device._multiple_requests:
@@ -789,11 +635,9 @@ class NamespaceHandler:
                     device.polling_response_size_available - self.HEADER_AVG_SIZE
                 )
             else:
-                device.log(
-                    device.WARNING,
-                    "%s(%s).async_poll_chunked: not enough space to add polling request (available:%s, device max:%s)",
-                    self.__class__.__name__,
-                    self.ns,
+                self.log(
+                    self.WARNING,
+                    "async_poll_chunked: not enough space to add polling request (available:%s, device max:%s)",
                     size_available,
                     device.device_response_size_max,
                     timeout=14400,
@@ -814,7 +658,7 @@ class NamespaceHandler:
         while True:
             if size_available > payload_item_size:
                 try:
-                    channels_payload.append({self.ns.key_idx: next(channels)})
+                    channels_payload.append({self.id.key_idx: next(channels)})
                     size_available -= payload_item_size
                     self.polling_response_size += payload_item_size
                     continue
@@ -839,11 +683,9 @@ class NamespaceHandler:
             )
             if size_available < payload_item_size:
                 # This is pathological since we've just flushed everything
-                device.log(
-                    device.WARNING,
-                    "%s(%s).async_poll_chunked: not enough space to add polling request (available:%s, device max:%s)",
-                    self.__class__.__name__,
-                    self.ns,
+                self.log(
+                    self.WARNING,
+                    "async_poll_chunked: not enough space to add polling request (available:%s, device max:%s)",
                     size_available,
                     device.device_response_size_max,
                     timeout=14400,
@@ -864,7 +706,7 @@ class NamespaceHandler:
         equivalent queries for the state carried in digest. (If the device doesn't support
         NS_MULTIPLE, it will likely do more queries though but this is unlikely)
         """
-        device = self.device
+        device = self.parent
         if device.mqtt_active:
             # on MQTT no need for updates since they're being PUSHed
             if not self.polling_epoch_next:
@@ -896,8 +738,8 @@ class NamespaceHandler:
         (period, payload size, etc) has been defaulted in self.__init__ when the definition
         for the namespace polling has not been found in POLLING_STRATEGY_CONF
         """
-        device = self.device
-        if device.mqtt_active and self.polling_epoch_next and self.ns.has_psh:
+        device = self.parent
+        if device.mqtt_active and self.polling_epoch_next and self.id.has_psh:
             # on MQTT no need for updates since they're being PUSHed
             return
 
@@ -916,7 +758,7 @@ class NamespaceHandler:
         the 'field' but that might likely be too much for many of these namespaces.
         """
 
-        ns = self.ns
+        ns = self.id
 
         async def _async_wrapped_get(payload: "JsonDict"):
             try:
@@ -981,7 +823,7 @@ class NamespaceHandler:
                 await _async_wrapped_push()
                 await _async_wrapped_get({})
 
-                channels = self.parsers.keys() or self.device.descriptor.channels
+                channels = self.parsers.keys() or self.parent.descriptor.channels
 
                 channels_count = len(channels)
                 channels_payload = [{ns_key_index: channel} for channel in channels]
@@ -1065,7 +907,7 @@ class NamespaceHandler:
                     if response_payload or (type(response_payload) is not list):
                         return
                     # the namespace might need a channel index in the request
-                    subdevices = self.device.descriptor.subdevices
+                    subdevices = self.parent.descriptor.subdevices
                     if subdevices is None:  # it is not a hub
                         await _async_wrapped_get({ns_key: [{mc.KEY_CHANNEL: 0}]})
                     else:  # it is an hub

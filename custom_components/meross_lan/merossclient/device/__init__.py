@@ -118,7 +118,7 @@ class Device(PhysicalDevice):
         type DigestParseFunc = Callable[[JsonDict], None] | Callable[[JsonList], None]
         type DigestInitReturnType = tuple[DigestParseFunc, Iterable[NamespaceHandler]]
         type DigestInitFunc = Callable[[Device, Any], DigestInitReturnType]
-        type NamespaceInitFunc = Callable[[Device, mn.Namespace], None]
+        type NamespaceInitFunc = Callable[[mn.Namespace, Device], None]
 
         class Args(AbstractClient.Args):
             descriptor: NotRequired[DeviceDescriptor]
@@ -218,7 +218,7 @@ class Device(PhysicalDevice):
         return Device.digest_parse_empty, ()
 
     @staticmethod
-    def namespace_init_empty(device: "Device", namespace: mn.Namespace):
+    def namespace_init_empty(ns: mn.Namespace, device: "Device", /):
         pass
 
     DIGEST_INIT_PACKAGE = (
@@ -345,15 +345,16 @@ class Device(PhysicalDevice):
             if ns not in ability:
                 continue
             try:
+                ns_init_func: "Device.NamespaceInitFunc"
                 try:
-                    ns_init_func(self, ns)
+                    ns_init_func(ns, self)
                 except TypeError:
                     try:
                         ns_init_func = getattr(
                             await async_import_module(
-                                ns_init_func[0], self.NAMESPACE_INIT_PACKAGE
+                                ns_init_func[0], self.NAMESPACE_INIT_PACKAGE  # type: ignore
                             ),
-                            ns_init_func[1],
+                            ns_init_func[1],  # type: ignore
                         )
                     except Exception as exception:
                         self.log_exception(
@@ -369,7 +370,7 @@ class Device(PhysicalDevice):
                         except AttributeError:
                             pass
                         self.NAMESPACE_INIT[ns] = ns_init_func
-                        ns_init_func(self, ns)
+                        ns_init_func(ns, self)
 
             except Exception as exception:
                 self.log_exception(
@@ -630,7 +631,7 @@ class Device(PhysicalDevice):
         """Called by the base device message parsing chain when a new
         NamespaceHandler need to be defined (This happens the first time
         the namespace enters the message handling flow)"""
-        return NamespaceHandler(self, ns)
+        return NamespaceHandler(ns, self)
 
     def get_handler(self, ns: "mn.Namespace", /):
         try:
@@ -912,7 +913,7 @@ class Device(PhysicalDevice):
             for message in multiple_responses:
                 _response = MerossMessage(message)
                 for handler in multiple_requests:
-                    if handler.ns != _response.namespace:
+                    if handler.id != _response.namespace:
                         continue
                     multiple_requests.remove(handler)
                     handler.handle_response(_response)
@@ -965,7 +966,7 @@ class Device(PhysicalDevice):
             self.log(
                 self.DEBUG,
                 "Skipping poll for %s to avoid mqtt rate-limiting (queue delay=%d s)",
-                handler.ns,
+                handler.id,
                 self.mqtt.connection.get_rl_safe_delay(self.id),
             )
             return False
