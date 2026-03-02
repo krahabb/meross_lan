@@ -273,14 +273,7 @@ class MQTTConnection(AbstractMQTTConnection):
     def log_message(self, message: "MerossMessage", direction: "Direction", /):
         super().log_message(message, direction)
         if self.parent.is_tracing:
-            self.parent.trace(
-                self.time(),
-                message.payload,
-                message.namespace,
-                message.method,
-                self.TRANSPORT,
-                direction,
-            )
+            self.parent.trace_msg(self.time(), message, self.TRANSPORT, direction)
 
     @callback
     @override

@@ -39,7 +39,7 @@ CONF_TRACE_MAXSIZE: Final = 262144  # or when MAXSIZE exceeded
 CONF_TRACE_DIRECTORY: Final = "traces"
 # versioning
 CONF_TRACE_VERSION: Final = 3
-CONF_TRACE_COLUMNS: Final = ["time", "rxtx", "protocol", "method", "namespace", "data"]
+CONF_TRACE_COLUMNS: Final = ["time", "direction", "transport", "method", "namespace", "data"]
 if TYPE_CHECKING:
 
     class TracingHeaderType(TypedDict):

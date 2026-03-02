@@ -987,19 +987,19 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
     def on_tx(self, message: "MerossMessage", client: "AbstractClient", /):
         self.last_tx_message = message
         self.last_tx_epoch = client.last_tx_epoch
-        self.log_message(message, Direction.TX, client.last_tx_epoch, client.TRANSPORT)
+        self.log_message(message, Direction.TX, client.TRANSPORT, self.last_tx_epoch)
 
     @override
     def on_rx(self, message: "MerossMessage", client: "AbstractClient", /):
         self.last_rx_message = message
-        self.last_rx_epoch = epoch = client.last_rx_epoch
+        self.last_rx_epoch = client.last_rx_epoch
         message_size = len(message.json)
         if message_size > self.device_response_size_min:
             self.device_response_size_min = message_size
             if message_size > self.device_response_size_max:
                 self.device_response_size_max = message_size
         transport = client.TRANSPORT
-        self.log_message(message, Direction.RX, epoch, transport)
+        self.log_message(message, Direction.RX, transport, self.last_rx_epoch)
         message.check()
         if self.transport is not transport:
             if (self.preferred_transport is transport) or (
@@ -1014,7 +1014,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         # we'll always be a bit late in processing
         self.device_timestamp = message.header[mc.KEY_TIMESTAMP]
         self.device_timedelta = (
-            9 * self.device_timedelta + (epoch - self.device_timestamp)
+            9 * self.device_timedelta + (self.last_rx_epoch - self.device_timestamp)
         ) / 10
 
         if self.isEnabledFor(self.DEBUG):
@@ -1032,22 +1032,10 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
     @override
     def log_message(
-        self,
-        message: MerossMessage,
-        direction: str,
-        epoch: float,
-        transport: Transport,
-        /,
+        self, msg: MerossMessage, dir: Direction, trans: Transport, epoch: float, /
     ):
         if self.is_tracing:
-            self.trace(
-                epoch,
-                message.payload,
-                message.namespace,
-                message.method,
-                transport,
-                direction,
-            )
+            self.trace_msg(epoch, msg, trans, dir)
         # here we avoid using self.log since it would
         # log to the trace file too but we've already 'traced' the
         # message if that's the case
@@ -1056,27 +1044,15 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             logger._log(
                 self.VERBOSE,
                 "%s: %s(%s) %s %s %s",
-                (
-                    transport.upper(),
-                    direction,
-                    message.messageid,
-                    message.method,
-                    message.namespace,
-                ),
-                _message=message,
+                (trans.upper(), dir, msg.messageid, msg.method, msg.namespace),
+                _message=msg,
                 obfuscate=self.obfuscate,
             )
         elif logger.isEnabledFor(self.DEBUG):
             logger._log(
                 self.DEBUG,
                 "%s: %s(%s) %s %s",
-                (
-                    transport.upper(),
-                    direction,
-                    message.messageid,
-                    message.method,
-                    message.namespace,
-                ),
+                (trans.upper(), dir, msg.messageid, msg.method, msg.namespace),
             )
 
     @override

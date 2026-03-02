@@ -163,7 +163,9 @@ class EmulatorDescriptor(DeviceDescriptor):
             version = 1
 
         match version:
-            case 3:
+            case mlc.CONF_TRACE_VERSION | 3:
+                # in meross_lan v6.x.x we changed some column labeling without
+                # changing the version number since the structure is the same
                 config_payload = header["config"]["payload"]
                 pushes = {
                     namespace: handler_state["lastpush"]

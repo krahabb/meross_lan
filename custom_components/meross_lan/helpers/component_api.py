@@ -337,12 +337,12 @@ class ComponentApi(mlq.MQTTProfile):
                     try:
                         device = api.devices[uuid]
                         if device:
-                            conf_protocol = device.config.get(mlc.CONF_PROTOCOL)
+                            conf_transport = device.config.get(mlc.CONF_PROTOCOL)
                         else:
                             config_entry = api.get_config_entry(uuid)
                             assert config_entry
-                            conf_protocol = config_entry.data.get(mlc.CONF_PROTOCOL)
-                        if conf_protocol == self.TRANSPORT:
+                            conf_transport = config_entry.data.get(mlc.CONF_PROTOCOL)
+                        if conf_transport == self.TRANSPORT:
                             # already configured to use BT
                             if device:
                                 device.add_client(self)

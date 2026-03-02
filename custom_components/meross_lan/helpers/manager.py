@@ -50,7 +50,9 @@ if TYPE_CHECKING:
     from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 
     from ..merossclient import HostAddress
+    from ..merossclient.client import Direction
     from ..merossclient.logging import LoggerArgs
+    from ..merossclient.protocol.message import MerossMessage
     from ..merossclient.protocol.types import MerossPayloadType
     from .component_api import ComponentApi
     from .entity import MLEntity
@@ -571,6 +573,8 @@ class ConfigEntryManager(EntityManager):
                     },
                     "",
                     "HEADER",
+                    Transport.AUTO,
+                    "",
                 )
 
             self._trace_opened(epoch)
@@ -633,16 +637,11 @@ class ConfigEntryManager(EntityManager):
         epoch: float,
         payload: "MerossPayloadType",
         namespace: str,
-        method: str = "",
-        transport: Transport = Transport.AUTO,
-        rxtx: str = "",
+        method: str,
+        transport: Transport,
+        rxtx: str,
         /,
     ):
-        """
-        A trace typically contains protocol transactions characterized by 'protocol' and 'rxtx'.
-        When (protocol == Transport.AUTO) it means the row contains 'extra' informations
-        like logs (see trace_log) or config, diagnostics, state, etc.
-        """
         try:
             data = OBFUSCATE_DICT(payload) if self.obfuscate else payload
             columns = [
@@ -651,6 +650,36 @@ class ConfigEntryManager(EntityManager):
                 transport,
                 method,
                 namespace,
+                data,
+            ]
+            if self._trace_data:
+                self._trace_data.append(columns)
+            if self._trace_file:
+                columns[5] = json_dumps(data)
+                self._trace_file.write("\t".join(columns) + "\r\n")
+                columns[5] = data  # restore the (eventual) _trace_data ref
+                if self._trace_file.tell() > mlc.CONF_TRACE_MAXSIZE:
+                    self.trace_close()
+
+        except Exception as exception:
+            self.trace_close(exception, "appending data")
+
+    def trace_msg(
+        self,
+        epoch: float,
+        msg: "MerossMessage",
+        transport: Transport,
+        dir: "Direction",
+        /,
+    ):
+        try:
+            data = OBFUSCATE_DICT(msg.payload) if self.obfuscate else msg.payload
+            columns = [
+                strftime("%Y/%m/%d - %H:%M:%S", localtime(epoch)),
+                dir,
+                transport,
+                msg.method,
+                msg.namespace,
                 data,
             ]
             if self._trace_data:

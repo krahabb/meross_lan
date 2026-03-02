@@ -63,7 +63,7 @@ class Transport(StrEnum):
     BLUETOOTH = "bluetooth"
 
     @staticmethod
-    def from_str(label: str) -> "Transport":
+    def from_str(label: str):
         label = label.lower()
         for transport in Transport:
             if transport.value == label:
@@ -245,9 +245,9 @@ class AbstractClient(logging.Loggable):
         return message
 
     def log_message(self, message: "MerossMessage", direction: Direction, /):
-        if self.isEnabledFor(logging.VERBOSE):
+        if self.isEnabledFor(self.VERBOSE):
             self.log(
-                logging.VERBOSE,
+                self.VERBOSE,
                 "%s(%s) %s %s %s",
                 direction,
                 message.messageid,
@@ -255,9 +255,9 @@ class AbstractClient(logging.Loggable):
                 message.namespace,
                 _message=message,
             )
-        elif self.isEnabledFor(logging.DEBUG):
+        elif self.isEnabledFor(self.DEBUG):
             self.log(
-                logging.DEBUG,
+                self.DEBUG,
                 "%s(%s) %s %s",
                 direction,
                 message.messageid,
