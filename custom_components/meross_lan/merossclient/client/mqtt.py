@@ -305,7 +305,6 @@ class AbstractMQTTConnection(AbstractClient):
         "rl_dropped",
         "_client_devices",
         "_transactions",
-        "_random_disconnect_unsub",
     )
 
     def __init__(
@@ -329,9 +328,7 @@ class AbstractMQTTConnection(AbstractClient):
         if MEROSSDEBUG:
 
             def _random_disconnect():
-                self._random_disconnect_unsub = self.schedule_callback(
-                    60, _random_disconnect
-                )
+                self.schedule_callback(60, _random_disconnect)
                 if self.is_connected:
                     if MEROSSDEBUG.mqtt_random_disconnect():
                         self.log(self.DEBUG, "random disconnect")
@@ -347,14 +344,7 @@ class AbstractMQTTConnection(AbstractClient):
                             self.async_connect(), "random connect", eager_start=True
                         )
 
-            self._random_disconnect_unsub = self.schedule_callback(
-                60, _random_disconnect
-            )
-
-            def _cleanup_random_disconnect():
-                self._random_disconnect_unsub.cancel()
-
-            self.shutdown_broadcast.add(_cleanup_random_disconnect)
+            self.schedule_callback(60, _random_disconnect)
 
     def get_rl_safe_delay(self, uuid: str, /):
         """Returns the 'safe delay' after which we should not incur rate-limiting.

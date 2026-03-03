@@ -144,15 +144,9 @@ class EntityManager(logging.Loggable):
         their async polling before invalidating the member pointers (which are
         usually referred to inside the polling /parsing code)
         """
-
-        """REMOVE
-        for entity in tuple(self.entities.values()):
-            # async_shutdown will pop out of self.entities
-            await entity.async_shutdown()
-        """
-
         await super().async_shutdown()
 
+        # TODO: REMOVE objects
         self.log(
             self.DEBUG,
             "EntityManager.async_shutdown complete (objects: %s)",
@@ -228,9 +222,7 @@ class ConfigEntryManager(EntityManager):
         _trace_file: io.TextIOWrapper | None
         _trace_future: asyncio.Future | None
         _trace_data: list | None
-        _trace_close_unsub: asyncio.TimerHandle | None
-        _entry_reload_unsub: asyncio.TimerHandle | None
-        _entry_update_listener_unsub: CALLBACK_TYPE | None
+        _entry_update_listener_unsub: CALLBACK_TYPE
 
         class Args(EntityManager.Args):
             pass
@@ -249,8 +241,6 @@ class ConfigEntryManager(EntityManager):
             "_trace_file",
             "_trace_future",
             "_trace_data",
-            "_trace_close_unsub",
-            "_entry_reload_unsub",
             "_entry_update_listener_unsub",
         )
         + EntityManager.__SLOTS__
@@ -286,9 +276,6 @@ class ConfigEntryManager(EntityManager):
         self._trace_file = None
         self._trace_future = None
         self._trace_data = None
-        self._trace_close_unsub = None
-        self._entry_reload_unsub = None
-        self._entry_update_listener_unsub = None
         kwargs.setdefault("loop", api.hass.loop)
         super().__init__(id, api, **kwargs)
 
@@ -301,7 +288,9 @@ class ConfigEntryManager(EntityManager):
         their async polling before invalidating the member pointers (which are
         usually referred to inside the polling /parsing code)
         """
-        self._cleanup_subscriptions()  # extra-safety cleanup: shouldnt be loaded/listened at this point
+        # TODO: remove cancel_callback and async_destroy_diagnostic_entities calls
+        # since they should be auto-removed by super().async_shutdown
+        self.cancel_callback(self.api.config_entries.async_schedule_reload)
         await self.async_destroy_diagnostic_entities()
         await super().async_shutdown()
         if self.is_tracing:
@@ -389,7 +378,7 @@ class ConfigEntryManager(EntityManager):
             config_entry, self.platforms.keys()
         ):
             return False
-        self._cleanup_subscriptions()
+        self._entry_update_listener_unsub()
         self.platforms.clear()
         self.config = {}
         await self.async_shutdown()
@@ -401,10 +390,8 @@ class ConfigEntryManager(EntityManager):
         config_entries.async_schedule_reload is now 'eager' and
         it might execute synchronously leading to unintended semantics.
         """
-        if self._entry_reload_unsub:
-            self._entry_reload_unsub.cancel()
         assert self.config_entry
-        self._entry_reload_unsub = self.schedule_callback(
+        self.schedule_callback(
             delay,
             self.api.config_entries.async_schedule_reload,
             self.config_entry.entry_id,
@@ -550,15 +537,10 @@ class ConfigEntryManager(EntityManager):
 
             self._trace_file = _t = await hass.async_add_executor_job(_trace_open)
 
-            @callback
-            def _trace_close_callback():
-                self._trace_close_unsub = None
-                self.trace_close()
-
-            self._trace_close_unsub = self.schedule_callback(
+            self.schedule_callback(
                 self.config.get(mlc.CONF_TRACE_TIMEOUT)
                 or mlc.CONF_TRACE_TIMEOUT_DEFAULT,
-                _trace_close_callback,
+                self.trace_close,
             )
 
             if p_trace_data is not None:
@@ -613,9 +595,9 @@ class ConfigEntryManager(EntityManager):
             self._trace_file = None
             self.log(self.DEBUG, "Tracing end")
 
-        if self._trace_close_unsub:
-            self._trace_close_unsub.cancel()
-            self._trace_close_unsub = None
+        # safely check/cancel any pending timer in case trace_close is
+        # being called outside the normal timeout.
+        self.cancel_callback(self.trace_close)
         if self._trace_future:
             self._trace_future.set_result(self._trace_data)
             self._trace_future = None
@@ -725,11 +707,3 @@ class ConfigEntryManager(EntityManager):
             "config": self.loggable_config(),
             "state": self.loggable_diagnostic_state(),
         }
-
-    def _cleanup_subscriptions(self, /):
-        if self._entry_update_listener_unsub:
-            self._entry_update_listener_unsub()
-            self._entry_update_listener_unsub = None
-        if self._entry_reload_unsub:
-            self._entry_reload_unsub.cancel()
-            self._entry_reload_unsub = None

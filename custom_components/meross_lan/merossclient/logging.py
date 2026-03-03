@@ -202,7 +202,8 @@ class Loggable(metaclass=abc.ABCMeta):
         shutdown_broadcast: broadcast.Broadcast[None]
         async_shutdown_broadcast: broadcast.Broadcast[Coroutine[Any, Any, None]]
 
-        _tasks: set[asyncio.Future]
+        _tasks: set[asyncio.Future]  # dynamic
+        _timers: dict[Callable, asyncio.TimerHandle]  # dynamic
 
         def time(self) -> float: ...
         class Args(TypedDict):
@@ -223,6 +224,7 @@ class Loggable(metaclass=abc.ABCMeta):
         "shutdown_broadcast",
         "async_shutdown_broadcast",
         "_tasks",
+        "_timers",
     )
 
     @classmethod
@@ -255,16 +257,24 @@ class Loggable(metaclass=abc.ABCMeta):
 
     async def async_shutdown(self):
         """
-        Shutdown the Loggable instance by cancelling pending tasks and broadcasting the shutdown event.
+        Shutdown the Loggable instance by cancelling pending timers and tasks and broadcasting the shutdown event.
         This method should be the preferered way to orderly clean-up instance state and resources,
         especially when async operations are involved, since it will wait for pending tasks to be
-        cancelled and completed before proceeding to synchronous shutdown by invoking the shutdown() method.
+        cancelled or completed before proceeding to synchronous shutdown by invoking the shutdown() method.
         Subclasses can override either or both depending on their cleanup needs where the sync version should
         be preferred for performance reasons, while the async version should be used when async operations
-        might be critical in the cleanup order (for example cancelling timers before awaiting for the
-        cleanup to proceed).
+        might be critical in the cleanup sequence.
         """
         self.log(VERBOSE, "async_shutdown")
+        try:
+            # remove timers first so that they'll not eventually be triggered while awaiting shutdown
+            for _timer in self._timers.values():
+                self.log(self.DEBUG, "Cancelling pending timer %r", _timer)
+                _timer.cancel()
+            self._timers.clear()
+        except AttributeError:
+            pass  # might be not initialized ...
+
         try:
             for task in tuple(self._tasks):
                 if task.done():
@@ -385,13 +395,61 @@ class Loggable(metaclass=abc.ABCMeta):
     def schedule_async_callback(
         self, delay: float, target: "Callable[..., Coroutine]", *args
     ):
-        def _callback(*_args):
-            self.create_task(target(*_args), "._callback", eager_start=True)
-
-        return self.loop.call_later(delay, _callback, *args)
+        """Schedules an async callback to be called after a delay by calling loop.call_later.
+        TimerHandles (and Tasks) are cached and automatically cancelled on async_shutdown.
+        The 'target' argument is used as a key to ensure that only one timer per target is
+        active at a time, so that if the same callback is already scheduled it'll be rescheduled
+        with the new delay. Also, scheduled timers can be cancelled by using the 'cancel_callback' method
+        with the same target."""
+        timer = self.loop.call_later(delay, self._async_callback_wrapper, target, *args)
+        try:
+            # drop if already scheduled (re-schedule)
+            self._timers[target].cancel()
+            self._timers[target] = timer
+        except AttributeError:
+            self._timers = {target: timer}
+        except KeyError:
+            self._timers[target] = timer
+        return timer
 
     def schedule_callback(self, delay: float, target: "Callable", *args):
-        return self.loop.call_later(delay, target, *args)
+        """Schedules a sync callback to be called after a delay by calling loop.call_later.
+        See schedule_async_callback for more details."""
+
+        timer = self.loop.call_later(delay, self._callback_wrapper, target, *args)
+        try:
+            # drop if already scheduled (re-schedule)
+            self._timers[target].cancel()
+            self._timers[target] = timer
+        except AttributeError:
+            self._timers = {target: timer}
+        except KeyError:
+            self._timers[target] = timer
+        return timer
+
+    def cancel_callback(self, target: "Callable"):
+        try:
+            self._timers[target].cancel()
+            del self._timers[target]
+        except (KeyError, AttributeError):
+            pass
+
+    def _callback_wrapper(self, target: "Callable", *args):
+        del self._timers[target]
+        try:
+            target(*args)
+        except Exception as e:
+            self.log_exception(
+                self.WARNING,
+                e,
+                "running callback %r with args %r",
+                target,
+                args,
+            )
+
+    def _async_callback_wrapper(self, target: "Callable[..., Coroutine]", *args):
+        del self._timers[target]
+        self.create_task(target(*args), "._callback_async_wrapper", eager_start=True)
 
     async def async_load_zoneinfo(self, tzname: str, /):
         try:

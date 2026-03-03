@@ -378,12 +378,10 @@ class MLGarage(MLCover):
                     )
                     timeout = self.number_close_timeout.native_value  # type: ignore
 
-            self._transition_unsub = manager.schedule_async_callback(
-                0.9, self._async_transition_callback
-            )
+            self.schedule_callback(0.9, self._transition_callback)
             # check the timeout after expected to account
             # for delays in communication
-            self._transition_end_unsub = manager.schedule_async_callback(
+            self.schedule_async_callback(
                 (timeout or self._transition_duration),  # type: ignore
                 self._async_transition_end_callback,
             )
@@ -406,11 +404,9 @@ class MLGarage(MLCover):
 
         is_closed = not payload[mc.KEY_OPEN]
         if self.is_closed == is_closed:
-            if self._transition_start and not self._transition_unsub:
-                # keep monitoring the transition in less than 1 sec
-                self._transition_unsub = self.manager.schedule_async_callback(
-                    0.9, self._async_transition_callback
-                )
+            if self._transition_start:
+                # keep monitoring the transition
+                self.schedule_callback(0.9, self._transition_callback)
             return
 
         # door open state changed
@@ -488,17 +484,16 @@ class MLGarage(MLCover):
         self._transition_start = 0.0
         MLCover._transition_cancel(self)
 
-    async def _async_transition_callback(self, /):
-        self._transition_unsub = None
-        manager = self.manager
-        if manager.transport is Transport.HTTP and not manager.mqtt_active:
+    @override
+    def _transition_callback(self, /):
+        if self.manager.transport is Transport.HTTP and not self.manager.mqtt_active:
             self.handler_ns.schedule_get(self.channel)
 
+    @override
     async def _async_transition_end_callback(self, /):
         """
         checks the transition did finish as per the timeout(s)
         """
-        self._transition_end_unsub = None
         was_closing = self.is_closing
         if was_closing:
             # when closing we expect this callback not to be called since

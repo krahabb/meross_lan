@@ -135,7 +135,6 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
             "_tracking_state",
             "_tracking_state_change_unsub",
             "_track_last_epoch",
-            "_track_unsub",
         )
 
         def __init__(self, climate: "MtsClimate", /):
@@ -145,7 +144,6 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
             self._tracking_state = None
             self._tracking_state_change_unsub = None
             self._track_last_epoch = 0
-            self._track_unsub = None
             super().__init__(climate.channel, climate.manager)
 
         # interface: MLEntity
@@ -155,9 +153,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
             del self.climate
 
         def set_unavailable(self):
-            if self._track_unsub:
-                self._track_unsub.cancel()
-                self._track_unsub = None
+            self.cancel_callback(self._track)
 
         async def async_added_to_hass(self):
             hass = self.hass
@@ -200,9 +196,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
             called when either the climate or the tracked_entity has a new
             temperature reading in order to see if the climate needs to be adjusted
             """
-            if self._track_unsub:
-                self._track_unsub.cancel()
-                self._track_unsub = None
+            self.cancel_callback(self._track)
 
             if not self.manager.is_connected or not self._tracking_state_change_unsub:
                 return
@@ -232,7 +226,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
             # See also https://github.com/krahabb/meross_lan/issues/593 for a particularly
             # difficult case (even tho a bit paroxysmal).
             delay = self.time() - self._track_last_epoch
-            self._track_unsub = self.manager.schedule_callback(
+            self.schedule_callback(
                 (
                     self.TRACKING_DELAY
                     if delay > self.TRACKING_DEADTIME
@@ -264,7 +258,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
         def _tracking_start(self):
             self._tracking_stop()
             entity_id = self.current_option
-            if entity_id and entity_id not in (
+            if entity_id not in (
                 hac.STATE_OFF,
                 hac.STATE_UNKNOWN,
                 hac.STATE_UNAVAILABLE,
@@ -285,9 +279,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
                 self._tracking_state_change_unsub()
                 self._tracking_state_change_unsub = None
                 self._tracking_state = None
-            if self._track_unsub:
-                self._track_unsub.cancel()
-                self._track_unsub = None
+            self.cancel_callback(self._track)
 
         def _tracking_state_change(self, tracked_state: "State | None"):
             self._tracking_state = tracked_state
@@ -296,7 +288,6 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
         def _track(self, tracked_state: "State"):
             """This is only called internally after a timeout when tracking needs to be updated
             due to state changes in either tracked entity or climate."""
-            self._track_unsub = None
             climate = self.climate
             current_temperature = climate.current_temperature
             if not current_temperature:

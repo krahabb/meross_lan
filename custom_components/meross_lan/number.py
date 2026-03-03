@@ -76,14 +76,8 @@ class MLConfigNumber(MLNumber):
 
     DEBOUNCE_DELAY = 1
 
-    __slots__ = ("_async_request_debounce_unsub",)
-
-    async def async_shutdown(self):
-        self._cancel_request()
-        await super().async_shutdown()
-
     def set_unavailable(self):
-        self._cancel_request()
+        self.cancel_callback(self._async_request_debounce)
         super().set_unavailable()
 
     # interface: number.NumberEntity
@@ -97,14 +91,12 @@ class MLConfigNumber(MLNumber):
         # especially when using the BOXED UI we're debouncing the device
         # request and provide 'temporaneous' optimistic updates
         self.update_native_value(device_value / self.device_scale)
-        self._cancel_request()
-        self._async_request_debounce_unsub = self.manager.schedule_async_callback(
+        self.schedule_async_callback(
             self.DEBOUNCE_DELAY, self._async_request_debounce, device_value
         )
 
     # interface: self
     async def _async_request_debounce(self, device_value):
-        del self._async_request_debounce_unsub
         try:
             await self.async_request_value(device_value)
         except Exception:
@@ -112,13 +104,6 @@ class MLConfigNumber(MLNumber):
             device_value = self.device_value
             if device_value is not None:
                 self.update_native_value(device_value / self.device_scale)
-
-    def _cancel_request(self):
-        try:
-            self._async_request_debounce_unsub.cancel()
-            del self._async_request_debounce_unsub
-        except AttributeError:
-            return
 
 
 class MLEmulatedNumber(MLNumber.PartialAvailableMixin, MLNumber):

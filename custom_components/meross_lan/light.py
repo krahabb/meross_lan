@@ -187,7 +187,6 @@ class MLLightBase(MLBinaryEntity, light.LightEntity):
 
         manager: Device
 
-        _t_unsub: asyncio.TimerHandle | None
         _t_begin: float
         _t_end: float
         _t_duration: float
@@ -229,7 +228,6 @@ class MLLightBase(MLBinaryEntity, light.LightEntity):
     __slots__ = (
         "_rgb_to_native",
         "_native_to_rgb",
-        "_t_unsub",
         "_t_begin",
         "_t_end",
         "_t_duration",
@@ -258,7 +256,6 @@ class MLLightBase(MLBinaryEntity, light.LightEntity):
     ):
         self._rgb_to_native = rgb_to_native
         self._native_to_rgb = native_to_rgb
-        self._t_unsub = None
         self.brightness = None
         self.color_mode = ColorMode.UNKNOWN
         self.color_temp_kelvin = None
@@ -276,14 +273,8 @@ class MLLightBase(MLBinaryEntity, light.LightEntity):
         manager.register_parser_entity(self)
 
     # interface: MLBinaryEntity
-    async def async_shutdown(self):
-        if self._t_unsub:
-            self._transition_cancel()
-        await super().async_shutdown()
-
     def set_unavailable(self):
-        if self._t_unsub:
-            self._transition_cancel()
+        self.cancel_callback(self._transition_callback)
         self.brightness = None
         self.color_mode = ColorMode.UNKNOWN
         self.color_temp_kelvin = None
@@ -343,11 +334,6 @@ class MLLightBase(MLBinaryEntity, light.LightEntity):
         else:
             return None  # no meaningful transition
 
-    def _transition_cancel(self, /):
-        # assert self._t_unsub
-        self._t_unsub.cancel()  # type: ignore
-        self._t_unsub = None
-
     def _transition_schedule(self, t_duration: float, /):
         """
         Calculates the next scheduled time based off remaining transition duration
@@ -364,12 +350,9 @@ class MLLightBase(MLBinaryEntity, light.LightEntity):
             _t_resolution = self._t_resolution
         # now 'spread' the resolution over the remaining duration
         _t_resolution = t_duration / (round(t_duration / _t_resolution) or 1)
-        self._t_unsub = self.manager.schedule_async_callback(
-            _t_resolution, self._async_transition
-        )
+        self.schedule_callback(_t_resolution, self._transition_callback)
 
-    async def _async_transition(self, /):
-        self._t_unsub = None
+    def _transition_callback(self, /):
         if not self.is_on:
             return
         t_now = monotonic()
@@ -407,8 +390,9 @@ class MLLightBase(MLBinaryEntity, light.LightEntity):
             # sending redundant light commands
             return
 
-        with self.exception_warning("_async_transition"):
-            await self.async_request_parse(_light)
+        self.create_task(
+            self.async_request_parse(_light), "._transition_callback", True
+        )
 
 
 class MLLight(MLLightBase):
@@ -522,8 +506,7 @@ class MLLight(MLLightBase):
     # interface: LightEntity
     @MLLightBase.ha_action
     async def async_turn_on(self, **kwargs):
-        if self._t_unsub:
-            self._transition_cancel()
+        self.cancel_callback(self._transition_callback)
 
         if not kwargs:
             await self.async_request_onoff(1)
@@ -684,8 +667,8 @@ class MLLightEffect(MLLight):
     # interface: LightEntity
     @MLLight.ha_action
     async def async_turn_on(self, **kwargs):
-        if self._t_unsub:
-            self._transition_cancel()
+        self.cancel_callback(self._transition_callback)
+
         _light = self._payload_ns
         _capacity = _light.get(mc.KEY_CAPACITY, 0)
         # intercept light command if it is related to effects (on/off/change of luminance)

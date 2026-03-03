@@ -131,7 +131,7 @@ async def test_device_tracing(request, hass: "HomeAssistant"):
                 tc.MOCK_TRACE_TIMEOUT,
                 tick=device.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
             ):
-                if not device._trace_ability_callback_unsub:
+                if not device._timers.get(device._async_trace_ability):
                     device.trace_close()
                     break
 

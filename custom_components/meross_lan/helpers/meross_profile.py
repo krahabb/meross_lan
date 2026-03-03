@@ -119,7 +119,6 @@ class MerossProfile(mlq.MQTTProfile):
         KEY_TOKEN_REQUEST_TIME: Final
 
         _data: MerossProfileStoreType
-        _polling_query_device_info_unsub: asyncio.TimerHandle | None
 
         # Overrides
         config: ProfileConfigType
@@ -138,7 +137,6 @@ class MerossProfile(mlq.MQTTProfile):
         "apiclient",
         "_data",
         "_store",
-        "_polling_query_device_info_unsub",
         "_device_info_time",
     )
 
@@ -156,7 +154,6 @@ class MerossProfile(mlq.MQTTProfile):
             id, self, credentials=self.config, session=async_get_clientsession(api.hass)
         )
         self._store = MerossProfileStore(api.hass, id)
-        self._polling_query_device_info_unsub = None
 
     async def async_init(self):
         """
@@ -225,15 +222,12 @@ class MerossProfile(mlq.MQTTProfile):
         if next_query_delay < mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT:
             # we'll give some breath to the init process
             next_query_delay = mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT
-        self._polling_query_device_info_unsub = self.schedule_async_callback(
+        self.schedule_async_callback(
             next_query_delay,
             self._async_query_device_info,
         )
 
     async def async_shutdown(self):
-        if self._polling_query_device_info_unsub:
-            self._polling_query_device_info_unsub.cancel()
-            self._polling_query_device_info_unsub = None
         await super().async_shutdown()
         await self.apiclient.async_shutdown()
         del self.apiclient
@@ -265,12 +259,7 @@ class MerossProfile(mlq.MQTTProfile):
             # no connection - whatsoever) so, having a fresh token and likely
             # good connectivity we're going to retrigger that
             if self._need_query_device_info():
-                # retrigger the poll at the right time since async_query_devices
-                # might be called for whatever reason 'asynchronously'
-                # at any time (say the user does a new cloud login or so...)
-                if self._polling_query_device_info_unsub:
-                    self._polling_query_device_info_unsub.cancel()
-                    await self._async_query_device_info()
+                await self._async_query_device_info()
 
     @override
     def get_logger_name(self) -> str:
@@ -516,7 +505,7 @@ class MerossProfile(mlq.MQTTProfile):
         ) > mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
 
     async def _async_query_device_info(self):
-        self._polling_query_device_info_unsub = self.schedule_async_callback(
+        self.schedule_async_callback(
             mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
             self._async_query_device_info,
         )

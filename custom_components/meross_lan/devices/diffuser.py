@@ -138,8 +138,7 @@ class MLDiffuserLight(MLLightBase):
     # interface: LightEntity
     @MLLightBase.ha_action
     async def async_turn_on(self, **kwargs):
-        if self._t_unsub:
-            self._transition_cancel()
+        self.cancel_callback(self._transition_callback)
 
         _light = dict(self._payload_ns)
         _light[mc.KEY_ONOFF] = 1

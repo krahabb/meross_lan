@@ -196,7 +196,6 @@ class Device(PhysicalDevice):
         _multiple_response_size: int
 
         _polling_delay: int
-        _polling_unsub: TimerHandle | None
         _polling_task: Task | None
         polling_lock: asyncio.Lock
         polling_epoch: Final[float]
@@ -249,7 +248,6 @@ class Device(PhysicalDevice):
         "_multiple_requests",
         "_multiple_response_size",
         "_polling_delay",
-        "_polling_unsub",
         "_polling_task",
         "_polling_lock",
         "polling_epoch",
@@ -285,7 +283,6 @@ class Device(PhysicalDevice):
         self._multiple_requests = []
         self._multiple_response_size = NamespaceHandler.HEADER_AVG_SIZE
         self._lazypoll_requests = []
-        self._polling_unsub = None
         self._polling_task = None
         self.polling_lock = asyncio.Lock()
         self.polling_epoch = self.time()
@@ -395,11 +392,6 @@ class Device(PhysicalDevice):
         # In order to leave the client 'alive' call remove_client before shutting down the device.
         for client in tuple(self._clients.values()):
             await client.async_shutdown()
-        """REMOVE
-        for handler in self.ns_handlers.values():
-            handler.shutdown()
-        self.ns_handlers.clear()
-        """
         assert not self.ns_handlers, "NamespaceHandlers should have been cleared by now"
         self.digest_parsers.clear()
         self.digest_pollers.clear()
@@ -702,24 +694,19 @@ class Device(PhysicalDevice):
         When called while a schedule is already in place, it'll be cancelled and re-started immediately.
         """
         self._polling_delay = self.polling_period
-        if self._polling_unsub:
-            self._polling_unsub.cancel()
-        return self._polling()
+        self._polling()
 
     def polling_stop(self):
         """Stops the polling schedule and cancels any ongoing polling task."""
-        if self._polling_unsub:
-            self._polling_unsub.cancel()
-            self._polling_unsub = None
-        elif self._polling_task:
+        self.cancel_callback(self._polling)
+        if self._polling_task:
             self._polling_task.cancel("polling_stop")
 
     def _polling(self, /):
-        self._polling_unsub = self.schedule_callback(self._polling_delay, self._polling)
-        self._polling_task = task = self.create_task(
+        self.schedule_callback(self._polling_delay, self._polling)
+        self._polling_task = self.create_task(
             self.async_poll(), f"._polling", eager_start=False
         )
-        return task
 
     async def async_poll(self, /):
         async with self.polling_lock:
@@ -800,11 +787,12 @@ class Device(PhysicalDevice):
 
     async def async_poll_full(self):
         """Perform a 'full' namespaces poll like when onlining i.e. without any lazy optimization."""
-        if self._polling_unsub:  # eventually reschedule from now on
-            self._polling_unsub.cancel()
-            self._polling_unsub = self.schedule_callback(
-                self._polling_delay, self._polling
-            )
+        try:
+            # eventually reschedule from now on
+            self._timers[self._polling].cancel()
+            self.schedule_callback(self._polling_delay, self._polling)
+        except (AttributeError, KeyError):
+            pass  # do not (re)schedule if we're not polling already
         for handler in self.ns_handlers.values():
             handler.polling_epoch_next = 0.0
         await self.async_poll()

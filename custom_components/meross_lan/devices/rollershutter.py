@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from homeassistant.exceptions import InvalidStateError
 
@@ -162,9 +162,7 @@ class MLRollerShutter(MLCover):
             else:
                 return  # No-Op
             await self.async_request_position(position)
-            self._transition_end_unsub = self.manager.schedule_async_callback(
-                timeout, self._async_transition_end_callback
-            )
+            self.schedule_async_callback(timeout, self._async_transition_end_callback)
 
     async def async_stop_cover(self, **kwargs):
         await self.async_request_position(mc.ROLLERSHUTTER_POSITION_STOP)
@@ -175,7 +173,22 @@ class MLRollerShutter(MLCover):
         self._transition_cancel()
         await self.async_request_payload({self.key_value: position})
         self._transition_cancel()
-        await self._async_transition_callback()
+        await self._async_read_state()
+
+    async def _async_read_state(self, /):
+        if self.manager.multiple_max >= 2:
+            await self.manager.async_handle_request_multiple(
+                (
+                    mn.Appliance_RollerShutter_State.request_default,
+                    self.ns.request_default,
+                )
+            )
+        else:
+            await self.manager.ns_handlers[mn.Appliance_RollerShutter_State].async_get(
+                self.channel
+            )
+            if self._position_native_isgood:
+                await self.handler_ns.async_get(self.channel)
 
     def _parse_config(self, payload: dict):
         # payload = {"channel": 0, "signalOpen": 50000, "signalClose": 50000}
@@ -195,7 +208,10 @@ class MLRollerShutter(MLCover):
         a trajectory calculation to emulate time based positioning
         now (#227) we'll detect devices reporting 'actual' good
         positioning and switch entity behaviour to trust this value
-        bypassing all of the 'time based' emulation
+        bypassing all of the 'time based' emulation.
+        TODO: we might prefer using schedule_flush_state here since we might
+        be in a 'transaction' where we receive multiple async updates
+        for state and position and we want to avoid multiple flushes.
         """
         position = payload[mc.KEY_POSITION]
 
@@ -285,52 +301,27 @@ class MLRollerShutter(MLCover):
             else:
                 self.is_closing = state == mc.ROLLERSHUTTER_STATE_CLOSING
                 self.is_opening = not self.is_closing
-                if not self._transition_unsub:
-                    # ensure we 'follow' cover movement
-                    self._transition_unsub = self.manager.schedule_async_callback(
-                        mlc.PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT,
-                        self._async_transition_callback,
-                    )
             self.flush_state()
 
-        if self._transition_unsub and (state == mc.ROLLERSHUTTER_STATE_IDLE):
+        if state == mc.ROLLERSHUTTER_STATE_IDLE:
             self._transition_cancel()
+        else:
+            self.schedule_callback(
+                mlc.PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT,
+                self._transition_callback,
+            )
 
-    async def _async_transition_callback(self):
-        """Schedule a repetitive callback when we detect or suspect shutter movement.
-        It will be invalidated only when a successful state message is parsed stating
-        there's no movement.
-        This is a very 'gentle' polling happening only on HTTP when we're sure we're
-        not receiving MQTT updates. If device was configured for MQTT only we could
-        not setup this at all."""
-        manager = self.manager
-        self._transition_unsub = manager.schedule_async_callback(
-            mlc.PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT,
-            self._async_transition_callback,
-        )
-        if (manager.transport is Transport.HTTP and not manager.mqtt_active) or (
-            self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE
-        ):
-            try:
-                if manager.multiple_max >= 2:
-                    await manager.async_handle_request_multiple(
-                        (
-                            mn.Appliance_RollerShutter_State.request_default,
-                            mn.Appliance_RollerShutter_Position.request_default,
-                        )
-                    )
-                else:
-                    await manager.ns_handlers[
-                        mn.Appliance_RollerShutter_State
-                    ].async_get(self.channel)
-                    if self._position_native_isgood:
-                        await self.handler_ns.async_get(self.channel)
-            except Exception as e:
-                self.log_exception(self.WARNING, e, "_async_transition_callback")
+    @override
+    def _transition_callback(self):
+        if (
+            self.manager.transport is Transport.HTTP and not self.manager.mqtt_active
+        ) or (self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE):
+            self.create_task(
+                self._async_read_state(), "._transition_callback", eager_start=True
+            )
 
-    async def _async_transition_end_callback(self):
-        self._transition_end_unsub = None
-        self.log(self.DEBUG, "_async_transition_end_callback")
+    @override
+    async def _async_transition_end_callback(self, /):
         await self.async_stop_cover()
 
 

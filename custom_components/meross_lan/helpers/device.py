@@ -273,12 +273,11 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         """Device actual estimated timestamp as extracted from last rx message."""
         device_timedelta: float
         """Device timestamp delta against local time (device_timestamp - local_time)."""
-        _check_device_time_unsub: TimerHandle | None  # dynamic
+        _check_device_time_enabled: bool
         """Scheduled 'on-demand' device time check. This is only created when enable_device_time_check is called."""
 
         _device_entries: dict[Any, dr.DeviceEntry]
         profile: Final[MQTTProfile | None]
-        _trace_ability_callback_unsub: TimerHandle | None
 
         _async_create_diagnostic_entities_task: Task  # dynamic
 
@@ -391,15 +390,13 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         "conf_transport",
         "host",
         "_device_entries",
-        "_async_entry_update_unsub",
         "device_debug",
         "device_timestamp",
         "device_timedelta",
-        "_check_device_time_unsub",
+        "_check_device_time_enabled",
         "device_timedelta_log_epoch",
         "device_timedelta_config_epoch",
         "_profile",
-        "_trace_ability_callback_unsub",
         "_async_create_diagnostic_entities_task",
         "sensor_protocol",
     )
@@ -448,14 +445,13 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             key=config_entry.data.get(mlc.CONF_KEY) or "",  # type: ignore[argument]
             descriptor=descriptor,  # type: ignore[argument],
         )
-        self._async_entry_update_unsub = None
         self.device_debug = None
         self.device_timestamp = 0
         self.device_timedelta = 0
+        self._check_device_time_enabled = False
         self.device_timedelta_log_epoch = 0
         self.device_timedelta_config_epoch = 0
         self.profile = None
-        self._trace_ability_callback_unsub = None
 
         NamespaceHandler(
             mn.Appliance_System_All,
@@ -510,9 +506,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
     async def async_shutdown(self):
         self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
-        if self._async_entry_update_unsub:
-            self._async_entry_update_unsub.cancel()
-            self._async_entry_update_unsub = None
+        self.cancel_callback(self._async_entry_update)
         if self.bluetooth:
             # bluetooth client is managed by ComponentApi so we dont shutdown it
             # (super().async_shutdown will also shutdown clients) but just unlink it from the device
@@ -763,7 +757,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
     @override
     def _trace_opened(self, epoch: float):
-        self._trace_ability_callback_unsub = self.schedule_async_callback(
+        self.schedule_async_callback(
             self.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
             self._async_trace_ability,
             iter(self.descriptor.ability),
@@ -772,9 +766,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
     def trace_close(
         self, exception: Exception | None = None, error_context: str | None = None
     ):
-        if self._trace_ability_callback_unsub:
-            self._trace_ability_callback_unsub.cancel()
-            self._trace_ability_callback_unsub = None
+        self.cancel_callback(self._async_trace_ability)
         super().trace_close(exception, error_context)
 
     def _trace_ability_next(self, abilities: "Iterator[str]", /):
@@ -789,18 +781,18 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         return None
 
     async def _async_trace_ability(self, abilities: "Iterator[str]"):
-        self._trace_ability_callback_unsub = None
         try:
             # avoid interleave tracing ability with polling loop
             # also, since we could trigger this at early stages
             # in device init, this check will prevent iterating
             # at least until the device fully initialize through
             # self.start()
-            if self.is_connected and not self._polling_task:
+            if self.is_connected:
                 while not (ns_handler := self._trace_ability_next(abilities)):
                     continue
-                self.log(self.DEBUG, "Tracing %s ability", ns_handler.id)
-                await ns_handler.async_trace(self.async_request)
+                async with self.polling_lock:
+                    self.log(self.DEBUG, "Tracing %s ability", ns_handler.id)
+                    await ns_handler.async_trace(self.async_request)
         except StopIteration:
             self.log(self.DEBUG, "Tracing abilities end")
             return
@@ -820,7 +812,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             )
         else:
             timeout = self.PARAM_TRACING_ABILITY_POLL_TIMEOUT
-        self._trace_ability_callback_unsub = self.schedule_async_callback(
+        self.schedule_async_callback(
             timeout,
             self._async_trace_ability,
             abilities,
@@ -845,9 +837,10 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             await self.async_poll_full()
             try:
                 abilities = iter(self.descriptor.ability)
-                while http.is_connected and self.is_tracing:
-                    if ns_handler := self._trace_ability_next(abilities):
-                        await ns_handler.async_trace(http.async_request)
+                async with self.polling_lock:
+                    while http.is_connected and self.is_tracing:
+                        if ns_handler := self._trace_ability_next(abilities):
+                            await ns_handler.async_trace(http.async_request)
                 self._trace_data = None
                 return trace_data  # might be truncated because offlining or async shutting trace
             except StopIteration:
@@ -945,15 +938,10 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
     @override
     def on_connect(self, /):
         super().on_connect()
-        try:
-            if self._check_device_time_unsub:
-                self._check_device_time_unsub.cancel()
-            self._check_device_time_unsub = self.schedule_callback(
+        if self._check_device_time_enabled:
+            self.schedule_callback(
                 self.PARAM_CHECK_DEVICE_TIME_START_DELAY, self._check_device_time
             )
-        except AttributeError:
-            pass  # enable_device_time_check not called so we don't install the check.
-
         if self.config.get(mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES):
             try:
                 self._async_create_diagnostic_entities_task.result()
@@ -975,12 +963,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
     def on_disconnect(self, /):
         super().on_disconnect()
         self.device_debug = None
-        try:
-            if self._check_device_time_unsub:
-                self._check_device_time_unsub.cancel()
-                self._check_device_time_unsub = None
-        except AttributeError:
-            pass  # check never installed
+        self.cancel_callback(self._check_device_time)
 
     @override
     def on_tx(self, message: "MerossMessage", client: "AbstractClient", /):
@@ -1117,9 +1100,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         """
         Schedule the ConfigEntry update due to self.descriptor changing.
         """
-        if self._async_entry_update_unsub:
-            self._async_entry_update_unsub.cancel()
-        self._async_entry_update_unsub = self.schedule_async_callback(
+        self.schedule_async_callback(
             5,
             self._async_entry_update,
             query_abilities,
@@ -1137,8 +1118,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         This is in order to detect 'abilities' changes even on the OptionFlow
         execution which independently queries the device itself.
         """
-        self._async_entry_update_unsub = None
-
         with self.exception_warning("_async_entry_update"):
             data = dict(self.config_entry.data)
             data[mlc.CONF_TIMESTAMP] = time()  # force ConfigEntry update..
@@ -1429,6 +1408,9 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         local time to what is expected in HA.
         -> Checks the device timezone has the same utc offset as HA local timezone.
         -> Checks if the device timezone transition times are still correctly set."""
+        self.schedule_callback(
+            self.PARAM_CHECK_DEVICE_TIME_REPEAT_DELAY, self._check_device_time
+        )
         # The device timestamp is usually unaligned when it cannot reach NTP service.
         # It seemed some devices could allow NTP sync through a simple MQTT transaction.
         if abs(self.device_timedelta) > self.PARAM_DEVICE_TIMESTAMP_TOLERANCE:
@@ -1496,25 +1478,14 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                 translation_placeholders={"device_name": self.display_name},
             )
 
-        self._check_device_time_unsub = self.schedule_callback(
-            self.PARAM_CHECK_DEVICE_TIME_REPEAT_DELAY, self._check_device_time
-        )
-
     @override
     def enable_check_device_time(self, /):
         """Public method to trigger the device time check procedure. If already in place, it will be restarted."""
-        try:
-            if self._check_device_time_unsub:
-                self._check_device_time_unsub.cancel()
-        except AttributeError:
-            pass
-        self._check_device_time_unsub = (
+        self._check_device_time_enabled = True
+        if self.is_connected:
             self.schedule_callback(
                 self.PARAM_CHECK_DEVICE_TIME_START_DELAY, self._check_device_time
             )
-            if self.is_connected
-            else None
-        )
 
     def _process_uuid_mismatch(
         self, response_uuid: str, payload_all: "MerossPayloadType | None"

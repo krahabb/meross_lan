@@ -155,7 +155,6 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         "device_entry",
         "entity_registry_enabled_default",
         "has_entity_name",
-        "_schedule_flush_state_unsub",
     ) + NamespaceParser.__SLOTS__
 
     def __init__(
@@ -182,7 +181,6 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         self.channel = channel
         self.entitykey = entitykey = kwargs.pop("entity_key", self.__class__.ENTITY_KEY)
         self._payload_ns = mn.EMPTY_DICT
-        self._schedule_flush_state_unsub = None
         id = (
             channel
             if entitykey is None
@@ -240,9 +238,6 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
     def shutdown(self):
         super().shutdown()
         self.manager.async_shutdown_broadcast.remove(self.async_shutdown)
-        if self._schedule_flush_state_unsub:
-            self._schedule_flush_state_unsub.cancel()
-            self._schedule_flush_state_unsub = None
         try:
             del self.flush_state  # remove any possible state callback registration
         except AttributeError:
@@ -285,14 +280,10 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
 
     def schedule_flush_state(self, delay: float = 0):
         """Schedules a state change to HA after a delay."""
-        if self._schedule_flush_state_unsub:
-            self._schedule_flush_state_unsub.cancel()
         if self.hass_connected:
-            self._schedule_flush_state_unsub = self.manager.schedule_callback(
-                delay, self.flush_state
-            )
+            self.schedule_callback(delay, self.flush_state)
         else:
-            self._schedule_flush_state_unsub = None
+            self.cancel_callback(self.flush_state)
 
     def set_available(self):
         self.available = True
