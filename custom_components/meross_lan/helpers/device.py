@@ -516,9 +516,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             self.profile.unlink(self)
         del self.sensor_protocol
         self.api.devices[self.id] = None
-        self.log(  # REMOVE
-            self.DEBUG, "Device.async_shutdown complete (object: %s)", self.objects
-        )
 
     # miscellaneous internals to prepare/refresh internal config
     def _update_config(self):

@@ -176,7 +176,6 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         """
         # init these first since Loggable init could call configure_logger which 'sometimes'
         # could rely on these
-        manager.objects.add(self)
         self.manager = manager
         self.channel = channel
         self.entitykey = entitykey = kwargs.pop("entity_key", self.__class__.ENTITY_KEY)

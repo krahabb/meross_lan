@@ -99,8 +99,6 @@ class EntityManager(logging.Loggable):
 
         platforms: PlatformsType  # init in derived
         entities: Final[dict[object, MLEntity]]
-        objects: Final[weakref.WeakSet]
-        """Keeps track of some object instances (for debugging) built and managed by this EntityManager."""
 
         class Args(logging.Loggable.Args):
             device_entry: NotRequired[dr.DeviceEntry | None]
@@ -122,7 +120,6 @@ class EntityManager(logging.Loggable):
         "device_entry",
         "platforms",
         "entities",
-        "objects",
     )
 
     def __init__(self, id: str, manager: "EntityManager", **kwargs: "Unpack[Args]"):
@@ -132,26 +129,7 @@ class EntityManager(logging.Loggable):
         self.device_entry = kwargs.get("device_entry")
         assert hasattr(self, "platforms"), "platforms must be set in derived classes"
         self.entities = {}
-        self.objects = weakref.WeakSet()
         super().__init__(id, manager, **kwargs)
-
-    async def async_shutdown(self):
-        """
-        Cleanup code called when the config entry is unloaded.
-        Beware, when a derived class owns some direct member pointers to entities,
-        be sure to invalidate them after calling the super() implementation.
-        This is especially true for Device(s) classes which need to stop
-        their async polling before invalidating the member pointers (which are
-        usually referred to inside the polling /parsing code)
-        """
-        await super().async_shutdown()
-
-        # TODO: REMOVE objects
-        self.log(
-            self.DEBUG,
-            "EntityManager.async_shutdown complete (objects: %s)",
-            self.objects,
-        )
 
     @property
     def display_name(self) -> str:
