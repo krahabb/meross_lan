@@ -130,9 +130,12 @@ class NamespaceHandler(logging.Loggable):
             else None
         )
         device.ns_handlers[ns] = self
+        device.shutdown_broadcast.add(self.shutdown)
 
     def shutdown(self):
-        """Cleanup possible circular references."""
+        super().shutdown()
+        self.parent.shutdown_broadcast.remove(self.shutdown)
+        del self.parent.ns_handlers[self.id]
         del self.handler  # especially this one
         assert not self.parsers, "parsers should have been cleared before shutdown"
 

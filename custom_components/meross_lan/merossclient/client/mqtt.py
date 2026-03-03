@@ -324,12 +324,12 @@ class AbstractMQTTConnection(AbstractClient):
         super().__init__(broker, parent, **kwargs)
         if not self.allow_publish:
             # install a method override to forcibly disable MQTT publish
-            self.async_publish_raw = MQTTConnection._async_publish_raw_disabled
+            self.async_publish_raw = AbstractMQTTConnection._async_publish_raw_disabled
 
         if MEROSSDEBUG:
 
             def _random_disconnect():
-                self._random_disconnect_unsub = self.loop.call_later(
+                self._random_disconnect_unsub = self.schedule_callback(
                     60, _random_disconnect
                 )
                 if self.is_connected:
@@ -347,7 +347,9 @@ class AbstractMQTTConnection(AbstractClient):
                             self.async_connect(), "random connect", eager_start=True
                         )
 
-            self._random_disconnect_unsub = self.loop.call_later(60, _random_disconnect)
+            self._random_disconnect_unsub = self.schedule_callback(
+                60, _random_disconnect
+            )
 
             def _cleanup_random_disconnect():
                 self._random_disconnect_unsub.cancel()
@@ -498,6 +500,10 @@ class MQTTConnection(AbstractMQTTConnection):
         _mqttc.on_publish = self._mqttc_publish
         _mqttc.suppress_exceptions = True
         _mqttc._easy_log = self._easy_log
+
+    def shutdown(self):
+        super().shutdown()
+        del self._mqttc
 
     def _easy_log(self, level, fmt: str, *args) -> None:
         # TODO: obfuscate in case (paho logs the topics...)

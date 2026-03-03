@@ -383,10 +383,9 @@ class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
 
             self._digest_parse = _digest_parse
 
-    @override
-    async def async_shutdown(self):
+    def shutdown(self):
         # fool the python inheritance pattern
-        await super().async_shutdown()
+        super().shutdown()
         del self.enable_check_device_time
         del self._digest_parse  # type: ignore[assignment]
         for _parse_method in tuple(
@@ -726,8 +725,8 @@ class SmokeAlarmSensor(SubDeviceEntity, MLEnumSensor):
         except KeyError:
             pass
 
-    async def async_shutdown(self):
-        await super().async_shutdown()
+    def shutdown(self):
+        super().shutdown()
         del self.binary_sensor_muted
         del self.binary_sensor_error
         del self.binary_sensor_alarm
@@ -813,8 +812,8 @@ class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
         super().__init__(subid, subdevice)
         self.sensor_humidity = MLHumiditySensor(subid, subdevice)
 
-    async def async_shutdown(self):
-        await super().async_shutdown()
+    def shutdown(self):
+        super().shutdown()
         del self.sensor_humidity
 
     @override
@@ -899,8 +898,8 @@ class MS130Sensor(MS100Sensor):
             {"channel": 0, "data": ["light", "temp", "humi"]},
         )
 
-    async def async_shutdown(self):
-        await super().async_shutdown()
+    def shutdown(self):
+        super().shutdown()
         del self.sensor_light
 
     @override
@@ -1042,8 +1041,8 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, MLSwitch):
         super().__init__(subid, subdevice)
         self.number_duration = MstSwitch.WateringDurationNumber(subid, subdevice)
 
-    async def async_shutdown(self):
-        await super().async_shutdown()
+    def shutdown(self):
+        super().shutdown()
         del self.number_duration
 
     @override

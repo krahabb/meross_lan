@@ -313,8 +313,8 @@ class MtsHoldAction(MLConfigSelect):
         )
         self.number_time.async_request_value = self._async_request_value_number_time
 
-    async def async_shutdown(self):
-        await MLConfigSelect.async_shutdown(self)
+    def shutdown(self):
+        MLConfigSelect.shutdown(self)
         del self.number_time
 
     # interface: self

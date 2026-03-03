@@ -85,8 +85,8 @@ class BaseDevice(mlm.EntityManager, device.PhysicalDevice):
         self.update_firmware = None
         super().__init__(id, parent, **kwargs)
 
-    async def async_shutdown(self):
-        await super().async_shutdown()
+    def shutdown(self):
+        super().shutdown()
         del self.update_firmware
 
     @override

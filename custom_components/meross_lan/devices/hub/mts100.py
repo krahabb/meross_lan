@@ -113,8 +113,8 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         for _entity in (self.number_adjust_temperature, self.schedule):
             subdevice.manager.register_parser_entity(_entity)
 
-    async def async_shutdown(self):
-        await super().async_shutdown()
+    def shutdown(self):
+        super().shutdown()
         del self.binary_sensor_window
         del self.switch_patch_hvacaction
         del self._parse

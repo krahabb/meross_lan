@@ -254,8 +254,17 @@ class Loggable(metaclass=abc.ABCMeta):
         self.log(VERBOSE, "init")
 
     async def async_shutdown(self):
+        """
+        Shutdown the Loggable instance by cancelling pending tasks and broadcasting the shutdown event.
+        This method should be the preferered way to orderly clean-up instance state and resources,
+        especially when async operations are involved, since it will wait for pending tasks to be
+        cancelled and completed before proceeding to synchronous shutdown by invoking the shutdown() method.
+        Subclasses can override either or both depending on their cleanup needs where the sync version should
+        be preferred for performance reasons, while the async version should be used when async operations
+        might be critical in the cleanup order (for example cancelling timers before awaiting for the
+        cleanup to proceed).
+        """
         self.log(VERBOSE, "async_shutdown")
-
         try:
             for task in tuple(self._tasks):
                 if task.done():
@@ -293,11 +302,15 @@ class Loggable(metaclass=abc.ABCMeta):
             for _listener in tuple(self.async_shutdown_broadcast):
                 await _listener()
             self.async_shutdown_broadcast.clear()
-        # broadcast and clear at the end since this
-        # will also cleanup the Broadcast objects linked to this Loggable
-        # see Loggable.Broadcast class.
-        self.shutdown_broadcast.broadcast()
-        self.shutdown_broadcast.clear()
+
+        self.shutdown()
+
+    def shutdown(self):
+        self.log(VERBOSE, "shutdown")
+        if self.shutdown_broadcast:
+            for _listener in tuple(self.shutdown_broadcast):
+                _listener()
+            self.shutdown_broadcast.clear()
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.id})"

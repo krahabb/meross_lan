@@ -118,17 +118,16 @@ class ConnectionSensor(MLDiagnosticSensor):
         )
         connection.sensor_connection = self
 
+    def shutdown(self):
+        super().shutdown()
+        self.connection.sensor_connection = None
+        del self.connection
+
     # interface: Loggable
     def configure_logger(self):
         self.logtag = (
             f"{self.__class__.__name__}({self.manager.loggable_broker(self.id)})"
         )
-
-    # interface: MLDiagnosticSensor
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        self.connection.sensor_connection = None
-        del self.connection
 
     # interface: self
     def update_devices(self):
@@ -243,8 +242,8 @@ class MQTTConnection(AbstractMQTTConnection):
         if profile.create_diagnostic_entities:
             ConnectionSensor(self)
 
-    async def async_shutdown(self):
-        await super().async_shutdown()
+    def shutdown(self):
+        super().shutdown()
         self.sensor_connection = None
 
     @override  # Loggable

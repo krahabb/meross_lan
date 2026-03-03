@@ -230,13 +230,13 @@ class MerossProfile(mlq.MQTTProfile):
             self._async_query_device_info,
         )
 
-    @override
     async def async_shutdown(self):
         if self._polling_query_device_info_unsub:
             self._polling_query_device_info_unsub.cancel()
             self._polling_query_device_info_unsub = None
         await super().async_shutdown()
         await self.apiclient.async_shutdown()
+        del self.apiclient
         self.api.profiles[self.id] = None
 
     # interface: ConfigEntryManager

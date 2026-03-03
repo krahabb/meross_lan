@@ -222,8 +222,8 @@ class Mts300Climate(MtsThermostatClimate):
         self.switch_fan_hold.async_turn_on = self._async_turn_on_switch_fan_hold
         self.switch_fan_hold.async_turn_off = self._async_turn_off_switch_fan_hold
 
-    async def async_shutdown(self):
-        await super().async_shutdown()
+    def shutdown(self):
+        super().shutdown()
         del self.switch_fan_hold
         del self.number_fan_hold
 

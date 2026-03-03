@@ -118,8 +118,8 @@ class Mts960Climate(MtsThermostatClimate):
         )
 
     # interface: MLEntity
-    async def async_shutdown(self):
-        await super().async_shutdown()
+    def shutdown(self):
+        super().shutdown()
         del self.binary_sensor_plug_state
         del self.number_timer_down_duration
         del self.number_timer_cycle_off_duration

@@ -395,9 +395,12 @@ class Device(PhysicalDevice):
         # In order to leave the client 'alive' call remove_client before shutting down the device.
         for client in tuple(self._clients.values()):
             await client.async_shutdown()
+        """REMOVE
         for handler in self.ns_handlers.values():
             handler.shutdown()
         self.ns_handlers.clear()
+        """
+        assert not self.ns_handlers, "NamespaceHandlers should have been cleared by now"
         self.digest_parsers.clear()
         self.digest_pollers.clear()
         self._lazypoll_requests.clear()

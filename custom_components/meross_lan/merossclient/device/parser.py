@@ -92,8 +92,8 @@ class NamespaceParser(logging.Loggable):
 
     __SLOTS__ = ()
 
-    async def async_shutdown(self):
-        await super().async_shutdown()
+    def shutdown(self):
+        super().shutdown()
         try:
             for handler in self._namespace_handlers:
                 _dispatcher: NamespaceParser.Dispatcher = handler.parsers[self.channel]  # type: ignore

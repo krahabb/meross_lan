@@ -523,8 +523,8 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
         )
 
     # interface: MLEntity
-    async def async_shutdown(self):
-        await super().async_shutdown()
+    def shutdown(self):
+        super().shutdown()
         del self.sensor_current_temperature  # type: ignore
         del self.select_track_sensor  # type: ignore
         del self.schedule  # type: ignore

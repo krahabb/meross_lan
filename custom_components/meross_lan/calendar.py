@@ -150,8 +150,8 @@ class MtsSchedule(MLEntity, calendar.CalendarEntity):
         climate.manager.enable_check_device_time()
 
     # interface: MLEntity
-    async def async_shutdown(self):
-        await super().async_shutdown()
+    def shutdown(self):
+        super().shutdown()
         del self.climate  # type: ignore
 
     def set_unavailable(self):

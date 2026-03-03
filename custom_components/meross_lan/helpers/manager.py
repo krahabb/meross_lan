@@ -144,11 +144,14 @@ class EntityManager(logging.Loggable):
         their async polling before invalidating the member pointers (which are
         usually referred to inside the polling /parsing code)
         """
-        await super().async_shutdown()
 
+        """REMOVE
         for entity in tuple(self.entities.values()):
             # async_shutdown will pop out of self.entities
             await entity.async_shutdown()
+        """
+
+        await super().async_shutdown()
 
         self.log(
             self.DEBUG,

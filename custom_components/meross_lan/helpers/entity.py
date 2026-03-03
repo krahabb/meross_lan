@@ -229,12 +229,26 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
             setattr(self, _attr_name, _attr_value)
 
         manager.entities[id] = self
+        manager.async_shutdown_broadcast.add(self.async_shutdown)
         try:
             manager.platforms[self.PLATFORM]([self])  # type: ignore
         except KeyError:
             manager.platforms[self.PLATFORM] = None
         except TypeError:
             pass  # platform setup not yet done
+
+    def shutdown(self):
+        super().shutdown()
+        self.manager.async_shutdown_broadcast.remove(self.async_shutdown)
+        if self._schedule_flush_state_unsub:
+            self._schedule_flush_state_unsub.cancel()
+            self._schedule_flush_state_unsub = None
+        try:
+            del self.flush_state  # remove any possible state callback registration
+        except AttributeError:
+            pass
+        del self.manager.entities[self.id]
+        del self.manager
 
     # interface: Entity
     @cached_property
@@ -252,18 +266,6 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         return await super().async_will_remove_from_hass()
 
     # interface: self
-    async def async_shutdown(self):
-        if self._schedule_flush_state_unsub:
-            self._schedule_flush_state_unsub.cancel()
-            self._schedule_flush_state_unsub = None
-        await super().async_shutdown()
-        try:
-            del self.flush_state  # remove any possible state callback registration
-        except AttributeError:
-            pass
-        del self.manager.entities[self.id]
-        del self.manager
-
     @final
     def register_state_callback(self, state_callback: "StateCallback", /):
         """Registers a callback to be called when flush_state is called."""

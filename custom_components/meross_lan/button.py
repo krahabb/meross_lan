@@ -53,9 +53,9 @@ class MLButton(MLEntity.PartialAvailableMixin, MLEntity, button.ButtonEntity):
         super().__init__(channel, manager, **kwargs)
         self.async_press = press_func
 
-    async def async_shutdown(self):
+    def shutdown(self):
+        super().shutdown()
         del self.async_press
-        await super().async_shutdown()
 
 
 class MLPersistentButton(MLButton):
