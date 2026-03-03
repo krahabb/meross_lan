@@ -102,14 +102,19 @@ class MerossMessage(dict):
         triggerSrc: str = mc.HEADER_TRIGGERSRC_DEFAULT,
         /,
     ):
-        key_header[mc.KEY_NAMESPACE] = namespace
-        key_header[mc.KEY_METHOD] = method
-        key_header[mc.KEY_PAYLOADVERSION] = 1
-        key_header[mc.KEY_TRIGGERSRC] = triggerSrc
-        key_header[mc.KEY_FROM] = from_
         return MerossMessage(
             {
-                mc.KEY_HEADER: key_header,
+                mc.KEY_HEADER: {
+                    mc.KEY_MESSAGEID: key_header[mc.KEY_MESSAGEID],
+                    mc.KEY_NAMESPACE: namespace,
+                    mc.KEY_METHOD: method,
+                    mc.KEY_PAYLOADVERSION: 1,
+                    mc.KEY_TRIGGERSRC: triggerSrc,
+                    mc.KEY_FROM: from_,
+                    mc.KEY_TIMESTAMP: key_header[mc.KEY_TIMESTAMP],
+                    mc.KEY_TIMESTAMPMS: key_header[mc.KEY_TIMESTAMPMS],
+                    mc.KEY_SIGN: key_header[mc.KEY_SIGN],
+                },
                 mc.KEY_PAYLOAD: payload,
             }
         )

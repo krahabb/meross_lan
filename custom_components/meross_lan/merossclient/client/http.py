@@ -58,9 +58,6 @@ class HttpClient(AbstractClient):
         _SESSION: ClassVar[aiohttp.ClientSession | None]
 
         _cipher: Cipher | None
-        _key_header: (
-            MerossHeaderType  # TODO: REMOVE and use last_request/last_response instead
-        )
 
     TRANSPORT = AbstractClient.Transport.HTTP  # type: ignore[override]
 
@@ -108,7 +105,6 @@ class HttpClient(AbstractClient):
         "_terminate",
         "_terminate_guard",
         "_cipher",
-        "_key_header",
     )
 
     def __init__(
@@ -131,7 +127,6 @@ class HttpClient(AbstractClient):
         self._terminate = False
         self._terminate_guard = 0
         self._cipher = None
-        self._key_header = {}  # type: ignore
         super().__init__(host, parent, **kwargs)
 
     @property
@@ -232,7 +227,6 @@ class HttpClient(AbstractClient):
             # we should never get here since raise_for_status raises for 4xx and 5xx
             raise MerossTransportError(f"Unexpected response status {response.status}")
         except Exception as e:
-            self._key_header = {}  # type: ignore
             self.log_exception(self.WARNING, e, "async_request_raw")
             raise
         finally:
@@ -244,8 +238,8 @@ class HttpClient(AbstractClient):
     ):
         key = self.key
         request = (
-            MerossMessage.build_keyhack(*args, self._key_header)
-            if key is None
+            MerossMessage.build_keyhack(*args, self.last_rx_message.header)
+            if key is None and self.last_rx_message
             else MerossMessage.build(*args, key)
         )
         response = await self.async_request_raw(request, **kwargs)
@@ -278,6 +272,4 @@ class HttpClient(AbstractClient):
         except KeyError:
             pass
 
-        if key is None:
-            self._key_header = response.header
         return response
