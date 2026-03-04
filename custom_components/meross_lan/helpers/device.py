@@ -1424,7 +1424,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                 if last_config_delay > 1800:
                     # 30 minutes 'cooldown' in order to avoid restarting
                     # the procedure too often
-                    self.create_task(
+                    mqtt.create_task(
                         mqtt.async_request(*mn.Appliance_System_Clock.request_default),
                         ".check_device_time",
                         eager_start=True,

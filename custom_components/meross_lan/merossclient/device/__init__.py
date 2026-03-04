@@ -386,12 +386,9 @@ class Device(PhysicalDevice):
     @override
     async def async_shutdown(self):
         self.polling_stop()
-        await super().async_shutdown()
-        # Clients will be forcibly disconnected/shutdown at this point since the base class shutdown
-        # will disconnect the device and so trigger the clients disconnect logic.
-        # In order to leave the client 'alive' call remove_client before shutting down the device.
         for client in tuple(self._clients.values()):
             await client.async_shutdown()
+        await super().async_shutdown()
         assert not self.ns_handlers, "NamespaceHandlers should have been cleared by now"
         self.digest_parsers.clear()
         self.digest_pollers.clear()
@@ -406,9 +403,9 @@ class Device(PhysicalDevice):
         # use pre 3.13 compatible syntax/semantics
         for earliest_connect in asyncio.as_completed(
             {
-                self.create_task(
+                _client.create_task(
                     _client.async_request(*handler_all.polling_request),
-                    f".async_poll_{_client.TRANSPORT}_task",
+                    f".async_connect_{_client.TRANSPORT}_task",
                     eager_start=True,
                 )
                 for _client in self._clients.values()

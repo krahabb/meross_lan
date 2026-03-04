@@ -290,17 +290,15 @@ class Loggable(metaclass=abc.ABCMeta):
                     self.log_exception(
                         self.WARNING,
                         exception,
-                        "cancelling task %r during %r shutdown",
+                        "cancelling task %r during shutdown",
                         task,
-                        self,
                     )
 
             if self._tasks:
                 self.log(
                     self.WARNING,
-                    "Some tasks were not properly shutdown %s in %r",
+                    "Some tasks were not properly shutdown (%r)",
                     self._tasks,
-                    self,
                 )
 
         except AttributeError:
@@ -381,6 +379,7 @@ class Loggable(metaclass=abc.ABCMeta):
         return task
 
     def _done_task_callback(self, task: asyncio.Future):
+        self._tasks.remove(task)
         try:
             task.result()
         except (asyncio.CancelledError, Exception) as e:
@@ -390,7 +389,6 @@ class Loggable(metaclass=abc.ABCMeta):
                 "Task %r",
                 task,
             )
-        self._tasks.remove(task)
 
     def schedule_async_callback(
         self, delay: float, target: "Callable[..., Coroutine]", *args
@@ -415,7 +413,6 @@ class Loggable(metaclass=abc.ABCMeta):
     def schedule_callback(self, delay: float, target: "Callable", *args):
         """Schedules a sync callback to be called after a delay by calling loop.call_later.
         See schedule_async_callback for more details."""
-
         timer = self.loop.call_later(delay, self._callback_wrapper, target, *args)
         try:
             # drop if already scheduled (re-schedule)
@@ -431,7 +428,7 @@ class Loggable(metaclass=abc.ABCMeta):
         try:
             self._timers[target].cancel()
             del self._timers[target]
-        except (KeyError, AttributeError):
+        except (AttributeError, KeyError):
             pass
 
     def _callback_wrapper(self, target: "Callable", *args):

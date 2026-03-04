@@ -390,7 +390,7 @@ class MQTTConnection(AbstractMQTTConnection):
             ):
                 # not really needed but we would like to always have the
                 # MQTT hub entry in case so if the user removed that..retrigger
-                profile.create_task(
+                api.create_task(
                     api.flow_manager.async_init(
                         mlc.DOMAIN,
                         context={"source": "hub"},
@@ -442,7 +442,7 @@ class MQTTConnection(AbstractMQTTConnection):
                 if key is not None:
                     return
 
-            profile.create_task(
+            self.create_task(
                 self.async_try_discovery(uuid),
                 f".async_try_discovery({uuid})",
                 eager_start=True,

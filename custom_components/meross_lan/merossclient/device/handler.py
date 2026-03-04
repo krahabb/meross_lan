@@ -405,8 +405,8 @@ class NamespaceHandler(logging.Loggable):
         Helper to schedule a straigth query to get the whole namespace payload.
         This shouldnt be used for namespaces that don't support GET.
         """
-        self.parent.create_task(
-            self.async_get_safe(*channels), task_name or self.id, eager_start=True
+        self.create_task(
+            self.async_get(*channels), task_name or self.id, eager_start=True
         )
 
     async def async_set(

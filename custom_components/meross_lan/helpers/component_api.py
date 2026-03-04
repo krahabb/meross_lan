@@ -220,7 +220,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
         else:
             key = self.parent.key
         if message.method == mc.METHOD_SET:
-            self.parent.create_task(
+            self.create_task(
                 self.async_publish_raw(
                     MerossAckReply(
                         message,
@@ -241,7 +241,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
         # and it appears newer mss315 could abort their connection
         # if not replied (see #346)
         if message.method == mc.METHOD_PUSH:
-            self.parent.create_task(
+            self.create_task(
                 self.async_publish_raw(
                     MerossPushReply(message, message.payload),
                     uuid=message.uuid,
@@ -259,7 +259,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
         # Note: I actually see this NS only on mss310 plugs
         # (msl120j bulb doesnt have it)
         if message.method == mc.METHOD_PUSH:
-            self.parent.create_task(
+            self.create_task(
                 self.async_publish_raw(
                     MerossPushReply(
                         message, {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(self.time())}}
@@ -318,8 +318,8 @@ class ComponentApi(mlq.MQTTProfile):
                 api.hass, self._bt_unavailable, address, connectable=True
             )
             api._bt_devices[address] = self
-            self._init_task = api.create_task(
-                self._async_init(), f"BTDevice({address})._async_init"
+            self._init_task = self.create_task(
+                self._async_init(), f"BTDevice({address}).__init__"
             )
 
         async def _async_init(self):
@@ -408,9 +408,7 @@ class ComponentApi(mlq.MQTTProfile):
         @callback
         def _bt_unavailable(self, info: ha_bt.BluetoothServiceInfoBleak):
             self.log(self.DEBUG, "_bt_unavailable(info: %s)", info)
-            self.api.create_task(
-                self.async_shutdown(), "_bt_unavailable", eager_start=True
-            )
+            self.create_task(self.async_shutdown(), "_bt_unavailable", eager_start=True)
 
     if TYPE_CHECKING:
         hass: Final[HomeAssistant]

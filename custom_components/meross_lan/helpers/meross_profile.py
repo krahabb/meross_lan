@@ -349,7 +349,7 @@ class MerossProfile(mlq.MQTTProfile):
 
         mqttconnection = self._get_mqttconnection(broker)
         if mqttconnection.state_inactive:
-            self.create_task(
+            mqttconnection.create_task(
                 mqttconnection.async_connect(),
                 "attach_mqtt.schedule_connect",
                 eager_start=True,
