@@ -35,7 +35,6 @@ class MLNumber(MLNumericEntity, number.NumberEntity):
         class Args(MLNumericEntity.Args):
             device_class: NotRequired[number.NumberDeviceClass | None]
 
-        manager: "BaseDevice"
         DEVICE_CLASS_DURATION: Final[number.NumberDeviceClass]
         DEVICE_CLASS_TEMPERATURE_DELTA: Final[number.NumberDeviceClass]
         # HA core entity attributes:
@@ -73,6 +72,9 @@ class MLConfigNumber(MLNumber):
     """
     Base class for any configurable numeric parameter in the device.
     """
+
+    if TYPE_CHECKING:
+        parent: Final[BaseDevice]  # type: ignore[override]
 
     DEBOUNCE_DELAY = 1
 

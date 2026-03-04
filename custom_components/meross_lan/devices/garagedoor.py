@@ -40,7 +40,7 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor.PartialAvailableMixin, MLBinary
 
     def __init__(self, garage: "MLGarage", /):
         self.extra_state_attributes = {}
-        super().__init__(garage.channel, garage.manager, device_value=False)
+        super().__init__(garage.channel, garage.parent, device_value=False)
 
     def update_ok(self, was_closing, /):
         extra_state_attributes = self.extra_state_attributes
@@ -71,7 +71,7 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
     def __init__(
         self,
         channel: int | None,
-        manager: "Device",
+        parent: "Device",
         key: str,
         *,
         device_value=None,
@@ -80,7 +80,7 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
         MLSwitch.__init__(
             self,
             channel,
-            manager,
+            parent,
             entity_key=f"config_{key}",
             device_value=device_value,
             name=key,
@@ -97,13 +97,13 @@ class MLGarageDoorEnableSwitch(MLGarageMultipleConfigSwitch):
     def __init__(
         self,
         channel: int,
-        manager: "Device",
+        parent: "Device",
         key: str,
         *,
         device_value=None,
     ):
         MLGarageMultipleConfigSwitch.__init__(
-            self, channel, manager, key, device_value=device_value
+            self, channel, parent, key, device_value=device_value
         )
         self._channel_enable(device_value)
 
@@ -118,9 +118,9 @@ class MLGarageDoorEnableSwitch(MLGarageMultipleConfigSwitch):
     def _channel_enable(self, enabled, /):
         """enables/disables all the entities of this channel garageDoor in the
         entity registry"""
-        registry_update_entity = self.manager.api.entity_registry.async_update_entity
+        registry_update_entity = self.parent.api.entity_registry.async_update_entity
         disabler = er.RegistryEntryDisabler.INTEGRATION
-        for entity in self.manager.entities.values():
+        for entity in self.parent.entities.values():
             if (
                 (entity.channel == self.channel)
                 and (entity is not self)
@@ -169,7 +169,7 @@ class MLGarageMultipleConfigNumber(MLConfigNumber):
     def __init__(
         self,
         channel: int | None,
-        manager: "Device",
+        parent: "Device",
         key: str,
         **kwargs: "Unpack[MLConfigNumber.Args]",
     ):
@@ -179,7 +179,7 @@ class MLGarageMultipleConfigNumber(MLConfigNumber):
         kwargs["device_class"], kwargs["device_scale"] = (
             MLGarageMultipleConfigNumber.KEY_TO_DEVICE_CLASS_MAP.get(key, (None, 1))
         )
-        MLConfigNumber.__init__(self, channel, manager, **kwargs)
+        MLConfigNumber.__init__(self, channel, parent, **kwargs)
 
 
 class MLGarageConfigNumber(MLGarageMultipleConfigNumber):
@@ -210,7 +210,7 @@ class MLGarageEmulatedConfigNumber(MLEmulatedNumber):
         MLEmulatedNumber.__init__(
             self,
             garage.channel,
-            garage.manager,
+            garage.parent,
             entity_key=f"config_{key}",
             device_value=garage._transition_duration,
             name=key,
@@ -259,7 +259,7 @@ class MLGarage(MLCover):
         "number_open_timeout",
     )
 
-    def __init__(self, channel: int, manager: "Device", /):
+    def __init__(self, channel: int, device: "Device", /):
         self._config = {}
         self._transition_duration = (
             mlc.PARAM_GARAGEDOOR_TRANSITION_MAXDURATION
@@ -269,10 +269,10 @@ class MLGarage(MLCover):
         self.extra_state_attributes = {
             self.ATTR_TRANSITION_DURATION: self._transition_duration
         }
-        MLCover.__init__(self, channel, manager)
-        ability = manager.descriptor.ability
-        manager.register_parser_entity(self)
-        manager.register_togglex_channel(self, False)
+        MLCover.__init__(self, channel, device)
+        ability = device.descriptor.ability
+        device.register_parser_entity(self)
+        device.register_togglex_channel(self, False)
         self.binary_sensor_timeout = MLGarageTimeoutBinarySensor(self)
         if mn.Appliance_GarageDoor_MultipleConfig in ability:
             # historically, when MultipleConfig appeared, these used to be
@@ -281,12 +281,12 @@ class MLGarage(MLCover):
             # We'll then override this initial guessing when we _parse_config
             # should those new keys appear
             self.number_close_timeout = MLGarageMultipleConfigNumber(
-                channel, manager, mc.KEY_SIGNALCLOSE
+                channel, device, mc.KEY_SIGNALCLOSE
             )
             self.number_open_timeout = MLGarageMultipleConfigNumber(
-                channel, manager, mc.KEY_SIGNALOPEN
+                channel, device, mc.KEY_SIGNALOPEN
             )
-            manager.register_parser(self, mn.Appliance_GarageDoor_MultipleConfig)
+            device.register_parser(self, mn.Appliance_GarageDoor_MultipleConfig)
         else:
             self.number_close_timeout = None
             self.number_open_timeout = None
@@ -345,8 +345,8 @@ class MLGarage(MLCover):
         _open = p_state[mc.KEY_OPEN]
         self.is_closed = not _open
         if p_state.get(mc.KEY_EXECUTE) and open_request != _open:
-            manager = self.manager
-            self._transition_start = manager.last_rx_epoch
+            device = self.parent
+            self._transition_start = device.last_rx_epoch
             if open_request:
                 self.is_closing = False
                 self.is_opening = True
@@ -356,7 +356,7 @@ class MLGarage(MLCover):
                     # this happens (once) when we don't have MULTIPLECONFIG ns support
                     # we'll then try use the 'x device' CONFIG or (since it could be missing)
                     # just build an emulated config entity
-                    self.number_open_timeout = manager.entities.get(
+                    self.number_open_timeout = device.entities.get(
                         f"config_{mc.KEY_DOOROPENDURATION}"
                     ) or MLGarageEmulatedConfigNumber(  # type: ignore
                         self, mc.KEY_DOOROPENDURATION
@@ -371,7 +371,7 @@ class MLGarage(MLCover):
                     # this happens (once) when we don't have MULTIPLECONFIG ns support
                     # we'll then try use the 'x device' CONFIG or (since it could be missing)
                     # just build an emulated config entity
-                    self.number_close_timeout = manager.entities.get(
+                    self.number_close_timeout = device.entities.get(
                         f"config_{mc.KEY_DOORCLOSEDURATION}"
                     ) or MLGarageEmulatedConfigNumber(  # type: ignore
                         self, mc.KEY_DOORCLOSEDURATION
@@ -421,9 +421,7 @@ class MLGarage(MLCover):
             # Also to note: if we're on HTTP this sampled time could happen anyway after the 'real'
             # state switched to 'closed' so we're likely going to measure in exceed of real transition duration
             if is_closed:
-                transition_duration = (
-                    self.manager.last_rx_epoch - self._transition_start
-                )
+                transition_duration = self.parent.last_rx_epoch - self._transition_start
                 # autoregression filtering applying 20% of last updated sample
                 self._update_transition_duration(
                     int((4 * self._transition_duration + transition_duration) / 5)
@@ -448,7 +446,7 @@ class MLGarage(MLCover):
           "buzzerEnable": 0
         },
         """
-        entities = self.manager.entities
+        entities = self.parent.entities
         entity_id_prefix = f"{self.channel}_config_"
         for key, value in payload.items():
             if key in MLGarage.CONFIG_KEY_EXCLUDED or (self._config.get(key) == value):
@@ -461,7 +459,7 @@ class MLGarage(MLCover):
                         key, MLGarageMultipleConfigNumber
                     )
                     entity = entity_class(
-                        self.channel, self.manager, key, device_value=value
+                        self.channel, self.parent, key, device_value=value
                     )
                     if key == mc.KEY_DOORCLOSEDURATION:
                         self.number_close_timeout = entity  # type: ignore
@@ -486,7 +484,7 @@ class MLGarage(MLCover):
 
     @override
     def _transition_callback(self, /):
-        if self.manager.transport is Transport.HTTP and not self.manager.mqtt_active:
+        if self.parent.transport is Transport.HTTP and not self.parent.mqtt_active:
             self.handler_ns.schedule_get(self.channel)
 
     @override

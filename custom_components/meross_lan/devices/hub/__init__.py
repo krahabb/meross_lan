@@ -80,12 +80,12 @@ class HubSubIdChannelMixin(MLEntity if TYPE_CHECKING else object):
     """
 
     if TYPE_CHECKING:
-        manager: "SubDevice"
+        parent: Final["SubDevice"]  # type: ignore[override]
 
     @override
     async def async_request_value(self, device_value, /):
         (
-            await self.manager.async_request(
+            await self.parent.async_request(
                 *self.ns.request_set(
                     {mc.KEY_CHANNEL: 0, self.key_value: device_value}, self.channel
                 )
@@ -100,14 +100,14 @@ class HubSubIdDeviceCfgMixin(MLEntity.GroupListChannelMixin):
     """
 
     if TYPE_CHECKING:
-        manager: "SubDevice"
+        parent: Final["SubDevice"]  # type: ignore[override]
 
     ns = mn_h.Appliance_Config_DeviceCfg
 
     @override
     async def async_request_value(self, device_value, /):
         (
-            await self.manager.async_request(
+            await self.parent.async_request(
                 *self.ns.request_set(
                     {mc.KEY_CHANNEL: 0, self.key_group: {self.key_value: device_value}},
                     self.channel,
@@ -309,9 +309,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
     """
 
     if TYPE_CHECKING:
-        # overrides
-        manager: "HubMixin"
-
+        parent: Final[HubMixin]  # type: ignore[override]
         # self
         NS_SUBDEVICE: ClassVar[Iterable[Namespace]]
         model: Final[str]
@@ -405,7 +403,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
 
     @override
     def generate_unique_id(self, entity: MLEntity, /):
-        return f"{self.manager.id}_{entity.id}"
+        return f"{self.parent.id}_{entity.id}"
 
     # interface: PhysicalDevice
     @property
@@ -419,7 +417,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
     def unique_id(self) -> str:
         # temporary fix to keep the embedded battery sensor unique_id
         # compatible with previous layout
-        return f"{self.manager.id}_{self.id}_battery"
+        return f"{self.parent.id}_{self.id}_battery"
 
     @override
     def set_available(self):
@@ -550,7 +548,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
             self.api.device_registry.async_update_device(device_entry.id, **kwargs)
 
     def _unknown_ns_parse(self, nh: NamespaceHandler, payload: dict, /):
-        if self.manager.create_diagnostic_entities:
+        if self.parent.create_diagnostic_entities:
             # since we're parsing an unknown namespace, our euristic about
             # the key_namespace might be wrong so we use another euristic
             if not nh.polling_strategy:
@@ -587,7 +585,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
             # carrying similar payloads structures. We'll be conservative
             # by not 'exploiting' lists in payloads since they usually carry
             # historic data or so
-            if self.manager.create_diagnostic_entities:
+            if self.parent.create_diagnostic_entities:
                 self.parse_undefined_dict(key, payload, self.id)
         except Exception as exception:
             self.log_exception(
@@ -607,8 +605,7 @@ class SubDeviceEntity(MLEntity):
     though some specializations could be needed for some subdevices."""
 
     if TYPE_CHECKING:
-        # overrides
-        manager: "SubDevice"
+        parent: Final[SubDevice]  # type: ignore[override]
 
         DIGEST_MAP: Final[dict[str, type[Self]]]
         """Static registration map for SubDeviceEntity subclasses by their KEY_DIGEST."""
@@ -637,10 +634,10 @@ class SubDeviceEntity(MLEntity):
             pass
 
     def _parse_all(self, payload: dict, /):
-        self.manager._parse_online(payload[mc.KEY_ONLINE])
+        self.parent._parse_online(payload[mc.KEY_ONLINE])
         if not self.available:
             return
-        self._parse(payload[self.manager.key_digest])
+        self._parse(payload[self.parent.key_digest])
 
 
 # TODO: this lame import is to be later refactored to use lazy imports
@@ -750,6 +747,7 @@ class SmokeAlarmSensor(SubDeviceEntity, MLEnumSensor):
 class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
 
     class SensorAdjustNumber(MLConfigNumber):
+
         ns = mn_h.Appliance_Hub_Sensor_Adjust
 
         _attr_device_scale = 10
@@ -763,7 +761,7 @@ class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
             # the 'new adjust value' we have to issue the difference against the
             # currently configured one
             (
-                await self.manager.async_request(
+                await self.parent.async_request(
                     *self.ns.request_set(
                         {self.key_value: device_value - self.device_value}, self.channel
                     )
@@ -824,7 +822,7 @@ class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
 
     @override
     def _parse_all(self, payload: "mt_h.Sensor_All_ms100", /):
-        self.manager._parse_online(payload[mc.KEY_ONLINE])
+        self.parent._parse_online(payload[mc.KEY_ONLINE])
         if self.available:
             self._update_sensors(
                 payload[mc.KEY_TEMPERATURE][mc.KEY_LATEST],
@@ -832,8 +830,8 @@ class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
             )
 
     def _parse_adjust(self, payload: "mt_h.Sensor_Adjust"):
-        subdevice = self.manager
-        subdevice.manager.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
+        subdevice = self.parent
+        subdevice.parent.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
             self,
             MS100Sensor.AdjustTemperatureNumber(
                 subdevice.id,
@@ -868,8 +866,8 @@ class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
         _poll_adjust = bool(self.update_device_value(temperature))
         _poll_adjust |= bool(self.sensor_humidity.update_device_value(humidity))
         if _poll_adjust:
-            handler = self.manager.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust]
-            if handler.last_poll_epoch < (self.manager.manager.last_rx_epoch - 30):
+            handler = self.parent.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust]
+            if handler.last_poll_epoch < (self.parent.parent.last_rx_epoch - 30):
                 handler.polling_epoch_next = 0.0
 
 
@@ -891,7 +889,7 @@ class MS130Sensor(MS100Sensor):
     def __init__(self, subid: str, subdevice: "SubDevice", /):
         super().__init__(subid, subdevice)
         self.sensor_light = MLLightSensor(subid, subdevice)
-        subdevice.manager.get_handler(
+        subdevice.parent.get_handler(
             mn_h.Appliance_Control_Sensor_LatestX
         ).register_parser(
             self,

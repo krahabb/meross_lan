@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
     from ..helpers.device import Device
     from ..helpers.entity import ChannelType
+    from ..helpers.manager import EntityManager
 
 
 class PresenceConfigBase(MLConfigSelect.GroupListChannelMixin):
@@ -49,10 +50,10 @@ class PresenceConfigModeBase(PresenceConfigSelectBase):
         2: "2",
     }
 
-    def __init__(self, channel: "ChannelType", manager: "Device", key: str):
+    def __init__(self, channel: "ChannelType", parent: "EntityManager", key: str):
         self.key_value = key
         PresenceConfigSelectBase.__init__(
-            self, channel, manager, entity_key=f"presence_config_mode_{key}", name=key
+            self, channel, parent, entity_key=f"presence_config_mode_{key}", name=key
         )
 
 
@@ -112,10 +113,10 @@ class PresenceConfigMthX(PresenceConfigNumberBase):
     native_min_value = 1
     native_step = 1
 
-    def __init__(self, channel: "ChannelType", manager: "Device", key: str, /):
+    def __init__(self, channel: "ChannelType", parent: "EntityManager", key: str, /):
         self.key_value = key
         PresenceConfigNumberBase.__init__(
-            self, channel, manager, entity_key=f"presence_config_mthx_{key}", name=key
+            self, channel, parent, entity_key=f"presence_config_mthx_{key}", name=key
         )
 
 
@@ -123,17 +124,17 @@ class PresenceConfigMode(PresenceConfigModeBase):
 
     _entities: tuple[PresenceConfigBase, ...]
 
-    def __init__(self, channel: "ChannelType", manager: "Device", /):
-        PresenceConfigModeBase.__init__(self, channel, manager, mc.KEY_WORKMODE)
-        manager.get_handler(mn.Appliance_Control_Presence_Config).register_parsers(
+    def __init__(self, channel: "ChannelType", device: "Device", /):
+        PresenceConfigModeBase.__init__(self, channel, device, mc.KEY_WORKMODE)
+        device.get_handler(mn.Appliance_Control_Presence_Config).register_parsers(
             self,
-            PresenceConfigModeBase(channel, manager, mc.KEY_TESTMODE),
-            PresenceConfigNoBodyTime(channel, manager),
-            PresenceConfigDistance(channel, manager),
-            PresenceConfigSensitivity(channel, manager),
-            PresenceConfigMthX(channel, manager, mc.KEY_MTH1),
-            PresenceConfigMthX(channel, manager, mc.KEY_MTH2),
-            PresenceConfigMthX(channel, manager, mc.KEY_MTH3),
+            PresenceConfigModeBase(channel, device, mc.KEY_TESTMODE),
+            PresenceConfigNoBodyTime(channel, device),
+            PresenceConfigDistance(channel, device),
+            PresenceConfigSensitivity(channel, device),
+            PresenceConfigMthX(channel, device, mc.KEY_MTH1),
+            PresenceConfigMthX(channel, device, mc.KEY_MTH2),
+            PresenceConfigMthX(channel, device, mc.KEY_MTH3),
         )
 
 
@@ -141,7 +142,8 @@ class MLPresenceSensor(MLNumericSensor):
     """ms600 presence sensor."""
 
     if TYPE_CHECKING:
-        manager: "Device"
+        # manager: "Device" pass
+        pass
 
     ENTITY_KEY = "sensor_presence"
 
@@ -156,7 +158,7 @@ class MLPresenceSensor(MLNumericSensor):
     def __init__(
         self,
         channel: "ChannelType",
-        manager: "Device",
+        manager: "EntityManager",
         /,
         **kwargs: "Unpack[MLNumericSensor.Args]",
     ):

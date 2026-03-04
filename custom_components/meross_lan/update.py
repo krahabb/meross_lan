@@ -7,7 +7,7 @@ from .helpers.entity import MLEntity
 from .merossclient.protocol import namespaces as mn
 
 if TYPE_CHECKING:
-    from typing import ClassVar, NotRequired
+    from typing import ClassVar, Final, NotRequired
 
     from .helpers.device import BaseDevice
 
@@ -22,7 +22,7 @@ class MLUpdate(MLEntity.PartialAvailableMixin, MLEntity, update.UpdateEntity):
         class Args(MLEntity.Args):
             device_class: NotRequired[update.UpdateDeviceClass | None]
 
-        manager: BaseDevice
+        parent: Final[BaseDevice]  # type: ignore[override]
 
         # HA core entity attributes:
         _attr_device_class: ClassVar[update.UpdateDeviceClass | None]
@@ -48,24 +48,24 @@ class MLUpdate(MLEntity.PartialAvailableMixin, MLEntity, update.UpdateEntity):
         "title",
     )
 
-    def __init__(self, manager: "BaseDevice", /):
+    def __init__(self, device: "BaseDevice", /):
         self.supported_features = self._attr_supported_features
-        self.title = manager.display_name
+        self.title = device.display_name
         self.unique_id = None
         self.installed_version, self.latest_version, self.release_summary = (
-            manager.get_upgrade_info()
+            device.get_upgrade_info()
         )
-        super().__init__(None, manager)
+        super().__init__(None, device)
 
     def update_info(self, /):
         self.installed_version, self.latest_version, self.release_summary = (
-            self.manager.get_upgrade_info()
+            self.parent.get_upgrade_info()
         )
         self.flush_state()
 
     @MLEntity.ha_action
     async def async_install(self, version: str | None, backup: bool, **kwargs):
-        basedevice = self.manager
+        basedevice = self.parent
         if not basedevice.is_connected:
             raise HomeAssistantError("Device is offline")
         upgrade_payload = basedevice.get_upgrade_payload()

@@ -87,11 +87,11 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         is_diagnostic: ClassVar[bool]
         """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
 
+        parent: Final[EntityManager]  # type: ignore[override]
         handler_ns: NamespaceHandler  # override NamespaceParser typing
         key_value: str  # defaulted to 'value'
         _parse_togglex: Callable[[JsonDict], Any]
 
-        manager: EntityManager  # Final
         channel: Final[ChannelType | None]
         entitykey: Final[str | None]
         # used to speed-up checks if entity is enabled and loaded
@@ -145,7 +145,6 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
 
     __slots__ = (
         # meross_lan managed attributes
-        "manager",
         "channel",
         "entitykey",
         "hass_connected",
@@ -175,11 +174,6 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         entities for the same channel and usually equal to device_class (but might not be)
         - device_class: used by HA to set some soft 'class properties' for the entity
         """
-        # TODO: migrate to using 'parent' instead of 'manager' and maybe distinguish device/client access from
-        # entity management access with two different attributes. This in turn strongly depends on how
-        # we come out when 'enriching' namespaceParser behavior since client access should be managed
-        # through that behavior.
-        self.manager = manager
         if type(channel) is mn.Namespace:
             # TODO: ugly trick...let's see if this can be 'linearized' through some future refactoring.
             # this is a special case for 'EntityNamespaceMixin' entities which are also NamespaceHandlers
@@ -203,7 +197,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
             ), "provide at least channel or entitykey (cannot be 'None' together)"
         assert (
             id not in manager.entities
-        ), f"id:{id} is not unique inside manager.entities"
+        ), f"id:{id} is not unique inside parent.entities"
         super().__init__(id, manager)
         self.channel = channel
         self.entitykey = entitykey
@@ -248,18 +242,17 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
 
     def shutdown(self):
         super().shutdown()
-        self.manager.async_shutdown_broadcast.remove(self.async_shutdown)
+        self.parent.async_shutdown_broadcast.remove(self.async_shutdown)
         try:
             del self.flush_state  # remove any possible state callback registration
         except AttributeError:
             pass
-        del self.manager.entities[self.id]
-        del self.manager
+        del self.parent.entities[self.id]
 
     # interface: Entity
     @cached_property
     def unique_id(self) -> str | None:
-        return self.manager.generate_unique_id(self)
+        return self.parent.generate_unique_id(self)
 
     async def async_added_to_hass(self):
         self.log(self.VERBOSE, "Added to HomeAssistant")
@@ -446,7 +439,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         """
 
         if TYPE_CHECKING:
-            manager: BaseDevice
+            parent: Final[BaseDevice]  # type: ignore[override]
             key_group: str
             key_value: str
 
@@ -455,7 +448,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         # interface: MLEntity
         async def async_request_value(self, device_value, /):
             (
-                await self.manager.async_request(
+                await self.parent.async_request(
                     *self.ns.request_set(
                         {self.key_group: {self.key_value: device_value}}, self.channel
                     )
@@ -493,7 +486,7 @@ class MLBinaryEntity(MLEntity):
     def __init__(
         self,
         channel: "ChannelType | None",
-        manager: "BaseDevice",
+        parent: "EntityManager",
         /,
         **kwargs: "Unpack[Args]",
     ):
@@ -504,7 +497,7 @@ class MLBinaryEntity(MLEntity):
                 self.is_on = False
             case _:
                 self.is_on = None
-        super().__init__(channel, manager, **kwargs)
+        super().__init__(channel, parent, **kwargs)
 
     def set_unavailable(self):
         self.is_on = None
@@ -575,7 +568,7 @@ class MLNumericEntity(MLEntity):
     def __init__(
         self,
         channel: "ChannelType | None",
-        manager: "EntityManager",
+        parent: "EntityManager",
         /,
         **kwargs: "Unpack[Args]",
     ):
@@ -596,7 +589,7 @@ class MLNumericEntity(MLEntity):
                 )
             )
 
-        super().__init__(channel, manager, **kwargs)
+        super().__init__(channel, parent, **kwargs)
 
     def set_unavailable(self):
         self.device_value = None
@@ -626,9 +619,6 @@ class EntityNamespaceMixin(NamespaceHandler, MLEntity):
     should they're disabled in HA.
     """
 
-    if TYPE_CHECKING:
-        manager: Device
-
     @classmethod
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
         assert ns is cls.ns
@@ -643,7 +633,7 @@ class EntityNamespaceMixin(NamespaceHandler, MLEntity):
         # since in v6.x.x entity.id initialization is different (at least for EntityNamespaceMixin entities)
         # and is not based on channel/entitykey but just on NamespaceHandler.id (mn.Namespace).
         # keep in mind these entities were already init'ed with channel = None
-        return f"{self.manager.id}_{self.entitykey}"
+        return f"{self.parent.id}_{self.entitykey}"
 
     async def async_added_to_hass(self):
         self.polling_strategy = self.DEFAULT_CONFIG[-1]

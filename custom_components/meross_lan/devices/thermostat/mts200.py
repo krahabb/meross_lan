@@ -54,11 +54,11 @@ class Mts200Climate(MtsThermostatClimate):
         "_mts_summermode_supported",
     )
 
-    def __init__(self, channel: int, manager: "Device", /):
-        MtsThermostatClimate.__init__(self, channel, manager)
+    def __init__(self, channel: int, device: "Device", /):
+        MtsThermostatClimate.__init__(self, channel, device)
         self._mts_summermode = None
         self._mts_summermode_supported = (
-            mn_t.Appliance_Control_Thermostat_SummerMode in manager.descriptor.ability
+            mn_t.Appliance_Control_Thermostat_SummerMode in device.descriptor.ability
         )
         if self._mts_summermode_supported:
             self.hvac_modes = [
@@ -92,7 +92,7 @@ class Mts200Climate(MtsThermostatClimate):
             # this is an indicator the device supports it
             summermode = self.HVAC_MODE_TO_MTS_SUMMERMODE[hvac_mode]
             if self._mts_summermode != summermode:
-                await self.manager.ns_handlers[
+                await self.parent.ns_handlers[
                     mn_t.Appliance_Control_Thermostat_SummerMode
                 ].async_set_c_ex({mc.KEY_MODE: summermode}, self)
 

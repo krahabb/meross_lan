@@ -40,7 +40,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
 
         def __init__(self, climate: "Mts100Climate", /):
             MtsClimate.Schedule.__init__(self, climate)
-            self._schedule_unit_time = climate.manager.manager.descriptor.ability.get(
+            self._schedule_unit_time = climate.parent.parent.descriptor.ability.get(
                 mn_h.Appliance_Hub_Mts100_ScheduleB, {}
             ).get(mc.KEY_SCHEDULEUNITTIME, 15)
 
@@ -111,7 +111,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         )
         self.switch_patch_hvacaction.register_state_callback(self.flush_state)
         for _entity in (self.number_adjust_temperature, self.schedule):
-            subdevice.manager.register_parser_entity(_entity)
+            subdevice.parent.register_parser_entity(_entity)
 
     def shutdown(self):
         super().shutdown()
@@ -170,7 +170,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
             # This is intended (right now) to allow the user change
             # the setpoint without implying the device switch on.
             # Turning on/off the device must be an explicit action on HVACMode.
-            await self.manager.async_request(
+            await self.parent.async_request(
                 *mn_h.Appliance_Hub_Mts100_Mode.request_set(
                     {mc.KEY_STATE: mc.MTS100_MODE_CUSTOM}, self.id
                 )
@@ -185,12 +185,12 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
     @override
     async def async_request_preset(self, mode: int, /):
         """Requests an mts mode and (ensure) turn-on"""
-        await self.manager.async_request(
+        await self.parent.async_request(
             *mn_h.Appliance_Hub_Mts100_Mode.request_set({mc.KEY_STATE: mode}, self.id)
         )
         self._mts_mode = mode
         if not self._mts_onoff:
-            await self.manager.async_request(
+            await self.parent.async_request(
                 *mn_h.Appliance_Hub_ToggleX.request_set({mc.KEY_ONOFF: 1}, self.id)
             )
             self._mts_onoff = 1
@@ -203,7 +203,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
 
     @override
     async def async_request_onoff(self, onoff: int, /):
-        await self.manager.async_request(
+        await self.parent.async_request(
             *mn_h.Appliance_Hub_ToggleX.request_set({mc.KEY_ONOFF: onoff}, self.id)
         )
         self._mts_onoff = onoff
@@ -215,7 +215,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
 
     # interface: SubDeviceEntity
     def _parse_all(self, payload: dict, /):
-        self.manager._parse_online(payload[mc.KEY_ONLINE])
+        self.parent._parse_online(payload[mc.KEY_ONLINE])
         if not self.available:
             return
 
@@ -255,7 +255,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
                 # only room temperature/setpoint updated -> this is 99.9% a PUSH
                 # whenever the target temp or mode changes
                 self.flush_state()
-                self.manager.ns_handlers[mn_h.Appliance_Hub_Mts100_Mode].schedule_get(
+                self.parent.ns_handlers[mn_h.Appliance_Hub_Mts100_Mode].schedule_get(
                     self.id
                 )
                 return

@@ -57,12 +57,12 @@ class MLEnumSensor(MLEntity, sensor.SensorEntity):
     def __init__(
         self,
         channel: "ChannelType | None",
-        manager: "EntityManager",
+        parent: "EntityManager",
         /,
         **kwargs: "Unpack[Args]",
     ):
         self.native_value = kwargs.pop("native_value", None)
-        super().__init__(channel, manager, **kwargs)
+        super().__init__(channel, parent, **kwargs)
 
     def set_unavailable(self):
         self.native_value = None
@@ -138,7 +138,7 @@ class MLNumericSensor(MLNumericEntity, sensor.SensorEntity):
     def __init__(
         self,
         channel: "ChannelType | None",
-        manager: "EntityManager",
+        parent: "EntityManager",
         /,
         **kwargs: "Unpack[Args]",
     ):
@@ -151,7 +151,7 @@ class MLNumericSensor(MLNumericEntity, sensor.SensorEntity):
         self.suggested_display_precision = kwargs.pop(
             "suggested_display_precision", self._attr_suggested_display_precision
         )
-        super().__init__(channel, manager, **kwargs)
+        super().__init__(channel, parent, **kwargs)
 
 
 class MLHumiditySensor(MLNumericSensor):
@@ -214,7 +214,7 @@ class MLDiagnosticSensor(MLEnumSensor):
 class ProtocolSensor(MLEnumSensor):
 
     if TYPE_CHECKING:
-        manager: "Device"
+        parent: Final["Device"]  # type: ignore[override]
         native_value: str
 
     ENTITY_KEY = "sensor_protocol"
@@ -247,12 +247,12 @@ class ProtocolSensor(MLEnumSensor):
             else ProtocolSensor.STATE_INACTIVE
         )
 
-    def __init__(self, manager: "Device"):
+    def __init__(self, parent: "Device"):
         self.extra_state_attributes = {}
-        super().__init__(None, manager, native_value=ProtocolSensor.STATE_DISCONNECTED)
+        super().__init__(None, parent, native_value=ProtocolSensor.STATE_DISCONNECTED)
 
     def set_available(self):
-        self.native_value = self.manager.transport
+        self.native_value = self.parent.transport
         self.flush_state()
 
     def set_unavailable(self):
@@ -334,6 +334,6 @@ class MLFilterMaintenanceSensor(MLNumericSensor):
     _attr_native_unit_of_measurement = mlc.hac.PERCENTAGE
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
 
-    def __init__(self, channel, manager: "Device", /):
-        MLNumericSensor.__init__(self, channel, manager)
-        manager.register_parser_entity(self)
+    def __init__(self, channel: int, parent: "Device", /):
+        MLNumericSensor.__init__(self, channel, parent)
+        parent.register_parser_entity(self)

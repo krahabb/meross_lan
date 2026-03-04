@@ -52,8 +52,8 @@ class ConnectionSensor(MLDiagnosticSensor):
         ATTR_PUBLISHED: Final
         ATTR_DROPPED: Final
 
-        manager: "MQTTProfile"
-        connection: "MQTTConnection"
+        parent: Final["MQTTProfile"]  # type: ignore[override]
+        connection: Final["MQTTConnection"]
 
         # HA core entity attributes:
         class AttrDictType(TypedDict):
@@ -121,12 +121,12 @@ class ConnectionSensor(MLDiagnosticSensor):
     def shutdown(self):
         super().shutdown()
         self.connection.sensor_connection = None
-        del self.connection
+        del self.connection  # type: ignore[del]
 
     # interface: Loggable
     def configure_logger(self):
         self.logtag = (
-            f"{self.__class__.__name__}({self.manager.loggable_broker(self.id)})"
+            f"{self.__class__.__name__}({self.parent.loggable_broker(self.id)})"
         )
 
     # interface: self

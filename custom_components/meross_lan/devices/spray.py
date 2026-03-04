@@ -39,6 +39,6 @@ class MLSpray(MLConfigSelect):
 
     entity_category = None
 
-    def __init__(self, channel: "ChannelType", manager: "Device", /):
-        MLConfigSelect.__init__(self, channel, manager)
-        manager.register_parser_entity(self)
+    def __init__(self, channel: "ChannelType", device: "Device", /):
+        MLConfigSelect.__init__(self, channel, device)
+        device.register_parser_entity(self)

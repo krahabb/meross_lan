@@ -97,7 +97,7 @@ class MtsScheduleEntry:
 class MtsSchedule(MLEntity, calendar.CalendarEntity):
 
     if TYPE_CHECKING:
-        manager: BaseDevice
+        parent: Final[BaseDevice]  # type: ignore[override]
         climate: Final[MtsClimate]
         _payload_ns: MtsScheduleNativeType | None
         _schedule: MtsScheduleNativeType | None
@@ -146,8 +146,8 @@ class MtsSchedule(MLEntity, calendar.CalendarEntity):
         # shown/available in the calendar UI.
         self._schedule_entry_count_max = 0
         self._schedule_entry_count_min = 0
-        super().__init__(climate.channel, climate.manager, entity_key=self.ns.key)
-        climate.manager.enable_check_device_time()
+        super().__init__(climate.channel, climate.parent, entity_key=self.ns.key)
+        climate.parent.enable_check_device_time()
 
     # interface: MLEntity
     def shutdown(self):
@@ -163,7 +163,7 @@ class MtsSchedule(MLEntity, calendar.CalendarEntity):
     def event(self) -> calendar.CalendarEvent | None:
         """Return the next upcoming event."""
         if self.climate.is_mts_scheduled():
-            if event_index := self._get_event_entry(datetime.now(tz=self.manager.tz)):
+            if event_index := self._get_event_entry(datetime.now(tz=self.parent.tz)):
                 return event_index.get_event(self.climate)
         return None
 
@@ -175,7 +175,7 @@ class MtsSchedule(MLEntity, calendar.CalendarEntity):
     ) -> list[calendar.CalendarEvent]:
         """Return calendar events within a datetime range."""
         events = []
-        event_entry = self._get_event_entry(start_date.astimezone(self.manager.tz))
+        event_entry = self._get_event_entry(start_date.astimezone(self.parent.tz))
         while event_entry:
             event = event_entry.get_event(self.climate)
             if event.start >= end_date:

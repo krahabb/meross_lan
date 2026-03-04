@@ -186,7 +186,7 @@ class MLLightBase(MLBinaryEntity, light.LightEntity):
         EFFECT_OFF: Final
         T_RESOLUTION_MIN: Final[float]
 
-        manager: Device
+        parent: Final[Device]  # type: ignore[override]
 
         _t_begin: float
         _t_end: float
@@ -253,7 +253,7 @@ class MLLightBase(MLBinaryEntity, light.LightEntity):
     )
 
     def __init__(
-        self, channel: int, manager: "Device", effect_list: list[str] | None = None, /
+        self, channel: int, device: "Device", effect_list: list[str] | None = None, /
     ):
         self._rgb_to_native = rgb_to_native
         self._native_to_rgb = native_to_rgb
@@ -270,8 +270,8 @@ class MLLightBase(MLBinaryEntity, light.LightEntity):
             self.supported_features = (
                 LightEntityFeature.EFFECT | LightEntityFeature.TRANSITION
             )
-        super().__init__(channel, manager)
-        manager.register_parser_entity(self)
+        super().__init__(channel, device)
+        device.register_parser_entity(self)
 
     # interface: MLBinaryEntity
     def set_unavailable(self):
@@ -341,7 +341,7 @@ class MLLightBase(MLBinaryEntity, light.LightEntity):
         in order to evenly spread the calls. This call also takes care of reducing
         the call frequency in case we're on cloud MQTT
         """
-        if self.manager.meross_binded:
+        if self.parent.meross_binded:
             # Saturate the resolution of the callback
             # to avoid excessive MQTT traffic when on cloud MQTT
             # This is applied even if we're using HTTP to send commands
@@ -436,7 +436,7 @@ class MLLight(MLLightBase):
     )
 
     def __init__(
-        self, channel: int, manager: "Device", effect_list: list[str] | None = None
+        self, channel: int, device: "Device", effect_list: list[str] | None = None
     ):
         # we'll use the (eventual) togglex payload to
         # see if we have to toggle the light by togglex or so
@@ -449,7 +449,7 @@ class MLLight(MLLightBase):
         # also (issue #218) the newer mss560-570 dimmer switches are implemented as 'light' devices with ToggleX
         # api and show a glitch when used this way (ToggleX + Light)
         # State-of-the-art is now to auto-detect (when booting the entity) what is the behavior
-        ability = manager.descriptor.ability
+        ability = device.descriptor.ability
 
         capacity = ability[mn.Appliance_Control_Light].get(
             mc.KEY_CAPACITY, mc.LIGHT_CAPACITY_LUMINANCE
@@ -465,8 +465,8 @@ class MLLight(MLLightBase):
             else:
                 supported_color_modes.add(ColorMode.ONOFF)
 
-        MLLightBase.__init__(self, channel, manager, effect_list)
-        self.handler_togglex = manager.register_togglex_channel(self, True)
+        MLLightBase.__init__(self, channel, device, effect_list)
+        self.handler_togglex = device.register_togglex_channel(self, True)
         self._togglex_auto = None if self.handler_togglex else False
 
     # interface: MLLightBase
@@ -546,7 +546,7 @@ class MLLight(MLLightBase):
         await self.async_request_light_on_flush(_light)
         # 87: @nao-pon bulbs need a 'double' send when setting Temp
         if ATTR_COLOR_TEMP_KELVIN in kwargs:
-            if self.manager.descriptor.firmwareVersion == "2.1.2":
+            if self.parent.descriptor.firmwareVersion == "2.1.2":
                 with self.exception_warning("async_turn_on fw 2.1.2 patch"):
                     await self.async_request_parse(_light)
         if _t_duration:
@@ -621,15 +621,15 @@ class MLLightEffect(MLLight):
         "handler_light_effect",
     )
 
-    def __init__(self, channel: int, manager: "Device", /):
+    def __init__(self, channel: int, device: "Device", /):
         self._light_effect_list: list[dict] = []
-        MLLight.__init__(self, channel, manager, [])
+        MLLight.__init__(self, channel, device, [])
         self.handler_light_effect = NamespaceHandler(
             mn.Appliance_Control_Light_Effect,
-            manager,
+            device,
             handler=self._handle_Appliance_Control_Light_Effect,
         )
-        if manager.descriptor.type.startswith(mc.TYPE_MSL320_PRO):
+        if device.descriptor.type.startswith(mc.TYPE_MSL320_PRO):
             # special rgb channels mgmt here
             self._rgb_to_native = rgbw_patch_to_native
             self._native_to_rgb = native_to_rgbw_patch

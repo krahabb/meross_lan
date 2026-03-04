@@ -45,7 +45,7 @@ class MLRollerShutter(MLCover):
         "_position_starttime",
     )
 
-    def __init__(self, channel: int, manager: "Device", /):
+    def __init__(self, channel: int, device: "Device", /):
         self.current_cover_position = None
         self.supported_features = (
             MLCover.EntityFeature.OPEN
@@ -57,7 +57,7 @@ class MLRollerShutter(MLCover):
         self._position_native = None  # as reported by the device
         self._position_start = 0  # set when when we're controlling a timed position
         self._position_starttime = 0  # epoch of transition start
-        descriptor = manager.descriptor
+        descriptor = device.descriptor
         # flag indicating the device position is reliable (#227)
         # this will anyway be set in case we 'decode' a meaningful device position
         try:
@@ -70,12 +70,12 @@ class MLRollerShutter(MLCover):
                 if fw_version <= (2, 1, 4):
                     # trying to detect if ns_multiple is offending
                     # 2.1.4 devices (#419)
-                    manager.enable_multiple(False)
+                    device.enable_multiple(False)
 
         except Exception:
             self._position_native_isgood = False
-        MLCover.__init__(self, channel, manager)
-        manager.register_parser_ex(
+        MLCover.__init__(self, channel, device)
+        device.register_parser_ex(
             self,
             self.ns,
             mn.Appliance_RollerShutter_Config,
@@ -85,12 +85,10 @@ class MLRollerShutter(MLCover):
             # This is still to be understood. This call will do nothing
             # since the digest seen so far carries an empty list of channels
             # even though the abilities show ToggleX support.
-            manager.register_togglex_channel(self, False)
+            device.register_togglex_channel(self, False)
         if mn.Appliance_RollerShutter_Adjust in descriptor.ability:
             # unknown use: actually the polling period is set on a very high timeout
-            manager.register_parser_entity(
-                MLRollerShutterAdjustSwitch(channel, self.manager)
-            )
+            device.register_parser_entity(MLRollerShutterAdjustSwitch(channel, device))
         self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
         self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
 
@@ -176,15 +174,15 @@ class MLRollerShutter(MLCover):
         await self._async_read_state()
 
     async def _async_read_state(self, /):
-        if self.manager.multiple_max >= 2:
-            await self.manager.async_handle_request_multiple(
+        if self.parent.multiple_max >= 2:
+            await self.parent.async_handle_request_multiple(
                 (
                     mn.Appliance_RollerShutter_State.request_default,
                     self.ns.request_default,
                 )
             )
         else:
-            await self.manager.ns_handlers[mn.Appliance_RollerShutter_State].async_get(
+            await self.parent.ns_handlers[mn.Appliance_RollerShutter_State].async_get(
                 self.channel
             )
             if self._position_native_isgood:
@@ -253,7 +251,7 @@ class MLRollerShutter(MLCover):
     def _parse_state(self, payload: "mt_rs.Status_C"):
         state = payload[mc.KEY_STATE]
         if not self._position_native_isgood:
-            epoch = self.manager.last_rx_epoch
+            epoch = self.parent.last_rx_epoch
             if self.is_opening:
                 self.current_cover_position = round(
                     self._position_start
@@ -314,7 +312,7 @@ class MLRollerShutter(MLCover):
     @override
     def _transition_callback(self):
         if (
-            self.manager.transport is Transport.HTTP and not self.manager.mqtt_active
+            self.parent.transport is Transport.HTTP and not self.parent.mqtt_active
         ) or (self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE):
             self.create_task(
                 self._async_read_state(), "._transition_callback", eager_start=True
@@ -377,7 +375,7 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
     def __init__(self, cover: "MLRollerShutter", key: str):
         self.key_value = key
         MLConfigNumber.__init__(
-            self, cover.channel, cover.manager, entity_key=f"config_{key}", name=key
+            self, cover.channel, cover.parent, entity_key=f"config_{key}", name=key
         )
 
 

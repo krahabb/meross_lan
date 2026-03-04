@@ -6,13 +6,14 @@ from .helpers import reverse_lookup
 from .helpers.entity import MLEntity
 
 if TYPE_CHECKING:
-    from typing import Any, ClassVar, Unpack
+    from typing import Any, ClassVar, Final, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
     from .helpers.device import BaseDevice
     from .helpers.entity import ChannelType
+    from .helpers.manager import EntityManager
 
 
 async def async_setup_entry(
@@ -60,6 +61,8 @@ class MLConfigSelect(MLSelect):
     """
 
     if TYPE_CHECKING:
+        parent: Final[BaseDevice]  # type: ignore[override]
+
         OPTIONS_MAP: ClassVar[dict[Any, str]]
         options_map: dict[Any, str]
 
@@ -76,7 +79,7 @@ class MLConfigSelect(MLSelect):
     def __init__(
         self,
         channel: "ChannelType | None",
-        manager: "BaseDevice",
+        device: "EntityManager",
         /,
         **kwargs: "Unpack[MLSelect.Args]",
     ):
@@ -84,7 +87,7 @@ class MLConfigSelect(MLSelect):
         self.options_map = self.OPTIONS_MAP
         self.options = list(self.options_map.values())
         self.device_value = None
-        MLSelect.__init__(self, channel, manager, **kwargs)
+        MLSelect.__init__(self, channel, device, **kwargs)
 
     def set_unavailable(self):
         self.device_value = None

@@ -29,7 +29,6 @@ class MLFan(MLBinaryEntity, fan.FanEntity):
         class Args(MLBinaryEntity.Args):
             pass
 
-        manager: Device
         handler_togglex: Final[NamespaceHandler | None]
 
         # HA core entity attributes:
@@ -66,13 +65,13 @@ class MLFan(MLBinaryEntity, fan.FanEntity):
         "handler_togglex",
     )
 
-    def __init__(self, channel: int, manager: "Device", /):
+    def __init__(self, channel: int, device: "Device", /):
         self.percentage = None
         self.speed_count = 1  # safe default: auto-inc when 'fan' payload updates
         self._saved_speed = 1
-        super().__init__(channel, manager)
-        manager.register_parser_entity(self)
-        self.handler_togglex = manager.register_togglex_channel(self, True)
+        super().__init__(channel, device)
+        device.register_parser_entity(self)
+        self.handler_togglex = device.register_togglex_channel(self, True)
 
     @override
     def set_unavailable(self):

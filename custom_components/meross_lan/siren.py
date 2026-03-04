@@ -9,15 +9,16 @@ from .select import MLConfigSelect
 from .switch import MLSwitch
 
 if TYPE_CHECKING:
-    from typing import Any, NotRequired, Unpack
+    from typing import Any, Final, NotRequired, Unpack
 
     from .helpers.device import Device
-    from .helpers.manager import EntityManager
     from .merossclient.protocol.types import JsonDict, JsonMapping
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
-    MLBinaryEntity.platform_setup_entry(hass, config_entry, async_add_devices, siren.DOMAIN)
+    MLBinaryEntity.platform_setup_entry(
+        hass, config_entry, async_add_devices, siren.DOMAIN
+    )
 
 
 class MLSiren(MLBinaryEntity, siren.SirenEntity):
@@ -59,7 +60,7 @@ class MLSiren(MLBinaryEntity, siren.SirenEntity):
         native_max_value = 100
 
     if TYPE_CHECKING:
-        manager: Device
+        parent: Final[Device]  # type: ignore[override]
 
         class Args(MLBinaryEntity.Args):
             pass
@@ -86,17 +87,17 @@ class MLSiren(MLBinaryEntity, siren.SirenEntity):
 
     __slots__ = ()
 
-    def __init__(self, channel: int, manager: "Device", /, **kwargs: "Unpack[Args]"):
-        super().__init__(channel, manager, **kwargs)
-        manager.register_parser_entity(self)
-        if mn.Appliance_Config_Alarm in manager.descriptor.ability:
-            song_select = self.SongSelect(channel, manager)
+    def __init__(self, channel: int, device: "Device", /, **kwargs: "Unpack[Args]"):
+        super().__init__(channel, device, **kwargs)
+        device.register_parser_entity(self)
+        if mn.Appliance_Config_Alarm in device.descriptor.ability:
+            song_select = self.SongSelect(channel, device)
             self.available_tones = song_select.OPTIONS_MAP
             self.supported_features = self.SUPPORTED_FEATURES
-            manager.get_handler(mn.Appliance_Config_Alarm).register_parsers(
-                self.EnableSwitch(channel, manager),
+            device.get_handler(mn.Appliance_Config_Alarm).register_parsers(
+                self.EnableSwitch(channel, device),
                 song_select,
-                self.VolumeNumber(channel, manager),
+                self.VolumeNumber(channel, device),
             )
         else:
             self.available_tones = {}
@@ -120,7 +121,7 @@ class MLSiren(MLBinaryEntity, siren.SirenEntity):
                     payload[payload_key] = kwargs[kwarg_key]
                 except KeyError:
                     pass
-            await self.manager.async_request(
+            await self.parent.async_request(
                 *mn.Appliance_Config_Alarm.request_set(payload, self.channel)
             )
 

@@ -34,7 +34,7 @@ class MLMp3Player(MLEntity, media_player.MediaPlayerEntity):
 
     if TYPE_CHECKING:
 
-        manager: Device
+        parent: Final[Device]  # type: ignore[override]
         # HA core entity attributes:
         _attr_device_class: Final[media_player.MediaPlayerDeviceClass]
         is_volume_muted: bool | None
@@ -72,14 +72,14 @@ class MLMp3Player(MLEntity, media_player.MediaPlayerEntity):
         "volume_level",
     )
 
-    def __init__(self, channel: "ChannelType", manager: "Device", /, **kwargs):
+    def __init__(self, channel: "ChannelType", device: "Device", /, **kwargs):
         self.is_volume_muted = None
         self.media_title = None
         self.media_track = None
         self.state = None
         self.volume_level = None
-        super().__init__(channel, manager, **kwargs)
-        manager.register_parser_entity(self)
+        super().__init__(channel, device, **kwargs)
+        device.register_parser_entity(self)
 
     # interface: MLEntity
     def set_unavailable(self):

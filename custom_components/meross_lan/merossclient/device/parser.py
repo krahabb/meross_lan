@@ -21,7 +21,7 @@ if TYPE_CHECKING:
         Unpack,
     )
 
-    from . import Device
+    from . import Device, PhysicalDevice
     from ..protocol.types import (
         JsonDict,
         JsonList,
@@ -76,7 +76,7 @@ class NamespaceParser(logging.Loggable):
         # These properties must be implemented in derived classes according to the
         # namespace payload syntax. NamespaceHandler will lookup any of these when
         # establishing the link between the handler and the parser
-        manager: "Device"  # used for async_request and ns_handlers access
+        parent: Final[PhysicalDevice]  # type: ignore[override]
         ns: mn.Namespace  # same (only MLEntity for now)
         channel: int | str  # the channel/id/subId key value according to the namespace
 
@@ -120,10 +120,10 @@ class NamespaceParser(logging.Loggable):
         # the NamespaceHandler to issue device requests. Most of the times these are entities
         # where ns parsing is delegated to a container object/handler which is then dispatching
         # updates without using the NamespaceHandler inner mechanisms.
-        return self.manager.ns_handlers[self.ns]
+        return self.parent.ns_handlers[self.ns]
 
     async def async_request_payload(self, payload: "JsonDict", /):
-        return await self.manager.async_request(
+        return await self.parent.async_request(
             *self.ns.request_set(payload, self.channel)
         )
 

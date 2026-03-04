@@ -47,7 +47,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
         _attr_device_class = MLConfigNumber.DEVICE_CLASS_TEMPERATURE_DELTA
 
         def __init__(self, climate: "MtsClimate", /):
-            MLConfigNumber.__init__(self, climate.channel, climate.manager)
+            MLConfigNumber.__init__(self, climate.channel, climate.parent)
 
     class SetPointNumber(MLConfigNumber):
         """
@@ -72,7 +72,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
             MLConfigNumber.__init__(
                 self,
                 climate.channel,
-                climate.manager,
+                climate.parent,
                 entity_key=f"config_temperature_{self.key_value}",
                 name=f"{preset_mode} temperature",
                 device_scale=climate.device_scale,
@@ -144,7 +144,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
             self._tracking_state = None
             self._tracking_state_change_unsub = None
             self._track_last_epoch = 0
-            super().__init__(climate.channel, climate.manager)
+            super().__init__(climate.channel, climate.parent)
 
         # interface: MLEntity
         async def async_shutdown(self):
@@ -198,7 +198,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
             """
             self.cancel_callback(self._track)
 
-            if not self.manager.is_connected or not self._tracking_state_change_unsub:
+            if not self.parent.is_connected or not self._tracking_state_change_unsub:
                 return
             tracked_state = self._tracking_state
             if not tracked_state:
@@ -390,10 +390,10 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
         SET_TEMP_FORCE_MANUAL_MODE: Final[bool]
         """Determines the behavior of async_set_temperature."""
 
-        manager: Final[BaseDevice]  # type: ignore[assignment]
-        channel: Final[me.ChannelType]  # type: ignore[assignment]
+        parent: Final[BaseDevice]  # type: ignore[override]
+        channel: Final[ChannelType]  # type: ignore[override]
 
-        number_adjust_temperature: Final["MLConfigNumber"]
+        number_adjust_temperature: Final[MLConfigNumber]
         number_preset_temperature: Final[dict[str, "MtsClimate.SetPointNumber"]]
         schedule: Final[MtsSchedule]
         select_track_sensor: Final[TrackSensorSelect]
@@ -479,7 +479,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
         "sensor_current_temperature",
     )
 
-    def __init__(self, channel: "ChannelType", manager: "BaseDevice", /):
+    def __init__(self, channel: "ChannelType", parent: "BaseDevice", /):
         self.current_humidity = None
         self.current_temperature = None
         self.hvac_action = None
@@ -496,7 +496,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
         self._mts_active = False
         self._mts_mode = 0
         self._mts_onoff = 0
-        super().__init__(channel, manager)
+        super().__init__(channel, parent)
         self.number_adjust_temperature = self.__class__.AdjustNumber(self)
         self.number_preset_temperature = {}
         SetPointNumber = self.__class__.SetPointNumber
@@ -510,7 +510,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
         self.schedule = self.__class__.Schedule(self)
         self.select_track_sensor = MtsClimate.TrackSensorSelect(self)
         self.sensor_current_temperature = MLTemperatureSensor(
-            channel, manager, entity_registry_enabled_default=False
+            channel, parent, entity_registry_enabled_default=False
         )
 
     # interface: MLEntity
@@ -563,7 +563,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
         Used to trigger a poll and the ns which is by default polled
         on a long timeout.
         """
-        return self.manager.ns_handlers[self.number_adjust_temperature.ns]
+        return self.parent.ns_handlers[self.number_adjust_temperature.ns]
 
     async def async_request_preset(self, mode: int, /):
         """Implements the protocol to set the Meross thermostat mode"""

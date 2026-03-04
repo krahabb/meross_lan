@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 
 
 class MLScreenBrightnessNumber(MLConfigNumber):
-    manager: "Device"
 
     ns = mn.Appliance_Control_Screen_Brightness
 
@@ -29,12 +28,12 @@ class MLScreenBrightnessNumber(MLConfigNumber):
     native_min_value = 0
     native_step = 12.5
 
-    def __init__(self, manager: "Device", key: str, /):
+    def __init__(self, device: "Device", key: str, /):
         self.key_value = key
         MLConfigNumber.__init__(
             self,
             0,
-            manager,
+            device,
             entity_key=f"screenbrightness_{key}",
             name=f"Screen brightness ({key})",
         )
@@ -95,7 +94,7 @@ class MtsWarningSensor(MLEnumSensor):
         MLEnumSensor.__init__(
             self,
             number_temperature.channel,
-            number_temperature.manager,
+            number_temperature.parent,
             entity_key=entity_key,
             native_value=native_value,
             translation_key=f"mts_{entity_key}",
@@ -111,7 +110,7 @@ class MtsConfigSwitch(MLSwitch):
         MLSwitch.__init__(
             self,
             number_temperature.channel,
-            number_temperature.manager,
+            number_temperature.parent,
             entity_key=f"{number_temperature.entitykey}_switch",
             device_value=device_value,
             name=(f"{number_temperature.entitykey} Alarm").capitalize(),
@@ -122,7 +121,7 @@ class MtsConfigSwitch(MLSwitch):
 class MtsCommonTemperatureNumber(MLConfigNumber):
 
     if TYPE_CHECKING:
-        manager: Device
+        parent: Final[Device]  # type: ignore[override]
 
     key_value = mc.KEY_VALUE
 
@@ -138,11 +137,11 @@ class MtsCommonTemperatureNumber(MLConfigNumber):
         MLConfigNumber.__init__(
             self,
             climate.channel,
-            climate.manager,
+            climate.parent,
             entity_key=self.__class__.ns.slug_end,
             device_scale=climate.device_scale,
         )
-        self.manager.register_parser_entity(self)
+        self.parent.register_parser_entity(self)
 
     def _parse(self, payload: "mt_t.CommonTemperature_C", /):
         try:
@@ -166,10 +165,10 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
 
     def __init__(self, climate: "MtsThermostatClimate", /):
         MtsCommonTemperatureNumber.__init__(self, climate)
-        manager = self.manager
+        device = self.parent
         # preset entity platforms since these might be instantiated later
-        manager.platforms.setdefault(MtsConfigSwitch.PLATFORM)
-        manager.platforms.setdefault(MtsWarningSensor.PLATFORM)
+        device.platforms.setdefault(MtsConfigSwitch.PLATFORM)
+        device.platforms.setdefault(MtsWarningSensor.PLATFORM)
 
     def _parse(self, payload: "mt_t.CommonTemperatureExt_C", /):
         try:
@@ -246,7 +245,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
         except AttributeError:
             self.sensor_external_temperature = MLTemperatureSensor(
                 self.channel,
-                self.manager,
+                self.parent,
                 entity_key="external sensor",
                 device_value=current_temp,
                 device_scale=self.device_scale,
@@ -266,8 +265,8 @@ class MtsWindowOpened(MLBinarySensor):
     _attr_device_class = MLBinarySensor.DeviceClass.WINDOW
 
     def __init__(self, climate: "MtsThermostatClimate", /):
-        MLBinarySensor.__init__(self, climate.channel, climate.manager)
-        climate.manager.register_parser_entity(self)
+        MLBinarySensor.__init__(self, climate.channel, climate.parent)
+        climate.parent.register_parser_entity(self)
 
 
 class MtsExternalSensorSwitch(MLSwitch):
@@ -278,14 +277,13 @@ class MtsExternalSensorSwitch(MLSwitch):
     key_value = mc.KEY_MODE
 
     def __init__(self, climate: "MtsThermostatClimate", /):
-        MLSwitch.__init__(self, climate.channel, climate.manager)
-        climate.manager.register_parser_entity(self)
+        MLSwitch.__init__(self, climate.channel, climate.parent)
+        climate.parent.register_parser_entity(self)
 
 
 class MtsHoldAction(MLConfigSelect):
 
     if TYPE_CHECKING:
-        manager: "Device"
         number_time: MLConfigNumber
 
     ENTITY_KEY = "hold action"
@@ -301,11 +299,11 @@ class MtsHoldAction(MLConfigSelect):
     __slots__ = ("number_time",)
 
     def __init__(self, climate: "MtsThermostatClimate", /):
-        MLConfigSelect.__init__(self, climate.channel, climate.manager)
-        climate.manager.register_parser_entity(self)
+        MLConfigSelect.__init__(self, climate.channel, climate.parent)
+        climate.parent.register_parser_entity(self)
         self.number_time = MLConfigNumber(
             climate.channel,
-            climate.manager,
+            climate.parent,
             entity_key="hold_action_time",
             device_scale=1,
             device_class=MLConfigNumber.DEVICE_CLASS_DURATION,
@@ -345,11 +343,9 @@ class MtsTempUnit(MLConfigSelect):
         mc.TEMPUNIT_FAHRENHEIT: mlc.hac.UnitOfTemperature.FAHRENHEIT,
     }
 
-    manager: "Device"
-
     def __init__(self, climate: "MtsThermostatClimate", /):
-        MLConfigSelect.__init__(self, climate.channel, climate.manager)
-        climate.manager.register_parser_entity(self)
+        MLConfigSelect.__init__(self, climate.channel, climate.parent)
+        climate.parent.register_parser_entity(self)
 
 
 class MtsThermostatClimate(MtsClimate):
@@ -369,7 +365,7 @@ class MtsThermostatClimate(MtsClimate):
         """Additional entities (linked to the climate one) in case their ns is supported/available"""
 
         # Overrides
-        manager: Final[Device]  # type: ignore
+        parent: Final[Device]  # type: ignore
         channel: Final[int]  # type: ignore
 
     OPTIONAL_NAMESPACES_INITIALIZERS = (
@@ -408,13 +404,11 @@ class MtsThermostatClimate(MtsClimate):
             self.native_step = 0.1
             MtsCommonTemperatureNumber.__init__(self, climate)
 
-    def __init__(self, channel: int, manager: "Device", /):
-        MtsClimate.__init__(self, channel, manager)
-        manager.register_parser_ex(
-            self, self.ns, *self.OPTIONAL_NAMESPACES_INITIALIZERS
-        )
-        manager.register_parser_entity(self.schedule)
-        ability = manager.descriptor.ability
+    def __init__(self, channel: int, device: "Device", /):
+        MtsClimate.__init__(self, channel, device)
+        device.register_parser_ex(self, self.ns, *self.OPTIONAL_NAMESPACES_INITIALIZERS)
+        device.register_parser_entity(self.schedule)
+        ability = device.descriptor.ability
         for entity_class in (
             _entity_class
             for _namespace, _entity_class in self.OPTIONAL_ENTITIES_INITIALIZERS.items()

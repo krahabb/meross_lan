@@ -5,7 +5,7 @@ from homeassistant.components import cover
 from .helpers.entity import MLEntity
 
 if TYPE_CHECKING:
-    from typing import ClassVar, NotRequired
+    from typing import ClassVar, Final, NotRequired
 
     from .helpers.device import Device
 
@@ -21,8 +21,7 @@ class MLCover(MLEntity, cover.CoverEntity):
         class Args(MLEntity.Args):
             device_class: NotRequired[cover.CoverDeviceClass | None]
 
-        manager: "Device"
-
+        parent: Final[Device]  # type: ignore[override]
         # HA core entity attributes:
         _attr_device_class: ClassVar[cover.CoverDeviceClass | None]
         is_closed: bool | None
@@ -53,11 +52,11 @@ class MLCover(MLEntity, cover.CoverEntity):
         "is_opening",
     )
 
-    def __init__(self, channel: int, manager: "Device", /):
+    def __init__(self, channel: int, parent: "Device", /):
         self.is_closed = None
         self.is_closing = False
         self.is_opening = False
-        super().__init__(channel, manager)
+        super().__init__(channel, parent)
 
     # interface: MLEntity
     async def async_will_remove_from_hass(self):
