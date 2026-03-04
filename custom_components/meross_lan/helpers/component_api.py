@@ -52,6 +52,8 @@ class HAMQTTConnection(mlq.MQTTConnection):
         class ConnectArgs(mlq.MQTTConnection.ConnectArgs):
             pass
 
+        parent: Final["ComponentApi"]  # type: ignore[override]
+
         _mqtt_subscribe_unsub: Callable | None
         _mqtt_disconnected_unsub: Callable | None
         _mqtt_connected_unsub: Callable | None
@@ -85,7 +87,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
         if self._mqtt_subscribe_future:
             return await self._mqtt_subscribe_future
 
-        hass = self.parent.api.hass
+        hass = self.parent.hass
         self._mqtt_subscribe_future = hass.loop.create_future()
         try:
             self._mqtt_subscribe_unsub = await mqtt.async_subscribe(
@@ -149,7 +151,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
         self.on_tx(message)
         try:
             await mqtt.async_publish(
-                self.parent.api.hass,
+                self.parent.hass,
                 mc.TOPIC_REQUEST.format(kwargs["uuid"]),
                 message.json,
             )
@@ -178,7 +180,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
         # try to get the HA broker host address
         with self.exception_warning("on_connect: recovering broker conf"):
 
-            mqtt_data = self.parent.api.hass.data[mqtt.DATA_MQTT]
+            mqtt_data = self.parent.hass.data[mqtt.DATA_MQTT]
             if mqtt_data and mqtt_data.client:
                 conf = mqtt_data.client.conf
                 self.id.host = conf[mqtt.CONF_BROKER]
@@ -207,17 +209,16 @@ class HAMQTTConnection(mlq.MQTTConnection):
         # replicate this and the "from" field is set as usual
 
         uuid = message.uuid
-        api = self.parent.api
-        if uuid in api.devices:
-            if device := api.devices[uuid]:
+        try:
+            if device := self.parent.devices[uuid]:
                 key = device.key
             else:  # device not loaded...
-                device_entry = api.get_config_entry(uuid)
+                device_entry = self.parent.get_config_entry(uuid)
                 if device_entry:
                     key = device_entry.data.get(mlc.CONF_KEY) or ""
                 else:
                     key = self.parent.key
-        else:
+        except KeyError:  # device not configured
             key = self.parent.key
         if message.method == mc.METHOD_SET:
             self.create_task(

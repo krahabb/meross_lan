@@ -89,6 +89,8 @@ class EntityManager(logging.Loggable):
 
         type PlatformsType = dict[str, Callable | None]
 
+        id: Final[str]  # type: ignore[override]
+        parent: Final[EntityManager]  # type: ignore[override]
         api: Final[ComponentApi]
         is_connected: Final[
             bool
@@ -114,7 +116,6 @@ class EntityManager(logging.Loggable):
     # multiple inheritance conflicts in Device
 
     __SLOTS__ = (
-        "manager",
         "api",
         "is_connected",
         "device_entry",
@@ -123,7 +124,6 @@ class EntityManager(logging.Loggable):
     )
 
     def __init__(self, id: str, manager: "EntityManager", **kwargs: "Unpack[Args]"):
-        self.manager = manager  # TODO: rename to parent
         self.api = manager.api
         self.is_connected = self._attr_is_connected
         self.device_entry = kwargs.get("device_entry")
@@ -134,7 +134,7 @@ class EntityManager(logging.Loggable):
     @property
     def display_name(self) -> str:
         """
-        returns a proper (friendly) 'manager' name for logging purposes
+        returns a proper (friendly) name for logging purposes
         """
         de = self.device_entry
         return (de and (de.name_by_user or de.name)) or self.logtag
@@ -192,6 +192,7 @@ class ConfigEntryManager(EntityManager):
 
         DEFAULT_PLATFORMS: ClassVar[EntityManager.PlatformsType]
 
+        parent: Final[ComponentApi]  # type: ignore[override]
         config_entry: Final[ConfigEntry | None]
         config: Mapping[str, Any]
         key: str
@@ -266,11 +267,8 @@ class ConfigEntryManager(EntityManager):
         their async polling before invalidating the member pointers (which are
         usually referred to inside the polling /parsing code)
         """
-        # TODO: remove cancel_callback and async_destroy_diagnostic_entities calls
-        # since they should be auto-removed by super().async_shutdown
-        self.cancel_callback(self.api.config_entries.async_schedule_reload)
-        await self.async_destroy_diagnostic_entities()
         await super().async_shutdown()
+        # TODO: register trace_close in shutdown callback
         if self.is_tracing:
             self.trace_close()
 
@@ -679,7 +677,7 @@ class ConfigEntryManager(EntityManager):
             self.trace_close(exception, "appending log")
 
     async def async_get_diagnostics(self, /) -> "mlc.TracingHeaderType":
-        # used to return diagnostic data for this manager ConfigEntry (see diagnostics.py)
+        # used to return diagnostic data for this ConfigEntry (see diagnostics.py)
         return {
             "version": mlc.CONF_TRACE_VERSION,
             "config": self.loggable_config(),

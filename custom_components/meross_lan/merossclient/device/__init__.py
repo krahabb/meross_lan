@@ -389,12 +389,15 @@ class Device(PhysicalDevice):
         for client in tuple(self._clients.values()):
             await client.async_shutdown()
         await super().async_shutdown()
-        assert not self.ns_handlers, "NamespaceHandlers should have been cleared by now"
         self.digest_parsers.clear()
         self.digest_pollers.clear()
         self._lazypoll_requests.clear()
         # This must be by design
         assert self.is_connected is False, "Device shutdown failed: still connected"
+        assert not self.client, "Device shutdown failed: client still set"
+        assert (
+            not self.ns_handlers
+        ), "Device shutdown failed: namespace handlers still set"
 
     # interface: AbstractClient
     @override
@@ -594,7 +597,7 @@ class Device(PhysicalDevice):
             getattr(self, client.TRANSPORT) is client
         ), f"{client.TRANSPORT} client not attached to {self}"
         client.on_device_remove(self)
-        self._clients.pop(client.TRANSPORT)
+        del self._clients[client.TRANSPORT]
         setattr(self, client.TRANSPORT, None)
         if client.is_connected:
             self.on_client_disconnect(client)
@@ -602,12 +605,16 @@ class Device(PhysicalDevice):
         client.disconnect_broadcast.remove(self.on_client_disconnect)
         client.tx_broadcast.remove(self.on_tx)
         client.rx_broadcast.remove(self.on_rx)
+        if self.client is client:
+            self.client = None  # type: ignore[assignment]
+            self.transport = self.TRANSPORT  # type: ignore[assignment]
+            self.log(self.DEBUG, "Switching transport to %s", self.transport)
 
     def on_client_connect(self, client: "AbstractClient", /):
         self._clients_connected[client.TRANSPORT] = client
 
     def on_client_disconnect(self, client: "AbstractClient", /):
-        self._clients_connected.pop(client.TRANSPORT)
+        del self._clients_connected[client.TRANSPORT]
         if self._clients_connected:
             if self.client is client:
                 self._switch_client(next(iter(self._clients_connected.values())))

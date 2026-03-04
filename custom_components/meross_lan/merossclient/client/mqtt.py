@@ -174,15 +174,19 @@ class AbstractMQTTConnection(AbstractClient):
             super().__init__(id, parent, **kwargs)
             connection.connect_broadcast.add(self.on_connection_connect)
             connection.disconnect_broadcast.add(self.on_connection_disconnect)
+            # Even if the cleanup is executed in sync code, it is preferrable to use
+            # the async_shutdown_broadcast so that any task/timer (in self) is cleaned before
+            # the connection is actually shutdown (the shutdown() method would be called later)
             connection.async_shutdown_broadcast.add(self.async_shutdown)
             if connection.is_connected:
                 self.on_connection_connect(connection)
 
-        async def async_shutdown(self):
+        def shutdown(self):
             self.connection.connect_broadcast.remove(self.on_connection_connect)
             self.connection.disconnect_broadcast.remove(self.on_connection_disconnect)
             self.connection.async_shutdown_broadcast.remove(self.async_shutdown)
-            await super().async_shutdown()
+            super().shutdown()
+            # del self.connection # type: ignore[assignment]
 
         @override
         async def async_connect(self, /, **kwargs: "Unpack[ConnectArgs]"):
@@ -227,7 +231,7 @@ class AbstractMQTTConnection(AbstractClient):
             """Called when a client is being removed from a device (Device.remove_client)."""
             uuid = device.descriptor.uuid
             super().on_device_remove(device)
-            self.connection._client_devices.pop(uuid)
+            del self.connection._client_devices[uuid]
             for mqtt_transaction in [
                 _t for _t in self.connection._transactions.values() if _t.uuid == uuid
             ]:
