@@ -17,8 +17,9 @@ import homeassistant.util.color as color_util
 from . import const as mlc
 from .helpers import clamp
 from .helpers.device import MerossMessage
-from .helpers.entity import MLBinaryEntity
-from .helpers.namespaces import EntityNamespaceMixin, NamespaceHandler, mc, mn
+from .helpers.entity import EntityNamespaceMixin, MLBinaryEntity
+from .helpers.namespaces import NamespaceHandler
+from .merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
     from typing import Final
@@ -758,13 +759,17 @@ class MLDNDLightEntity(EntityNamespaceMixin, MLBinaryEntity, light.LightEntity):
     through a light feature (presence light or so)
     """
 
+    DEFAULT_CONFIG = (
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
+        mlc.PARAM_CLOUD_UPDATE_PERIOD,
+        EntityNamespaceMixin.async_poll_smart,
+    )
     PLATFORM = light.DOMAIN
     ENTITY_KEY = "dnd"
     ns = mn.Appliance_System_DNDMode
     key_value = mc.KEY_MODE
     native_on = 0
     native_off = 1
-
     # HA core entity attributes:
     color_mode: ColorMode = ColorMode.ONOFF
     entity_category = MLBinaryEntity.EntityCategory.CONFIG

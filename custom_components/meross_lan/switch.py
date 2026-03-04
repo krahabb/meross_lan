@@ -3,9 +3,9 @@ from typing import TYPE_CHECKING, override
 from homeassistant.components import switch
 
 from .const import hac
-from .helpers.entity import MLBinaryEntity
-from .helpers.namespaces import EntityNamespaceMixin, mc, mn
+from .helpers.entity import EntityNamespaceMixin, MLBinaryEntity
 from .merossclient import extract_dict_payloads
+from .merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
     from typing import ClassVar, NotRequired, Unpack
@@ -82,14 +82,13 @@ class PhysicalLockSwitch(MLSwitch):
 
 class MLToggle(EntityNamespaceMixin, MLSwitch):
 
-    # 2024-03-13: passing entity_key="0" instead of channel in order
-    # to mantain unique_id compatibility with installations but
-    # updating to new toggle entity model (where channel is None for this entity type)
-    # 2025-12-22: restructiring MLToggle to use EntityNamespaceMixin
-    # but we still keep entity_key = "0" for compatibility with installed registry entries
-    ENTITY_KEY = "0"
+    DEFAULT_CONFIG = (
+        0,
+        0,
+        EntityNamespaceMixin.async_poll_default,
+    )
+    ENTITY_KEY = "0"  # used to keep unique_id compatibility with legacy versions
     ns = mn.Appliance_Control_Toggle
-
     # HA core entity attributes:
     _attr_device_class = MLSwitch.DeviceClass.OUTLET
     entity_category = None

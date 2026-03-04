@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from typing import (
         Any,
         Callable,
+        ClassVar,
         Coroutine,
         Final,
         NotRequired,
@@ -196,6 +197,8 @@ class Loggable(metaclass=abc.ABCMeta):
             loggable.shutdown_broadcast.add(self.clear)
 
     if TYPE_CHECKING:
+        __SLOTS__: ClassVar[tuple[str, ...]]
+
         id: Final[Any]
         parent: Final[LoggerType]
         loop: Final[asyncio.AbstractEventLoop]
@@ -205,7 +208,8 @@ class Loggable(metaclass=abc.ABCMeta):
         _tasks: set[asyncio.Future]  # dynamic
         _timers: dict[Callable, asyncio.TimerHandle]  # dynamic
 
-        def time(self) -> float: ...
+        @staticmethod
+        def time() -> float: ...
         class Args(TypedDict):
             loop: NotRequired[asyncio.AbstractEventLoop]
 
@@ -215,7 +219,7 @@ class Loggable(metaclass=abc.ABCMeta):
     WARNING = WARNING
     CRITICAL = CRITICAL
 
-    __SLOTS__ = (
+    __slots__ = (
         "id",
         "logtag",
         "parent",
@@ -225,7 +229,9 @@ class Loggable(metaclass=abc.ABCMeta):
         "async_shutdown_broadcast",
         "_tasks",
         "_timers",
+        "__dict__",
     )
+    __SLOTS__ = ()
 
     @classmethod
     def _calc_slots(cls, *slots: "Unpack[tuple[str, ...]]"):

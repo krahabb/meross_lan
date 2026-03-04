@@ -7,13 +7,12 @@ from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.util import dt as dt_util
 
 from .. import const as mlc
+from ..helpers.entity import EntityNamespaceMixin
 from ..helpers.namespaces import (
     POLLING_STRATEGY_CONF,
-    EntityNamespaceMixin,
     NamespaceHandler,
-    mc,
-    mn,
 )
+from ..merossclient.protocol import const as mc, namespaces as mn
 from ..sensor import MLEnumSensor, MLNumericSensor
 from ..switch import MLSwitch
 
@@ -95,7 +94,7 @@ class ElectricitySensor(MLNumericSensor):
         self._electricity_lastepoch = 0.0
         self._reset_unsub = None
         # depending on init order we might not have this ready now...
-        self.sensor_consumptionx = manager.entities.get(ConsumptionXSensor.ENTITY_KEY)  # type: ignore
+        self.sensor_consumptionx = manager.ns_handlers.get(mn.Appliance_Control_ConsumptionX)  # type: ignore
         # here entity_key is the 'legacy' EnergyEstimateSensor one to mantain compatibility
         kwargs["device_value"] = 0
         super().__init__(channel, manager, **kwargs)
@@ -230,6 +229,11 @@ def namespace_init_electricity(ns: mn.Namespace, device: "Device", /):
         ns,
         device,
         handler=ElectricitySensor(None, device)._handle_Appliance_Control_Electricity,
+        config=(
+            mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
+            mlc.PARAM_SENSOR_FAST_CLOUD_UPDATE_PERIOD,
+            NamespaceHandler.async_poll_smart,
+        ),
     )
 
 
@@ -369,6 +373,12 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         _channels_to_poll: list[ChannelToPollType]
         # TODO: reconcile this member with polling_request_channels in base cls
 
+    DEFAULT_CONFIG = (
+        mlc.PARAM_ENERGY_UPDATE_PERIOD,
+        mlc.PARAM_ENERGY_CLOUD_UPDATE_PERIOD,
+        NamespaceHandler.async_poll_smart,
+    )
+
     __slots__ = ("_channels_to_poll",)
 
     def __init__(self, ns: "mn.Namespace", device: "Device", /):
@@ -452,8 +462,6 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
 class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
 
     if TYPE_CHECKING:
-        manager: "Device"
-
         ATTR_OFFSET: Final
         ATTR_RESET_TS: Final
 
@@ -463,13 +471,17 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         _consumption_last_value: int | None
         _consumption_last_time: int | None
 
+    DEFAULT_CONFIG = (
+        mlc.PARAM_ENERGY_UPDATE_PERIOD,
+        mlc.PARAM_ENERGY_CLOUD_UPDATE_PERIOD,
+        NamespaceHandler.async_poll_smart,
+    )
     ENTITY_KEY = "energy"
     ns = mn.Appliance_Control_ConsumptionX
+    _attr_device_class = MLNumericSensor.DeviceClass.ENERGY
 
     ATTR_OFFSET = "offset"
     ATTR_RESET_TS = "reset_ts"
-
-    _attr_device_class = MLNumericSensor.DeviceClass.ENERGY
 
     __slots__ = (
         "offset",
@@ -555,16 +567,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
             # consumption value from the device. The attributes restoration will
             # instead keep patching the 'consumption reset bug'
 
-    # interface: self
-    def reset_consumption(self):
-        if self.native_value != 0:
-            self.native_value = 0
-            self.extra_state_attributes = {}
-            self.offset = 0
-            self.reset_ts = 0
-            self.flush_state()
-            self.log(self.DEBUG, "no readings available for new day - resetting")
-
+    @override
     def _handle(self, message: "MerossMessage", /):
         device = self.manager
         days = message.payload[mc.KEY_CONSUMPTIONX]
@@ -687,21 +690,35 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         self.flush_state()
         self.log(self.DEBUG, "updating consumption=%d", day_last_value)
 
+    # interface: self
+    def reset_consumption(self):
+        if self.native_value != 0:
+            self.native_value = 0
+            self.extra_state_attributes = {}
+            self.offset = 0
+            self.reset_ts = 0
+            self.flush_state()
+            self.log(self.DEBUG, "no readings available for new day - resetting")
+
 
 class OverTempEnableSwitch(EntityNamespaceMixin, MLSwitch):
 
+    DEFAULT_CONFIG = (
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
+        mlc.PARAM_CLOUD_UPDATE_PERIOD,
+        NamespaceHandler.async_poll_smart,
+    )
     ENTITY_KEY = "config_overtemp_enable"
     ns = mn.Appliance_Config_OverTemp
     key_value = mc.KEY_ENABLE
 
     __slots__ = ("sensor_overtemp_type",)
 
-    # interface: self
     @override
     def _handle(self, message: "MerossMessage", /):
         """{"overTemp": {"enable": 1,"type": 1}}"""
         overtemp = message.payload[mc.KEY_OVERTEMP]
-        self._parse(overtemp)
+        self.update_device_value(overtemp[self.key_value])
         try:
             self.sensor_overtemp_type.update_native_value(overtemp[mc.KEY_TYPE])
         except AttributeError:
@@ -717,26 +734,6 @@ class OverTempEnableSwitch(EntityNamespaceMixin, MLSwitch):
 
 POLLING_STRATEGY_CONF.update(
     {
-        mn.Appliance_Config_OverTemp: (
-            mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
-        mn.Appliance_Control_ConsumptionH: (
-            mlc.PARAM_ENERGY_UPDATE_PERIOD,
-            mlc.PARAM_ENERGY_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
-        mn.Appliance_Control_ConsumptionX: (
-            mlc.PARAM_ENERGY_UPDATE_PERIOD,
-            mlc.PARAM_ENERGY_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
-        mn.Appliance_Control_Electricity: (
-            mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
-            mlc.PARAM_SENSOR_FAST_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
         mn.Appliance_Control_ElectricityX: (
             mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
             mlc.PARAM_SENSOR_FAST_CLOUD_UPDATE_PERIOD,

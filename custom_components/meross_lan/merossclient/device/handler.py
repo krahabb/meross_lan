@@ -45,10 +45,6 @@ class NamespaceHandler(logging.Loggable):
     - handler: specify a custom handler method for this namespace. By default
     it will be looked-up in the device definition (looking for _handle_xxxxxx)
 
-    - entity_class: specify a MLEntity type (actually an implementation
-    of Merossentity) to be instanced whenever a message for a particular channel
-    is received and the channel has no parser associated (see _handle_list)
-
     """
 
     if TYPE_CHECKING:
@@ -82,7 +78,7 @@ class NamespaceHandler(logging.Loggable):
 
     HEADER_AVG_SIZE = 300
 
-    __slots__ = logging.Loggable._calc_slots(
+    __SLOTS__ = (
         "handler",
         "parsers",
         "last_rx_epoch",
@@ -112,7 +108,7 @@ class NamespaceHandler(logging.Loggable):
         )
         super().__init__(ns, device)
         self.handler = handler or getattr(
-            device, f"_handle_{ns.replace('.', '_')}", self._handle_undefined
+            device, f"_handle_{ns.replace('.', '_')}", self._handle
         )
         self.parsers = {}
         self.last_rx_epoch = self.last_poll_epoch = self.polling_epoch_next = 0.0
@@ -319,7 +315,10 @@ class NamespaceHandler(logging.Loggable):
                 except Exception as e:
                     self.log_parser_exception(e, p_channel)
 
-    def _handle_undefined(self, msg: MerossMessage, /):
+    def _handle(self, msg: MerossMessage, /):
+        """Default handler for a namespace message. This implementation works as a stub and is being invoked if no
+        better handler is found. Handler functions can be installed per instance at construction or
+        by overriding this method definition in custom NamespaceHandlers."""
         self.log(
             self.DEBUG, "Handler undefined (message:%s)", _message=msg, timeout=14400
         )
@@ -957,5 +956,5 @@ class VoidNamespaceHandler(NamespaceHandler):
     done by the base default handling."""
 
     @override
-    def _handle_undefined(self, message: "MerossMessage", /):
+    def _handle(self, message: "MerossMessage", /):
         pass

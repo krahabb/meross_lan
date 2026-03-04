@@ -16,21 +16,6 @@ if TYPE_CHECKING:
 
 
 class NamespaceHandler(handler.NamespaceHandler):
-    """
-    This is the root class for somewhat dynamic namespace handlers.
-    Every device keeps its own list of method handlers indexed through
-    the message namespace in order to speed up parsing/routing when receiving
-    a message from the device see Device.ns_handlers and
-    Device._handle to get the basic behavior.
-
-    - handler: specify a custom handler method for this namespace. By default
-    it will be looked-up in the device definition (looking for _handle_xxxxxx)
-
-    - entity_class: specify a MLEntity type (actually an implementation
-    of Merossentity) to be instanced whenever a message for a particular channel
-    is received and the channel has no parser associated (see _handle_list)
-
-    """
 
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
@@ -42,7 +27,7 @@ class NamespaceHandler(handler.NamespaceHandler):
         None,
     )
 
-    __slots__ = ("entity_class",)
+    # __slots__ = ("entity_class",)
 
     def __init__(
         self,
@@ -74,7 +59,7 @@ class NamespaceHandler(handler.NamespaceHandler):
             entity_class(channel, self.parent)
 
     @override
-    def _handle_undefined(self, message: "MerossMessage", /):
+    def _handle(self, message: "MerossMessage", /):
         device = self.parent
         if device.create_diagnostic_entities:
             # since we're parsing an unknown namespace, our euristic about
@@ -101,7 +86,7 @@ class NamespaceHandler(handler.NamespaceHandler):
                     pass
 
         else:
-            super()._handle_undefined(message)
+            super()._handle(message)
 
     @override
     def _handle_missing_parser(self, p_channel: dict, ke: KeyError, /):
@@ -126,36 +111,6 @@ class NamespaceHandler(handler.NamespaceHandler):
         self.parsers[channel](p_channel)
 
 
-class EntityNamespaceMixin(MLEntity if TYPE_CHECKING else object):
-    """
-    Special 'polling enabler/disabler' mixin used with entities which are
-    'single instance' for a namespace handler and so they'll disable polling
-    should they're disabled in HA.
-    """
-
-    if TYPE_CHECKING:
-        manager: Device
-
-    @classmethod
-    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        assert ns is cls.ns
-        entity = cls(None, device)
-        entity.handler_ns = NamespaceHandler(ns, device, handler=entity._handle)
-        entity.handler_ns.polling_strategy = None
-        return entity
-
-    async def async_added_to_hass(self):
-        self.handler_ns.polling_strategy = POLLING_STRATEGY_CONF[self.ns][-1]
-        return await super().async_added_to_hass()
-
-    async def async_will_remove_from_hass(self):
-        self.handler_ns.polling_strategy = None
-        return await super().async_will_remove_from_hass()
-
-    def _handle(self, message: "MerossMessage", /):
-        self._parse(message.payload[self.ns.key])
-
-
 """
 Default timeouts and config parameters for polled namespaces.
 The configuration is set in the tuple as:
@@ -172,16 +127,6 @@ POLLING_STRATEGY_CONF = {
         0,
         None,
     ),  # TODO: add expected size definition to mn.Namespace class grammar
-    mn.Appliance_System_DNDMode: (
-        mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_System_Runtime: (
-        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-        mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        NamespaceHandler.async_poll_smart,
-    ),
     mn.Appliance_Config_Alarm: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
@@ -233,7 +178,6 @@ POLLING_STRATEGY_CONF = {
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
         NamespaceHandler.async_poll_smart,
     ),
-    mn.Appliance_Control_Toggle: (0, 0, NamespaceHandler.async_poll_default),
     mn.Appliance_Mcu_Firmware: (0, 0, NamespaceHandler.async_poll_once),
     mn.Appliance_Mcu_Hp110_Firmware: (0, 0, NamespaceHandler.async_poll_once),
 }

@@ -210,20 +210,16 @@ class ConfigEntryManager(EntityManager):
     """Defined at the class level to preset a list of domains for entities
     which could be dynamically added after ConfigEntry loading."""
 
-    __slots__ = (
-        (
-            "config_entry",
-            "config",
-            "key",
-            "obfuscate",
-            "_issues",
-            "_trace_file",
-            "_trace_future",
-            "_trace_data",
-            "_entry_update_listener_unsub",
-        )
-        + EntityManager.__SLOTS__
-        + logging.Loggable.__SLOTS__
+    __slots__ = EntityManager._calc_slots(
+        "config_entry",
+        "config",
+        "key",
+        "obfuscate",
+        "_issues",
+        "_trace_file",
+        "_trace_future",
+        "_trace_data",
+        "_entry_update_listener_unsub",
     )
 
     def __init__(

@@ -37,8 +37,9 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.helpers.device_registry import DeviceEntry
 
+    from ..merossclient.protocol.message import MerossMessage
     from ..merossclient.protocol.types import JsonDict, JsonMapping, PayloadIndexType
-    from .device import BaseDevice, Device, MerossResponse
+    from .device import BaseDevice, Device
     from .manager import ConfigEntryManager, EntityManager
 
     type ChannelType = PayloadIndexType
@@ -155,7 +156,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         "device_entry",
         "entity_registry_enabled_default",
         "has_entity_name",
-    ) + NamespaceParser.__SLOTS__
+    )
 
     def __init__(
         self,
@@ -174,29 +175,40 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         entities for the same channel and usually equal to device_class (but might not be)
         - device_class: used by HA to set some soft 'class properties' for the entity
         """
-        # init these first since Loggable init could call configure_logger which 'sometimes'
-        # could rely on these
+        # TODO: migrate to using 'parent' instead of 'manager' and maybe distinguish device/client access from
+        # entity management access with two different attributes. This in turn strongly depends on how
+        # we come out when 'enriching' namespaceParser behavior since client access should be managed
+        # through that behavior.
         self.manager = manager
-        self.channel = channel
-        self.entitykey = entitykey = kwargs.pop("entity_key", self.__class__.ENTITY_KEY)
-        self._payload_ns = mn.EMPTY_DICT
-        id = (
-            channel
-            if entitykey is None
-            else entitykey if channel is None else f"{channel}_{entitykey}"
-        )
-        super().__init__(id, manager)
-        # init before raising exceptions so that the Loggable is
-        # setup before any exception is raised
-        assert (
-            id is not None
-        ), "provide at least channel or entitykey (cannot be 'None' together)"
+        if type(channel) is mn.Namespace:
+            # TODO: ugly trick...let's see if this can be 'linearized' through some future refactoring.
+            # this is a special case for 'EntityNamespaceMixin' entities which are also NamespaceHandlers
+            # and so they get initialized with the namespace as channel because of constructor layout
+            # and general coding in our inheritance scheme.
+            # In this case we set the channel to None and store the namespace in a dedicated
+            # variable for later use in parsing and so on.
+            id = channel  # ns
+            channel = None
+            entitykey = self.__class__.ENTITY_KEY
+            assert "entity_key" not in kwargs
+        else:
+            entitykey = kwargs.pop("entity_key", self.__class__.ENTITY_KEY)
+            id = (
+                channel
+                if entitykey is None
+                else entitykey if channel is None else f"{channel}_{entitykey}"
+            )
+            assert (
+                id is not None
+            ), "provide at least channel or entitykey (cannot be 'None' together)"
         assert (
             id not in manager.entities
         ), f"id:{id} is not unique inside manager.entities"
-
+        super().__init__(id, manager)
+        self.channel = channel
+        self.entitykey = entitykey
         self.hass_connected = False
-
+        self._payload_ns = mn.EMPTY_DICT
         self.available = self._attr_available or manager.is_connected
         self.device_class = kwargs.pop("device_class", self._attr_device_class)
         self.device_entry = kwargs.pop(
@@ -605,3 +617,41 @@ class MLNumericEntity(MLEntity):
             self.native_value = native_value
             self.flush_state()
             return True
+
+
+class EntityNamespaceMixin(NamespaceHandler, MLEntity):
+    """
+    Special 'polling enabler/disabler' mixin used with entities which are
+    'single instance' for a namespace handler and so they'll disable polling
+    should they're disabled in HA.
+    """
+
+    if TYPE_CHECKING:
+        manager: Device
+
+    @classmethod
+    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
+        assert ns is cls.ns
+        ns_entity = cls(ns, device)
+        ns_entity.handler_ns = ns_entity
+        ns_entity.polling_strategy = None
+        return ns_entity
+
+    @cached_property
+    def unique_id(self) -> str | None:
+        # MIGRATE: This is to mantain unique_id compatibility with legacy versions
+        # since in v6.x.x entity.id initialization is different (at least for EntityNamespaceMixin entities)
+        # and is not based on channel/entitykey but just on NamespaceHandler.id (mn.Namespace).
+        # keep in mind these entities were already init'ed with channel = None
+        return f"{self.manager.id}_{self.entitykey}"
+
+    async def async_added_to_hass(self):
+        self.polling_strategy = self.DEFAULT_CONFIG[-1]
+        return await super().async_added_to_hass()
+
+    async def async_will_remove_from_hass(self):
+        self.polling_strategy = None
+        return await super().async_will_remove_from_hass()
+
+    def _handle(self, message: "MerossMessage", /):
+        self._parse(message.payload[self.ns.key])

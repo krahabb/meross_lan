@@ -169,8 +169,8 @@ class HubNamespaceHandler(NamespaceHandler):
                     # This could happen when the main payload is not a list of subdevices
                     # and might indicate this namespace is likely devoted to general hub
                     # commands/info (something like Appliance.Hub.*)
-                    self.handler = self._handle_undefined
-                    self._handle_undefined(message)
+                    self.handler = self._handle
+                    self.handler(message)
                     return
                 self.log_parser_exception(e, payload)
 

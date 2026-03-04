@@ -3,9 +3,9 @@ from typing import TYPE_CHECKING
 from homeassistant.components import sensor
 
 from . import const as mlc
-from .helpers.entity import MLEntity, MLNumericEntity
-from .helpers.namespaces import EntityNamespaceMixin, mc, mn
+from .helpers.entity import EntityNamespaceMixin, MLEntity, MLNumericEntity
 from .merossclient.client import Transport
+from .merossclient.protocol import const as mc, namespaces as mn
 from .merossclient.protocol.message import json_dumps
 
 if TYPE_CHECKING:
@@ -309,10 +309,14 @@ class ProtocolSensor(MLEnumSensor):
 
 class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
 
+    DEFAULT_CONFIG = (
+        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
+        mlc.PARAM_CLOUD_UPDATE_PERIOD,
+        EntityNamespaceMixin.async_poll_smart,
+    )
     ENTITY_KEY = "signal_strength"
     ns = mn.Appliance_System_Runtime
     key_value = mc.KEY_SIGNAL
-
     # HA core entity attributes:
     _attr_native_unit_of_measurement = mlc.hac.PERCENTAGE
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
