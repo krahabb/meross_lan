@@ -31,6 +31,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .helpers import DeviceContext
+    from custom_components.meross_lan.helpers.device import Device
 
 
 # set TEST_POWER and TEST_DURATION so they produce at least
@@ -70,6 +71,14 @@ def _configure_dates(tz):
     return today, tomorrow, todayseconds
 
 
+def _get_sensors(device: "Device"):
+    sensor_consumption = device.entities[ConsumptionXSensor.ns]
+    assert isinstance(sensor_consumption, ConsumptionXSensor)
+    sensor_electricity = device.entities[ElectricitySensor.ns]
+    assert isinstance(sensor_electricity, ElectricitySensor)
+    return sensor_consumption, sensor_electricity
+
+
 async def _async_configure_context(context: "DeviceContext", timezone: str):
     emulator = context.emulator
     assert isinstance(emulator, EmulatorConsumptionMixin)
@@ -94,14 +103,10 @@ async def _async_configure_context(context: "DeviceContext", timezone: str):
     assert powerstate
     assert float(powerstate.state) == TEST_POWER
 
-    sensor_consumption = device.entities[ConsumptionXSensor.ns]
-    assert isinstance(sensor_consumption, ConsumptionXSensor)
+    sensor_consumption, sensor_electricity = _get_sensors(device)
     consumptionstate = states.get(sensor_consumption.entity_id)
     assert consumptionstate
     assert int(consumptionstate.state) == 0
-
-    sensor_electricity = device.entities[ElectricitySensor.ENTITY_KEY]
-    assert isinstance(sensor_electricity, ElectricitySensor)
     # energy_estimate is disabled by default
     assert states.get(sensor_electricity.entity_id) is None
 
@@ -120,7 +125,7 @@ async def test_consumption(request, hass: "HomeAssistant"):
     today, tomorrow, todayseconds = _configure_dates(dt_util.DEFAULT_TIME_ZONE)
 
     async with helpers.DeviceContext(
-        request, hass, mc.TYPE_MSS310, time=today
+        request, hass, mc.TYPE_MSS310, time=today, auto_setup=False, auto_poll=False
     ) as context:
         device, sensor_consumption, sensor_electricity = await _async_configure_context(
             context, dt_util.DEFAULT_TIME_ZONE.key  # type: ignore
@@ -301,10 +306,7 @@ async def test_consumption_with_reload(request, hass: "HomeAssistant"):
 
         device = await context.async_enable_entity(sensor_estimate_entity_id)
         # 'async_enable_entity' will invalidate our references
-        sensor_consumption = device.entities[ConsumptionXSensor.ns]
-        assert isinstance(sensor_consumption, ConsumptionXSensor)
-        sensor_electricity = device.entities[ElectricitySensor.ENTITY_KEY]
-        assert isinstance(sensor_electricity, ElectricitySensor)
+        sensor_consumption, sensor_electricity = _get_sensors(device)
 
         def _check_energy_states(power, duration, msg):
             # consumption values are hard to predict due to the polling
@@ -344,10 +346,7 @@ async def test_consumption_with_reload(request, hass: "HomeAssistant"):
 
             assert await context.async_setup()
             device = context.device
-            sensor_consumption = device.entities[ConsumptionXSensor.ns]
-            assert isinstance(sensor_consumption, ConsumptionXSensor)
-            sensor_electricity = device.entities[ElectricitySensor.ENTITY_KEY]
-            assert isinstance(sensor_electricity, ElectricitySensor)
+            sensor_consumption, sensor_electricity = _get_sensors(device)
 
             # sensor states should have been restored
             assert sensor_consumption.offset == offset

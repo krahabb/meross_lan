@@ -314,7 +314,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         mn.Appliance_Control_Alarm: (".siren", "MLSiren"),
         mn.Appliance_Control_Electricity: (
             ".devices.mss",
-            "namespace_init_electricity",
+            "ElectricitySensor",
         ),
         mn.Appliance_Control_ElectricityX: (".devices.mss", "ElectricityXSensor"),
         mn.Appliance_Control_ConsumptionH: (
