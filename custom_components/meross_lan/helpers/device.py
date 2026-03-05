@@ -21,6 +21,7 @@ from ..merossclient import (
 )
 from ..merossclient.client import AbstractClient, Direction, Transport
 from ..merossclient.client.http import HttpClient
+from ..merossclient.device.handler import VoidNamespaceHandler
 from ..merossclient.obfuscate import OBFUSCATE_DICT
 from ..merossclient.protocol import MerossError, const as mc, namespaces as mn
 from ..merossclient.protocol.message import MerossMessage, MerossResponse
@@ -161,17 +162,6 @@ class BaseDevice(mlm.EntityManager, device.PhysicalDevice):
         pass
 
 
-_IGNORED_NAMESPACES_CFG = (".merossclient.device.handler", "VoidNamespaceHandler")
-_IGNORED_NAMESPACES = (
-    mn.Appliance_Config_Info,
-    mn.Appliance_Control_Bind,
-    mn.Appliance_Control_ConsumptionConfig,
-    mn.Appliance_System_Clock,
-    mn.Appliance_System_Online,
-    mn.Appliance_System_Report,
-)
-
-
 class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
     """
     Generic protocol handler class managing the physical device stack/state
@@ -261,6 +251,16 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         ns_handlers: Final[dict[str, NamespaceHandler]]  # type: ignore[override]
 
         def get_handler(self, ns: mn.Namespace) -> NamespaceHandler: ...
+
+        NAMESPACE_IGNORE: ClassVar[tuple[str, ...]]
+        """ This is a set of namespaces we don't use and for which we don't want to have any diagnostic
+        entity/log as well. These might be published by devices and enter our MQTT async processing
+        generating 'default' handlers which will in turn partecipate in logging/diagnostics.
+        That's why we use a 'void' handler for these namespaces, which will just ignore the messages."""
+        TRACE_ABILITY_EXCLUDE: ClassVar[tuple[str, ...]]
+        """ When tracing we enumerate appliance abilities to get insights on payload structures
+        this list will be excluded from enumeration since it's redundant/exposing sensitive info
+        or simply crashes/hangs the device."""
 
         # these are set from ConfigEntry
         configured_transport: Transport
@@ -363,8 +363,15 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         ),
         mn.Appliance_System_DNDMode: (".light", "MLDNDLightEntity"),
         mn.Appliance_System_Runtime: (".sensor", "MLSignalStrengthSensor"),
-    } | {_ns: _IGNORED_NAMESPACES_CFG for _ns in _IGNORED_NAMESPACES}
-
+    }
+    NAMESPACE_IGNORE = (
+        mn.Appliance_Config_Info,
+        mn.Appliance_Control_Bind,
+        mn.Appliance_Control_ConsumptionConfig,
+        mn.Appliance_System_Clock,
+        mn.Appliance_System_Online,
+        mn.Appliance_System_Report,
+    )
     TRACE_ABILITY_EXCLUDE = (
         mn.Appliance_System_Ability,
         mn.Appliance_System_All,
@@ -381,7 +388,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         mn.Appliance_Control_Bind,
         mn.Appliance_Control_Unbind,
     )
-
     DEFAULT_PLATFORMS = mlm.ConfigEntryManager.DEFAULT_PLATFORMS | {
         MLUpdate.PLATFORM: None,
     }
@@ -1192,11 +1198,15 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             return
 
         try:
+            # We could use self.get_handler_by_name here but this is
+            # more 'smart' since we can eventually add a grammar (mn.Namespace)
+            # on the fly by inspecting the received message in case the ns is
+            # not yet normalized.
             handler = self.ns_handlers[message.namespace]
-        except KeyError as key_error:
-            namespace = key_error.args[0]
+        except KeyError:
             # we don't have an handler in place and this is typically due to
             # PUSHES of unknown/unmanaged namespaces
+            namespace = message.namespace
             if not namespace:
                 # this weird error appears in an ns_multiple response missing
                 # the expected namespace key for "Appliance.Control.Runtime"
@@ -1209,12 +1219,15 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                 return
             # here the namespace might be unknown to our definitions (mn.Namespace)
             # so we try, in case, to build a new one with good presets
-            handler = self._create_handler(
-                self.NAMESPACES.get(namespace)
-                or mn.Namespace.from_message(
-                    namespace, method, message.payload, self.NAMESPACES
+            if namespace in self.NAMESPACE_IGNORE:
+                handler = VoidNamespaceHandler(self.NAMESPACES[namespace], self)
+            else:
+                handler = self._create_handler(
+                    self.NAMESPACES.get(namespace)
+                    or mn.Namespace.from_message(
+                        namespace, method, message.payload, self.NAMESPACES
+                    )
                 )
-            )
 
         if method == mc.METHOD_PUSH:
             # we're saving for diagnostic purposes so we have knowledge of

@@ -159,10 +159,6 @@ class Device(PhysicalDevice):
         they'll be cached in the dict.
         Namespace handlers will be initialized in the order as they appear in the dict
         and this could have consequences in the order of polls."""
-        TRACE_ABILITY_EXCLUDE: ClassVar[tuple[str, ...]]
-        """ When tracing we enumerate appliance abilities to get insights on payload structures
-        this list will be excluded from enumeration since it's redundant/exposing sensitive info
-        or simply crashes/hangs the device."""
 
         # Configuration
         preferred_transport: Transport

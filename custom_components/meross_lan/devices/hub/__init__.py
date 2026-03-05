@@ -8,16 +8,8 @@ from ...calendar import MtsSchedule
 from ...climate import MtsClimate
 from ...helpers import device as mld
 from ...helpers.entity import MLEntity
-from ...helpers.namespaces import (
-    POLLING_STRATEGY_CONF,
-    NamespaceHandler,
-)
-from ...merossclient import (
-    device,
-    get_productname,
-    get_subdevice_key_digest,
-)
-from ...merossclient.device.handler import VoidNamespaceHandler
+from ...helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler
+from ...merossclient import device, get_productname, get_subdevice_key_digest
 from ...merossclient.protocol import const as mc, namespaces as mn
 from ...merossclient.protocol.namespaces import hub as mn_h
 from ...number import MLConfigNumber
@@ -187,6 +179,14 @@ class HubMixin(Device if TYPE_CHECKING else object):
 
     NAMESPACES = mn.HUB_NAMESPACES
 
+    NAMESPACE_IGNORE = mld.Device.NAMESPACE_IGNORE + (
+        mn_h.Appliance_Hub_ExtraInfo,
+        mn_h.Appliance_Hub_SubdeviceList,
+    )
+    TRACE_ABILITY_EXCLUDE = mld.Device.TRACE_ABILITY_EXCLUDE + (
+        mn_h.Appliance_Hub_Exception,
+        mn_h.Appliance_Hub_Report,
+    )
     # TODO: skip caching add_entity callback and directly access core component method
     DEFAULT_PLATFORMS = mld.Device.DEFAULT_PLATFORMS | {
         MLBinarySensor.PLATFORM: None,
@@ -198,11 +198,6 @@ class HubMixin(Device if TYPE_CHECKING else object):
         MtsClimate.PLATFORM: None,
         MtsClimate.TrackSensorSelect.PLATFORM: None,
     }
-
-    TRACE_ABILITY_EXCLUDE = mld.Device.TRACE_ABILITY_EXCLUDE + (
-        mn_h.Appliance_Hub_Exception,
-        mn_h.Appliance_Hub_Report,
-    )
 
     @override
     def managed_entities(self, platform, /):
@@ -1177,12 +1172,6 @@ def digest_init_hub(
             device,
             handler=lambda message: digest_parse_hub(message.payload[mc.KEY_HUB]),
         )
-    for ns in (
-        mn_h.Appliance_Hub_ExtraInfo,
-        mn_h.Appliance_Hub_SubdeviceList,
-    ):
-        if ns in ability:
-            VoidNamespaceHandler(ns, device)
 
     return digest_parse_hub, ()
 
