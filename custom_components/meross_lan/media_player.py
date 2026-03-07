@@ -91,11 +91,9 @@ class MLMp3Player(MLEntity, media_player.MediaPlayerEntity):
         super().set_unavailable()
 
     # interface: MediaPlayerEntity
-    @MLEntity.ha_action
     async def async_mute_volume(self, mute):
         await self.async_request_parse_ex({mc.KEY_MUTE: 1 if mute else 0})
 
-    @MLEntity.ha_action
     async def async_set_volume_level(self, volume):
         await self.async_request_parse_ex(
             {
@@ -107,15 +105,12 @@ class MLMp3Player(MLEntity, media_player.MediaPlayerEntity):
             }
         )
 
-    @MLEntity.ha_action
     async def async_media_play(self):
         await self.async_request_parse_ex({mc.KEY_MUTE: 0})
 
-    @MLEntity.ha_action
     async def async_media_stop(self):
         await self.async_request_parse_ex({mc.KEY_MUTE: 1})
 
-    @MLEntity.ha_action
     async def async_media_previous_track(self):
         song = self.media_track
         await self.async_request_parse_ex(
@@ -128,7 +123,6 @@ class MLMp3Player(MLEntity, media_player.MediaPlayerEntity):
             }
         )
 
-    @MLEntity.ha_action
     async def async_media_next_track(self):
         song = self.media_track
         await self.async_request_parse_ex(
@@ -145,8 +139,8 @@ class MLMp3Player(MLEntity, media_player.MediaPlayerEntity):
         """
         {"channel": 0, "lmTime": 1630691532, "song": 9, "mute": 1, "volume": 11}
         """
-        if self._payload_ns != payload:
-            self._payload_ns = payload
+        if self.ns_payload != payload:
+            self.ns_payload = payload
             if mc.KEY_MUTE in payload:
                 self.is_volume_muted = mute = payload[mc.KEY_MUTE]
                 self.state = MediaPlayerState.IDLE if mute else MediaPlayerState.PLAYING

@@ -215,7 +215,6 @@ class _ElectricitySensor(MLNumericSensor):
         self.update_native_value(0)
 
 
-
 class ElectricitySensor(EntityNamespaceMixin, _ElectricitySensor):
 
     DEFAULT_CONFIG = (
@@ -722,10 +721,10 @@ class OverTempEnableSwitch(EntityNamespaceMixin, MLSwitch):
     @override
     def _handle(self, message: "MerossMessage", /):
         """{"overTemp": {"enable": 1,"type": 1}}"""
-        overtemp = message.payload[mc.KEY_OVERTEMP]
+        self.ns_payload = overtemp = message.payload[mc.KEY_OVERTEMP]
         self.update_device_value(overtemp[self.key_value])
         try:
-            self.sensor_overtemp_type.update_native_value(overtemp[mc.KEY_TYPE])
+            self.sensor_overtemp_type.update_device_value(overtemp[mc.KEY_TYPE])
         except AttributeError:
             self.sensor_overtemp_type = MLEnumSensor(
                 self.channel,

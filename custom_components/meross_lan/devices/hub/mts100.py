@@ -45,6 +45,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
             ).get(mc.KEY_SCHEDULEUNITTIME, 15)
 
     if TYPE_CHECKING:
+        ns_payload: mt_h._Mts100_Temperature
         binary_sensor_window: MLBinarySensor
         switch_patch_hvacaction: MLEmulatedSwitch
 
@@ -146,14 +147,12 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
             self.hvac_action = MtsClimate.HVACAction.OFF
         MtsClimate.flush_state(self)
 
-    @MtsClimate.ha_action
     async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode, /):
         if hvac_mode == MtsClimate.HVACMode.OFF:
             await self.async_request_onoff(0)
             return
         await self.async_request_onoff(1)
 
-    @MtsClimate.ha_action
     async def async_set_temperature(self, **kwargs):
         if (
             self.SET_TEMP_FORCE_MANUAL_MODE and self._mts_mode != mc.MTS100_MODE_CUSTOM
@@ -194,11 +193,12 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
                 *mn_h.Appliance_Hub_ToggleX.request_set({mc.KEY_ONOFF: 1}, self.id)
             )
             self._mts_onoff = 1
-        key_temp = mc.MTS100_MODE_TO_CURRENTSET_MAP.get(mode)
-        if key_temp in self._payload_ns:
-            target_temperature = self._payload_ns[key_temp]
-            self._payload_ns[mc.KEY_CURRENTSET] = target_temperature
+        try:
+            target_temperature = self.ns_payload[mc.MTS100_MODE_TO_CURRENTSET_MAP[mode]]
+            self.ns_payload[mc.KEY_CURRENTSET] = target_temperature
             self.target_temperature = target_temperature / self.device_scale
+        except KeyError:
+            pass
         self.flush_state()
 
     @override
@@ -214,37 +214,34 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         return self._mts_onoff and self._mts_mode == mc.MTS100_MODE_AUTO
 
     # interface: SubDeviceEntity
-    def _parse_all(self, payload: dict, /):
+    def _parse_all(self, payload: "mt_h.Mts100_All", /):
         self.parent._parse_online(payload[mc.KEY_ONLINE])
         if not self.available:
             return
-
         if mc.KEY_SCHEDULEBMODE in payload:
             self.update_scheduleb_mode(payload[mc.KEY_SCHEDULEBMODE])
         if p_mode := payload.get(mc.KEY_MODE):
             self._mts_mode = p_mode[mc.KEY_STATE]
-
         if p_togglex := payload.get(mc.KEY_TOGGLEX):
             self._mts_onoff = p_togglex[mc.KEY_ONOFF]
-
         if p_temperature := payload.get(mc.KEY_TEMPERATURE):
             self._parse_temperature(p_temperature)
         else:
             self.flush_state()
 
     # interface: self
-    def _parse_togglex(self, payload, /):
+    def _parse_togglex(self, payload: "mt_h.ToggleX", /):
         self._mts_onoff = payload[mc.KEY_ONOFF]
         self.flush_state()
 
-    def _parse_mode(self, payload, /):
+    def _parse_mode(self, payload: "mt_h._Mts100_Mode", /):
         self._mts_mode = payload[mc.KEY_STATE]
         self.flush_state()
 
-    def _parse_temperature(self, payload, /):
-        if self._payload_ns == payload:
+    def _parse_temperature(self, payload: "mt_h._Mts100_Temperature", /):
+        if self.ns_payload == payload:
             return
-        self._payload_ns = payload
+        self.ns_payload = payload
         if mc.KEY_ROOM in payload:
             self._update_current_temperature(payload[mc.KEY_ROOM])
         if mc.KEY_CURRENTSET in payload:
@@ -266,7 +263,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         if mc.KEY_HEATING in payload:
             self._mts_active = payload[mc.KEY_HEATING]
         if mc.KEY_OPENWINDOW in payload:
-            self.binary_sensor_window.update_native_value(payload[mc.KEY_OPENWINDOW])
+            self.binary_sensor_window.update_device_value(payload[mc.KEY_OPENWINDOW])
 
         for (
             key_temp,

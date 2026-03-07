@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from ..binary_sensor import MLBinarySensor
 from ..const import hac
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from ..helpers.manager import EntityManager
 
 
-class PresenceConfigBase(MLConfigSelect.GroupListChannelMixin):
+class PresenceConfigBase(MLConfigSelect.NamespaceGroupValue):
     """Mixin style base class for all of the entities managed in Appliance.Control.Presence.Config"""
 
     if TYPE_CHECKING:
@@ -122,8 +122,6 @@ class PresenceConfigMthX(PresenceConfigNumberBase):
 
 class PresenceConfigMode(PresenceConfigModeBase):
 
-    _entities: tuple[PresenceConfigBase, ...]
-
     def __init__(self, channel: "ChannelType", device: "Device", /):
         PresenceConfigModeBase.__init__(self, channel, device, mc.KEY_WORKMODE)
         device.get_handler(mn.Appliance_Control_Presence_Config).register_parsers(
@@ -186,11 +184,13 @@ class MLPresenceSensor(MLNumericSensor):
             name="Presence times",
         )
 
+    @override
     def _parse(self, payload: dict, /):
         """
         {"times": 0, "distance": 760, "value": 2, "timestamp": 1725907895}
         """
+        self.ns_payload = payload
         self.update_device_value(payload[mc.KEY_VALUE])
         self.sensor_distance.update_device_value(payload[mc.KEY_DISTANCE])
-        self.binary_sensor_motion.update_native_value(payload[mc.KEY_VALUE] == 2)
+        self.binary_sensor_motion.update_boolean_value(payload[mc.KEY_VALUE] == 2)
         self.sensor_times.update_device_value(payload[mc.KEY_TIMES])

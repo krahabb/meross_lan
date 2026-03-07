@@ -49,7 +49,7 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor.PartialAvailableMixin, MLBinary
         ):
             extra_state_attributes.pop(self.ATTR_TRANSITION_TIMEOUT, None)
             extra_state_attributes.pop(self.ATTR_TRANSITION_TARGET, None)
-        self.update_native_value(False)
+        self.update_boolean_value(False)
 
     def update_timeout(self, was_closing, /):
         self.extra_state_attributes[self.ATTR_TRANSITION_TARGET] = (
@@ -108,11 +108,11 @@ class MLGarageDoorEnableSwitch(MLGarageMultipleConfigSwitch):
         self._channel_enable(device_value)
 
     @override
-    def update_native_value(self, onoff, /):
-        if self.is_on != onoff:
-            self.is_on = onoff
+    def update_boolean_value(self, is_on, /):
+        if self.is_on != is_on:
+            self.is_on = is_on
             self.flush_state()
-            self._channel_enable(onoff)
+            self._channel_enable(is_on)
             return True
 
     def _channel_enable(self, enabled, /):
@@ -319,7 +319,6 @@ class MLGarage(MLCover):
         await self.async_request_position(0)
 
     # interface: self
-    @MLCover.ha_action
     async def async_request_position(self, open_request: int, /):
         self._transition_cancel()
         response = await self.async_request_payload({self.key_value: open_request})
@@ -579,7 +578,7 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
 
         if mc.KEY_BUZZERENABLE in payload:
             try:
-                self.switch_buzzerEnable.update_native_value(
+                self.switch_buzzerEnable.update_device_value(
                     payload[mc.KEY_BUZZERENABLE]
                 )
             except AttributeError:

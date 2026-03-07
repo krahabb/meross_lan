@@ -62,11 +62,11 @@ class MLEmulatedSwitch(MLSwitch.PartialAvailableMixin, MLSwitch):
 
     @override
     async def async_turn_on(self, **kwargs):
-        self.update_native_value(True)
+        self.update_boolean_value(True)
 
     @override
     async def async_turn_off(self, **kwargs):
-        self.update_native_value(False)
+        self.update_boolean_value(False)
 
 
 class PhysicalLockSwitch(MLSwitch):

@@ -66,15 +66,10 @@ class MLConfigSelect(MLSelect):
         OPTIONS_MAP: ClassVar[dict[Any, str]]
         options_map: dict[Any, str]
 
-        device_value: Any
-
     # configure initial options(map) through a class default
     OPTIONS_MAP = {}
 
-    __slots__ = (
-        "options_map",
-        "device_value",
-    )
+    __slots__ = ("options_map",)
 
     def __init__(
         self,
@@ -86,12 +81,7 @@ class MLConfigSelect(MLSelect):
         self.current_option = None
         self.options_map = self.OPTIONS_MAP
         self.options = list(self.options_map.values())
-        self.device_value = None
         MLSelect.__init__(self, channel, device, **kwargs)
-
-    def set_unavailable(self):
-        self.device_value = None
-        return MLSelect.set_unavailable(self)
 
     def update_device_value(self, device_value, /):
         if self.device_value != device_value:
@@ -109,6 +99,5 @@ class MLConfigSelect(MLSelect):
             return True
 
     # interface: select.SelectEntity
-    @MLSelect.ha_action
     async def async_select_option(self, option: str):
         await self.async_request_value(reverse_lookup(self.options_map, option))

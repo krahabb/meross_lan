@@ -61,7 +61,7 @@ class Mts300Climate(MtsThermostatClimate):
 
         # TODO: customize parsing of native payload since we have 2 temperatures
 
-    class SensorAssociationSelect(MLConfigSelect.GroupListChannelMixin, MLConfigSelect):
+    class SensorAssociationSelect(MLConfigSelect.NamespaceGroupValue, MLConfigSelect):
         """
         Configures internal/external sensor association for temperature readings in mts300.
         """
@@ -84,7 +84,7 @@ class Mts300Climate(MtsThermostatClimate):
 
     if TYPE_CHECKING:
         # overrides
-        _payload_ns: mt_t.ModeC_C
+        ns_payload: mt_t.ModeC_C
 
         HVAC_MODE_TO_MODE_MAP: ClassVar
         _mts_work: int | None
@@ -235,13 +235,11 @@ class Mts300Climate(MtsThermostatClimate):
         self._mts_work = None
         return super().set_unavailable()
 
-    @MtsThermostatClimate.ha_action
     async def async_set_hvac_mode(self, hvac_mode: MtsThermostatClimate.HVACMode):
         await self.async_request_parse_ex(
             {mc.KEY_MODE: self.HVAC_MODE_TO_MODE_MAP[hvac_mode]}
         )
 
-    @MtsThermostatClimate.ha_action
     async def async_set_temperature(self, **kwargs):
         format_temp = lambda t: round(t * self.device_scale)
 
@@ -277,7 +275,6 @@ class Mts300Climate(MtsThermostatClimate):
 
         await self.async_request_parse_ex(modeC_args)
 
-    @MtsThermostatClimate.ha_action
     async def async_set_fan_mode(self, fan_mode: str, /):
         fan_speed = self.FAN_MODE_TO_FAN_SPEED_MAP[fan_mode]
         # actually we assume: (fan_speed != 0) <-> (fMode == mc.MTS300_FAN_MODE_ON)
@@ -317,9 +314,9 @@ class Mts300Climate(MtsThermostatClimate):
 
     # interface: self
     def _parse_modeC(self, payload: "mt_t.ModeC_C", /):
-        if self._payload_ns == payload:
+        if self.ns_payload == payload:
             return
-        self._payload_ns = payload
+        self.ns_payload = payload
         try:
             self._mts_work = payload["work"]
             self.preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_work)
@@ -354,12 +351,12 @@ class Mts300Climate(MtsThermostatClimate):
                 # this doesn't update device_value so that it is saved and
                 # eventually reused when switch_fan_hold toggles on
                 self.number_fan_hold.update_native_value(None)
-                self.switch_fan_hold.update_native_value(0)
+                self.switch_fan_hold.update_boolean_value(False)
             else:
                 if not self.number_fan_hold.update_device_value(fan_hold_time):
                     # might happen when we toggle-on switch_fan_hold
                     self.number_fan_hold.update_native_value(fan_hold_time)
-                self.switch_fan_hold.update_native_value(1)
+                self.switch_fan_hold.update_boolean_value(True)
 
             match mode := payload["mode"]:
                 case mc.MTS300_MODE_OFF:

@@ -112,7 +112,6 @@ class MLSiren(MLBinaryEntity, siren.SirenEntity):
         )
         self.update_device_value(device_value)
 
-    @MLBinaryEntity.ha_action
     async def async_turn_on(self, **kwargs):
         if kwargs:
             payload = {}

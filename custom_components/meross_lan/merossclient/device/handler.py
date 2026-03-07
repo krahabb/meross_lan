@@ -150,10 +150,7 @@ class NamespaceHandler(logging.Loggable):
         self.parsers[channel] = getattr(
             parser, f"_parse_{self.id.slug_end}", parser._parse
         )
-
-        if not parser._namespace_handlers:
-            parser._namespace_handlers = set()
-        parser._namespace_handlers.add(self)
+        parser._namespace_registered(self)
         self.polling_request_add_channel(channel, extra)
         self.handler = self._handle_list
 
@@ -168,9 +165,7 @@ class NamespaceHandler(logging.Loggable):
         _parser_method_name = f"_parse_{self.id.slug_end}"
         for parser in parsers:
             assert parser.channel == channel, "All parsers must have the same channel"
-            if not parser._namespace_handlers:
-                parser._namespace_handlers = set()
-            parser._namespace_handlers.add(self)
+            parser._namespace_registered(self)
             _dispatcher.parsers.append(
                 getattr(parser, _parser_method_name, parser._parse)
             )
@@ -181,25 +176,21 @@ class NamespaceHandler(logging.Loggable):
         if len(parsers) == 1:
             parser = parsers[0]
             assert old.channel == parser.channel, "channel mismatch"
-            old._namespace_handlers.remove(self)
-            self.parsers[parser.channel] = getattr(
+            old._ns_handlers.remove(self)
+            self.parsers[old.channel] = getattr(
                 parser, f"_parse_{self.id.slug_end}", parser._parse
             )
-            if not parser._namespace_handlers:
-                parser._namespace_handlers = set()
-            parser._namespace_handlers.add(self)
+            parser._namespace_registered(self)
         else:
             # install a dispatcher
-            old._namespace_handlers.remove(self)
+            old._ns_handlers.remove(self)
             self.parsers[old.channel] = _dispatcher = NamespaceParser.Dispatcher()
             _parser_method_name = f"_parse_{self.id.slug_end}"
             for parser in parsers:
                 assert (
                     parser.channel == old.channel
                 ), "All parsers must have the same channel"
-                if not parser._namespace_handlers:
-                    parser._namespace_handlers = set()
-                parser._namespace_handlers.add(self)
+                parser._namespace_registered(self)
                 _dispatcher.parsers.append(
                     getattr(parser, _parser_method_name, parser._parse)
                 )

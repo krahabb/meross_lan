@@ -105,12 +105,12 @@ def disable_entity_registry_update():
         MLGarageMultipleConfigSwitch,
     )
 
-    saved = MLGarageDoorEnableSwitch.update_native_value
-    MLGarageDoorEnableSwitch.update_native_value = (
-        MLGarageMultipleConfigSwitch.update_native_value
+    saved = MLGarageDoorEnableSwitch.update_boolean_value
+    MLGarageDoorEnableSwitch.update_boolean_value = (
+        MLGarageMultipleConfigSwitch.update_boolean_value  # type: ignore
     )
     yield
-    MLGarageDoorEnableSwitch.update_native_value = saved
+    MLGarageDoorEnableSwitch.update_boolean_value = saved
 
 
 @pytest.fixture(autouse=True, scope="function")

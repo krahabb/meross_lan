@@ -63,7 +63,6 @@ class MLUpdate(MLEntity.PartialAvailableMixin, MLEntity, update.UpdateEntity):
         )
         self.flush_state()
 
-    @MLEntity.ha_action
     async def async_install(self, version: str | None, backup: bool, **kwargs):
         basedevice = self.parent
         if not basedevice.is_connected:

@@ -22,7 +22,7 @@ class Mts200Climate(MtsThermostatClimate):
         ns = mn_t.Appliance_Control_Thermostat_Schedule
 
     if TYPE_CHECKING:
-        _payload_ns: mt_t.Mode_C
+        ns_payload: mt_t.Mode_C
 
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS200_MODE_MANUAL: MtsThermostatClimate.Preset.CUSTOM,
@@ -82,7 +82,6 @@ class Mts200Climate(MtsThermostatClimate):
             self.hvac_action = MtsThermostatClimate.HVACAction.OFF
         MtsThermostatClimate.flush_state(self)
 
-    @MtsThermostatClimate.ha_action
     async def async_set_hvac_mode(self, hvac_mode: MtsThermostatClimate.HVACMode, /):
         if hvac_mode == MtsThermostatClimate.HVACMode.OFF:
             await self.async_request_onoff(0)
@@ -98,7 +97,6 @@ class Mts200Climate(MtsThermostatClimate):
 
         await self.async_request_onoff(1)
 
-    @MtsThermostatClimate.ha_action
     async def async_set_temperature(self, /, **kwargs):
         mode = self._mts_mode
         if self.SET_TEMP_FORCE_MANUAL_MODE or (mode == mc.MTS200_MODE_AUTO):
@@ -111,7 +109,7 @@ class Mts200Climate(MtsThermostatClimate):
                 mode = mc.MTS200_MODE_MANUAL
 
         target_temp = round(kwargs[self.ATTR_TEMPERATURE] * self.device_scale)
-        self._payload_ns[mc.KEY_TARGETTEMP] = target_temp  # optimistic update
+        self.ns_payload[mc.KEY_TARGETTEMP] = target_temp  # optimistic update
         await self.async_request_parse_ex({mc.KEY_MODE: mode, key: target_temp})
 
     async def async_request_preset(self, mode: int, /):
@@ -125,9 +123,9 @@ class Mts200Climate(MtsThermostatClimate):
 
     # interface: self
     def _parse_mode(self, payload: "mt_t.Mode_C", /):
-        if self._payload_ns == payload:
+        if self.ns_payload == payload:
             return
-        self._payload_ns = payload
+        self.ns_payload = payload
         if mc.KEY_MODE in payload:
             self._mts_mode = payload[mc.KEY_MODE]
         if mc.KEY_ONOFF in payload:

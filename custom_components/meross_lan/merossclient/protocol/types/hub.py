@@ -29,10 +29,56 @@ class Online(_Online, IdPayload):
     """Appliance.Hub.Online"""
 
 
-class ToggleX(IdPayload):
+class _ToggleX(TypedDict):
+    onoff: int  # 1: on, 0: off
+
+
+class ToggleX(_ToggleX, IdPayload):
     """Appliance.Hub.ToggleX"""
 
-    onoff: int  # 1: on, 0: off
+    pass
+
+
+class _Mts100_Mode(TypedDict):
+    """Appliance.Hub.Mts100.Mode"""
+
+    state: int  # MTS100_MODE_* constants
+
+
+class Mts100_Mode(_Mts100_Mode, IdPayload):
+    """Appliance.Hub.Mts100.Mode"""
+
+    pass
+
+
+class _Mts100_Temperature(TypedDict):
+
+    room: int
+    currentSet: int
+    custom: int
+    comfort: int
+    economy: int
+    max: int
+    min: int
+    heating: int  # 1: on, 0: off
+    away: int
+    openWindow: int  # 1: open, 0: closed
+
+
+class Mts100_Temperature(_Mts100_Temperature, IdPayload):
+    """Appliance.Hub.Mts100.Temperature"""
+
+    pass
+
+
+class Mts100_All(IdPayload):
+    """Appliance.Hub.Mts100.All"""
+
+    online: _Online
+    scheduleBMode: int
+    togglex: NotRequired[ToggleX]
+    mode: NotRequired[_Mts100_Mode]
+    temperature: NotRequired[_Mts100_Temperature]
 
 
 class Sensor_Adjust(IdPayload):
@@ -161,6 +207,18 @@ class Digest_mts100v3(Digest_SubDevice):
 
     scheduleBMode: int
     mts100v3: _mts100v3
+
+
+class _mts150(TypedDict):
+    mode: int
+    # TODO: more keys
+
+
+class Digest_mts150(Digest_SubDevice):
+    """Digest payload for mts150 subdevice."""
+
+    scheduleBMode: int
+    mts150: _mts150
 
 
 class Digest_gs559(Digest_SubDevice):

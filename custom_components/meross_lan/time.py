@@ -46,7 +46,6 @@ class MLTime(MLEntity, time.TimeEntity):
     __slots__ = (
         "device_scale",
         "device_value_disabled",
-        "device_value",
         # HA core
         "native_value",
     )
@@ -60,11 +59,9 @@ class MLTime(MLEntity, time.TimeEntity):
         self.native_value = kwargs.pop("native_value", None)
         self.device_scale = kwargs.pop("device_scale", 1)
         self.device_value_disabled = kwargs.pop("device_value_disabled", 0)
-        self.device_value = kwargs.pop("device_value", None)
         super().__init__(channel, manager, **kwargs)
 
     def set_unavailable(self):
-        self.device_value = None
         self.native_value = None
         super().set_unavailable()
 
@@ -75,7 +72,6 @@ class MLTime(MLEntity, time.TimeEntity):
     # interface: self
     def update_device_value(self, device_value: int | None):
         if self.device_value != device_value:
-            self.device_value = device_value
             if (device_value == self.device_value_disabled) or (device_value is None):
                 self.native_value = None
             else:
@@ -88,6 +84,7 @@ class MLTime(MLEntity, time.TimeEntity):
                     self.native_value = dt.time(hour, minute, second)
                 else:
                     self.native_value = None
+            self.device_value = device_value
             self.flush_state()
             return True
 

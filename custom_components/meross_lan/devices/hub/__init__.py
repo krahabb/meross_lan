@@ -76,17 +76,13 @@ class HubSubIdChannelMixin(MLEntity if TYPE_CHECKING else object):
 
     @override
     async def async_request_value(self, device_value, /):
-        (
-            await self.parent.async_request(
-                *self.ns.request_set(
-                    {mc.KEY_CHANNEL: 0, self.key_value: device_value}, self.channel
-                )
-            )
+        await self.async_request_payload(
+            {mc.KEY_CHANNEL: 0, self.key_value: device_value}
         )
         self.update_device_value(device_value)
 
 
-class HubSubIdDeviceCfgMixin(MLEntity.GroupListChannelMixin):
+class HubSubIdDeviceCfgMixin(MLEntity.NamespaceGroupValue):
     """
     Mixin implementation for protocol method 'SET' on 'Appliance.Config.DeviceCfg'.
     """
@@ -98,13 +94,8 @@ class HubSubIdDeviceCfgMixin(MLEntity.GroupListChannelMixin):
 
     @override
     async def async_request_value(self, device_value, /):
-        (
-            await self.parent.async_request(
-                *self.ns.request_set(
-                    {mc.KEY_CHANNEL: 0, self.key_group: {self.key_value: device_value}},
-                    self.channel,
-                )
-            )
+        await self.async_request_payload(
+            {mc.KEY_CHANNEL: 0, self.key_group: {self.key_value: device_value}}
         )
         self.update_device_value(device_value)
 
@@ -683,9 +674,6 @@ class SmokeAlarmSensor(SubDeviceEntity, MLEnumSensor):
     )
 
     def __init__(self, subid: str, subdevice: "SubDevice", /):
-        self.device_value = (
-            None  # TODO: move to MLEnumSensor together with mapping capability
-        )
         super().__init__(subid, subdevice, translation_key="smoke_alarm_status")
         self.binary_sensor_alarm = MLBinarySensor(
             subid,
@@ -709,11 +697,11 @@ class SmokeAlarmSensor(SubDeviceEntity, MLEnumSensor):
     def _parse(self, payload: "mt_h._smokeAlarm", /):
         self.device_value = value = payload[mc.KEY_STATUS]
         self.update_native_value(self.STATUS_MAP.get(value, value))
-        self.binary_sensor_alarm.update_native_value(value in self.STATUS_ALARM)
-        self.binary_sensor_error.update_native_value(value in self.STATUS_ERROR)
-        self.binary_sensor_muted.update_native_value(value in self.STATUS_MUTED)
+        self.binary_sensor_alarm.update_boolean_value(value in self.STATUS_ALARM)
+        self.binary_sensor_error.update_boolean_value(value in self.STATUS_ERROR)
+        self.binary_sensor_muted.update_boolean_value(value in self.STATUS_MUTED)
         try:
-            self.sensor_interConn.update_native_value(payload[mc.KEY_INTERCONN])
+            self.sensor_interConn.update_device_value(payload[mc.KEY_INTERCONN])
         except KeyError:
             pass
 
@@ -755,12 +743,8 @@ class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
             # Since the native HA interface async_set_native_value wants to set
             # the 'new adjust value' we have to issue the difference against the
             # currently configured one
-            (
-                await self.parent.async_request(
-                    *self.ns.request_set(
-                        {self.key_value: device_value - self.device_value}, self.channel
-                    )
-                )
+            await self.async_request_payload(
+                {self.key_value: device_value - self.device_value}
             )
             self.update_device_value(device_value)
 

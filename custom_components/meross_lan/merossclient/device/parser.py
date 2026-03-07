@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import TYPE_CHECKING, final
+from typing import TYPE_CHECKING, final, override
 
 from .. import logging, merge_dicts
 from ..protocol import const as mc, namespaces as mn
@@ -26,6 +26,7 @@ if TYPE_CHECKING:
         JsonDict,
         JsonList,
         JsonMapping,
+        PayloadIndexType,
     )
     from .handler import NamespaceHandler
 
@@ -78,24 +79,22 @@ class NamespaceParser(logging.Loggable):
         # establishing the link between the handler and the parser
         parent: Final[PhysicalDevice]  # type: ignore[override]
         ns: mn.Namespace  # same (only MLEntity for now)
-        channel: int | str  # the channel/id/subId key value according to the namespace
+        # TODO/BEWARE: these are not yet initialized here and they
+        # are expected to be set by the derived class
+        channel: PayloadIndexType | None  # TODO: rename to 'index'
+        """The channel/id/subId key value according to the namespace (indexed or not)."""
+        ns_payload: JsonMapping  # type: ignore[assignment]
+        """The last parsed payload."""
+        _ns_handlers: set[NamespaceHandler]
+        """Set of NamespaceHandlers this parser is registered to. This is used to manage the link back
+        to the handler for issuing requests and for cleanup on shutdown."""
 
-        _payload_ns: JsonDict  # the last parsed payload
-        _namespace_handlers: set[
-            "NamespaceHandler"
-        ]  # multiple ns could forward to this parser
-
-    # using class-level defaults here until we build a proper hierarchy
-    # with specialized __init__
-    _payload_ns = mn.EMPTY_DICT  # class-level default
-    _namespace_handlers = None  # type: ignore
-
-    __SLOTS__ = ()
+    __SLOTS__ = ("channel", "ns_payload", "_ns_handlers")
 
     def shutdown(self):
         super().shutdown()
         try:
-            for handler in self._namespace_handlers:
+            for handler in self._ns_handlers:
                 _dispatcher: NamespaceParser.Dispatcher = handler.parsers[self.channel]  # type: ignore
                 if type(_dispatcher) is NamespaceParser.Dispatcher:
                     # remove from dispatcher
@@ -106,11 +105,27 @@ class NamespaceParser(logging.Loggable):
                         del handler.parsers[self.channel]
                 else:
                     del handler.parsers[self.channel]
-            self._namespace_handlers = None  # type: ignore
+            del self._ns_handlers
             del self.handler_ns
         except (TypeError, AttributeError):  # never registered
             pass
-        assert self._namespace_handlers is None
+
+    def _namespace_registered(self, handler: "NamespaceHandler", /):
+        """This is called by the NamespaceHandler when registering this parser to the handler.
+        This is useful to setup the link back to the NamespaceHandler for issuing requests.
+        """
+        try:
+            self._ns_handlers.add(handler)
+        except AttributeError:
+            self._ns_handlers = {handler}
+
+    @cached_property
+    def ns_payload(self) -> "JsonMapping":
+        """The last parsed payload. This is set by the default _parse method but it can be
+        used by derived classes to store the last parsed payload for later use, such as
+        when issuing a request to update a value in the device and needing to merge the
+        request payload with the last known state of the whole namespace."""
+        return mn.EMPTY_DICT
 
     @cached_property
     def handler_ns(self):
@@ -122,6 +137,7 @@ class NamespaceParser(logging.Loggable):
         # updates without using the NamespaceHandler inner mechanisms.
         return self.parent.ns_handlers[self.ns]
 
+    # TODO: rename to async_request
     async def async_request_payload(self, payload: "JsonDict", /):
         return await self.parent.async_request(
             *self.ns.request_set(payload, self.channel)
@@ -141,22 +157,124 @@ class NamespaceParser(logging.Loggable):
     async def async_request_parse_ex(self, payload: "JsonDict", /):
         response = await self.async_request_payload(payload)
         getattr(self, f"_parse_{self.ns.slug_end}", self._parse)(
-            merge_dicts(dict(self._payload_ns), payload)
+            merge_dicts(dict(self.ns_payload), payload)
         )
         return response
 
     def _parse(self, payload: "JsonMapping", /):
-        """Default payload message parser. This is invoked automatically
-        when the parser is registered to a NamespaceHandler for a given namespace
-        and no 'better' _parse_xxxx has been defined. See NamespaceHandler.register.
-        At this root level, coming here is likely an error but this feature
-        (default parser) is being leveraged to setup a default parsing route for some
-        specific class of entities instead of having to define a specific _parse_xxxx.
-        This is useful for generalized sensor classes which are just mapped to a single
-        namespace."""
+        """Default payload message parser. This is invoked by the NamespaceHandler
+        default routing mechanics when the parser is registered to a NamespaceHandler.
+        """
+        self.ns_payload = payload
         self.log(
             self.WARNING,
             "Parsing undefined for payload:(%s)",
             _payload=payload,
             timeout=14400,
         )
+
+
+class NamespaceValue(NamespaceParser):
+    """A specialization of NamespaceParser providing a simple interface to manage
+    a single item value in the namespace payload."""
+
+    if TYPE_CHECKING:
+        key_value: ClassVar[str] | str
+        device_value: Any  # type: ignore[assignment]
+
+    key_value = mc.KEY_VALUE
+
+    __SLOTS__ = ("device_value",)
+
+    @cached_property
+    def device_value(self) -> "Any":
+        return None
+
+    def update_device_value(self, device_value, /) -> bool | None:
+        # Called when the device value is being updated, either by parsing a new payload or by issuing a request.
+        # This is intended as a placeholder to be overridden by derived classes to implement custom logic on device value update,
+        # such as updating the entity state or triggering side effects. By default, it just updates the internal
+        # device_value and returns True if the value has changed, False otherwise.
+        if self.device_value != device_value:
+            self.device_value = device_value
+            return True
+
+    async def async_request_value(self, device_value, /) -> None:
+        """Issues a command SET to update the device and also updates
+        the entity state if the command was acknowledged by the device.
+        Raises exception on connection/protocol errors."""
+        await self.async_request_payload({self.key_value: device_value})
+        self.update_device_value(device_value)
+
+    @override  # NamespaceParser
+    def _parse(self, payload: "JsonMapping", /):
+        self.ns_payload = payload
+        self.update_device_value(payload[self.key_value])
+
+
+class NamespaceBoolean(NamespaceValue):
+    """A specialization of NamespaceValue to manage boolean values with custom on/off values in the device.
+    By default it assumes that the device uses 1 for 'on' and 0 for 'off', but this can be customized by setting the
+    'native_on' and 'native_off' class (or instance) attributes."""
+
+    if TYPE_CHECKING:
+        native_on: ClassVar[int] | int
+        """The actual device value representing the 'on' state."""
+        native_off: ClassVar[int] | int
+        """The actual device value representing the 'off' state."""
+
+    key_value = mc.KEY_ONOFF
+    native_on = 1
+    native_off = 0
+
+    __SLOTS__ = ("is_on",)
+
+    @override
+    def update_device_value(self, device_value, /) -> bool | None:
+        if self.device_value != device_value:
+            self.device_value = device_value
+            match device_value:
+                case self.native_on:
+                    self.is_on = True
+                case self.native_off:
+                    self.is_on = False
+                case _:
+                    self.is_on = None
+            return True
+
+    # interface compatibility with HA toggle entities, allowing to use this class as a
+    # mixin with other NamespaceParser specializations
+    @cached_property
+    def is_on(self) -> bool | None:
+        """Return True if entity is on."""
+        return None
+
+    async def async_turn_on(self, **kwargs):
+        await self.async_request_value(self.native_on)
+
+    async def async_turn_off(self, **kwargs):
+        await self.async_request_value(self.native_off)
+
+
+class NamespaceGroupValue(NamespaceValue):
+    """
+    Parser for payload values embedded in a(sub)dictionary in the namespace payload. The key of the
+    dictionary is defined by the 'key_group' attribute and the value is defined by 'key_value'.
+    This class could also be used as a mixin with other NamespaceParser specializations.
+    """
+
+    if TYPE_CHECKING:
+        key_group: ClassVar[str] | str
+        key_value: ClassVar[str] | str
+
+    @override
+    async def async_request_value(self, device_value, /):
+        await self.async_request_payload(
+            {self.key_group: {self.key_value: device_value}}
+        )
+        self.update_device_value(device_value)
+
+    @override
+    def _parse(self, payload, /):
+        self.ns_payload = payload
+        self.update_device_value(payload[self.key_group][self.key_value])

@@ -15,11 +15,10 @@ from homeassistant.components.light import (
 import homeassistant.util.color as color_util
 
 from . import const as mlc
-from .helpers import clamp
-from .helpers.device import MerossMessage
-from .helpers.entity import EntityNamespaceMixin, MLBinaryEntity
+from .helpers import clamp, entity as mle
 from .helpers.namespaces import NamespaceHandler
 from .merossclient.protocol import const as mc, namespaces as mn
+from .merossclient.protocol.message import MerossMessage
 
 if TYPE_CHECKING:
     from typing import Final
@@ -28,13 +27,13 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .helpers.device import Device
-    from .merossclient.protocol.types import JsonDict, JsonList
+    from .merossclient.protocol.types import JsonDict, JsonList, JsonMapping
 
 
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    MLBinaryEntity.platform_setup_entry(
+    mle.MLEntity.platform_setup_entry(
         hass, config_entry, async_add_devices, light.DOMAIN
     )
 
@@ -170,7 +169,7 @@ def native_to_kelvin(temperature: int):
     )
 
 
-class MLLightBase(MLBinaryEntity, light.LightEntity):
+class MLLightBase(mle.MLToggleXEntity, light.LightEntity):
     """
     base 'abstract' class for meross light entities handling
     either
@@ -180,7 +179,7 @@ class MLLightBase(MLBinaryEntity, light.LightEntity):
 
     if TYPE_CHECKING:
 
-        class Args(MLBinaryEntity.Args):
+        class Args(mle.MLToggleXEntity.Args):
             pass
 
         EFFECT_OFF: Final
@@ -357,7 +356,7 @@ class MLLightBase(MLBinaryEntity, light.LightEntity):
         if not self.is_on:
             return
         t_now = monotonic()
-        _light = dict(self._payload_ns)
+        _light = dict(self.ns_payload)
         if t_now >= (self._t_end - self._t_resolution):
             _light[mc.KEY_LUMINANCE] = self._t_luminance_end
             if self._t_rgb_end:
@@ -385,7 +384,7 @@ class MLLightBase(MLBinaryEntity, light.LightEntity):
                 )
             self._transition_schedule(self._t_end - t_now)
 
-        if _light == self._payload_ns:
+        if _light == self.ns_payload:
             # Our time resolution might be too fast to produce
             # visible effects in light payload so we're skipping
             # sending redundant light commands
@@ -410,7 +409,6 @@ class MLLight(MLLightBase):
 
         ATTR_TOGGLEX_AUTO: Final[str]
 
-        handler_togglex: Final[NamespaceHandler | None]
         _togglex_auto: bool | None
         """
         - False: the device needs to use TOGGLEX
@@ -430,10 +428,7 @@ class MLLight(MLLightBase):
         }
     )
 
-    __slots__ = (
-        "handler_togglex",
-        "_togglex_auto",
-    )
+    __slots__ = ("_togglex_auto",)
 
     def __init__(
         self, channel: int, device: "Device", effect_list: list[str] | None = None
@@ -466,18 +461,17 @@ class MLLight(MLLightBase):
                 supported_color_modes.add(ColorMode.ONOFF)
 
         MLLightBase.__init__(self, channel, device, effect_list)
-        self.handler_togglex = device.register_togglex_channel(self, True)
         self._togglex_auto = None if self.handler_togglex else False
 
     # interface: MLLightBase
-    def _parse_light(self, payload: dict, /):
-        if self._payload_ns != payload:
-            self._payload_ns = payload
+    def _parse_light(self, payload: "JsonMapping", /):
+        if self.ns_payload != payload:
+            self.ns_payload = payload
             if mc.KEY_ONOFF in payload:
                 self.is_on = payload[mc.KEY_ONOFF]
             capacity = payload[mc.KEY_CAPACITY]
             if capacity & mc.LIGHT_CAPACITY_EFFECT:
-                self._flush_light_effect(payload)
+                self._flush_light_effect(payload[mc.KEY_EFFECT])
             else:
                 self.effect = None
                 if mc.KEY_LUMINANCE in payload:
@@ -500,12 +494,11 @@ class MLLight(MLLightBase):
                 # self.color_mode = ColorMode.UNKNOWN
             self.flush_state()
 
-    def _flush_light_effect(self, _light: dict, /):
+    def _flush_light_effect(self, effect: int, /):
         self.color_mode = ColorMode.ONOFF
-        self.effect = self.effect_list[_light[mc.KEY_EFFECT]]  # type: ignore
+        self.effect = self.effect_list[effect]  # type: ignore
 
     # interface: LightEntity
-    @MLLightBase.ha_action
     async def async_turn_on(self, **kwargs):
         self.cancel_callback(self._transition_callback)
 
@@ -513,7 +506,7 @@ class MLLight(MLLightBase):
             await self.async_request_onoff(1)
             return
 
-        _light = dict(self._payload_ns)
+        _light = dict(self.ns_payload)
 
         if ATTR_TRANSITION in kwargs and kwargs[ATTR_TRANSITION] != 0:
             _t_duration = self._transition_setup(_light, kwargs)
@@ -552,7 +545,6 @@ class MLLight(MLLightBase):
         if _t_duration:
             self._transition_schedule(_t_duration)
 
-    @MLLightBase.ha_action
     async def async_turn_off(self, **kwargs):
         await self.async_request_onoff(0)
 
@@ -634,23 +626,21 @@ class MLLightEffect(MLLight):
             self._rgb_to_native = rgbw_patch_to_native
             self._native_to_rgb = native_to_rgbw_patch
 
-    # interface: MLBinaryEntity
     @override
-    def update_native_value(self, onoff, /):
-        if self.is_on != onoff:
-            self.is_on = onoff
-            if onoff and (mc.KEY_EFFECT in self._payload_ns):
-                self.handler_light_effect.polling_period = 0
-            self.flush_state()
-            return True
+    def flush_state(self):
+        self.handler_light_effect.polling_period = (
+            0
+            if self.is_on and (mc.KEY_EFFECT in self.ns_payload)
+            else mlc.PARAM_INFINITE_TIMEOUT
+        )
+        return super().flush_state()
 
     # interface: MLLight
     @override
-    def _flush_light_effect(self, _light: dict):
-        effect_index = _light[mc.KEY_EFFECT]
+    def _flush_light_effect(self, effect: int, /):
         self.handler_light_effect.polling_period = 0
         try:
-            _light_effect = self._light_effect_list[effect_index]
+            _light_effect = self._light_effect_list[effect]
         except IndexError:
             # our _light_effect_list might be stale
             return
@@ -665,34 +655,36 @@ class MLLightEffect(MLLight):
             self.brightness = None
             self.color_mode = ColorMode.ONOFF
 
-    # interface: LightEntity
-    @MLLight.ha_action
+    @override
     async def async_turn_on(self, **kwargs):
         self.cancel_callback(self._transition_callback)
 
-        _light = self._payload_ns
-        _capacity = _light.get(mc.KEY_CAPACITY, 0)
         # intercept light command if it is related to effects (on/off/change of luminance)
         if ATTR_EFFECT in kwargs:
+            _light = dict(self.ns_payload)
             effect_index = self.effect_list.index(kwargs[ATTR_EFFECT])  # type: ignore
             if effect_index == len(self._light_effect_list):  # EFFECT_OFF
-                _light = dict(_light)
                 _light.pop(mc.KEY_EFFECT, None)
-                _light[mc.KEY_CAPACITY] = _capacity & ~mc.LIGHT_CAPACITY_EFFECT
+                _light[mc.KEY_CAPACITY] = (
+                    _light[mc.KEY_CAPACITY] & ~mc.LIGHT_CAPACITY_EFFECT
+                )
                 await self.async_request_light_on_flush(_light)
             else:
                 _light_effect = self._light_effect_list[effect_index]
                 _light_effect[mc.KEY_ENABLE] = 1
                 await self.handler_light_effect.async_set(_light_effect)
                 _light[mc.KEY_EFFECT] = effect_index
-                _light[mc.KEY_CAPACITY] = _capacity | mc.LIGHT_CAPACITY_EFFECT
+                _light[mc.KEY_CAPACITY] = (
+                    _light[mc.KEY_CAPACITY] | mc.LIGHT_CAPACITY_EFFECT
+                )
                 self._parse_light(_light)
                 if not self.is_on:
                     await self.async_request_onoff(1)
             return
 
         if ATTR_BRIGHTNESS in kwargs:
-            if _capacity & mc.LIGHT_CAPACITY_EFFECT:
+            _light = self.ns_payload
+            if _light[mc.KEY_CAPACITY] & mc.LIGHT_CAPACITY_EFFECT:
                 # we're trying to control the luminance of the effect though...
                 _light_effect = None
                 try:
@@ -746,14 +738,11 @@ class MLLightEffect(MLLight):
                 _light_effect[mc.KEY_EFFECTNAME] for _light_effect in _light_effect_list
             ] + [MLLightBase.EFFECT_OFF]
             # add a 'fake' key so the next update will force-flush
-            self._payload_ns["_"] = None
+            self.ns_payload["_"] = None  # type: ignore
             self.handler_ns.schedule_get()
 
-        if not (self.is_on and (mc.KEY_EFFECT in self._payload_ns)):
-            self.handler_light_effect.polling_period = mlc.PARAM_INFINITE_TIMEOUT
 
-
-class MLDNDLightEntity(EntityNamespaceMixin, MLBinaryEntity, light.LightEntity):
+class MLDNDLightEntity(mle.EntityNamespaceMixin, mle.MLBinaryEntity, light.LightEntity):
     """
     light entity representing the device DND feature usually implemented
     through a light feature (presence light or so)
@@ -762,7 +751,7 @@ class MLDNDLightEntity(EntityNamespaceMixin, MLBinaryEntity, light.LightEntity):
     DEFAULT_CONFIG = (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        EntityNamespaceMixin.async_poll_smart,
+        mle.EntityNamespaceMixin.async_poll_smart,
     )
     PLATFORM = light.DOMAIN
     ENTITY_KEY = "dnd"
@@ -772,7 +761,7 @@ class MLDNDLightEntity(EntityNamespaceMixin, MLBinaryEntity, light.LightEntity):
     native_off = 1
     # HA core entity attributes:
     color_mode: ColorMode = ColorMode.ONOFF
-    entity_category = MLBinaryEntity.EntityCategory.CONFIG
+    entity_category = mle.MLBinaryEntity.EntityCategory.CONFIG
     supported_color_modes: set[ColorMode] = {ColorMode.ONOFF}
 
 

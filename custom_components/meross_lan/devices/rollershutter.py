@@ -24,6 +24,7 @@ class MLRollerShutter(MLCover):
         current_cover_position: int | None
         supported_features: MLCover.EntityFeature
 
+    # TODO: switchover main ns to State so we could use device_value for _mrs_state
     ns = mn.Appliance_RollerShutter_Position
     key_value = mc.KEY_POSITION
 
@@ -166,7 +167,6 @@ class MLRollerShutter(MLCover):
         await self.async_request_position(mc.ROLLERSHUTTER_POSITION_STOP)
 
     # interface: self
-    @MLCover.ha_action
     async def async_request_position(self, position: int):
         self._transition_cancel()
         await self.async_request_payload({self.key_value: position})
@@ -352,7 +352,7 @@ class MLRollerShutterAdjustSwitch(MLSwitch):
             # these scenarios with a try/except conditional
             self.update_device_value(payload[self.key_value])
         except KeyError:
-            self.update_native_value(payload[mc.KEY_STATUS] != 0)
+            self.update_boolean_value(payload[mc.KEY_STATUS] != 0)
 
 
 class MLRollerShutterConfigNumber(MLConfigNumber):

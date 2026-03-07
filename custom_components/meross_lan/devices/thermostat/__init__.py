@@ -38,7 +38,6 @@ class MLScreenBrightnessNumber(MLConfigNumber):
             name=f"Screen brightness ({key})",
         )
 
-    @MLConfigNumber.ha_action
     async def async_set_native_value(self, value: float, /):
         """Override base async_set_native_value since it would round
         the value to an int (common device native type)."""
@@ -172,14 +171,14 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
 
     def _parse(self, payload: "mt_t.CommonTemperatureExt_C", /):
         try:
-            self.sensor_warning.update_native_value(payload[mc.KEY_WARNING])
+            self.sensor_warning.update_device_value(payload[mc.KEY_WARNING])
         except AttributeError:
             self.sensor_warning = MtsWarningSensor(self, payload[mc.KEY_WARNING])
         except KeyError:
             pass
         try:
             self.available = bool(payload[mc.KEY_ONOFF])
-            self.switch.update_native_value(self.available)
+            self.switch.update_boolean_value(self.available)
         except AttributeError:
             self.switch = MtsConfigSwitch(self, self.available)
         except KeyError:

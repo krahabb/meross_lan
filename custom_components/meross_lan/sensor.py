@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from homeassistant.components import sensor
 
@@ -64,10 +64,12 @@ class MLEnumSensor(MLEntity, sensor.SensorEntity):
         self.native_value = kwargs.pop("native_value", None)
         super().__init__(channel, parent, **kwargs)
 
+    @override
     def set_unavailable(self):
         self.native_value = None
         super().set_unavailable()
 
+    @override
     def update_device_value(self, device_value):
         if self.native_value != device_value:
             self.native_value = device_value
@@ -208,7 +210,7 @@ class MLDiagnosticSensor(MLEnumSensor):
         namespace handlers to manage 'unexpected' channels when they eventually
         pop-up and we (still) have no clue why these channels are pushed (See #428)
         """
-        self.update_native_value(json_dumps(payload))
+        self.update_device_value(json_dumps(payload))
 
 
 class ProtocolSensor(MLEnumSensor):

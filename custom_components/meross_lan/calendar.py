@@ -99,7 +99,7 @@ class MtsSchedule(MLEntity, calendar.CalendarEntity):
     if TYPE_CHECKING:
         parent: Final[BaseDevice]  # type: ignore[override]
         climate: Final[MtsClimate]
-        _payload_ns: MtsScheduleNativeType | None
+        ns_payload: MtsScheduleNativeType | None
         _schedule: MtsScheduleNativeType | None
         # HA core entity attributes:
         supported_features: calendar.CalendarEntityFeature
@@ -130,7 +130,7 @@ class MtsSchedule(MLEntity, calendar.CalendarEntity):
         # save a flattened version of the device schedule to ease/optimize CalendarEvent management
         # since the original schedule has a fixed number of contiguous events spanning the day(s) (6 on my MTS100)
         # we might 'compress' these when 2 or more consecutive entries don't change the temperature
-        # _payload_ns carries the original unpacked schedule payload from the device representing
+        # ns_payload carries the original unpacked schedule payload from the device representing
         # its effective state
         self._schedule = None
         # set the 'granularity' of the schedule entries i.e. the schedule duration
@@ -563,7 +563,7 @@ class MtsSchedule(MLEntity, calendar.CalendarEntity):
 
     def _build_internal_schedule(self):
         self._schedule = None
-        if payload := self._payload_ns:
+        if payload := self.ns_payload:
             # payload = {
             #   ...
             #   "mon": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
@@ -605,13 +605,13 @@ class MtsSchedule(MLEntity, calendar.CalendarEntity):
         # the payload we receive from the device might be partial
         # if we're getting the PUSH in realtime since it only carries
         # the updated entries for the updated day.
-        native_schedule = self._payload_ns
+        native_schedule = self.ns_payload
         if native_schedule:
             payload = native_schedule | payload
             if payload == native_schedule:
                 return
 
-        self._payload_ns = payload
+        self.ns_payload = payload
         if mc.KEY_SECTION in payload:
             # mts960 carries 'section' to accomodate the
             # maximum number of entries according to @bernardpe

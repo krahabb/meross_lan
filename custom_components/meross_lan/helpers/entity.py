@@ -16,7 +16,7 @@ except ImportError:
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity
 
-from ..merossclient.device.handler import NamespaceParser
+from ..merossclient.device import parser
 from ..merossclient.protocol import MerossError, const as mc, namespaces as mn
 from .namespaces import NamespaceHandler
 
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     type ChannelType = PayloadIndexType
 
 
-class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
+class MLEntity(parser.NamespaceValue, entity.Entity if TYPE_CHECKING else object):
     """
     Mixin style base class for all of the entity platform(s)
     This class must prepend the HA entity class in our custom
@@ -66,6 +66,7 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
             device_entry: NotRequired[DeviceEntry | None]
             entity_category: NotRequired[entity.EntityCategory | None]
             entity_registry_enabled_default: NotRequired[bool]
+            device_value: NotRequired[Any]
 
         EntityCategory: Final
 
@@ -89,10 +90,9 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
 
         parent: Final[EntityManager]  # type: ignore[override]
         handler_ns: NamespaceHandler  # override NamespaceParser typing
-        key_value: str  # defaulted to 'value'
+
         _parse_togglex: Callable[[JsonDict], Any]
 
-        channel: Final[ChannelType | None]
         entitykey: Final[str | None]
         # used to speed-up checks if entity is enabled and loaded
         hass_connected: Final[bool]  # public ReadOnly attribute
@@ -128,8 +128,6 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
 
     is_diagnostic = False
 
-    key_value = mc.KEY_VALUE
-
     # HA core entity attributes:
     force_update = False
     _attr_has_entity_name = True
@@ -143,12 +141,10 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
     icon = None
     translation_key = None
 
-    __slots__ = (
+    __slots__ = parser.NamespaceValue._calc_slots(
         # meross_lan managed attributes
-        "channel",
         "entitykey",
         "hass_connected",
-        "_payload_ns",  # inherited from NamespaceParser
         # HA core
         "available",
         "device_class",
@@ -200,9 +196,11 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         ), f"id:{id} is not unique inside parent.entities"
         super().__init__(id, manager)
         self.channel = channel
+        self.ns_payload = mn.EMPTY_DICT
+        self.device_value = kwargs.pop("device_value", None)
         self.entitykey = entitykey
         self.hass_connected = False
-        self._payload_ns = mn.EMPTY_DICT
+
         self.available = self._attr_available or manager.is_connected
         self.device_class = kwargs.pop("device_class", self._attr_device_class)
         self.device_entry = kwargs.pop(
@@ -297,14 +295,9 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         if self._attr_available:
             return  # this entity is always available, no need to set unavailable
         self.available = False
-        self._payload_ns = mn.EMPTY_DICT
+        self.ns_payload = mn.EMPTY_DICT
+        self.device_value = None
         self.flush_state()
-
-    def update_native_value(self, native_value, /) -> bool | None:
-        """This is a stub definition. It will usually be called by update_device_value
-        with the result of the conversion from the incoming device value (from Meross protocol)
-        to the proper HA type/value for the entity class."""
-        raise NotImplementedError("Called 'update_native_value' on wrong entity type")
 
     async def get_last_state_available(self):
         """
@@ -335,27 +328,6 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
                     return state
         return None
 
-    # TODO: move to a subclass kind of MLDeviceEntity
-    # interface: device communication
-    def update_device_value(self, device_value, /) -> bool | None:
-        """This is a stub definition. It will be called by _parse (when namespace dispatching
-        is configured so) or directly as a short path inside other parsers to forward the
-        incoming device value to the underlyinh HA entity state."""
-        raise NotImplementedError("Called 'update_device_value' on wrong entity type")
-
-    async def async_request_value(self, device_value, /) -> None:
-        """Issues a command SET to update the device and also updates
-        the entity state if the command was acknowledged by the device.
-        Raises exception on connection/protocol errors."""
-        await self.async_request_payload({self.key_value: device_value})
-        self.update_device_value(device_value)
-
-    @override  # NamespaceParser
-    def _parse(self, payload: "JsonMapping", /):
-        """Default parsing for entities. Set the proper
-        key_value in class/instance definition to make it work."""
-        self.update_device_value(payload[self.key_value])
-
     @staticmethod
     def platform_setup_entry(
         hass,
@@ -367,23 +339,6 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
         manager.log(manager.DEBUG, "platform_setup_entry { platform: %s }", platform)
         manager.platforms[platform] = async_add_devices
         async_add_devices(manager.managed_entities(platform))
-
-    @staticmethod
-    def ha_action(func):
-        """
-        Decorator to wrap HA service calls and raise HomeAssistantError on failure.
-        This will prevent dumping the full stack trace in the logs and instead log a concise error message
-        on selected exceptions.
-        """
-
-        def _ha_action(*args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except MerossError as error:
-                # Meross protocol error, typically due to a device communication issue.
-                raise HomeAssistantError(str(error)) from error
-
-        return _ha_action
 
     @classmethod
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
@@ -432,54 +387,18 @@ class MLEntity(NamespaceParser, entity.Entity if TYPE_CHECKING else object):
             self.available = False
             self.flush_state()
 
-    class GroupListChannelMixin(NamespaceParser if TYPE_CHECKING else object):
-        """
-        Implementation for protocol method 'SET' on entities/namespaces backed by a channel
-        list and the actual entity value is embedded in a 'group' key (see Appliance.Config.DeviceCfg).
-        """
-
-        if TYPE_CHECKING:
-            parent: Final[BaseDevice]  # type: ignore[override]
-            key_group: str
-            key_value: str
-
-            def update_device_value(self, device_value, /) -> bool | None: ...
-
-        # interface: MLEntity
-        async def async_request_value(self, device_value, /):
-            (
-                await self.parent.async_request(
-                    *self.ns.request_set(
-                        {self.key_group: {self.key_value: device_value}}, self.channel
-                    )
-                )
-            )
-            self.update_device_value(device_value)
-
-        def _parse(self, payload, /):
-            self.update_device_value(payload[self.key_group][self.key_value])
+    NamespaceValue = parser.NamespaceValue
+    NamespaceGroupValue = parser.NamespaceGroupValue
 
 
-class MLBinaryEntity(MLEntity):
+class MLBinaryEntity(parser.NamespaceBoolean, MLEntity):
     """Partially abstract common base class for ToggleEntity and BinarySensor.
     The initializer is skipped."""
 
     if TYPE_CHECKING:
 
         class Args(MLEntity.Args):
-            device_value: NotRequired[Any]
-
-        # These work much like key_value in MLEntity so that they're generally class attributes
-        native_on: Any
-        """The actual device value representing the 'on' state."""
-        native_off: Any
-        """The actual device value representing the 'off' state."""
-        # HA core entity attributes:
-        is_on: Any | None
-
-    key_value = mc.KEY_ONOFF
-    native_on = 1
-    native_off = 0
+            pass
 
     __slots__ = ("is_on",)
 
@@ -490,13 +409,16 @@ class MLBinaryEntity(MLEntity):
         /,
         **kwargs: "Unpack[Args]",
     ):
-        match kwargs.pop("device_value", None):
-            case self.native_on:
-                self.is_on = True
-            case self.native_off:
-                self.is_on = False
-            case _:
-                self.is_on = None
+        try:
+            match kwargs["device_value"]:  # type: ignore
+                case self.native_on:
+                    self.is_on = True
+                case self.native_off:
+                    self.is_on = False
+                case _:
+                    self.is_on = None
+        except KeyError:
+            self.is_on = None
         super().__init__(channel, parent, **kwargs)
 
     def set_unavailable(self):
@@ -507,29 +429,45 @@ class MLBinaryEntity(MLEntity):
     def update_device_value(self, device_value, /) -> bool | None:
         """Default parsing for toggles and binary sensors. Set the proper
         key_value in class/instance definition to make it work."""
-        match device_value:
-            case self.native_on:
-                return self.update_native_value(True)
-            case self.native_off:
-                return self.update_native_value(False)
-            case _:
-                return self.update_native_value(None)
+        if self.device_value != device_value:
+            self.device_value = device_value
+            match device_value:
+                case self.native_on:
+                    return self.update_boolean_value(True)
+                case self.native_off:
+                    return self.update_boolean_value(False)
+                case _:
+                    return self.update_boolean_value(None)
 
-    @override
-    def update_native_value(self, onoff, /):
-        if self.is_on != onoff:
-            self.is_on = onoff
+    def update_boolean_value(self, is_on: bool | None) -> bool | None:
+        if self.is_on != is_on:
+            self.is_on = is_on
             self.flush_state()
             return True
 
-    # provide a generalized toggle behavior for binary entities
-    @MLEntity.ha_action
-    async def async_turn_on(self, **kwargs):
-        await self.async_request_value(self.native_on)
 
-    @MLEntity.ha_action
-    async def async_turn_off(self, **kwargs):
-        await self.async_request_value(self.native_off)
+class MLToggleXEntity(MLBinaryEntity):
+    """Special binary entity linked to Appliance.Control.ToggleX namespace.
+    This is a slight modification of generic MLBinaryEntity and is especially suited as a mixin class
+    for more complex entities (MLFan, MLLight) which should be toggled by the ToggleX namespace
+    instead of their main specific one."""
+
+    if TYPE_CHECKING:
+
+        class Args(MLBinaryEntity.Args):
+            pass
+
+        parent: Final[Device]  # type: ignore[override]
+        handler_togglex: Final[NamespaceHandler | None]
+
+    __slots__ = ("handler_togglex",)
+
+    def __init__(self, channel: int, parent: "Device", /, **kwargs: "Unpack[Args]"):
+        super().__init__(channel, parent, **kwargs)
+        self.handler_togglex = parent.register_togglex_channel(self, True)
+
+    def _parse_togglex(self, payload: dict, /):
+        self.update_boolean_value(payload[mc.KEY_ONOFF] == 1)
 
 
 class MLNumericEntity(MLEntity):
@@ -560,7 +498,6 @@ class MLNumericEntity(MLEntity):
 
     __slots__ = (
         "device_scale",
-        "device_value",
         "native_value",
         "native_unit_of_measurement",
     )
@@ -573,11 +510,9 @@ class MLNumericEntity(MLEntity):
         **kwargs: "Unpack[Args]",
     ):
         self.device_scale = kwargs.pop("device_scale", self._attr_device_scale)
-        if "device_value" in kwargs:
-            self.device_value = kwargs.pop("device_value")
-            self.native_value = self.device_value / self.device_scale
-        else:
-            self.device_value = None
+        try:
+            self.native_value = kwargs["device_value"] / self.device_scale  # type: ignore
+        except KeyError:
             self.native_value = None
         try:
             self.native_unit_of_measurement = kwargs["native_unit_of_measurement"]  # type: ignore
@@ -592,7 +527,6 @@ class MLNumericEntity(MLEntity):
         super().__init__(channel, parent, **kwargs)
 
     def set_unavailable(self):
-        self.device_value = None
         self.native_value = None
         super().set_unavailable()
 
@@ -604,7 +538,6 @@ class MLNumericEntity(MLEntity):
             self.flush_state()
             return True
 
-    @override
     def update_native_value(self, native_value: int | float | None, /):
         if self.native_value != native_value:
             self.native_value = native_value

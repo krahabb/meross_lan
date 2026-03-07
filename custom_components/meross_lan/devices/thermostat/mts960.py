@@ -60,7 +60,7 @@ class Mts960Climate(MtsThermostatClimate):
             )
 
     if TYPE_CHECKING:
-        _payload_ns: mt_t.ModeB_C
+        ns_payload: mt_t.ModeB_C
         binary_sensor_plug_state: PlugState
         number_timer_down_duration: TimerConfigNumber
         number_timer_cycle_off_duration: TimerConfigNumber
@@ -216,7 +216,6 @@ class Mts960Climate(MtsThermostatClimate):
 
         super().flush_state()
 
-    @MtsThermostatClimate.ha_action
     async def async_set_hvac_mode(self, hvac_mode: MtsThermostatClimate.HVACMode):
         match hvac_mode:
             case MtsThermostatClimate.HVACMode.OFF:
@@ -253,7 +252,6 @@ class Mts960Climate(MtsThermostatClimate):
                     }
                 )
 
-    @MtsThermostatClimate.ha_action
     async def async_set_preset_mode(self, preset_mode: str):
         match preset_mode:
             case Mts960Climate.Preset.HEATING:
@@ -318,7 +316,6 @@ class Mts960Climate(MtsThermostatClimate):
                     },
                 )
 
-    @MtsThermostatClimate.ha_action
     async def async_set_temperature(self, **kwargs):
         # bumps out of any timer/schedule mode and sets target temp
         # preserving heating/cooling mode
@@ -370,16 +367,16 @@ class Mts960Climate(MtsThermostatClimate):
 
     # message handlers
     def _parse_modeB(self, payload: "mt_t.ModeB_C", /):
-        if self._payload_ns == payload:
+        if self.ns_payload == payload:
             return
-        self._payload_ns = payload
+        self.ns_payload = payload
         if mc.KEY_MODE in payload:
             self._mts_mode = payload[mc.KEY_MODE]
         if mc.KEY_ONOFF in payload:
             self._mts_onoff = payload[mc.KEY_ONOFF] == mc.MTS960_ONOFF_ON
         if mc.KEY_STATE in payload:
             self._mts_active = payload[mc.KEY_STATE] == mc.MTS960_STATE_ON
-            self.binary_sensor_plug_state.update_native_value(self._mts_active)
+            self.binary_sensor_plug_state.update_boolean_value(self._mts_active)
         if mc.KEY_WORKING in payload:
             self._mts_working = payload[mc.KEY_WORKING]
         if mc.KEY_CURRENTTEMP in payload:
@@ -398,7 +395,7 @@ class Mts960Climate(MtsThermostatClimate):
             for key in self.DIAGNOSTIC_SENSOR_KEYS:
                 try:
                     native_value = payload[key]
-                    entities[f"{channel}_{key}"].update_native_value(native_value)
+                    entities[f"{channel}_{key}"].update_device_value(native_value)
                 except KeyError as key_error:
                     if key_error.args[0] != key:
                         MLDiagnosticSensor(
@@ -424,16 +421,16 @@ class Mts960Climate(MtsThermostatClimate):
                     mc.MTS960_TIMER_TYPE_COUNTDOWN,
                     p_down[mc.KEY_ONOFF],
                 )
-                self.number_timer_down_duration.update_native_value(
+                self.number_timer_down_duration.update_device_value(
                     p_down[mc.KEY_DURATION]
                 )
             case mc.MTS960_TIMER_TYPE_CYCLE:
                 p_cycle: "mt_t.Timer_Cycle" = payload[mc.KEY_CYCLE]  # type: ignore
                 self._mts_timer_mode = (mc.MTS960_TIMER_TYPE_CYCLE, None)
-                self.number_timer_cycle_off_duration.update_native_value(
+                self.number_timer_cycle_off_duration.update_device_value(
                     p_cycle[mc.KEY_OFFDURATION]
                 )
-                self.number_timer_cycle_on_duration.update_native_value(
+                self.number_timer_cycle_on_duration.update_device_value(
                     p_cycle[mc.KEY_ONDURATION]
                 )
             case _:

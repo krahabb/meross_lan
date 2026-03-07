@@ -5,6 +5,7 @@ from json import JSONDecodeError
 from time import time
 from typing import TYPE_CHECKING, override
 
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
 
@@ -145,7 +146,7 @@ class BaseDevice(mlm.EntityManager, device.PhysicalDevice):
                         if channel is not None
                         else f"{key_parent}_{key}"
                     )
-                ].update_native_value(value)
+                ].update_device_value(value)
             except KeyError:
                 from ..sensor import MLDiagnosticSensor
 
@@ -969,6 +970,20 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         self.cancel_callback(self._check_device_time)
 
     @override
+    async def async_request(
+        self,
+        *args: "Unpack[MerossRequestType]",
+        **kwargs: "Unpack[Device.RequestArgs]",
+    ):
+        """Wrapper for common final request method in order to catch MerossErrors and raise
+        HomeAssistantError instead to avoid dumping full stack trace in logs and log a
+        concise error message instead on selected exceptions."""
+        try:
+            return await super().async_request(*args, **kwargs)
+        except Exception as e:
+            raise HomeAssistantError(str(e)) from e
+
+    @override
     def on_tx(self, message: "MerossMessage", client: "AbstractClient", /):
         self.last_tx_message = message
         self.last_tx_epoch = client.last_tx_epoch
@@ -1080,15 +1095,10 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         try:
             for togglex_digest in self.descriptor.digest[mc.KEY_TOGGLEX]:
                 if togglex_digest[mc.KEY_CHANNEL] == entity.channel:
-                    # TODO: _parse_togglex need to be automatically bound
-                    # here but this code might be improved in some way
-                    # without needing to allocate new lambdas for each entity
                     if active:
-                        entity._parse_togglex = (
-                            lambda payload: entity.update_native_value(
-                                payload[mc.KEY_ONOFF]
-                            )
-                        )
+                        # by design this should be an MLToggleXEntity
+                        # but we have enough of _parse_togglex
+                        assert hasattr(entity, "_parse_togglex")
                     else:
                         entity._parse_togglex = lambda payload: None
                     ns_handler = self.get_handler(mn.Appliance_Control_ToggleX)
