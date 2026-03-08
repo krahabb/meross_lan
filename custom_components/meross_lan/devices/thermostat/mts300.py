@@ -4,10 +4,10 @@ from homeassistant.components.climate import const as hacc
 
 from . import MtsThermostatClimate, mc, mlc, mn, mn_t
 from ...helpers import reverse_lookup
-from ...number import MLConfigNumber
-from ...select import MLConfigSelect
-from ...sensor import MLEnumSensor, MLHumiditySensor
-from ...switch import MLEmulatedSwitch
+from ...number import ParserNumber
+from ...select import SelectParser
+from ...sensor import EnumSensor, HumiditySensor
+from ...switch import EmulatedSwitch
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final
@@ -23,7 +23,7 @@ class Mts300Climate(MtsThermostatClimate):
 
         if TYPE_CHECKING:
             """{"channel":0,"value":150,"min":-450,"max":450,"humiValue":-60}"""
-            number_calibration_humi: MLConfigNumber
+            number_calibration_humi: ParserNumber
 
         __slots__ = ("number_calibration_humi",)
 
@@ -38,11 +38,11 @@ class Mts300Climate(MtsThermostatClimate):
                 humidity = payload["humiValue"]  # type: ignore
                 self.number_calibration_humi.update_device_value(humidity)
             except AttributeError:
-                self.number_calibration_humi = MLConfigNumber(
+                self.number_calibration_humi = ParserNumber(
                     self.channel,
                     self.parent,
                     entity_key="humidity_calibration",
-                    device_class=MLConfigNumber.DeviceClass.HUMIDITY,
+                    device_class=ParserNumber.DeviceClass.HUMIDITY,
                     device_scale=10,
                     device_value=humidity,
                 )
@@ -61,7 +61,7 @@ class Mts300Climate(MtsThermostatClimate):
 
         # TODO: customize parsing of native payload since we have 2 temperatures
 
-    class SensorAssociationSelect(MLConfigSelect.NamespaceGroupValue, MLConfigSelect):
+    class SensorAssociationSelect(SelectParser.NamespaceGroupValue, SelectParser):
         """
         Configures internal/external sensor association for temperature readings in mts300.
         """
@@ -73,7 +73,7 @@ class Mts300Climate(MtsThermostatClimate):
         ENTITY_KEY = f"{ns.slug}__{key_group}_{key_value}"
         _attr_name = "Sensor Association"
 
-        entity_category = MLConfigSelect.EntityCategory.DIAGNOSTIC
+        entity_category = SelectParser.EntityCategory.DIAGNOSTIC
 
         """ TODO: get a description of possible options and implement either translations or constant symbols
         so that we can change also the entity category to CONFIG
@@ -94,9 +94,9 @@ class Mts300Climate(MtsThermostatClimate):
         target_temperature_low: float | None
 
         # entities
-        sensor_current_humidity: MLHumiditySensor
-        number_fan_hold: MLConfigNumber
-        switch_fan_hold: MLEmulatedSwitch
+        sensor_current_humidity: HumiditySensor
+        number_fan_hold: ParserNumber
+        switch_fan_hold: EmulatedSwitch
         select_temp_association: SensorAssociationSelect
 
     # MtsClimate class attributes
@@ -136,29 +136,29 @@ class Mts300Climate(MtsThermostatClimate):
     }
     """Status flags in "more" dict mapped as: (bool(hStatus), bool(cStatus), bool(fStatus))."""
     ENTITY_DEFS = {
-        "hdStatus": MLEnumSensor.ENTITY_DEF(
+        "hdStatus": EnumSensor.ENTITY_DEF(
             entity_key="(de)humidifier_status",
             translation_key="mts300_hdstatus",
-            entity_category=MLEnumSensor.EntityCategory.DIAGNOSTIC,
+            entity_category=EnumSensor.EntityCategory.DIAGNOSTIC,
         ),
-        "hStatus": MLEnumSensor.ENTITY_DEF(
+        "hStatus": EnumSensor.ENTITY_DEF(
             entity_key="heating_status",
             translation_key="mts300_status",
-            entity_category=MLEnumSensor.EntityCategory.DIAGNOSTIC,
+            entity_category=EnumSensor.EntityCategory.DIAGNOSTIC,
         ),
-        "cStatus": MLEnumSensor.ENTITY_DEF(
+        "cStatus": EnumSensor.ENTITY_DEF(
             entity_key="cooling_status",
             translation_key="mts300_status",
-            entity_category=MLEnumSensor.EntityCategory.DIAGNOSTIC,
+            entity_category=EnumSensor.EntityCategory.DIAGNOSTIC,
         ),
-        "fStatus": MLEnumSensor.ENTITY_DEF(
+        "fStatus": EnumSensor.ENTITY_DEF(
             entity_key="fan_speed",
             translation_key="mts300_status",
         ),
-        "aStatus": MLEnumSensor.ENTITY_DEF(
+        "aStatus": EnumSensor.ENTITY_DEF(
             entity_key="auxiliary_status",
             translation_key="mts300_status",
-            entity_category=MLEnumSensor.EntityCategory.DIAGNOSTIC,
+            entity_category=EnumSensor.EntityCategory.DIAGNOSTIC,
         ),
     }
 
@@ -200,21 +200,21 @@ class Mts300Climate(MtsThermostatClimate):
                 f"sensor_{_key}",
                 _def.type(channel, device, **_def.kwargs),
             )
-        self.sensor_current_humidity = MLHumiditySensor(
+        self.sensor_current_humidity = HumiditySensor(
             channel, device, entity_registry_enabled_default=False
         )
-        self.number_fan_hold = MLConfigNumber(
+        self.number_fan_hold = ParserNumber(
             channel,
             device,
             entity_key="fan_hold_time",
-            device_class=MLConfigNumber.DEVICE_CLASS_DURATION,
+            device_class=ParserNumber.DEVICE_CLASS_DURATION,
             native_unit_of_measurement=mlc.hac.UnitOfTime.MINUTES,
             device_scale=1,
         )
         self.number_fan_hold.async_request_value = (
             self._async_request_value_number_fan_hold
         )
-        self.switch_fan_hold = MLEmulatedSwitch(
+        self.switch_fan_hold = EmulatedSwitch(
             channel,
             device,
             entity_key="fan_hold_enable",

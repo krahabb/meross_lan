@@ -54,7 +54,7 @@ def auto_enable(request: pytest.FixtureRequest, disable_debug):
             yield
         else:
             with patch(
-                "custom_components.meross_lan.helpers.entity.MLEntity.get_last_state_available",
+                "custom_components.meross_lan.helpers.entity.Entity.get_last_state_available",
                 return_value=None,
             ):
                 yield
@@ -101,16 +101,16 @@ def disable_entity_registry_update():
     the entity registry."""
 
     from custom_components.meross_lan.devices.garagedoor import (
-        MLGarageDoorEnableSwitch,
-        MLGarageMultipleConfigSwitch,
+        GarageEnableSwitch,
+        GarageMultipleConfigSwitch,
     )
 
-    saved = MLGarageDoorEnableSwitch.update_boolean_value
-    MLGarageDoorEnableSwitch.update_boolean_value = (
-        MLGarageMultipleConfigSwitch.update_boolean_value  # type: ignore
+    saved = GarageEnableSwitch.update_boolean_value
+    GarageEnableSwitch.update_boolean_value = (
+        GarageMultipleConfigSwitch.update_boolean_value  # type: ignore
     )
     yield
-    MLGarageDoorEnableSwitch.update_boolean_value = saved
+    GarageEnableSwitch.update_boolean_value = saved
 
 
 @pytest.fixture(autouse=True, scope="function")

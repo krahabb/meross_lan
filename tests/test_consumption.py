@@ -19,7 +19,7 @@ from custom_components.meross_lan.devices.mss import (
     ElectricitySensor,
 )
 from custom_components.meross_lan.merossclient.protocol import const as mc
-from custom_components.meross_lan.sensor import MLNumericSensor
+from custom_components.meross_lan.sensor import NumericSensor
 from emulator.mixins.electricity import (
     ConsumptionXMixin as EmulatorConsumptionMixin,
     ElectricityMixin as EmulatorElectricityMixin,
@@ -30,8 +30,9 @@ from tests import helpers
 if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
-    from .helpers import DeviceContext
     from custom_components.meross_lan.helpers.device import Device
+
+    from .helpers import DeviceContext
 
 
 # set TEST_POWER and TEST_DURATION so they produce at least
@@ -98,7 +99,7 @@ async def _async_configure_context(context: "DeviceContext", timezone: str):
     states = context.hass.states
 
     sensor_power = device.entities[mc.KEY_POWER]
-    assert isinstance(sensor_power, MLNumericSensor)
+    assert isinstance(sensor_power, NumericSensor)
     powerstate = states.get(sensor_power.entity_id)
     assert powerstate
     assert float(powerstate.state) == TEST_POWER
@@ -347,16 +348,13 @@ async def test_consumption_with_reload(request, hass: "HomeAssistant"):
             assert await context.async_setup()
             device = context.device
             sensor_consumption, sensor_electricity = _get_sensors(device)
-
             # sensor states should have been restored
             assert sensor_consumption.offset == offset
-            consumptionstate = hass_states_get(sensor_consumption_entity_id)
-            # assert consumptionstate and consumptionstate.state == STATE_UNAVAILABLE
-            estimatestate = hass_states_get(sensor_estimate_entity_id)
-            assert estimatestate and estimatestate.state == saved_estimated_energy_value
-
+            # TODO: remove perform_coldstart since device is already online/polled at this point
             # online the device
             await context.perform_coldstart()
+            estimatestate = hass_states_get(sensor_estimate_entity_id)
+            assert estimatestate and estimatestate.state == saved_estimated_energy_value
             # check the real consumption
             _check_energy_states(TEST_POWER, 3 * TEST_DURATION, msg)
             return device, sensor_consumption, sensor_electricity

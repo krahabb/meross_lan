@@ -2,11 +2,11 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.components import siren
 
-from .helpers.entity import MLBinaryEntity
+from .helpers.entity import BinaryParser
 from .merossclient.protocol import const as mc, namespaces as mn
-from .number import MLConfigNumber
-from .select import MLConfigSelect
-from .switch import MLSwitch
+from .number import ParserNumber
+from .select import SelectParser
+from .switch import SwitchParser
 
 if TYPE_CHECKING:
     from typing import Any, Final, NotRequired, Unpack
@@ -16,12 +16,12 @@ if TYPE_CHECKING:
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
-    MLBinaryEntity.platform_setup_entry(
+    BinaryParser.platform_setup_entry(
         hass, config_entry, async_add_devices, siren.DOMAIN
     )
 
 
-class MLSiren(MLBinaryEntity, siren.SirenEntity):
+class Siren(BinaryParser, siren.SirenEntity):
     """
     This first implementation was mostly tailored to suit mts300 'fan hold time' feature
     We'll maybe generalize this platform when the need comes.
@@ -29,15 +29,15 @@ class MLSiren(MLBinaryEntity, siren.SirenEntity):
     and not very well for time durations. The code is left for reference in the future.
     """
 
-    class EnableSwitch(MLSwitch):
+    class EnableSwitch(SwitchParser):
         ns = mn.Appliance_Config_Alarm
-        NS_CHANNELS = MLSwitch.NS_CHANNELS_SINGLE
+        NS_CHANNELS = SwitchParser.NS_CHANNELS_SINGLE
         key_value = mc.KEY_ENABLE
         ENTITY_KEY = f"{ns.slug}__{key_value}"
 
-    class SongSelect(MLConfigSelect):
+    class SongSelect(SelectParser):
         ns = mn.Appliance_Config_Alarm
-        NS_CHANNELS = MLConfigSelect.NS_CHANNELS_SINGLE
+        NS_CHANNELS = SelectParser.NS_CHANNELS_SINGLE
         key_value = mc.KEY_SONG
         ENTITY_KEY = f"{ns.slug}__{key_value}"
 
@@ -51,9 +51,9 @@ class MLSiren(MLBinaryEntity, siren.SirenEntity):
             7: "Buzzer",
         }
 
-    class VolumeNumber(MLConfigNumber):
+    class VolumeNumber(ParserNumber):
         ns = mn.Appliance_Config_Alarm
-        NS_CHANNELS = MLConfigNumber.NS_CHANNELS_SINGLE
+        NS_CHANNELS = ParserNumber.NS_CHANNELS_SINGLE
         key_value = mc.KEY_VOLUME
         ENTITY_KEY = f"{ns.slug}__{key_value}"
         native_min_value = 0
@@ -62,12 +62,12 @@ class MLSiren(MLBinaryEntity, siren.SirenEntity):
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
 
-        class Args(MLBinaryEntity.Args):
+        class Args(BinaryParser.Args):
             pass
 
     PLATFORM = siren.DOMAIN
     ns = mn.Appliance_Control_Alarm
-    NS_CHANNELS = MLBinaryEntity.NS_CHANNELS_SINGLE
+    NS_CHANNELS = BinaryParser.NS_CHANNELS_SINGLE
     key_value = "event_security_value"
     ENTITY_KEY = f"{ns.slug}__event_security_value"
     native_on = 1

@@ -2,9 +2,9 @@ import enum
 from typing import TYPE_CHECKING, override
 
 from . import MtsThermostatClimate, mc, mlc, mn_t
-from ...binary_sensor import MLBinarySensor
-from ...number import MLEmulatedNumber
-from ...sensor import MLDiagnosticSensor
+from ...binary_sensor import BinarySensor
+from ...number import EmulatedNumber
+from ...sensor import DiagnosticSensor
 
 if TYPE_CHECKING:
     from typing import Final
@@ -31,7 +31,7 @@ class Mts960Climate(MtsThermostatClimate):
     class Schedule(MtsThermostatClimate.Schedule):
         ns = mn_t.Appliance_Control_Thermostat_ScheduleB
 
-    class PlugState(MLBinarySensor):
+    class PlugState(BinarySensor):
 
         ENTITY_KEY = "plug_state"
 
@@ -42,20 +42,20 @@ class Mts960Climate(MtsThermostatClimate):
         def icon(self):
             return "mdi:power-plug" if self.is_on else "mdi:power-plug-off"
 
-    class TimerConfigNumber(MLEmulatedNumber):
+    class TimerConfigNumber(EmulatedNumber):
         """
         Helper entity to configure countdown/cycle timer durations.
         """
 
         # HA core entity attributes:
-        _attr_device_class = MLEmulatedNumber.DEVICE_CLASS_DURATION
+        _attr_device_class = EmulatedNumber.DEVICE_CLASS_DURATION
         _attr_native_unit_of_measurement = mlc.hac.UnitOfTime.MINUTES
         native_max_value = 1440  # 1 day max duration (no real info just guessing)
         native_min_value = 1
         native_step = 1
 
         def __init__(self, climate: "Mts960Climate", entity_key: str, /):
-            MLEmulatedNumber.__init__(
+            EmulatedNumber.__init__(
                 self, climate.channel, climate.parent, entity_key=entity_key
             )
 
@@ -117,7 +117,6 @@ class Mts960Climate(MtsThermostatClimate):
             self, "timer_cycle_on_duration"
         )
 
-    # interface: MLEntity
     def shutdown(self):
         super().shutdown()
         del self.binary_sensor_plug_state
@@ -390,7 +389,7 @@ class Mts960Climate(MtsThermostatClimate):
 
         device = self.parent
         if device.create_diagnostic_entities:
-            entities = device.entities
+            entities: dict[str, DiagnosticSensor] = device.entities  # type: ignore
             channel = self.channel
             for key in self.DIAGNOSTIC_SENSOR_KEYS:
                 try:
@@ -398,7 +397,7 @@ class Mts960Climate(MtsThermostatClimate):
                     entities[f"{channel}_{key}"].update_device_value(native_value)
                 except KeyError as key_error:
                     if key_error.args[0] != key:
-                        MLDiagnosticSensor(
+                        DiagnosticSensor(
                             channel, device, entity_key=key, native_value=native_value
                         )
 
@@ -421,16 +420,16 @@ class Mts960Climate(MtsThermostatClimate):
                     mc.MTS960_TIMER_TYPE_COUNTDOWN,
                     p_down[mc.KEY_ONOFF],
                 )
-                self.number_timer_down_duration.update_device_value(
+                self.number_timer_down_duration.update_native_value(
                     p_down[mc.KEY_DURATION]
                 )
             case mc.MTS960_TIMER_TYPE_CYCLE:
                 p_cycle: "mt_t.Timer_Cycle" = payload[mc.KEY_CYCLE]  # type: ignore
                 self._mts_timer_mode = (mc.MTS960_TIMER_TYPE_CYCLE, None)
-                self.number_timer_cycle_off_duration.update_device_value(
+                self.number_timer_cycle_off_duration.update_native_value(
                     p_cycle[mc.KEY_OFFDURATION]
                 )
-                self.number_timer_cycle_on_duration.update_device_value(
+                self.number_timer_cycle_on_duration.update_native_value(
                     p_cycle[mc.KEY_ONDURATION]
                 )
             case _:

@@ -440,12 +440,7 @@ class NamespaceHandler(logging.Loggable):
         TODO: this is a temporary workaround for some namespaces.
         Examples are the Thermostat namespaces (see module devices.thermostat).
         But we could reorganize all together through implementation of a NamespaceHandler
-        cache of the device state received through queries. This cache is now implemented
-        'per entity' everywhere needed but there are a lot of entities needing it.
-        (MLLight._light for instance or various thermostats)
-        An idea would be to put a 'generic JSONDict' attribute in NamespaceParser so that
-        it would be easy to update it (when invoking NamespaceHandler.handler) in get requests
-        and use it when issuing set requests.
+        cache of the device state received through queries. This cache should be the ns_payload attribute.
         """
         ns = self.id
         assert ns.payload_set is mn.PayloadType.LIST_IDX, "Only LIST_C supported here"

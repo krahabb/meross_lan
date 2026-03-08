@@ -2,11 +2,11 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.exceptions import InvalidStateError
 
-from ..cover import MLCover, cover
+from ..cover import Cover, cover
 from ..helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
 from ..merossclient.client import Transport
-from ..number import MLConfigNumber
-from ..switch import MLSwitch
+from ..number import ParserNumber
+from ..switch import SwitchParser
 
 if TYPE_CHECKING:
     from typing import ClassVar, NotRequired
@@ -15,14 +15,14 @@ if TYPE_CHECKING:
     from ..merossclient.protocol.types import rollershutter as mt_rs
 
 
-class MLRollerShutter(MLCover):
+class RollerShutter(Cover):
     """
     Meross Roller Shutter cover device implementation.
     """
 
     if TYPE_CHECKING:
         current_cover_position: int | None
-        supported_features: MLCover.EntityFeature
+        supported_features: Cover.EntityFeature
 
     # TODO: switchover main ns to State so we could use device_value for _mrs_state
     ns = mn.Appliance_RollerShutter_Position
@@ -31,7 +31,7 @@ class MLRollerShutter(MLCover):
     ATTR_POSITION_NATIVE = "position_native"
 
     # HA core entity attributes:
-    _attr_device_class = MLCover.DeviceClass.SHUTTER
+    _attr_device_class = Cover.DeviceClass.SHUTTER
     assumed_state = True
 
     __slots__ = (
@@ -49,9 +49,9 @@ class MLRollerShutter(MLCover):
     def __init__(self, channel: int, device: "Device", /):
         self.current_cover_position = None
         self.supported_features = (
-            MLCover.EntityFeature.OPEN
-            | MLCover.EntityFeature.CLOSE
-            | MLCover.EntityFeature.STOP
+            Cover.EntityFeature.OPEN
+            | Cover.EntityFeature.CLOSE
+            | Cover.EntityFeature.STOP
         )
         self.extra_state_attributes = {}
         self._mrs_state = None
@@ -65,7 +65,7 @@ class MLRollerShutter(MLCover):
             fw_version = descriptor.firmware_version
             if fw_version >= (6, 6, 6):
                 self._position_native_isgood = True
-                self.supported_features |= MLCover.EntityFeature.SET_POSITION
+                self.supported_features |= Cover.EntityFeature.SET_POSITION
             else:
                 self._position_native_isgood = False
                 if fw_version <= (2, 1, 4):
@@ -75,7 +75,7 @@ class MLRollerShutter(MLCover):
 
         except Exception:
             self._position_native_isgood = False
-        MLCover.__init__(self, channel, device)
+        Cover.__init__(self, channel, device)
         device.register_parser_ex(
             self,
             self.ns,
@@ -89,16 +89,16 @@ class MLRollerShutter(MLCover):
             device.register_togglex_channel(self, False)
         if mn.Appliance_RollerShutter_Adjust in descriptor.ability:
             # unknown use: actually the polling period is set on a very high timeout
-            device.register_parser_entity(MLRollerShutterAdjustSwitch(channel, device))
-        self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
-        self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
+            device.register_parser_entity(RollerShutterAdjustSwitch(channel, device))
+        self.number_signalOpen = RollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
+        self.number_signalClose = RollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
 
     def set_unavailable(self):
         self._mrs_state = None
-        MLCover.set_unavailable(self)
+        Cover.set_unavailable(self)
 
     async def async_added_to_hass(self):
-        await MLCover.async_added_to_hass(self)
+        await Cover.async_added_to_hass(self)
         """
         we're trying to recover the 'timed' position from previous state
         if it happens it wasn't updated too far in time
@@ -109,15 +109,15 @@ class MLRollerShutter(MLCover):
                     # at this stage, the euristic on fw version doesn't say anything
                     try:
                         self.extra_state_attributes[
-                            MLRollerShutter.ATTR_POSITION_NATIVE
-                        ] = last_state.attributes[MLRollerShutter.ATTR_POSITION_NATIVE]
+                            RollerShutter.ATTR_POSITION_NATIVE
+                        ] = last_state.attributes[RollerShutter.ATTR_POSITION_NATIVE]
                         # Having ATTR_POSITION_NATIVE in attributes
                         # means we didn't trust native position so far
                         self.current_cover_position = last_state.attributes[
                             cover.ATTR_CURRENT_POSITION
                         ]
                         # If this didn't fail, we can now assume device native_position is reliable
-                        self.supported_features |= MLCover.EntityFeature.SET_POSITION
+                        self.supported_features |= Cover.EntityFeature.SET_POSITION
                     except KeyError:
                         pass
 
@@ -229,13 +229,13 @@ class MLRollerShutter(MLCover):
             self._position_native_isgood = True
             self._position_native = None
             self.is_closed = False
-            self.extra_state_attributes.pop(MLRollerShutter.ATTR_POSITION_NATIVE, None)
-            self.supported_features |= MLCover.EntityFeature.SET_POSITION
+            self.extra_state_attributes.pop(RollerShutter.ATTR_POSITION_NATIVE, None)
+            self.supported_features |= Cover.EntityFeature.SET_POSITION
             self.current_cover_position = position
         else:
             self._position_native = position
             self.is_closed = position == mc.ROLLERSHUTTER_POSITION_CLOSED
-            self.extra_state_attributes[MLRollerShutter.ATTR_POSITION_NATIVE] = position
+            self.extra_state_attributes[RollerShutter.ATTR_POSITION_NATIVE] = position
             if self.current_cover_position is None:
                 # only happening when we didn't restore state on devices
                 # which are likely not supporting native positioning
@@ -243,7 +243,7 @@ class MLRollerShutter(MLCover):
                 # trusting the device position as the better guess
                 # If current_cover_position is already set, it represents the
                 # emulated state and so we don't touch it
-                self.supported_features |= MLCover.EntityFeature.SET_POSITION
+                self.supported_features |= Cover.EntityFeature.SET_POSITION
                 self.current_cover_position = position
 
         self.flush_state()
@@ -277,14 +277,14 @@ class MLRollerShutter(MLCover):
                         # this should never really happen since we've
                         # already set current_cover_position in _parse_position
                         self.current_cover_position = mc.ROLLERSHUTTER_POSITION_CLOSED
-                        self.supported_features |= MLCover.EntityFeature.SET_POSITION
+                        self.supported_features |= Cover.EntityFeature.SET_POSITION
                     self._position_start = self.current_cover_position
                     self._position_starttime = epoch
             elif state == mc.ROLLERSHUTTER_STATE_CLOSING:
                 if not self.is_closing:
                     if self.current_cover_position is None:
                         self.current_cover_position = mc.ROLLERSHUTTER_POSITION_OPENED
-                        self.supported_features |= MLCover.EntityFeature.SET_POSITION
+                        self.supported_features |= Cover.EntityFeature.SET_POSITION
                     self._position_start = self.current_cover_position
                     self._position_starttime = epoch
 
@@ -323,7 +323,7 @@ class MLRollerShutter(MLCover):
         await self.async_stop_cover()
 
 
-class MLRollerShutterAdjustSwitch(MLSwitch):
+class RollerShutterAdjustSwitch(SwitchParser):
     """
     Appliance.RollerShutter.Adjust is a bit weird. It seems to report
     some binary status about shutter tuning operations.
@@ -355,7 +355,7 @@ class MLRollerShutterAdjustSwitch(MLSwitch):
             self.update_boolean_value(payload[mc.KEY_STATUS] != 0)
 
 
-class MLRollerShutterConfigNumber(MLConfigNumber):
+class RollerShutterConfigNumber(ParserNumber):
     """
     Helper entity to configure MRS open/close duration
     """
@@ -365,16 +365,16 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
     _attr_device_scale = 1000
 
     # HA core entity attributes:
-    _attr_device_class = MLConfigNumber.DEVICE_CLASS_DURATION
+    _attr_device_class = ParserNumber.DEVICE_CLASS_DURATION
     # these are ok for open/close durations
     # customize those when needed...
     native_max_value = 60
     native_min_value = 1
     native_step = 1
 
-    def __init__(self, cover: "MLRollerShutter", key: str):
+    def __init__(self, cover: "RollerShutter", key: str):
         self.key_value = key
-        MLConfigNumber.__init__(
+        ParserNumber.__init__(
             self, cover.channel, cover.parent, entity_key=f"config_{key}", name=key
         )
 

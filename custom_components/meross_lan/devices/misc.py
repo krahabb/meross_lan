@@ -10,12 +10,12 @@ from ..climate import MtsClimate
 from ..helpers.namespaces import NamespaceHandler, mn
 from ..merossclient.protocol import const as mc
 from ..sensor import (
-    MLHumiditySensor,
-    MLLightSensor,
-    MLNumericSensor,
-    MLTemperatureSensor,
+    HumiditySensor,
+    LightSensor,
+    NumericSensor,
+    TemperatureSensor,
 )
-from .ms600 import MLPresenceSensor
+from .ms600 import PresenceSensor
 
 if TYPE_CHECKING:
     from ..helpers.device import Device, MerossMessage
@@ -32,11 +32,11 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
     VALUE_KEY_EXCLUDED = (mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
 
     ENTITY_DEFS = {
-        mc.KEY_HUMI: MLHumiditySensor.ENTITY_DEF(),  # confirmed in MTS200 trace (2024/06)
-        mc.KEY_TEMP: MLTemperatureSensor.ENTITY_DEF(
+        mc.KEY_HUMI: HumiditySensor.ENTITY_DEF(),  # confirmed in MTS200 trace (2024/06)
+        mc.KEY_TEMP: TemperatureSensor.ENTITY_DEF(
             device_scale=100
         ),  # just guessed (2024/04)
-        mc.KEY_LIGHT: MLLightSensor.ENTITY_DEF(),  # just guessed (2024/09)
+        mc.KEY_LIGHT: LightSensor.ENTITY_DEF(),  # just guessed (2024/09)
     }
 
     def __init__(self, ns: mn.Namespace, device: "Device", /):
@@ -70,12 +70,12 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                     if key in SensorLatestNamespaceHandler.VALUE_KEY_EXCLUDED:
                         continue
                     try:
-                        entity: MLNumericSensor = entities[f"{channel}_sensor_{key}"]  # type: ignore
+                        entity: NumericSensor = entities[f"{channel}_sensor_{key}"]  # type: ignore
                     except KeyError:
                         try:
                             entity_def = SensorLatestNamespaceHandler.ENTITY_DEFS[key]
                         except KeyError:
-                            entity = MLNumericSensor(
+                            entity = NumericSensor(
                                 channel, self.parent, entity_key=f"sensor_{key}"
                             )
                         else:
@@ -108,10 +108,10 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
 
     # many of these defs are guesses
     ENTITY_DEFS = {
-        mc.KEY_HUMI: MLHumiditySensor.ENTITY_DEF(),
-        mc.KEY_LIGHT: MLLightSensor.ENTITY_DEF(),
-        mc.KEY_PRESENCE: MLPresenceSensor.ENTITY_DEF(),
-        mc.KEY_TEMP: MLTemperatureSensor.ENTITY_DEF(device_scale=100),
+        mc.KEY_HUMI: HumiditySensor.ENTITY_DEF(),
+        mc.KEY_LIGHT: LightSensor.ENTITY_DEF(),
+        mc.KEY_PRESENCE: PresenceSensor.ENTITY_DEF(),
+        mc.KEY_TEMP: TemperatureSensor.ENTITY_DEF(device_scale=100),
     }
 
     __slots__ = ()
@@ -124,8 +124,8 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
             handler=self._handle_Appliance_Control_Sensor_LatestX,
         )
         if device.descriptor.type.startswith(mc.TYPE_MS600):
-            MLPresenceSensor(0, device)
-            MLLightSensor(0, device, entity_key="sensor_light")
+            PresenceSensor(0, device)
+            LightSensor(0, device, entity_key="sensor_light")
             self.polling_request_add_channel(
                 0, {mc.KEY_DATA: [mc.KEY_PRESENCE, mc.KEY_LIGHT]}
             )
@@ -141,13 +141,13 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
             channel: int = p_channel[key_idx]
             for data_key, data_value in p_channel[mc.KEY_DATA].items():
                 try:
-                    entity: MLNumericSensor = entities[f"{channel}_sensor_{data_key}"]  # type: ignore
+                    entity: NumericSensor = entities[f"{channel}_sensor_{data_key}"]  # type: ignore
                 except KeyError:
                     # new channel or data_key
                     try:
                         entity_def = SensorLatestXNamespaceHandler.ENTITY_DEFS[data_key]
                     except KeyError:
-                        entity = MLNumericSensor(
+                        entity = NumericSensor(
                             channel, self.parent, entity_key=f"sensor_{data_key}"
                         )
                     else:

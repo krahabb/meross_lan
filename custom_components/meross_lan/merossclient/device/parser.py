@@ -37,9 +37,6 @@ class NamespaceParser(logging.Loggable):
     In this model, NamespaceHandler is responsible for unpacking those messages
     who are intended to be delivered to different entities based off some indexing
     keys. These are typically: "channel", "Id", "subId" depending on the namespace itself.
-    The class implementing the NamespaceParser protocol needs to expose that key value as a
-    property with the same name. 99% of the time the class is a MLEntity with its "channel"
-    property but the implementation allows more versatility.
     The protocol implementation needs to also expose a proper _parse_{key_namespace}
     (see NamespaceHandler.register_parser).
     """
@@ -78,10 +75,8 @@ class NamespaceParser(logging.Loggable):
         # namespace payload syntax. NamespaceHandler will lookup any of these when
         # establishing the link between the handler and the parser
         parent: Final[PhysicalDevice]  # type: ignore[override]
-        ns: mn.Namespace  # same (only MLEntity for now)
-        # TODO/BEWARE: these are not yet initialized here and they
-        # are expected to be set by the derived class
-        channel: PayloadIndexType | None  # TODO: rename to 'index'
+        ns: mn.Namespace  # TODO: rename uppercase
+        channel: PayloadIndexType | None  # type: ignore[assignment] # TODO: rename to 'index'
         """The channel/id/subId key value according to the namespace (indexed or not)."""
         ns_payload: JsonMapping  # type: ignore[assignment]
         """The last parsed payload."""
@@ -120,6 +115,15 @@ class NamespaceParser(logging.Loggable):
             self._ns_handlers = {handler}
 
     @cached_property
+    def channel(self) -> "PayloadIndexType | None":
+        """The channel/id/subId key value according to the namespace (indexed or not).
+        This is used by the NamespaceHandler to route messages to the correct parser.
+        This is expected to be implemented by derived classes according to the namespace syntax.
+        By default, it returns None, which means that the parser is not indexed and will receive
+        all the messages for the namespace."""
+        return None
+
+    @cached_property
     def ns_payload(self) -> "JsonMapping":
         """The last parsed payload. This is set by the default _parse method but it can be
         used by derived classes to store the last parsed payload for later use, such as
@@ -129,12 +133,6 @@ class NamespaceParser(logging.Loggable):
 
     @cached_property
     def handler_ns(self):
-        # TODO: define a more consistent interface
-        # This is right now a brutal hack to automagically provide ns_handler property
-        # to entities which might not need to be registered parsers but still need to access
-        # the NamespaceHandler to issue device requests. Most of the times these are entities
-        # where ns parsing is delegated to a container object/handler which is then dispatching
-        # updates without using the NamespaceHandler inner mechanisms.
         return self.parent.ns_handlers[self.ns]
 
     # TODO: rename to async_request

@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 from homeassistant.components import number
 
 from .const import hac
-from .helpers.entity import MLNumericEntity
+from .helpers import entity as mle
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final, NotRequired, Unpack
@@ -17,22 +17,22 @@ if TYPE_CHECKING:
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    MLNumericEntity.platform_setup_entry(
+    mle.Entity.platform_setup_entry(
         hass, config_entry, async_add_devices, number.DOMAIN
     )
 
 
-class MLNumber(MLNumericEntity, number.NumberEntity):
+class Number(mle.NumericEntity, number.NumberEntity):
     """
-    Base (abstract) ancestor for ML number entities. This has 2 specializations:
-    - MLConfigNumber: for configuration parameters backed by a device namespace value.
-    - MLEmulatedNumber: for configuration parameters not directly mapped to a device ns.
+    Base (abstract) ancestor for number entities. This has 2 specializations:
+    - ConfigNumber: for configuration parameters backed by a device namespace value.
+    - EmulatedNumber: for configuration parameters not directly mapped to a device ns.
     These in turn will be managed with HA state-restoration.
     """
 
     if TYPE_CHECKING:
 
-        class Args(MLNumericEntity.Args):
+        class Args(mle.NumericEntity.Args):
             device_class: NotRequired[number.NumberDeviceClass | None]
 
         DEVICE_CLASS_DURATION: Final[number.NumberDeviceClass]
@@ -63,18 +63,15 @@ class MLNumber(MLNumericEntity, number.NumberEntity):
     }
 
     # HA core entity attributes:
-    entity_category = MLNumericEntity.EntityCategory.CONFIG
+    entity_category = mle.Entity.EntityCategory.CONFIG
     mode = number.NumberMode.BOX
     native_step = 1
 
 
-class MLConfigNumber(MLNumber):
+class ParserNumber(mle.NumericParser, Number):
     """
     Base class for any configurable numeric parameter in the device.
     """
-
-    if TYPE_CHECKING:
-        parent: Final[BaseDevice]  # type: ignore[override]
 
     DEBOUNCE_DELAY = 1
 
@@ -108,9 +105,9 @@ class MLConfigNumber(MLNumber):
                 self.update_native_value(device_value / self.device_scale)
 
 
-class MLEmulatedNumber(MLNumber.PartialAvailableMixin, MLNumber):
+class EmulatedNumber(Number):
     """
-    Number entity not directly binded to a device parameter (like MLConfigNumber)
+    Number entity not directly binded to a device parameter (like ConfigNumber)
     but used to store in HA a bit of component configuration.
     """
 

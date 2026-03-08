@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 from homeassistant.components import button
 from homeassistant.util import slugify
 
-from .helpers.entity import MLEntity
+from .helpers.entity import Entity
 
 if TYPE_CHECKING:
     from types import CoroutineType
@@ -19,16 +19,16 @@ if TYPE_CHECKING:
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    MLEntity.platform_setup_entry(hass, config_entry, async_add_devices, button.DOMAIN)
+    Entity.platform_setup_entry(hass, config_entry, async_add_devices, button.DOMAIN)
 
 
-class MLButton(MLEntity.PartialAvailableMixin, MLEntity, button.ButtonEntity):
+class Button(Entity, button.ButtonEntity):
     # MEPartialAvailableMixin is needed here since this entity state is not being updated
     # by our component. This will ensure (by default) the entity is available/unavailable
     # when the device is online/offline
     if TYPE_CHECKING:
 
-        class Args(MLEntity.Args):
+        class Args(Entity.Args):
             name: str  # Override
             device_class: NotRequired[button.ButtonDeviceClass | None]
 
@@ -39,6 +39,7 @@ class MLButton(MLEntity.PartialAvailableMixin, MLEntity, button.ButtonEntity):
     DeviceClass = button.ButtonDeviceClass
 
     # HA core entity attributes:
+    _attr_available = False
 
     __slots__ = ()
 
@@ -47,7 +48,7 @@ class MLButton(MLEntity.PartialAvailableMixin, MLEntity, button.ButtonEntity):
         channel: "ChannelType | None",
         parent: "EntityManager",
         press_func: "Callable[[], CoroutineType[Any, Any, None]]",
-        **kwargs: "Unpack[MLButton.Args]",
+        **kwargs: "Unpack[Button.Args]",
     ):
         kwargs.setdefault("entity_key", f"button_{slugify(kwargs['name'])}")
         super().__init__(channel, parent, **kwargs)
@@ -58,7 +59,7 @@ class MLButton(MLEntity.PartialAvailableMixin, MLEntity, button.ButtonEntity):
         del self.async_press
 
 
-class MLPersistentButton(MLButton):
+class PersistentButton(Button):
 
     # HA core entity attributes:
     _attr_available = True

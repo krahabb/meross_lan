@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.components import fan
 
-from .helpers.entity import MLToggleXEntity
+from .helpers import entity as mle
 from .helpers.namespaces import NamespaceHandler, mn
 from .merossclient.protocol import const as mc
 
@@ -14,19 +14,19 @@ if TYPE_CHECKING:
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
-    MLToggleXEntity.platform_setup_entry(
+    mle.ValueParser.platform_setup_entry(
         hass, config_entry, async_add_devices, fan.DOMAIN
     )
 
 
-class MLFan(MLToggleXEntity, fan.FanEntity):
+class Fan(mle.ToggleXParser, mle.ValueParser, fan.FanEntity):
     """
     Fan entity for map100 Air Purifier (or any device implementing Appliance.Control.Fan)
     """
 
     if TYPE_CHECKING:
 
-        class Args(MLToggleXEntity.Args):
+        class Args(mle.ValueParser.Args):
             pass
 
         # HA core entity attributes:
@@ -126,7 +126,7 @@ def digest_init_fan(
 ) -> "Device.DigestInitReturnType":
     """[{ "channel": 2, "speed": 3, "maxSpeed": 3 }]"""
     for channel_digest in digest:
-        MLFan(channel_digest[mc.KEY_CHANNEL], device)
+        Fan(channel_digest[mc.KEY_CHANNEL], device)
     handler = device.get_handler(mn.Appliance_Control_Fan)
     return handler.parse_list, (handler,)
 
@@ -135,6 +135,6 @@ def namespace_init_fan(ns: mn.Namespace, device: "Device", /):
     """Special care for NS_FAN since it might have been initialized in digest_init"""
     if mc.KEY_FAN not in device.descriptor.digest:
         # actually only map100 (so far)
-        MLFan(0, device)
+        Fan(0, device)
         # setup a polling strategy since state is not carried in digest
         device.get_handler(ns).polling_strategy = NamespaceHandler.async_poll_default

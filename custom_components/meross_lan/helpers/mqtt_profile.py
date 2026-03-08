@@ -12,7 +12,7 @@ from ..merossclient.client import Transport
 from ..merossclient.client.mqtt import AbstractMQTTConnection
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..merossclient.protocol.message import MerossResponse, get_replykey
-from ..sensor import MLDiagnosticSensor
+from ..sensor import DiagnosticSensor
 
 if TYPE_CHECKING:
     from typing import (
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from .device import Device
 
 
-class ConnectionSensor(MLDiagnosticSensor):
+class ConnectionSensor(DiagnosticSensor):
 
     if TYPE_CHECKING:
         STATE_DISCONNECTED: Final
@@ -83,7 +83,7 @@ class ConnectionSensor(MLDiagnosticSensor):
             ATTR_RECEIVED,
             ATTR_PUBLISHED,
             ATTR_DROPPED,
-            *MLDiagnosticSensor._unrecorded_attributes,
+            *DiagnosticSensor._unrecorded_attributes,
         }
     )
 

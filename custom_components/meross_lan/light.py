@@ -33,9 +33,7 @@ if TYPE_CHECKING:
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    mle.MLEntity.platform_setup_entry(
-        hass, config_entry, async_add_devices, light.DOMAIN
-    )
+    mle.Entity.platform_setup_entry(hass, config_entry, async_add_devices, light.DOMAIN)
 
 
 MSL_LUMINANCE_MIN = 1
@@ -169,17 +167,17 @@ def native_to_kelvin(temperature: int):
     )
 
 
-class MLLightBase(mle.MLToggleXEntity, light.LightEntity):
+class LightBase(mle.ToggleXParser, light.LightEntity):
     """
     base 'abstract' class for meross light entities handling
     either
-    NS_APPLIANCE_CONTROL_LIGHT -> specialized in MLLight
-    NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT -> specialized in MLDiffuserLight
+    NS_APPLIANCE_CONTROL_LIGHT -> specialized in Light
+    NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT -> specialized in DiffuserLight
     """
 
     if TYPE_CHECKING:
 
-        class Args(mle.MLToggleXEntity.Args):
+        class Args(mle.ToggleXParser.Args):
             pass
 
         EFFECT_OFF: Final
@@ -272,7 +270,7 @@ class MLLightBase(mle.MLToggleXEntity, light.LightEntity):
         super().__init__(channel, device)
         device.register_parser_entity(self)
 
-    # interface: MLBinaryEntity
+    @override
     def set_unavailable(self):
         self.cancel_callback(self._transition_callback)
         self.brightness = None
@@ -283,6 +281,8 @@ class MLLightBase(mle.MLToggleXEntity, light.LightEntity):
         super().set_unavailable()
 
     # interface: self
+    def _parse_light(self, payload, /): ...
+
     def _transition_setup(self, _light: dict, kwargs: dict, /) -> float | None:
         self._t_duration = _t_duration = kwargs[ATTR_TRANSITION]
         self._t_begin = monotonic()
@@ -329,7 +329,7 @@ class MLLightBase(mle.MLToggleXEntity, light.LightEntity):
         if _t_ratio_max:
             # we now setup an update period (resolution)
             # for the transition according to its highest dynamic
-            self._t_resolution = max(1 / _t_ratio_max, MLLightBase.T_RESOLUTION_MIN)
+            self._t_resolution = max(1 / _t_ratio_max, LightBase.T_RESOLUTION_MIN)
             return _t_duration
         else:
             return None  # no meaningful transition
@@ -395,7 +395,7 @@ class MLLightBase(mle.MLToggleXEntity, light.LightEntity):
         )
 
 
-class MLLight(MLLightBase):
+class Light(LightBase):
     """
     light entity for Meross bulbs and any device supporting light api
     identified from devices carrying 'light' node in SYSTEM_ALL payload and/or
@@ -404,7 +404,7 @@ class MLLight(MLLightBase):
 
     if TYPE_CHECKING:
 
-        class Args(MLLightBase.Args):
+        class Args(LightBase.Args):
             pass
 
         ATTR_TOGGLEX_AUTO: Final[str]
@@ -424,7 +424,7 @@ class MLLight(MLLightBase):
     _unrecorded_attributes = frozenset(
         {
             ATTR_TOGGLEX_AUTO,
-            *MLLightBase._unrecorded_attributes,
+            *LightBase._unrecorded_attributes,
         }
     )
 
@@ -460,10 +460,10 @@ class MLLight(MLLightBase):
             else:
                 supported_color_modes.add(ColorMode.ONOFF)
 
-        MLLightBase.__init__(self, channel, device, effect_list)
+        LightBase.__init__(self, channel, device, effect_list)
         self._togglex_auto = None if self.handler_togglex else False
 
-    # interface: MLLightBase
+    @override
     def _parse_light(self, payload: "JsonMapping", /):
         if self.ns_payload != payload:
             self.ns_payload = payload
@@ -576,7 +576,7 @@ class MLLight(MLLightBase):
             if self.is_on or not self.handler_togglex:
                 # in case MQTT pushed the togglex -> on
                 self._togglex_auto = True
-                self.extra_state_attributes = {MLLight.ATTR_TOGGLEX_AUTO: True}
+                self.extra_state_attributes = {Light.ATTR_TOGGLEX_AUTO: True}
                 return
 
             try:
@@ -588,7 +588,7 @@ class MLLight(MLLightBase):
                 # all its (working) euristics after returning from async_request
                 self._togglex_auto = self.is_on
                 self.extra_state_attributes = {
-                    MLLight.ATTR_TOGGLEX_AUTO: self._togglex_auto
+                    Light.ATTR_TOGGLEX_AUTO: self._togglex_auto
                 }
                 if self.is_on:
                     return
@@ -599,7 +599,7 @@ class MLLight(MLLightBase):
         await self.async_request_onoff(1)
 
 
-class MLLightEffect(MLLight):
+class EffectLight(Light):
     """
     Specialized light entity for devices supporting Appliance.Control.Light.Effect
     like msl320
@@ -615,7 +615,7 @@ class MLLightEffect(MLLight):
 
     def __init__(self, channel: int, device: "Device", /):
         self._light_effect_list: list[dict] = []
-        MLLight.__init__(self, channel, device, [])
+        Light.__init__(self, channel, device, [])
         self.handler_light_effect = NamespaceHandler(
             mn.Appliance_Control_Light_Effect,
             device,
@@ -635,7 +635,7 @@ class MLLightEffect(MLLight):
         )
         return super().flush_state()
 
-    # interface: MLLight
+    # interface: Light
     @override
     def _flush_light_effect(self, effect: int, /):
         self.handler_light_effect.polling_period = 0
@@ -736,13 +736,13 @@ class MLLightEffect(MLLight):
             self._light_effect_list = _light_effect_list
             self.effect_list = [
                 _light_effect[mc.KEY_EFFECTNAME] for _light_effect in _light_effect_list
-            ] + [MLLightBase.EFFECT_OFF]
+            ] + [LightBase.EFFECT_OFF]
             # add a 'fake' key so the next update will force-flush
             self.ns_payload["_"] = None  # type: ignore
             self.handler_ns.schedule_get()
 
 
-class MLDNDLightEntity(mle.EntityNamespaceMixin, mle.MLBinaryEntity, light.LightEntity):
+class DNDLight(mle.EntityNamespaceMixin, mle.BinaryParser, light.LightEntity):
     """
     light entity representing the device DND feature usually implemented
     through a light feature (presence light or so)
@@ -761,7 +761,7 @@ class MLDNDLightEntity(mle.EntityNamespaceMixin, mle.MLBinaryEntity, light.Light
     native_off = 1
     # HA core entity attributes:
     color_mode: ColorMode = ColorMode.ONOFF
-    entity_category = mle.MLBinaryEntity.EntityCategory.CONFIG
+    entity_category = mle.BinaryParser.EntityCategory.CONFIG
     supported_color_modes: set[ColorMode] = {ColorMode.ONOFF}
 
 
@@ -772,11 +772,11 @@ def digest_init_light(
     ability = device.descriptor.ability
 
     if mn.Appliance_Control_Light_Effect in ability:
-        light = MLLightEffect(digest[mc.KEY_CHANNEL], device)
+        light = EffectLight(digest[mc.KEY_CHANNEL], device)
     elif mn.Appliance_Control_Mp3 in ability:
-        light = MLLight(digest[mc.KEY_CHANNEL], device, mc.HP110A_LIGHT_EFFECT_LIST)
+        light = Light(digest[mc.KEY_CHANNEL], device, mc.HP110A_LIGHT_EFFECT_LIST)
     else:
-        light = MLLight(digest[mc.KEY_CHANNEL], device)
+        light = Light(digest[mc.KEY_CHANNEL], device)
     return light.handler_ns.parse_dict, (light.handler_ns,)
 
 
@@ -788,15 +788,15 @@ def digest_init_light_effect(
     # (same as ns Appliance.Control.Light.Effect)
 
     try:
-        # MLLightEffect should be in place
+        # EffectLight should be in place
         light = device.entities[0]
-        if isinstance(light, MLLightEffect):
+        if isinstance(light, EffectLight):
             # initialize light effect_list (we're loading config at device init time
             # so this could be outdated but..)
             light._light_effect_list = digest
             light.effect_list = [
                 _light_effect[mc.KEY_EFFECTNAME] for _light_effect in digest
-            ] + [MLLightBase.EFFECT_OFF]
+            ] + [LightBase.EFFECT_OFF]
 
             handler = device.ns_handlers[mn.Appliance_Control_Light_Effect]
 

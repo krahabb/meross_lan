@@ -2,12 +2,12 @@ from homeassistant import const as hac
 from homeassistant.components import light as haec
 from homeassistant.components.light import ColorMode, LightEntity, LightEntityFeature
 
-from custom_components.meross_lan.devices.diffuser import MLDiffuserLight
+from custom_components.meross_lan.devices.diffuser import DiffuserLight
 from custom_components.meross_lan.light import (
-    MLDNDLightEntity,
-    MLLight,
-    MLLightBase,
-    MLLightEffect,
+    DNDLight,
+    EffectLight,
+    Light,
+    LightBase,
     native_to_rgb,
     rgb_to_native,
 )
@@ -24,25 +24,25 @@ class EntityTest(EntityComponentTest):
     ENTITY_TYPE = LightEntity
 
     DIGEST_ENTITIES = {
-        mc.KEY_LIGHT: [MLLight],
-        mc.KEY_DIFFUSER: {mc.KEY_LIGHT: [MLDiffuserLight]},
+        mc.KEY_LIGHT: [Light],
+        mc.KEY_DIFFUSER: {mc.KEY_LIGHT: [DiffuserLight]},
     }
     NAMESPACES_ENTITIES = {
-        mn.Appliance_Control_Light_Effect: [MLLightEffect],
-        mn.Appliance_Control_Mp3: [MLLight],
-        mn.Appliance_System_DNDMode: [MLDNDLightEntity],
+        mn.Appliance_Control_Light_Effect: [EffectLight],
+        mn.Appliance_Control_Mp3: [Light],
+        mn.Appliance_System_DNDMode: [DNDLight],
     }
 
     async def async_test_each_callback(
         self,
-        entity: MLLight | MLDiffuserLight | MLDNDLightEntity,
+        entity: Light | DiffuserLight | DNDLight,
     ):
         await super().async_test_each_callback(entity)
 
         supported_color_modes = entity.supported_color_modes
         supported_features = entity.supported_features
 
-        if isinstance(entity, MLDNDLightEntity):
+        if isinstance(entity, DNDLight):
             # special light here with reduced set of features
             assert supported_color_modes == {ColorMode.ONOFF}, "supported_color_modes"
         else:
@@ -50,12 +50,12 @@ class EntityTest(EntityComponentTest):
             self._check_remove_togglex(entity)
             # check the other specialized implementations
             if mn.Appliance_Control_Diffuser_Light in ability:
-                assert isinstance(entity, MLDiffuserLight)
+                assert isinstance(entity, DiffuserLight)
                 assert ColorMode.RGB in supported_color_modes, "supported_color_modes"
                 assert LightEntityFeature.EFFECT in supported_features
                 assert entity.effect_list == mc.DIFFUSER_LIGHT_MODE_LIST, "effect_list"
             if mn.Appliance_Control_Light in ability:
-                assert isinstance(entity, MLLight)
+                assert isinstance(entity, Light)
                 capacity = ability[mn.Appliance_Control_Light][mc.KEY_CAPACITY]
                 if capacity & mc.LIGHT_CAPACITY_RGB:
                     assert (
@@ -69,28 +69,28 @@ class EntityTest(EntityComponentTest):
                     assert LightEntityFeature.EFFECT in supported_features
                     assert entity.effect_list, "effect_list"
                 if mn.Appliance_Control_Light_Effect in ability:
-                    assert type(entity) is MLLightEffect
+                    assert type(entity) is EffectLight
                     assert LightEntityFeature.EFFECT in supported_features
                     assert entity.effect_list, "effect_list"
-                    # need to manually remove MLLight instance since it's also requested in digest
-                    EntityComponentTest.expected_entity_types.remove(MLLight)
+                    # need to manually remove Light instance since it's also requested in digest
+                    EntityComponentTest.expected_entity_types.remove(Light)
                 if mn.Appliance_Control_Mp3 in ability:
                     assert LightEntityFeature.EFFECT in supported_features
                     assert (
                         entity.effect_list == mc.HP110A_LIGHT_EFFECT_LIST
                     ), "effect_list"
-                    # need to manually remove MLLight instance since it's also requested in digest
-                    EntityComponentTest.expected_entity_types.remove(MLLight)
+                    # need to manually remove Light instance since it's also requested in digest
+                    EntityComponentTest.expected_entity_types.remove(Light)
 
     async def async_test_enabled_callback(
-        self, entity: MLLight | MLDiffuserLight | MLDNDLightEntity
+        self, entity: Light | DiffuserLight | DNDLight
     ):
         await self.async_service_call_check(haec.SERVICE_TURN_OFF, hac.STATE_OFF)
         await self.async_service_call_check(haec.SERVICE_TURN_ON, hac.STATE_ON)
 
-        if entity.entitykey == MLDNDLightEntity.ENTITY_KEY:
+        if entity.entitykey == DNDLight.ENTITY_KEY:
             return
-        assert isinstance(entity, MLLightBase)
+        assert isinstance(entity, LightBase)
         supported_color_modes = entity.supported_color_modes
 
         check_brightness = ColorMode.BRIGHTNESS in supported_color_modes
@@ -144,7 +144,7 @@ class EntityTest(EntityComponentTest):
 
     async def async_test_disabled_callback(
         self,
-        entity: MLLight | MLDiffuserLight | MLDNDLightEntity,
+        entity: Light | DiffuserLight | DNDLight,
     ):
         await entity.async_turn_on()
         assert entity.is_on

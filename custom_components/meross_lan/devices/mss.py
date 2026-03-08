@@ -13,8 +13,8 @@ from ..helpers.namespaces import (
     NamespaceHandler,
 )
 from ..merossclient.protocol import const as mc, namespaces as mn
-from ..sensor import MLEnumSensor, MLNumericSensor
-from ..switch import MLSwitch
+from ..sensor import EnumSensor, NumericSensor
+from ..switch import SwitchParser
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final, Unpack
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from ..merossclient.protocol import types as mt
 
 
-class _ElectricitySensor(MLNumericSensor):
+class _ElectricitySensor(NumericSensor):
     """
     This sensor acts as the main parser for 'Electricity' and 'ElectricityX' namespaces
     taking care of power, current, voltage, etc, sensors for the same channel.
@@ -38,46 +38,45 @@ class _ElectricitySensor(MLNumericSensor):
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
 
-        class Args(MLNumericSensor.Args):
+        class Args(NumericSensor.Args):
             pass
 
         # not setting 'entity_key' in EntityDef will mark the entity as 'not required'
         # (see __init__)
-        ENTITY_DEFS: ClassVar[dict[str, MLNumericSensor.EntityDef["MLNumericSensor"]]]
+        ENTITY_DEFS: ClassVar[dict[str, NumericSensor.EntityDef["NumericSensor"]]]
         # HA core entity attributes:
         native_value: int
 
         sensor_consumptionx: "ConsumptionXSensor | None"
-        sensor_power: MLNumericSensor
+        sensor_power: NumericSensor
 
     ENTITY_KEY = "energy_estimate"
     ENTITY_DEFS = {
-        mc.KEY_CURRENT: MLNumericSensor.ENTITY_DEF(
+        mc.KEY_CURRENT: NumericSensor.ENTITY_DEF(
             entity_key=mc.KEY_CURRENT,
-            device_class=MLNumericSensor.DeviceClass.CURRENT,
-            state_class=MLNumericSensor.StateClass.MEASUREMENT,
+            device_class=NumericSensor.DeviceClass.CURRENT,
+            state_class=NumericSensor.StateClass.MEASUREMENT,
             suggested_display_precision=1,
             device_scale=1000,
         ),
-        mc.KEY_POWER: MLNumericSensor.ENTITY_DEF(
+        mc.KEY_POWER: NumericSensor.ENTITY_DEF(
             entity_key=mc.KEY_POWER,
-            device_class=MLNumericSensor.DeviceClass.POWER,
-            state_class=MLNumericSensor.StateClass.MEASUREMENT,
+            device_class=NumericSensor.DeviceClass.POWER,
+            state_class=NumericSensor.StateClass.MEASUREMENT,
             suggested_display_precision=1,
             device_scale=1000,
         ),
-        mc.KEY_VOLTAGE: MLNumericSensor.ENTITY_DEF(
+        mc.KEY_VOLTAGE: NumericSensor.ENTITY_DEF(
             entity_key=mc.KEY_VOLTAGE,
-            device_class=MLNumericSensor.DeviceClass.VOLTAGE,
-            state_class=MLNumericSensor.StateClass.MEASUREMENT,
+            device_class=NumericSensor.DeviceClass.VOLTAGE,
+            state_class=NumericSensor.StateClass.MEASUREMENT,
             suggested_display_precision=1,
             device_scale=10,
         ),
     }
 
     # HA core entity attributes:
-    _attr_available = True
-    _attr_device_class = MLNumericSensor.DeviceClass.ENERGY
+    _attr_device_class = NumericSensor.DeviceClass.ENERGY
     _attr_entity_registry_enabled_default = False
 
     __slots__ = (
@@ -151,6 +150,11 @@ class _ElectricitySensor(MLNumericSensor):
             # and more consistent
             self._estimate = float(state.state)
             self.native_value = int(self._estimate)
+
+    @override
+    def set_available(self):
+        self.available = True
+        self.flush_state()
 
     # interface: self
     def _parse(self, payload: dict, /):
@@ -248,12 +252,12 @@ class ElectricityXSensor(_ElectricitySensor):
 
     ns = mn.Appliance_Control_ElectricityX
 
-    class MConsumeSensor(MLNumericSensor):
+    class MConsumeSensor(NumericSensor):
         if TYPE_CHECKING:
             parent: Final[Device]  # type: ignore[override]
 
         def __init__(self, channel, device: "Device", /, **kwargs):
-            MLNumericSensor.__init__(self, channel, device, **kwargs)
+            NumericSensor.__init__(self, channel, device, **kwargs)
             # TODO: in 6.x.x we should generalize this mechanism to any ns/device
             try:
                 handler_ch: "ConsumptionHNamespaceHandler" = device.ns_handlers[
@@ -265,7 +269,7 @@ class ElectricityXSensor(_ElectricitySensor):
 
         @override
         def update_device_value(self, device_value: int | float, /):
-            if MLNumericSensor.update_device_value(self, device_value):
+            if NumericSensor.update_device_value(self, device_value):
                 # We'll use this event to trigger an update of the related
                 # ConsumptionHSensor. We'll so ensure  ConsumptionH sensors in em06
                 # are effectively instantiated since their list cannot be inferred
@@ -284,22 +288,22 @@ class ElectricityXSensor(_ElectricitySensor):
                 return True
 
     ENTITY_DEFS = _ElectricitySensor.ENTITY_DEFS | {
-        mc.KEY_VOLTAGE: MLNumericSensor.ENTITY_DEF(
+        mc.KEY_VOLTAGE: NumericSensor.ENTITY_DEF(
             entity_key=mc.KEY_VOLTAGE,
-            device_class=MLNumericSensor.DeviceClass.VOLTAGE,
-            state_class=MLNumericSensor.StateClass.MEASUREMENT,
+            device_class=NumericSensor.DeviceClass.VOLTAGE,
+            state_class=NumericSensor.StateClass.MEASUREMENT,
             suggested_display_precision=1,
             device_scale=1000,
         ),
-        mc.KEY_FACTOR: MLNumericSensor.ENTITY_DEF(
-            device_class=MLNumericSensor.DeviceClass.POWER_FACTOR,
-            state_class=MLNumericSensor.StateClass.MEASUREMENT,
+        mc.KEY_FACTOR: NumericSensor.ENTITY_DEF(
+            device_class=NumericSensor.DeviceClass.POWER_FACTOR,
+            state_class=NumericSensor.StateClass.MEASUREMENT,
             suggested_display_precision=2,
             device_scale=1,
         ),
         mc.KEY_MCONSUME: MConsumeSensor.ENTITY_DEF(
-            device_class=MLNumericSensor.DeviceClass.ENERGY,
-            state_class=MLNumericSensor.StateClass.TOTAL_INCREASING,  # quick patch for #621 (will be fixed in v6.x.x)
+            device_class=NumericSensor.DeviceClass.ENERGY,
+            state_class=NumericSensor.StateClass.TOTAL_INCREASING,  # quick patch for #621 (will be fixed in v6.x.x)
             suggested_display_precision=0,
             device_scale=1,
         ),
@@ -310,11 +314,11 @@ class ElectricityXSensor(_ElectricitySensor):
         device.register_parser_entity(self)
 
 
-class ConsumptionHSensor(MLNumericSensor):
+class ConsumptionHSensor(NumericSensor):
 
     if TYPE_CHECKING:
 
-        class Args(MLNumericSensor.Args):
+        class Args(NumericSensor.Args):
             pass
 
         handler_ns: "ConsumptionHNamespaceHandler"
@@ -323,21 +327,21 @@ class ConsumptionHSensor(MLNumericSensor):
     ns = mn.Appliance_Control_ConsumptionH
     key_value = mc.KEY_TOTAL
 
-    _attr_device_class = MLNumericSensor.DeviceClass.ENERGY
+    _attr_device_class = NumericSensor.DeviceClass.ENERGY
     _attr_suggested_display_precision = 0
 
     def __init__(self, channel, device: "Device", /, **kwargs: "Unpack[Args]"):
         kwargs["name"] = "Consumption"
-        MLNumericSensor.__init__(self, channel, device, **kwargs)
+        NumericSensor.__init__(self, channel, device, **kwargs)
         device.register_parser_entity(self)
 
     async def async_added_to_hass(self):
         self.handler_ns.channel_polling_add(self.channel)
-        return await MLNumericSensor.async_added_to_hass(self)
+        return await NumericSensor.async_added_to_hass(self)
 
     async def async_will_remove_from_hass(self):
         self.handler_ns.channel_polling_remove(self.channel)
-        return await MLNumericSensor.async_will_remove_from_hass(self)
+        return await NumericSensor.async_will_remove_from_hass(self)
 
     def _parse_consumptionH(self, payload: dict):
         """
@@ -462,7 +466,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
             await device.async_poll_request_smart(self)
 
 
-class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
+class ConsumptionXSensor(EntityNamespaceMixin, NumericSensor):
 
     if TYPE_CHECKING:
         ATTR_OFFSET: Final
@@ -481,7 +485,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
     )
     ENTITY_KEY = "energy"
     ns = mn.Appliance_Control_ConsumptionX
-    _attr_device_class = MLNumericSensor.DeviceClass.ENERGY
+    _attr_device_class = NumericSensor.DeviceClass.ENERGY
 
     ATTR_OFFSET = "offset"
     ATTR_RESET_TS = "reset_ts"
@@ -515,7 +519,6 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         self.polling_response_size_adj(30)  # maximum item count for payload
         device.enable_check_device_time()
 
-    # interface: MLEntity
     def set_unavailable(self):
         self._yesterday_midnight_epoch = 0
         self._today_midnight_epoch = 0
@@ -705,7 +708,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
             self.log(self.DEBUG, "no readings available for new day - resetting")
 
 
-class OverTempEnableSwitch(EntityNamespaceMixin, MLSwitch):
+class OverTempEnableSwitch(EntityNamespaceMixin, SwitchParser):
 
     DEFAULT_CONFIG = (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
@@ -726,7 +729,7 @@ class OverTempEnableSwitch(EntityNamespaceMixin, MLSwitch):
         try:
             self.sensor_overtemp_type.update_device_value(overtemp[mc.KEY_TYPE])
         except AttributeError:
-            self.sensor_overtemp_type = MLEnumSensor(
+            self.sensor_overtemp_type = EnumSensor(
                 self.channel,
                 self.parent,
                 entity_key="config_overtemp_type",

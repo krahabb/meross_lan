@@ -1,21 +1,20 @@
 from typing import TYPE_CHECKING, override
 
-from ..binary_sensor import MLBinarySensor
+from ..binary_sensor import BinarySensor
 from ..const import hac
 from ..helpers.namespaces import mc, mn
-from ..number import MLConfigNumber
-from ..select import MLConfigSelect
-from ..sensor import MLNumericSensor
+from ..number import ParserNumber
+from ..select import SelectParser
+from ..sensor import NumericSensor
 
 if TYPE_CHECKING:
     from typing import Final, Unpack
 
     from ..helpers.device import Device
     from ..helpers.entity import ChannelType
-    from ..helpers.manager import EntityManager
 
 
-class PresenceConfigBase(MLConfigSelect.NamespaceGroupValue):
+class PresenceConfigBase(SelectParser.NamespaceGroupValue):
     """Mixin style base class for all of the entities managed in Appliance.Control.Presence.Config"""
 
     if TYPE_CHECKING:
@@ -25,16 +24,16 @@ class PresenceConfigBase(MLConfigSelect.NamespaceGroupValue):
     ns = mn.Appliance_Control_Presence_Config
 
     # HA core entity attributes:
-    entity_category = MLConfigSelect.EntityCategory.CONFIG
+    entity_category = SelectParser.EntityCategory.CONFIG
 
     # TODO: generalize entitykey generation
 
 
-class PresenceConfigNumberBase(PresenceConfigBase, MLConfigNumber):
+class PresenceConfigNumberBase(PresenceConfigBase, ParserNumber):
     """Base class for config values represented as Number entities in HA."""
 
 
-class PresenceConfigSelectBase(PresenceConfigBase, MLConfigSelect):
+class PresenceConfigSelectBase(PresenceConfigBase, SelectParser):
     """Base class for config values represented as Select entities in HA."""
 
 
@@ -50,7 +49,7 @@ class PresenceConfigModeBase(PresenceConfigSelectBase):
         2: "2",
     }
 
-    def __init__(self, channel: "ChannelType", parent: "EntityManager", key: str):
+    def __init__(self, channel: "ChannelType", parent: "Device", key: str):
         self.key_value = key
         PresenceConfigSelectBase.__init__(
             self, channel, parent, entity_key=f"presence_config_mode_{key}", name=key
@@ -66,7 +65,7 @@ class PresenceConfigNoBodyTime(PresenceConfigNumberBase):
 
     # HA core entity attributes:
     _attr_name = mc.KEY_NOBODYTIME
-    _attr_device_class = MLConfigNumber.DEVICE_CLASS_DURATION
+    _attr_device_class = ParserNumber.DEVICE_CLASS_DURATION
     native_max_value = 3600  # 1 hour ?
     native_min_value = 1
     native_step = 1
@@ -83,7 +82,7 @@ class PresenceConfigDistance(PresenceConfigNumberBase):
     _attr_device_scale = 1000
 
     # HA core entity attributes:
-    _attr_device_class = MLConfigNumber.DeviceClass.DISTANCE
+    _attr_device_class = ParserNumber.DeviceClass.DISTANCE
     _attr_native_unit_of_measurement = hac.UnitOfLength.METERS
     native_max_value = 12
     native_min_value = 0.1
@@ -113,7 +112,7 @@ class PresenceConfigMthX(PresenceConfigNumberBase):
     native_min_value = 1
     native_step = 1
 
-    def __init__(self, channel: "ChannelType", parent: "EntityManager", key: str, /):
+    def __init__(self, channel: "ChannelType", parent: "Device", key: str, /):
         self.key_value = key
         PresenceConfigNumberBase.__init__(
             self, channel, parent, entity_key=f"presence_config_mthx_{key}", name=key
@@ -136,7 +135,7 @@ class PresenceConfigMode(PresenceConfigModeBase):
         )
 
 
-class MLPresenceSensor(MLNumericSensor):
+class PresenceSensor(NumericSensor):
     """ms600 presence sensor."""
 
     if TYPE_CHECKING:
@@ -156,30 +155,30 @@ class MLPresenceSensor(MLNumericSensor):
     def __init__(
         self,
         channel: "ChannelType",
-        manager: "EntityManager",
+        device: "Device",
         /,
-        **kwargs: "Unpack[MLNumericSensor.Args]",
+        **kwargs: "Unpack[NumericSensor.Args]",
     ):
-        MLNumericSensor.__init__(self, channel, manager, **kwargs)
-        self.sensor_distance = MLNumericSensor(
+        NumericSensor.__init__(self, channel, device, **kwargs)
+        self.sensor_distance = NumericSensor(
             channel,
-            manager,
+            device,
             entity_key=f"{self.entitykey}_distance",
             device_scale=1000,
-            device_class=MLNumericSensor.DeviceClass.DISTANCE,
+            device_class=NumericSensor.DeviceClass.DISTANCE,
             native_unit_of_measurement=hac.UnitOfLength.METERS,
             suggested_display_precision=2,
             name="Presence distance",
         )
-        self.binary_sensor_motion = MLBinarySensor(
+        self.binary_sensor_motion = BinarySensor(
             channel,
-            manager,
+            device,
             entity_key=f"{self.entitykey}_motion",
-            device_class=MLBinarySensor.DeviceClass.MOTION,
+            device_class=BinarySensor.DeviceClass.MOTION,
         )
-        self.sensor_times = MLNumericSensor(
+        self.sensor_times = NumericSensor(
             channel,
-            manager,
+            device,
             entity_key=f"{self.entitykey}_times",
             name="Presence times",
         )

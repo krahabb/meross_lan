@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from ..helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
 from ..light import (
@@ -8,26 +8,27 @@ from ..light import (
     ATTR_TRANSITION,
     MSL_LUMINANCE_MAX,
     ColorMode,
-    MLLightBase,
+    LightBase,
     brightness_to_native,
     native_to_brightness,
     native_to_rgb,
     rgb_to_native,
 )
-from ..sensor import MLHumiditySensor, MLTemperatureSensor
-from .spray import MLSpray
+from ..sensor import HumiditySensor, TemperatureSensor
+from .spray import Spray
 
 if TYPE_CHECKING:
     from typing import Final
 
     from ..helpers.device import Device, MerossMessage
     from ..merossclient.protocol.types import JsonDict
+    from ..sensor import NumericSensor
 
     DIFFUSER_SENSOR_ENTITY_DEFS: Final
 
 DIFFUSER_SENSOR_ENTITY_DEFS = {
-    mc.KEY_HUMIDITY: MLHumiditySensor.ENTITY_DEF(),
-    mc.KEY_TEMPERATURE: MLTemperatureSensor.ENTITY_DEF(device_scale=10),
+    mc.KEY_HUMIDITY: HumiditySensor.ENTITY_DEF(),
+    mc.KEY_TEMPERATURE: TemperatureSensor.ENTITY_DEF(device_scale=10),
 }
 
 
@@ -46,14 +47,14 @@ def digest_init_diffuser(
         mn.Appliance_Control_Diffuser_Light, device
     )
     diffuser_light_handler.register_entity_class(
-        MLDiffuserLight, (light[mc.KEY_CHANNEL] for light in digest[mc.KEY_LIGHT])
+        DiffuserLight, (light[mc.KEY_CHANNEL] for light in digest[mc.KEY_LIGHT])
     )
 
     diffuser_spray_handler = NamespaceHandler(
         mn.Appliance_Control_Diffuser_Spray, device
     )
     diffuser_spray_handler.register_entity_class(
-        MLDiffuserSpray, (spray[mc.KEY_CHANNEL] for spray in digest[mc.KEY_SPRAY])
+        DiffuserSpray, (spray[mc.KEY_CHANNEL] for spray in digest[mc.KEY_SPRAY])
     )
 
     if mn.Appliance_Control_Diffuser_Sensor in device.descriptor.ability:
@@ -67,17 +68,16 @@ def digest_init_diffuser(
                 "temperature": {"value": 0, "lmTime": 0}
             }
             """
-            entities = device.entities
+            # TODO: access entities by namespace handler parsers instead of by device.entities[key]
+            # (we can store the entity in the handler when we create it)
             for key in DIFFUSER_SENSOR_ENTITY_DEFS:
                 try:
                     value = message.payload[key][mc.KEY_VALUE]
                     try:
-                        entity = entities[key]
+                        entity = device.entities[key]
                     except KeyError:
                         entity_def = DIFFUSER_SENSOR_ENTITY_DEFS[key]
-                        entity = entity_def.type(
-                            None, device, entity_key=key, **entity_def.kwargs
-                        )
+                        entity = entity_def.type(None, device, **entity_def.kwargs)
                     entity.update_device_value(value)
                 except KeyError:
                     continue
@@ -105,7 +105,7 @@ def digest_init_diffuser(
     return digest_parse, (diffuser_light_handler, diffuser_spray_handler)
 
 
-class MLDiffuserLight(MLLightBase):
+class DiffuserLight(LightBase):
     """
     light entity for Meross diffuser (MOD100)
     """
@@ -117,8 +117,9 @@ class MLDiffuserLight(MLLightBase):
 
     def __init__(self, channel: int, manager: "Device", /):
         self.supported_color_modes = {ColorMode.RGB}
-        MLLightBase.__init__(self, channel, manager, mc.DIFFUSER_LIGHT_MODE_LIST)
+        LightBase.__init__(self, channel, manager, mc.DIFFUSER_LIGHT_MODE_LIST)
 
+    @override
     def _parse_light(self, payload, /):
         # taken from https://github.com/bwp91/homebridge-meross/blob/latest/lib/device/diffuser.js
         if self.ns_payload != payload:
@@ -135,7 +136,7 @@ class MLDiffuserLight(MLLightBase):
                 self.effect = self.effect_list[mode]
             self.flush_state()
 
-    # interface: LightEntity
+    @override
     async def async_turn_on(self, **kwargs):
         self.cancel_callback(self._transition_callback)
 
@@ -163,6 +164,7 @@ class MLDiffuserLight(MLLightBase):
         if _t_duration:
             self._transition_schedule(_t_duration)
 
+    @override
     async def async_turn_off(self, **kwargs):
         await self.async_request_payload({mc.KEY_ONOFF: 0})
         if self.is_on:
@@ -170,14 +172,14 @@ class MLDiffuserLight(MLLightBase):
             self.flush_state()
 
 
-class MLDiffuserSpray(MLSpray):
+class DiffuserSpray(Spray):
 
     ns = mn.Appliance_Control_Diffuser_Spray
 
     OPTIONS_MAP = {
-        mc.DIFFUSER_SPRAY_MODE_OFF: MLSpray.OPTIONS_MAP[mc.SPRAY_MODE_OFF],
-        mc.DIFFUSER_SPRAY_MODE_ECO: MLSpray.OPTIONS_MAP[mc.SPRAY_MODE_INTERMITTENT],
-        mc.DIFFUSER_SPRAY_MODE_FULL: MLSpray.OPTIONS_MAP[mc.SPRAY_MODE_CONTINUOUS],
+        mc.DIFFUSER_SPRAY_MODE_OFF: Spray.OPTIONS_MAP[mc.SPRAY_MODE_OFF],
+        mc.DIFFUSER_SPRAY_MODE_ECO: Spray.OPTIONS_MAP[mc.SPRAY_MODE_INTERMITTENT],
+        mc.DIFFUSER_SPRAY_MODE_FULL: Spray.OPTIONS_MAP[mc.SPRAY_MODE_CONTINUOUS],
     }
 
 

@@ -16,14 +16,14 @@ class EntityTest(EntityComponentTest):
     DIGEST_ENTITIES = {}
 
     NAMESPACES_ENTITIES = {
-        mn.Appliance_Control_Alarm: [siren.MLSiren],
+        mn.Appliance_Control_Alarm: [siren.Siren],
     }
 
-    async def async_test_enabled_callback(self, entity: siren.MLSiren):
+    async def async_test_enabled_callback(self, entity: siren.Siren):
         await self.async_service_call_check(haec.SERVICE_TURN_ON, hac.STATE_ON)
         await self.async_service_call_check(haec.SERVICE_TURN_OFF, hac.STATE_OFF)
 
-    async def async_test_disabled_callback(self, entity: siren.MLSiren):
+    async def async_test_disabled_callback(self, entity: siren.Siren):
         await entity.async_turn_on()
         assert entity.is_on
         await entity.async_turn_off()

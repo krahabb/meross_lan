@@ -12,7 +12,7 @@ from homeassistant.util import dt as dt_util
 # import core modules instead of symbols to ease patching in a single place
 from . import manager as mlm
 from .. import const as mlc
-from ..button import MLPersistentButton
+from ..button import PersistentButton
 from ..merossclient import (
     DeviceDescriptor,
     datetime_from_epoch,
@@ -28,7 +28,7 @@ from ..merossclient.protocol import MerossError, const as mc, namespaces as mn
 from ..merossclient.protocol.message import MerossMessage, MerossResponse
 from ..merossclient.protocol.namespaces import thermostat as mn_t
 from ..sensor import ProtocolSensor
-from ..update import MLUpdate
+from ..update import UpdateEntity
 from .namespaces import NamespaceHandler
 
 if TYPE_CHECKING:
@@ -59,7 +59,7 @@ if TYPE_CHECKING:
         control as mt_c,
     )
     from .component_api import ComponentApi
-    from .entity import ChannelType, MLEntity
+    from .entity import ChannelType, Entity, ParserEntity
     from .meross_profile import DeviceInfoType, LatestVersionType
     from .mqtt_profile import MQTTConnection, MQTTProfile
 
@@ -72,7 +72,7 @@ class BaseDevice(mlm.EntityManager, device.PhysicalDevice):
 
     if TYPE_CHECKING:
 
-        update_firmware: MLUpdate | None
+        update_firmware: UpdateEntity | None
         # Overrides
         device_entry: Final[dr.DeviceEntry]  # type: ignore
 
@@ -114,7 +114,7 @@ class BaseDevice(mlm.EntityManager, device.PhysicalDevice):
         if self.update_firmware:
             self.update_firmware.update_info()
         else:
-            self.update_firmware = MLUpdate(self)
+            self.update_firmware = UpdateEntity(self)
 
     def parse_undefined_dict(
         self, key_parent: str, payload: dict, channel: "ChannelType | None", /
@@ -148,9 +148,9 @@ class BaseDevice(mlm.EntityManager, device.PhysicalDevice):
                     )
                 ].update_device_value(value)
             except KeyError:
-                from ..sensor import MLDiagnosticSensor
+                from ..sensor import DiagnosticSensor
 
-                MLDiagnosticSensor(
+                DiagnosticSensor(
                     channel,
                     self,
                     entity_key=f"{key_parent}_{key}",
@@ -312,7 +312,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
     NAMESPACE_INIT_PACKAGE = DIGEST_INIT_PACKAGE
     NAMESPACE_INIT = {
         mn.Appliance_Config_OverTemp: (".devices.mss", "OverTempEnableSwitch"),
-        mn.Appliance_Control_Alarm: (".siren", "MLSiren"),
+        mn.Appliance_Control_Alarm: (".siren", "Siren"),
         mn.Appliance_Control_Electricity: (
             ".devices.mss",
             "ElectricitySensor",
@@ -326,9 +326,9 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         mn.Appliance_Control_Fan: (".fan", "namespace_init_fan"),
         mn.Appliance_Control_FilterMaintenance: (
             ".sensor",
-            "MLFilterMaintenanceSensor",
+            "FilterMaintenanceSensor",
         ),
-        mn.Appliance_Control_Mp3: (".media_player", "MLMp3Player"),
+        mn.Appliance_Control_Mp3: (".media_player", "Mp3Player"),
         mn.Appliance_Control_PhysicalLock: (".switch", "PhysicalLockSwitch"),
         mn.Appliance_Control_Presence_Config: (
             ".devices.ms600",
@@ -360,10 +360,10 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         ),
         mn.Appliance_RollerShutter_Position: (
             ".devices.rollershutter",
-            "MLRollerShutter",
+            "RollerShutter",
         ),
-        mn.Appliance_System_DNDMode: (".light", "MLDNDLightEntity"),
-        mn.Appliance_System_Runtime: (".sensor", "MLSignalStrengthSensor"),
+        mn.Appliance_System_DNDMode: (".light", "DNDLight"),
+        mn.Appliance_System_Runtime: (".sensor", "SignalStrengthSensor"),
     }
     NAMESPACE_IGNORE = (
         mn.Appliance_Config_Info,
@@ -390,7 +390,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         mn.Appliance_Control_Unbind,
     )
     DEFAULT_PLATFORMS = mlm.ConfigEntryManager.DEFAULT_PLATFORMS | {
-        MLUpdate.PLATFORM: None,
+        UpdateEntity.PLATFORM: None,
     }
 
     __slots__ = device.Device._calc_slots(
@@ -470,21 +470,21 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             ),
         )
         self.sensor_protocol = ProtocolSensor(self)
-        MLPersistentButton(
+        PersistentButton(
             None,
             self,
             self.async_poll_full,
             name="Refresh",
-            device_class=MLPersistentButton.DeviceClass.RESTART,
-            entity_category=MLPersistentButton.EntityCategory.DIAGNOSTIC,
+            device_class=PersistentButton.DeviceClass.RESTART,
+            entity_category=PersistentButton.EntityCategory.DIAGNOSTIC,
         )
-        MLPersistentButton(
+        PersistentButton(
             None,
             self,
             self._async_button_reload_press,
             name="Reload",
-            device_class=MLPersistentButton.DeviceClass.RESTART,
-            entity_category=MLPersistentButton.EntityCategory.DIAGNOSTIC,
+            device_class=PersistentButton.DeviceClass.RESTART,
+            entity_category=PersistentButton.EntityCategory.DIAGNOSTIC,
         )
         self._update_config()
 
@@ -1084,10 +1084,10 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         await super().async_poll_full()
 
     # interface: self
-    def register_parser_entity(self, entity: "MLEntity", /):
+    def register_parser_entity(self, entity: "ParserEntity", /):
         self.get_handler(entity.ns).register_parser(entity)
 
-    def register_togglex_channel(self, entity: "MLEntity", active: bool, /):
+    def register_togglex_channel(self, entity: "ParserEntity", active: bool, /):
         """
         Checks if entity has an associated ToggleX behavior and eventually
         registers it
@@ -1096,7 +1096,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             for togglex_digest in self.descriptor.digest[mc.KEY_TOGGLEX]:
                 if togglex_digest[mc.KEY_CHANNEL] == entity.channel:
                     if active:
-                        # by design this should be an MLToggleXEntity
+                        # by design this should be an ToggleXParser
                         # but we have enough of _parse_togglex
                         assert hasattr(entity, "_parse_togglex")
                     else:
@@ -1544,7 +1544,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         for device_info_channel in device_info.get("channels", []):
             # we assume the device_info.channels struct are mapped
             # to what we consider 'default' entities for the device
-            # (i.e. MLGarage for garageDoor devices, MLToggle for
+            # (i.e. GarageDoor for garageDoor devices, ToggleXSwitch for
             # plain toggle devices, and so on).
             # also, the list looks like eventually containing empty dicts
             # for non-existent channel ids

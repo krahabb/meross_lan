@@ -1,6 +1,6 @@
 from homeassistant.components import media_player as haec  # HA EntityComponent
 
-from custom_components.meross_lan.media_player import MLMp3Player
+from custom_components.meross_lan.media_player import Mp3Player
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
@@ -16,7 +16,7 @@ class EntityTest(EntityComponentTest):
     DIGEST_ENTITIES = {}
 
     NAMESPACES_ENTITIES = {
-        mn.Appliance_Control_Mp3: [MLMp3Player],
+        mn.Appliance_Control_Mp3: [Mp3Player],
     }
 
     SERVICE_STATE_MAP = {
@@ -26,10 +26,10 @@ class EntityTest(EntityComponentTest):
         haec.SERVICE_MEDIA_STOP: haec.MediaPlayerState.IDLE,
     }
 
-    async def async_test_each_callback(self, entity: MLMp3Player):
+    async def async_test_each_callback(self, entity: Mp3Player):
         pass
 
-    async def async_test_enabled_callback(self, entity: MLMp3Player):
+    async def async_test_enabled_callback(self, entity: Mp3Player):
         await super().async_test_each_callback(entity)
 
         for service_name, expected_state in EntityTest.SERVICE_STATE_MAP.items():
@@ -56,5 +56,5 @@ class EntityTest(EntityComponentTest):
             state.attributes[haec.ATTR_MEDIA_VOLUME_LEVEL] == round(0.1 * 16) / 16
         ), haec.ATTR_MEDIA_VOLUME_LEVEL
 
-    async def async_test_disabled_callback(self, entity: MLMp3Player):
+    async def async_test_disabled_callback(self, entity):
         pass

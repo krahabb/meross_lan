@@ -1,11 +1,11 @@
 from typing import TYPE_CHECKING, override
 
 from . import SubDeviceEntity
-from ...binary_sensor import MLBinarySensor
+from ...binary_sensor import BinarySensor
 from ...climate import MtsClimate
 from ...merossclient.protocol import const as mc
 from ...merossclient.protocol.namespaces import hub as mn_h
-from ...switch import MLEmulatedSwitch
+from ...switch import EmulatedSwitch
 
 if TYPE_CHECKING:
     from typing import Unpack
@@ -46,8 +46,8 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
 
     if TYPE_CHECKING:
         ns_payload: mt_h._Mts100_Temperature
-        binary_sensor_window: MLBinarySensor
-        switch_patch_hvacaction: MLEmulatedSwitch
+        binary_sensor_window: BinarySensor
+        switch_patch_hvacaction: EmulatedSwitch
 
     NS_HUB = (
         mn_h.Appliance_Hub_Mts100_All,
@@ -98,17 +98,17 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
                 self._parse = self._parse_mts150
 
         super().__init__(subid, subdevice)
-        self.binary_sensor_window = MLBinarySensor(
+        self.binary_sensor_window = BinarySensor(
             subid,
             subdevice,
-            entity_key=str(MLBinarySensor.DeviceClass.WINDOW),
-            device_class=MLBinarySensor.DeviceClass.WINDOW,
+            entity_key=str(BinarySensor.DeviceClass.WINDOW),
+            device_class=BinarySensor.DeviceClass.WINDOW,
         )
-        self.switch_patch_hvacaction = MLEmulatedSwitch(
+        self.switch_patch_hvacaction = EmulatedSwitch(
             subid,
             subdevice,
             entity_key="patch_hvacaction",
-            device_value=0,
+            is_on=False,
         )
         self.switch_patch_hvacaction.register_state_callback(self.flush_state)
         for _entity in (self.number_adjust_temperature, self.schedule):
@@ -263,7 +263,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         if mc.KEY_HEATING in payload:
             self._mts_active = payload[mc.KEY_HEATING]
         if mc.KEY_OPENWINDOW in payload:
-            self.binary_sensor_window.update_device_value(payload[mc.KEY_OPENWINDOW])
+            self.binary_sensor_window.update_boolean_value(payload[mc.KEY_OPENWINDOW])
 
         for (
             key_temp,

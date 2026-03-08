@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components import cover
 
-from .helpers.entity import MLEntity
+from .helpers.entity import ParserEntity
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final, NotRequired
@@ -11,14 +11,16 @@ if TYPE_CHECKING:
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
-    MLEntity.platform_setup_entry(hass, config_entry, async_add_devices, cover.DOMAIN)
+    ParserEntity.platform_setup_entry(
+        hass, config_entry, async_add_devices, cover.DOMAIN
+    )
 
 
-class MLCover(MLEntity, cover.CoverEntity):
+class Cover(ParserEntity, cover.CoverEntity):
 
     if TYPE_CHECKING:
 
-        class Args(MLEntity.Args):
+        class Args(ParserEntity.Args):
             device_class: NotRequired[cover.CoverDeviceClass | None]
 
         parent: Final[Device]  # type: ignore[override]
@@ -58,7 +60,6 @@ class MLCover(MLEntity, cover.CoverEntity):
         self.is_opening = False
         super().__init__(channel, parent)
 
-    # interface: MLEntity
     async def async_will_remove_from_hass(self):
         self._transition_cancel()
         await super().async_will_remove_from_hass()

@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
 from ..merossclient.protocol import const as mc, namespaces as mn
-from ..select import MLConfigSelect
+from ..select import SelectParser
 
 if TYPE_CHECKING:
     from ..helpers.device import Device
@@ -14,16 +14,16 @@ def digest_init_spray(
 ) -> "Device.DigestInitReturnType":
     """[{"channel": 0, "mode": 0, "lmTime": 1629035486, "lastMode": 1, "onoffTime": 1629035486}]"""
     for channel_digest in digest:
-        MLSpray(channel_digest[mc.KEY_CHANNEL], device)
+        Spray(channel_digest[mc.KEY_CHANNEL], device)
 
     handler = device.get_handler(mn.Appliance_Control_Spray)
     return handler.parse_list, (handler,)
 
 
-class MLSpray(MLConfigSelect):
+class Spray(SelectParser):
     """
     SelectEntity class for Appliance.Control.Spray namespace. This is also
-    slightly customized in MLDiffuserSpray to override namespace mapping and
+    slightly customized in DiffuserSpray to override namespace mapping and
     message formatting.
     """
 
@@ -40,5 +40,5 @@ class MLSpray(MLConfigSelect):
     entity_category = None
 
     def __init__(self, channel: "ChannelType", device: "Device", /):
-        MLConfigSelect.__init__(self, channel, device)
+        SelectParser.__init__(self, channel, device)
         device.register_parser_entity(self)

@@ -9,14 +9,14 @@ from custom_components.meross_lan.merossclient.protocol.namespaces import (
     thermostat as mn_t,
 )
 from custom_components.meross_lan.sensor import (
-    MLEnumSensor,
-    MLFilterMaintenanceSensor,
-    MLHumiditySensor,
-    MLLightSensor,
-    MLNumericSensor,
-    MLSignalStrengthSensor,
-    MLTemperatureSensor,
+    EnumSensor,
+    FilterMaintenanceSensor,
+    HumiditySensor,
+    LightSensor,
+    NumericSensor,
     ProtocolSensor,
+    SignalStrengthSensor,
+    TemperatureSensor,
 )
 
 from tests.entities import EntityComponentTest
@@ -31,27 +31,27 @@ class EntityTest(EntityComponentTest):
     DIGEST_ENTITIES = {
         mc.KEY_THERMOSTAT: {
             mc.KEY_MODE: [
-                MLTemperatureSensor
+                TemperatureSensor
             ],  # additional (disabled) current temperature sensor
             mc.KEY_MODEB: [
-                MLTemperatureSensor
+                TemperatureSensor
             ],  # additional (disabled) current temperature sensor
         },
     }
 
     NAMESPACES_ENTITIES = {
-        mn.Appliance_Config_OverTemp: [MLEnumSensor],
+        mn.Appliance_Config_OverTemp: [EnumSensor],
         mn.Appliance_Control_ConsumptionH: [mss.ConsumptionHSensor],
         mn.Appliance_Control_ConsumptionX: [mss.ConsumptionXSensor],
         mn.Appliance_Control_Diffuser_Sensor: [
-            MLHumiditySensor,
-            MLTemperatureSensor,
+            HumiditySensor,
+            TemperatureSensor,
         ],
         mn.Appliance_Control_Electricity: [
             mss.ElectricitySensor,
-            MLNumericSensor,
-            MLNumericSensor,
-            MLNumericSensor,
+            NumericSensor,
+            NumericSensor,
+            NumericSensor,
         ],
         mn.Appliance_Control_ElectricityX: [
             # There's an issue in removing 'ElectricityXSensor' when
@@ -63,52 +63,50 @@ class EntityTest(EntityComponentTest):
                 for _entity_def in mss.ElectricityXSensor.ENTITY_DEFS.values()
             ),
         ],
-        mn.Appliance_Control_FilterMaintenance: [MLFilterMaintenanceSensor],
+        mn.Appliance_Control_FilterMaintenance: [FilterMaintenanceSensor],
         mn.Appliance_Control_Presence_Config: [
             # These are entities installed by mn.Appliance_Control_Sensor_LatestX
             # but we use this namespace to detect presence capability (ms600)
-            ms600.MLPresenceSensor,
-            ms600.MLNumericSensor,
-            ms600.MLNumericSensor,
-            MLLightSensor,
+            ms600.PresenceSensor,
+            ms600.NumericSensor,
+            ms600.NumericSensor,
+            LightSensor,
         ],
         mn_t.Appliance_Control_Thermostat_ModeC: [  # mts300
-            MLEnumSensor,  # output status sensors
-            MLEnumSensor,
-            MLEnumSensor,
-            MLEnumSensor,
-            MLEnumSensor,
-            MLTemperatureSensor,  # additional (disabled) current temperature sensor
-            MLHumiditySensor,  # additional (disabled) current humidity sensor
+            EnumSensor,  # output status sensors
+            EnumSensor,
+            EnumSensor,
+            EnumSensor,
+            EnumSensor,
+            TemperatureSensor,  # additional (disabled) current temperature sensor
+            HumiditySensor,  # additional (disabled) current humidity sensor
         ],
-        mn_t.Appliance_Control_Thermostat_Overheat: [MLTemperatureSensor],
-        mn.Appliance_Control_Sensor_Latest: [MLHumiditySensor],  # mts200 (some models)
-        mn.Appliance_System_Runtime: [MLSignalStrengthSensor],
+        mn_t.Appliance_Control_Thermostat_Overheat: [TemperatureSensor],
+        mn.Appliance_Control_Sensor_Latest: [HumiditySensor],  # mts200 (some models)
+        mn.Appliance_System_Runtime: [SignalStrengthSensor],
     }
 
     HUB_SUBDEVICES_ENTITIES = {
         None: [hub.SubDevice],  # actual implementation of battery sensor
-        mc.TYPE_MS100: [hub.MS100Sensor, MLHumiditySensor],
-        mc.KEY_TEMPHUMI: [hub.MS130Sensor, MLHumiditySensor, MLLightSensor],
+        mc.TYPE_MS100: [hub.MS100Sensor, HumiditySensor],
+        mc.KEY_TEMPHUMI: [hub.MS130Sensor, HumiditySensor, LightSensor],
         mc.TYPE_MTS100: [
-            MLTemperatureSensor
+            TemperatureSensor
         ],  # additional (disabled) current temperature sensor
         mc.TYPE_MTS100V3: [
-            MLTemperatureSensor
+            TemperatureSensor
         ],  # additional (disabled) current temperature sensor
         mc.TYPE_MTS150: [
-            MLTemperatureSensor
+            TemperatureSensor
         ],  # additional (disabled) current temperature sensor
         mc.KEY_SMOKEALARM: [
             hub.SmokeAlarmSensor,
-            MLEnumSensor,
+            EnumSensor,
         ],  # status, interConn sensors
     }
 
-    async def async_test_enabled_callback(self, entity: MLEnumSensor | MLNumericSensor):
+    async def async_test_enabled_callback(self, entity: EnumSensor | NumericSensor):
         pass
 
-    async def async_test_disabled_callback(
-        self, entity: MLEnumSensor | MLNumericSensor
-    ):
+    async def async_test_disabled_callback(self, entity: EnumSensor | NumericSensor):
         pass

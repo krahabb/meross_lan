@@ -8,7 +8,7 @@ from homeassistant.components.media_player.const import (
 )
 
 from .helpers import clamp
-from .helpers.entity import MLEntity
+from .helpers.entity import ParserEntity
 from .merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
@@ -25,12 +25,12 @@ if TYPE_CHECKING:
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    MLEntity.platform_setup_entry(
+    ParserEntity.platform_setup_entry(
         hass, config_entry, async_add_devices, media_player.DOMAIN
     )
 
 
-class MLMp3Player(MLEntity, media_player.MediaPlayerEntity):
+class Mp3Player(ParserEntity, media_player.MediaPlayerEntity):
 
     if TYPE_CHECKING:
 
@@ -81,7 +81,6 @@ class MLMp3Player(MLEntity, media_player.MediaPlayerEntity):
         super().__init__(channel, device, **kwargs)
         device.register_parser_entity(self)
 
-    # interface: MLEntity
     def set_unavailable(self):
         self.is_volume_muted = None
         self.media_title = None

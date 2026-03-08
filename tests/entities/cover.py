@@ -1,9 +1,9 @@
 from homeassistant.components import cover as haec
 
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.cover import MLCover
-from custom_components.meross_lan.devices.garagedoor import MLGarage
-from custom_components.meross_lan.devices.rollershutter import MLRollerShutter
+from custom_components.meross_lan.cover import Cover
+from custom_components.meross_lan.devices.garagedoor import GarageDoor
+from custom_components.meross_lan.devices.rollershutter import RollerShutter
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
@@ -18,11 +18,11 @@ class EntityTest(EntityComponentTest):
     ENTITY_TYPE = haec.CoverEntity
 
     DIGEST_ENTITIES = {
-        mc.KEY_GARAGEDOOR: [MLGarage],
+        mc.KEY_GARAGEDOOR: [GarageDoor],
     }
 
     NAMESPACES_ENTITIES = {
-        mn.Appliance_RollerShutter_State: [MLRollerShutter],
+        mn.Appliance_RollerShutter_State: [RollerShutter],
     }
 
     COVER_TRANSITIONS = {
@@ -38,17 +38,17 @@ class EntityTest(EntityComponentTest):
         ),
     }
 
-    async def async_test_each_callback(self, entity: MLCover):
+    async def async_test_each_callback(self, entity: Cover):
         await super().async_test_each_callback(entity)
 
-        if isinstance(entity, MLGarage):
+        if isinstance(entity, GarageDoor):
             assert (
                 entity.supported_features
                 == haec.CoverEntityFeature.OPEN | haec.CoverEntityFeature.CLOSE
             )
             self._check_remove_togglex(entity)
 
-        elif isinstance(entity, MLRollerShutter):
+        elif isinstance(entity, RollerShutter):
             assert (
                 entity.supported_features
                 >= haec.CoverEntityFeature.OPEN
@@ -62,13 +62,13 @@ class EntityTest(EntityComponentTest):
                 entity.number_signalOpen.device_value == RollerShutterMixin.SIGNALOPEN
             )
 
-    async def async_test_enabled_callback(self, entity: MLCover):
+    async def async_test_enabled_callback(self, entity: Cover):
         states = self.hass_states
-        if isinstance(entity, MLGarage):
+        if isinstance(entity, GarageDoor):
             await self._async_test_cover_transition(entity)
             await self._async_test_cover_transition(entity)
-        elif isinstance(entity, MLRollerShutter):
-            # MLRollerShutter could need at least a run to enable
+        elif isinstance(entity, RollerShutter):
+            # RollerShutter could need at least a run to enable
             # support for SET_POSITION
             # this should open the cover (emulator starts with closed)
             await self._async_test_cover_transition(entity)
@@ -103,7 +103,7 @@ class EntityTest(EntityComponentTest):
             await self._async_test_set_position(entity, 0)
             await self._async_test_set_position(entity, 100)
 
-    async def async_test_disabled_callback(self, entity: MLCover):
+    async def async_test_disabled_callback(self, entity: Cover):
         pass
 
     async def _async_test_cover_transition(self, entity):
@@ -114,7 +114,7 @@ class EntityTest(EntityComponentTest):
         trans = self.COVER_TRANSITIONS[state.state]
         state = await self.async_service_call(trans[0])
         assert state.state == trans[1], trans[1]
-        # The MLGarage/MLRollerShutter state machine has a timed callback mechanism
+        # The GarageDoor/RollerShutter state machine has a timed callback mechanism
         # TODO: use and check that callback instead of the raw 60 seconds timeout
         # we're using async_warp over 40 seconds (which are enough on our emulators
         # to complete the transition) so to better 'match' the callbacks state refresh
@@ -127,7 +127,7 @@ class EntityTest(EntityComponentTest):
         return state
 
     async def _async_test_set_position(
-        self, entity: MLRollerShutter, target_position: int
+        self, entity: RollerShutter, target_position: int
     ):
         state = await self.async_service_call(
             haec.SERVICE_SET_COVER_POSITION, {haec.ATTR_POSITION: target_position}

@@ -1,13 +1,13 @@
 from typing import TYPE_CHECKING
 
-from ...binary_sensor import MLBinarySensor
+from ...binary_sensor import BinarySensorParser
 from ...climate import MtsClimate
 from ...helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
 from ...merossclient.protocol.namespaces import thermostat as mn_t
-from ...number import MLConfigNumber
-from ...select import MLConfigSelect
-from ...sensor import MLEnumSensor, MLTemperatureSensor
-from ...switch import MLSwitch
+from ...number import ParserNumber
+from ...select import SelectParser
+from ...sensor import EnumSensor, TemperatureSensor
+from ...switch import SwitchParser
 
 if TYPE_CHECKING:
     from typing import Any, Callable, ClassVar, Final, Unpack
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from ...merossclient.protocol.types import JsonDict, thermostat as mt_t
 
 
-class MLScreenBrightnessNumber(MLConfigNumber):
+class ScreenBrightnessNumber(ParserNumber):
 
     ns = mn.Appliance_Control_Screen_Brightness
 
@@ -30,7 +30,7 @@ class MLScreenBrightnessNumber(MLConfigNumber):
 
     def __init__(self, device: "Device", key: str, /):
         self.key_value = key
-        MLConfigNumber.__init__(
+        ParserNumber.__init__(
             self,
             0,
             device,
@@ -63,12 +63,10 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
             handler=self._handle_Appliance_Control_Screen_Brightness,
         )
         self.polling_request_add_channel(0)
-        self.number_brightness_operation = MLScreenBrightnessNumber(
+        self.number_brightness_operation = ScreenBrightnessNumber(
             device, mc.KEY_OPERATION
         )
-        self.number_brightness_standby = MLScreenBrightnessNumber(
-            device, mc.KEY_STANDBY
-        )
+        self.number_brightness_standby = ScreenBrightnessNumber(device, mc.KEY_STANDBY)
 
     def _handle_Appliance_Control_Screen_Brightness(self, message: "MerossMessage", /):
         for p_channel in message.payload[mc.KEY_BRIGHTNESS]:
@@ -82,7 +80,7 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
                 break
 
 
-class MtsWarningSensor(MLEnumSensor):
+class MtsWarningSensor(EnumSensor):
 
     __slots__ = ("translation_key",)
 
@@ -90,7 +88,7 @@ class MtsWarningSensor(MLEnumSensor):
         self, number_temperature: "MtsCommonTemperatureExtNumber", native_value, /
     ):
         entity_key = f"{number_temperature.entitykey}_warning"
-        MLEnumSensor.__init__(
+        EnumSensor.__init__(
             self,
             number_temperature.channel,
             number_temperature.parent,
@@ -100,13 +98,13 @@ class MtsWarningSensor(MLEnumSensor):
         )
 
 
-class MtsConfigSwitch(MLSwitch):
+class MtsConfigSwitch(SwitchParser):
 
     def __init__(
         self, number_temperature: "MtsCommonTemperatureExtNumber", device_value, /
     ):
         self.ns = number_temperature.ns
-        MLSwitch.__init__(
+        SwitchParser.__init__(
             self,
             number_temperature.channel,
             number_temperature.parent,
@@ -117,14 +115,14 @@ class MtsConfigSwitch(MLSwitch):
         self.register_state_callback(number_temperature._switch_state_callback)
 
 
-class MtsCommonTemperatureNumber(MLConfigNumber):
+class MtsCommonTemperatureNumber(ParserNumber):
 
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
 
     key_value = mc.KEY_VALUE
 
-    _attr_device_class = MLConfigNumber.DeviceClass.TEMPERATURE
+    _attr_device_class = ParserNumber.DeviceClass.TEMPERATURE
 
     __slots__ = (
         "native_max_value",
@@ -133,7 +131,7 @@ class MtsCommonTemperatureNumber(MLConfigNumber):
     )
 
     def __init__(self, climate: "MtsThermostatClimate", /):
-        MLConfigNumber.__init__(
+        ParserNumber.__init__(
             self,
             climate.channel,
             climate.parent,
@@ -202,7 +200,7 @@ class MtsDeadZoneNumber(MtsCommonTemperatureNumber):
 
     ns = mn_t.Appliance_Control_Thermostat_DeadZone
 
-    _attr_device_class = MLConfigNumber.DEVICE_CLASS_TEMPERATURE_DELTA
+    _attr_device_class = ParserNumber.DEVICE_CLASS_TEMPERATURE_DELTA
 
     def __init__(self, climate: "MtsThermostatClimate", /):
         self.native_max_value = 3.5
@@ -225,7 +223,7 @@ class MtsFrostNumber(MtsCommonTemperatureExtNumber):
 class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
 
     if TYPE_CHECKING:
-        sensor_external_temperature: MLTemperatureSensor
+        sensor_external_temperature: TemperatureSensor
 
     ns = mn_t.Appliance_Control_Thermostat_Overheat
 
@@ -242,7 +240,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
             current_temp = payload[mc.KEY_CURRENTTEMP]
             self.sensor_external_temperature.update_device_value(current_temp)
         except AttributeError:
-            self.sensor_external_temperature = MLTemperatureSensor(
+            self.sensor_external_temperature = TemperatureSensor(
                 self.channel,
                 self.parent,
                 entity_key="external sensor",
@@ -254,21 +252,21 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
         MtsCommonTemperatureExtNumber._parse(self, payload)
 
 
-class MtsWindowOpened(MLBinarySensor):
+class MtsWindowOpened(BinarySensorParser):
     # Specialized binary sensor for Thermostat.WindowOpened entity used in Mts200-Mts960(maybe).
 
     ENTITY_KEY = mc.KEY_WINDOWOPENED
     ns = mn_t.Appliance_Control_Thermostat_WindowOpened
     key_value = mc.KEY_STATUS
 
-    _attr_device_class = MLBinarySensor.DeviceClass.WINDOW
+    _attr_device_class = BinarySensorParser.DeviceClass.WINDOW
 
     def __init__(self, climate: "MtsThermostatClimate", /):
-        MLBinarySensor.__init__(self, climate.channel, climate.parent)
+        BinarySensorParser.__init__(self, climate.channel, climate.parent)
         climate.parent.register_parser_entity(self)
 
 
-class MtsExternalSensorSwitch(MLSwitch):
+class MtsExternalSensorSwitch(SwitchParser):
     # External sensor mode: use internal(0) vs external(1) sensor as temperature loopback.
 
     ENTITY_KEY = "external sensor mode"
@@ -276,14 +274,14 @@ class MtsExternalSensorSwitch(MLSwitch):
     key_value = mc.KEY_MODE
 
     def __init__(self, climate: "MtsThermostatClimate", /):
-        MLSwitch.__init__(self, climate.channel, climate.parent)
+        SwitchParser.__init__(self, climate.channel, climate.parent)
         climate.parent.register_parser_entity(self)
 
 
-class MtsHoldAction(MLConfigSelect):
+class MtsHoldAction(SelectParser):
 
     if TYPE_CHECKING:
-        number_time: MLConfigNumber
+        number_time: ParserNumber
 
     ENTITY_KEY = "hold action"
     ns = mn_t.Appliance_Control_Thermostat_HoldAction
@@ -298,20 +296,20 @@ class MtsHoldAction(MLConfigSelect):
     __slots__ = ("number_time",)
 
     def __init__(self, climate: "MtsThermostatClimate", /):
-        MLConfigSelect.__init__(self, climate.channel, climate.parent)
+        SelectParser.__init__(self, climate.channel, climate.parent)
         climate.parent.register_parser_entity(self)
-        self.number_time = MLConfigNumber(
+        self.number_time = ParserNumber(
             climate.channel,
             climate.parent,
             entity_key="hold_action_time",
             device_scale=1,
-            device_class=MLConfigNumber.DEVICE_CLASS_DURATION,
+            device_class=ParserNumber.DEVICE_CLASS_DURATION,
             native_unit_of_measurement=mlc.hac.UnitOfTime.MINUTES,
         )
         self.number_time.async_request_value = self._async_request_value_number_time
 
     def shutdown(self):
-        MLConfigSelect.shutdown(self)
+        SelectParser.shutdown(self)
         del self.number_time
 
     # interface: self
@@ -331,7 +329,7 @@ class MtsHoldAction(MLConfigSelect):
         )
 
 
-class MtsTempUnit(MLConfigSelect):
+class MtsTempUnit(SelectParser):
 
     ENTITY_KEY = "display_temperature_unit"
     ns = mn.Appliance_Control_TempUnit
@@ -343,7 +341,7 @@ class MtsTempUnit(MLConfigSelect):
     }
 
     def __init__(self, climate: "MtsThermostatClimate", /):
-        MLConfigSelect.__init__(self, climate.channel, climate.parent)
+        SelectParser.__init__(self, climate.channel, climate.parent)
         climate.parent.register_parser_entity(self)
 
 
@@ -395,7 +393,7 @@ class MtsThermostatClimate(MtsClimate):
 
         ns = mn_t.Appliance_Control_Thermostat_Calibration
 
-        _attr_device_class = MLConfigNumber.DEVICE_CLASS_TEMPERATURE_DELTA
+        _attr_device_class = ParserNumber.DEVICE_CLASS_TEMPERATURE_DELTA
 
         def __init__(self, climate: "MtsThermostatClimate", /):
             self.native_max_value = 8

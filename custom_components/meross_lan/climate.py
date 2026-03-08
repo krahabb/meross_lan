@@ -1,6 +1,6 @@
 import enum
 from functools import cached_property
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from homeassistant.components import climate, sensor
 from homeassistant.core import CoreState, callback
@@ -10,10 +10,10 @@ from homeassistant.util.unit_conversion import TemperatureConverter
 from .calendar import MtsSchedule
 from .const import hac
 from .helpers import reverse_lookup
-from .helpers.entity import MLEntity
-from .number import MLConfigNumber
-from .select import MLSelect
-from .sensor import MLTemperatureSensor
+from .helpers.entity import ParserEntity
+from .number import ParserNumber
+from .select import SelectEntity
+from .sensor import TemperatureSensor
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final, Unpack
@@ -29,10 +29,12 @@ if TYPE_CHECKING:
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    MLEntity.platform_setup_entry(hass, config_entry, async_add_devices, climate.DOMAIN)
+    ParserEntity.platform_setup_entry(
+        hass, config_entry, async_add_devices, climate.DOMAIN
+    )
 
 
-class MtsClimate(MLEntity, climate.ClimateEntity):
+class MtsClimate(ParserEntity, climate.ClimateEntity):
 
     class Preset(enum.StrEnum):
         CUSTOM = "custom"
@@ -41,21 +43,21 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
         AWAY = "away"
         AUTO = "auto"
 
-    class AdjustNumber(MLConfigNumber):
+    class AdjustNumber(ParserNumber):
 
         _attr_name = "Calibration"
-        _attr_device_class = MLConfigNumber.DEVICE_CLASS_TEMPERATURE_DELTA
+        _attr_device_class = ParserNumber.DEVICE_CLASS_TEMPERATURE_DELTA
 
         def __init__(self, climate: "MtsClimate", /):
-            MLConfigNumber.__init__(self, climate.channel, climate.parent)
+            ParserNumber.__init__(self, climate.channel, climate.parent)
 
-    class SetPointNumber(MLConfigNumber):
+    class SetPointNumber(ParserNumber):
         """
         Helper entity to configure MTS100/150/200 setpoints
         AKA: Heat(comfort) - Cool(sleep) - Eco(away)
         """
 
-        _attr_device_class = MLConfigNumber.DeviceClass.TEMPERATURE
+        _attr_device_class = ParserNumber.DeviceClass.TEMPERATURE
 
         __slots__ = (
             "climate",
@@ -69,7 +71,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
             self.key_value = climate.MTS_MODE_TO_TEMPERATUREKEY_MAP[
                 reverse_lookup(climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
             ]
-            MLConfigNumber.__init__(
+            ParserNumber.__init__(
                 self,
                 climate.channel,
                 climate.parent,
@@ -105,7 +107,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
 
         pass
 
-    class TrackSensorSelect(MLSelect):
+    class TrackSensorSelect(SelectEntity):
         """
         A select entity used to select among all temperature sensors in HA
         an entity to track so that the thermostat regulates T against
@@ -146,12 +148,13 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
             self._track_last_epoch = 0
             super().__init__(climate.channel, climate.parent)
 
-        # interface: MLEntity
+        @override
         async def async_shutdown(self):
             self._tracking_stop()
             await super().async_shutdown()
             del self.climate
 
+        @override
         def set_unavailable(self):
             self.cancel_callback(self._track)
 
@@ -186,6 +189,7 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
             await super().async_will_remove_from_hass()
 
         # interface: SelectEntity
+        @override
         async def async_select_option(self, option: str):
             self.update_option(option)
             self._tracking_start()
@@ -393,11 +397,11 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
         parent: Final[BaseDevice]  # type: ignore[override]
         channel: Final[ChannelType]  # type: ignore[override]
 
-        number_adjust_temperature: Final[MLConfigNumber]
+        number_adjust_temperature: Final[ParserNumber]
         number_preset_temperature: Final[dict[str, "MtsClimate.SetPointNumber"]]
         schedule: Final[MtsSchedule]
         select_track_sensor: Final[TrackSensorSelect]
-        sensor_current_temperature: Final[MLTemperatureSensor]
+        sensor_current_temperature: Final[TemperatureSensor]
         _mts_active: bool | int
         _mts_mode: int
         _mts_onoff: int
@@ -509,11 +513,10 @@ class MtsClimate(MLEntity, climate.ClimateEntity):
                 )
         self.schedule = self.__class__.Schedule(self)
         self.select_track_sensor = MtsClimate.TrackSensorSelect(self)
-        self.sensor_current_temperature = MLTemperatureSensor(
+        self.sensor_current_temperature = TemperatureSensor(
             channel, parent, entity_registry_enabled_default=False
         )
 
-    # interface: MLEntity
     def shutdown(self):
         super().shutdown()
         del self.sensor_current_temperature  # type: ignore

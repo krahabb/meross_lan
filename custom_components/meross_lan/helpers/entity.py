@@ -13,11 +13,11 @@ try:
 except ImportError:
     get_last_state_changes = None
 
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity
 
 from ..merossclient.device import parser
-from ..merossclient.protocol import MerossError, const as mc, namespaces as mn
+from ..merossclient.logging import Loggable
+from ..merossclient.protocol import const as mc, namespaces as mn
 from .namespaces import NamespaceHandler
 
 if TYPE_CHECKING:
@@ -45,20 +45,18 @@ if TYPE_CHECKING:
     type ChannelType = PayloadIndexType
 
 
-class MLEntity(parser.NamespaceValue, entity.Entity if TYPE_CHECKING else object):
+class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
     """
     Mixin style base class for all of the entity platform(s)
     This class must prepend the HA entity class in our custom
-    entity classe definitions like:
-    from homeassistant.components.switch import Switch
-    class MyCustomSwitch(MLEntity, Switch)
+    entity class definitions.
     """
 
     if TYPE_CHECKING:
 
         type StateCallback = Callable[[], Any]
 
-        class Args(TypedDict):
+        class Args(Loggable.Args):
             entity_key: NotRequired[str | None]
             name: NotRequired[str | None]
             translation_key: NotRequired[str]
@@ -66,33 +64,19 @@ class MLEntity(parser.NamespaceValue, entity.Entity if TYPE_CHECKING else object
             device_entry: NotRequired[DeviceEntry | None]
             entity_category: NotRequired[entity.EntityCategory | None]
             entity_registry_enabled_default: NotRequired[bool]
-            device_value: NotRequired[Any]
 
         EntityCategory: Final
 
         PLATFORM: ClassVar[str]
         ENTITY_KEY: ClassVar[str | None]
 
-        NS_CHANNELS: ClassVar[tuple[int, ...] | None]
-        """
-        This is related to NamespaceHandler registration. For entity classes where we know
-        the ns exposes fixed channel layouts (i.e. PhysicalLock) which are not exposed in any digest key
-        we can set this to (0,) or more funny presets so that namespace initialization will also
-        automatically build the needed entity(ies).
-        Setting to None means 'scan digests for channels'.
-        This is actually not mandatory though since only used for NamespaceHandler.register_entity_class.
-        """
-        NS_CHANNELS_SINGLE: Final[tuple[int, ...]]
-        """Preset singleton for entities to be configured with a single channel in 0."""
-
-        is_diagnostic: ClassVar[bool]
+        is_diagnostic: ClassVar[bool]  # TODO: type uppercase
         """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
 
         parent: Final[EntityManager]  # type: ignore[override]
-        handler_ns: NamespaceHandler  # override NamespaceParser typing
-
-        _parse_togglex: Callable[[JsonDict], Any]
-
+        channel: (
+            ChannelType | None
+        )  # TODO: maybe remove since it might only be relevant in ParserEntity
         entitykey: Final[str | None]
         # used to speed-up checks if entity is enabled and loaded
         hass_connected: Final[bool]  # public ReadOnly attribute
@@ -123,16 +107,13 @@ class MLEntity(parser.NamespaceValue, entity.Entity if TYPE_CHECKING else object
     EntityCategory = entity.EntityCategory
 
     ENTITY_KEY = None
-    NS_CHANNELS = None  # scan digests for channels
-    NS_CHANNELS_SINGLE = (0,)
-
     is_diagnostic = False
 
     # HA core entity attributes:
     force_update = False
     _attr_has_entity_name = True
     should_poll = False
-    _attr_available = False
+    _attr_available = False  # TODO: review the availability mechanics
     _attr_device_class = None
     _attr_entity_registry_enabled_default = True
     assumed_state = False
@@ -141,7 +122,7 @@ class MLEntity(parser.NamespaceValue, entity.Entity if TYPE_CHECKING else object
     icon = None
     translation_key = None
 
-    __slots__ = parser.NamespaceValue._calc_slots(
+    __slots__ = Loggable._calc_slots(
         # meross_lan managed attributes
         "entitykey",
         "hass_connected",
@@ -247,7 +228,7 @@ class MLEntity(parser.NamespaceValue, entity.Entity if TYPE_CHECKING else object
             pass
         del self.parent.entities[self.id]
 
-    # interface: Entity
+    # interface: entity.Entity
     @cached_property
     def unique_id(self) -> str | None:
         return self.parent.generate_unique_id(self)
@@ -287,18 +268,6 @@ class MLEntity(parser.NamespaceValue, entity.Entity if TYPE_CHECKING else object
         else:
             self.cancel_callback(self.flush_state)
 
-    def set_available(self):
-        self.available = True
-        # we don't flush here since we'll wait for actual device readings
-
-    def set_unavailable(self):
-        if self._attr_available:
-            return  # this entity is always available, no need to set unavailable
-        self.available = False
-        self.ns_payload = mn.EMPTY_DICT
-        self.device_value = None
-        self.flush_state()
-
     async def get_last_state_available(self):
         """
         Recover the last known good state from recorder in order to
@@ -328,6 +297,23 @@ class MLEntity(parser.NamespaceValue, entity.Entity if TYPE_CHECKING else object
                     return state
         return None
 
+    def set_available(self):
+        if self._attr_available:
+            return  # this entity is always available, no need to flush
+        self.available = True
+        self.flush_state()
+
+    def set_unavailable(self):
+        if self._attr_available:
+            return  # this entity is always available, no need to flush
+        self.available = False
+        self.flush_state()
+
+    def update_device_value(self, device_value, /) -> bool | None:
+        raise NotImplementedError(
+            "update_device_value must be implemented by subclasses if used in parsing scheme"
+        )
+
     @staticmethod
     def platform_setup_entry(
         hass,
@@ -340,15 +326,7 @@ class MLEntity(parser.NamespaceValue, entity.Entity if TYPE_CHECKING else object
         manager.platforms[platform] = async_add_devices
         async_add_devices(manager.managed_entities(platform))
 
-    @classmethod
-    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        """Helper to register a specialized entity class to the proper namespace.
-        This is going to be used on Device initialization fo various entities sharing
-        common semantics in namespace parsing/handling."""
-        assert ns is cls.ns
-        NamespaceHandler(ns, device).register_entity_class(cls, cls.NS_CHANNELS)
-
-    class EntityDef[_T: MLEntity]:
+    class EntityDef[_T: Entity]:
         """Descriptor class used when populating maps used to dynamically instantiate (sensor)
         entities based on their appearance in a payload key."""
 
@@ -357,7 +335,7 @@ class MLEntity(parser.NamespaceValue, entity.Entity if TYPE_CHECKING else object
 
         __slots__ = ("type", "kwargs")
 
-        def __init__(self, type: "type[_T]", **kwargs: "Unpack[MLEntity.Args]"):
+        def __init__(self, type: "type[_T]", **kwargs: "Unpack[Entity.Args]"):
             self.type = type
             self.kwargs = kwargs
 
@@ -365,42 +343,126 @@ class MLEntity(parser.NamespaceValue, entity.Entity if TYPE_CHECKING else object
     def ENTITY_DEF(
         cls,
         **kwargs: "Unpack[Args]",
-    ) -> "MLEntity.EntityDef[Self]":
-        return MLEntity.EntityDef["Self"](cls, **kwargs)
+    ) -> "Entity.EntityDef[Self]":
+        return Entity.EntityDef["Self"](cls, **kwargs)
 
-    class PartialAvailableMixin:
+
+class ParserEntity(parser.NamespaceParser, Entity):
+    """Base class for entities directly linked to a device and not to a namespace.
+    This is actually not used that much since most of the entities are linked to namespaces but it can be useful
+    for some 'general' entities like 'DeviceInfo' or so."""
+
+    if TYPE_CHECKING:
+        parent: Final[BaseDevice]  # type: ignore[override]
+        handler_ns: NamespaceHandler  # override
+
+        class Args(Entity.Args):
+            device_value: NotRequired[Any]
+
+        NS_CHANNELS: ClassVar[tuple[int, ...] | None]
         """
-        Mixin class for entities which should be available when device is connected
-        but their state needs to be preserved since they're representing a state not directly
-        carried by the device ('emulated' configuration params like MLEmulatedNumber or so).
+        This is related to NamespaceHandler registration. For entity classes where we know
+        the ns exposes fixed channel layouts (i.e. PhysicalLock) which are not exposed in any digest key
+        we can set this to (0,) or more funny presets so that namespace initialization will also
+        automatically build the needed entity(ies).
+        Setting to None means 'scan digests for channels'.
+        This is actually not mandatory though since only used for NamespaceHandler.register_entity_class.
         """
+        NS_CHANNELS_SINGLE: Final[tuple[int, ...]]
+        """Preset singleton for entities to be configured with a single channel in 0."""
 
-        if TYPE_CHECKING:
-
-            def flush_state(self): ...
-
-        def set_available(self):
-            self.available = True
-            self.flush_state()
-
-        def set_unavailable(self):
-            self.available = False
-            self.flush_state()
+        _parse_togglex: Callable[[JsonDict], Any]
 
     NamespaceValue = parser.NamespaceValue
     NamespaceGroupValue = parser.NamespaceGroupValue
 
+    NS_CHANNELS = None  # scan digests for channels
+    NS_CHANNELS_SINGLE = (0,)
 
-class MLBinaryEntity(parser.NamespaceBoolean, MLEntity):
-    """Partially abstract common base class for ToggleEntity and BinarySensor.
-    The initializer is skipped."""
+    # __slots__ = parser.NamespaceParser._calc_slots()
+
+    # TODO: add constructor with register_parser_entity ?
+
+    @override
+    def set_available(self):
+        self.available = True
+        # we don't flush here since we'll wait for actual device readings
+
+    @override
+    def set_unavailable(self):
+        self.available = False
+        self.ns_payload = mn.EMPTY_DICT
+        self.flush_state()
+
+    @classmethod
+    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
+        """Helper to register a specialized entity class to the proper namespace.
+        This is going to be used on Device initialization fo various entities sharing
+        common semantics in namespace parsing/handling."""
+        assert ns is cls.ns
+        NamespaceHandler(ns, device).register_entity_class(cls, cls.NS_CHANNELS)
+
+
+class ValueParser(parser.NamespaceValue, ParserEntity):
+    """Specialization for 'simple' parser entities where the HA entity state is a function
+    of a single data point in the json ns payload. This provides a common implementation
+    for setting the value (using parser.NamespaceValue.async_request_value) and for parsing the
+    value from the payload (using parser.NamespaceValue.update_device_value).
+    Examples of such entities are sensors/numbers, binary_sensors/switches."""
 
     if TYPE_CHECKING:
 
-        class Args(MLEntity.Args):
-            pass
+        class Args(ParserEntity.Args):
+            key_value: NotRequired[str]
+            device_value: NotRequired[Any]
 
-    __slots__ = ("is_on",)
+    def __init__(
+        self,
+        channel: "ChannelType | None",
+        parent: "BaseDevice",
+        /,
+        **kwargs: "Unpack[Args]",
+    ):
+        try:
+            # set instance attribute if provided else this should fallback to class attribute
+            self.key_value = kwargs["key_value"]  # type: ignore
+        except KeyError:
+            pass
+        self.device_value = kwargs.pop("device_value", None)
+        super().__init__(channel, parent, **kwargs)
+
+    def set_unavailable(self):
+        self.device_value = None
+        super().set_unavailable()
+
+    @override
+    def update_device_value(self, device_value, /) -> bool | None:
+        if super().update_device_value(device_value):
+            self.flush_state()
+
+
+class NumericEntity(Entity):
+    """Common base class for sensors and numbers."""
+
+    if TYPE_CHECKING:
+
+        class Args(Entity.Args):
+            native_value: NotRequired[int | float]
+            native_unit_of_measurement: NotRequired[str]
+
+        DEVICECLASS_TO_UNIT_MAP: ClassVar[dict[Any | None, str | None]]
+
+        # HA core entity attributes:
+        _attr_native_unit_of_measurement: ClassVar[str | None]
+        native_value: int | float | None
+        native_unit_of_measurement: str | None
+
+    _attr_native_unit_of_measurement = None
+
+    __slots__ = (
+        "native_value",
+        "native_unit_of_measurement",
+    )
 
     def __init__(
         self,
@@ -409,16 +471,121 @@ class MLBinaryEntity(parser.NamespaceBoolean, MLEntity):
         /,
         **kwargs: "Unpack[Args]",
     ):
+        self.native_value = kwargs.get("native_value", None)
+        try:
+            self.native_unit_of_measurement = kwargs["native_unit_of_measurement"]  # type: ignore
+        except KeyError:
+            self.native_unit_of_measurement = (
+                self._attr_native_unit_of_measurement
+                or self.DEVICECLASS_TO_UNIT_MAP.get(
+                    kwargs.get("device_class", self._attr_device_class)
+                )
+            )
+        super().__init__(channel, parent, **kwargs)
+
+    def update_native_value(self, native_value: int | float | None, /):
+        if self.native_value != native_value:
+            self.native_value = native_value
+            self.flush_state()
+            return True
+
+
+class NumericParser(ValueParser, NumericEntity):
+    if TYPE_CHECKING:
+
+        class Args(ValueParser.Args, NumericEntity.Args):
+            device_scale: NotRequired[int | float]
+
+        _attr_device_scale: ClassVar[int | float]
+        device_scale: int | float
+        device_value: int | float | None
+
+    _attr_device_scale = 1
+
+    def __init__(
+        self,
+        channel: "ChannelType | None",
+        parent: "BaseDevice",
+        /,
+        **kwargs: "Unpack[Args]",
+    ):
+        self.device_scale = kwargs.pop("device_scale", self._attr_device_scale)
+        try:
+            kwargs["native_value"] = kwargs["device_value"] / self.device_scale  # type: ignore
+        except KeyError:
+            pass
+        super().__init__(channel, parent, **kwargs)
+
+    def set_unavailable(self):
+        # likely useless override...
+        self.native_value = None
+        super().set_unavailable()
+
+    @override
+    def update_device_value(self, device_value: int | float, /):
+        if self.device_value != device_value:
+            self.device_value = device_value
+            self.native_value = device_value / self.device_scale
+            self.flush_state()
+            return True
+
+
+class BinaryEntity(Entity):
+    """Base class for HA binary entities (binary_sensors/toggle_entities)."""
+
+    if TYPE_CHECKING:
+
+        class Args(Entity.Args):
+            is_on: NotRequired[Any]
+
+        is_on: Any
+
+    __slots__ = ("is_on",)
+
+    def __init__(
+        self,
+        channel: "ChannelType | None",
+        manager: "EntityManager",
+        /,
+        **kwargs: "Unpack[Args]",
+    ):
+        self.is_on = kwargs.pop("is_on", None)
+        super().__init__(channel, manager, **kwargs)
+
+    def update_boolean_value(self, is_on: "Any", /) -> bool | None:
+        if self.is_on != is_on:
+            self.is_on = is_on
+            self.flush_state()
+            return True
+
+
+class BinaryParser(parser.NamespaceBoolean, ValueParser, BinaryEntity):
+    """Base parsing class for Switches and BinarySensors linked to a namespace."""
+
+    if TYPE_CHECKING:
+
+        class Args(BinaryEntity.Args, ValueParser.Args):
+            pass
+
+    def __init__(
+        self,
+        channel: "ChannelType | None",
+        parent: "BaseDevice",
+        /,
+        **kwargs: "Unpack[Args]",
+    ):
+        # TODO: maybe remove this init code:
+        # This is due for entities which are created after entry setup when device is already loaded
+        # and we want to flush the initial state during HA entry adding (which happens in Entity constructor)
+        # without having to flush twice (UNKNOWN -> device state)
         try:
             match kwargs["device_value"]:  # type: ignore
                 case self.native_on:
-                    self.is_on = True
+                    kwargs["is_on"] = True
                 case self.native_off:
-                    self.is_on = False
-                case _:
-                    self.is_on = None
+                    kwargs["is_on"] = False
         except KeyError:
-            self.is_on = None
+            pass
         super().__init__(channel, parent, **kwargs)
 
     def set_unavailable(self):
@@ -429,32 +596,19 @@ class MLBinaryEntity(parser.NamespaceBoolean, MLEntity):
     def update_device_value(self, device_value, /) -> bool | None:
         """Default parsing for toggles and binary sensors. Set the proper
         key_value in class/instance definition to make it work."""
-        if self.device_value != device_value:
-            self.device_value = device_value
-            match device_value:
-                case self.native_on:
-                    return self.update_boolean_value(True)
-                case self.native_off:
-                    return self.update_boolean_value(False)
-                case _:
-                    return self.update_boolean_value(None)
-
-    def update_boolean_value(self, is_on: bool | None) -> bool | None:
-        if self.is_on != is_on:
-            self.is_on = is_on
+        if super().update_device_value(device_value):
             self.flush_state()
-            return True
 
 
-class MLToggleXEntity(MLBinaryEntity):
-    """Special binary entity linked to Appliance.Control.ToggleX namespace.
-    This is a slight modification of generic MLBinaryEntity and is especially suited as a mixin class
-    for more complex entities (MLFan, MLLight) which should be toggled by the ToggleX namespace
-    instead of their main specific one."""
+class ToggleXParser(BinaryEntity, ParserEntity):
+    """Special parser entity which is also linked to Appliance.Control.ToggleX namespace.
+    This is intended to add Appliance.Control.ToggleX namespace handling/parsing
+    to entities which are represented in HA as more sophisticated entities than simple toggles
+    (like Fan-Light)."""
 
     if TYPE_CHECKING:
 
-        class Args(MLBinaryEntity.Args):
+        class Args(BinaryEntity.Args, ParserEntity.Args):
             pass
 
         parent: Final[Device]  # type: ignore[override]
@@ -467,85 +621,10 @@ class MLToggleXEntity(MLBinaryEntity):
         self.handler_togglex = parent.register_togglex_channel(self, True)
 
     def _parse_togglex(self, payload: dict, /):
-        self.update_boolean_value(payload[mc.KEY_ONOFF] == 1)
+        self.update_boolean_value(payload[mc.KEY_ONOFF])
 
 
-class MLNumericEntity(MLEntity):
-    """Common base class for (numeric) sensors and numbers."""
-
-    if TYPE_CHECKING:
-
-        class Args(MLEntity.Args):
-            device_value: NotRequired[int | float]
-            device_scale: NotRequired[int | float]
-            native_unit_of_measurement: NotRequired[str]
-
-        DEVICECLASS_TO_UNIT_MAP: ClassVar[dict[Any | None, str | None]]
-
-        _attr_device_scale: ClassVar[int | float]
-        device_scale: int | float
-        device_value: int | float | None
-        """The 'native' device value carried in protocol messages."""
-
-        # HA core entity attributes:
-        native_value: int | float | None
-        _attr_native_unit_of_measurement: ClassVar[str | None]
-        native_unit_of_measurement: str | None
-
-    """To be init in derived classes with their DeviceClass own types."""
-    _attr_device_scale = 1
-    _attr_native_unit_of_measurement = None
-
-    __slots__ = (
-        "device_scale",
-        "native_value",
-        "native_unit_of_measurement",
-    )
-
-    def __init__(
-        self,
-        channel: "ChannelType | None",
-        parent: "EntityManager",
-        /,
-        **kwargs: "Unpack[Args]",
-    ):
-        self.device_scale = kwargs.pop("device_scale", self._attr_device_scale)
-        try:
-            self.native_value = kwargs["device_value"] / self.device_scale  # type: ignore
-        except KeyError:
-            self.native_value = None
-        try:
-            self.native_unit_of_measurement = kwargs["native_unit_of_measurement"]  # type: ignore
-        except KeyError:
-            self.native_unit_of_measurement = (
-                self._attr_native_unit_of_measurement
-                or self.DEVICECLASS_TO_UNIT_MAP.get(
-                    kwargs.get("device_class", self._attr_device_class)
-                )
-            )
-
-        super().__init__(channel, parent, **kwargs)
-
-    def set_unavailable(self):
-        self.native_value = None
-        super().set_unavailable()
-
-    @override
-    def update_device_value(self, device_value: int | float, /):
-        if self.device_value != device_value:
-            self.device_value = device_value
-            self.native_value = device_value / self.device_scale
-            self.flush_state()
-            return True
-
-    def update_native_value(self, native_value: int | float | None, /):
-        if self.native_value != native_value:
-            self.native_value = native_value
-            self.flush_state()
-            return True
-
-
-class EntityNamespaceMixin(NamespaceHandler, MLEntity):
+class EntityNamespaceMixin(NamespaceHandler, ParserEntity):
     """
     Special 'polling enabler/disabler' mixin used with entities which are
     'single instance' for a namespace handler and so they'll disable polling

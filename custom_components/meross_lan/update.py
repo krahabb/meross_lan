@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 from homeassistant.components import update
 from homeassistant.exceptions import HomeAssistantError
 
-from .helpers.entity import MLEntity
+from .helpers.entity import Entity
 from .merossclient.protocol import namespaces as mn
 
 if TYPE_CHECKING:
@@ -13,13 +13,13 @@ if TYPE_CHECKING:
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
-    MLEntity.platform_setup_entry(hass, config_entry, async_add_devices, update.DOMAIN)
+    Entity.platform_setup_entry(hass, config_entry, async_add_devices, update.DOMAIN)
 
 
-class MLUpdate(MLEntity.PartialAvailableMixin, MLEntity, update.UpdateEntity):
+class UpdateEntity(Entity, update.UpdateEntity):
     if TYPE_CHECKING:
 
-        class Args(MLEntity.Args):
+        class Args(Entity.Args):
             device_class: NotRequired[update.UpdateDeviceClass | None]
 
         parent: Final[BaseDevice]  # type: ignore[override]
@@ -36,9 +36,10 @@ class MLUpdate(MLEntity.PartialAvailableMixin, MLEntity, update.UpdateEntity):
     ENTITY_KEY = "firmware_update"
 
     # HA core entity attributes:
+    _attr_available = False
     _attr_device_class = DeviceClass.FIRMWARE
     _attr_supported_features = update.UpdateEntityFeature.INSTALL
-    entity_category = MLEntity.EntityCategory.DIAGNOSTIC
+    entity_category = Entity.EntityCategory.DIAGNOSTIC
 
     __slots__ = (
         "installed_version",

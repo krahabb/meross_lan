@@ -55,7 +55,7 @@ if TYPE_CHECKING:
     from ..merossclient.protocol.message import MerossMessage
     from ..merossclient.protocol.types import MerossPayloadType
     from .component_api import ComponentApi
-    from .entity import MLEntity
+    from .entity import Entity
 
 OBFUSCATE_KEYS |= {
     # ConfigEntries keys
@@ -73,7 +73,7 @@ OBFUSCATE_KEYS |= {
 class EntityManager(logging.Loggable):
     """
     This is an abstraction of an actual (device or other) container
-    for MLEntity(s). This container is very 'hybrid', end its main purpose
+    for Entity(s). This container is very 'hybrid', end its main purpose
     is to provide interfaces to their owned MerossEntities.
     It could represent a Device, a SubDevice or an ApiProfile
     and manages the relation(s) with the ConfigEntry (config, life-cycle).
@@ -100,7 +100,7 @@ class EntityManager(logging.Loggable):
         """Link to optional DeviceRegistry entry info."""
 
         platforms: PlatformsType  # init in derived
-        entities: Final[dict[object, MLEntity]]
+        entities: Final[dict[object, Entity]]
 
         class Args(logging.Loggable.Args):
             device_entry: NotRequired[dr.DeviceEntry | None]
@@ -145,7 +145,7 @@ class EntityManager(logging.Loggable):
             entity for entity in self.entities.values() if entity.PLATFORM is platform
         ]
 
-    def generate_unique_id(self, entity: "MLEntity", /):
+    def generate_unique_id(self, entity: "Entity", /):
         """
         flexible policy in order to generate unique_ids for entities:
         This is an helper needed to better control migrations in code

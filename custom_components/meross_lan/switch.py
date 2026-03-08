@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, override
 from homeassistant.components import switch
 
 from .const import hac
-from .helpers.entity import EntityNamespaceMixin, MLBinaryEntity
+from .helpers import entity as mle
 from .merossclient import extract_dict_payloads
 from .merossclient.protocol import const as mc, namespaces as mn
 
@@ -20,21 +20,17 @@ if TYPE_CHECKING:
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    MLBinaryEntity.platform_setup_entry(
+    mle.Entity.platform_setup_entry(
         hass, config_entry, async_add_devices, switch.DOMAIN
     )
 
 
-class MLSwitch(MLBinaryEntity, switch.SwitchEntity):
-    """
-    Generic switch entity for meross_lan devices.
-    This class is 'ready to use' for most of the devices toggleable features.
-    It just need to be configured and linked to a proper ns/channel/key_value in order to work.
-    """
+class SwitchEntity(mle.BinaryEntity, switch.SwitchEntity):
+    """ """
 
     if TYPE_CHECKING:
 
-        class Args(MLBinaryEntity.Args):
+        class Args(mle.BinaryEntity.Args):
             device_class: NotRequired[switch.SwitchDeviceClass | None]
 
         # HA core entity attributes:
@@ -45,10 +41,10 @@ class MLSwitch(MLBinaryEntity, switch.SwitchEntity):
 
     # HA core entity attributes:
     _attr_device_class = switch.SwitchDeviceClass.SWITCH
-    entity_category = MLBinaryEntity.EntityCategory.CONFIG
+    entity_category = mle.BinaryEntity.EntityCategory.CONFIG
 
 
-class MLEmulatedSwitch(MLSwitch.PartialAvailableMixin, MLSwitch):
+class EmulatedSwitch(SwitchEntity):
     """
     Switch entity not related to any device feature but used to configure
     behaviors for meross_lan entities.
@@ -69,28 +65,37 @@ class MLEmulatedSwitch(MLSwitch.PartialAvailableMixin, MLSwitch):
         self.update_boolean_value(False)
 
 
-class PhysicalLockSwitch(MLSwitch):
+class SwitchParser(mle.BinaryParser, SwitchEntity):
+    """Generic switch entity for meross_lan devices.
+    This class is 'ready to use' for most of the devices toggleable features.
+    It just need to be configured and linked to a proper ns/channel/key_value in order to work.
+    """
+
+    pass
+
+
+class PhysicalLockSwitch(SwitchParser):
 
     ENTITY_KEY = mc.KEY_LOCK
     ns = mn.Appliance_Control_PhysicalLock
-    NS_CHANNELS = MLSwitch.NS_CHANNELS_SINGLE
+    NS_CHANNELS = SwitchParser.NS_CHANNELS_SINGLE
 
     def __init__(self, channel: int, device: "Device", /):
-        MLSwitch.__init__(self, channel, device)
+        SwitchParser.__init__(self, channel, device)
         device.register_parser_entity(self)
 
 
-class MLToggle(EntityNamespaceMixin, MLSwitch):
+class ToggleSwitch(mle.EntityNamespaceMixin, SwitchParser):
 
     DEFAULT_CONFIG = (
         0,
         0,
-        EntityNamespaceMixin.async_poll_default,
+        mle.EntityNamespaceMixin.async_poll_default,
     )
     ENTITY_KEY = "0"  # used to keep unique_id compatibility with legacy versions
     ns = mn.Appliance_Control_Toggle
     # HA core entity attributes:
-    _attr_device_class = MLSwitch.DeviceClass.OUTLET
+    _attr_device_class = SwitchEntity.DeviceClass.OUTLET
     entity_category = None
 
 
@@ -98,20 +103,20 @@ def digest_init_toggle(
     device: "Device", digest: "JsonDict", /
 ) -> "Device.DigestInitReturnType":
     """{"onoff": 0, "lmTime": 1645391086}"""
-    toggle = MLToggle.namespace_init(mn.Appliance_Control_Toggle, device)
+    toggle = ToggleSwitch.namespace_init(mn.Appliance_Control_Toggle, device)
     return toggle._parse, (toggle.handler_ns,)
 
 
-class MLToggleX(MLSwitch):
+class ToggleXSwitch(SwitchParser):
 
     ns = mn.Appliance_Control_ToggleX
 
     # HA core entity attributes:
-    _attr_device_class = MLSwitch.DeviceClass.OUTLET
+    _attr_device_class = SwitchEntity.DeviceClass.OUTLET
     entity_category = None
 
     def __init__(self, channel: int, device: "Device", /):
-        MLSwitch.__init__(self, channel, device)
+        SwitchParser.__init__(self, channel, device)
         device.register_parser_entity(self)
 
 
@@ -120,14 +125,14 @@ def digest_init_togglex(
 ) -> "Device.DigestInitReturnType":
     # We don't initialize every switch/ToggleX here since the digest reported channels
     # might be mapped to more specialized entities:
-    # this is true for lights (MLLight), garageDoor (MLGarage) and fan (MLFan) though
+    # this is true for lights, garageDoor and fan though
     # and maybe some more others.
     # In general, it is not very clear how and when these ToggleX entities are really needed
     # so we have some euristics in place to fix 'this and that'.
     # The general rule is to let the togglex namespace/channel be managed by the
     # aforementioned specialized entity, while, if no channel match exists, create a disabled
     # (by default) switch entity. When  switches are really switches (like mssXXX series) instead,
-    # we'll setup proper MLToggleX (this is detected by the fact no specialized entity exists in
+    # we'll setup proper ToggleXSwitch (this is detected by the fact no specialized entity exists in
     # device definition)
 
     channels = {togglex[mc.KEY_CHANNEL] for togglex in togglex_digest}
@@ -152,7 +157,7 @@ def digest_init_togglex(
             pass
 
     handler = device.get_handler(mn.Appliance_Control_ToggleX)
-    handler.register_entity_class(MLToggleX, channels)
+    handler.register_entity_class(ToggleXSwitch, channels)
     if device.descriptor.is_refoss:
         handler.polling_request = mn.PayloadType.DICT_IDX_65535.build_get(handler.id)
     return handler.parse_list, (handler,)

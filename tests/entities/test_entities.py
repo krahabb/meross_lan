@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 from homeassistant.helpers.entity import STATE_UNAVAILABLE
 
 from custom_components.meross_lan.devices.hub import HubMixin
+from custom_components.meross_lan.helpers.entity import ParserEntity
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
@@ -107,7 +108,7 @@ async def test_entities(
     in order to try cover all of the entities features. For each entity platform
     the test code is defined in the respective module.
     # TODO!! add expectancy for enabled/disabled entities
-    # TODO add expected MLGarageTimeoutBinarySensor for MLGarage (and maybe some others in garageConfig)
+    # TODO add expected GarageTimeoutBinarySensor for GarageDoor (and maybe some others in garageConfig)
     """
     EntityComponentTest.hass = hass
     EntityComponentTest.hass_states = hass.states
@@ -158,14 +159,18 @@ async def test_entities(
                 if ns in ability:
                     if ns.indexed and ns.key_idx == mc.KEY_CHANNEL:
                         for entity_type in entity_types:
-                            _add_func(
-                                [entity_type]
-                                * (
-                                    len(descriptor.channels)
-                                    if entity_type.NS_CHANNELS is None
-                                    else len(entity_type.NS_CHANNELS)
+                            if issubclass(entity_type, ParserEntity):
+                                _add_func(
+                                    [entity_type]
+                                    * (
+                                        len(descriptor.channels)
+                                        if entity_type.NS_CHANNELS is None
+                                        else len(entity_type.NS_CHANNELS)
+                                    )
                                 )
-                            )
+                            else:
+                                _add_func([entity_type] * (len(descriptor.channels)))
+                                _add_func(entity_types)
                     else:
                         _add_func(entity_types)
             if ishub:

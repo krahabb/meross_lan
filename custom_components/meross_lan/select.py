@@ -1,9 +1,8 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from homeassistant.components import select
 
-from .helpers import reverse_lookup
-from .helpers.entity import MLEntity
+from .helpers import entity as mle, reverse_lookup
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar, Final, Unpack
@@ -19,12 +18,14 @@ if TYPE_CHECKING:
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    MLEntity.platform_setup_entry(hass, config_entry, async_add_devices, select.DOMAIN)
+    mle.Entity.platform_setup_entry(
+        hass, config_entry, async_add_devices, select.DOMAIN
+    )
 
 
-class MLSelect(MLEntity, select.SelectEntity):
+class SelectEntity(mle.Entity, select.SelectEntity):
     """Base 'abstract' class for both select entities representing a
-    device config/option value (through MLConfigSelect) and
+    device config/option value (through ParserSelect) and
     emulated entities used to configure meross_lan (i.e. MtsTrackedSensor).
     Be sure to correctly init current_option and options in any derived class."""
 
@@ -35,7 +36,7 @@ class MLSelect(MLEntity, select.SelectEntity):
         current_option: str | None
         options: list[str]
 
-    entity_category = MLEntity.EntityCategory.CONFIG
+    entity_category = mle.Entity.EntityCategory.CONFIG
 
     __slots__ = (
         "current_option",
@@ -52,7 +53,7 @@ class MLSelect(MLEntity, select.SelectEntity):
             self.flush_state()
 
 
-class MLConfigSelect(MLSelect):
+class SelectParser(mle.ValueParser, SelectEntity):
     """
     Base class for any configurable 'list-like' parameter in the device.
     The mapping between HA entity select.options (string representation) and
@@ -76,13 +77,14 @@ class MLConfigSelect(MLSelect):
         channel: "ChannelType | None",
         device: "EntityManager",
         /,
-        **kwargs: "Unpack[MLSelect.Args]",
+        **kwargs: "Unpack[SelectEntity.Args]",
     ):
         self.current_option = None
         self.options_map = self.OPTIONS_MAP
         self.options = list(self.options_map.values())
-        MLSelect.__init__(self, channel, device, **kwargs)
+        SelectEntity.__init__(self, channel, device, **kwargs)
 
+    @override
     def update_device_value(self, device_value, /):
         if self.device_value != device_value:
             try:
@@ -96,8 +98,10 @@ class MLConfigSelect(MLSelect):
                 self.update_option(option)
 
             self.device_value = device_value
+            super().update_device_value(device_value)
             return True
 
     # interface: select.SelectEntity
+    @override
     async def async_select_option(self, option: str):
         await self.async_request_value(reverse_lookup(self.options_map, option))

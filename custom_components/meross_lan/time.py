@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components import time
 
-from .helpers.entity import MLEntity
+from .helpers.entity import Entity
 
 if TYPE_CHECKING:
     from typing import Any, NotRequired, Unpack
@@ -12,10 +12,10 @@ if TYPE_CHECKING:
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
-    MLEntity.platform_setup_entry(hass, config_entry, async_add_devices, time.DOMAIN)
+    Entity.platform_setup_entry(hass, config_entry, async_add_devices, time.DOMAIN)
 
 
-class MLTime(MLEntity, time.TimeEntity):
+class TimeEntity(Entity, time.TimeEntity):
     """
     This first implementation was mostly tailored to suit mts300 'fan hold time' feature
     We'll maybe generalize this platform when the need comes.
@@ -25,7 +25,7 @@ class MLTime(MLEntity, time.TimeEntity):
 
     if TYPE_CHECKING:
 
-        class Args(MLEntity.Args):
+        class Args(Entity.Args):
             native_value: NotRequired[dt.time]
             device_scale: NotRequired[int | float]
             device_value_disabled: NotRequired[int]
@@ -41,7 +41,7 @@ class MLTime(MLEntity, time.TimeEntity):
     PLATFORM = time.DOMAIN
 
     # HA core entity attributes:
-    entity_category = MLEntity.EntityCategory.CONFIG
+    entity_category = Entity.EntityCategory.CONFIG
 
     __slots__ = (
         "device_scale",

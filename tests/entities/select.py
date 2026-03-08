@@ -1,13 +1,13 @@
 from homeassistant.components import select as haec
 
-from custom_components.meross_lan import climate, select, siren
-from custom_components.meross_lan.devices.diffuser import MLDiffuserSpray
+from custom_components.meross_lan import climate, siren
+from custom_components.meross_lan.devices.diffuser import DiffuserSpray
 from custom_components.meross_lan.devices.ms600 import (
     PresenceConfigMode,
     PresenceConfigModeBase,
     PresenceConfigSensitivity,
 )
-from custom_components.meross_lan.devices.spray import MLSpray
+from custom_components.meross_lan.devices.spray import Spray
 from custom_components.meross_lan.devices.thermostat import (
     MtsHoldAction,
     MtsTempUnit,
@@ -29,11 +29,11 @@ class EntityTest(EntityComponentTest):
             mc.KEY_MODE: [climate.MtsClimate.TrackSensorSelect],
             mc.KEY_MODEB: [climate.MtsClimate.TrackSensorSelect],
         },
-        mc.KEY_SPRAY: [MLSpray],
-        mc.KEY_DIFFUSER: {mc.KEY_SPRAY: [MLDiffuserSpray]},
+        mc.KEY_SPRAY: [Spray],
+        mc.KEY_DIFFUSER: {mc.KEY_SPRAY: [DiffuserSpray]},
     }
     NAMESPACES_ENTITIES = {
-        mn.Appliance_Config_Alarm: [siren.MLSiren.SongSelect],
+        mn.Appliance_Config_Alarm: [siren.Siren.SongSelect],
         mn.Appliance_Config_Sensor_Association: [Mts300Climate.SensorAssociationSelect],
         mn.Appliance_Control_TempUnit: [MtsTempUnit],
         mn.Appliance_Control_Presence_Config: [
@@ -50,14 +50,14 @@ class EntityTest(EntityComponentTest):
         mc.TYPE_MTS150: [climate.MtsClimate.TrackSensorSelect],
     }
 
-    async def async_test_enabled_callback(self, entity: select.MLSelect):
+    async def async_test_enabled_callback(self, entity: haec.SelectEntity):
         for option in entity.options:
             state = await self.async_service_call(
                 haec.SERVICE_SELECT_OPTION, {haec.ATTR_OPTION: option}
             )
             assert state.state == option
 
-    async def async_test_disabled_callback(self, entity: select.MLSelect):
+    async def async_test_disabled_callback(self, entity: haec.SelectEntity):
         for option in entity.options:
             await entity.async_select_option(option)
             assert entity.state == option

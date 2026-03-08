@@ -14,7 +14,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt
 
 from .helpers import clamp
-from .helpers.entity import MLEntity
+from .helpers.entity import ParserEntity
 from .merossclient.protocol import const as mc
 
 if TYPE_CHECKING:
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    MLEntity.platform_setup_entry(
+    ParserEntity.platform_setup_entry(
         hass, config_entry, async_add_devices, calendar.DOMAIN
     )
 
@@ -94,7 +94,7 @@ class MtsScheduleEntry:
         )
 
 
-class MtsSchedule(MLEntity, calendar.CalendarEntity):
+class MtsSchedule(ParserEntity, calendar.CalendarEntity):
 
     if TYPE_CHECKING:
         parent: Final[BaseDevice]  # type: ignore[override]
@@ -108,7 +108,7 @@ class MtsSchedule(MLEntity, calendar.CalendarEntity):
 
     # HA core entity attributes:
     _attr_name = "Schedule"
-    entity_category = MLEntity.EntityCategory.CONFIG
+    entity_category = ParserEntity.EntityCategory.CONFIG
     supported_features = (
         calendar.CalendarEntityFeature.CREATE_EVENT
         | calendar.CalendarEntityFeature.DELETE_EVENT
@@ -149,7 +149,6 @@ class MtsSchedule(MLEntity, calendar.CalendarEntity):
         super().__init__(climate.channel, climate.parent, entity_key=self.ns.key)
         climate.parent.enable_check_device_time()
 
-    # interface: MLEntity
     def shutdown(self):
         super().shutdown()
         del self.climate  # type: ignore

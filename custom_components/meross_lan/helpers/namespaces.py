@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from ..merossclient.protocol import types as mt
     from ..merossclient.protocol.message import MerossMessage, MerossResponse
     from .device import Device
-    from .entity import MLEntity
+    from .entity import ParserEntity
 
     POLLING_STRATEGY_CONF: Final[dict[mn.Namespace, "NamespaceHandler.ConfigType"]]
 
@@ -19,7 +19,7 @@ class NamespaceHandler(handler.NamespaceHandler):
 
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
-        entity_class: type["MLEntity"] | None
+        entity_class: type["ParserEntity"] | None
 
     DEFAULT_CONFIG = (
         mlc.PARAM_DIAGNOSTIC_UPDATE_PERIOD,
@@ -47,7 +47,7 @@ class NamespaceHandler(handler.NamespaceHandler):
         self.entity_class = None
 
     def register_entity_class(
-        self, entity_class: type["MLEntity"], channels: "Iterable[int] | None", /
+        self, entity_class: type["ParserEntity"], channels: "Iterable[int] | None", /
     ):
         # TODO: rename to parser_class and move to base
         self.entity_class = entity_class
@@ -100,10 +100,10 @@ class NamespaceHandler(handler.NamespaceHandler):
                 channel, self.parent, entity_registry_enabled_default=True
             )
         elif self.parent.create_diagnostic_entities:
-            from ..sensor import MLDiagnosticSensor
+            from ..sensor import DiagnosticSensor
 
             self.register_parser(
-                MLDiagnosticSensor(channel, self.parent, entity_key=self.id.key)
+                DiagnosticSensor(channel, self.parent, entity_key=self.id.key)
             )
         else:
             self.parsers[channel] = self._parse_stub

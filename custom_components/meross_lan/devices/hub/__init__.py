@@ -2,25 +2,25 @@ from functools import cached_property
 from typing import TYPE_CHECKING, override
 
 from ... import const as mlc
-from ...binary_sensor import MLBinarySensor
-from ...button import MLButton
+from ...binary_sensor import BinarySensor
+from ...button import Button
 from ...calendar import MtsSchedule
 from ...climate import MtsClimate
-from ...helpers import device as mld
-from ...helpers.entity import MLEntity
+from ...helpers import device as mld, entity as mle
 from ...helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler
 from ...merossclient import device, get_productname, get_subdevice_key_digest
+from ...merossclient.device import parser
 from ...merossclient.protocol import const as mc, namespaces as mn
 from ...merossclient.protocol.namespaces import hub as mn_h
-from ...number import MLConfigNumber
+from ...number import ParserNumber
 from ...sensor import (
-    MLEnumSensor,
-    MLHumiditySensor,
-    MLLightSensor,
-    MLNumericSensor,
-    MLTemperatureSensor,
+    EnumSensor,
+    HumiditySensor,
+    LightSensor,
+    NumericSensor,
+    TemperatureSensor,
 )
-from ...switch import MLSwitch
+from ...switch import SwitchParser
 
 if TYPE_CHECKING:
     from typing import (
@@ -52,16 +52,16 @@ if TYPE_CHECKING:
     )
 
 
-class HubBeep(MLSwitch):
+class HubBeep(SwitchParser):
     """Generic switch to map Appliance.Hub.SubDevice.Beep namespace."""
 
     ns = mn_h.Appliance_Hub_SubDevice_Beep
-    ENTITY_KEY = f"{ns.slug}__{MLSwitch.key_value}"
+    ENTITY_KEY = f"{ns.slug}__{SwitchParser.key_value}"
 
     _attr_name = "Beep alarm"
 
 
-class HubSubIdChannelMixin(MLEntity if TYPE_CHECKING else object):
+class HubSubIdChannelMixin(mle.ValueParser if TYPE_CHECKING else object):
     """
     Mixin implementation for protocol method 'SET' on hub entities/namespaces backed by a
     subId/channel indexing key pair.
@@ -71,9 +71,6 @@ class HubSubIdChannelMixin(MLEntity if TYPE_CHECKING else object):
     entities indexing (id and unique_id)and management.
     """
 
-    if TYPE_CHECKING:
-        parent: Final["SubDevice"]  # type: ignore[override]
-
     @override
     async def async_request_value(self, device_value, /):
         await self.async_request_payload(
@@ -82,13 +79,10 @@ class HubSubIdChannelMixin(MLEntity if TYPE_CHECKING else object):
         self.update_device_value(device_value)
 
 
-class HubSubIdDeviceCfgMixin(MLEntity.NamespaceGroupValue):
+class HubSubIdDeviceCfgMixin(mle.ParserEntity.NamespaceGroupValue):
     """
     Mixin implementation for protocol method 'SET' on 'Appliance.Config.DeviceCfg'.
     """
-
-    if TYPE_CHECKING:
-        parent: Final["SubDevice"]  # type: ignore[override]
 
     ns = mn_h.Appliance_Config_DeviceCfg
 
@@ -164,7 +158,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
     """
 
     if TYPE_CHECKING:
-        # entities now contains both MLEntity and SubDevice
+        # entities now contains both Entity and SubDevice
         # so we just override this to make the linter happy
         entities: Final[dict[str, "SubDevice"]]  # type: ignore[override]
 
@@ -180,12 +174,12 @@ class HubMixin(Device if TYPE_CHECKING else object):
     )
     # TODO: skip caching add_entity callback and directly access core component method
     DEFAULT_PLATFORMS = mld.Device.DEFAULT_PLATFORMS | {
-        MLBinarySensor.PLATFORM: None,
-        MLButton.PLATFORM: None,
+        BinarySensor.PLATFORM: None,
+        Button.PLATFORM: None,
         MtsSchedule.PLATFORM: None,
-        MLConfigNumber.PLATFORM: None,
-        MLNumericSensor.PLATFORM: None,
-        MLSwitch.PLATFORM: None,
+        ParserNumber.PLATFORM: None,
+        NumericSensor.PLATFORM: None,
+        SwitchParser.PLATFORM: None,
         MtsClimate.PLATFORM: None,
         MtsClimate.TrackSensorSelect.PLATFORM: None,
     }
@@ -282,7 +276,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
         return SubDevice(subid, self, key_digest, entity_class)
 
 
-class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
+class SubDevice(mld.BaseDevice, device.SubDevice, NumericSensor):
     """
     Class for a physical subdevice registered with a Hub device.
     This class acts as a 'container' for the actual entities implemented for the device
@@ -306,9 +300,9 @@ class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
         The default implementation will just try the 'smart logic' parser by inspecting the
         class methods or building diagnostic entities in case."""
 
-    # MLNumericSensor attributes
+    # NumericSensor attributes
     # ENTITY_KEY = mc.KEY_BATTERY
-    _attr_device_class = MLNumericSensor.DeviceClass.BATTERY
+    _attr_device_class = NumericSensor.DeviceClass.BATTERY
 
     NS_SUBDEVICE = (
         mn_h.Appliance_Hub_Battery,
@@ -341,7 +335,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
         # we save subid for safe use whenever we need a 'clear' device subid
         self.key_digest = key_digest
         self.model = model = (entity_class and entity_class.MODEL) or key_digest
-        # MLNumericSensor init (battery level) will pop device_entry from kwargs
+        # NumericSensor init (battery level) will pop device_entry from kwargs
         # so we need to ensure it's built after EntityManager base
         super().__init__(
             subid,
@@ -388,7 +382,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
         )
 
     @override
-    def generate_unique_id(self, entity: MLEntity, /):
+    def generate_unique_id(self, entity: mle.Entity, /):
         return f"{self.parent.id}_{entity.id}"
 
     # interface: PhysicalDevice
@@ -397,7 +391,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
     def firmware_version(self, /) -> str:
         return self.device_entry.sw_version or self.latest_version[mc.KEY_VERSION]
 
-    # interface: MLEntity
+    # interface: Entity
     @cached_property
     @override
     def unique_id(self) -> str:
@@ -584,10 +578,10 @@ class SubDevice(mld.BaseDevice, device.SubDevice, MLNumericSensor):
             )
 
 
-class SubDeviceEntity(MLEntity):
+class SubDeviceEntity(mle.ParserEntity):
     """Base class for entities acting as the 'main target' of a subdevice namespace parsing.
     The design allows to easily link both digest parsing and *.All parsing to the
-    default entity parsing stub (MLEntity._parse). This is a rather common pattern even
+    default entity parsing stub (Entity._parse). This is a rather common pattern even
     though some specializations could be needed for some subdevices."""
 
     if TYPE_CHECKING:
@@ -631,7 +625,7 @@ class SubDeviceEntity(MLEntity):
 from .mts100 import Mts100Climate
 
 
-class SmokeAlarmSensor(SubDeviceEntity, MLEnumSensor):
+class SmokeAlarmSensor(SubDeviceEntity, EnumSensor):
     if TYPE_CHECKING:
         STATUS_MAP: Final
         MUTE_MAP: Final
@@ -675,24 +669,24 @@ class SmokeAlarmSensor(SubDeviceEntity, MLEnumSensor):
 
     def __init__(self, subid: str, subdevice: "SubDevice", /):
         super().__init__(subid, subdevice, translation_key="smoke_alarm_status")
-        self.binary_sensor_alarm = MLBinarySensor(
+        self.binary_sensor_alarm = BinarySensor(
             subid,
             subdevice,
             entity_key=mc.KEY_ALARM,
-            device_class=MLBinarySensor.DeviceClass.SAFETY,
+            device_class=BinarySensor.DeviceClass.SAFETY,
         )
-        self.binary_sensor_error = MLBinarySensor(
+        self.binary_sensor_error = BinarySensor(
             subid,
             subdevice,
             entity_key=mc.KEY_ERROR,
-            device_class=MLBinarySensor.DeviceClass.PROBLEM,
+            device_class=BinarySensor.DeviceClass.PROBLEM,
         )
-        self.binary_sensor_muted = MLBinarySensor(subid, subdevice, entity_key="muted")
-        self.sensor_interConn = MLEnumSensor(
+        self.binary_sensor_muted = BinarySensor(subid, subdevice, entity_key="muted")
+        self.sensor_interConn = EnumSensor(
             subid, subdevice, entity_key=mc.KEY_INTERCONN
         )
-        MLButton(subid, subdevice, self.async_mute, name="Mute")
-        MLButton(subid, subdevice, self.async_test, name="Test")
+        Button(subid, subdevice, self.async_mute, name="Mute")
+        Button(subid, subdevice, self.async_test, name="Test")
 
     def _parse(self, payload: "mt_h._smokeAlarm", /):
         self.device_value = value = payload[mc.KEY_STATUS]
@@ -727,9 +721,9 @@ class SmokeAlarmSensor(SubDeviceEntity, MLEnumSensor):
         await self.async_request_payload({mc.KEY_STATUS: 23})
 
 
-class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
+class MS100Sensor(SubDeviceEntity, TemperatureSensor):
 
-    class SensorAdjustNumber(MLConfigNumber):
+    class SensorAdjustNumber(ParserNumber):
 
         ns = mn_h.Appliance_Hub_Sensor_Adjust
 
@@ -752,7 +746,7 @@ class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
 
         ENTITY_KEY = "config_adjust_temperature"
         key_value = mc.KEY_TEMPERATURE
-        _attr_device_class = MLConfigNumber.DeviceClass.TEMPERATURE
+        _attr_device_class = ParserNumber.DeviceClass.TEMPERATURE
         _attr_name = "Adjust temperature"
 
         native_min_value = -5
@@ -763,7 +757,7 @@ class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
 
         ENTITY_KEY = "config_adjust_humidity"
         key_value = mc.KEY_HUMIDITY
-        _attr_device_class = MLConfigNumber.DeviceClass.HUMIDITY
+        _attr_device_class = ParserNumber.DeviceClass.HUMIDITY
         _attr_name = "Adjust humidity"
 
         native_min_value = -20
@@ -787,7 +781,7 @@ class MS100Sensor(SubDeviceEntity, MLTemperatureSensor):
 
     def __init__(self, subid: str, subdevice: "SubDevice", /):
         super().__init__(subid, subdevice)
-        self.sensor_humidity = MLHumiditySensor(subid, subdevice)
+        self.sensor_humidity = HumiditySensor(subid, subdevice)
 
     def shutdown(self):
         super().shutdown()
@@ -867,7 +861,7 @@ class MS130Sensor(MS100Sensor):
 
     def __init__(self, subid: str, subdevice: "SubDevice", /):
         super().__init__(subid, subdevice)
-        self.sensor_light = MLLightSensor(subid, subdevice)
+        self.sensor_light = LightSensor(subid, subdevice)
         subdevice.parent.get_handler(
             mn_h.Appliance_Control_Sensor_LatestX
         ).register_parser(
@@ -926,7 +920,7 @@ class MS130Sensor(MS100Sensor):
         }
         """
         p_data = payload[mc.KEY_DATA]
-        entity: MLNumericSensor
+        entity: NumericSensor
         for key, entity in {
             mc.KEY_TEMP: self,
             mc.KEY_HUMI: self.sensor_humidity,
@@ -938,19 +932,19 @@ class MS130Sensor(MS100Sensor):
                 pass
 
 
-class DoorWindowSensor(SubDeviceEntity, MLBinarySensor):
+class DoorWindowSensor(SubDeviceEntity, BinarySensor):
     MODEL = mc.TYPE_MS200
     KEY_DIGEST = mc.KEY_DOORWINDOW
     NS_HUB = (mn_h.Appliance_Hub_Sensor_All, *SubDeviceEntity.NS_HUB)
 
-    ENTITY_KEY = MLBinarySensor.DeviceClass.WINDOW
+    ENTITY_KEY = BinarySensor.DeviceClass.WINDOW
     ns = mn_h.Appliance_Hub_Sensor_DoorWindow
     key_value = mc.KEY_STATUS
 
-    _attr_device_class = MLBinarySensor.DeviceClass.WINDOW
+    _attr_device_class = BinarySensor.DeviceClass.WINDOW
 
 
-class WaterLeakSensor(SubDeviceEntity, MLBinarySensor):
+class WaterLeakSensor(SubDeviceEntity, BinarySensor):
     MODEL = mc.TYPE_MS400
     KEY_DIGEST = mc.KEY_WATERLEAK
     NS_HUB = (mn_h.Appliance_Hub_Sensor_All, *SubDeviceEntity.NS_HUB)
@@ -959,10 +953,10 @@ class WaterLeakSensor(SubDeviceEntity, MLBinarySensor):
     ns = mn_h.Appliance_Hub_Sensor_WaterLeak
     key_value = mc.KEY_LATESTWATERLEAK
 
-    _attr_device_class = MLBinarySensor.DeviceClass.SAFETY
+    _attr_device_class = BinarySensor.DeviceClass.SAFETY
 
 
-class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, MLSwitch):
+class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, SwitchParser):
     """Switch to turn on/off the MST valve."""
 
     # TODO: it looks like this device could support Hub.ToggleX
@@ -987,7 +981,7 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, MLSwitch):
             dura: NotRequired[int]  # duration in seconds
             onoff: int  # 1: on, 2: off
 
-    class WateringDurationNumber(HubSubIdDeviceCfgMixin, MLConfigNumber):
+    class WateringDurationNumber(HubSubIdDeviceCfgMixin, ParserNumber):
         """Number to set watering duration."""
 
         ENTITY_KEY = mc.KEY_DURATION
@@ -996,7 +990,7 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, MLSwitch):
 
         # HA core entity attributes:
         _attr_name = "Watering duration"
-        _attr_device_class = MLConfigNumber.DEVICE_CLASS_DURATION
+        _attr_device_class = ParserNumber.DEVICE_CLASS_DURATION
         _attr_native_unit_of_measurement = mlc.hac.UnitOfTime.SECONDS
         native_max_value = 86400  # 1 day max duration (no real info just guessing)
         native_min_value = 1
@@ -1027,7 +1021,7 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, MLSwitch):
         # unknown payload semantic
         pass
 
-    _parse_water = MLSwitch._parse
+    _parse_water = SwitchParser._parse
 
     def _parse_deviceCfg(self, payload: "DeviceCfg", /):
         self.number_duration._parse(payload)
