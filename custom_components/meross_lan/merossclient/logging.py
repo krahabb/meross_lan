@@ -237,14 +237,17 @@ class Loggable(metaclass=abc.ABCMeta):
     def _calc_slots(cls, *slots: "Unpack[tuple[str, ...]]"):
         _added_slots = set(slots)
         _existing_slots = set()
+        # TODO: we need to see if it's feasible to cache results in
+        # cls.__dict__ to avoid repeating this on every subclass since our
+        # mro could be highly repetitive and this method is called on every subclass
         for _base in cls.__mro__:
             try:
-                _added_slots.update(_base.__SLOTS__)
-            except AttributeError:
+                _added_slots.update(_base.__dict__["__SLOTS__"])
+            except KeyError:
                 pass
             try:
-                _existing_slots.update(_base.__slots__)
-            except AttributeError:
+                _existing_slots.update(_base.__dict__["__slots__"])
+            except KeyError:
                 pass
 
         return _added_slots - _existing_slots

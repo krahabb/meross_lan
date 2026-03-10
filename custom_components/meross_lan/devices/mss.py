@@ -379,7 +379,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         NamespaceHandler.async_poll_smart,
     )
 
-    __slots__ = ("_channels_to_poll",)
+    __SLOTS__ = ("_channels_to_poll",)
 
     def __init__(self, ns: "mn.Namespace", device: "Device", /):
         self._channels_to_poll = []
@@ -483,7 +483,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, NumericSensor):
     ATTR_OFFSET = "offset"
     ATTR_RESET_TS = "reset_ts"
 
-    __slots__ = (
+    __SLOTS__ = (
         "offset",
         "reset_ts",
         "energy_estimate",
@@ -708,7 +708,7 @@ class OverTempEnableSwitch(EntityNamespaceMixin, SwitchParser):
     ns = mn.Appliance_Config_OverTemp
     key_value = mc.KEY_ENABLE
 
-    __slots__ = ("sensor_overtemp_type",)
+    __SLOTS__ = ("sensor_overtemp_type",)
 
     @override
     def _handle(self, message: "MerossMessage", /):

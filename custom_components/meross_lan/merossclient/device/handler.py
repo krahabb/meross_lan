@@ -51,7 +51,9 @@ class NamespaceHandler(logging.Loggable):
     if TYPE_CHECKING:
         type HandlerFunc = Callable[[MerossMessage], None]
         type ParserFunc = Callable[[JsonMapping], None]
-        type PollingStrategyFunc = Callable[[Self], Awaitable]
+        type PollingStrategyFunc = Callable[
+            [Any], Awaitable
+        ]  # need to use Any because of covariance issues with NamespaceHandler
         type PollingConfigType = tuple[int, int, PollingStrategyFunc | None]
         """PollingConfigType is a tuple of (polling_period, polling_period_cloud, polling_strategy).
         This is used to configure the handler polling policy setting polling periods and strategy processor."""

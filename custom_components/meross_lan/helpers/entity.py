@@ -627,6 +627,13 @@ class EntityNamespaceMixin(NamespaceHandler, ParserEntity):
     should they're disabled in HA.
     """
 
+    def __init_subclass__(cls):
+        super().__init_subclass__()
+        # Since NamespaceHandler cannot be slotted itself because of mixin-ing with ParserEntity
+        # in EntityNamespaceMixin we try this trick to provide automatic slotting for all the subclasses
+        # which are not mixed with parsers and which don't define their own __slots__.
+        cls.__slots__ = cls._calc_slots()
+
     @classmethod
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
         assert ns is cls.ns

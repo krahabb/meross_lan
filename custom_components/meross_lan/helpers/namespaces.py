@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING, override
 
 from .. import const as mlc
 from ..merossclient.device.handler import NamespaceHandler as _NH
+from ..merossclient.device.parser import NamespaceParser
 from ..merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
@@ -16,21 +17,23 @@ if TYPE_CHECKING:
 class NamespaceHandler(_NH):
 
     if TYPE_CHECKING:
-        # type PollingStrategyFunc = _NH.PollingStrategyFunc
-        # type PollingConfigType = _NH.PollingConfigType
-        POLLING_CONFIG_STATE_NS: Final[_NH.PollingConfigType]
+        type HandlerFunc = _NH.HandlerFunc
+        type ParserFunc = _NH.ParserFunc
+        type PollingStrategyFunc = _NH.PollingStrategyFunc
+        type PollingConfigType = _NH.PollingConfigType
+        POLLING_CONFIG_STATE_NS: Final[PollingConfigType]
         """Common polling configuration for namespaces carrying state information which need to be polled at every cycle."""
-        POLLING_CONFIG_DIGEST_NS: Final[_NH.PollingConfigType]
+        POLLING_CONFIG_DIGEST_NS: Final[PollingConfigType]
         """Namespaces which need not to be polled since they're already carried in digest payload (see async_poll_all)"""
-        POLLING_CONFIG_FASTSENSOR_NS: Final[_NH.PollingConfigType]
-        POLLING_CONFIG_SLOWSENSOR_NS: Final[_NH.PollingConfigType]
-        POLLING_CONFIG_CONFIGURATION_NS: Final[_NH.PollingConfigType]
+        POLLING_CONFIG_FASTSENSOR_NS: Final[PollingConfigType]
+        POLLING_CONFIG_SLOWSENSOR_NS: Final[PollingConfigType]
+        POLLING_CONFIG_CONFIGURATION_NS: Final[PollingConfigType]
         """Common polling configuration for namespaces carrying configuration parameters.
         These are polled on a longer period since we don't expect them to change very often."""
-        POLLING_CONFIG_SINGLEPOLL_NS: Final[_NH.PollingConfigType]
+        POLLING_CONFIG_SINGLEPOLL_NS: Final[PollingConfigType]
         """Common polling configuration for namespaces carrying configuration parameters.
         These are polled on a longer period since we don't expect them to change very often."""
-        POLLING_CONFIG_MAP: Final[dict[mn.Namespace, _NH.PollingConfigType]]
+        POLLING_CONFIG_MAP: Final[dict[mn.Namespace, PollingConfigType]]
         """Centralized polling config parameters for namespaces."""
 
         parent: Final[Device]  # type: ignore[override]
@@ -68,14 +71,22 @@ class NamespaceHandler(_NH):
 
     __SLOTS__ = ("entity_class",)
 
+    def __init_subclass__(cls):
+        super().__init_subclass__()
+        # Since NamespaceHandler cannot be slotted itself because of mixin-ing with ParserEntity
+        # in EntityNamespaceMixin we try this trick to provide automatic slotting for all the subclasses
+        # which are not mixed with parsers and which don't define their own __slots__.
+        if not issubclass(cls, NamespaceParser):
+            cls.__slots__ = cls._calc_slots()
+
     def __init__(
         self,
         ns: "mn.Namespace",
         device: "Device",
         /,
         *,
-        handler: "_NH.HandlerFunc | None" = None,
-        config: "_NH.PollingConfigType | None" = None,
+        handler: "HandlerFunc | None" = None,
+        config: "PollingConfigType | None" = None,
     ):
         super().__init__(
             ns,

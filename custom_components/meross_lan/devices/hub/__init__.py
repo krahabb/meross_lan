@@ -1184,5 +1184,5 @@ NamespaceHandler.POLLING_CONFIG_MAP.update(
         ),
         mn_h.Appliance_Hub_SubDevice_Beep: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
         mn_h.Appliance_Hub_SubDevice_Version: NamespaceHandler.POLLING_CONFIG_SINGLEPOLL_NS,
-    }  # type: ignore[assignment]
+    }
 )
