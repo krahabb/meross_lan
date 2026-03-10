@@ -21,12 +21,10 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         ns = mn_h.Appliance_Hub_Mts100_Adjust
         key_value = mc.KEY_TEMPERATURE
         ENTITY_KEY = f"config_{ns.key}_{key_value}"
-
         _attr_device_scale = 100
-
-        native_max_value = 5
-        native_min_value = -5
-        native_step = 0.5
+        _attr_native_max_value = 5
+        _attr_native_min_value = -5
+        _attr_native_step = 0.5
 
     class SetPointNumber(MtsClimate.SetPointNumber):
         """

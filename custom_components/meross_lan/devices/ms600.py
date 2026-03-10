@@ -17,14 +17,10 @@ if TYPE_CHECKING:
 class PresenceConfigBase(SelectParser.NamespaceGroupValue):
     """Mixin style base class for all of the entities managed in Appliance.Control.Presence.Config"""
 
-    if TYPE_CHECKING:
-        ns: Final
-        entity_category: Final
-
     ns = mn.Appliance_Control_Presence_Config
 
     # HA core entity attributes:
-    entity_category = SelectParser.EntityCategory.CONFIG
+    _attr_entity_category = SelectParser.EntityCategory.CONFIG
 
     # TODO: generalize entitykey generation
 
@@ -64,11 +60,11 @@ class PresenceConfigNoBodyTime(PresenceConfigNumberBase):
     key_value = mc.KEY_TIME
 
     # HA core entity attributes:
-    _attr_name = mc.KEY_NOBODYTIME
     _attr_device_class = ParserNumber.DEVICE_CLASS_DURATION
-    native_max_value = 3600  # 1 hour ?
-    native_min_value = 1
-    native_step = 1
+    _attr_name = mc.KEY_NOBODYTIME
+    _attr_native_max_value = 3600  # 1 hour ?
+    _attr_native_min_value = 1
+    _attr_native_step = 1
 
 
 class PresenceConfigDistance(PresenceConfigNumberBase):
@@ -84,9 +80,9 @@ class PresenceConfigDistance(PresenceConfigNumberBase):
     # HA core entity attributes:
     _attr_device_class = ParserNumber.DeviceClass.DISTANCE
     _attr_native_unit_of_measurement = hac.UnitOfLength.METERS
-    native_max_value = 12
-    native_min_value = 0.1
-    native_step = 0.1
+    _attr_native_max_value = 12
+    _attr_native_min_value = 0.1
+    _attr_native_step = 0.1
 
 
 class PresenceConfigSensitivity(PresenceConfigSelectBase):
@@ -108,14 +104,18 @@ class PresenceConfigSensitivity(PresenceConfigSelectBase):
 class PresenceConfigMthX(PresenceConfigNumberBase):
     key_group = mc.KEY_MTHX
     # HA core entity attributes:
-    native_max_value = 1000
-    native_min_value = 1
-    native_step = 1
+    _attr_native_max_value = 1000
+    _attr_native_min_value = 1
+    _attr_native_step = 1
 
     def __init__(self, channel: "ChannelType", parent: "Device", key: str, /):
-        self.key_value = key
         PresenceConfigNumberBase.__init__(
-            self, channel, parent, entity_key=f"presence_config_mthx_{key}", name=key
+            self,
+            channel,
+            parent,
+            entity_key=f"presence_config_mthx_{key}",
+            name=key,
+            key_value=key,
         )
 
 

@@ -36,9 +36,9 @@ class SelectEntity(mle.Entity, select.SelectEntity):
         current_option: str | None
         options: list[str]
 
-    entity_category = mle.Entity.EntityCategory.CONFIG
+    _attr_entity_category = mle.Entity.EntityCategory.CONFIG
 
-    __slots__ = (
+    __SLOTS__ = (
         "current_option",
         "options",
     )
@@ -62,10 +62,12 @@ class SelectParser(mle.ValueParser, SelectEntity):
     """
 
     if TYPE_CHECKING:
-        parent: Final[BaseDevice]  # type: ignore[override]
 
         OPTIONS_MAP: ClassVar[dict[Any, str]]
         options_map: dict[Any, str]
+
+        class Args(SelectEntity.Args):
+            pass
 
     # configure initial options(map) through a class default
     OPTIONS_MAP = {}
@@ -75,30 +77,29 @@ class SelectParser(mle.ValueParser, SelectEntity):
     def __init__(
         self,
         channel: "ChannelType | None",
-        device: "EntityManager",
+        device: "BaseDevice",
         /,
-        **kwargs: "Unpack[SelectEntity.Args]",
+        **kwargs: "Unpack[Args]",
     ):
         self.current_option = None
         self.options_map = self.OPTIONS_MAP
         self.options = list(self.options_map.values())
-        SelectEntity.__init__(self, channel, device, **kwargs)
+        super().__init__(channel, device, **kwargs)
 
     @override
     def update_device_value(self, device_value, /):
         if self.device_value != device_value:
             try:
-                self.update_option(self.options_map[device_value])
+                self.current_option = self.options_map[device_value]
             except KeyError:
                 if self.options_map is self.OPTIONS_MAP:
                     # first time we see a new value - create an instance map
                     self.options_map = dict(self.OPTIONS_MAP)
                 self.options_map[device_value] = option = str(device_value)
                 self.options.append(option)
-                self.update_option(option)
-
+                self.current_option = option
             self.device_value = device_value
-            super().update_device_value(device_value)
+            self.flush_state()
             return True
 
     # interface: select.SelectEntity

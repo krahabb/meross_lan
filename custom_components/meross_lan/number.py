@@ -12,6 +12,8 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .helpers.device import BaseDevice
+    from .helpers.entity import ChannelType
+    from .helpers.manager import EntityManager
 
 
 async def async_setup_entry(
@@ -32,19 +34,38 @@ class Number(mle.NumericEntity, number.NumberEntity):
 
     if TYPE_CHECKING:
 
-        class Args(mle.NumericEntity.Args):
-            device_class: NotRequired[number.NumberDeviceClass | None]
-
         DEVICE_CLASS_DURATION: Final[number.NumberDeviceClass]
         DEVICE_CLASS_TEMPERATURE_DELTA: Final[number.NumberDeviceClass]
         # HA core entity attributes:
         _attr_device_class: ClassVar[number.NumberDeviceClass | None]
-        mode: number.NumberMode
-        native_max_value: float
-        native_min_value: float
+        _attr_mode: ClassVar[number.NumberMode]
+        _attr_native_max_value: ClassVar[float]
+        _attr_native_min_value: ClassVar[float]
+        _attr_native_step: ClassVar[float]
         native_step: float
 
+        class Args(mle.NumericEntity.Args):
+            device_class: NotRequired[number.NumberDeviceClass | None]  # Override
+            mode: NotRequired[number.NumberMode]
+            native_max_value: NotRequired[float]
+            native_min_value: NotRequired[float]
+            native_step: NotRequired[float]
+
+        def __init__(
+            self,
+            channel: ChannelType | None,
+            parent: EntityManager,
+            /,
+            **kwargs: Unpack[Args],
+        ): ...
+
     PLATFORM = number.DOMAIN
+    CORE_ENTITY_ATTRIBUTES = mle.NumericEntity.CORE_ENTITY_ATTRIBUTES + (
+        "mode",
+        "native_max_value",
+        "native_min_value",
+        "native_step",
+    )
     DeviceClass = number.NumberDeviceClass
 
     # HA core compatibility layer for NumberDeviceClass.DURATION (HA core 2023.7 misses that)
@@ -63,15 +84,37 @@ class Number(mle.NumericEntity, number.NumberEntity):
     }
 
     # HA core entity attributes:
-    entity_category = mle.Entity.EntityCategory.CONFIG
-    mode = number.NumberMode.BOX
-    native_step = 1
+    _attr_entity_category = mle.Entity.EntityCategory.CONFIG
+    _attr_mode = number.NumberMode.BOX
+    _attr_native_step = 1.0
 
 
 class ParserNumber(mle.NumericParser, Number):
     """
     Base class for any configurable numeric parameter in the device.
     """
+
+    if TYPE_CHECKING:
+
+        class Args(Number.Args, mle.NumericParser.Args):
+            pass
+
+        def __init__(
+            self,
+            channel: ChannelType | None,
+            parent: BaseDevice,
+            /,
+            **kwargs: Unpack[Args],
+        ): ...
+
+        @classmethod
+        def ENTITY_DEF(
+            cls,
+            **kwargs: "Unpack[ParserNumber.Args]",
+        ) -> "ParserNumber.EntityDef[ParserNumber]":  # type: ignore[override]
+            pass
+
+        DEBOUNCE_DELAY: Final
 
     DEBOUNCE_DELAY = 1
 
@@ -110,6 +153,8 @@ class EmulatedNumber(Number):
     Number entity not directly binded to a device parameter (like ConfigNumber)
     but used to store in HA a bit of component configuration.
     """
+
+    __slots__ = Number._calc_slots()
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()

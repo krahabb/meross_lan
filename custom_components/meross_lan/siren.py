@@ -56,11 +56,14 @@ class Siren(BinaryParser, siren.SirenEntity):
         NS_CHANNELS = ParserNumber.NS_CHANNELS_SINGLE
         key_value = mc.KEY_VOLUME
         ENTITY_KEY = f"{ns.slug}__{key_value}"
-        native_min_value = 0
-        native_max_value = 100
+        _attr_native_max_value = 100
+        _attr_native_min_value = 0
 
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
+
+        # HA core entity attributes:
+        _attr_supported_features: Final[siren.SirenEntityFeature]
 
         class Args(BinaryParser.Args):
             pass
@@ -73,7 +76,7 @@ class Siren(BinaryParser, siren.SirenEntity):
     native_on = 1
     native_off = 2
 
-    SUPPORTED_FEATURES = (
+    _attr_supported_features = (
         siren.SirenEntityFeature.TURN_ON
         | siren.SirenEntityFeature.TURN_OFF
         | siren.SirenEntityFeature.TONES
@@ -88,12 +91,10 @@ class Siren(BinaryParser, siren.SirenEntity):
     __slots__ = ()
 
     def __init__(self, channel: int, device: "Device", /, **kwargs: "Unpack[Args]"):
-        super().__init__(channel, device, **kwargs)
-        device.register_parser_entity(self)
         if mn.Appliance_Config_Alarm in device.descriptor.ability:
             song_select = self.SongSelect(channel, device)
             self.available_tones = song_select.OPTIONS_MAP
-            self.supported_features = self.SUPPORTED_FEATURES
+            self.supported_features = self._attr_supported_features
             device.get_handler(mn.Appliance_Config_Alarm).register_parsers(
                 self.EnableSwitch(channel, device),
                 song_select,
@@ -104,6 +105,8 @@ class Siren(BinaryParser, siren.SirenEntity):
             self.supported_features = (
                 siren.SirenEntityFeature.TURN_ON | siren.SirenEntityFeature.TURN_OFF
             )
+        super().__init__(channel, device, **kwargs)
+        device.register_parser_entity(self)
 
     @override
     async def async_request_value(self, device_value, /) -> None:
@@ -112,6 +115,7 @@ class Siren(BinaryParser, siren.SirenEntity):
         )
         self.update_device_value(device_value)
 
+    @override
     async def async_turn_on(self, **kwargs):
         if kwargs:
             payload = {}

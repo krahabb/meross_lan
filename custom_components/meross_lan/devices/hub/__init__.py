@@ -749,9 +749,9 @@ class MS100Sensor(SubDeviceEntity, TemperatureSensor):
         _attr_device_class = ParserNumber.DeviceClass.TEMPERATURE
         _attr_name = "Adjust temperature"
 
-        native_min_value = -5
-        native_max_value = 5
-        native_step = 0.1
+        _attr_native_min_value = -5
+        _attr_native_max_value = 5
+        _attr_native_step = 0.1
 
     class AdjustHumidityNumber(SensorAdjustNumber):
 
@@ -760,9 +760,9 @@ class MS100Sensor(SubDeviceEntity, TemperatureSensor):
         _attr_device_class = ParserNumber.DeviceClass.HUMIDITY
         _attr_name = "Adjust humidity"
 
-        native_min_value = -20
-        native_max_value = 20
-        native_step = 1
+        _attr_native_min_value = -20
+        _attr_native_max_value = 20
+        _attr_native_step = 1
 
     MODEL = mc.TYPE_MS100
     KEY_DIGEST = mc.TYPE_MS100
@@ -992,8 +992,10 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, SwitchParser):
         _attr_name = "Watering duration"
         _attr_device_class = ParserNumber.DEVICE_CLASS_DURATION
         _attr_native_unit_of_measurement = mlc.hac.UnitOfTime.SECONDS
-        native_max_value = 86400  # 1 day max duration (no real info just guessing)
-        native_min_value = 1
+        _attr_native_max_value = (
+            86400  # 1 day max duration (no real info just guessing)
+        )
+        _attr_native_min_value = 1
 
     MODEL = mc.TYPE_MST100
     KEY_DIGEST = mc.KEY_MST

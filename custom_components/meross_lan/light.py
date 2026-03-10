@@ -177,9 +177,6 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
 
     if TYPE_CHECKING:
 
-        class Args(mle.ToggleXParser.Args):
-            pass
-
         EFFECT_OFF: Final
         T_RESOLUTION_MIN: Final[float]
 
@@ -761,7 +758,7 @@ class DNDLight(mle.EntityNamespaceMixin, mle.BinaryParser, light.LightEntity):
     native_off = 1
     # HA core entity attributes:
     color_mode: ColorMode = ColorMode.ONOFF
-    entity_category = mle.BinaryParser.EntityCategory.CONFIG
+    _attr_entity_category = mle.BinaryParser.EntityCategory.CONFIG
     supported_color_modes: set[ColorMode] = {ColorMode.ONOFF}
 
 

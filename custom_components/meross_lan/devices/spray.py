@@ -37,7 +37,7 @@ class Spray(SelectParser):
         mc.SPRAY_MODE_INTERMITTENT: "eco",
     }
 
-    entity_category = None
+    _attr_entity_category = None
 
     def __init__(self, channel: "ChannelType", device: "Device", /):
         SelectParser.__init__(self, channel, device)

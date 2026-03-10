@@ -20,15 +20,15 @@ class Cover(ParserEntity, cover.CoverEntity):
 
     if TYPE_CHECKING:
 
-        class Args(ParserEntity.Args):
-            device_class: NotRequired[cover.CoverDeviceClass | None]
-
         parent: Final[Device]  # type: ignore[override]
         # HA core entity attributes:
         _attr_device_class: ClassVar[cover.CoverDeviceClass | None]
         is_closed: bool | None
         is_closing: bool
         is_opening: bool
+
+        class Args(ParserEntity.Args):
+            device_class: NotRequired[cover.CoverDeviceClass | None]
 
     PLATFORM = cover.DOMAIN
 

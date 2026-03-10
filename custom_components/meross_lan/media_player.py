@@ -36,15 +36,11 @@ class Mp3Player(ParserEntity, media_player.MediaPlayerEntity):
 
         parent: Final[Device]  # type: ignore[override]
         # HA core entity attributes:
-        _attr_device_class: Final[media_player.MediaPlayerDeviceClass]
         is_volume_muted: bool | None
-        media_content_type: Final[MediaType]
         media_title: str | None
         media_track: int | None
         state: media_player.MediaPlayerState | None
-        supported_features: MediaPlayerEntityFeature
         volume_level: float | None
-        volume_step: Final[float]
 
     PLATFORM = media_player.DOMAIN
     ENTITY_KEY = mc.KEY_MP3
@@ -52,8 +48,8 @@ class Mp3Player(ParserEntity, media_player.MediaPlayerEntity):
 
     # HA core entity attributes:
     _attr_device_class = media_player.MediaPlayerDeviceClass.SPEAKER
-    media_content_type = MediaType.MUSIC
-    supported_features = (
+    _attr_media_content_type = MediaType.MUSIC
+    _attr_supported_features = (
         MediaPlayerEntityFeature.VOLUME_MUTE
         | MediaPlayerEntityFeature.VOLUME_SET
         | MediaPlayerEntityFeature.VOLUME_STEP
@@ -62,7 +58,7 @@ class Mp3Player(ParserEntity, media_player.MediaPlayerEntity):
         | MediaPlayerEntityFeature.PLAY
         | MediaPlayerEntityFeature.STOP
     )
-    volume_step = 1 / mc.HP110A_MP3_VOLUME_MAX
+    _attr_volume_step = 1 / mc.HP110A_MP3_VOLUME_MAX
 
     __slots__ = (
         "is_volume_muted",

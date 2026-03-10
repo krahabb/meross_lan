@@ -30,6 +30,7 @@ class GarageTimeoutBinarySensor(BinarySensor):
 
     # HA core entity attributes:
     _attr_device_class = BinarySensor.DeviceClass.PROBLEM
+    _attr_entity_category = BinarySensor.EntityCategory.DIAGNOSTIC
     _unrecorded_attributes = frozenset(
         {
             ATTR_TRANSITION_TARGET,
@@ -37,7 +38,6 @@ class GarageTimeoutBinarySensor(BinarySensor):
             *BinarySensor._unrecorded_attributes,
         }
     )
-    entity_category = BinarySensor.EntityCategory.DIAGNOSTIC
 
     def __init__(self, garage: "GarageDoor", /):
         self.extra_state_attributes = {}
@@ -164,9 +164,9 @@ class GarageMultipleConfigNumber(ParserNumber):
     # HA core entity attributes:
     # these are ok for open/close durations
     # customize those when needed...
-    native_max_value = 60
-    native_min_value = 1
-    native_step = 1
+    _attr_native_max_value = 60
+    _attr_native_min_value = 1
+    _attr_native_step = 1
 
     def __init__(
         self,
@@ -204,9 +204,9 @@ class GarageEmulatedConfigNumber(EmulatedNumber):
 
     # HA core entity attributes:
     _attr_device_class = EmulatedNumber.DEVICE_CLASS_DURATION
-    native_max_value = 60
-    native_min_value = 1
-    native_step = 1
+    _attr_native_max_value = 60
+    _attr_native_min_value = 1
+    _attr_native_step = 1
 
     def __init__(self, garage: "GarageDoor", key: str, /):
         EmulatedNumber.__init__(
@@ -231,8 +231,6 @@ class GarageDoor(Cover):
         number_close_timeout: ParserNumber | EmulatedNumber | None
         number_open_timeout: ParserNumber | EmulatedNumber | None
 
-        supported_features: Final[Cover.EntityFeature]
-
     ns = mn.Appliance_GarageDoor_State
     key_value = mc.KEY_OPEN
 
@@ -250,7 +248,7 @@ class GarageDoor(Cover):
 
     # HA core entity attributes:
     _attr_device_class = Cover.DeviceClass.GARAGE
-    supported_features = Cover.EntityFeature.OPEN | Cover.EntityFeature.CLOSE
+    _attr_supported_features = Cover.EntityFeature.OPEN | Cover.EntityFeature.CLOSE
 
     __slots__ = (
         "_config",
@@ -575,9 +573,9 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
                     self.parent,
                     mc.KEY_SIGNALDURATION,
                     device_value=payload[mc.KEY_SIGNALDURATION],
+                    native_step=0.1,
+                    native_min_value=0.1,
                 )
-                self.number_signalDuration.native_step = 0.1
-                self.number_signalDuration.native_min_value = 0.1
 
         if mc.KEY_BUZZERENABLE in payload:
             try:

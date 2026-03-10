@@ -22,7 +22,8 @@ class RollerShutter(Cover):
 
     if TYPE_CHECKING:
         current_cover_position: int | None
-        supported_features: Cover.EntityFeature
+        _attr_supported_features: ClassVar[Cover.EntityFeature]
+        supported_features: Cover.EntityFeature  # slot override base property
 
     # TODO: switchover main ns to State so we could use device_value for _mrs_state
     ns = mn.Appliance_RollerShutter_Position
@@ -31,8 +32,11 @@ class RollerShutter(Cover):
     ATTR_POSITION_NATIVE = "position_native"
 
     # HA core entity attributes:
+    _attr_assumed_state = True
     _attr_device_class = Cover.DeviceClass.SHUTTER
-    assumed_state = True
+    _attr_supported_features = (
+        Cover.EntityFeature.OPEN | Cover.EntityFeature.CLOSE | Cover.EntityFeature.STOP
+    )
 
     __slots__ = (
         "current_cover_position",
@@ -48,12 +52,8 @@ class RollerShutter(Cover):
 
     def __init__(self, channel: int, device: "Device", /):
         self.current_cover_position = None
-        self.supported_features = (
-            Cover.EntityFeature.OPEN
-            | Cover.EntityFeature.CLOSE
-            | Cover.EntityFeature.STOP
-        )
         self.extra_state_attributes = {}
+        self.supported_features = self._attr_supported_features
         self._mrs_state = None
         self._position_native = None  # as reported by the device
         self._position_start = 0  # set when when we're controlling a timed position
@@ -368,14 +368,18 @@ class RollerShutterConfigNumber(ParserNumber):
     _attr_device_class = ParserNumber.DEVICE_CLASS_DURATION
     # these are ok for open/close durations
     # customize those when needed...
-    native_max_value = 60
-    native_min_value = 1
-    native_step = 1
+    _attr_native_max_value = 60
+    _attr_native_min_value = 1
+    _attr_native_step = 1
 
     def __init__(self, cover: "RollerShutter", key: str):
-        self.key_value = key
         ParserNumber.__init__(
-            self, cover.channel, cover.parent, entity_key=f"config_{key}", name=key
+            self,
+            cover.channel,
+            cover.parent,
+            entity_key=f"config_{key}",
+            name=key,
+            key_value=key,
         )
 
 

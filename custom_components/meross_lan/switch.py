@@ -30,18 +30,18 @@ class SwitchEntity(mle.BinaryEntity, switch.SwitchEntity):
 
     if TYPE_CHECKING:
 
-        class Args(mle.BinaryEntity.Args):
-            device_class: NotRequired[switch.SwitchDeviceClass | None]
-
         # HA core entity attributes:
         _attr_device_class: ClassVar[switch.SwitchDeviceClass | None]
+
+        class Args(mle.BinaryEntity.Args):
+            device_class: NotRequired[switch.SwitchDeviceClass | None]
 
     PLATFORM = switch.DOMAIN
     DeviceClass = switch.SwitchDeviceClass
 
     # HA core entity attributes:
     _attr_device_class = switch.SwitchDeviceClass.SWITCH
-    entity_category = mle.BinaryEntity.EntityCategory.CONFIG
+    _attr_entity_category = mle.BinaryEntity.EntityCategory.CONFIG
 
 
 class EmulatedSwitch(SwitchEntity):
@@ -49,6 +49,8 @@ class EmulatedSwitch(SwitchEntity):
     Switch entity not related to any device feature but used to configure
     behaviors for meross_lan entities.
     """
+
+    __slots__ = SwitchEntity._calc_slots()
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -96,7 +98,7 @@ class ToggleSwitch(mle.EntityNamespaceMixin, SwitchParser):
     ns = mn.Appliance_Control_Toggle
     # HA core entity attributes:
     _attr_device_class = SwitchEntity.DeviceClass.OUTLET
-    entity_category = None
+    _attr_entity_category = None
 
 
 def digest_init_toggle(
@@ -113,7 +115,7 @@ class ToggleXSwitch(SwitchParser):
 
     # HA core entity attributes:
     _attr_device_class = SwitchEntity.DeviceClass.OUTLET
-    entity_category = None
+    _attr_entity_category = None
 
     def __init__(self, channel: int, device: "Device", /):
         SwitchParser.__init__(self, channel, device)

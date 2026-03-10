@@ -37,20 +37,17 @@ class UpdateEntity(Entity, update.UpdateEntity):
 
     # HA core entity attributes:
     _attr_available = False
-    _attr_device_class = DeviceClass.FIRMWARE
-    _attr_supported_features = update.UpdateEntityFeature.INSTALL
-    entity_category = Entity.EntityCategory.DIAGNOSTIC
 
     __slots__ = (
         "installed_version",
         "latest_version",
         "release_summary",
-        "supported_features",
         "title",
     )
 
     def __init__(self, device: "BaseDevice", /):
-        self.supported_features = self._attr_supported_features
+        self.device_class = update.UpdateDeviceClass.FIRMWARE
+        self.supported_features = update.UpdateEntityFeature.INSTALL
         self.title = device.display_name
         self.unique_id = None
         self.installed_version, self.latest_version, self.release_summary = (

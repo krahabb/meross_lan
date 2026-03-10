@@ -57,12 +57,16 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         AKA: Heat(comfort) - Cool(sleep) - Eco(away)
         """
 
+        if TYPE_CHECKING:
+            # HA core entity attributes:
+            icon: Final[str]
+
         _attr_device_class = ParserNumber.DeviceClass.TEMPERATURE
+        _attr_native_step = 0.5
 
         __slots__ = (
             "climate",
             "icon",
-            "key_value",
         )
 
         def __init__(self, climate: "MtsClimate", preset_mode: "MtsClimate.Preset", /):
@@ -80,6 +84,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
                 device_scale=climate.device_scale,
             )
 
+        # TODO: remove properties and fix these values when updated on MtsClimate
         @property
         def native_max_value(self):
             return self.climate.max_temp
@@ -87,10 +92,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         @property
         def native_min_value(self):
             return self.climate.min_temp
-
-        @property
-        def native_step(self):
-            return self.climate.target_temperature_step
 
         async def async_request_value(self, device_value, /):
             # This implementation is only valid for mts100/mts200 where
@@ -132,7 +133,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         _attr_available = True
         _attr_entity_registry_enabled_default = False
 
-        __slots__ = (
+        __slots__ = SelectEntity._calc_slots(
             "climate",
             "_tracking_state",
             "_tracking_state_change_unsub",
@@ -385,6 +386,8 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
         device_scale: ClassVar[float]
 
+        TARGET_TEMPERATURE_STEP: ClassVar[float]
+
         MTS_MODE_TO_PRESET_MAP: ClassVar[dict[int | None, str]]
         """maps device 'mode' value to the HA climate.preset_mode"""
         MTS_MODE_TO_TEMPERATUREKEY_MAP: ClassVar[dict[int | None, str]]
@@ -407,8 +410,9 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         _mts_onoff: int
 
         # HA core entity attributes override:
-        _attr_preset_modes: list[str]
-        _attr_supported_features: climate.ClimateEntityFeature
+        _attr_preset_modes: ClassVar[list[str]]
+        _attr_supported_features: ClassVar[climate.ClimateEntityFeature]
+
         current_humidity: float | None
         current_temperature: float | None
         hvac_action: climate.HVACAction | None
@@ -421,7 +425,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         target_temperature: float | None
         target_temperature_step: float
         temperature_unit: Final[str]
-        translation_key: Final[str]
 
     PLATFORM = climate.DOMAIN
 
@@ -436,16 +439,15 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
     device_scale = 1
 
+    TARGET_TEMPERATURE_STEP = 0.5
     PRESET_TO_ICON_MAP = {
         Preset.COMFORT: "mdi:sun-thermometer",
         Preset.SLEEP: "mdi:power-sleep",
         Preset.AWAY: "mdi:bag-checked",
     }
     """lookups used in MtsSetpointNumber to map a pretty icon to the setpoint entity"""
-
     SET_TEMP_FORCE_MANUAL_MODE = True
     """Determines the behavior of async_set_temperature."""
-
     # HA core entity attributes:
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
     _attr_preset_modes = list(Preset)
@@ -457,7 +459,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
     )
     _enable_turn_on_off_backwards_compatibility = False
 
-    translation_key = "mts_climate"
+    _attr_translation_key = "mts_climate"
 
     __slots__ = (
         "current_humidity",
@@ -495,7 +497,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         self.preset_modes = self._attr_preset_modes
         self.supported_features = self._attr_supported_features
         self.target_temperature = None
-        self.target_temperature_step = 0.5
+        self.target_temperature_step = self.TARGET_TEMPERATURE_STEP
         self.temperature_unit = hac.UnitOfTemperature.CELSIUS
         self._mts_active = False
         self._mts_mode = 0

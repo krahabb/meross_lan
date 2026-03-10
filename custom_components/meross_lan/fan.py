@@ -19,40 +19,32 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
     )
 
 
-class Fan(mle.ToggleXParser, mle.ValueParser, fan.FanEntity):
+class Fan(mle.ToggleXParser, fan.FanEntity):
     """
     Fan entity for map100 Air Purifier (or any device implementing Appliance.Control.Fan)
     """
 
     if TYPE_CHECKING:
 
-        class Args(mle.ValueParser.Args):
-            pass
-
         # HA core entity attributes:
         percentage: int | None
-        preset_mode: str | None
-        preset_modes: list[str] | None
         speed_count: int
-        supported_features: fan.FanEntityFeature
+        _attr_supported_features: fan.FanEntityFeature
 
     PLATFORM = fan.DOMAIN
 
     ns = mn.Appliance_Control_Fan
-    key_value = mc.KEY_SPEED
 
     # HA core entity attributes:
-    preset_mode = None
-    preset_modes = None
     try:
         # HA core 2024.8.0 new flags
-        supported_features = (
+        _attr_supported_features = (
             fan.FanEntityFeature.SET_SPEED
             | fan.FanEntityFeature.TURN_OFF
             | fan.FanEntityFeature.TURN_ON
         )
     except:
-        supported_features = fan.FanEntityFeature.SET_SPEED
+        _attr_supported_features = fan.FanEntityFeature.SET_SPEED
 
     _enable_turn_on_off_backwards_compatibility = False
 
@@ -69,26 +61,12 @@ class Fan(mle.ToggleXParser, mle.ValueParser, fan.FanEntity):
         super().__init__(channel, device)
         device.register_parser_entity(self)
 
-    @override
-    def update_device_value(self, device_value, /) -> bool | None:
-        if self.device_value != device_value:
-            self.device_value = device_value
-            if device_value:
-                self.is_on = True
-                if device_value > self.speed_count:
-                    self.speed_count = device_value
-                self.percentage = round(device_value * 100 / self.speed_count)
-                self._saved_speed = device_value
-            else:
-                self.is_on = False
-                self.percentage = 0
-            self.flush_state()
-            return True
-
     # interface: fan.FanEntity
     @override
     async def async_set_percentage(self, percentage: int):
-        await self.async_request_value(round(percentage * self.speed_count / 100))
+        await self.async_request_parse_ex(
+            {mc.KEY_SPEED: round(percentage * self.speed_count / 100)}
+        )
 
     @override
     async def async_turn_on(
@@ -99,10 +77,14 @@ class Fan(mle.ToggleXParser, mle.ValueParser, fan.FanEntity):
             await self.handler_togglex.async_set(
                 {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: 1}
             )
-        await self.async_request_value(
-            round(percentage * self.speed_count / 100)
-            if percentage
-            else self._saved_speed
+        await self.async_request_parse_ex(
+            {
+                mc.KEY_SPEED: (
+                    round(percentage * self.speed_count / 100)
+                    if percentage
+                    else self._saved_speed
+                )
+            }
         )
 
     @override
@@ -110,7 +92,7 @@ class Fan(mle.ToggleXParser, mle.ValueParser, fan.FanEntity):
         if self.handler_togglex:
             await self.handler_togglex.async_set({mc.KEY_ONOFF: 0}, self)
         else:
-            await self.async_request_value(0)
+            await self.async_request_parse_ex({mc.KEY_SPEED: 0})
 
     # interface: self
     def _parse_fan(self, payload: dict, /):
@@ -118,7 +100,17 @@ class Fan(mle.ToggleXParser, mle.ValueParser, fan.FanEntity):
         if self.ns_payload != payload:
             self.ns_payload = payload
             self.speed_count = payload.get(mc.KEY_MAXSPEED, self.speed_count)
-            self.update_device_value(payload[self.key_value])
+            speed = payload[mc.KEY_SPEED]
+            if speed:
+                self.is_on = True
+                if speed > self.speed_count:
+                    self.speed_count = speed
+                self.percentage = round(speed * 100 / self.speed_count)
+                self._saved_speed = speed
+            else:
+                self.is_on = False
+                self.percentage = 0
+            self.flush_state()
 
 
 def digest_init_fan(

@@ -101,15 +101,13 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
         climate: Final[MtsClimate]
         ns_payload: MtsScheduleNativeType | None
         _schedule: MtsScheduleNativeType | None
-        # HA core entity attributes:
-        supported_features: calendar.CalendarEntityFeature
 
     PLATFORM = calendar.DOMAIN
 
     # HA core entity attributes:
+    _attr_entity_category = ParserEntity.EntityCategory.CONFIG
     _attr_name = "Schedule"
-    entity_category = ParserEntity.EntityCategory.CONFIG
-    supported_features = (
+    _attr_supported_features = (
         calendar.CalendarEntityFeature.CREATE_EVENT
         | calendar.CalendarEntityFeature.DELETE_EVENT
         | calendar.CalendarEntityFeature.UPDATE_EVENT

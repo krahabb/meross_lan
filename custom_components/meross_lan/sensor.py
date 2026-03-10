@@ -1,3 +1,4 @@
+from functools import cached_property
 from typing import TYPE_CHECKING, override
 
 from homeassistant.components import sensor
@@ -33,20 +34,30 @@ class Sensor(mle.NumericEntity, sensor.SensorEntity):
 
     if TYPE_CHECKING:
 
-        class Args(mle.NumericEntity.Args):
-            device_class: NotRequired[sensor.SensorDeviceClass | None]
-            state_class: NotRequired[sensor.SensorStateClass]
-            suggested_display_precision: NotRequired[int]
-
         DEVICE_CLASS_TEMPERATURE_DELTA: Final[sensor.SensorDeviceClass]
         # HA core entity attributes:
         _attr_device_class: ClassVar[sensor.SensorDeviceClass | None]
         _attr_suggested_display_precision: ClassVar[int | None]
         device_class: sensor.SensorDeviceClass | None
-        state_class: sensor.SensorStateClass
-        suggested_display_precision: int | None
+
+        class Args(mle.NumericEntity.Args):
+            device_class: NotRequired[sensor.SensorDeviceClass | None]  # Override
+            state_class: NotRequired[sensor.SensorStateClass | None]
+            suggested_display_precision: NotRequired[int]
+
+        def __init__(
+            self,
+            channel: ChannelType | None,
+            parent: EntityManager,
+            /,
+            **kwargs: Unpack[Args],
+        ): ...
 
     PLATFORM = sensor.DOMAIN
+    CORE_ENTITY_ATTRIBUTES = mle.NumericEntity.CORE_ENTITY_ATTRIBUTES + (
+        "state_class",
+        "suggested_display_precision",
+    )
     DeviceClass = sensor.SensorDeviceClass
     StateClass = sensor.SensorStateClass
 
@@ -70,38 +81,21 @@ class Sensor(mle.NumericEntity, sensor.SensorEntity):
 
     # we basically default Sensor.state_class to SensorStateClass.MEASUREMENT
     # except these device classes
-    DEVICECLASS_TO_STATECLASS_MAP: dict[DeviceClass | None, StateClass] = {
+    DEVICECLASS_TO_STATECLASS_MAP: dict[DeviceClass | None, StateClass | None] = {
         None: StateClass.MEASUREMENT,
         DeviceClass.ENERGY: StateClass.TOTAL_INCREASING,
+        DeviceClass.ENUM: None,
     }
 
-    # HA core entity attributes:
-    _attr_suggested_display_precision = None
-
-    __SLOTS__ = (
-        "state_class",
-        "suggested_display_precision",
-    )
-
-    def __init__(
-        self,
-        channel: "ChannelType | None",
-        parent: "EntityManager",
-        /,
-        **kwargs: "Unpack[Args]",
-    ):
+    @cached_property
+    def state_class(self):
         try:
-            self.state_class = kwargs["state_class"]  # type: ignore
-        except KeyError:
-            self.state_class = self.DEVICECLASS_TO_STATECLASS_MAP.get(
-                kwargs.get("device_class", self._attr_device_class),
+            return self._attr_state_class
+        except AttributeError:
+            return self.DEVICECLASS_TO_STATECLASS_MAP.get(
+                self.device_class,
                 sensor.SensorStateClass.MEASUREMENT,
             )
-        try:
-            self.suggested_display_precision = kwargs["suggested_display_precision"]  # type: ignore
-        except KeyError:
-            self.suggested_display_precision = self._attr_suggested_display_precision
-        super().__init__(channel, parent, **kwargs)
 
 
 class EnumSensor(mle.ValueParser, Sensor):
@@ -110,19 +104,28 @@ class EnumSensor(mle.ValueParser, Sensor):
 
     if TYPE_CHECKING:
 
+        _attr_device_class: Final[sensor.SensorDeviceClass]
+        _attr_state_class: Final[None]
+        native_value: sensor.StateType
+
         class Args(mle.Entity.Args):
             native_value: NotRequired[sensor.StateType]
             device_class: NotRequired[Never]
 
+        def __init__(
+            self,
+            channel: ChannelType | None,
+            parent: BaseDevice,
+            /,
+            **kwargs: Unpack[Args],
+        ): ...
+
         @classmethod
         def ENTITY_DEF(
             cls,
-            **kwargs: "Unpack[EnumSensor.Args]",
-        ) -> "EnumSensor.EntityDef[EnumSensor]":  # type: ignore[override]
+            **kwargs: Unpack[Args],
+        ) -> EnumSensor.EntityDef[EnumSensor]:  # type: ignore[override]
             pass
-
-        _attr_device_class: Final[sensor.SensorDeviceClass]
-        native_value: sensor.StateType
 
         def update_native_value(
             self, native_value: sensor.StateType, /
@@ -130,15 +133,7 @@ class EnumSensor(mle.ValueParser, Sensor):
 
     # HA core entity attributes:
     _attr_device_class = sensor.SensorDeviceClass.ENUM
-
-    def __init__(
-        self,
-        channel: "ChannelType | None",
-        parent: "BaseDevice",
-        /,
-        **kwargs: "Unpack[Args]",
-    ):
-        super().__init__(channel, parent, **kwargs)
+    _attr_state_class = None
 
     @override
     def update_device_value(self, device_value: sensor.StateType, /):
@@ -161,17 +156,17 @@ class NumericSensor(mle.NumericParser, Sensor):
 
         def __init__(
             self,
-            channel: "ChannelType | None",
-            parent: "BaseDevice",
+            channel: ChannelType | None,
+            parent: BaseDevice,
             /,
-            **kwargs: "Unpack[Args]",
+            **kwargs: Unpack[Args],
         ): ...
 
         @classmethod
         def ENTITY_DEF(
             cls,
-            **kwargs: "Unpack[NumericSensor.Args]",
-        ) -> "NumericSensor.EntityDef[NumericSensor]":  # type: ignore[override]
+            **kwargs: Unpack[Args],
+        ) -> NumericSensor.EntityDef[NumericSensor]:  # type: ignore[override]
             pass
 
 
@@ -213,15 +208,38 @@ class LightSensor(NumericSensor):
     _attr_suggested_display_precision = 0
 
 
-class DiagnosticSensor(EnumSensor):
+class DiagnosticSensor(Sensor):
 
     if TYPE_CHECKING:
         is_diagnostic: Final
+        native_value: sensor.StateType
+
+        class Args(mle.Entity.Args):
+            native_value: NotRequired[sensor.StateType]
+
+        def __init__(
+            self,
+            channel: ChannelType | None,
+            parent: EntityManager,
+            /,
+            **kwargs: Unpack[Args],
+        ): ...
+
+        @classmethod
+        def ENTITY_DEF(
+            cls,
+            **kwargs: Unpack[Args],
+        ) -> DiagnosticSensor.EntityDef[DiagnosticSensor]:  # type: ignore[override]
+            pass
+
+        def update_native_value(
+            self, native_value: sensor.StateType, /
+        ) -> bool | None: ...
 
     is_diagnostic = True
 
     # HA core entity attributes:
-    entity_category = NumericSensor.EntityCategory.DIAGNOSTIC
+    _attr_entity_category = NumericSensor.EntityCategory.DIAGNOSTIC
 
     def _parse(self, payload: dict):
         """
@@ -232,10 +250,10 @@ class DiagnosticSensor(EnumSensor):
         self.update_device_value(json_dumps(payload))
 
 
-class ProtocolSensor(EnumSensor):
+class ProtocolSensor(Sensor):
 
     if TYPE_CHECKING:
-        parent: Final["Device"]  # type: ignore[override]
+        parent: Final[Device]  # type: ignore[override]
         native_value: str
 
     ENTITY_KEY = "sensor_protocol"
@@ -247,18 +265,17 @@ class ProtocolSensor(EnumSensor):
 
     # HA core entity attributes:
     _attr_available = True
+    _attr_device_class = sensor.SensorDeviceClass.ENUM
+    _attr_entity_category = Sensor.EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
-    entity_category = EnumSensor.EntityCategory.DIAGNOSTIC
+    _attr_state_class = None
+
     options: list[str] = [
         STATE_DISCONNECTED,
         Transport.BLUETOOTH,
         Transport.HTTP,
         Transport.MQTT,
     ]
-
-    @staticmethod
-    def _get_attr_state(value):
-        return ProtocolSensor.STATE_ACTIVE if value else ProtocolSensor.STATE_INACTIVE
 
     @staticmethod
     def _get_client_attr_state(client: "AbstractClient | None"):
@@ -270,7 +287,7 @@ class ProtocolSensor(EnumSensor):
 
     def __init__(self, parent: "Device"):
         self.extra_state_attributes = {}
-        super().__init__(None, parent, native_value=ProtocolSensor.STATE_DISCONNECTED)
+        super().__init__(None, parent, native_value=ProtocolSensor.STATE_DISCONNECTED) # type: ignore
 
     def set_available(self):
         self.native_value = self.parent.transport
@@ -339,9 +356,9 @@ class SignalStrengthSensor(mle.EntityNamespaceMixin, NumericSensor):
     ns = mn.Appliance_System_Runtime
     key_value = mc.KEY_SIGNAL
     # HA core entity attributes:
+    _attr_entity_category = NumericSensor.EntityCategory.DIAGNOSTIC
     _attr_native_unit_of_measurement = mlc.hac.PERCENTAGE
-    entity_category = NumericSensor.EntityCategory.DIAGNOSTIC
-    icon = "mdi:wifi"
+    _attr_icon = "mdi:wifi"
 
 
 class FilterMaintenanceSensor(NumericSensor):
@@ -352,8 +369,8 @@ class FilterMaintenanceSensor(NumericSensor):
     key_value = mc.KEY_LIFE
 
     # HA core entity attributes:
+    _attr_entity_category = NumericSensor.EntityCategory.DIAGNOSTIC
     _attr_native_unit_of_measurement = mlc.hac.PERCENTAGE
-    entity_category = NumericSensor.EntityCategory.DIAGNOSTIC
 
     def __init__(self, channel: int, parent: "Device", /):
         NumericSensor.__init__(self, channel, parent)

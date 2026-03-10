@@ -22,20 +22,20 @@ class ScreenBrightnessNumber(ParserNumber):
     ns = mn.Appliance_Control_Screen_Brightness
 
     # HA core entity attributes:
+    _attr_icon = "mdi:brightness-percent"
     _attr_native_unit_of_measurement = mlc.hac.PERCENTAGE
-    icon: str = "mdi:brightness-percent"
-    native_max_value = 100
-    native_min_value = 0
-    native_step = 12.5
+    _attr_native_max_value = 100
+    _attr_native_min_value = 0
+    _attr_native_step = 12.5
 
     def __init__(self, device: "Device", key: str, /):
-        self.key_value = key
         ParserNumber.__init__(
             self,
             0,
             device,
             entity_key=f"screenbrightness_{key}",
             name=f"Screen brightness ({key})",
+            key_value=key,
         )
 
     async def async_set_native_value(self, value: float, /):
@@ -82,8 +82,6 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
 
 class MtsWarningSensor(EnumSensor):
 
-    __slots__ = ("translation_key",)
-
     def __init__(
         self, number_temperature: "MtsCommonTemperatureExtNumber", native_value, /
     ):
@@ -123,12 +121,6 @@ class MtsCommonTemperatureNumber(ParserNumber):
     key_value = mc.KEY_VALUE
 
     _attr_device_class = ParserNumber.DeviceClass.TEMPERATURE
-
-    __slots__ = (
-        "native_max_value",
-        "native_min_value",
-        "native_step",
-    )
 
     def __init__(self, climate: "MtsThermostatClimate", /):
         ParserNumber.__init__(
@@ -201,23 +193,18 @@ class MtsDeadZoneNumber(MtsCommonTemperatureNumber):
     ns = mn_t.Appliance_Control_Thermostat_DeadZone
 
     _attr_device_class = ParserNumber.DEVICE_CLASS_TEMPERATURE_DELTA
-
-    def __init__(self, climate: "MtsThermostatClimate", /):
-        self.native_max_value = 3.5
-        self.native_min_value = 0.5
-        self.native_step = 0.1
-        MtsCommonTemperatureNumber.__init__(self, climate)
+    _attr_native_max_value = 3.5
+    _attr_native_min_value = 0.5
+    _attr_native_step = 0.1
 
 
 class MtsFrostNumber(MtsCommonTemperatureExtNumber):
 
     ns = mn_t.Appliance_Control_Thermostat_Frost
 
-    def __init__(self, climate: "MtsThermostatClimate", /):
-        self.native_max_value = 15
-        self.native_min_value = 5
-        self.native_step = climate.target_temperature_step
-        MtsCommonTemperatureExtNumber.__init__(self, climate)
+    _attr_native_max_value = 15
+    _attr_native_min_value = 5
+    _attr_native_step = MtsClimate.TARGET_TEMPERATURE_STEP
 
 
 class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
@@ -229,11 +216,9 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
 
     __slots__ = ("sensor_external_temperature",)
 
-    def __init__(self, climate: "MtsThermostatClimate", /):
-        self.native_max_value = 70
-        self.native_min_value = 20
-        self.native_step = climate.target_temperature_step
-        MtsCommonTemperatureExtNumber.__init__(self, climate)
+    _attr_native_max_value = 70
+    _attr_native_min_value = 20
+    _attr_native_step = MtsClimate.TARGET_TEMPERATURE_STEP
 
     def _parse(self, payload: "mt_t.Overheat_C", /):
         try:
@@ -394,12 +379,9 @@ class MtsThermostatClimate(MtsClimate):
         ns = mn_t.Appliance_Control_Thermostat_Calibration
 
         _attr_device_class = ParserNumber.DEVICE_CLASS_TEMPERATURE_DELTA
-
-        def __init__(self, climate: "MtsThermostatClimate", /):
-            self.native_max_value = 8
-            self.native_min_value = -8
-            self.native_step = 0.1
-            MtsCommonTemperatureNumber.__init__(self, climate)
+        _attr_native_max_value = 8
+        _attr_native_min_value = -8
+        _attr_native_step = 0.1
 
     def __init__(self, channel: int, device: "Device", /):
         MtsClimate.__init__(self, channel, device)

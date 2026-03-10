@@ -5,7 +5,7 @@ from homeassistant.components import binary_sensor
 from .helpers import entity as mle
 
 if TYPE_CHECKING:
-    from typing import ClassVar, NotRequired
+    from typing import ClassVar, NotRequired, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -24,11 +24,11 @@ class BinarySensor(mle.BinaryEntity, binary_sensor.BinarySensorEntity):
 
     if TYPE_CHECKING:
 
-        class Args(mle.BinaryEntity.Args):
-            device_class: NotRequired[binary_sensor.BinarySensorDeviceClass | None]
-
         # HA core entity attributes:
         _attr_device_class: ClassVar[binary_sensor.BinarySensorDeviceClass | None]
+
+        class Args(mle.BinaryEntity.Args):
+            device_class: NotRequired[binary_sensor.BinarySensorDeviceClass | None]
 
     PLATFORM = binary_sensor.DOMAIN
     DeviceClass = binary_sensor.BinarySensorDeviceClass
@@ -36,3 +36,16 @@ class BinarySensor(mle.BinaryEntity, binary_sensor.BinarySensorEntity):
 
 class BinarySensorParser(mle.BinaryParser, BinarySensor):
     """Binary sensor entity automatically linked to namespace handling/parsing."""
+
+    if TYPE_CHECKING:
+
+        class Args(BinarySensor.Args, mle.BinaryParser.Args):
+            pass
+
+        def __init__(
+            self,
+            channel: mle.ChannelType | None,
+            parent: mle.BaseDevice,
+            /,
+            **kwargs: Unpack[Args],
+        ): ...

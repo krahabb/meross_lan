@@ -25,13 +25,11 @@ class Mts300Climate(MtsThermostatClimate):
             """{"channel":0,"value":150,"min":-450,"max":450,"humiValue":-60}"""
             number_calibration_humi: ParserNumber
 
-        __slots__ = ("number_calibration_humi",)
+        _attr_native_max_value = 4.5
+        _attr_native_min_value = -4.5
+        _attr_native_step = 0.1
 
-        def __init__(self, climate: "MtsThermostatClimate", /):
-            super().__init__(climate)
-            self.native_max_value = 4.5
-            self.native_min_value = -4.5
-            self.native_step = 0.1
+        __slots__ = ("number_calibration_humi",)
 
         def _parse(self, payload: "mt_t.Calibration_C", /):
             try:
@@ -45,12 +43,12 @@ class Mts300Climate(MtsThermostatClimate):
                     device_class=ParserNumber.DeviceClass.HUMIDITY,
                     device_scale=10,
                     device_value=humidity,
+                    key_value="humiValue",
+                    native_max_value=5,
+                    native_min_value=-5,
+                    native_step=0.1,
                 )
                 self.number_calibration_humi.ns = self.ns
-                self.number_calibration_humi.key_value = "humiValue"
-                self.number_calibration_humi.native_max_value = 5
-                self.number_calibration_humi.native_min_value = -5
-                self.number_calibration_humi.native_step = 0.1
             except KeyError:  # missing humiValue
                 pass
 
@@ -69,11 +67,10 @@ class Mts300Climate(MtsThermostatClimate):
         ns = mn.Appliance_Config_Sensor_Association
         key_group = mc.KEY_TEMP
         key_value = ns.slug_end
-
         ENTITY_KEY = f"{ns.slug}__{key_group}_{key_value}"
-        _attr_name = "Sensor Association"
 
-        entity_category = SelectParser.EntityCategory.DIAGNOSTIC
+        _attr_entity_category = SelectParser.EntityCategory.DIAGNOSTIC
+        _attr_name = "Sensor Association"
 
         """ TODO: get a description of possible options and implement either translations or constant symbols
         so that we can change also the entity category to CONFIG

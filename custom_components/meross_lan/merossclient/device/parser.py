@@ -77,7 +77,9 @@ class NamespaceParser(logging.Loggable):
         parent: Final[PhysicalDevice]  # type: ignore[override]
         ns: mn.Namespace  # TODO: rename uppercase
         channel: PayloadIndexType | None  # type: ignore[assignment] # TODO: rename to 'index'
-        """The channel/id/subId key value according to the namespace (indexed or not)."""
+        """The channel/id/subId key value according to the namespace (indexed or not).
+        This is used by the NamespaceHandler to route messages to the correct parser.
+        This is expected to be initialized by derived classes according to the namespace syntax."""
         ns_payload: JsonMapping  # type: ignore[assignment]
         """The last parsed payload."""
         _ns_handlers: set[NamespaceHandler]
@@ -109,27 +111,11 @@ class NamespaceParser(logging.Loggable):
         """This is called by the NamespaceHandler when registering this parser to the handler.
         This is useful to setup the link back to the NamespaceHandler for issuing requests.
         """
+        self.ns_payload = mn.EMPTY_DICT
         try:
             self._ns_handlers.add(handler)
         except AttributeError:
             self._ns_handlers = {handler}
-
-    @cached_property
-    def channel(self) -> "PayloadIndexType | None":
-        """The channel/id/subId key value according to the namespace (indexed or not).
-        This is used by the NamespaceHandler to route messages to the correct parser.
-        This is expected to be implemented by derived classes according to the namespace syntax.
-        By default, it returns None, which means that the parser is not indexed and will receive
-        all the messages for the namespace."""
-        return None
-
-    @cached_property
-    def ns_payload(self) -> "JsonMapping":
-        """The last parsed payload. This is set by the default _parse method but it can be
-        used by derived classes to store the last parsed payload for later use, such as
-        when issuing a request to update a value in the device and needing to merge the
-        request payload with the last known state of the whole namespace."""
-        return mn.EMPTY_DICT
 
     @cached_property
     def handler_ns(self):
@@ -178,15 +164,12 @@ class NamespaceValue(NamespaceParser):
 
     if TYPE_CHECKING:
         key_value: ClassVar[str] | str
-        device_value: Any  # type: ignore[assignment]
+        device_value: Any
 
     key_value = mc.KEY_VALUE
+    device_value = None
 
     __SLOTS__ = ("device_value",)
-
-    @cached_property
-    def device_value(self) -> "Any":
-        return None
 
     def update_device_value(self, device_value, /) -> bool | None:
         # Called when the device value is being updated, either by parsing a new payload or by issuing a request.
@@ -220,10 +203,12 @@ class NamespaceBoolean(NamespaceValue):
         """The actual device value representing the 'on' state."""
         native_off: ClassVar[int] | int
         """The actual device value representing the 'off' state."""
+        is_on: bool | None
 
     key_value = mc.KEY_ONOFF
     native_on = 1
     native_off = 0
+    is_on = False
 
     __SLOTS__ = ("is_on",)
 
@@ -242,11 +227,6 @@ class NamespaceBoolean(NamespaceValue):
 
     # interface compatibility with HA toggle entities, allowing to use this class as a
     # mixin with other NamespaceParser specializations
-    @cached_property
-    def is_on(self) -> bool | None:
-        """Return True if entity is on."""
-        return None
-
     async def async_turn_on(self, **kwargs):
         await self.async_request_value(self.native_on)
 

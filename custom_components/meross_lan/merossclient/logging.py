@@ -235,13 +235,19 @@ class Loggable(metaclass=abc.ABCMeta):
 
     @classmethod
     def _calc_slots(cls, *slots: "Unpack[tuple[str, ...]]"):
-        _slots = set(slots)
+        _added_slots = set(slots)
+        _existing_slots = set()
         for _base in cls.__mro__:
             try:
-                _slots.update(_base.__SLOTS__)
+                _added_slots.update(_base.__SLOTS__)
             except AttributeError:
                 pass
-        return _slots
+            try:
+                _existing_slots.update(_base.__slots__)
+            except AttributeError:
+                pass
+
+        return _added_slots - _existing_slots
 
     def __init__(
         self, id, parent: "LoggerType | None" = None, /, **kwargs: "Unpack[Args]"

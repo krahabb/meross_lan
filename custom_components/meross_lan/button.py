@@ -28,20 +28,18 @@ class Button(Entity, button.ButtonEntity):
     # when the device is online/offline
     if TYPE_CHECKING:
 
+        # HA core entity attributes:
+        _attr_device_class: ClassVar[button.ButtonDeviceClass | None]
+
         class Args(Entity.Args):
             name: str  # Override
             device_class: NotRequired[button.ButtonDeviceClass | None]
-
-        # HA core entity attributes:
-        _attr_device_class: ClassVar[button.ButtonDeviceClass | None]
 
     PLATFORM = button.DOMAIN
     DeviceClass = button.ButtonDeviceClass
 
     # HA core entity attributes:
     _attr_available = False
-
-    __slots__ = ()
 
     def __init__(
         self,

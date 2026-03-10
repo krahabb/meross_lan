@@ -41,7 +41,7 @@ class TimeEntity(Entity, time.TimeEntity):
     PLATFORM = time.DOMAIN
 
     # HA core entity attributes:
-    entity_category = Entity.EntityCategory.CONFIG
+    _attr_entity_category = Entity.EntityCategory.CONFIG
 
     __slots__ = (
         "device_scale",
