@@ -12,11 +12,12 @@ from ..number import EmulatedNumber, ParserNumber
 from ..switch import SwitchParser
 
 if TYPE_CHECKING:
-    from typing import Final, Unpack
+    from typing import ClassVar, Final, NotRequired, TypedDict, Unpack
 
     from ..helpers.device import Device, MerossMessage
-    from ..helpers.entity import ParserEntity
+    from ..helpers.entity import ValueParser
     from ..merossclient.protocol.types import JsonList
+    from ..number import Number
 
 
 class GarageTimeoutBinarySensor(BinarySensor):
@@ -61,35 +62,44 @@ class GarageTimeoutBinarySensor(BinarySensor):
         self.flush_state()
 
 
-class GarageMultipleConfigSwitch(SwitchParser):
-    """
-    switch entity to manage MSG configuration (buzzer, enable)
-    'x channel' through mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
-    """
+class GarageConfigMixin(ValueParser if TYPE_CHECKING else object):
+    if TYPE_CHECKING:
 
+        class Args(TypedDict):
+            device_value: NotRequired[int]
+
+    # Assuming by default we're parsing MultipleConfig
+    # This will be overriden when creating entities for Appliance.GarageDoor.Config
     ns = mn.Appliance_GarageDoor_MultipleConfig
 
     def __init__(
         self,
         channel: int | None,
-        parent: "Device",
+        device: "Device",
         key: str,
-        *,
-        device_value=None,
+        /,
+        **kwargs: "Unpack[Args]",
     ):
-        # self.key_value = key# TODO: check
-        SwitchParser.__init__(
-            self,
+        super().__init__(
             channel,
-            parent,
+            device,
             entity_key=f"config_{key}",
             key_value=key,
-            device_value=device_value,
             name=key,
+            **kwargs,
         )
 
 
-class GarageEnableSwitch(GarageMultipleConfigSwitch):
+class GarageConfigSwitch(GarageConfigMixin, SwitchParser):
+    """
+    switch entity to manage MSG configuration (buzzer, enable)
+    'x channel' through mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
+    """
+
+    pass
+
+
+class GarageEnableSwitch(GarageConfigSwitch):
     """
     Dedicated entity for "doorEnable" config option in mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
     in order to try enable/disable the same channel associated entities in HA too
@@ -98,16 +108,14 @@ class GarageEnableSwitch(GarageMultipleConfigSwitch):
 
     def __init__(
         self,
-        channel: int,
+        channel: int | None,
         parent: "Device",
         key: str,
-        *,
-        device_value=None,
+        /,
+        **kwargs: "Unpack[GarageEnableSwitch.Args]",
     ):
-        GarageMultipleConfigSwitch.__init__(
-            self, channel, parent, key, device_value=device_value
-        )
-        self._channel_enable(device_value)
+        GarageConfigSwitch.__init__(self, channel, parent, key, **kwargs)
+        self._channel_enable(self.is_on)
 
     @override
     def update_boolean_value(self, is_on, /):
@@ -136,100 +144,86 @@ class GarageEnableSwitch(GarageMultipleConfigSwitch):
                         registry_update_entity(entry.entity_id, disabled_by=disabler)
 
 
-class GarageConfigSwitch(GarageMultipleConfigSwitch):
-    """
-    switch entity to manage MSG configuration (buzzer)
-    'x device' through mc.NS_APPLIANCE_GARAGEDOOR_CONFIG
-    """
-
-    ns = mn.Appliance_GarageDoor_Config
-
-
-class GarageMultipleConfigNumber(ParserNumber):
+class GarageConfigNumber(GarageConfigMixin, ParserNumber):
     """
     number entity to manage MSG configuration (open/close timeout and the likes)
     'x channel' through mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
     """
 
-    ns = mn.Appliance_GarageDoor_MultipleConfig
+    if TYPE_CHECKING:
 
-    KEY_TO_DEVICE_CLASS_MAP = {
-        mc.KEY_SIGNALDURATION: (ParserNumber.DEVICE_CLASS_DURATION, 1000),
-        mc.KEY_SIGNALCLOSE: (ParserNumber.DEVICE_CLASS_DURATION, 1000),
-        mc.KEY_SIGNALOPEN: (ParserNumber.DEVICE_CLASS_DURATION, 1000),
-        mc.KEY_DOORCLOSEDURATION: (ParserNumber.DEVICE_CLASS_DURATION, 1000),
-        mc.KEY_DOOROPENDURATION: (ParserNumber.DEVICE_CLASS_DURATION, 1000),
-    }
+        class Args(ParserNumber.Args):
+            pass
 
-    # HA core entity attributes:
-    # these are ok for open/close durations
-    # customize those when needed...
-    _attr_native_max_value = 60
-    _attr_native_min_value = 1
-    _attr_native_step = 1
-
-    def __init__(
-        self,
-        channel: int | None,
-        parent: "Device",
-        key: str,
-        **kwargs: "Unpack[ParserNumber.Args]",
-    ):
-        self.key_value = key
-        kwargs["name"] = key
-        kwargs["entity_key"] = f"config_{key}"
-        kwargs["device_class"], kwargs["device_scale"] = (
-            GarageMultipleConfigNumber.KEY_TO_DEVICE_CLASS_MAP.get(key, (None, 1))
-        )
-        ParserNumber.__init__(self, channel, parent, **kwargs)
-
-
-class GarageConfigNumber(GarageMultipleConfigNumber):
-    """
-    number entity to manage MSG configuration (open/close timeout and the likes)
-    'x device' through mc.NS_APPLIANCE_GARAGEDOOR_CONFIG
-    """
-
-    ns = mn.Appliance_GarageDoor_Config
-
-
-class GarageEmulatedConfigNumber(EmulatedNumber):
-    """
-    number entity to manage MSG configuration (open/close timeout)
-    'x channel' when mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG is unavailable
-    and the mc.NS_APPLIANCE_GARAGEDOOR_CONFIG too does not carry open/close
-    timeouts (this happens particularly on fw 3.2.7 as per #338).
-    This entity will just provide an 'HA only' storage for these parameters
-    """
-
-    # HA core entity attributes:
-    _attr_device_class = EmulatedNumber.DEVICE_CLASS_DURATION
-    _attr_native_max_value = 60
-    _attr_native_min_value = 1
-    _attr_native_step = 1
-
-    def __init__(self, garage: "GarageDoor", key: str, /):
-        EmulatedNumber.__init__(
+        def __init__(
             self,
-            garage.channel,
-            garage.parent,
-            entity_key=f"config_{key}",
-            native_value=garage._transition_duration,
-            name=key,
-        )
+            channel: int | None,
+            parent: Device,
+            /,
+            **kwargs: Unpack[Args],
+        ): ...
+
+    # these are ok for almost all config entities (they're mostly durations with
+    # milliseconds device_value)
+    # customize those when needed...
+    _attr_device_scale = 1000
+    # HA core entity attributes:
+    _attr_device_class = ParserNumber.DEVICE_CLASS_DURATION
+    _attr_native_max_value = 60
+    _attr_native_min_value = 1
+    _attr_native_step = 1
+
+
+class _DurationHelper:
+    """
+    GarageDoor helper class to manage the automatic instantiation of number entities for
+    doorOpenDuration/doorCloseDuration should they be missing in MultipleConfig (legacy fw) and eventually
+    update the related attribute(s) in GarageDoor.
+    The logic here is to check if Garagedoor.Config carries any candidate or fallback to an emulated number.
+    """
+
+    if TYPE_CHECKING:
+        garage_door: Final["GarageDoor"]
+        key: Final[str]
+
+    __slots__ = ("garage_door", "key")
+
+    def __init__(self, garage_door: "GarageDoor", key: str):
+        self.garage_door = garage_door
+        self.key = key
+
+    @property
+    def native_value(self):
+        # Invoked only once (per key) since it'll also install a definitive
+        # number entity
+        gd = self.garage_door
+        try:
+            number: "Number" = gd.parent.entities[f"config_{self.key}"]  # type: ignore
+        except KeyError:
+            number = EmulatedNumber(
+                gd.channel,
+                gd.parent,
+                entity_key=f"config_{self.key}",
+                native_value=gd._transition_duration,
+                name=self.key,
+                device_class=EmulatedNumber.DEVICE_CLASS_DURATION,
+                native_max_value=60,
+                native_min_value=1,
+                native_step=1,
+            )
+        setattr(gd, f"number_{self.key}", number)
+        return number.native_value
 
 
 class GarageDoor(Cover):
 
     if TYPE_CHECKING:
 
-        channel: Final[int]  # type: ignore[override]
-
-        CONFIG_KEY_TO_ENTITY_MAP: Final[dict[str, type[GarageMultipleConfigSwitch]]]
+        ENTITY_DEFS: dict[str, GarageConfigMixin.EntityDef[GarageConfigMixin]]
 
         binary_sensor_timeout: GarageTimeoutBinarySensor
-        number_close_timeout: ParserNumber | EmulatedNumber | None
-        number_open_timeout: ParserNumber | EmulatedNumber | None
+        number_doorCloseDuration: Number | _DurationHelper
+        number_doorOpenDuration: Number | _DurationHelper
 
     ns = mn.Appliance_GarageDoor_State
     key_value = mc.KEY_OPEN
@@ -239,12 +233,15 @@ class GarageDoor(Cover):
 
     # these keys in Appliance.GarageDoor.MultipleConfig are to be ignored
     CONFIG_KEY_EXCLUDED = (mc.KEY_CHANNEL, mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
-    # maps keys from Appliance.GarageDoor.MultipleConfig to
-    # dedicated entity types (if any) else create a GarageMultipleConfigNumber
-    CONFIG_KEY_TO_ENTITY_MAP = {
-        mc.KEY_BUZZERENABLE: GarageMultipleConfigSwitch,
-        mc.KEY_DOORENABLE: GarageEnableSwitch,
-    }
+    ENTITY_DEFS = {
+        mc.KEY_BUZZERENABLE: GarageConfigSwitch.ENTITY_DEF(),
+        mc.KEY_DOORENABLE: GarageEnableSwitch.ENTITY_DEF(),
+        mc.KEY_SIGNALDURATION: GarageConfigNumber.ENTITY_DEF(),
+        mc.KEY_SIGNALCLOSE: GarageConfigNumber.ENTITY_DEF(),
+        mc.KEY_SIGNALOPEN: GarageConfigNumber.ENTITY_DEF(),
+        mc.KEY_DOORCLOSEDURATION: GarageConfigNumber.ENTITY_DEF(),
+        mc.KEY_DOOROPENDURATION: GarageConfigNumber.ENTITY_DEF(),
+    }  # type: ignore
 
     # HA core entity attributes:
     _attr_device_class = Cover.DeviceClass.GARAGE
@@ -255,8 +252,8 @@ class GarageDoor(Cover):
         "_transition_duration",
         "_transition_start",
         "binary_sensor_timeout",
-        "number_close_timeout",
-        "number_open_timeout",
+        "number_doorCloseDuration",
+        "number_doorOpenDuration",
     )
 
     def __init__(self, channel: int, device: "Device", /):
@@ -270,26 +267,34 @@ class GarageDoor(Cover):
             self.ATTR_TRANSITION_DURATION: self._transition_duration
         }
         Cover.__init__(self, channel, device)
-        ability = device.descriptor.ability
         device.register_parser_entity(self)
         device.register_togglex_channel(self, False)
         self.binary_sensor_timeout = GarageTimeoutBinarySensor(self)
-        if mn.Appliance_GarageDoor_MultipleConfig in ability:
+        if mn.Appliance_GarageDoor_MultipleConfig in device.descriptor.ability:
             # historically, when MultipleConfig appeared, these used to be
             # the available timeouts while recent fw (4.2.8) shows presence
             # of more 'natural' doorOpenDuration/doorCloseDuration keys.
             # We'll then override this initial guessing when we _parse_config
             # should those new keys appear
-            self.number_close_timeout = GarageMultipleConfigNumber(
+            self.number_doorCloseDuration = self.ENTITY_DEFS[mc.KEY_SIGNALCLOSE].type(
                 channel, device, mc.KEY_SIGNALCLOSE
-            )
-            self.number_open_timeout = GarageMultipleConfigNumber(
+            )  # type: ignore
+            self.number_doorOpenDuration = self.ENTITY_DEFS[mc.KEY_SIGNALOPEN].type(
                 channel, device, mc.KEY_SIGNALOPEN
-            )
+            )  # type: ignore
             device.register_parser(self, mn.Appliance_GarageDoor_MultipleConfig)
         else:
-            self.number_close_timeout = None
-            self.number_open_timeout = None
+            self.number_doorCloseDuration = _DurationHelper(
+                self, mc.KEY_DOORCLOSEDURATION
+            )
+            self.number_doorOpenDuration = _DurationHelper(
+                self, mc.KEY_DOOROPENDURATION
+            )
+
+    def shutdown(self):
+        super().shutdown()
+        del self.number_doorCloseDuration
+        del self.number_doorOpenDuration
 
     async def async_added_to_hass(self):
         await Cover.async_added_to_hass(self)
@@ -348,34 +353,11 @@ class GarageDoor(Cover):
             if open_request:
                 self.is_closing = False
                 self.is_opening = True
-                try:
-                    timeout = self.number_open_timeout.native_value  # type: ignore
-                except AttributeError:
-                    # this happens (once) when we don't have MULTIPLECONFIG ns support
-                    # we'll then try use the 'x device' CONFIG or (since it could be missing)
-                    # just build an emulated config entity
-                    self.number_open_timeout = device.entities.get(
-                        f"config_{mc.KEY_DOOROPENDURATION}"
-                    ) or GarageEmulatedConfigNumber(  # type: ignore
-                        self, mc.KEY_DOOROPENDURATION
-                    )
-                    timeout = self.number_open_timeout.native_value  # type: ignore
+                timeout = self.number_doorOpenDuration.native_value
             else:
                 self.is_closing = True
                 self.is_opening = False
-                try:
-                    timeout = self.number_close_timeout.native_value  # type: ignore
-                except AttributeError:
-                    # this happens (once) when we don't have MULTIPLECONFIG ns support
-                    # we'll then try use the 'x device' CONFIG or (since it could be missing)
-                    # just build an emulated config entity
-                    self.number_close_timeout = device.entities.get(
-                        f"config_{mc.KEY_DOORCLOSEDURATION}"
-                    ) or GarageEmulatedConfigNumber(  # type: ignore
-                        self, mc.KEY_DOORCLOSEDURATION
-                    )
-                    timeout = self.number_close_timeout.native_value  # type: ignore
-
+                timeout = self.number_doorCloseDuration.native_value
             self.schedule_callback(0.9, self._transition_callback)
             # check the timeout after expected to account
             # for delays in communication
@@ -451,23 +433,17 @@ class GarageDoor(Cover):
                 self._config.get(key) == value
             ):
                 continue
+            self._config[key] = value  # useless ?
             try:
                 try:
-                    entity: "ParserEntity" = entities[f"{entity_id_prefix}{key}"]  # type: ignore
+                    entities[f"{entity_id_prefix}{key}"].update_device_value(value)
                 except KeyError:
-                    entity_class = GarageDoor.CONFIG_KEY_TO_ENTITY_MAP.get(
-                        key, GarageMultipleConfigNumber
-                    )
-                    entity = entity_class(
+                    entity_def = self.ENTITY_DEFS[key]
+                    entity = entity_def.type(
                         self.channel, self.parent, key, device_value=value
                     )
-                    if key == mc.KEY_DOORCLOSEDURATION:
-                        self.number_close_timeout = entity  # type: ignore
-                    elif key == mc.KEY_DOOROPENDURATION:
-                        self.number_open_timeout = entity  # type: ignore
-                    continue
-                entity._parse(payload)
-                self._config[key] = value
+                    if key in (mc.KEY_DOORCLOSEDURATION, mc.KEY_DOOROPENDURATION):
+                        setattr(self, f"number_{key}", entity)
             except Exception as exception:
                 self.log_exception(
                     self.WARNING,
@@ -537,117 +513,50 @@ class GarageDoor(Cover):
 class GarageDoorConfigNamespaceHandler(NamespaceHandler):
 
     if TYPE_CHECKING:
-        number_signalDuration: GarageConfigNumber
-        switch_buzzerEnable: GarageConfigSwitch
-        number_doorOpenDuration: ParserNumber | EmulatedNumber | None
-        number_doorCloseDuration: ParserNumber | EmulatedNumber | None
+        ENTITY_DEFS: dict[str, GarageConfigMixin.EntityDef[GarageConfigMixin]]
 
-    __slots__ = (
-        "number_signalDuration",
-        "switch_buzzerEnable",
-        "number_doorOpenDuration",
-        "number_doorCloseDuration",
-    )
+        _check_missing_config_keys: ClassVar[bool] | bool
+        """Guard used to eventually initialize emulated entities for garage door open/close durations
+        should they be missed in MultipleConfig."""
 
-    def __init__(self, device: "Device", /):
-        self.number_doorOpenDuration = None  # type: ignore
-        self.number_doorCloseDuration = None  # type: ignore
-        NamespaceHandler.__init__(
-            self,
-            mn.Appliance_GarageDoor_Config,
-            device,
-            handler=self._handle_Appliance_GarageDoor_Config,
-        )
+    ENTITY_DEFS = {
+        mc.KEY_BUZZERENABLE: GarageConfigSwitch.ENTITY_DEF(),
+        mc.KEY_SIGNALDURATION: GarageConfigNumber.ENTITY_DEF(
+            native_step=0.1,
+            native_min_value=0.1,
+        ),
+        mc.KEY_DOORCLOSEDURATION: GarageConfigNumber.ENTITY_DEF(),
+        mc.KEY_DOOROPENDURATION: GarageConfigNumber.ENTITY_DEF(),
+    }  # type: ignore
 
-    def _handle_Appliance_GarageDoor_Config(self, message: "MerossMessage", /):
+    _check_missing_config_keys = True
+
+    def _handle(self, message: "MerossMessage", /):
         # {"config": {"signalDuration": 1000, "buzzerEnable": 0, "doorOpenDuration": 30000, "doorCloseDuration": 30000}}
-        payload = message.payload[mc.KEY_CONFIG]
-        if mc.KEY_SIGNALDURATION in payload:
-            try:
-                self.number_signalDuration.update_device_value(
-                    payload[mc.KEY_SIGNALDURATION]
-                )
-            except AttributeError:
-                self.number_signalDuration = GarageConfigNumber(
-                    None,
-                    self.parent,
-                    mc.KEY_SIGNALDURATION,
-                    device_value=payload[mc.KEY_SIGNALDURATION],
-                    native_step=0.1,
-                    native_min_value=0.1,
-                )
+        entities = self.parent.entities
+        for key, value in message.payload[mc.KEY_CONFIG].items():
 
-        if mc.KEY_BUZZERENABLE in payload:
             try:
-                self.switch_buzzerEnable.update_device_value(
-                    payload[mc.KEY_BUZZERENABLE]
-                )
-            except AttributeError:
-                self.switch_buzzerEnable = GarageConfigSwitch(
-                    None,
-                    self.parent,
-                    mc.KEY_BUZZERENABLE,
-                    device_value=payload[mc.KEY_BUZZERENABLE],
-                )
+                entities[f"config_{key}"].update_device_value(value)
+            except KeyError:
+                entity_def = self.ENTITY_DEFS[key]
+                entity_def.type(
+                    None, self.parent, key, device_value=value, **entity_def.kwargs
+                ).ns = self.id
 
-        if mc.KEY_DOOROPENDURATION in payload:
-            # this config key has been removed in recent firmwares
-            # now we have door open/close duration set per channel (#82)
-            # but legacy ones still manage this
-            try:
-                self.number_doorOpenDuration.update_device_value(  # type: ignore
-                    payload[mc.KEY_DOOROPENDURATION]
-                )
-            except AttributeError:
-                self.number_doorOpenDuration = GarageConfigNumber(
-                    None,
-                    self.parent,
-                    mc.KEY_DOOROPENDURATION,
-                    device_value=payload[mc.KEY_DOOROPENDURATION],
-                )
-        else:
-            # no config for KEY_DOOROPENDURATION: we'll let every channel manage it's own
-            if not self.number_doorOpenDuration:  # use as a guard...
-                device = self.parent
-                for channel_digest in device.descriptor.digest[mc.KEY_GARAGEDOOR]:
-                    garage: GarageDoor = device.entities[channel_digest[mc.KEY_CHANNEL]]  # type: ignore
-                    # in case MULTIPLECONFIG is supported this code does nothing
-                    # since everything is already in place
-                    garage.number_open_timeout = (
-                        garage.number_open_timeout
-                        or GarageEmulatedConfigNumber(garage, mc.KEY_DOOROPENDURATION)
-                    )
-                    # set guard so we don't repeat this 'late conditional init'
-                    self.number_doorOpenDuration = garage.number_open_timeout
-
-        if mc.KEY_DOORCLOSEDURATION in payload:
-            # this config key has been removed in recent firmwares
-            # now we have door open/close duration set per channel (#82)
-            try:
-                self.number_doorCloseDuration.update_device_value(  # type: ignore
-                    payload[mc.KEY_DOORCLOSEDURATION]
-                )
-            except AttributeError:
-                self.number_doorCloseDuration = GarageConfigNumber(
-                    None,
-                    self.parent,
-                    mc.KEY_DOORCLOSEDURATION,
-                    device_value=payload[mc.KEY_DOORCLOSEDURATION],
-                )
-        else:
-            # no config for KEY_DOORCLOSEDURATION: we'll let every channel manage it's own
-            if not self.number_doorCloseDuration:  # use as a guard...
-                device = self.parent
-                for channel_digest in device.descriptor.digest[mc.KEY_GARAGEDOOR]:
-                    garage: GarageDoor = device.entities[channel_digest[mc.KEY_CHANNEL]]  # type: ignore
-                    # in case MULTIPLECONFIG is supported this code does nothing
-                    # since everything is already in place
-                    garage.number_close_timeout = (
-                        garage.number_close_timeout
-                        or GarageEmulatedConfigNumber(garage, mc.KEY_DOORCLOSEDURATION)
-                    )
-                    # set guard so we don't repeat this 'late conditional init'
-                    self.number_doorCloseDuration = garage.number_close_timeout
+        if self._check_missing_config_keys:
+            # mc.KEY_DOOROPENDURATION and mc.KEY_DOORCLOSEDURATION config keys have been
+            # removed in recent firmwares (migrated to MultipleConfig x channel #82).
+            # We keep implementing emulated entities in case for legacy firmwares.
+            self._check_missing_config_keys = False
+            # we'll let every channel manage it's own doorOpenDuration config parameter
+            for channel_digest in self.parent.descriptor.digest[mc.KEY_GARAGEDOOR]:
+                garage = entities[channel_digest[mc.KEY_CHANNEL]]
+                # in case MULTIPLECONFIG is supported this code does nothing
+                # since everything is already in place.
+                # This is just to trigger the _DurationHelper in case it's installed
+                for key in (mc.KEY_DOOROPENDURATION, mc.KEY_DOORCLOSEDURATION):
+                    getattr(garage, f"number_{key}").native_value
 
 
 class GarageDoorStateNamespaceHandler(NamespaceHandler):
@@ -684,13 +593,15 @@ def digest_init_garagedoor(
         GarageDoor(channel_digest[mc.KEY_CHANNEL], device)
 
     if mn.Appliance_GarageDoor_Config in device.descriptor.ability:
-        GarageDoorConfigNamespaceHandler(device)
+        GarageDoorConfigNamespaceHandler(mn.Appliance_GarageDoor_Config, device)
 
     return handler.parse_list, (handler,)
 
 
 POLLING_STRATEGY_CONF.update(
     {
+        # TODO: define a common polling strategy config for namespaces
+        # sharing the same config like these
         mn.Appliance_GarageDoor_Config: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,

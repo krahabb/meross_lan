@@ -39,7 +39,7 @@ class EntityTest(EntityComponentTest):
         ],
         mn.Appliance_GarageDoor_MultipleConfig: [
             gd.GarageEnableSwitch,
-            gd.GarageMultipleConfigSwitch,
+            gd.GarageConfigSwitch,
         ],
         mn.Appliance_Config_OverTemp: [mss.OverTempEnableSwitch],
         mn.Appliance_Control_PhysicalLock: [switch.PhysicalLockSwitch],

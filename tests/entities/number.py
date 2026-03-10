@@ -59,11 +59,10 @@ class EntityTest(EntityComponentTest):
             gd.GarageConfigNumber,
             gd.GarageConfigNumber,  # doorOpenDuration
             gd.GarageConfigNumber,  # doorCloseDuration
-            gd.GarageConfigSwitch,  # buzzerEnble
         ],
         mn.Appliance_GarageDoor_MultipleConfig: [
-            gd.GarageMultipleConfigNumber,
-            gd.GarageMultipleConfigNumber,
+            gd.GarageConfigNumber,
+            gd.GarageConfigNumber,
         ],
         mn.Appliance_RollerShutter_Config: [rs.RollerShutterConfigNumber] * 2,
         mn.Appliance_Control_Presence_Config: [
@@ -94,7 +93,7 @@ class EntityTest(EntityComponentTest):
     }
 
     async def async_test_each_callback(self, entity: number.Number):
-        if type(entity) is gd.GarageEmulatedConfigNumber:
+        if type(entity) is gd.EmulatedNumber and type(entity.parent) is gd.GarageDoor:
             EntityComponentTest.expected_entity_types.remove(gd.GarageConfigNumber)
 
         if isinstance(entity, MtsCommonTemperatureExtNumber):
