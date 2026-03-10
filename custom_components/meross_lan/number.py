@@ -110,7 +110,7 @@ class ParserNumber(mle.NumericParser, Number):
         @classmethod
         def ENTITY_DEF(
             cls,
-            **kwargs: "Unpack[ParserNumber.Args]",
+            **kwargs: Unpack[Args],
         ) -> "ParserNumber.EntityDef[ParserNumber]":  # type: ignore[override]
             pass
 
@@ -125,27 +125,35 @@ class ParserNumber(mle.NumericParser, Number):
     # interface: number.NumberEntity
     async def async_set_native_value(self, value: float):
         """round up the requested value to the device native resolution
-        which is almost always an int number (some exceptions though)."""
-        device_value = round(value * self.device_scale)
-        device_step = round(self.native_step * self.device_scale)
-        device_value = round(device_value / device_step) * device_step
-        # since the async_set_native_value might be triggered back-to-back
-        # especially when using the BOXED UI we're debouncing the device
-        # request and provide 'temporaneous' optimistic updates
-        self.update_native_value(device_value / self.device_scale)
-        self.schedule_async_callback(
-            self.DEBOUNCE_DELAY, self._async_request_debounce, device_value
-        )
+        which is almost always an int number (some exceptions though).
+        This method will not immediately send the request but just schedule it after a short debounce delay,
+        in order to 'collapse' multiple back-to-back changes (like when using the BOXED UI slider).
+        """
+        device_scale = self.device_scale
+        if type(device_scale) is int:
+            device_value = round(value * device_scale)
+            device_step = round(self.native_step * device_scale)
+            device_value = round(device_value / device_step) * device_step
+            self.update_native_value(device_value / device_scale)
+            self.schedule_async_callback(
+                self.DEBOUNCE_DELAY, self._async_request_debounce, device_value
+            )
+        else:
+            self.update_native_value(value)
+            self.schedule_async_callback(
+                self.DEBOUNCE_DELAY, self._async_request_debounce, value * device_scale
+            )
 
     # interface: self
-    async def _async_request_debounce(self, device_value):
+    async def _async_request_debounce(self, device_value: int | float):
         try:
             await self.async_request_value(device_value)
         except Exception:
             # restore the last good known device value
-            device_value = self.device_value
-            if device_value is not None:
-                self.update_native_value(device_value / self.device_scale)
+            try:
+                self.update_native_value(self.device_value / self.device_scale)  # type: ignore
+            except TypeError:
+                pass  # self.device_value is None
 
 
 class EmulatedNumber(Number):

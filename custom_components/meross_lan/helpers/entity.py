@@ -479,6 +479,8 @@ class NumericEntity(Entity):
 
 
 class NumericParser(ValueParser, NumericEntity):
+    """Specialized parser for numeric entities like Number and Sensor."""
+
     if TYPE_CHECKING:
 
         class Args(ValueParser.Args, NumericEntity.Args):
@@ -486,6 +488,9 @@ class NumericParser(ValueParser, NumericEntity):
 
         _attr_device_scale: ClassVar[int | float]
         device_scale: int | float
+        """device_scale type need to follow the type supported for device_value.
+        This is used in Number entity to do the correct roundings when converting between
+        native_value and device_value."""
         device_value: int | float | None
 
     _attr_device_scale = 1
@@ -505,11 +510,6 @@ class NumericParser(ValueParser, NumericEntity):
         except KeyError:
             pass
         super().__init__(channel, parent, **kwargs)
-
-    def set_unavailable(self):
-        # likely useless override...
-        self.native_value = None
-        super().set_unavailable()
 
     @override
     def update_device_value(self, device_value: int | float, /):

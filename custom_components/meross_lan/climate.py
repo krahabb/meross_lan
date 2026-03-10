@@ -384,7 +384,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         ATTR_TARGET_TEMP_HIGH: Final
         ATTR_TARGET_TEMP_LOW: Final
 
-        device_scale: ClassVar[float]
+        device_scale: ClassVar[int]
 
         TARGET_TEMPERATURE_STEP: ClassVar[float]
 

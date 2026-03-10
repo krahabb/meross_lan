@@ -21,27 +21,13 @@ class ScreenBrightnessNumber(ParserNumber):
 
     ns = mn.Appliance_Control_Screen_Brightness
 
+    _attr_device_scale = 1.0
     # HA core entity attributes:
     _attr_icon = "mdi:brightness-percent"
     _attr_native_unit_of_measurement = mlc.hac.PERCENTAGE
     _attr_native_max_value = 100
     _attr_native_min_value = 0
     _attr_native_step = 12.5
-
-    def __init__(self, device: "Device", key: str, /):
-        ParserNumber.__init__(
-            self,
-            0,
-            device,
-            entity_key=f"screenbrightness_{key}",
-            name=f"Screen brightness ({key})",
-            key_value=key,
-        )
-
-    async def async_set_native_value(self, value: float, /):
-        """Override base async_set_native_value since it would round
-        the value to an int (common device native type)."""
-        await self.async_request_value(value)
 
 
 class ScreenBrightnessNamespaceHandler(NamespaceHandler):
@@ -50,34 +36,24 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
     nevertheless live in its own module (or in 'misc' maybe)
     """
 
-    __slots__ = (
-        "number_brightness_operation",
-        "number_brightness_standby",
-    )
-
     def __init__(self, ns: "mn.Namespace", device: "Device", /):
         NamespaceHandler.__init__(
             self,
             ns,
             device,
-            handler=self._handle_Appliance_Control_Screen_Brightness,
         )
-        self.polling_request_add_channel(0)
-        self.number_brightness_operation = ScreenBrightnessNumber(
-            device, mc.KEY_OPERATION
+        self.register_parsers(
+            *(
+                ScreenBrightnessNumber(
+                    0,
+                    device,
+                    entity_key=f"screenbrightness_{key}",
+                    name=f"Screen brightness ({key})",
+                    key_value=key,
+                )
+                for key in (mc.KEY_OPERATION, mc.KEY_STANDBY)
+            ),
         )
-        self.number_brightness_standby = ScreenBrightnessNumber(device, mc.KEY_STANDBY)
-
-    def _handle_Appliance_Control_Screen_Brightness(self, message: "MerossMessage", /):
-        for p_channel in message.payload[mc.KEY_BRIGHTNESS]:
-            if p_channel[mc.KEY_CHANNEL] == 0:
-                self.number_brightness_operation.update_device_value(
-                    p_channel[mc.KEY_OPERATION]
-                )
-                self.number_brightness_standby.update_device_value(
-                    p_channel[mc.KEY_STANDBY]
-                )
-                break
 
 
 class MtsWarningSensor(EnumSensor):
