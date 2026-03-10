@@ -99,6 +99,9 @@ class GarageConfigSwitch(GarageConfigMixin, SwitchParser):
     pass
 
 
+_GarageConfigSwitch_ENTITY_DEF = GarageConfigSwitch.ENTITY_DEF()
+
+
 class GarageEnableSwitch(GarageConfigSwitch):
     """
     Dedicated entity for "doorEnable" config option in mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
@@ -174,6 +177,9 @@ class GarageConfigNumber(GarageConfigMixin, ParserNumber):
     _attr_native_step = 1
 
 
+_GarageConfigNumber_ENTITY_DEF = GarageConfigNumber.ENTITY_DEF()
+
+
 class _DurationHelper:
     """
     GarageDoor helper class to manage the automatic instantiation of number entities for
@@ -234,13 +240,13 @@ class GarageDoor(Cover):
     # these keys in Appliance.GarageDoor.MultipleConfig are to be ignored
     CONFIG_KEY_EXCLUDED = (mc.KEY_CHANNEL, mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
     ENTITY_DEFS = {
-        mc.KEY_BUZZERENABLE: GarageConfigSwitch.ENTITY_DEF(),
+        mc.KEY_BUZZERENABLE: _GarageConfigSwitch_ENTITY_DEF,
         mc.KEY_DOORENABLE: GarageEnableSwitch.ENTITY_DEF(),
-        mc.KEY_SIGNALDURATION: GarageConfigNumber.ENTITY_DEF(),
-        mc.KEY_SIGNALCLOSE: GarageConfigNumber.ENTITY_DEF(),
-        mc.KEY_SIGNALOPEN: GarageConfigNumber.ENTITY_DEF(),
-        mc.KEY_DOORCLOSEDURATION: GarageConfigNumber.ENTITY_DEF(),
-        mc.KEY_DOOROPENDURATION: GarageConfigNumber.ENTITY_DEF(),
+        mc.KEY_SIGNALDURATION: _GarageConfigNumber_ENTITY_DEF,
+        mc.KEY_SIGNALCLOSE: _GarageConfigNumber_ENTITY_DEF,
+        mc.KEY_SIGNALOPEN: _GarageConfigNumber_ENTITY_DEF,
+        mc.KEY_DOORCLOSEDURATION: _GarageConfigNumber_ENTITY_DEF,
+        mc.KEY_DOOROPENDURATION: _GarageConfigNumber_ENTITY_DEF,
     }  # type: ignore
 
     # HA core entity attributes:
@@ -520,13 +526,13 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
         should they be missed in MultipleConfig."""
 
     ENTITY_DEFS = {
-        mc.KEY_BUZZERENABLE: GarageConfigSwitch.ENTITY_DEF(),
+        mc.KEY_BUZZERENABLE: _GarageConfigSwitch_ENTITY_DEF,
         mc.KEY_SIGNALDURATION: GarageConfigNumber.ENTITY_DEF(
             native_step=0.1,
             native_min_value=0.1,
         ),
-        mc.KEY_DOORCLOSEDURATION: GarageConfigNumber.ENTITY_DEF(),
-        mc.KEY_DOOROPENDURATION: GarageConfigNumber.ENTITY_DEF(),
+        mc.KEY_DOORCLOSEDURATION: _GarageConfigNumber_ENTITY_DEF,
+        mc.KEY_DOOROPENDURATION: _GarageConfigNumber_ENTITY_DEF,
     }  # type: ignore
 
     _check_missing_config_keys = True
