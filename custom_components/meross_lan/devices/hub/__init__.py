@@ -11,12 +11,12 @@ from ...helpers.namespaces import NamespaceHandler
 from ...merossclient import device, get_productname, get_subdevice_key_digest
 from ...merossclient.protocol import const as mc, namespaces as mn
 from ...merossclient.protocol.namespaces import hub as mn_h
-from ...number import ParserNumber
+from ...number import NumberParser
 from ...sensor import (
-    EnumSensor,
+    EnumParser,
     HumiditySensor,
     LightSensor,
-    NumericSensor,
+    SensorParser,
     TemperatureSensor,
 )
 from ...switch import SwitchParser
@@ -176,8 +176,8 @@ class HubMixin(Device if TYPE_CHECKING else object):
         BinarySensor.PLATFORM: None,
         Button.PLATFORM: None,
         MtsSchedule.PLATFORM: None,
-        ParserNumber.PLATFORM: None,
-        NumericSensor.PLATFORM: None,
+        NumberParser.PLATFORM: None,
+        SensorParser.PLATFORM: None,
         SwitchParser.PLATFORM: None,
         MtsClimate.PLATFORM: None,
         MtsClimate.TrackSensorSelect.PLATFORM: None,
@@ -275,7 +275,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
         return SubDevice(subid, self, key_digest, entity_class)
 
 
-class SubDevice(mld.BaseDevice, device.SubDevice, NumericSensor):
+class SubDevice(mld.BaseDevice, device.SubDevice, SensorParser):
     """
     Class for a physical subdevice registered with a Hub device.
     This class acts as a 'container' for the actual entities implemented for the device
@@ -301,7 +301,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, NumericSensor):
 
     # NumericSensor attributes
     # ENTITY_KEY = mc.KEY_BATTERY
-    _attr_device_class = NumericSensor.DeviceClass.BATTERY
+    _attr_device_class = SensorParser.DeviceClass.BATTERY
 
     NS_SUBDEVICE = (
         mn_h.Appliance_Hub_Battery,
@@ -624,7 +624,7 @@ class SubDeviceEntity(mle.ParserEntity):
 from .mts100 import Mts100Climate
 
 
-class SmokeAlarmSensor(SubDeviceEntity, EnumSensor):
+class SmokeAlarmSensor(SubDeviceEntity, EnumParser):
     if TYPE_CHECKING:
         STATUS_MAP: Final
         MUTE_MAP: Final
@@ -681,7 +681,7 @@ class SmokeAlarmSensor(SubDeviceEntity, EnumSensor):
             device_class=BinarySensor.DeviceClass.PROBLEM,
         )
         self.binary_sensor_muted = BinarySensor(subid, subdevice, entity_key="muted")
-        self.sensor_interConn = EnumSensor(
+        self.sensor_interConn = EnumParser(
             subid, subdevice, entity_key=mc.KEY_INTERCONN
         )
         Button(subid, subdevice, self.async_mute, name="Mute")
@@ -722,7 +722,7 @@ class SmokeAlarmSensor(SubDeviceEntity, EnumSensor):
 
 class MS100Sensor(SubDeviceEntity, TemperatureSensor):
 
-    class SensorAdjustNumber(ParserNumber):
+    class SensorAdjustNumber(NumberParser):
 
         ns = mn_h.Appliance_Hub_Sensor_Adjust
 
@@ -745,7 +745,7 @@ class MS100Sensor(SubDeviceEntity, TemperatureSensor):
 
         ENTITY_KEY = "config_adjust_temperature"
         key_value = mc.KEY_TEMPERATURE
-        _attr_device_class = ParserNumber.DeviceClass.TEMPERATURE
+        _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
         _attr_name = "Adjust temperature"
 
         _attr_native_min_value = -5
@@ -756,7 +756,7 @@ class MS100Sensor(SubDeviceEntity, TemperatureSensor):
 
         ENTITY_KEY = "config_adjust_humidity"
         key_value = mc.KEY_HUMIDITY
-        _attr_device_class = ParserNumber.DeviceClass.HUMIDITY
+        _attr_device_class = NumberParser.DeviceClass.HUMIDITY
         _attr_name = "Adjust humidity"
 
         _attr_native_min_value = -20
@@ -919,7 +919,7 @@ class MS130Sensor(MS100Sensor):
         }
         """
         p_data = payload[mc.KEY_DATA]
-        entity: NumericSensor
+        entity: SensorParser
         for key, entity in {
             mc.KEY_TEMP: self,
             mc.KEY_HUMI: self.sensor_humidity,
@@ -980,7 +980,7 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, SwitchParser):
             dura: NotRequired[int]  # duration in seconds
             onoff: int  # 1: on, 2: off
 
-    class WateringDurationNumber(HubSubIdDeviceCfgMixin, ParserNumber):
+    class WateringDurationNumber(HubSubIdDeviceCfgMixin, NumberParser):
         """Number to set watering duration."""
 
         ENTITY_KEY = mc.KEY_DURATION
@@ -989,7 +989,7 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, SwitchParser):
 
         # HA core entity attributes:
         _attr_name = "Watering duration"
-        _attr_device_class = ParserNumber.DEVICE_CLASS_DURATION
+        _attr_device_class = NumberParser.DEVICE_CLASS_DURATION
         _attr_native_unit_of_measurement = mlc.hac.UnitOfTime.SECONDS
         _attr_native_max_value = (
             86400  # 1 day max duration (no real info just guessing)

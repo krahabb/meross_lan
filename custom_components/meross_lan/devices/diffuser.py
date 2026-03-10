@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
     from ..helpers.device import Device, MerossMessage
     from ..merossclient.protocol.types import JsonDict
-    from ..sensor import NumericSensor
+    from ..sensor import SensorParser
 
     DIFFUSER_SENSOR_ENTITY_DEFS: Final
 

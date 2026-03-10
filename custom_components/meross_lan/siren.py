@@ -4,7 +4,7 @@ from homeassistant.components import siren
 
 from .helpers.entity import BinaryParser
 from .merossclient.protocol import const as mc, namespaces as mn
-from .number import ParserNumber
+from .number import NumberParser
 from .select import SelectParser
 from .switch import SwitchParser
 
@@ -51,9 +51,9 @@ class Siren(BinaryParser, siren.SirenEntity):
             7: "Buzzer",
         }
 
-    class VolumeNumber(ParserNumber):
+    class VolumeNumber(NumberParser):
         ns = mn.Appliance_Config_Alarm
-        NS_CHANNELS = ParserNumber.NS_CHANNELS_SINGLE
+        NS_CHANNELS = NumberParser.NS_CHANNELS_SINGLE
         key_value = mc.KEY_VOLUME
         ENTITY_KEY = f"{ns.slug}__{key_value}"
         _attr_native_max_value = 100

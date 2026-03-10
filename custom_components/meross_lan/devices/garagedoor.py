@@ -8,7 +8,7 @@ from ..cover import Cover
 from ..helpers import clamp
 from ..helpers.namespaces import NamespaceHandler, mc, mlc, mn
 from ..merossclient.client import Transport
-from ..number import EmulatedNumber, ParserNumber
+from ..number import EmulatedNumber, NumberParser
 from ..switch import SwitchParser
 
 if TYPE_CHECKING:
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from ..helpers.device import Device, MerossMessage
     from ..helpers.entity import ValueParser
     from ..merossclient.protocol.types import JsonList
-    from ..number import Number
+    from ..number import NumberEntity
 
 
 class GarageTimeoutBinarySensor(BinarySensor):
@@ -147,7 +147,7 @@ class GarageEnableSwitch(GarageConfigSwitch):
                         registry_update_entity(entry.entity_id, disabled_by=disabler)
 
 
-class GarageConfigNumber(GarageConfigMixin, ParserNumber):
+class GarageConfigNumber(GarageConfigMixin, NumberParser):
     """
     number entity to manage MSG configuration (open/close timeout and the likes)
     'x channel' through mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
@@ -155,7 +155,7 @@ class GarageConfigNumber(GarageConfigMixin, ParserNumber):
 
     if TYPE_CHECKING:
 
-        class Args(ParserNumber.Args):
+        class Args(NumberParser.Args):
             pass
 
         def __init__(
@@ -171,7 +171,7 @@ class GarageConfigNumber(GarageConfigMixin, ParserNumber):
     # customize those when needed...
     _attr_device_scale = 1000
     # HA core entity attributes:
-    _attr_device_class = ParserNumber.DEVICE_CLASS_DURATION
+    _attr_device_class = NumberParser.DEVICE_CLASS_DURATION
     _attr_native_max_value = 60
     _attr_native_min_value = 1
     _attr_native_step = 1
@@ -204,7 +204,7 @@ class _DurationHelper:
         # number entity
         gd = self.garage_door
         try:
-            number: "Number" = gd.parent.entities[f"config_{self.key}"]  # type: ignore
+            number: "NumberEntity" = gd.parent.entities[f"config_{self.key}"]  # type: ignore
         except KeyError:
             number = EmulatedNumber(
                 gd.channel,
@@ -228,8 +228,8 @@ class GarageDoor(Cover):
         ENTITY_DEFS: dict[str, GarageConfigMixin.EntityDef[GarageConfigMixin]]
 
         binary_sensor_timeout: GarageTimeoutBinarySensor
-        number_doorCloseDuration: Number | _DurationHelper
-        number_doorOpenDuration: Number | _DurationHelper
+        number_doorCloseDuration: NumberEntity | _DurationHelper
+        number_doorOpenDuration: NumberEntity | _DurationHelper
 
     ns = mn.Appliance_GarageDoor_State
     key_value = mc.KEY_OPEN
@@ -592,7 +592,7 @@ class GarageDoorStateNamespaceHandler(NamespaceHandler):
 def digest_init_garagedoor(
     device: "Device", digest: "JsonList", /
 ) -> "Device.DigestInitReturnType":
-    device.platforms.setdefault(ParserNumber.PLATFORM, None)
+    device.platforms.setdefault(NumberParser.PLATFORM, None)
     device.platforms.setdefault(SwitchParser.PLATFORM, None)
 
     handler = GarageDoorStateNamespaceHandler(device)

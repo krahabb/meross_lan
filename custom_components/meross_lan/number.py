@@ -24,7 +24,7 @@ async def async_setup_entry(
     )
 
 
-class Number(mle.NumericEntity, number.NumberEntity):
+class NumberEntity(mle.NumericEntity, number.NumberEntity):
     """
     Base (abstract) ancestor for number entities. This has 2 specializations:
     - ConfigNumber: for configuration parameters backed by a device namespace value.
@@ -89,14 +89,14 @@ class Number(mle.NumericEntity, number.NumberEntity):
     _attr_native_step = 1.0
 
 
-class ParserNumber(mle.NumericParser, Number):
+class NumberParser(mle.NumericParser, NumberEntity):
     """
     Base class for any configurable numeric parameter in the device.
     """
 
     if TYPE_CHECKING:
 
-        class Args(Number.Args, mle.NumericParser.Args):
+        class Args(NumberEntity.Args, mle.NumericParser.Args):
             pass
 
         def __init__(
@@ -111,7 +111,7 @@ class ParserNumber(mle.NumericParser, Number):
         def ENTITY_DEF(
             cls,
             **kwargs: Unpack[Args],
-        ) -> "ParserNumber.EntityDef[ParserNumber]":  # type: ignore[override]
+        ) -> "NumberParser.EntityDef[NumberParser]":  # type: ignore[override]
             pass
 
         DEBOUNCE_DELAY: Final
@@ -156,13 +156,13 @@ class ParserNumber(mle.NumericParser, Number):
                 pass  # self.device_value is None
 
 
-class EmulatedNumber(Number):
+class EmulatedNumber(NumberEntity):
     """
     Number entity not directly binded to a device parameter (like ConfigNumber)
     but used to store in HA a bit of component configuration.
     """
 
-    __slots__ = Number._calc_slots()
+    __slots__ = NumberEntity._calc_slots()
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()

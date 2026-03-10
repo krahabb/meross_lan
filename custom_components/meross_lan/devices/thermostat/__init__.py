@@ -4,9 +4,9 @@ from ...binary_sensor import BinarySensorParser
 from ...climate import MtsClimate
 from ...helpers.namespaces import NamespaceHandler, mc, mlc, mn
 from ...merossclient.protocol.namespaces import thermostat as mn_t
-from ...number import ParserNumber
+from ...number import NumberParser
 from ...select import SelectParser
-from ...sensor import EnumSensor, TemperatureSensor
+from ...sensor import EnumParser, TemperatureSensor
 from ...switch import SwitchParser
 
 if TYPE_CHECKING:
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from ...merossclient.protocol.types import JsonDict, thermostat as mt_t
 
 
-class ScreenBrightnessNumber(ParserNumber):
+class ScreenBrightnessNumber(NumberParser):
 
     ns = mn.Appliance_Control_Screen_Brightness
 
@@ -58,13 +58,13 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
         )
 
 
-class MtsWarningSensor(EnumSensor):
+class MtsWarningSensor(EnumParser):
 
     def __init__(
         self, number_temperature: "MtsCommonTemperatureExtNumber", native_value, /
     ):
         entity_key = f"{number_temperature.entitykey}_warning"
-        EnumSensor.__init__(
+        EnumParser.__init__(
             self,
             number_temperature.channel,
             number_temperature.parent,
@@ -91,17 +91,17 @@ class MtsConfigSwitch(SwitchParser):
         self.register_state_callback(number_temperature._switch_state_callback)
 
 
-class MtsCommonTemperatureNumber(ParserNumber):
+class MtsCommonTemperatureNumber(NumberParser):
 
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
 
     key_value = mc.KEY_VALUE
 
-    _attr_device_class = ParserNumber.DeviceClass.TEMPERATURE
+    _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
 
     def __init__(self, climate: "MtsThermostatClimate", /):
-        ParserNumber.__init__(
+        NumberParser.__init__(
             self,
             climate.channel,
             climate.parent,
@@ -170,7 +170,7 @@ class MtsDeadZoneNumber(MtsCommonTemperatureNumber):
 
     ns = mn_t.Appliance_Control_Thermostat_DeadZone
 
-    _attr_device_class = ParserNumber.DEVICE_CLASS_TEMPERATURE_DELTA
+    _attr_device_class = NumberParser.DEVICE_CLASS_TEMPERATURE_DELTA
     _attr_native_max_value = 3.5
     _attr_native_min_value = 0.5
     _attr_native_step = 0.1
@@ -244,7 +244,7 @@ class MtsExternalSensorSwitch(SwitchParser):
 class MtsHoldAction(SelectParser):
 
     if TYPE_CHECKING:
-        number_time: ParserNumber
+        number_time: NumberParser
 
     ENTITY_KEY = "hold action"
     ns = mn_t.Appliance_Control_Thermostat_HoldAction
@@ -261,12 +261,12 @@ class MtsHoldAction(SelectParser):
     def __init__(self, climate: "MtsThermostatClimate", /):
         SelectParser.__init__(self, climate.channel, climate.parent)
         climate.parent.register_parser_entity(self)
-        self.number_time = ParserNumber(
+        self.number_time = NumberParser(
             climate.channel,
             climate.parent,
             entity_key="hold_action_time",
             device_scale=1,
-            device_class=ParserNumber.DEVICE_CLASS_DURATION,
+            device_class=NumberParser.DEVICE_CLASS_DURATION,
             native_unit_of_measurement=mlc.hac.UnitOfTime.MINUTES,
         )
         self.number_time.async_request_value = self._async_request_value_number_time
@@ -356,7 +356,7 @@ class MtsThermostatClimate(MtsClimate):
 
         ns = mn_t.Appliance_Control_Thermostat_Calibration
 
-        _attr_device_class = ParserNumber.DEVICE_CLASS_TEMPERATURE_DELTA
+        _attr_device_class = NumberParser.DEVICE_CLASS_TEMPERATURE_DELTA
         _attr_native_max_value = 8
         _attr_native_min_value = -8
         _attr_native_step = 0.1

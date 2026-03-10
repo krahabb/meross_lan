@@ -5,7 +5,7 @@ from homeassistant.exceptions import InvalidStateError
 from ..cover import Cover, cover
 from ..helpers.namespaces import NamespaceHandler, mc, mn
 from ..merossclient.client import Transport
-from ..number import ParserNumber
+from ..number import NumberParser
 from ..switch import SwitchParser
 
 if TYPE_CHECKING:
@@ -357,7 +357,7 @@ class RollerShutterAdjustSwitch(SwitchParser):
             self.update_boolean_value(payload[mc.KEY_STATUS] != 0)
 
 
-class RollerShutterConfigNumber(ParserNumber):
+class RollerShutterConfigNumber(NumberParser):
     """
     Helper entity to configure MRS open/close duration
     """
@@ -367,7 +367,7 @@ class RollerShutterConfigNumber(ParserNumber):
     _attr_device_scale = 1000
 
     # HA core entity attributes:
-    _attr_device_class = ParserNumber.DEVICE_CLASS_DURATION
+    _attr_device_class = NumberParser.DEVICE_CLASS_DURATION
     # these are ok for open/close durations
     # customize those when needed...
     _attr_native_max_value = 60
@@ -375,7 +375,7 @@ class RollerShutterConfigNumber(ParserNumber):
     _attr_native_step = 1
 
     def __init__(self, cover: "RollerShutter", key: str):
-        ParserNumber.__init__(
+        NumberParser.__init__(
             self,
             cover.channel,
             cover.parent,

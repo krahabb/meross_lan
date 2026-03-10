@@ -10,7 +10,7 @@ from .. import const as mlc
 from ..helpers.entity import EntityNamespaceMixin
 from ..helpers.namespaces import NamespaceHandler
 from ..merossclient.protocol import const as mc, namespaces as mn
-from ..sensor import EnumSensor, NumericSensor
+from ..sensor import EnumParser, SensorParser
 from ..switch import SwitchParser
 
 if TYPE_CHECKING:
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from ..merossclient.protocol import types as mt
 
 
-class _ElectricitySensor(NumericSensor):
+class _ElectricitySensor(SensorParser):
     """
     This sensor acts as the main parser for 'Electricity' and 'ElectricityX' namespaces
     taking care of power, current, voltage, etc, sensors for the same channel.
@@ -35,45 +35,45 @@ class _ElectricitySensor(NumericSensor):
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
 
-        class Args(NumericSensor.Args):
+        class Args(SensorParser.Args):
             pass
 
         # not setting 'entity_key' in EntityDef will mark the entity as 'not required'
         # (see __init__)
-        ENTITY_DEFS: ClassVar[dict[str, NumericSensor.EntityDef["NumericSensor"]]]
+        ENTITY_DEFS: ClassVar[dict[str, SensorParser.EntityDef["SensorParser"]]]
         # HA core entity attributes:
         native_value: int
 
         sensor_consumptionx: "ConsumptionXSensor | None"
-        sensor_power: NumericSensor
+        sensor_power: SensorParser
 
     ENTITY_KEY = "energy_estimate"
     ENTITY_DEFS = {
-        mc.KEY_CURRENT: NumericSensor.ENTITY_DEF(
+        mc.KEY_CURRENT: SensorParser.ENTITY_DEF(
             entity_key=mc.KEY_CURRENT,
-            device_class=NumericSensor.DeviceClass.CURRENT,
-            state_class=NumericSensor.StateClass.MEASUREMENT,
+            device_class=SensorParser.DeviceClass.CURRENT,
+            state_class=SensorParser.StateClass.MEASUREMENT,
             suggested_display_precision=1,
             device_scale=1000,
         ),
-        mc.KEY_POWER: NumericSensor.ENTITY_DEF(
+        mc.KEY_POWER: SensorParser.ENTITY_DEF(
             entity_key=mc.KEY_POWER,
-            device_class=NumericSensor.DeviceClass.POWER,
-            state_class=NumericSensor.StateClass.MEASUREMENT,
+            device_class=SensorParser.DeviceClass.POWER,
+            state_class=SensorParser.StateClass.MEASUREMENT,
             suggested_display_precision=1,
             device_scale=1000,
         ),
-        mc.KEY_VOLTAGE: NumericSensor.ENTITY_DEF(
+        mc.KEY_VOLTAGE: SensorParser.ENTITY_DEF(
             entity_key=mc.KEY_VOLTAGE,
-            device_class=NumericSensor.DeviceClass.VOLTAGE,
-            state_class=NumericSensor.StateClass.MEASUREMENT,
+            device_class=SensorParser.DeviceClass.VOLTAGE,
+            state_class=SensorParser.StateClass.MEASUREMENT,
             suggested_display_precision=1,
             device_scale=10,
         ),
     }
 
     # HA core entity attributes:
-    _attr_device_class = NumericSensor.DeviceClass.ENERGY
+    _attr_device_class = SensorParser.DeviceClass.ENERGY
     _attr_entity_registry_enabled_default = False
 
     __slots__ = (
@@ -245,12 +245,12 @@ class ElectricityXSensor(_ElectricitySensor):
 
     ns = mn.Appliance_Control_ElectricityX
 
-    class MConsumeSensor(NumericSensor):
+    class MConsumeSensor(SensorParser):
         if TYPE_CHECKING:
             parent: Final[Device]  # type: ignore[override]
 
         def __init__(self, channel, device: "Device", /, **kwargs):
-            NumericSensor.__init__(self, channel, device, **kwargs)
+            SensorParser.__init__(self, channel, device, **kwargs)
             # TODO: in 6.x.x we should generalize this mechanism to any ns/device
             try:
                 handler_ch: "ConsumptionHNamespaceHandler" = device.ns_handlers[
@@ -262,7 +262,7 @@ class ElectricityXSensor(_ElectricitySensor):
 
         @override
         def update_device_value(self, device_value: int | float, /):
-            if NumericSensor.update_device_value(self, device_value):
+            if SensorParser.update_device_value(self, device_value):
                 # We'll use this event to trigger an update of the related
                 # ConsumptionHSensor. We'll so ensure  ConsumptionH sensors in em06
                 # are effectively instantiated since their list cannot be inferred
@@ -281,22 +281,22 @@ class ElectricityXSensor(_ElectricitySensor):
                 return True
 
     ENTITY_DEFS = _ElectricitySensor.ENTITY_DEFS | {
-        mc.KEY_VOLTAGE: NumericSensor.ENTITY_DEF(
+        mc.KEY_VOLTAGE: SensorParser.ENTITY_DEF(
             entity_key=mc.KEY_VOLTAGE,
-            device_class=NumericSensor.DeviceClass.VOLTAGE,
-            state_class=NumericSensor.StateClass.MEASUREMENT,
+            device_class=SensorParser.DeviceClass.VOLTAGE,
+            state_class=SensorParser.StateClass.MEASUREMENT,
             suggested_display_precision=1,
             device_scale=1000,
         ),
-        mc.KEY_FACTOR: NumericSensor.ENTITY_DEF(
-            device_class=NumericSensor.DeviceClass.POWER_FACTOR,
-            state_class=NumericSensor.StateClass.MEASUREMENT,
+        mc.KEY_FACTOR: SensorParser.ENTITY_DEF(
+            device_class=SensorParser.DeviceClass.POWER_FACTOR,
+            state_class=SensorParser.StateClass.MEASUREMENT,
             suggested_display_precision=2,
             device_scale=1,
         ),
         mc.KEY_MCONSUME: MConsumeSensor.ENTITY_DEF(
-            device_class=NumericSensor.DeviceClass.ENERGY,
-            state_class=NumericSensor.StateClass.TOTAL_INCREASING,  # quick patch for #621 (will be fixed in v6.x.x)
+            device_class=SensorParser.DeviceClass.ENERGY,
+            state_class=SensorParser.StateClass.TOTAL_INCREASING,  # quick patch for #621 (will be fixed in v6.x.x)
             suggested_display_precision=0,
             device_scale=1,
         ),
@@ -307,11 +307,11 @@ class ElectricityXSensor(_ElectricitySensor):
         device.register_parser_entity(self)
 
 
-class ConsumptionHSensor(NumericSensor):
+class ConsumptionHSensor(SensorParser):
 
     if TYPE_CHECKING:
 
-        class Args(NumericSensor.Args):
+        class Args(SensorParser.Args):
             pass
 
         handler_ns: "ConsumptionHNamespaceHandler"
@@ -320,21 +320,21 @@ class ConsumptionHSensor(NumericSensor):
     ns = mn.Appliance_Control_ConsumptionH
     key_value = mc.KEY_TOTAL
 
-    _attr_device_class = NumericSensor.DeviceClass.ENERGY
+    _attr_device_class = SensorParser.DeviceClass.ENERGY
     _attr_suggested_display_precision = 0
 
     def __init__(self, channel, device: "Device", /, **kwargs: "Unpack[Args]"):
         kwargs["name"] = "Consumption"
-        NumericSensor.__init__(self, channel, device, **kwargs)
+        SensorParser.__init__(self, channel, device, **kwargs)
         device.register_parser_entity(self)
 
     async def async_added_to_hass(self):
         self.handler_ns.channel_polling_add(self.channel)
-        return await NumericSensor.async_added_to_hass(self)
+        return await SensorParser.async_added_to_hass(self)
 
     async def async_will_remove_from_hass(self):
         self.handler_ns.channel_polling_remove(self.channel)
-        return await NumericSensor.async_will_remove_from_hass(self)
+        return await SensorParser.async_will_remove_from_hass(self)
 
     def _parse_consumptionH(self, payload: dict):
         """
@@ -459,7 +459,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
             await device.async_poll_request_smart(self)
 
 
-class ConsumptionXSensor(EntityNamespaceMixin, NumericSensor):
+class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
 
     if TYPE_CHECKING:
         ATTR_OFFSET: Final
@@ -478,7 +478,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, NumericSensor):
     )
     ENTITY_KEY = "energy"
     ns = mn.Appliance_Control_ConsumptionX
-    _attr_device_class = NumericSensor.DeviceClass.ENERGY
+    _attr_device_class = SensorParser.DeviceClass.ENERGY
 
     ATTR_OFFSET = "offset"
     ATTR_RESET_TS = "reset_ts"
@@ -718,7 +718,7 @@ class OverTempEnableSwitch(EntityNamespaceMixin, SwitchParser):
         try:
             self.sensor_overtemp_type.update_device_value(overtemp[mc.KEY_TYPE])
         except AttributeError:
-            self.sensor_overtemp_type = EnumSensor(
+            self.sensor_overtemp_type = EnumParser(
                 self.channel,
                 self.parent,
                 entity_key="config_overtemp_type",

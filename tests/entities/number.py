@@ -73,11 +73,11 @@ class EntityTest(EntityComponentTest):
         mn.Appliance_Control_Screen_Brightness: [ScreenBrightnessNumber] * 2,
         mn_t.Appliance_Control_Thermostat_DeadZone: [MtsDeadZoneNumber],
         mn_t.Appliance_Control_Thermostat_Frost: [MtsFrostNumber],
-        mn_t.Appliance_Control_Thermostat_HoldAction: [number.ParserNumber],
+        mn_t.Appliance_Control_Thermostat_HoldAction: [number.NumberParser],
         mn_t.Appliance_Control_Thermostat_ModeC: [
             Mts300Climate.AdjustNumber,
-            number.ParserNumber,  # humidity_calibration
-            number.ParserNumber,  # fan_hold_time
+            number.NumberParser,  # humidity_calibration
+            number.NumberParser,  # fan_hold_time
         ],
         mn_t.Appliance_Control_Thermostat_Overheat: [MtsOverheatNumber],
     }
@@ -92,7 +92,7 @@ class EntityTest(EntityComponentTest):
         mc.KEY_MST: [hub.MstSwitch.WateringDurationNumber],
     }
 
-    async def async_test_each_callback(self, entity: number.Number):
+    async def async_test_each_callback(self, entity: number.NumberEntity):
         if type(entity) is gd.EmulatedNumber and type(entity.parent) is gd.GarageDoor:
             EntityComponentTest.expected_entity_types.remove(gd.GarageConfigNumber)
 
@@ -118,8 +118,8 @@ class EntityTest(EntityComponentTest):
                 await _switch.async_turn_on()
         await super().async_test_each_callback(entity)
 
-    async def async_test_enabled_callback(self, entity: number.Number):
-        is_config_number = isinstance(entity, number.ParserNumber)
+    async def async_test_enabled_callback(self, entity: number.NumberEntity):
+        is_config_number = isinstance(entity, number.NumberParser)
         states = self.hass_states
         time_mocker = self.device_context.time_mock
         await self.async_service_call(
@@ -137,8 +137,8 @@ class EntityTest(EntityComponentTest):
         assert (state := states.get(self.entity_id))
         assert float(state.state) == entity.min_value, "min_value"
 
-    async def async_test_disabled_callback(self, entity: number.Number):
-        is_config_number = isinstance(entity, number.ParserNumber)
+    async def async_test_disabled_callback(self, entity: number.NumberEntity):
+        is_config_number = isinstance(entity, number.NumberParser)
         time_mocker = self.device_context.time_mock
         await entity.async_set_native_value(entity.native_max_value)
         if is_config_number:

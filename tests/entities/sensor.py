@@ -9,11 +9,11 @@ from custom_components.meross_lan.merossclient.protocol.namespaces import (
     thermostat as mn_t,
 )
 from custom_components.meross_lan.sensor import (
-    EnumSensor,
+    EnumParser,
     FilterMaintenanceSensor,
     HumiditySensor,
     LightSensor,
-    NumericSensor,
+    SensorParser,
     ProtocolSensor,
     SignalStrengthSensor,
     TemperatureSensor,
@@ -40,7 +40,7 @@ class EntityTest(EntityComponentTest):
     }
 
     NAMESPACES_ENTITIES = {
-        mn.Appliance_Config_OverTemp: [EnumSensor],
+        mn.Appliance_Config_OverTemp: [EnumParser],
         mn.Appliance_Control_ConsumptionH: [mss.ConsumptionHSensor],
         mn.Appliance_Control_ConsumptionX: [mss.ConsumptionXSensor],
         mn.Appliance_Control_Diffuser_Sensor: [
@@ -49,9 +49,9 @@ class EntityTest(EntityComponentTest):
         ],
         mn.Appliance_Control_Electricity: [
             mss.ElectricitySensor,
-            NumericSensor,
-            NumericSensor,
-            NumericSensor,
+            SensorParser,
+            SensorParser,
+            SensorParser,
         ],
         mn.Appliance_Control_ElectricityX: [
             # There's an issue in removing 'ElectricityXSensor' when
@@ -68,16 +68,16 @@ class EntityTest(EntityComponentTest):
             # These are entities installed by mn.Appliance_Control_Sensor_LatestX
             # but we use this namespace to detect presence capability (ms600)
             ms600.PresenceSensor,
-            ms600.NumericSensor,
-            ms600.NumericSensor,
+            ms600.SensorParser,
+            ms600.SensorParser,
             LightSensor,
         ],
         mn_t.Appliance_Control_Thermostat_ModeC: [  # mts300
-            EnumSensor,  # output status sensors
-            EnumSensor,
-            EnumSensor,
-            EnumSensor,
-            EnumSensor,
+            EnumParser,  # output status sensors
+            EnumParser,
+            EnumParser,
+            EnumParser,
+            EnumParser,
             TemperatureSensor,  # additional (disabled) current temperature sensor
             HumiditySensor,  # additional (disabled) current humidity sensor
         ],
@@ -101,12 +101,12 @@ class EntityTest(EntityComponentTest):
         ],  # additional (disabled) current temperature sensor
         mc.KEY_SMOKEALARM: [
             hub.SmokeAlarmSensor,
-            EnumSensor,
+            EnumParser,
         ],  # status, interConn sensors
     }
 
-    async def async_test_enabled_callback(self, entity: EnumSensor | NumericSensor):
+    async def async_test_enabled_callback(self, entity: EnumParser | SensorParser):
         pass
 
-    async def async_test_disabled_callback(self, entity: EnumSensor | NumericSensor):
+    async def async_test_disabled_callback(self, entity: EnumParser | SensorParser):
         pass

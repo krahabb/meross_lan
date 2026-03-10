@@ -3,9 +3,9 @@ from typing import TYPE_CHECKING, override
 from ..binary_sensor import BinarySensor
 from ..const import hac
 from ..helpers.namespaces import mc, mn
-from ..number import ParserNumber
+from ..number import NumberParser
 from ..select import SelectParser
-from ..sensor import NumericSensor
+from ..sensor import SensorParser
 
 if TYPE_CHECKING:
     from typing import Final, Unpack
@@ -25,7 +25,7 @@ class PresenceConfigBase(SelectParser.NamespaceGroupValue):
     # TODO: generalize entitykey generation
 
 
-class PresenceConfigNumberBase(PresenceConfigBase, ParserNumber):
+class PresenceConfigNumberBase(PresenceConfigBase, NumberParser):
     """Base class for config values represented as Number entities in HA."""
 
 
@@ -60,7 +60,7 @@ class PresenceConfigNoBodyTime(PresenceConfigNumberBase):
     key_value = mc.KEY_TIME
 
     # HA core entity attributes:
-    _attr_device_class = ParserNumber.DEVICE_CLASS_DURATION
+    _attr_device_class = NumberParser.DEVICE_CLASS_DURATION
     _attr_name = mc.KEY_NOBODYTIME
     _attr_native_max_value = 3600  # 1 hour ?
     _attr_native_min_value = 1
@@ -78,7 +78,7 @@ class PresenceConfigDistance(PresenceConfigNumberBase):
     _attr_device_scale = 1000
 
     # HA core entity attributes:
-    _attr_device_class = ParserNumber.DeviceClass.DISTANCE
+    _attr_device_class = NumberParser.DeviceClass.DISTANCE
     _attr_native_unit_of_measurement = hac.UnitOfLength.METERS
     _attr_native_max_value = 12
     _attr_native_min_value = 0.1
@@ -135,7 +135,7 @@ class PresenceConfigMode(PresenceConfigModeBase):
         )
 
 
-class PresenceSensor(NumericSensor):
+class PresenceSensor(SensorParser):
     """ms600 presence sensor."""
 
     if TYPE_CHECKING:
@@ -157,15 +157,15 @@ class PresenceSensor(NumericSensor):
         channel: "ChannelType",
         device: "Device",
         /,
-        **kwargs: "Unpack[NumericSensor.Args]",
+        **kwargs: "Unpack[SensorParser.Args]",
     ):
-        NumericSensor.__init__(self, channel, device, **kwargs)
-        self.sensor_distance = NumericSensor(
+        SensorParser.__init__(self, channel, device, **kwargs)
+        self.sensor_distance = SensorParser(
             channel,
             device,
             entity_key=f"{self.entitykey}_distance",
             device_scale=1000,
-            device_class=NumericSensor.DeviceClass.DISTANCE,
+            device_class=SensorParser.DeviceClass.DISTANCE,
             native_unit_of_measurement=hac.UnitOfLength.METERS,
             suggested_display_precision=2,
             name="Presence distance",
@@ -176,7 +176,7 @@ class PresenceSensor(NumericSensor):
             entity_key=f"{self.entitykey}_motion",
             device_class=BinarySensor.DeviceClass.MOTION,
         )
-        self.sensor_times = NumericSensor(
+        self.sensor_times = SensorParser(
             channel,
             device,
             entity_key=f"{self.entitykey}_times",

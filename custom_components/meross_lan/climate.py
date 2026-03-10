@@ -11,7 +11,7 @@ from .calendar import MtsSchedule
 from .const import hac
 from .helpers import reverse_lookup
 from .helpers.entity import ParserEntity
-from .number import ParserNumber
+from .number import NumberParser
 from .select import SelectEntity
 from .sensor import TemperatureSensor
 
@@ -43,15 +43,15 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         AWAY = "away"
         AUTO = "auto"
 
-    class AdjustNumber(ParserNumber):
+    class AdjustNumber(NumberParser):
 
         _attr_name = "Calibration"
-        _attr_device_class = ParserNumber.DEVICE_CLASS_TEMPERATURE_DELTA
+        _attr_device_class = NumberParser.DEVICE_CLASS_TEMPERATURE_DELTA
 
         def __init__(self, climate: "MtsClimate", /):
-            ParserNumber.__init__(self, climate.channel, climate.parent)
+            NumberParser.__init__(self, climate.channel, climate.parent)
 
-    class SetPointNumber(ParserNumber):
+    class SetPointNumber(NumberParser):
         """
         Helper entity to configure MTS100/150/200 setpoints
         AKA: Heat(comfort) - Cool(sleep) - Eco(away)
@@ -61,7 +61,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             # HA core entity attributes:
             icon: Final[str]
 
-        _attr_device_class = ParserNumber.DeviceClass.TEMPERATURE
+        _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
         _attr_native_step = 0.5
 
         __slots__ = (
@@ -75,7 +75,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             self.key_value = climate.MTS_MODE_TO_TEMPERATUREKEY_MAP[
                 reverse_lookup(climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
             ]
-            ParserNumber.__init__(
+            NumberParser.__init__(
                 self,
                 climate.channel,
                 climate.parent,
@@ -400,7 +400,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         parent: Final[BaseDevice]  # type: ignore[override]
         channel: Final[ChannelType]  # type: ignore[override]
 
-        number_adjust_temperature: Final[ParserNumber]
+        number_adjust_temperature: Final[NumberParser]
         number_preset_temperature: Final[dict[str, "MtsClimate.SetPointNumber"]]
         schedule: Final[MtsSchedule]
         select_track_sensor: Final[TrackSensorSelect]

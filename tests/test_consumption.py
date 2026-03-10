@@ -19,7 +19,7 @@ from custom_components.meross_lan.devices.mss import (
     ElectricitySensor,
 )
 from custom_components.meross_lan.merossclient.protocol import const as mc
-from custom_components.meross_lan.sensor import NumericSensor
+from custom_components.meross_lan.sensor import SensorParser
 from emulator.mixins.electricity import (
     ConsumptionXMixin as EmulatorConsumptionMixin,
     ElectricityMixin as EmulatorElectricityMixin,
@@ -99,7 +99,7 @@ async def _async_configure_context(context: "DeviceContext", timezone: str):
     states = context.hass.states
 
     sensor_power = device.entities[mc.KEY_POWER]
-    assert isinstance(sensor_power, NumericSensor)
+    assert isinstance(sensor_power, SensorParser)
     powerstate = states.get(sensor_power.entity_id)
     assert powerstate
     assert float(powerstate.state) == TEST_POWER

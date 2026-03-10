@@ -30,7 +30,8 @@ async def async_setup_entry(
     )
 
 
-class Sensor(mle.NumericEntity, sensor.SensorEntity):
+class SensorEntity(mle.NumericEntity, sensor.SensorEntity):
+    """Base wrapper around HA core SensorEntity."""
 
     if TYPE_CHECKING:
 
@@ -98,9 +99,8 @@ class Sensor(mle.NumericEntity, sensor.SensorEntity):
             )
 
 
-class EnumSensor(mle.ValueParser, Sensor):
-    """Specialization for sensor with ENUM device_class which allows to store
-    anything as opposed to numeric sensor types which have units and so."""
+class EnumParser(mle.ValueParser, SensorEntity):
+    """Specialized class for enum sensors bound to a namespace parser."""
 
     if TYPE_CHECKING:
 
@@ -146,12 +146,12 @@ class EnumSensor(mle.ValueParser, Sensor):
     update_native_value = update_device_value
 
 
-# TODO rename to ParserSensor
-class NumericSensor(mle.NumericParser, Sensor):
+class SensorParser(mle.NumericParser, SensorEntity):
+    """Specialized class for numeric sensors bound to a namespace parser."""
 
     if TYPE_CHECKING:
 
-        class Args(Sensor.Args, mle.NumericParser.Args):
+        class Args(SensorEntity.Args, mle.NumericParser.Args):
             pass
 
         def __init__(
@@ -170,7 +170,7 @@ class NumericSensor(mle.NumericParser, Sensor):
             pass
 
 
-class HumiditySensor(NumericSensor):
+class HumiditySensor(SensorParser):
     """Specialization for Humidity sensor.
     - device_scale defaults to 10 which is actually the only scale seen so far.
     - suggested_display_precision defaults to 1
@@ -184,7 +184,7 @@ class HumiditySensor(NumericSensor):
     _attr_suggested_display_precision = 1
 
 
-class TemperatureSensor(NumericSensor):
+class TemperatureSensor(SensorParser):
     """Specialization for Temperature sensor.
     - device_scale defaults to 1 (from base class definition) and is likely to be overriden.
     - suggested_display_precision defaults to 1
@@ -197,7 +197,7 @@ class TemperatureSensor(NumericSensor):
     _attr_suggested_display_precision = 1
 
 
-class LightSensor(NumericSensor):
+class LightSensor(SensorParser):
     """Specialization for sensor reporting light illuminance (lux)."""
 
     ENTITY_KEY = mc.KEY_LIGHT
@@ -208,7 +208,7 @@ class LightSensor(NumericSensor):
     _attr_suggested_display_precision = 0
 
 
-class DiagnosticSensor(Sensor):
+class DiagnosticSensor(SensorEntity):
 
     if TYPE_CHECKING:
         is_diagnostic: Final
@@ -239,7 +239,7 @@ class DiagnosticSensor(Sensor):
     is_diagnostic = True
 
     # HA core entity attributes:
-    _attr_entity_category = NumericSensor.EntityCategory.DIAGNOSTIC
+    _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC
 
 
 class DiagnosticParser(mle.ParserEntity, DiagnosticSensor):
@@ -259,7 +259,7 @@ class DiagnosticParser(mle.ParserEntity, DiagnosticSensor):
         self.update_device_value(json_dumps(payload))
 
 
-class ProtocolSensor(Sensor):
+class ProtocolSensor(SensorEntity):
 
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
@@ -275,7 +275,7 @@ class ProtocolSensor(Sensor):
     # HA core entity attributes:
     _attr_available = True
     _attr_device_class = sensor.SensorDeviceClass.ENUM
-    _attr_entity_category = Sensor.EntityCategory.DIAGNOSTIC
+    _attr_entity_category = SensorEntity.EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
     _attr_state_class = None
 
@@ -354,7 +354,7 @@ class ProtocolSensor(Sensor):
         self.schedule_flush_state()
 
 
-class SignalStrengthSensor(mle.EntityNamespaceMixin, NumericSensor):
+class SignalStrengthSensor(mle.EntityNamespaceMixin, SensorParser):
 
     POLLING_CONFIG_DEFAULT = mle.EntityNamespaceMixin.POLLING_CONFIG_SLOWSENSOR_NS
 
@@ -362,22 +362,22 @@ class SignalStrengthSensor(mle.EntityNamespaceMixin, NumericSensor):
     ns = mn.Appliance_System_Runtime
     key_value = mc.KEY_SIGNAL
     # HA core entity attributes:
-    _attr_entity_category = NumericSensor.EntityCategory.DIAGNOSTIC
+    _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC
     _attr_native_unit_of_measurement = mlc.hac.PERCENTAGE
     _attr_icon = "mdi:wifi"
 
 
-class FilterMaintenanceSensor(NumericSensor):
+class FilterMaintenanceSensor(SensorParser):
 
     ENTITY_KEY = mc.KEY_FILTER
     ns = mn.Appliance_Control_FilterMaintenance
-    NS_CHANNELS = NumericSensor.NS_CHANNELS_SINGLE
+    NS_CHANNELS = SensorParser.NS_CHANNELS_SINGLE
     key_value = mc.KEY_LIFE
 
     # HA core entity attributes:
-    _attr_entity_category = NumericSensor.EntityCategory.DIAGNOSTIC
+    _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC
     _attr_native_unit_of_measurement = mlc.hac.PERCENTAGE
 
     def __init__(self, channel: int, parent: "Device", /):
-        NumericSensor.__init__(self, channel, parent)
+        SensorParser.__init__(self, channel, parent)
         parent.register_parser_entity(self)

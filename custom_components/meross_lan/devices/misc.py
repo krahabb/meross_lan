@@ -12,7 +12,7 @@ from ..merossclient.protocol import const as mc
 from ..sensor import (
     HumiditySensor,
     LightSensor,
-    NumericSensor,
+    SensorParser,
     TemperatureSensor,
 )
 from .ms600 import PresenceSensor
@@ -70,12 +70,12 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                     if key in SensorLatestNamespaceHandler.VALUE_KEY_EXCLUDED:
                         continue
                     try:
-                        entity: NumericSensor = entities[f"{channel}_sensor_{key}"]  # type: ignore
+                        entity: SensorParser = entities[f"{channel}_sensor_{key}"]  # type: ignore
                     except KeyError:
                         try:
                             entity_def = SensorLatestNamespaceHandler.ENTITY_DEFS[key]
                         except KeyError:
-                            entity = NumericSensor(
+                            entity = SensorParser(
                                 channel, self.parent, entity_key=f"sensor_{key}"
                             )
                         else:
@@ -141,13 +141,13 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
             channel: int = p_channel[key_idx]
             for data_key, data_value in p_channel[mc.KEY_DATA].items():
                 try:
-                    entity: NumericSensor = entities[f"{channel}_sensor_{data_key}"]  # type: ignore
+                    entity: SensorParser = entities[f"{channel}_sensor_{data_key}"]  # type: ignore
                 except KeyError:
                     # new channel or data_key
                     try:
                         entity_def = SensorLatestXNamespaceHandler.ENTITY_DEFS[data_key]
                     except KeyError:
-                        entity = NumericSensor(
+                        entity = SensorParser(
                             channel, self.parent, entity_key=f"sensor_{data_key}"
                         )
                     else:

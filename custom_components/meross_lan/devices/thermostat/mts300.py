@@ -4,9 +4,9 @@ from homeassistant.components.climate import const as hacc
 
 from . import MtsThermostatClimate, mc, mlc, mn, mn_t
 from ...helpers import reverse_lookup
-from ...number import ParserNumber
+from ...number import NumberParser
 from ...select import SelectParser
-from ...sensor import EnumSensor, HumiditySensor
+from ...sensor import EnumParser, HumiditySensor
 from ...switch import EmulatedSwitch
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ class Mts300Climate(MtsThermostatClimate):
 
         if TYPE_CHECKING:
             """{"channel":0,"value":150,"min":-450,"max":450,"humiValue":-60}"""
-            number_calibration_humi: ParserNumber
+            number_calibration_humi: NumberParser
 
         _attr_native_max_value = 4.5
         _attr_native_min_value = -4.5
@@ -36,11 +36,11 @@ class Mts300Climate(MtsThermostatClimate):
                 humidity = payload["humiValue"]  # type: ignore
                 self.number_calibration_humi.update_device_value(humidity)
             except AttributeError:
-                self.number_calibration_humi = ParserNumber(
+                self.number_calibration_humi = NumberParser(
                     self.channel,
                     self.parent,
                     entity_key="humidity_calibration",
-                    device_class=ParserNumber.DeviceClass.HUMIDITY,
+                    device_class=NumberParser.DeviceClass.HUMIDITY,
                     device_scale=10,
                     device_value=humidity,
                     key_value="humiValue",
@@ -92,7 +92,7 @@ class Mts300Climate(MtsThermostatClimate):
 
         # entities
         sensor_current_humidity: HumiditySensor
-        number_fan_hold: ParserNumber
+        number_fan_hold: NumberParser
         switch_fan_hold: EmulatedSwitch
         select_temp_association: SensorAssociationSelect
 
@@ -133,29 +133,29 @@ class Mts300Climate(MtsThermostatClimate):
     }
     """Status flags in "more" dict mapped as: (bool(hStatus), bool(cStatus), bool(fStatus))."""
     ENTITY_DEFS = {
-        "hdStatus": EnumSensor.ENTITY_DEF(
+        "hdStatus": EnumParser.ENTITY_DEF(
             entity_key="(de)humidifier_status",
             translation_key="mts300_hdstatus",
-            entity_category=EnumSensor.EntityCategory.DIAGNOSTIC,
+            entity_category=EnumParser.EntityCategory.DIAGNOSTIC,
         ),
-        "hStatus": EnumSensor.ENTITY_DEF(
+        "hStatus": EnumParser.ENTITY_DEF(
             entity_key="heating_status",
             translation_key="mts300_status",
-            entity_category=EnumSensor.EntityCategory.DIAGNOSTIC,
+            entity_category=EnumParser.EntityCategory.DIAGNOSTIC,
         ),
-        "cStatus": EnumSensor.ENTITY_DEF(
+        "cStatus": EnumParser.ENTITY_DEF(
             entity_key="cooling_status",
             translation_key="mts300_status",
-            entity_category=EnumSensor.EntityCategory.DIAGNOSTIC,
+            entity_category=EnumParser.EntityCategory.DIAGNOSTIC,
         ),
-        "fStatus": EnumSensor.ENTITY_DEF(
+        "fStatus": EnumParser.ENTITY_DEF(
             entity_key="fan_speed",
             translation_key="mts300_status",
         ),
-        "aStatus": EnumSensor.ENTITY_DEF(
+        "aStatus": EnumParser.ENTITY_DEF(
             entity_key="auxiliary_status",
             translation_key="mts300_status",
-            entity_category=EnumSensor.EntityCategory.DIAGNOSTIC,
+            entity_category=EnumParser.EntityCategory.DIAGNOSTIC,
         ),
     }
 
@@ -200,11 +200,11 @@ class Mts300Climate(MtsThermostatClimate):
         self.sensor_current_humidity = HumiditySensor(
             channel, device, entity_registry_enabled_default=False
         )
-        self.number_fan_hold = ParserNumber(
+        self.number_fan_hold = NumberParser(
             channel,
             device,
             entity_key="fan_hold_time",
-            device_class=ParserNumber.DEVICE_CLASS_DURATION,
+            device_class=NumberParser.DEVICE_CLASS_DURATION,
             native_unit_of_measurement=mlc.hac.UnitOfTime.MINUTES,
             device_scale=1,
         )
