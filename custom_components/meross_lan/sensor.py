@@ -241,6 +241,15 @@ class DiagnosticSensor(Sensor):
     # HA core entity attributes:
     _attr_entity_category = NumericSensor.EntityCategory.DIAGNOSTIC
 
+
+class DiagnosticParser(mle.ParserEntity, DiagnosticSensor):
+    """
+    This is a specialization of DiagnosticSensor which is also a ParserEntity, so that it can be
+    easily registered in NamespaceHandler to parse the whole payload of an unexpected namespace and
+    store it as-is in the state of this sensor.
+    """
+
+    @override
     def _parse(self, payload: dict):
         """
         This implementation aims at diagnostic sensors installed in 'well-known'
@@ -287,7 +296,7 @@ class ProtocolSensor(Sensor):
 
     def __init__(self, parent: "Device"):
         self.extra_state_attributes = {}
-        super().__init__(None, parent, native_value=ProtocolSensor.STATE_DISCONNECTED) # type: ignore
+        super().__init__(None, parent, native_value=ProtocolSensor.STATE_DISCONNECTED)  # type: ignore
 
     def set_available(self):
         self.native_value = self.parent.transport

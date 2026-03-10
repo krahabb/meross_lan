@@ -100,10 +100,10 @@ class NamespaceHandler(handler.NamespaceHandler):
                 channel, self.parent, entity_registry_enabled_default=True
             )
         elif self.parent.create_diagnostic_entities:
-            from ..sensor import DiagnosticSensor
+            from ..sensor import DiagnosticParser
 
             self.register_parser(
-                DiagnosticSensor(channel, self.parent, entity_key=self.id.key)
+                DiagnosticParser(channel, self.parent, entity_key=self.id.key)
             )
         else:
             self.parsers[channel] = self._parse_stub
