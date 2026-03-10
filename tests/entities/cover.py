@@ -88,7 +88,7 @@ class EntityTest(EntityComponentTest):
             )
             # advance the time a bit
             await self.device_context.time_mock.async_tick(
-                mlc.PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT
+                RollerShutter.PARAM_TRANSITION_POLL_TIMEOUT
             )
             # ensure we're still opening
             assert (state := states.get(self.entity_id))

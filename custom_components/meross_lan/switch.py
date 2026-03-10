@@ -89,11 +89,7 @@ class PhysicalLockSwitch(SwitchParser):
 
 class ToggleSwitch(mle.EntityNamespaceMixin, SwitchParser):
 
-    DEFAULT_CONFIG = (
-        0,
-        0,
-        mle.EntityNamespaceMixin.async_poll_default,
-    )
+    POLLING_CONFIG_DEFAULT = mle.EntityNamespaceMixin.POLLING_CONFIG_STATE_NS
     ENTITY_KEY = "0"  # used to keep unique_id compatibility with legacy versions
     ns = mn.Appliance_Control_Toggle
     # HA core entity attributes:

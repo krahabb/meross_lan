@@ -356,11 +356,8 @@ class ProtocolSensor(Sensor):
 
 class SignalStrengthSensor(mle.EntityNamespaceMixin, NumericSensor):
 
-    DEFAULT_CONFIG = (
-        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-        mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        mle.EntityNamespaceMixin.async_poll_smart,
-    )
+    POLLING_CONFIG_DEFAULT = mle.EntityNamespaceMixin.POLLING_CONFIG_SLOWSENSOR_NS
+
     ENTITY_KEY = "signal_strength"
     ns = mn.Appliance_System_Runtime
     key_value = mc.KEY_SIGNAL

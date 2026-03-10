@@ -9,6 +9,7 @@ from .parser import NamespaceParser
 if TYPE_CHECKING:
     from typing import (
         Any,
+        Awaitable,
         Callable,
         ClassVar,
         Coroutine,
@@ -50,12 +51,14 @@ class NamespaceHandler(logging.Loggable):
     if TYPE_CHECKING:
         type HandlerFunc = Callable[[MerossMessage], None]
         type ParserFunc = Callable[[JsonMapping], None]
-        type PollingStrategyFunc = Callable[[Self], Coroutine]
-        type ConfigType = tuple[int, int, PollingStrategyFunc | None]
+        type PollingStrategyFunc = Callable[[Self], Awaitable]
+        type PollingConfigType = tuple[int, int, PollingStrategyFunc | None]
+        """PollingConfigType is a tuple of (polling_period, polling_period_cloud, polling_strategy).
+        This is used to configure the handler polling policy setting polling periods and strategy processor."""
 
-        DEFAULT_CONFIG: ClassVar[ConfigType]
         HEADER_AVG_SIZE: Final[int]
         """(rough) estimate of the header part of any response"""
+        POLLING_CONFIG_DEFAULT: ClassVar[PollingConfigType]
 
         parent: Final["Device"]  # type: ignore[override]
         id: Final[mn.Namespace]  # type: ignore[override]
@@ -70,13 +73,8 @@ class NamespaceHandler(logging.Loggable):
         last_rx_push: JsonDict | None
         # TODO: implement caching of all methods responses
 
-    DEFAULT_CONFIG = (
-        0,
-        0,
-        None,
-    )
-
     HEADER_AVG_SIZE = 300
+    POLLING_CONFIG_DEFAULT = (0, 0, None)
 
     __SLOTS__ = (
         "handler",
@@ -100,19 +98,16 @@ class NamespaceHandler(logging.Loggable):
         /,
         *,
         handler: "HandlerFunc | None" = None,
-        config: "ConfigType | None" = None,
+        config: "PollingConfigType | None" = None,
     ):
-        assert ns not in device.ns_handlers, (
-            "Namespace already registered",
-            ns,
-        )
+        assert ns not in device.ns_handlers, ("Namespace already registered", ns)
         super().__init__(ns, device)
         self.handler = handler or getattr(
             device, f"_handle_{ns.replace('.', '_')}", self._handle
         )
         self.parsers = {}
         self.last_rx_epoch = self.last_poll_epoch = self.polling_epoch_next = 0.0
-        config = config or self.DEFAULT_CONFIG
+        config = config or self.POLLING_CONFIG_DEFAULT
         self.polling_period = config[0]
         self.polling_period_cloud = config[1]
         self.polling_strategy = config[2]
@@ -722,9 +717,7 @@ class NamespaceHandler(logging.Loggable):
         This strategy is for namespace polling when diagnostics sensors are detected and
         installed due to any unknown namespace parsing (see self._parse_undefined_dict).
         This in turn needs to be removed from polling when diagnostic sensors are disabled.
-        The strategy itself is the same as async_poll_smart; the polling settings
-        (period, payload size, etc) has been defaulted in self.__init__ when the definition
-        for the namespace polling has not been found in POLLING_STRATEGY_CONF
+        The strategy itself is the same as async_poll_smart.
         """
         device = self.parent
         if device.mqtt_active and self.polling_epoch_next and self.id.has_psh:

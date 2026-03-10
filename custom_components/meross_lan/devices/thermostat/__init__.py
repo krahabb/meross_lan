@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 
 from ...binary_sensor import BinarySensorParser
 from ...climate import MtsClimate
-from ...helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
+from ...helpers.namespaces import NamespaceHandler, mc, mlc, mn
 from ...merossclient.protocol.namespaces import thermostat as mn_t
 from ...number import ParserNumber
 from ...select import SelectParser
@@ -35,6 +35,8 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
     This ns only appears with thermostats so far.. so we put it here but it could
     nevertheless live in its own module (or in 'misc' maybe)
     """
+
+    POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS
 
     def __init__(self, ns: "mn.Namespace", device: "Device", /):
         NamespaceHandler.__init__(
@@ -476,72 +478,19 @@ def digest_init_thermostat(
     return digest_parse_thermostat, digest_pollers
 
 
-POLLING_STRATEGY_CONF.update(
+NamespaceHandler.POLLING_CONFIG_MAP.update(
     {
-        mn.Appliance_Control_Screen_Brightness: (
-            mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
-        mn.Appliance_Control_TempUnit: (
-            mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
-        mn_t.Appliance_Control_Thermostat_Calibration: (
-            mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
-        mn_t.Appliance_Control_Thermostat_CtlRange: (
-            0,
-            0,
-            NamespaceHandler.async_poll_once,
-        ),
-        mn_t.Appliance_Control_Thermostat_DeadZone: (
-            mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
-        mn_t.Appliance_Control_Thermostat_Frost: (
-            mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-            mlc.PARAM_SENSOR_SLOW_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
-        mn_t.Appliance_Control_Thermostat_HoldAction: (
-            mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
-        mn_t.Appliance_Control_Thermostat_ModeC: (
-            0,
-            0,
-            NamespaceHandler.async_poll_default,
-        ),
-        mn_t.Appliance_Control_Thermostat_Overheat: (
-            mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-            mlc.PARAM_SENSOR_SLOW_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
-        mn_t.Appliance_Control_Thermostat_Timer: (
-            0,
-            0,
-            NamespaceHandler.async_poll_default,
-        ),
-        mn_t.Appliance_Control_Thermostat_Schedule: (
-            mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
-        mn_t.Appliance_Control_Thermostat_ScheduleB: (
-            mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
-        mn_t.Appliance_Control_Thermostat_Sensor: (
-            mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-            mlc.PARAM_SENSOR_SLOW_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
+        mn.Appliance_Control_TempUnit: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
+        mn_t.Appliance_Control_Thermostat_Calibration: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
+        mn_t.Appliance_Control_Thermostat_CtlRange: NamespaceHandler.POLLING_CONFIG_SINGLEPOLL_NS,
+        mn_t.Appliance_Control_Thermostat_DeadZone: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
+        mn_t.Appliance_Control_Thermostat_Frost: NamespaceHandler.POLLING_CONFIG_SLOWSENSOR_NS,
+        mn_t.Appliance_Control_Thermostat_HoldAction: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
+        mn_t.Appliance_Control_Thermostat_ModeC: NamespaceHandler.POLLING_CONFIG_STATE_NS,
+        mn_t.Appliance_Control_Thermostat_Overheat: NamespaceHandler.POLLING_CONFIG_SLOWSENSOR_NS,
+        mn_t.Appliance_Control_Thermostat_Timer: NamespaceHandler.POLLING_CONFIG_STATE_NS,
+        mn_t.Appliance_Control_Thermostat_Schedule: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
+        mn_t.Appliance_Control_Thermostat_ScheduleB: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
+        mn_t.Appliance_Control_Thermostat_Sensor: NamespaceHandler.POLLING_CONFIG_SLOWSENSOR_NS,
     }
 )

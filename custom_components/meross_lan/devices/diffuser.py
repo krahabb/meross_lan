@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, override
 
-from ..helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
+from ..helpers.namespaces import NamespaceHandler, mc, mlc, mn
 from ..light import (
     ATTR_BRIGHTNESS,
     ATTR_EFFECT,
@@ -183,22 +183,10 @@ class DiffuserSpray(Spray):
     }
 
 
-POLLING_STRATEGY_CONF.update(
+NamespaceHandler.POLLING_CONFIG_MAP.update(
     {
-        mn.Appliance_Control_Diffuser_Light: (
-            mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
-            mlc.PARAM_SENSOR_FAST_CLOUD_UPDATE_PERIOD,
-            None,  # digest payload
-        ),
-        mn.Appliance_Control_Diffuser_Spray: (
-            mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
-            mlc.PARAM_SENSOR_FAST_CLOUD_UPDATE_PERIOD,
-            None,  # digest payload
-        ),
-        mn.Appliance_Control_Diffuser_Sensor: (
-            mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-            mlc.PARAM_SENSOR_SLOW_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
+        mn.Appliance_Control_Diffuser_Light: NamespaceHandler.POLLING_CONFIG_DIGEST_NS,
+        mn.Appliance_Control_Diffuser_Spray: NamespaceHandler.POLLING_CONFIG_DIGEST_NS,
+        mn.Appliance_Control_Diffuser_Sensor: NamespaceHandler.POLLING_CONFIG_SLOWSENSOR_NS,
     }
 )

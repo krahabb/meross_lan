@@ -745,11 +745,7 @@ class DNDLight(mle.EntityNamespaceMixin, mle.BinaryParser, light.LightEntity):
     through a light feature (presence light or so)
     """
 
-    DEFAULT_CONFIG = (
-        mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        mle.EntityNamespaceMixin.async_poll_smart,
-    )
+    POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS
     PLATFORM = light.DOMAIN
     ENTITY_KEY = "dnd"
     ns = mn.Appliance_System_DNDMode

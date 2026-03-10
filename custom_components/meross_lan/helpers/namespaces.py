@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, override
 
 from .. import const as mlc
-from ..merossclient.device import handler
+from ..merossclient.device.handler import NamespaceHandler as _NH
 from ..merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
@@ -12,22 +12,61 @@ if TYPE_CHECKING:
     from .device import Device
     from .entity import ParserEntity
 
-    POLLING_STRATEGY_CONF: Final[dict[mn.Namespace, "NamespaceHandler.ConfigType"]]
 
-
-class NamespaceHandler(handler.NamespaceHandler):
+class NamespaceHandler(_NH):
 
     if TYPE_CHECKING:
+        # type PollingStrategyFunc = _NH.PollingStrategyFunc
+        # type PollingConfigType = _NH.PollingConfigType
+        POLLING_CONFIG_STATE_NS: Final[_NH.PollingConfigType]
+        """Common polling configuration for namespaces carrying state information which need to be polled at every cycle."""
+        POLLING_CONFIG_DIGEST_NS: Final[_NH.PollingConfigType]
+        """Namespaces which need not to be polled since they're already carried in digest payload (see async_poll_all)"""
+        POLLING_CONFIG_FASTSENSOR_NS: Final[_NH.PollingConfigType]
+        POLLING_CONFIG_SLOWSENSOR_NS: Final[_NH.PollingConfigType]
+        POLLING_CONFIG_CONFIGURATION_NS: Final[_NH.PollingConfigType]
+        """Common polling configuration for namespaces carrying configuration parameters.
+        These are polled on a longer period since we don't expect them to change very often."""
+        POLLING_CONFIG_SINGLEPOLL_NS: Final[_NH.PollingConfigType]
+        """Common polling configuration for namespaces carrying configuration parameters.
+        These are polled on a longer period since we don't expect them to change very often."""
+        POLLING_CONFIG_MAP: Final[dict[mn.Namespace, _NH.PollingConfigType]]
+        """Centralized polling config parameters for namespaces."""
+
         parent: Final[Device]  # type: ignore[override]
-        entity_class: type["ParserEntity"] | None
+        entity_class: type[ParserEntity] | None
 
-    DEFAULT_CONFIG = (
-        mlc.PARAM_DIAGNOSTIC_UPDATE_PERIOD,
+    POLLING_CONFIG_DEFAULT = (300, mlc.PARAM_CLOUD_UPDATE_PERIOD, None)
+    """Default polling configuration. This is intended for unknown/unmanaged namespaces since it should
+    be overriden whenever installing a namespace actually used in meross_lan."""
+    POLLING_CONFIG_STATE_NS = (0, 0, _NH.async_poll_default)
+    POLLING_CONFIG_DIGEST_NS = (0, 0, None)
+    POLLING_CONFIG_FASTSENSOR_NS = (0, 180, _NH.async_poll_smart)
+    POLLING_CONFIG_SLOWSENSOR_NS = (300, 600, _NH.async_poll_smart)
+    POLLING_CONFIG_CONFIGURATION_NS = (
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        None,
+        _NH.async_poll_smart,
     )
+    POLLING_CONFIG_SINGLEPOLL_NS = (0, 0, _NH.async_poll_once)
+    POLLING_CONFIG_MAP = {
+        mn.Appliance_System_Debug: (0, 0, None),
+        mn.Appliance_Config_Alarm: POLLING_CONFIG_CONFIGURATION_NS,
+        mn.Appliance_Config_Sensor_Association: POLLING_CONFIG_CONFIGURATION_NS,
+        mn.Appliance_Control_Alarm: POLLING_CONFIG_CONFIGURATION_NS,
+        mn.Appliance_Control_Fan: POLLING_CONFIG_DIGEST_NS,
+        mn.Appliance_Control_FilterMaintenance: POLLING_CONFIG_SLOWSENSOR_NS,
+        mn.Appliance_Control_Light_Effect: POLLING_CONFIG_CONFIGURATION_NS,
+        mn.Appliance_Control_Mp3: POLLING_CONFIG_STATE_NS,
+        mn.Appliance_Control_PhysicalLock: POLLING_CONFIG_CONFIGURATION_NS,
+        mn.Appliance_Control_Presence_Config: POLLING_CONFIG_CONFIGURATION_NS,
+        mn.Appliance_Control_Sensor_Latest: POLLING_CONFIG_FASTSENSOR_NS,
+        mn.Appliance_Control_Sensor_LatestX: POLLING_CONFIG_FASTSENSOR_NS,
+        mn.Appliance_Mcu_Firmware: POLLING_CONFIG_SINGLEPOLL_NS,
+        mn.Appliance_Mcu_Hp110_Firmware: POLLING_CONFIG_SINGLEPOLL_NS,
+    }
 
-    # __slots__ = ("entity_class",)
+    __SLOTS__ = ("entity_class",)
 
     def __init__(
         self,
@@ -35,14 +74,15 @@ class NamespaceHandler(handler.NamespaceHandler):
         device: "Device",
         /,
         *,
-        handler: "NamespaceHandler.HandlerFunc | None" = None,
-        config: "NamespaceHandler.ConfigType | None" = None,
+        handler: "_NH.HandlerFunc | None" = None,
+        config: "_NH.PollingConfigType | None" = None,
     ):
         super().__init__(
             ns,
             device,
             handler=handler,
-            config=config or POLLING_STRATEGY_CONF.get(ns, self.DEFAULT_CONFIG),
+            config=config
+            or self.POLLING_CONFIG_MAP.get(ns, self.POLLING_CONFIG_DEFAULT),
         )
         self.entity_class = None
 
@@ -109,75 +149,3 @@ class NamespaceHandler(handler.NamespaceHandler):
             self.parsers[channel] = self._parse_stub
 
         self.parsers[channel](p_channel)
-
-
-"""
-Default timeouts and config parameters for polled namespaces.
-The configuration is set in the tuple as:
-(
-    polling_period,
-    polling_period_cloud,
-    strategy
-)
-see the NamespaceHandler class for the meaning of these values
-"""
-POLLING_STRATEGY_CONF = {
-    mn.Appliance_System_Debug: (
-        0,
-        0,
-        None,
-    ),  # TODO: add expected size definition to mn.Namespace class grammar
-    mn.Appliance_Config_Alarm: (
-        mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Config_Sensor_Association: (
-        mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Control_Alarm: (
-        mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Control_Fan: (
-        0,
-        mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        None,
-    ),
-    mn.Appliance_Control_FilterMaintenance: (
-        mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Control_Light_Effect: (
-        mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Control_Mp3: (0, 0, NamespaceHandler.async_poll_default),
-    mn.Appliance_Control_PhysicalLock: (
-        mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Control_Presence_Config: (
-        mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Control_Sensor_Latest: (
-        mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
-        mlc.PARAM_SENSOR_SLOW_CLOUD_UPDATE_PERIOD,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Control_Sensor_LatestX: (
-        mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
-        mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Mcu_Firmware: (0, 0, NamespaceHandler.async_poll_once),
-    mn.Appliance_Mcu_Hp110_Firmware: (0, 0, NamespaceHandler.async_poll_once),
-}

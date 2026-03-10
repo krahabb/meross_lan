@@ -39,7 +39,14 @@ CONF_TRACE_MAXSIZE: Final = 262144  # or when MAXSIZE exceeded
 CONF_TRACE_DIRECTORY: Final = "traces"
 # versioning
 CONF_TRACE_VERSION: Final = 3
-CONF_TRACE_COLUMNS: Final = ["time", "direction", "transport", "method", "namespace", "data"]
+CONF_TRACE_COLUMNS: Final = [
+    "time",
+    "direction",
+    "transport",
+    "method",
+    "namespace",
+    "data",
+]
 if TYPE_CHECKING:
 
     class TracingHeaderType(TypedDict):
@@ -184,30 +191,14 @@ PARAM_INFINITE_TIMEOUT = 2147483647  # inifinite epoch (2038 bug?)
 """the (infinite) timeout in order to disable timed schedules"""
 PARAM_COLDSTARTPOLL_DELAY = 2
 """(maximum) delay of initial poll after device setup"""
-PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT = 2
-"""used when polling the cover state to monitor an ongoing transition"""
 PARAM_CLOUD_UPDATE_PERIOD = 1195
 """General polling period for entities over cloud MQTT use 'at least' this"""
 PARAM_CONFIG_UPDATE_PERIOD = 300
 """read device config polling period"""
-PARAM_SENSOR_FAST_UPDATE_PERIOD = 0
-"""fast varying sensors polling period (this should lead to updates at every poll depending on polling policy)"""
-PARAM_SENSOR_FAST_CLOUD_UPDATE_PERIOD = 180
-"""fast varying sensors polling period over cloud mqtt"""
-PARAM_SENSOR_MEDIUM_UPDATE_PERIOD = 55
-"""medium speed varying sensors polling period (not as critical as FAST_UPDATEs that need to be queried asap)"""
-PARAM_SENSOR_SLOW_UPDATE_PERIOD = 300
-"""slowly varying sensors polling period"""
-PARAM_SENSOR_SLOW_CLOUD_UPDATE_PERIOD = 600
-"""slowly varying sensors polling period over cloud mqtt"""
-PARAM_DIAGNOSTIC_UPDATE_PERIOD = 300
-"""read diagnostic sensors only every ... second"""
 PARAM_ENERGY_UPDATE_PERIOD = 55
 """read energy consumption only every ... second"""
 PARAM_ENERGY_CLOUD_UPDATE_PERIOD = 600
 """read energy consumption over cloud mqtt only every ... second"""
-PARAM_GARAGEDOOR_TRANSITION_MAXDURATION = 60
-PARAM_GARAGEDOOR_TRANSITION_MINDURATION = 10
 PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT = 5
 """(mimimum) timeout before querying cloud api after loading the profile"""
 PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT = 86400  # 1 day

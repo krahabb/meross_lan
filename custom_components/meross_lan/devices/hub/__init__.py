@@ -7,9 +7,8 @@ from ...button import Button
 from ...calendar import MtsSchedule
 from ...climate import MtsClimate
 from ...helpers import device as mld, entity as mle
-from ...helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler
+from ...helpers.namespaces import NamespaceHandler
 from ...merossclient import device, get_productname, get_subdevice_key_digest
-from ...merossclient.device import parser
 from ...merossclient.protocol import const as mc, namespaces as mn
 from ...merossclient.protocol.namespaces import hub as mn_h
 from ...number import ParserNumber
@@ -1156,62 +1155,34 @@ def digest_init_hub(
     return digest_parse_hub, ()
 
 
-POLLING_STRATEGY_CONF.update(
+NamespaceHandler.POLLING_CONFIG_MAP.update(
     {
-        mn_h.Appliance_Config_DeviceCfg: (
-            mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
-        mn_h.Appliance_Control_Sensor_LatestX: (
-            mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
-        mn_h.Appliance_Control_Water: (
-            0,
-            0,
-            NamespaceHandler.async_poll_default,
-        ),
+        mn_h.Appliance_Config_DeviceCfg: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
+        mn_h.Appliance_Control_Sensor_LatestX: NamespaceHandler.POLLING_CONFIG_FASTSENSOR_NS,
+        mn_h.Appliance_Control_Water: NamespaceHandler.POLLING_CONFIG_STATE_NS,
         mn_h.Appliance_Hub_Battery: (
             3600,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
             NamespaceHandler.async_poll_smart,
         ),
-        mn_h.Appliance_Hub_Mts100_Adjust: (
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
+        mn_h.Appliance_Hub_Mts100_Adjust: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
         mn_h.Appliance_Hub_Mts100_All: (
             device.Device.HEARTBEAT_TIMEOUT,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
             NamespaceHandler.async_poll_chunked,
         ),
         mn_h.Appliance_Hub_Mts100_ScheduleB: (
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
+            mlc.PARAM_CONFIG_UPDATE_PERIOD,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
             NamespaceHandler.async_poll_chunked,
         ),
-        mn_h.Appliance_Hub_Sensor_Adjust: (
-            device.Device.HEARTBEAT_TIMEOUT,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
+        mn_h.Appliance_Hub_Sensor_Adjust: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
         mn_h.Appliance_Hub_Sensor_All: (
             device.Device.HEARTBEAT_TIMEOUT,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
             NamespaceHandler.async_poll_chunked,
         ),
-        mn_h.Appliance_Hub_SubDevice_Beep: (
-            0,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
-        mn_h.Appliance_Hub_SubDevice_Version: (
-            0,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_once,
-        ),
-    }
+        mn_h.Appliance_Hub_SubDevice_Beep: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
+        mn_h.Appliance_Hub_SubDevice_Version: NamespaceHandler.POLLING_CONFIG_SINGLEPOLL_NS,
+    }  # type: ignore[assignment]
 )

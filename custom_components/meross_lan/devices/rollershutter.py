@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, override
 from homeassistant.exceptions import InvalidStateError
 
 from ..cover import Cover, cover
-from ..helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
+from ..helpers.namespaces import NamespaceHandler, mc, mn
 from ..merossclient.client import Transport
 from ..number import ParserNumber
 from ..switch import SwitchParser
@@ -30,6 +30,8 @@ class RollerShutter(Cover):
     key_value = mc.KEY_POSITION
 
     ATTR_POSITION_NATIVE = "position_native"
+    PARAM_TRANSITION_POLL_TIMEOUT = 2
+    """used when polling the cover state to monitor an ongoing transition"""
 
     # HA core entity attributes:
     _attr_assumed_state = True
@@ -305,7 +307,7 @@ class RollerShutter(Cover):
             self._transition_cancel()
         else:
             self.schedule_callback(
-                mlc.PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT,
+                self.PARAM_TRANSITION_POLL_TIMEOUT,
                 self._transition_callback,
             )
 
@@ -383,27 +385,11 @@ class RollerShutterConfigNumber(ParserNumber):
         )
 
 
-POLLING_STRATEGY_CONF.update(
+NamespaceHandler.POLLING_CONFIG_MAP.update(
     {
-        mn.Appliance_RollerShutter_Adjust: (
-            mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
-        mn.Appliance_RollerShutter_Config: (
-            mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
-        mn.Appliance_RollerShutter_Position: (
-            0,
-            0,
-            NamespaceHandler.async_poll_default,
-        ),
-        mn.Appliance_RollerShutter_State: (
-            0,
-            0,
-            NamespaceHandler.async_poll_default,
-        ),
+        mn.Appliance_RollerShutter_Adjust: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
+        mn.Appliance_RollerShutter_Config: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
+        mn.Appliance_RollerShutter_Position: NamespaceHandler.POLLING_CONFIG_STATE_NS,
+        mn.Appliance_RollerShutter_State: NamespaceHandler.POLLING_CONFIG_STATE_NS,
     }
 )

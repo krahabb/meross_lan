@@ -6,7 +6,7 @@ from homeassistant.util.dt import now
 from ..binary_sensor import BinarySensor
 from ..cover import Cover
 from ..helpers import clamp
-from ..helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
+from ..helpers.namespaces import NamespaceHandler, mc, mlc, mn
 from ..merossclient.client import Transport
 from ..number import EmulatedNumber, ParserNumber
 from ..switch import SwitchParser
@@ -234,7 +234,8 @@ class GarageDoor(Cover):
     ns = mn.Appliance_GarageDoor_State
     key_value = mc.KEY_OPEN
 
-    # garagedoor extra attributes
+    PARAM_TRANSITION_MAXDURATION = 60
+    PARAM_TRANSITION_MINDURATION = 10
     ATTR_TRANSITION_DURATION = "transition_duration"
 
     # these keys in Appliance.GarageDoor.MultipleConfig are to be ignored
@@ -265,8 +266,7 @@ class GarageDoor(Cover):
     def __init__(self, channel: int, device: "Device", /):
         self._config = {}
         self._transition_duration = (
-            mlc.PARAM_GARAGEDOOR_TRANSITION_MAXDURATION
-            + mlc.PARAM_GARAGEDOOR_TRANSITION_MINDURATION
+            self.PARAM_TRANSITION_MAXDURATION + self.PARAM_TRANSITION_MINDURATION
         ) / 2
         self._transition_start = 0.0
         self.extra_state_attributes = {
@@ -508,8 +508,8 @@ class GarageDoor(Cover):
     def _update_transition_duration(self, transition_duration, /):
         self._transition_duration = clamp(
             transition_duration,
-            mlc.PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
-            mlc.PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
+            self.PARAM_TRANSITION_MINDURATION,
+            self.PARAM_TRANSITION_MAXDURATION,
         )
         self.extra_state_attributes[self.ATTR_TRANSITION_DURATION] = (
             self._transition_duration
@@ -524,6 +524,8 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
         _check_missing_config_keys: ClassVar[bool] | bool
         """Guard used to eventually initialize emulated entities for garage door open/close durations
         should they be missed in MultipleConfig."""
+
+    POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS
 
     ENTITY_DEFS = {
         mc.KEY_BUZZERENABLE: _GarageConfigSwitch_ENTITY_DEF,
@@ -604,19 +606,8 @@ def digest_init_garagedoor(
     return handler.parse_list, (handler,)
 
 
-POLLING_STRATEGY_CONF.update(
+NamespaceHandler.POLLING_CONFIG_MAP.update(
     {
-        # TODO: define a common polling strategy config for namespaces
-        # sharing the same config like these
-        mn.Appliance_GarageDoor_Config: (
-            mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
-        mn.Appliance_GarageDoor_MultipleConfig: (
-            mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
+        mn.Appliance_GarageDoor_MultipleConfig: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
     }
 )

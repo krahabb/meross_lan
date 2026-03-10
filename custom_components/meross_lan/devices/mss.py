@@ -8,10 +8,7 @@ from homeassistant.util import dt as dt_util
 
 from .. import const as mlc
 from ..helpers.entity import EntityNamespaceMixin
-from ..helpers.namespaces import (
-    POLLING_STRATEGY_CONF,
-    NamespaceHandler,
-)
+from ..helpers.namespaces import NamespaceHandler
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..sensor import EnumSensor, NumericSensor
 from ..switch import SwitchParser
@@ -221,11 +218,7 @@ class _ElectricitySensor(NumericSensor):
 
 class ElectricitySensor(EntityNamespaceMixin, _ElectricitySensor):
 
-    DEFAULT_CONFIG = (
-        mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
-        mlc.PARAM_SENSOR_FAST_CLOUD_UPDATE_PERIOD,
-        EntityNamespaceMixin.async_poll_smart,
-    )
+    POLLING_CONFIG_DEFAULT = EntityNamespaceMixin.POLLING_CONFIG_FASTSENSOR_NS
 
     ns = mn.Appliance_Control_Electricity
 
@@ -380,7 +373,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         _channels_to_poll: list[ChannelToPollType]
         # TODO: reconcile this member with polling_request_channels in base cls
 
-    DEFAULT_CONFIG = (
+    POLLING_CONFIG_DEFAULT = (
         mlc.PARAM_ENERGY_UPDATE_PERIOD,
         mlc.PARAM_ENERGY_CLOUD_UPDATE_PERIOD,
         NamespaceHandler.async_poll_smart,
@@ -478,10 +471,10 @@ class ConsumptionXSensor(EntityNamespaceMixin, NumericSensor):
         _consumption_last_value: int | None
         _consumption_last_time: int | None
 
-    DEFAULT_CONFIG = (
+    POLLING_CONFIG_DEFAULT = (
         mlc.PARAM_ENERGY_UPDATE_PERIOD,
         mlc.PARAM_ENERGY_CLOUD_UPDATE_PERIOD,
-        NamespaceHandler.async_poll_smart,
+        EntityNamespaceMixin.async_poll_smart,
     )
     ENTITY_KEY = "energy"
     ns = mn.Appliance_Control_ConsumptionX
@@ -710,11 +703,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, NumericSensor):
 
 class OverTempEnableSwitch(EntityNamespaceMixin, SwitchParser):
 
-    DEFAULT_CONFIG = (
-        mlc.PARAM_CONFIG_UPDATE_PERIOD,
-        mlc.PARAM_CLOUD_UPDATE_PERIOD,
-        NamespaceHandler.async_poll_smart,
-    )
+    POLLING_CONFIG_DEFAULT = EntityNamespaceMixin.POLLING_CONFIG_CONFIGURATION_NS
     ENTITY_KEY = "config_overtemp_enable"
     ns = mn.Appliance_Config_OverTemp
     key_value = mc.KEY_ENABLE
@@ -739,12 +728,8 @@ class OverTempEnableSwitch(EntityNamespaceMixin, SwitchParser):
             pass
 
 
-POLLING_STRATEGY_CONF.update(
+NamespaceHandler.POLLING_CONFIG_MAP.update(
     {
-        mn.Appliance_Control_ElectricityX: (
-            mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
-            mlc.PARAM_SENSOR_FAST_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
-        ),
+        mn.Appliance_Control_ElectricityX: NamespaceHandler.POLLING_CONFIG_FASTSENSOR_NS,
     }
 )

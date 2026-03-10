@@ -644,7 +644,7 @@ class EntityNamespaceMixin(NamespaceHandler, ParserEntity):
         return f"{self.parent.id}_{self.entitykey}"
 
     async def async_added_to_hass(self):
-        self.polling_strategy = self.DEFAULT_CONFIG[-1]
+        self.polling_strategy = self.POLLING_CONFIG_DEFAULT[-1]
         return await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
