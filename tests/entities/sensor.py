@@ -11,12 +11,9 @@ from custom_components.meross_lan.merossclient.protocol.namespaces import (
 from custom_components.meross_lan.sensor import (
     EnumParser,
     FilterMaintenanceSensor,
-    HumiditySensor,
-    LightSensor,
     SensorParser,
     ProtocolSensor,
     SignalStrengthSensor,
-    TemperatureSensor,
 )
 
 from tests.entities import EntityComponentTest
@@ -31,10 +28,10 @@ class EntityTest(EntityComponentTest):
     DIGEST_ENTITIES = {
         mc.KEY_THERMOSTAT: {
             mc.KEY_MODE: [
-                TemperatureSensor
+                SensorParser
             ],  # additional (disabled) current temperature sensor
             mc.KEY_MODEB: [
-                TemperatureSensor
+                SensorParser
             ],  # additional (disabled) current temperature sensor
         },
     }
@@ -44,14 +41,15 @@ class EntityTest(EntityComponentTest):
         mn.Appliance_Control_ConsumptionH: [mss.ConsumptionHSensor],
         mn.Appliance_Control_ConsumptionX: [mss.ConsumptionXSensor],
         mn.Appliance_Control_Diffuser_Sensor: [
-            HumiditySensor,
-            TemperatureSensor,
+            SensorParser,
+            SensorParser,
         ],
         mn.Appliance_Control_Electricity: [
             mss.ElectricitySensor,
-            SensorParser,
-            SensorParser,
-            SensorParser,
+            *(
+                _entity_def.type  # type: ignore
+                for _entity_def in mss.ElectricitySensor.ENTITY_DEFS.values()
+            ),
         ],
         mn.Appliance_Control_ElectricityX: [
             # There's an issue in removing 'ElectricityXSensor' when
@@ -59,7 +57,7 @@ class EntityTest(EntityComponentTest):
             # this class from 'expected_entities'
             mss.ElectricityXSensor,
             *(
-                _entity_def.type
+                _entity_def.type  # type: ignore
                 for _entity_def in mss.ElectricityXSensor.ENTITY_DEFS.values()
             ),
         ],
@@ -70,7 +68,7 @@ class EntityTest(EntityComponentTest):
             ms600.PresenceSensor,
             ms600.SensorParser,
             ms600.SensorParser,
-            LightSensor,
+            SensorParser,  # Light
         ],
         mn_t.Appliance_Control_Thermostat_ModeC: [  # mts300
             EnumParser,  # output status sensors
@@ -78,26 +76,26 @@ class EntityTest(EntityComponentTest):
             EnumParser,
             EnumParser,
             EnumParser,
-            TemperatureSensor,  # additional (disabled) current temperature sensor
-            HumiditySensor,  # additional (disabled) current humidity sensor
+            SensorParser,  # additional (disabled) current temperature sensor
+            SensorParser,  # additional (disabled) current humidity sensor
         ],
-        mn_t.Appliance_Control_Thermostat_Overheat: [TemperatureSensor],
-        mn.Appliance_Control_Sensor_Latest: [HumiditySensor],  # mts200 (some models)
+        mn_t.Appliance_Control_Thermostat_Overheat: [SensorParser],
+        mn.Appliance_Control_Sensor_Latest: [SensorParser],  # mts200 (some models)
         mn.Appliance_System_Runtime: [SignalStrengthSensor],
     }
 
     HUB_SUBDEVICES_ENTITIES = {
         None: [hub.SubDevice],  # actual implementation of battery sensor
-        mc.TYPE_MS100: [hub.MS100Sensor, HumiditySensor],
-        mc.KEY_TEMPHUMI: [hub.MS130Sensor, HumiditySensor, LightSensor],
+        mc.TYPE_MS100: [hub.MS100Sensor, SensorParser],
+        mc.KEY_TEMPHUMI: [hub.MS130Sensor, SensorParser, SensorParser],
         mc.TYPE_MTS100: [
-            TemperatureSensor
+            SensorParser
         ],  # additional (disabled) current temperature sensor
         mc.TYPE_MTS100V3: [
-            TemperatureSensor
+            SensorParser
         ],  # additional (disabled) current temperature sensor
         mc.TYPE_MTS150: [
-            TemperatureSensor
+            SensorParser
         ],  # additional (disabled) current temperature sensor
         mc.KEY_SMOKEALARM: [
             hub.SmokeAlarmSensor,

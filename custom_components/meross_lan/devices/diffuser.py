@@ -14,7 +14,7 @@ from ..light import (
     native_to_rgb,
     rgb_to_native,
 )
-from ..sensor import HumiditySensor, TemperatureSensor
+from ..sensor import SensorParser
 from .spray import Spray
 
 if TYPE_CHECKING:
@@ -22,13 +22,12 @@ if TYPE_CHECKING:
 
     from ..helpers.device import Device, MerossMessage
     from ..merossclient.protocol.types import JsonDict
-    from ..sensor import SensorParser
 
-    DIFFUSER_SENSOR_ENTITY_DEFS: Final
+    DIFFUSER_SENSOR_ENTITY_ARGS: Final
 
-DIFFUSER_SENSOR_ENTITY_DEFS = {
-    mc.KEY_HUMIDITY: HumiditySensor.ENTITY_DEF(),
-    mc.KEY_TEMPERATURE: TemperatureSensor.ENTITY_DEF(device_scale=10),
+DIFFUSER_SENSOR_ENTITY_ARGS = {
+    mc.KEY_HUMIDITY: SensorParser.HUMIDITY_ARGS,
+    mc.KEY_TEMPERATURE: SensorParser.TEMPERATURE_ARGS,
 }
 
 
@@ -70,15 +69,20 @@ def digest_init_diffuser(
             """
             # TODO: access entities by namespace handler parsers instead of by device.entities[key]
             # (we can store the entity in the handler when we create it)
-            for key in DIFFUSER_SENSOR_ENTITY_DEFS:
+            for key in DIFFUSER_SENSOR_ENTITY_ARGS:
                 try:
                     value = message.payload[key][mc.KEY_VALUE]
                     try:
-                        entity = device.entities[key]
+                        device.entities[key].update_device_value(value)
                     except KeyError:
-                        entity_def = DIFFUSER_SENSOR_ENTITY_DEFS[key]
-                        entity = entity_def.type(None, device, **entity_def.kwargs)
-                    entity.update_device_value(value)
+                        SensorParser(
+                            None,
+                            device,
+                            **(
+                                DIFFUSER_SENSOR_ENTITY_ARGS[key]
+                                | {"device_value": value}
+                            ),
+                        )
                 except KeyError:
                     continue
 

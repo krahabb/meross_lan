@@ -6,7 +6,7 @@ from ...helpers.namespaces import NamespaceHandler, mc, mlc, mn
 from ...merossclient.protocol.namespaces import thermostat as mn_t
 from ...number import NumberParser
 from ...select import SelectParser
-from ...sensor import EnumParser, TemperatureSensor
+from ...sensor import EnumParser, SensorParser
 from ...switch import SwitchParser
 
 if TYPE_CHECKING:
@@ -188,7 +188,7 @@ class MtsFrostNumber(MtsCommonTemperatureExtNumber):
 class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
 
     if TYPE_CHECKING:
-        sensor_external_temperature: TemperatureSensor
+        sensor_external_temperature: SensorParser
 
     ns = mn_t.Appliance_Control_Thermostat_Overheat
 
@@ -203,7 +203,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
             current_temp = payload[mc.KEY_CURRENTTEMP]
             self.sensor_external_temperature.update_device_value(current_temp)
         except AttributeError:
-            self.sensor_external_temperature = TemperatureSensor(
+            self.sensor_external_temperature = SensorParser.Temperature(
                 self.channel,
                 self.parent,
                 entity_key="external sensor",

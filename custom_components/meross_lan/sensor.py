@@ -10,7 +10,16 @@ from .merossclient.protocol import const as mc, namespaces as mn
 from .merossclient.protocol.message import json_dumps
 
 if TYPE_CHECKING:
-    from typing import ClassVar, Final, Never, NotRequired, Unpack
+    from typing import (
+        Callable,
+        ClassVar,
+        Final,
+        Never,
+        NotRequired,
+        Protocol,
+        Self,
+        Unpack,
+    )
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -121,11 +130,7 @@ class EnumParser(mle.ValueParser, SensorEntity):
         ): ...
 
         @classmethod
-        def ENTITY_DEF(
-            cls,
-            **kwargs: Unpack[Args],
-        ) -> EnumSensor.EntityDef[EnumSensor]:  # type: ignore[override]
-            pass
+        def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
         def update_native_value(
             self, native_value: sensor.StateType, /
@@ -154,6 +159,15 @@ class SensorParser(mle.NumericParser, SensorEntity):
         class Args(SensorEntity.Args, mle.NumericParser.Args):
             pass
 
+        class Initializer(Protocol):
+            def __call__(
+                self,
+                channel: ChannelType | None,
+                parent: BaseDevice,
+                /,
+                **kwargs: Unpack["SensorParser.Args"],
+            ) -> "SensorParser": ...
+
         def __init__(
             self,
             channel: ChannelType | None,
@@ -163,49 +177,54 @@ class SensorParser(mle.NumericParser, SensorEntity):
         ): ...
 
         @classmethod
-        def ENTITY_DEF(
-            cls,
-            **kwargs: Unpack[Args],
-        ) -> NumericSensor.EntityDef[NumericSensor]:  # type: ignore[override]
-            pass
+        def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
+    HUMIDITY_ARGS: "Args" = {
+        "entity_key": mc.KEY_HUMIDITY,
+        "device_scale": 10,  # almost always valid
+        "device_class": SensorEntity.DeviceClass.HUMIDITY,
+        "suggested_display_precision": 1,
+    }
 
-class HumiditySensor(SensorParser):
-    """Specialization for Humidity sensor.
-    - device_scale defaults to 10 which is actually the only scale seen so far.
-    - suggested_display_precision defaults to 1
-    """
+    @classmethod
+    def Humidity(
+        cls,
+        channel: "ChannelType | None",
+        manager: "BaseDevice",
+        **kwargs: "Unpack[Args]",
+    ) -> "Self":
+        return cls(channel, manager, **(cls.HUMIDITY_ARGS | kwargs))
 
-    ENTITY_KEY = mc.KEY_HUMIDITY
+    LIGHT_ARGS: "Args" = {
+        "entity_key": mc.KEY_LIGHT,
+        "device_class": SensorEntity.DeviceClass.ILLUMINANCE,
+        "suggested_display_precision": 0,
+    }
 
-    _attr_device_scale = 10
-    # HA core entity attributes:
-    _attr_device_class = sensor.SensorDeviceClass.HUMIDITY
-    _attr_suggested_display_precision = 1
+    @classmethod
+    def Light(
+        cls,
+        channel: "ChannelType | None",
+        manager: "BaseDevice",
+        **kwargs: "Unpack[Args]",
+    ) -> "Self":
+        return cls(channel, manager, **(cls.LIGHT_ARGS | kwargs))
 
+    TEMPERATURE_ARGS: "Args" = {
+        "entity_key": mc.KEY_TEMPERATURE,
+        "device_scale": 10,  # just a default - sometimes 100 or 1000
+        "device_class": SensorEntity.DeviceClass.TEMPERATURE,
+        "suggested_display_precision": 1,
+    }
 
-class TemperatureSensor(SensorParser):
-    """Specialization for Temperature sensor.
-    - device_scale defaults to 1 (from base class definition) and is likely to be overriden.
-    - suggested_display_precision defaults to 1
-    """
-
-    ENTITY_KEY = mc.KEY_TEMPERATURE
-
-    # HA core entity attributes:
-    _attr_device_class = sensor.SensorDeviceClass.TEMPERATURE
-    _attr_suggested_display_precision = 1
-
-
-class LightSensor(SensorParser):
-    """Specialization for sensor reporting light illuminance (lux)."""
-
-    ENTITY_KEY = mc.KEY_LIGHT
-
-    _attr_device_scale = 1
-    # HA core entity attributes:
-    _attr_device_class = sensor.SensorDeviceClass.ILLUMINANCE
-    _attr_suggested_display_precision = 0
+    @classmethod
+    def Temperature(
+        cls,
+        channel: "ChannelType | None",
+        manager: "BaseDevice",
+        **kwargs: "Unpack[Args]",
+    ) -> "Self":
+        return cls(channel, manager, **(cls.TEMPERATURE_ARGS | kwargs))
 
 
 class DiagnosticSensor(SensorEntity):
@@ -226,11 +245,7 @@ class DiagnosticSensor(SensorEntity):
         ): ...
 
         @classmethod
-        def ENTITY_DEF(
-            cls,
-            **kwargs: Unpack[Args],
-        ) -> DiagnosticSensor.EntityDef[DiagnosticSensor]:  # type: ignore[override]
-            pass
+        def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
         def update_native_value(
             self, native_value: sensor.StateType, /

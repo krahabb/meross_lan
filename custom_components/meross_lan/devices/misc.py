@@ -9,15 +9,12 @@ from typing import TYPE_CHECKING
 from ..climate import MtsClimate
 from ..helpers.namespaces import NamespaceHandler, mn
 from ..merossclient.protocol import const as mc
-from ..sensor import (
-    HumiditySensor,
-    LightSensor,
-    SensorParser,
-    TemperatureSensor,
-)
+from ..sensor import SensorParser
 from .ms600 import PresenceSensor
 
 if TYPE_CHECKING:
+    from typing import Final
+
     from ..helpers.device import Device, MerossMessage
     from ..merossclient.protocol import types as mt
     from ..merossclient.protocol.types import sensor as mt_s
@@ -29,14 +26,15 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
     (seen on an MTS200 so far:2024-06)
     """
 
+    if TYPE_CHECKING:
+        ENTITY_ARGS: Final[dict[str, SensorParser.Args]]
+
     VALUE_KEY_EXCLUDED = (mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
 
-    ENTITY_DEFS = {
-        mc.KEY_HUMI: HumiditySensor.ENTITY_DEF(),  # confirmed in MTS200 trace (2024/06)
-        mc.KEY_TEMP: TemperatureSensor.ENTITY_DEF(
-            device_scale=100
-        ),  # just guessed (2024/04)
-        mc.KEY_LIGHT: LightSensor.ENTITY_DEF(),  # just guessed (2024/09)
+    ENTITY_ARGS = {
+        mc.KEY_HUMI: SensorParser.HUMIDITY_ARGS,
+        mc.KEY_TEMP: SensorParser.TEMPERATURE_ARGS | {"device_scale": 100},
+        mc.KEY_LIGHT: SensorParser.LIGHT_ARGS,
     }
 
     def __init__(self, ns: mn.Namespace, device: "Device", /):
@@ -70,32 +68,32 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                     if key in SensorLatestNamespaceHandler.VALUE_KEY_EXCLUDED:
                         continue
                     try:
-                        entity: SensorParser = entities[f"{channel}_sensor_{key}"]  # type: ignore
+                        entities[f"{channel}_sensor_{key}"].update_device_value(value)
                     except KeyError:
-                        try:
-                            entity_def = SensorLatestNamespaceHandler.ENTITY_DEFS[key]
-                        except KeyError:
-                            entity = SensorParser(
-                                channel, self.parent, entity_key=f"sensor_{key}"
-                            )
-                        else:
-                            entity = entity_def.type(
-                                channel,
-                                self.parent,
-                                entity_key=f"sensor_{key}",
-                                **entity_def.kwargs,
-                            )
+                        SensorParser(
+                            channel,
+                            self.parent,
+                            **(
+                                SensorLatestNamespaceHandler.ENTITY_ARGS.get(key, {})
+                                | {
+                                    "entity_key": f"sensor_{key}",
+                                    "device_value": value,
+                                }
+                            ),
+                        )
                         self.polling_request_add_channel(channel)
-
-                    entity.update_device_value(value)
 
                     if key == mc.KEY_HUMI:
                         # look for a thermostat and sync the reported humidity
-                        climate = entities.get(channel)
-                        if isinstance(climate, MtsClimate):
-                            if climate.current_humidity != entity.native_value:
-                                climate.current_humidity = entity.native_value
+                        try:
+                            climate: "MtsClimate" = entities[channel]  # type: ignore
+                            humidity = value / 10
+                            if climate.current_humidity != humidity:
+                                climate.current_humidity = humidity
                                 climate.flush_state()
+                        except (AttributeError, KeyError):
+                            # not a climate (missing current_humidity) or no entity for the channel
+                            pass
 
 
 class SensorLatestXNamespaceHandler(NamespaceHandler):
@@ -106,12 +104,17 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
     Hub(s) have a somewhat different parser.
     """
 
+    if TYPE_CHECKING:
+        ENTITY_DEFS: Final[dict[str, SensorParser.Initializer]]
+
     # many of these defs are guesses
     ENTITY_DEFS = {
-        mc.KEY_HUMI: HumiditySensor.ENTITY_DEF(),
-        mc.KEY_LIGHT: LightSensor.ENTITY_DEF(),
-        mc.KEY_PRESENCE: PresenceSensor.ENTITY_DEF(),
-        mc.KEY_TEMP: TemperatureSensor.ENTITY_DEF(device_scale=100),
+        mc.KEY_HUMI: SensorParser.Humidity,
+        mc.KEY_LIGHT: SensorParser.Light,
+        mc.KEY_PRESENCE: PresenceSensor,
+        mc.KEY_TEMP: SensorParser.ENTITY_DEF(
+            **(SensorParser.TEMPERATURE_ARGS | {"device_scale": 100})
+        ),
     }
 
     __slots__ = ()
@@ -125,7 +128,9 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
         )
         if device.descriptor.type.startswith(mc.TYPE_MS600):
             PresenceSensor(0, device)
-            LightSensor(0, device, entity_key="sensor_light")
+            SensorParser(
+                0, device, **(SensorParser.LIGHT_ARGS | {"entity_key": "sensor_light"})
+            )
             self.polling_request_add_channel(
                 0, {mc.KEY_DATA: [mc.KEY_PRESENCE, mc.KEY_LIGHT]}
             )
@@ -141,23 +146,21 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
             channel: int = p_channel[key_idx]
             for data_key, data_value in p_channel[mc.KEY_DATA].items():
                 try:
-                    entity: SensorParser = entities[f"{channel}_sensor_{data_key}"]  # type: ignore
+                    entities[f"{channel}_sensor_{data_key}"].update_device_value(
+                        data_value[0]["value"]
+                    )
                 except KeyError:
-                    # new channel or data_key
-                    try:
-                        entity_def = SensorLatestXNamespaceHandler.ENTITY_DEFS[data_key]
-                    except KeyError:
-                        entity = SensorParser(
-                            channel, self.parent, entity_key=f"sensor_{data_key}"
-                        )
-                    else:
-                        entity = entity_def.type(
-                            channel,
-                            self.parent,
-                            entity_key=f"sensor_{data_key}",
-                            **entity_def.kwargs,
-                        )
-
+                    # Likely missing the entity for this channel/data_key. It might also be
+                    # a KeyError raised by accessing data_value[0]["value"] (or IndexError)
+                    # but it will be raised again when constructing the entity.
+                    SensorLatestXNamespaceHandler.ENTITY_DEFS.get(
+                        data_key, SensorParser
+                    )(
+                        channel,
+                        self.parent,
+                        entity_key=f"sensor_{data_key}",
+                        device_value=data_value[0]["value"],
+                    )
                     polling_request_channels = self.polling_request_channels
                     for channel_payload in polling_request_channels:
                         if channel_payload[key_idx] == channel:
@@ -171,7 +174,6 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
                             self.HEADER_AVG_SIZE
                             + len(polling_request_channels) * ns.payload_item_size
                         )
-                entity._parse(data_value[0])
 
 
 def namespace_init_sensor_latestx(ns: mn.Namespace, device: "Device", /):

@@ -10,7 +10,7 @@ from ..sensor import SensorParser
 if TYPE_CHECKING:
     from typing import Final, Unpack
 
-    from ..helpers.device import Device
+    from ..helpers.device import BaseDevice
     from ..helpers.entity import ChannelType
 
 
@@ -45,7 +45,7 @@ class PresenceConfigModeBase(PresenceConfigSelectBase):
         2: "2",
     }
 
-    def __init__(self, channel: "ChannelType", parent: "Device", key: str):
+    def __init__(self, channel: "ChannelType | None", parent: "BaseDevice", key: str):
         self.key_value = key
         PresenceConfigSelectBase.__init__(
             self, channel, parent, entity_key=f"presence_config_mode_{key}", name=key
@@ -108,7 +108,9 @@ class PresenceConfigMthX(PresenceConfigNumberBase):
     _attr_native_min_value = 1
     _attr_native_step = 1
 
-    def __init__(self, channel: "ChannelType", parent: "Device", key: str, /):
+    def __init__(
+        self, channel: "ChannelType | None", parent: "BaseDevice", key: str, /
+    ):
         PresenceConfigNumberBase.__init__(
             self,
             channel,
@@ -121,7 +123,7 @@ class PresenceConfigMthX(PresenceConfigNumberBase):
 
 class PresenceConfigMode(PresenceConfigModeBase):
 
-    def __init__(self, channel: "ChannelType", device: "Device", /):
+    def __init__(self, channel: "ChannelType | None", device: "BaseDevice", /):
         PresenceConfigModeBase.__init__(self, channel, device, mc.KEY_WORKMODE)
         device.get_handler(mn.Appliance_Control_Presence_Config).register_parsers(
             self,
@@ -154,8 +156,8 @@ class PresenceSensor(SensorParser):
 
     def __init__(
         self,
-        channel: "ChannelType",
-        device: "Device",
+        channel: "ChannelType | None",
+        device: "BaseDevice",
         /,
         **kwargs: "Unpack[SensorParser.Args]",
     ):

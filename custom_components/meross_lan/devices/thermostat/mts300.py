@@ -6,7 +6,7 @@ from . import MtsThermostatClimate, mc, mlc, mn, mn_t
 from ...helpers import reverse_lookup
 from ...number import NumberParser
 from ...select import SelectParser
-from ...sensor import EnumParser, HumiditySensor
+from ...sensor import EnumParser, SensorParser
 from ...switch import EmulatedSwitch
 
 if TYPE_CHECKING:
@@ -84,6 +84,7 @@ class Mts300Climate(MtsThermostatClimate):
         ns_payload: mt_t.ModeC_C
 
         HVAC_MODE_TO_MODE_MAP: ClassVar
+        ENTITY_ARGS: Final[dict[str, EnumParser.Args]]
         _mts_work: int | None
 
         # HA core entity attributes:
@@ -91,7 +92,7 @@ class Mts300Climate(MtsThermostatClimate):
         target_temperature_low: float | None
 
         # entities
-        sensor_current_humidity: HumiditySensor
+        sensor_current_humidity: SensorParser
         number_fan_hold: NumberParser
         switch_fan_hold: EmulatedSwitch
         select_temp_association: SensorAssociationSelect
@@ -132,31 +133,31 @@ class Mts300Climate(MtsThermostatClimate):
         (False, False, True): MtsThermostatClimate.HVACAction.FAN,
     }
     """Status flags in "more" dict mapped as: (bool(hStatus), bool(cStatus), bool(fStatus))."""
-    ENTITY_DEFS = {
-        "hdStatus": EnumParser.ENTITY_DEF(
-            entity_key="(de)humidifier_status",
-            translation_key="mts300_hdstatus",
-            entity_category=EnumParser.EntityCategory.DIAGNOSTIC,
-        ),
-        "hStatus": EnumParser.ENTITY_DEF(
-            entity_key="heating_status",
-            translation_key="mts300_status",
-            entity_category=EnumParser.EntityCategory.DIAGNOSTIC,
-        ),
-        "cStatus": EnumParser.ENTITY_DEF(
-            entity_key="cooling_status",
-            translation_key="mts300_status",
-            entity_category=EnumParser.EntityCategory.DIAGNOSTIC,
-        ),
-        "fStatus": EnumParser.ENTITY_DEF(
-            entity_key="fan_speed",
-            translation_key="mts300_status",
-        ),
-        "aStatus": EnumParser.ENTITY_DEF(
-            entity_key="auxiliary_status",
-            translation_key="mts300_status",
-            entity_category=EnumParser.EntityCategory.DIAGNOSTIC,
-        ),
+    ENTITY_ARGS = {
+        "hdStatus": {
+            "entity_key": "(de)humidifier_status",
+            "translation_key": "mts300_hdstatus",
+            "entity_category": EnumParser.EntityCategory.DIAGNOSTIC,
+        },
+        "hStatus": {
+            "entity_key": "heating_status",
+            "translation_key": "mts300_status",
+            "entity_category": EnumParser.EntityCategory.DIAGNOSTIC,
+        },
+        "cStatus": {
+            "entity_key": "cooling_status",
+            "translation_key": "mts300_status",
+            "entity_category": EnumParser.EntityCategory.DIAGNOSTIC,
+        },
+        "fStatus": {
+            "entity_key": "fan_speed",
+            "translation_key": "mts300_status",
+        },
+        "aStatus": {
+            "entity_key": "auxiliary_status",
+            "translation_key": "mts300_status",
+            "entity_category": EnumParser.EntityCategory.DIAGNOSTIC,
+        },
     }
 
     # HA core entity attributes:
@@ -182,7 +183,7 @@ class Mts300Climate(MtsThermostatClimate):
         "number_fan_hold",
         "switch_fan_hold",
         "select_temp_association",
-    ) + tuple(f"sensor_{_key}" for _key in ENTITY_DEFS)
+    ) + tuple(f"sensor_{_key}" for _key in ENTITY_ARGS)
 
     def __init__(self, channel: int, device: "Device", /, **kwargs):
         super().__init__(channel, device)
@@ -191,13 +192,9 @@ class Mts300Climate(MtsThermostatClimate):
         self.target_temperature_high = None
         self.target_temperature_low = None
         self._mts_work = None
-        for _key, _def in Mts300Climate.ENTITY_DEFS.items():
-            setattr(
-                self,
-                f"sensor_{_key}",
-                _def.type(channel, device, **_def.kwargs),
-            )
-        self.sensor_current_humidity = HumiditySensor(
+        for _key, _args in Mts300Climate.ENTITY_ARGS.items():
+            setattr(self, f"sensor_{_key}", EnumParser(channel, device, **_args))
+        self.sensor_current_humidity = SensorParser.Humidity(
             channel, device, entity_registry_enabled_default=False
         )
         self.number_fan_hold = NumberParser(
@@ -223,6 +220,8 @@ class Mts300Climate(MtsThermostatClimate):
         super().shutdown()
         del self.switch_fan_hold
         del self.number_fan_hold
+        for _key in Mts300Climate.ENTITY_ARGS:
+            delattr(self, f"sensor_{_key}")
 
     # interface: MtsClimate
     def set_unavailable(self):
@@ -338,7 +337,7 @@ class Mts300Climate(MtsThermostatClimate):
             more = payload["more"]
             self.sensor_current_humidity.update_device_value(more["humi"])
             self.current_humidity = self.sensor_current_humidity.native_value
-            for _key in Mts300Climate.ENTITY_DEFS:
+            for _key in Mts300Climate.ENTITY_ARGS:
                 getattr(self, f"sensor_{_key}").update_native_value(more[_key])
 
             fan = payload["fan"]

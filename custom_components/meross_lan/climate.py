@@ -13,7 +13,7 @@ from .helpers import reverse_lookup
 from .helpers.entity import ParserEntity
 from .number import NumberParser
 from .select import SelectEntity
-from .sensor import TemperatureSensor
+from .sensor import SensorParser
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final, Unpack
@@ -404,7 +404,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         number_preset_temperature: Final[dict[str, "MtsClimate.SetPointNumber"]]
         schedule: Final[MtsSchedule]
         select_track_sensor: Final[TrackSensorSelect]
-        sensor_current_temperature: Final[TemperatureSensor]
+        sensor_current_temperature: Final[SensorParser]
         _mts_active: bool | int
         _mts_mode: int
         _mts_onoff: int
@@ -515,7 +515,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
                 )
         self.schedule = self.__class__.Schedule(self)
         self.select_track_sensor = MtsClimate.TrackSensorSelect(self)
-        self.sensor_current_temperature = TemperatureSensor(
+        self.sensor_current_temperature = SensorParser.Temperature(
             channel, parent, entity_registry_enabled_default=False
         )
 

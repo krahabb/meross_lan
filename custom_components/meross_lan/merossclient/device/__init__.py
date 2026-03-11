@@ -64,9 +64,17 @@ Transport = AbstractClient.Transport
 
 
 class PhysicalDevice(AbstractClient):
-    """Common base for physical devices including Hub-paired (sub)devices."""
+    """Common base for physical devices including Hub-paired (sub)devices.
+    This is the common root of two main hierarchy branches defined in:
+    - Device: any physical device with it's own network ip address
+    - SubDevice: any physical device connected through an Hub (Device)
+
+    This common root allows to abstract communication with namespaces
+    which is actually carried/mediated by a proper Device.
+    """
 
     if TYPE_CHECKING:
+        descriptor: Final[DeviceDescriptor]  # type:ignore[override]
         latest_version: LatestVersionType  # lazy init
 
     __SLOTS__ = ("latest_version",)
@@ -97,15 +105,37 @@ class PhysicalDevice(AbstractClient):
         """If an update is available returns a tuple of (installed_version, latest_version, release_summary)"""
         raise NotImplementedError("get_upgrade_info")
 
+    # These methods are actually only relevant/implemented in Device child classes branch.
+    # The Subdevice child branch will just link to the methods/attributes defined in the parent Device.
     @cached_property
     @abstractmethod
-    def tz(self, /) -> tzinfo:
-        raise NotImplementedError("tz")
+    def tz(self, /) -> tzinfo: ...
 
     @cached_property
     @abstractmethod
-    def ns_handlers(self, /) -> "Mapping[str, NamespaceHandler]":
-        raise NotImplementedError("ns_handlers")
+    def ns_handlers(self, /) -> "Mapping[str, NamespaceHandler]": ...
+
+    @abstractmethod
+    def _create_handler(self, ns: "mn.Namespace", /) -> "NamespaceHandler": ...
+
+    def get_handler(self, ns: "mn.Namespace", /):
+        try:
+            return self.ns_handlers[ns]
+        except KeyError:
+            return self._create_handler(ns)
+
+    def register_parser(self, parser: "NamespaceParser", ns: "mn.Namespace", /):
+        self.get_handler(ns).register_parser(parser)
+
+    def register_parser_ex(
+        self,
+        parser: "NamespaceParser",
+        *nss: "mn.Namespace",
+    ):
+        """Register a parser for multiple namespaces. Abilities are checked for namespaces availability."""
+        ability = self.descriptor.ability
+        for ns in (_ns for _ns in nss if _ns in ability):
+            self.get_handler(ns).register_parser(parser)
 
 
 class Device(PhysicalDevice):
@@ -125,8 +155,6 @@ class Device(PhysicalDevice):
 
         class ConnectArgs(AbstractClient.ConnectArgs):
             pass
-
-        descriptor: Final[DeviceDescriptor]  # type:ignore[override]
 
         NAMESPACES: ClassVar[mn.NamespacesMapType]
         """Accesses the namespaces definitions for this Device. This could be overriden
@@ -622,36 +650,18 @@ class Device(PhysicalDevice):
         self.transport = client.TRANSPORT  # type: ignore[assignment]
         self.log(self.DEBUG, "Switching transport to %s", self.transport)
 
+    @override
     def _create_handler(self, ns: "mn.Namespace", /):
         """Called by the base device message parsing chain when a new
         NamespaceHandler need to be defined (This happens the first time
         the namespace enters the message handling flow)"""
         return NamespaceHandler(ns, self)
 
-    def get_handler(self, ns: "mn.Namespace", /):
-        try:
-            return self.ns_handlers[ns]
-        except KeyError:
-            return self._create_handler(ns)
-
     def get_handler_by_name(self, namespace: str, /):
         try:
             return self.ns_handlers[namespace]
         except KeyError:
             return self._create_handler(self.NAMESPACES[namespace])
-
-    def register_parser(self, parser: "NamespaceParser", ns: "mn.Namespace", /):
-        self.get_handler(ns).register_parser(parser)
-
-    def register_parser_ex(
-        self,
-        parser: "NamespaceParser",
-        *nss: "mn.Namespace",
-    ):
-        """Register a parser for multiple namespaces. Abilities are checked for namespaces availability."""
-        ability = self.descriptor.ability
-        for ns in (_ns for _ns in nss if _ns in ability):
-            self.get_handler(ns).register_parser(parser)
 
     @property
     def polling_response_size_available(self):
@@ -991,6 +1001,7 @@ class SubDevice(PhysicalDevice):
     __SLOTS__ = (
         "async_request",
         "ns_handlers",
+        "_create_handler",
     )
 
     def __init__(
@@ -998,6 +1009,7 @@ class SubDevice(PhysicalDevice):
     ):
         self.async_request = parent.async_request
         self.ns_handlers = parent.ns_handlers
+        self._create_handler = parent._create_handler
         kwargs["key"] = parent.key
         kwargs["from_"] = parent.from_
         kwargs["trigger_src"] = parent.trigger_src
@@ -1010,6 +1022,7 @@ class SubDevice(PhysicalDevice):
         await super().async_shutdown()
         del self.async_request
         del self.ns_handlers
+        del self._create_handler
 
     # interface: AbstractClient
     @override
@@ -1023,8 +1036,13 @@ class SubDevice(PhysicalDevice):
     # interface: PhysicalDevice
     @property
     @override
+    # Use a property since parent.tz might change so we can't cache it
     def tz(self):
         return self.parent.tz
+
+    @override
+    # parent._create_handler is being cached in self._create_handler
+    def _create_handler(self, ns: "mn.Namespace", /) -> "NamespaceHandler": ...
 
     # TODO: implement maybe something for firmware_version
     @override

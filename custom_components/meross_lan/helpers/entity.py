@@ -314,25 +314,39 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         manager.platforms[platform] = async_add_devices
         async_add_devices(manager.managed_entities(platform))
 
-    class EntityDef[_T: Entity]:
-        """Descriptor class used when populating maps used to dynamically instantiate (sensor)
-        entities based on their appearance in a payload key."""
+    class EntityDef[_T: Entity](dict):
+        """Descriptor class used when populating maps used to dynamically instantiate
+        entities based on their appearance in a payload key (typically in sensor payloads
+        but more use cases are implemented)."""
 
         type: "Final[type[_T]]"
-        kwargs: "Final[Any]"
 
-        __slots__ = ("type", "kwargs")
+        __slots__ = "type"
 
         def __init__(self, type: "type[_T]", **kwargs: "Unpack[Entity.Args]"):
+            dict.__init__(self, **kwargs)
             self.type = type
-            self.kwargs = kwargs
+
+        def __call__(self, *args, **kwargs: "Unpack[Entity.Args]") -> _T:
+            return self.type(*args, **(self | kwargs))
 
     @classmethod
-    def ENTITY_DEF(
-        cls,
-        **kwargs: "Unpack[Args]",
-    ) -> "Entity.EntityDef[Self]":
-        return Entity.EntityDef["Self"](cls, **kwargs)
+    def ENTITY_DEF(cls, **kwargs: "Unpack[Args]") -> type["Self"]:
+        # This method returns a special class 'EntityDef' but
+        # type hinting suggests it is still self.cls so that the
+        # 'hidden' EntityDef works like a wrapper for constructor
+        # keyword arguments and this semantic allows to chain different
+        # calls each one adding its own custom set of kwargs.
+        # In the end, the return type works exactly as a standard
+        # constructor in term of syntax and semantics (unless we inspect it ofc)
+        # This 'funny' semantic allows us to define ENTITY_DEFS maps wherever needed
+        # where both simple class types and EntityDef instances can work as consistent
+        # callables with the same syntax as the class constructor.
+        # TODO: This technique is very useful except we should still find a way to
+        # automatically 'infer' the kwargs unpacking for the relevant cls.
+        # This is actually overcomed with typing overwrites in child classes where the Args
+        # type differs from the base Entity.Args.
+        return Entity.EntityDef(cls, **kwargs)  # type: ignore[return-value]
 
 
 class ParserEntity(parser.NamespaceParser, Entity):

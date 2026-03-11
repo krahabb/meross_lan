@@ -6,7 +6,7 @@ from .const import hac
 from .helpers import entity as mle
 
 if TYPE_CHECKING:
-    from typing import ClassVar, Final, NotRequired, Unpack
+    from typing import ClassVar, Final, NotRequired, Self, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -108,11 +108,7 @@ class NumberParser(mle.NumericParser, NumberEntity):
         ): ...
 
         @classmethod
-        def ENTITY_DEF(
-            cls,
-            **kwargs: Unpack[Args],
-        ) -> "NumberParser.EntityDef[NumberParser]":  # type: ignore[override]
-            pass
+        def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
         DEBOUNCE_DELAY: Final
 

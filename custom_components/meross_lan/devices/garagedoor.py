@@ -6,7 +6,7 @@ from homeassistant.util.dt import now
 from ..binary_sensor import BinarySensor
 from ..cover import Cover
 from ..helpers import clamp
-from ..helpers.namespaces import NamespaceHandler, mc, mlc, mn
+from ..helpers.namespaces import NamespaceHandler, mc, mn
 from ..merossclient.client import Transport
 from ..number import EmulatedNumber, NumberParser
 from ..switch import SwitchParser
@@ -99,9 +99,6 @@ class GarageConfigSwitch(GarageConfigMixin, SwitchParser):
     pass
 
 
-_GarageConfigSwitch_ENTITY_DEF = GarageConfigSwitch.ENTITY_DEF()
-
-
 class GarageEnableSwitch(GarageConfigSwitch):
     """
     Dedicated entity for "doorEnable" config option in mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
@@ -177,9 +174,6 @@ class GarageConfigNumber(GarageConfigMixin, NumberParser):
     _attr_native_step = 1
 
 
-_GarageConfigNumber_ENTITY_DEF = GarageConfigNumber.ENTITY_DEF()
-
-
 class _DurationHelper:
     """
     GarageDoor helper class to manage the automatic instantiation of number entities for
@@ -225,7 +219,7 @@ class GarageDoor(Cover):
 
     if TYPE_CHECKING:
 
-        ENTITY_DEFS: dict[str, GarageConfigMixin.EntityDef[GarageConfigMixin]]
+        ENTITY_DEFS: dict[str, type[GarageConfigMixin]]
 
         binary_sensor_timeout: GarageTimeoutBinarySensor
         number_doorCloseDuration: NumberEntity | _DurationHelper
@@ -241,14 +235,14 @@ class GarageDoor(Cover):
     # these keys in Appliance.GarageDoor.MultipleConfig are to be ignored
     CONFIG_KEY_EXCLUDED = (mc.KEY_CHANNEL, mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
     ENTITY_DEFS = {
-        mc.KEY_BUZZERENABLE: _GarageConfigSwitch_ENTITY_DEF,
-        mc.KEY_DOORENABLE: GarageEnableSwitch.ENTITY_DEF(),
-        mc.KEY_SIGNALDURATION: _GarageConfigNumber_ENTITY_DEF,
-        mc.KEY_SIGNALCLOSE: _GarageConfigNumber_ENTITY_DEF,
-        mc.KEY_SIGNALOPEN: _GarageConfigNumber_ENTITY_DEF,
-        mc.KEY_DOORCLOSEDURATION: _GarageConfigNumber_ENTITY_DEF,
-        mc.KEY_DOOROPENDURATION: _GarageConfigNumber_ENTITY_DEF,
-    }  # type: ignore
+        mc.KEY_BUZZERENABLE: GarageConfigSwitch,
+        mc.KEY_DOORENABLE: GarageEnableSwitch,
+        mc.KEY_SIGNALDURATION: GarageConfigNumber,
+        mc.KEY_SIGNALCLOSE: GarageConfigNumber,
+        mc.KEY_SIGNALOPEN: GarageConfigNumber,
+        mc.KEY_DOORCLOSEDURATION: GarageConfigNumber,
+        mc.KEY_DOOROPENDURATION: GarageConfigNumber,
+    }
 
     # HA core entity attributes:
     _attr_device_class = Cover.DeviceClass.GARAGE
@@ -282,10 +276,10 @@ class GarageDoor(Cover):
             # of more 'natural' doorOpenDuration/doorCloseDuration keys.
             # We'll then override this initial guessing when we _parse_config
             # should those new keys appear
-            self.number_doorCloseDuration = self.ENTITY_DEFS[mc.KEY_SIGNALCLOSE].type(
+            self.number_doorCloseDuration = self.ENTITY_DEFS[mc.KEY_SIGNALCLOSE](
                 channel, device, mc.KEY_SIGNALCLOSE
             )  # type: ignore
-            self.number_doorOpenDuration = self.ENTITY_DEFS[mc.KEY_SIGNALOPEN].type(
+            self.number_doorOpenDuration = self.ENTITY_DEFS[mc.KEY_SIGNALOPEN](
                 channel, device, mc.KEY_SIGNALOPEN
             )  # type: ignore
             device.register_parser(self, mn.Appliance_GarageDoor_MultipleConfig)
@@ -444,12 +438,18 @@ class GarageDoor(Cover):
                 try:
                     entities[f"{entity_id_prefix}{key}"].update_device_value(value)
                 except KeyError:
-                    entity_def = self.ENTITY_DEFS[key]
-                    entity = entity_def.type(
-                        self.channel, self.parent, key, device_value=value
-                    )
                     if key in (mc.KEY_DOORCLOSEDURATION, mc.KEY_DOOROPENDURATION):
-                        setattr(self, f"number_{key}", entity)
+                        setattr(
+                            self,
+                            f"number_{key}",
+                            self.ENTITY_DEFS[key](
+                                self.channel, self.parent, key, device_value=value
+                            ),
+                        )
+                    else:
+                        self.ENTITY_DEFS[key](
+                            self.channel, self.parent, key, device_value=value
+                        )
             except Exception as exception:
                 self.log_exception(
                     self.WARNING,
@@ -519,7 +519,7 @@ class GarageDoor(Cover):
 class GarageDoorConfigNamespaceHandler(NamespaceHandler):
 
     if TYPE_CHECKING:
-        ENTITY_DEFS: dict[str, GarageConfigMixin.EntityDef[GarageConfigMixin]]
+        ENTITY_DEFS: dict[str, type[GarageConfigMixin]]
 
         _check_missing_config_keys: ClassVar[bool] | bool
         """Guard used to eventually initialize emulated entities for garage door open/close durations
@@ -528,14 +528,14 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
     POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS
 
     ENTITY_DEFS = {
-        mc.KEY_BUZZERENABLE: _GarageConfigSwitch_ENTITY_DEF,
+        mc.KEY_BUZZERENABLE: GarageConfigSwitch,
         mc.KEY_SIGNALDURATION: GarageConfigNumber.ENTITY_DEF(
             native_step=0.1,
             native_min_value=0.1,
         ),
-        mc.KEY_DOORCLOSEDURATION: _GarageConfigNumber_ENTITY_DEF,
-        mc.KEY_DOOROPENDURATION: _GarageConfigNumber_ENTITY_DEF,
-    }  # type: ignore
+        mc.KEY_DOORCLOSEDURATION: GarageConfigNumber,
+        mc.KEY_DOOROPENDURATION: GarageConfigNumber,
+    }
 
     _check_missing_config_keys = True
 
@@ -547,10 +547,9 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
             try:
                 entities[f"config_{key}"].update_device_value(value)
             except KeyError:
-                entity_def = self.ENTITY_DEFS[key]
-                entity_def.type(
-                    None, self.parent, key, device_value=value, **entity_def.kwargs
-                ).ns = self.id
+                self.ENTITY_DEFS[key](None, self.parent, key, device_value=value).ns = (
+                    self.id
+                )
 
         if self._check_missing_config_keys:
             # mc.KEY_DOOROPENDURATION and mc.KEY_DOORCLOSEDURATION config keys have been

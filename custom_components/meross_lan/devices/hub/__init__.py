@@ -12,13 +12,7 @@ from ...merossclient import device, get_productname, get_subdevice_key_digest
 from ...merossclient.protocol import const as mc, namespaces as mn
 from ...merossclient.protocol.namespaces import hub as mn_h
 from ...number import NumberParser
-from ...sensor import (
-    EnumParser,
-    HumiditySensor,
-    LightSensor,
-    SensorParser,
-    TemperatureSensor,
-)
+from ...sensor import EnumParser, SensorParser
 from ...switch import SwitchParser
 
 if TYPE_CHECKING:
@@ -720,7 +714,7 @@ class SmokeAlarmSensor(SubDeviceEntity, EnumParser):
         await self.async_request_payload({mc.KEY_STATUS: 23})
 
 
-class MS100Sensor(SubDeviceEntity, TemperatureSensor):
+class MS100Sensor(SubDeviceEntity, SensorParser):
 
     class SensorAdjustNumber(NumberParser):
 
@@ -774,13 +768,13 @@ class MS100Sensor(SubDeviceEntity, TemperatureSensor):
 
     ns = mn_h.Appliance_Hub_Sensor_TempHum
 
-    _attr_device_scale = 10
-
     __slots__ = ("sensor_humidity",)
 
     def __init__(self, subid: str, subdevice: "SubDevice", /):
-        super().__init__(subid, subdevice)
-        self.sensor_humidity = HumiditySensor(subid, subdevice)
+        super().__init__(subid, subdevice, **SensorParser.TEMPERATURE_ARGS)
+        self.sensor_humidity = SensorParser(
+            subid, subdevice, **SensorParser.HUMIDITY_ARGS
+        )
 
     def shutdown(self):
         super().shutdown()
@@ -860,10 +854,8 @@ class MS130Sensor(MS100Sensor):
 
     def __init__(self, subid: str, subdevice: "SubDevice", /):
         super().__init__(subid, subdevice)
-        self.sensor_light = LightSensor(subid, subdevice)
-        subdevice.parent.get_handler(
-            mn_h.Appliance_Control_Sensor_LatestX
-        ).register_parser(
+        self.sensor_light = SensorParser.Light(subid, subdevice)
+        subdevice.get_handler(mn_h.Appliance_Control_Sensor_LatestX).register_parser(
             self,
             {"channel": 0, "data": ["light", "temp", "humi"]},
         )

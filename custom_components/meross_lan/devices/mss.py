@@ -40,7 +40,7 @@ class _ElectricitySensor(SensorParser):
 
         # not setting 'entity_key' in EntityDef will mark the entity as 'not required'
         # (see __init__)
-        ENTITY_DEFS: ClassVar[dict[str, SensorParser.EntityDef["SensorParser"]]]
+        ENTITY_DEFS: ClassVar[dict[str, type[SensorParser]]]
         # HA core entity attributes:
         native_value: int
 
@@ -98,13 +98,8 @@ class _ElectricitySensor(SensorParser):
         super().__init__(ns_or_channel, device, **kwargs)
         self._schedule_reset(dt_util.now())
         channel = self.channel
-        for entity_def in self.ENTITY_DEFS.values():
-            if "entity_key" in entity_def.kwargs:
-                entity_def.type(
-                    channel,
-                    device,
-                    **entity_def.kwargs,
-                )
+        for _entity_def in self.ENTITY_DEFS.values():
+            _entity_def(channel, device)
         self.sensor_power = device.entities[
             mc.KEY_POWER if channel is None else f"{channel}_{mc.KEY_POWER}"
         ]  # type: ignore
@@ -167,12 +162,7 @@ class _ElectricitySensor(SensorParser):
                     key if channel is None else f"{channel}_{key}"
                 ].update_device_value(payload[key])
             except KeyError:
-                if key in payload:
-                    entity_def = self.ENTITY_DEFS[key]
-                    kwargs = dict(entity_def.kwargs)
-                    kwargs["entity_key"] = key
-                    kwargs["device_value"] = payload[key]
-                    entity_def.type(channel, device, **kwargs)
+                pass
 
         power = self.sensor_power.native_value
         # device.device_timestamp 'should be' current epoch of the message
@@ -289,12 +279,14 @@ class ElectricityXSensor(_ElectricitySensor):
             device_scale=1000,
         ),
         mc.KEY_FACTOR: SensorParser.ENTITY_DEF(
+            entity_key=mc.KEY_FACTOR,
             device_class=SensorParser.DeviceClass.POWER_FACTOR,
             state_class=SensorParser.StateClass.MEASUREMENT,
             suggested_display_precision=2,
             device_scale=1,
         ),
         mc.KEY_MCONSUME: MConsumeSensor.ENTITY_DEF(
+            entity_key=mc.KEY_MCONSUME,
             device_class=SensorParser.DeviceClass.ENERGY,
             state_class=SensorParser.StateClass.TOTAL_INCREASING,  # quick patch for #621 (will be fixed in v6.x.x)
             suggested_display_precision=0,
