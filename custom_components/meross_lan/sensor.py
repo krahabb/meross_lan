@@ -392,7 +392,3 @@ class FilterMaintenanceSensor(SensorParser):
     # HA core entity attributes:
     _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC
     _attr_native_unit_of_measurement = mlc.hac.PERCENTAGE
-
-    def __init__(self, channel: int, parent: "Device", /):
-        SensorParser.__init__(self, channel, parent)
-        parent.register_parser_entity(self)

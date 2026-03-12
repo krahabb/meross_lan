@@ -17,17 +17,13 @@ from ...switch import SwitchParser
 
 if TYPE_CHECKING:
     from typing import (
-        Any,
         Callable,
         ClassVar,
-        Collection,
         Final,
         Iterable,
-        Mapping,
         NotRequired,
         Self,
         TypedDict,
-        Unpack,
     )
 
     from ...helpers.device import Device, MerossMessage
@@ -94,9 +90,9 @@ class HubNamespaceHandler(NamespaceHandler):
     relevant subdevice instance.
     """
 
-    parent: "HubMixin"  # type: ignore[override]
+    parent: "Hub"  # type: ignore[override]
 
-    def __init__(self, ns: "Namespace", device: "HubMixin", /):
+    def __init__(self, ns: "Namespace", device: "Hub", /):
         NamespaceHandler.__init__(self, ns, device, handler=self._handle_list)
 
     def _handle_list(self, message: "MerossMessage"):
@@ -145,7 +141,7 @@ class HubNamespaceHandler(NamespaceHandler):
                 self.log_parser_exception(e, payload)
 
 
-class HubMixin(Device if TYPE_CHECKING else object):
+class Hub(Device if TYPE_CHECKING else object):
     """
     Specialized Device for smart hub(s) like MSH300
     """
@@ -217,7 +213,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
 
     # interface: self
     @property
-    def subdevices(self, /):
+    def subdevices(self, /) -> "Iterable[SubDevice]":
         return (
             entity for entity in self.entities.values() if entity.__class__ is SubDevice
         )
@@ -268,6 +264,139 @@ class HubMixin(Device if TYPE_CHECKING else object):
 
         return SubDevice(subid, self, key_digest, entity_class)
 
+    def parse_digest(self, p_hub: dict, /):
+        # Usually called by _handle_Appliance_System_All as part of the digest parsing
+        # Here we'll check the fresh subdevice list against the actual one and
+        # eventually manage newly added subdevices or removed ones #119
+        subdevices = set(self.subdevices)
+
+        for p_subdevice_digest in p_hub[mc.KEY_SUBDEVICE]:
+            try:
+                subdevice_id = p_subdevice_digest[mc.KEY_ID]
+                try:
+                    subdevice = self.entities[subdevice_id]
+                    try:
+                        subdevices.remove(subdevice)
+                    except KeyError:
+                        # this shouldnt but happened in a trace (#331)
+                        self.log_duplicated_subdevice(subdevice_id)
+                        continue
+                except KeyError:
+                    subdevice = self._subdevice_build(p_subdevice_digest)
+                    self.schedule_entry_update(True)
+
+                subdevice.parse_digest(p_subdevice_digest)
+            except Exception as exception:
+                self.log_exception(self.WARNING, exception, "digest_parse_hub")
+
+        if subdevices:
+            # now we're left with non-existent (removed) subdevices
+            self.schedule_entry_update(False)
+            for subdevice in subdevices:
+                self.log(
+                    self.WARNING,
+                    "%s (id:%s) unregistered from hub",
+                    subdevice.display_name,
+                    subdevice.id,
+                )
+                self.create_issue(
+                    mlc.ISSUE_HUB_SUBDEVICE_REMOVED,
+                    subdevice.id,
+                    severity=self.IssueSeverity.WARNING,
+                    translation_placeholders={"device_name": subdevice.display_name},
+                )
+                self.create_task(
+                    subdevice.async_shutdown(),
+                    f"{subdevice.__class__.__name__}.async_shutdown()",
+                    eager_start=True,
+                )
+
+    @classmethod
+    # @override
+    # In order to configure the Hub, we use the Device machanics in async_init where it looks for keys in digest
+    # in order to setup the parsers/handlers.
+    # Those mechanics rely on NamespaceParser digest_init classmethod to instantiate parsers..here we
+    # use a more tricky approach leveraging that callback to slightly customize the device itself
+    def digest_init(
+        cls, device: "Hub", digest: "mt_h.Digest_Hub", /
+    ) -> "Device.DigestInitReturnType":
+        # This is a trick to dynamically mixin the HubMixin capabilities
+        # into the device instance. Historically we were mixing HubMixin
+        # as a subclass of the device class at ConfigEntry load time in ComponentApi
+        # but this new approach requires less coding.
+        # BEWARE: this works if we don't need special __init__ logic in HubMixin
+        # because the instance is already initialized here and we're called in the
+        # context of Device.async_init method. This happens rather soon but surely
+        # after Device.__init__
+        # Also, the base Device class mixed-in might be different at test time since it gets mocked
+        # so we have to dynamically create a new class on the fly. and ensure HubMixin is not
+        # overriding any mocked attribute (see test.helpers.ConfigEntryMocker.ManagerMock)
+        device.__class__ = type(
+            f"HubMixin{device.__class__.__name__}", (cls, device.__class__), {}
+        )
+        # temporary patch entry platforms defaults
+        device.platforms = cls.DEFAULT_PLATFORMS.copy() | device.platforms
+
+        # Check for unbinded subdevices which are 'still' in the device_registry
+        registry_subdevices = {}
+        for (
+            device_entry
+        ) in device.api.device_registry.devices.get_devices_for_config_entry_id(
+            device.config_entry.entry_id
+        ):
+            # The caveat here is to detect if a subdev has been re-binded to
+            # a different hub (so a different config_entry). We need to be sure
+            # we're removing a surely unused device.
+            # To be honest, I don't know about the 'integrity' enforced in DeviceRegistry
+            # at any rate, a subdev is always unique in dev_reg since we use the
+            # subdev "Id" as an identifier.
+            if device_entry.via_device_id == device.device_entry.id:
+                # checking 'via_device_id' should be enough to ensure
+                # the device hasn't been re-binded
+                for identifiers in device_entry.identifiers:
+                    if identifiers[0] == mlc.DOMAIN:
+                        registry_subdevices[identifiers[1]] = device_entry
+
+        for p_subdevice_digest in digest[mc.KEY_SUBDEVICE]:
+            try:
+                subdevice_id = p_subdevice_digest[mc.KEY_ID]
+                if subdevice_id in device.entities:
+                    device.log_duplicated_subdevice(subdevice_id)
+                    continue
+
+                device._subdevice_build(p_subdevice_digest)
+                try:
+                    del registry_subdevices[subdevice_id]
+                except KeyError:
+                    pass
+            except Exception as exception:
+                device.log_exception(
+                    device.WARNING,
+                    exception,
+                    "digest_init_hub (payload: %s)",
+                    _payload=p_subdevice_digest,
+                )
+
+        for subdevice_id, device_entry in registry_subdevices.items():
+            device.create_issue(
+                mlc.ISSUE_HUB_SUBDEVICE_REMOVED,
+                subdevice_id,
+                severity=device.IssueSeverity.WARNING,
+                translation_placeholders={"device_name": device_entry.name},
+            )
+
+        ability = device.descriptor.ability
+        if mn_h.Appliance_Digest_Hub in ability:
+            NamespaceHandler(
+                mn_h.Appliance_Digest_Hub,
+                device,
+                handler=lambda message: device.parse_digest(
+                    message.payload[mc.KEY_HUB]
+                ),
+            )
+
+        return device.parse_digest, ()
+
 
 class SubDevice(mld.BaseDevice, device.SubDevice, SensorParser):
     """
@@ -282,7 +411,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, SensorParser):
     """
 
     if TYPE_CHECKING:
-        parent: Final[HubMixin]  # type: ignore[override]
+        parent: Final[Hub]  # type: ignore[override]
         # self
         NS_SUBDEVICE: ClassVar[Iterable[Namespace]]
         model: Final[str]
@@ -315,7 +444,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, SensorParser):
     def __init__(
         self,
         subid: str,
-        hub: HubMixin,
+        hub: Hub,
         key_digest: str,
         entity_class: "type[SubDeviceEntity] | None",
         /,
@@ -1018,133 +1147,6 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, SwitchParser):
 
     def _parse_deviceCfg(self, payload: "DeviceCfg", /):
         self.number_duration._parse(payload)
-
-
-def digest_init_hub(
-    device: "HubMixin", digest: "mt_h.Digest_Hub", /
-) -> "Device.DigestInitReturnType":
-
-    # This is a trick to dynamically mixin the HubMixin capabilities
-    # into the device instance. Historically we were mixing HubMixin
-    # as a subclass of the device class at ConfigEntry load time in ComponentApi
-    # but this new approach requires less coding.
-    # BEWARE: this works if we don't need special __init__ logic in HubMixin
-    # because the instance is already initialized here and we're called in the
-    # context of Device.async_init method. This happens rather soon but surely
-    # after Device.__init__
-    # Also, the base Device class mixed-in might be different at test time since it gets mocked
-    # so we have to dynamically create a new class on the fly. and ensure HubMixin is not
-    # overriding any mocked attribute (see test.helpers.ConfigEntryMocker.ManagerMock)
-    device.__class__ = type(
-        f"HubMixin{device.__class__.__name__}", (HubMixin, device.__class__), {}
-    )
-    # temporary patch entry platforms defaults
-    device.platforms = HubMixin.DEFAULT_PLATFORMS.copy() | device.platforms
-
-    # Check for unbinded subdevices which are 'still' in the device_registry
-    registry_subdevices = {}
-    for (
-        device_entry
-    ) in device.api.device_registry.devices.get_devices_for_config_entry_id(
-        device.config_entry.entry_id
-    ):
-        # The caveat here is to detect if a subdev has been re-binded to
-        # a different hub (so a different config_entry). We need to be sure
-        # we're removing a surely unused device.
-        # To be honest, I don't know about the 'integrity' enforced in DeviceRegistry
-        # at any rate, a subdev is always unique in dev_reg since we use the
-        # subdev "Id" as an identifier.
-        if device_entry.via_device_id == device.device_entry.id:
-            # checking 'via_device_id' should be enough to ensure
-            # the device hasn't been re-binded
-            for identifiers in device_entry.identifiers:
-                if identifiers[0] == mlc.DOMAIN:
-                    registry_subdevices[identifiers[1]] = device_entry
-
-    for p_subdevice_digest in digest[mc.KEY_SUBDEVICE]:
-        try:
-            subdevice_id = p_subdevice_digest[mc.KEY_ID]
-            if subdevice_id in device.entities:
-                device.log_duplicated_subdevice(subdevice_id)
-                continue
-
-            device._subdevice_build(p_subdevice_digest)
-            try:
-                del registry_subdevices[subdevice_id]
-            except KeyError:
-                pass
-        except Exception as exception:
-            device.log_exception(
-                device.WARNING,
-                exception,
-                "digest_init_hub (payload: %s)",
-                _payload=p_subdevice_digest,
-            )
-
-    for subdevice_id, device_entry in registry_subdevices.items():
-        device.create_issue(
-            mlc.ISSUE_HUB_SUBDEVICE_REMOVED,
-            subdevice_id,
-            severity=device.IssueSeverity.WARNING,
-            translation_placeholders={"device_name": device_entry.name},
-        )
-
-    def digest_parse_hub(p_hub: dict, /):
-        # Usually called by _handle_Appliance_System_All as part of the digest parsing
-        # Here we'll check the fresh subdevice list against the actual one and
-        # eventually manage newly added subdevices or removed ones #119
-        subdevices = set(device.subdevices)
-
-        for p_subdevice_digest in p_hub[mc.KEY_SUBDEVICE]:
-            try:
-                subdevice_id = p_subdevice_digest[mc.KEY_ID]
-                try:
-                    subdevice = device.entities[subdevice_id]
-                    try:
-                        subdevices.remove(subdevice)
-                    except KeyError:
-                        # this shouldnt but happened in a trace (#331)
-                        device.log_duplicated_subdevice(subdevice_id)
-                        continue
-                except KeyError:
-                    subdevice = device._subdevice_build(p_subdevice_digest)
-                    device.schedule_entry_update(True)
-
-                subdevice.parse_digest(p_subdevice_digest)
-            except Exception as exception:
-                device.log_exception(device.WARNING, exception, "digest_parse_hub")
-
-        if subdevices:
-            # now we're left with non-existent (removed) subdevices
-            device.schedule_entry_update(False)
-            for subdevice in subdevices:
-                device.log(
-                    device.WARNING,
-                    "%s (id:%s) unregistered from hub",
-                    subdevice.display_name,
-                    subdevice.id,
-                )
-                device.create_issue(
-                    mlc.ISSUE_HUB_SUBDEVICE_REMOVED,
-                    subdevice.id,
-                    severity=device.IssueSeverity.WARNING,
-                    translation_placeholders={"device_name": subdevice.display_name},
-                )
-                device.create_task(
-                    subdevice.async_shutdown(),
-                    f"{subdevice.__class__.__name__}.async_shutdown()",
-                    eager_start=True,
-                )
-
-    ability = device.descriptor.ability
-    if mn_h.Appliance_Digest_Hub in ability:
-        NamespaceHandler(
-            mn_h.Appliance_Digest_Hub,
-            device,
-            handler=lambda message: digest_parse_hub(message.payload[mc.KEY_HUB]),
-        )
-
-    return digest_parse_hub, ()
 
 
 NamespaceHandler.POLLING_CONFIG_MAP.update(

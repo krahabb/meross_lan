@@ -124,9 +124,6 @@ class PhysicalDevice(AbstractClient):
         except KeyError:
             return self._create_handler(ns)
 
-    def register_parser(self, parser: "NamespaceParser", ns: "mn.Namespace", /):
-        self.get_handler(ns).register_parser(parser)
-
     def register_parser_ex(
         self,
         parser: "NamespaceParser",
@@ -162,6 +159,7 @@ class Device(PhysicalDevice):
         way, when we're working only with standard devices we don't need to import the namespaces
         only relevant to hubs."""
         DIGEST_INIT_PACKAGE: ClassVar[str]
+        """package/module path where to look for digest initialization functions."""
         DIGEST_INIT: ClassVar[dict[str, Any]]
         """ Static dict of 'digest initialization function(s)'.
         This is built on demand during Device init whenever a new digest key
@@ -177,8 +175,9 @@ class Device(PhysicalDevice):
         with the same name as the digest key.
         - if any is not found we'll set a 'digest_init_empty' function in order to not
         repeat the lookup process. That function will just pass so that the key
-        init/parsing will not harm."""
+        init/parsing will just default to do nothing and not harm."""
         NAMESPACE_INIT_PACKAGE: ClassVar[str]
+        """package/module path where to look for namespace initialization functions."""
         NAMESPACE_INIT: ClassVar[dict[mn.Namespace, Any]]
         """ Static dict of namespace initialization functions. This will be looked up
         and matched against the current device abilities (at device init time) and
@@ -244,9 +243,8 @@ class Device(PhysicalDevice):
     def namespace_init_empty(ns: mn.Namespace, device: "Device", /):
         pass
 
-    DIGEST_INIT_PACKAGE = (
-        "merossclient"  # TODO: define glob symbol for merossclient package/library
-    )
+    # TODO: define global symbol for merossclient package/library
+    DIGEST_INIT_PACKAGE = "merossclient"
     DIGEST_INIT = {}
     NAMESPACE_INIT_PACKAGE = DIGEST_INIT_PACKAGE
     NAMESPACE_INIT = {}
@@ -312,6 +310,8 @@ class Device(PhysicalDevice):
         self.polling_epoch = self.time()
 
     async def async_init(self):
+        digest_init_func: "Device.DigestInitFunc"
+        ns_init_func: "Device.NamespaceInitFunc"
 
         await self._async_init_zoneinfo()
 
@@ -335,12 +335,21 @@ class Device(PhysicalDevice):
                         # This means we catched an error inside the digest init func
                         raise
                     try:
-                        digest_init_func: "Device.DigestInitFunc" = getattr(
-                            await async_import_module(
-                                _module_path, self.DIGEST_INIT_PACKAGE
-                            ),
-                            f"digest_init_{key_slug}",
+                        _module = await async_import_module(
+                            _module_path, self.DIGEST_INIT_PACKAGE
                         )
+                        # Lookup a class with the same name as the digest key.
+                        # This is going to be the default parser class for the digest
+                        # key and it has to implement a 'digest_init' classmethod with the proper signature.
+                        try:
+                            digest_init_func = getattr(
+                                _module, key_slug.capitalize()
+                            ).digest_init
+                        except AttributeError:
+                            # else fallback to a function with the same name as the digest key and the proper signature.
+                            digest_init_func = getattr(
+                                _module, f"digest_init_{key_slug}"
+                            )
                     except Exception as exception:
                         self.log_exception(
                             self.WARNING,
@@ -366,7 +375,6 @@ class Device(PhysicalDevice):
             if ns not in ability:
                 continue
             try:
-                ns_init_func: "Device.NamespaceInitFunc"
                 try:
                     ns_init_func(ns, self)
                 except TypeError:

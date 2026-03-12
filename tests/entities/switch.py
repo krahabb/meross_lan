@@ -30,7 +30,7 @@ class EntityTest(EntityComponentTest):
     # special care here since light and cover entity could manage the togglex
     # namespace
     DIGEST_ENTITIES = {
-        mc.KEY_TOGGLEX: [switch.ToggleXSwitch],
+        mc.KEY_TOGGLEX: [switch.Togglex],
     }
     NAMESPACES_ENTITIES = {
         mn.Appliance_Config_Alarm: [siren.Siren.EnableSwitch],
@@ -49,7 +49,7 @@ class EntityTest(EntityComponentTest):
         mn_t.Appliance_Control_Thermostat_Frost: [MtsConfigSwitch],
         mn_t.Appliance_Control_Thermostat_Sensor: [MtsExternalSensorSwitch],
         mn_t.Appliance_Control_Thermostat_Overheat: [MtsConfigSwitch],
-        mn.Appliance_Control_Toggle: [switch.ToggleSwitch],
+        mn.Appliance_Control_Toggle: [switch.Toggle],
         mn.Appliance_RollerShutter_Adjust: [rs.RollerShutterAdjustSwitch],
     }
     HUB_SUBDEVICES_ENTITIES = {

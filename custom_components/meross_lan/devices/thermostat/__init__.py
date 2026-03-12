@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from typing import Any, Callable, ClassVar, Final, Unpack
 
     from ...helpers.device import Device, MerossMessage
+    from ...merossclient.device.handler import NamespaceHandler as _NamespaceHandler
     from ...merossclient.protocol.namespaces import Namespace
     from ...merossclient.protocol.types import JsonDict, thermostat as mt_t
 
@@ -108,7 +109,6 @@ class MtsCommonTemperatureNumber(NumberParser):
             entity_key=self.__class__.ns.slug_end,
             device_scale=climate.device_scale,
         )
-        self.parent.register_parser_entity(self)
 
     def _parse(self, payload: "mt_t.CommonTemperature_C", /):
         try:
@@ -226,7 +226,6 @@ class MtsWindowOpened(BinarySensorParser):
 
     def __init__(self, climate: "MtsThermostatClimate", /):
         BinarySensorParser.__init__(self, climate.channel, climate.parent)
-        climate.parent.register_parser_entity(self)
 
 
 class MtsExternalSensorSwitch(SwitchParser):
@@ -238,7 +237,6 @@ class MtsExternalSensorSwitch(SwitchParser):
 
     def __init__(self, climate: "MtsThermostatClimate", /):
         SwitchParser.__init__(self, climate.channel, climate.parent)
-        climate.parent.register_parser_entity(self)
 
 
 class MtsHoldAction(SelectParser):
@@ -260,7 +258,6 @@ class MtsHoldAction(SelectParser):
 
     def __init__(self, climate: "MtsThermostatClimate", /):
         SelectParser.__init__(self, climate.channel, climate.parent)
-        climate.parent.register_parser_entity(self)
         self.number_time = NumberParser(
             climate.channel,
             climate.parent,
@@ -305,7 +302,6 @@ class MtsTempUnit(SelectParser):
 
     def __init__(self, climate: "MtsThermostatClimate", /):
         SelectParser.__init__(self, climate.channel, climate.parent)
-        climate.parent.register_parser_entity(self)
 
 
 class MtsThermostatClimate(MtsClimate):
@@ -320,7 +316,7 @@ class MtsThermostatClimate(MtsClimate):
         OPTIONAL_NAMESPACES_INITIALIZERS: Final[tuple[mn.Namespace, ...]]
         """These namespaces handlers will forward message parsing to the climate entity"""
         OPTIONAL_ENTITIES_INITIALIZERS: Final[
-            dict[str, Callable[["MtsThermostatClimate"], Any]]
+            dict[mn.Namespace, Callable[["MtsThermostatClimate"], Any]]
         ]
         """Additional entities (linked to the climate one) in case their ns is supported/available"""
 
@@ -363,15 +359,11 @@ class MtsThermostatClimate(MtsClimate):
 
     def __init__(self, channel: int, device: "Device", /):
         MtsClimate.__init__(self, channel, device)
-        device.register_parser_ex(self, self.ns, *self.OPTIONAL_NAMESPACES_INITIALIZERS)
-        device.register_parser_entity(self.schedule)
+        device.register_parser_ex(self, *self.OPTIONAL_NAMESPACES_INITIALIZERS)
         ability = device.descriptor.ability
-        for entity_class in (
-            _entity_class
-            for _namespace, _entity_class in self.OPTIONAL_ENTITIES_INITIALIZERS.items()
-            if _namespace in ability
-        ):
-            entity_class(self)
+        for _ns, _entity_class in self.OPTIONAL_ENTITIES_INITIALIZERS.items():
+            if _ns in ability:
+                device.get_handler(_ns).register_parser(_entity_class(self))
 
     # interface: self
     def _parse_ctlRange(self, payload: dict, /):
@@ -433,7 +425,7 @@ def digest_init_thermostat(
     ability = device.descriptor.ability
 
     digest_parsers: dict[str, "Device.DigestParseFunc"] = {}
-    digest_pollers: set["NamespaceHandler"] = set()
+    digest_pollers: set["_NamespaceHandler"] = set()
 
     for ns_key, ns_digest in digest.items():
 
@@ -456,8 +448,9 @@ def digest_init_thermostat(
         digest_pollers.add(handler)
 
         if climate_class := CLIMATE_INITIALIZERS.get(ns_key):
-            for channel_digest in ns_digest:
-                climate_class(channel_digest[mc.KEY_CHANNEL], device)
+            handler.register_parser_class(
+                climate_class, (_digest[mc.KEY_CHANNEL] for _digest in ns_digest)
+            )
 
     def digest_parse_thermostat(digest: "JsonDict", /):
         """

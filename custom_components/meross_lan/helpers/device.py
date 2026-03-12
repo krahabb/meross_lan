@@ -332,7 +332,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         mn.Appliance_Control_PhysicalLock: (".switch", "PhysicalLockSwitch"),
         mn.Appliance_Control_Presence_Config: (
             ".devices.ms600",
-            "PresenceConfigMode",
+            "namespace_init_presence_config",
         ),
         mn.Appliance_Control_Screen_Brightness: (
             ".devices.thermostat",
@@ -1084,9 +1084,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         await super().async_poll_full()
 
     # interface: self
-    def register_parser_entity(self, entity: "ParserEntity", /):
-        self.get_handler(entity.ns).register_parser(entity)
-
     def register_togglex_channel(self, entity: "ParserEntity", active: bool, /):
         """
         Checks if entity has an associated ToggleX behavior and eventually

@@ -82,12 +82,8 @@ class PhysicalLockSwitch(SwitchParser):
     ns = mn.Appliance_Control_PhysicalLock
     NS_CHANNELS = SwitchParser.NS_CHANNELS_SINGLE
 
-    def __init__(self, channel: int, device: "Device", /):
-        SwitchParser.__init__(self, channel, device)
-        device.register_parser_entity(self)
 
-
-class ToggleSwitch(mle.EntityNamespaceMixin, SwitchParser):
+class Toggle(mle.EntityNamespaceMixin, SwitchParser):
 
     POLLING_CONFIG_DEFAULT = mle.EntityNamespaceMixin.POLLING_CONFIG_STATE_NS
     ENTITY_KEY = "0"  # used to keep unique_id compatibility with legacy versions
@@ -96,16 +92,17 @@ class ToggleSwitch(mle.EntityNamespaceMixin, SwitchParser):
     _attr_device_class = SwitchEntity.DeviceClass.OUTLET
     _attr_entity_category = None
 
+    @classmethod
+    @override
+    def digest_init(
+        cls, device: "Device", digest: "JsonDict", /
+    ) -> "Device.DigestInitReturnType":
+        """{"onoff": 0, "lmTime": 1645391086}"""
+        handler = Toggle.namespace_init(mn.Appliance_Control_Toggle, device)
+        return handler._parse, (handler.handler_ns,)
 
-def digest_init_toggle(
-    device: "Device", digest: "JsonDict", /
-) -> "Device.DigestInitReturnType":
-    """{"onoff": 0, "lmTime": 1645391086}"""
-    toggle = ToggleSwitch.namespace_init(mn.Appliance_Control_Toggle, device)
-    return toggle._parse, (toggle.handler_ns,)
 
-
-class ToggleXSwitch(SwitchParser):
+class Togglex(SwitchParser):
 
     ns = mn.Appliance_Control_ToggleX
 
@@ -113,49 +110,49 @@ class ToggleXSwitch(SwitchParser):
     _attr_device_class = SwitchEntity.DeviceClass.OUTLET
     _attr_entity_category = None
 
-    def __init__(self, channel: int, device: "Device", /):
-        SwitchParser.__init__(self, channel, device)
-        device.register_parser_entity(self)
+    @classmethod
+    @override
+    def digest_init(
+        cls, device: "Device", togglex_digest: "JsonList", /
+    ) -> "Device.DigestInitReturnType":
+        # We don't initialize every switch/ToggleX here since the digest reported channels
+        # might be mapped to more specialized entities:
+        # this is true for lights, garageDoor and fan though
+        # and maybe some more others.
+        # In general, it is not very clear how and when these ToggleX entities are really needed
+        # so we have some euristics in place to fix 'this and that'.
+        # The general rule is to let the togglex namespace/channel be managed by the
+        # aforementioned specialized entity, while, if no channel match exists, create a disabled
+        # (by default) switch entity. When  switches are really switches (like mssXXX series) instead,
+        # we'll setup proper ToggleXSwitch (this is detected by the fact no specialized entity exists in
+        # device definition)
 
+        channels = {togglex[mc.KEY_CHANNEL] for togglex in togglex_digest}
 
-def digest_init_togglex(
-    device: "Device", togglex_digest: "JsonList", /
-) -> "Device.DigestInitReturnType":
-    # We don't initialize every switch/ToggleX here since the digest reported channels
-    # might be mapped to more specialized entities:
-    # this is true for lights, garageDoor and fan though
-    # and maybe some more others.
-    # In general, it is not very clear how and when these ToggleX entities are really needed
-    # so we have some euristics in place to fix 'this and that'.
-    # The general rule is to let the togglex namespace/channel be managed by the
-    # aforementioned specialized entity, while, if no channel match exists, create a disabled
-    # (by default) switch entity. When  switches are really switches (like mssXXX series) instead,
-    # we'll setup proper ToggleXSwitch (this is detected by the fact no specialized entity exists in
-    # device definition)
+        digest = device.descriptor.digest
 
-    channels = {togglex[mc.KEY_CHANNEL] for togglex in togglex_digest}
+        for _key in (mc.KEY_FAN, mc.KEY_GARAGEDOOR, mc.KEY_LIGHT):
+            if _key in digest:
+                for _key_digest in extract_dict_payloads(digest[_key]):
+                    try:
+                        channels.remove(_key_digest[mc.KEY_CHANNEL])
+                    except KeyError:
+                        pass
 
-    digest = device.descriptor.digest
+        # the fan controller 'map100' doesn't expose a fan in digest but it has one at channel 0
+        if (mn.Appliance_Control_Fan in device.descriptor.ability) and (
+            mc.KEY_FAN not in digest
+        ):
+            try:
+                channels.remove(0)
+            except KeyError:
+                pass
 
-    for _key in (mc.KEY_FAN, mc.KEY_GARAGEDOOR, mc.KEY_LIGHT):
-        if _key in digest:
-            for _key_digest in extract_dict_payloads(digest[_key]):
-                try:
-                    channels.remove(_key_digest[mc.KEY_CHANNEL])
-                except KeyError:
-                    pass
-
-    # the fan controller 'map100' doesn't expose a fan in digest but it has one at channel 0
-    if (mn.Appliance_Control_Fan in device.descriptor.ability) and (
-        mc.KEY_FAN not in digest
-    ):
-        try:
-            channels.remove(0)
-        except KeyError:
-            pass
-
-    handler = device.get_handler(mn.Appliance_Control_ToggleX)
-    handler.register_entity_class(ToggleXSwitch, channels)
-    if device.descriptor.is_refoss:
-        handler.polling_request = mn.PayloadType.DICT_IDX_65535.build_get(handler.id)
-    return handler.parse_list, (handler,)
+        # don't explicitly create the handler since it might have been created by other digest entities
+        handler = device.get_handler(mn.Appliance_Control_ToggleX)
+        handler.register_parser_class(Togglex, channels)
+        if device.descriptor.is_refoss:
+            handler.polling_request = mn.PayloadType.DICT_IDX_65535.build_get(
+                handler.id
+            )
+        return handler.parse_list, (handler,)

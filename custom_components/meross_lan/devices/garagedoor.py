@@ -40,7 +40,7 @@ class GarageTimeoutBinarySensor(BinarySensor):
         }
     )
 
-    def __init__(self, garage: "GarageDoor", /):
+    def __init__(self, garage: "Garagedoor", /):
         self.extra_state_attributes = {}
         super().__init__(garage.channel, garage.parent, is_on=False)
 
@@ -183,12 +183,12 @@ class _DurationHelper:
     """
 
     if TYPE_CHECKING:
-        garage_door: Final["GarageDoor"]
+        garage_door: Final["Garagedoor"]
         key: Final[str]
 
     __slots__ = ("garage_door", "key")
 
-    def __init__(self, garage_door: "GarageDoor", key: str):
+    def __init__(self, garage_door: "Garagedoor", key: str):
         self.garage_door = garage_door
         self.key = key
 
@@ -215,7 +215,7 @@ class _DurationHelper:
         return number.native_value
 
 
-class GarageDoor(Cover):
+class Garagedoor(Cover):
 
     if TYPE_CHECKING:
 
@@ -267,8 +267,6 @@ class GarageDoor(Cover):
             self.ATTR_TRANSITION_DURATION: self._transition_duration
         }
         Cover.__init__(self, channel, device)
-        device.register_parser_entity(self)
-        device.register_togglex_channel(self, False)
         self.binary_sensor_timeout = GarageTimeoutBinarySensor(self)
         if mn.Appliance_GarageDoor_MultipleConfig in device.descriptor.ability:
             # historically, when MultipleConfig appeared, these used to be
@@ -282,7 +280,9 @@ class GarageDoor(Cover):
             self.number_doorOpenDuration = self.ENTITY_DEFS[mc.KEY_SIGNALOPEN](
                 channel, device, mc.KEY_SIGNALOPEN
             )  # type: ignore
-            device.register_parser(self, mn.Appliance_GarageDoor_MultipleConfig)
+            device.get_handler(mn.Appliance_GarageDoor_MultipleConfig).register_parser(
+                self
+            )
         else:
             self.number_doorCloseDuration = _DurationHelper(
                 self, mc.KEY_DOORCLOSEDURATION
@@ -429,7 +429,7 @@ class GarageDoor(Cover):
         entities = self.parent.entities
         entity_id_prefix = f"{self.channel}_config_"
         for key, value in payload.items():
-            if key in GarageDoor.CONFIG_KEY_EXCLUDED or (
+            if key in Garagedoor.CONFIG_KEY_EXCLUDED or (
                 self._config.get(key) == value
             ):
                 continue
@@ -515,7 +515,45 @@ class GarageDoor(Cover):
             self._transition_duration
         )
 
+    @classmethod
+    @override
+    def digest_init(
+        cls, device: "Device", digest: "JsonList", /
+    ) -> "Device.DigestInitReturnType":
+        device.platforms.setdefault(NumberParser.PLATFORM, None)
+        device.platforms.setdefault(SwitchParser.PLATFORM, None)
 
+        handler = NamespaceHandler(mn.Appliance_GarageDoor_State, device)
+        descriptor = device.descriptor
+        if descriptor.type.startswith(mc.TYPE_MSG200) and (
+            descriptor.firmware_version <= (4, 2, 1)
+        ):
+            # trying to patch lacking of state polling (#538)
+            # It's not sure querying with the list of channels works.
+            # Also, in fw 4.0.0 the default polling with empty dict correctly returns
+            # the list of channels so this should not be needed.
+            # Here the issue arises when we optimize NS_ALL polling by issuing single digest
+            # namespaces requests: it looks like we're unable to get in a single query the full
+            # state of all channels, at least on these old firmwares.
+            # So we disable NS_ALL 'optimization' and we go straigth to querying for that every time.
+            # As we know it now, this namespace accepts this queries:
+            # - single channel in a DICT_C_STRICT
+            # - all channels in an empty dict (only confirmed in 4.0.0+ fw)
+            device.ns_handlers[mn.Appliance_System_All].polling_period = 0
+
+        # do not register_entity_class since we don't want to create spurious
+        # GarageDoor at channel 0 (msg200)
+        for channel_digest in digest:
+            handler.register_parser(Garagedoor(channel_digest[mc.KEY_CHANNEL], device))
+
+        if mn.Appliance_GarageDoor_Config in descriptor.ability:
+            GarageDoorConfigNamespaceHandler(mn.Appliance_GarageDoor_Config, device)
+
+        return handler.parse_list, (handler,)
+
+
+# TODO: generalize similar namespaces where no channel indexing is in place (much like EntityNamespaceMixini)
+# but we have multiple (likely dynamic) parsers to register (see Appliance.Control.Sensor.Latest/latestX)
 class GarageDoorConfigNamespaceHandler(NamespaceHandler):
 
     if TYPE_CHECKING:
@@ -564,45 +602,6 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
                 # This is just to trigger the _DurationHelper in case it's installed
                 for key in (mc.KEY_DOOROPENDURATION, mc.KEY_DOORCLOSEDURATION):
                     getattr(garage, f"number_{key}").native_value
-
-
-class GarageDoorStateNamespaceHandler(NamespaceHandler):
-
-    def __init__(self, device: "Device", /):
-        NamespaceHandler.__init__(self, mn.Appliance_GarageDoor_State, device)
-        descriptor = device.descriptor
-        if descriptor.type.startswith(mc.TYPE_MSG200) and (
-            descriptor.firmware_version <= (4, 2, 1)
-        ):
-            # trying to patch lacking of state polling (#538)
-            # It's not sure querying with the list of channels works.
-            # Also, in fw 4.0.0 the default polling with empty dict correctly returns
-            # the list of channels so this should not be needed.
-            # Here the issue arises when we optimize NS_ALL polling by issuing single digest
-            # namespaces requests: it looks like we're unable to get in a single query the full
-            # state of all channels, at least on these old firmwares.
-            # So we disable NS_ALL 'optimization' and we go straigth to querying for that every time.
-            # As we know it now, this namespace accepts this queries:
-            # - single channel in a DICT_C_STRICT
-            # - all channels in an empty dict (only confirmed in 4.0.0+ fw)
-            device.ns_handlers[mn.Appliance_System_All].polling_period = 0
-
-
-def digest_init_garagedoor(
-    device: "Device", digest: "JsonList", /
-) -> "Device.DigestInitReturnType":
-    device.platforms.setdefault(NumberParser.PLATFORM, None)
-    device.platforms.setdefault(SwitchParser.PLATFORM, None)
-
-    handler = GarageDoorStateNamespaceHandler(device)
-
-    for channel_digest in digest:
-        GarageDoor(channel_digest[mc.KEY_CHANNEL], device)
-
-    if mn.Appliance_GarageDoor_Config in device.descriptor.ability:
-        GarageDoorConfigNamespaceHandler(mn.Appliance_GarageDoor_Config, device)
-
-    return handler.parse_list, (handler,)
 
 
 NamespaceHandler.POLLING_CONFIG_MAP.update(

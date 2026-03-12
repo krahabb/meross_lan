@@ -265,7 +265,6 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
                 LightEntityFeature.EFFECT | LightEntityFeature.TRANSITION
             )
         super().__init__(channel, device)
-        device.register_parser_entity(self)
 
     @override
     def set_unavailable(self):
@@ -595,6 +594,25 @@ class Light(LightBase):
         # previous test showed that we need TOGGLEX
         await self.async_request_onoff(1)
 
+    @classmethod
+    @override
+    def digest_init(
+        cls, device: "Device", digest: "JsonDict", /
+    ) -> "Device.DigestInitReturnType":
+
+        ability = device.descriptor.ability
+        handler = NamespaceHandler(mn.Appliance_Control_Light, device)
+        handler.register_parser(
+            EffectLight(digest[mc.KEY_CHANNEL], device)
+            if mn.Appliance_Control_Light_Effect in ability
+            else (
+                Light(digest[mc.KEY_CHANNEL], device, mc.HP110A_LIGHT_EFFECT_LIST)
+                if mn.Appliance_Control_Mp3 in ability
+                else Light(digest[mc.KEY_CHANNEL], device)
+            )
+        )
+        return handler.parse_dict, (handler,)
+
 
 class EffectLight(Light):
     """
@@ -756,21 +774,6 @@ class DNDLight(mle.EntityNamespaceMixin, mle.BinaryParser, light.LightEntity):
     color_mode: ColorMode = ColorMode.ONOFF
     _attr_entity_category = mle.BinaryParser.EntityCategory.CONFIG
     supported_color_modes: set[ColorMode] = {ColorMode.ONOFF}
-
-
-def digest_init_light(
-    device: "Device", digest: "JsonDict", /
-) -> "Device.DigestInitReturnType":
-
-    ability = device.descriptor.ability
-
-    if mn.Appliance_Control_Light_Effect in ability:
-        light = EffectLight(digest[mc.KEY_CHANNEL], device)
-    elif mn.Appliance_Control_Mp3 in ability:
-        light = Light(digest[mc.KEY_CHANNEL], device, mc.HP110A_LIGHT_EFFECT_LIST)
-    else:
-        light = Light(digest[mc.KEY_CHANNEL], device)
-    return light.handler_ns.parse_dict, (light.handler_ns,)
 
 
 def digest_init_light_effect(

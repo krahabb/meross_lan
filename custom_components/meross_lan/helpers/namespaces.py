@@ -6,10 +6,9 @@ from ..merossclient.device.parser import NamespaceParser
 from ..merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Coroutine, Final, Iterable, Self
+    from typing import Final
 
-    from ..merossclient.protocol import types as mt
-    from ..merossclient.protocol.message import MerossMessage, MerossResponse
+    from ..merossclient.protocol.message import MerossMessage
     from .device import Device
     from .entity import ParserEntity
 
@@ -33,11 +32,8 @@ class NamespaceHandler(_NH):
         POLLING_CONFIG_SINGLEPOLL_NS: Final[PollingConfigType]
         """Common polling configuration for namespaces carrying configuration parameters.
         These are polled on a longer period since we don't expect them to change very often."""
-        POLLING_CONFIG_MAP: Final[dict[mn.Namespace, PollingConfigType]]
-        """Centralized polling config parameters for namespaces."""
-
         parent: Final[Device]  # type: ignore[override]
-        entity_class: type[ParserEntity] | None
+        parser_class: type[ParserEntity] | None  # type: ignore[override]
 
     POLLING_CONFIG_DEFAULT = (300, mlc.PARAM_CLOUD_UPDATE_PERIOD, None)
     """Default polling configuration. This is intended for unknown/unmanaged namespaces since it should
@@ -52,24 +48,24 @@ class NamespaceHandler(_NH):
         _NH.async_poll_smart,
     )
     POLLING_CONFIG_SINGLEPOLL_NS = (0, 0, _NH.async_poll_once)
-    POLLING_CONFIG_MAP = {
-        mn.Appliance_System_Debug: (0, 0, None),
-        mn.Appliance_Config_Alarm: POLLING_CONFIG_CONFIGURATION_NS,
-        mn.Appliance_Config_Sensor_Association: POLLING_CONFIG_CONFIGURATION_NS,
-        mn.Appliance_Control_Alarm: POLLING_CONFIG_CONFIGURATION_NS,
-        mn.Appliance_Control_Fan: POLLING_CONFIG_DIGEST_NS,
-        mn.Appliance_Control_FilterMaintenance: POLLING_CONFIG_SLOWSENSOR_NS,
-        mn.Appliance_Control_Light_Effect: POLLING_CONFIG_CONFIGURATION_NS,
-        mn.Appliance_Control_Mp3: POLLING_CONFIG_STATE_NS,
-        mn.Appliance_Control_PhysicalLock: POLLING_CONFIG_CONFIGURATION_NS,
-        mn.Appliance_Control_Presence_Config: POLLING_CONFIG_CONFIGURATION_NS,
-        mn.Appliance_Control_Sensor_Latest: POLLING_CONFIG_FASTSENSOR_NS,
-        mn.Appliance_Control_Sensor_LatestX: POLLING_CONFIG_FASTSENSOR_NS,
-        mn.Appliance_Mcu_Firmware: POLLING_CONFIG_SINGLEPOLL_NS,
-        mn.Appliance_Mcu_Hp110_Firmware: POLLING_CONFIG_SINGLEPOLL_NS,
-    }
-
-    __SLOTS__ = ("entity_class",)
+    _NH.POLLING_CONFIG_MAP.update(
+        {
+            mn.Appliance_System_Debug: (0, 0, None),
+            mn.Appliance_Config_Alarm: POLLING_CONFIG_CONFIGURATION_NS,
+            mn.Appliance_Config_Sensor_Association: POLLING_CONFIG_CONFIGURATION_NS,
+            mn.Appliance_Control_Alarm: POLLING_CONFIG_CONFIGURATION_NS,
+            mn.Appliance_Control_Fan: POLLING_CONFIG_DIGEST_NS,
+            mn.Appliance_Control_FilterMaintenance: POLLING_CONFIG_SLOWSENSOR_NS,
+            mn.Appliance_Control_Light_Effect: POLLING_CONFIG_CONFIGURATION_NS,
+            mn.Appliance_Control_Mp3: POLLING_CONFIG_STATE_NS,
+            mn.Appliance_Control_PhysicalLock: POLLING_CONFIG_CONFIGURATION_NS,
+            mn.Appliance_Control_Presence_Config: POLLING_CONFIG_CONFIGURATION_NS,
+            mn.Appliance_Control_Sensor_Latest: POLLING_CONFIG_FASTSENSOR_NS,
+            mn.Appliance_Control_Sensor_LatestX: POLLING_CONFIG_FASTSENSOR_NS,
+            mn.Appliance_Mcu_Firmware: POLLING_CONFIG_SINGLEPOLL_NS,
+            mn.Appliance_Mcu_Hp110_Firmware: POLLING_CONFIG_SINGLEPOLL_NS,
+        }
+    )
 
     def __init_subclass__(cls):
         super().__init_subclass__()
@@ -78,36 +74,6 @@ class NamespaceHandler(_NH):
         # which are not mixed with parsers and which don't define their own __slots__.
         if not issubclass(cls, NamespaceParser):
             cls.__slots__ = cls._calc_slots()
-
-    def __init__(
-        self,
-        ns: "mn.Namespace",
-        device: "Device",
-        /,
-        *,
-        handler: "HandlerFunc | None" = None,
-        config: "PollingConfigType | None" = None,
-    ):
-        super().__init__(
-            ns,
-            device,
-            handler=handler,
-            config=config
-            or self.POLLING_CONFIG_MAP.get(ns, self.POLLING_CONFIG_DEFAULT),
-        )
-        self.entity_class = None
-
-    def register_entity_class(
-        self, entity_class: type["ParserEntity"], channels: "Iterable[int] | None", /
-    ):
-        # TODO: rename to parser_class and move to base
-        self.entity_class = entity_class
-        self.handler = self._handle_list
-        self.parent.platforms.setdefault(entity_class.PLATFORM)
-        for channel in (
-            self.parent.descriptor.channels if channels is None else channels
-        ):
-            entity_class(channel, self.parent)
 
     @override
     def _handle(self, message: "MerossMessage", /):
@@ -143,13 +109,13 @@ class NamespaceHandler(_NH):
     def _handle_missing_parser(self, p_channel: dict, ke: KeyError, /):
         channel = p_channel[self.id.key_idx]
         if channel in self.parsers:
+            # KeyError raised inside parser function, not on missing parser
             self.log_parser_exception(ke, p_channel)
             return
 
-        if self.entity_class:
-            self.entity_class(
-                channel, self.parent, entity_registry_enabled_default=True
-            )
+        # TODO: move to base. We must decide on diagnostic parser installations
+        if self.parser_class:
+            self.register_parser(self.parser_class(channel, self.parent))
         elif self.parent.create_diagnostic_entities:
             from ..sensor import DiagnosticParser
 

@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.helpers.entity import STATE_UNAVAILABLE
 
-from custom_components.meross_lan.devices.hub import HubMixin
+from custom_components.meross_lan.devices.hub import Hub
 from custom_components.meross_lan.helpers.entity import ParserEntity
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
@@ -170,7 +170,6 @@ async def test_entities(
                                 )
                             else:
                                 _add_func([entity_type] * (len(descriptor.channels)))
-                                _add_func(entity_types)
                     else:
                         _add_func(entity_types)
             if ishub:
@@ -209,7 +208,7 @@ async def test_entities(
                     )
                     assert device.descriptor.is_hub == ishub
                     if ishub:
-                        assert isinstance(device, HubMixin)
+                        assert isinstance(device, Hub)
                         for subdevice in device.subdevices:
                             await _async_test_entities(
                                 subdevice, expected, unexpected, unavailable

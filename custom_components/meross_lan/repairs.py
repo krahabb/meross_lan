@@ -11,7 +11,7 @@ from .helpers.component_api import ComponentApi
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
-    from .devices.hub import HubMixin
+    from .devices.hub import Hub
     from .helpers.device import Device
 
 
@@ -61,7 +61,7 @@ class HubSubdeviceRemovedFlow(SimpleRepairFlow):
                 api = ComponentApi.get(self.hass)
                 config_entry = api.get_config_entry(device_id)
                 assert config_entry
-                device: "HubMixin | None" = getattr(config_entry, "runtime_data", None)
+                device: "Hub | None" = getattr(config_entry, "runtime_data", None)
                 if device:
                     device.remove_issue_id(self.issue_id)
                     if subdevice_id in device.entities:

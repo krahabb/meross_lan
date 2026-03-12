@@ -518,6 +518,8 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         self.sensor_current_temperature = SensorParser.Temperature(
             channel, parent, entity_registry_enabled_default=False
         )
+        for _entity in (self.number_adjust_temperature, self.schedule):
+            parent.get_handler(_entity.ns).register_parser(_entity)
 
     def shutdown(self):
         super().shutdown()
@@ -558,15 +560,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         raise NotImplementedError()
 
     # interface: self
-    @cached_property
-    def handler_adjust(self):
-        """
-        Returns the correct ns handler for the adjust namespace.
-        Used to trigger a poll and the ns which is by default polled
-        on a long timeout.
-        """
-        return self.parent.ns_handlers[self.number_adjust_temperature.ns]
-
     async def async_request_preset(self, mode: int, /):
         """Implements the protocol to set the Meross thermostat mode"""
         raise NotImplementedError()
@@ -590,7 +583,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             # temp change might be an indication of a calibration so
             # we'll speed up polling for the adjust/calibration ns
             try:
-                handler = self.handler_adjust
+                handler = self.number_adjust_temperature.handler_ns
                 if handler.polling_epoch_next > (handler.parent.last_rx_epoch + 30):
                     handler.polling_epoch_next = 0.0
             except:

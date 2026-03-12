@@ -106,7 +106,6 @@ class Siren(BinaryParser, siren.SirenEntity):
                 siren.SirenEntityFeature.TURN_ON | siren.SirenEntityFeature.TURN_OFF
             )
         super().__init__(channel, device, **kwargs)
-        device.register_parser_entity(self)
 
     @override
     async def async_request_value(self, device_value, /) -> None:

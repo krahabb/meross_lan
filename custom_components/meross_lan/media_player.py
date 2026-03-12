@@ -75,7 +75,6 @@ class Mp3Player(ParserEntity, media_player.MediaPlayerEntity):
         self.state = None
         self.volume_level = None
         super().__init__(channel, device, **kwargs)
-        device.register_parser_entity(self)
 
     def set_unavailable(self):
         self.is_volume_muted = None

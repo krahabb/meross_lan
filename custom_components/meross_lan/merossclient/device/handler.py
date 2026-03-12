@@ -7,29 +7,12 @@ from ..protocol.message import MerossMessage
 from .parser import NamespaceParser
 
 if TYPE_CHECKING:
-    from typing import (
-        Any,
-        Awaitable,
-        Callable,
-        ClassVar,
-        Coroutine,
-        Final,
-        Generator,
-        Iterable,
-        Mapping,
-        NotRequired,
-        Protocol,
-        Self,
-        TypedDict,
-        Unpack,
-    )
+    from typing import Any, Callable, ClassVar, Coroutine, Final, Iterable
 
     from . import Device
     from ..protocol.types import (
         JsonDict,
-        JsonList,
         JsonMapping,
-        MerossMessageType,
         MerossPayloadType,
         MerossRequestType,
     )
@@ -51,9 +34,8 @@ class NamespaceHandler(logging.Loggable):
     if TYPE_CHECKING:
         type HandlerFunc = Callable[[MerossMessage], None]
         type ParserFunc = Callable[[JsonMapping], None]
-        type PollingStrategyFunc = Callable[
-            [Any], Awaitable
-        ]  # need to use Any because of covariance issues with NamespaceHandler
+        # need to use Any because of covariance issues with NamespaceHandler
+        type PollingStrategyFunc = Callable[[Any], Coroutine]
         type PollingConfigType = tuple[int, int, PollingStrategyFunc | None]
         """PollingConfigType is a tuple of (polling_period, polling_period_cloud, polling_strategy).
         This is used to configure the handler polling policy setting polling periods and strategy processor."""
@@ -61,12 +43,18 @@ class NamespaceHandler(logging.Loggable):
         HEADER_AVG_SIZE: Final[int]
         """(rough) estimate of the header part of any response"""
         POLLING_CONFIG_DEFAULT: ClassVar[PollingConfigType]
+        """(final) default polling configuration. This is used if no config is being passed
+        at NamespaceHandler initialization time and no entry is found in POLLING_CONFIG_MAP."""
+        POLLING_CONFIG_MAP: Final[dict[mn.Namespace, PollingConfigType]]
+        """Centralized polling config parameters for namespaces. This is used if no config is being passed
+        at NamespaceHandler initialization time."""
 
         parent: Final["Device"]  # type: ignore[override]
         id: Final[mn.Namespace]  # type: ignore[override]
 
-        parsers: Final[dict[object, ParserFunc]]
         handler: HandlerFunc
+        parser_class: type[NamespaceParser] | None
+        parsers: Final[dict[object, ParserFunc]]
 
         polling_strategy: PollingStrategyFunc | None
         polling_request: MerossRequestType
@@ -77,9 +65,11 @@ class NamespaceHandler(logging.Loggable):
 
     HEADER_AVG_SIZE = 300
     POLLING_CONFIG_DEFAULT = (0, 0, None)
+    POLLING_CONFIG_MAP = {}
 
     __SLOTS__ = (
         "handler",
+        "parser_class",
         "parsers",
         "last_rx_epoch",
         "last_poll_epoch",
@@ -107,9 +97,11 @@ class NamespaceHandler(logging.Loggable):
         self.handler = handler or getattr(
             device, f"_handle_{ns.replace('.', '_')}", self._handle
         )
+        self.parser_class = None
         self.parsers = {}
         self.last_rx_epoch = self.last_poll_epoch = self.polling_epoch_next = 0.0
-        config = config or self.POLLING_CONFIG_DEFAULT
+        if not config:
+            config = self.POLLING_CONFIG_MAP.get(ns, self.POLLING_CONFIG_DEFAULT)
         self.polling_period = config[0]
         self.polling_period_cloud = config[1]
         self.polling_strategy = config[2]
@@ -132,10 +124,21 @@ class NamespaceHandler(logging.Loggable):
         del self.handler  # especially this one
         assert not self.parsers, "parsers should have been cleared before shutdown"
 
+    def register_parser_class(
+        self, parser_class: type[NamespaceParser], channels: "Iterable[int] | None", /
+    ):
+        self.parser_class = parser_class
+        self.handler = self._handle_list
+        for channel in (
+            self.parent.descriptor.channels if channels is None else channels
+        ):
+            assert parser_class.ns == self.id
+            self.register_parser(parser_class(channel, self.parent))
+
     def register_parser(
         self,
         parser: NamespaceParser,
-        extra: "MerossPayloadType" = mn.EMPTY_DICT,
+        extra: "JsonDict" = mn.EMPTY_DICT,
         /,
     ):
         """Installs a dedicated parser for the given channel payload.

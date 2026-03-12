@@ -294,10 +294,6 @@ class ElectricityXSensor(_ElectricitySensor):
         ),
     }
 
-    def __init__(self, channel, device: "Device", /, **kwargs: "Unpack[Args]"):
-        _ElectricitySensor.__init__(self, channel, device, **kwargs)
-        device.register_parser_entity(self)
-
 
 class ConsumptionHSensor(SensorParser):
 
@@ -313,12 +309,8 @@ class ConsumptionHSensor(SensorParser):
     key_value = mc.KEY_TOTAL
 
     _attr_device_class = SensorParser.DeviceClass.ENERGY
+    _attr_name = "Consumption"
     _attr_suggested_display_precision = 0
-
-    def __init__(self, channel, device: "Device", /, **kwargs: "Unpack[Args]"):
-        kwargs["name"] = "Consumption"
-        SensorParser.__init__(self, channel, device, **kwargs)
-        device.register_parser_entity(self)
 
     async def async_added_to_hass(self):
         self.handler_ns.channel_polling_add(self.channel)
@@ -376,7 +368,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
     def __init__(self, ns: "mn.Namespace", device: "Device", /):
         self._channels_to_poll = []
         NamespaceHandler.__init__(self, ns, device)
-        self.register_entity_class(ConsumptionHSensor, device.descriptor.channels)
+        self.register_parser_class(ConsumptionHSensor, device.descriptor.channels)
         self.polling_strategy = ConsumptionHNamespaceHandler.async_poll_probe  # type: ignore
         device.enable_check_device_time()
 

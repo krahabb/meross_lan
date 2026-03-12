@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from homeassistant.helpers.device_registry import DeviceEntry
 
     from ..merossclient.protocol.message import MerossMessage
-    from ..merossclient.protocol.types import JsonDict, JsonMapping, PayloadIndexType
+    from ..merossclient.protocol.types import JsonDict, JsonList, PayloadIndexType
     from .device import BaseDevice, Device
     from .manager import ConfigEntryManager, EntityManager
 
@@ -203,6 +203,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         try:
             manager.platforms[self.PLATFORM]([self])  # type: ignore
         except KeyError:
+            # platform never registered before for this manager
             manager.platforms[self.PLATFORM] = None
         except TypeError:
             pass  # platform setup not yet done
@@ -361,25 +362,10 @@ class ParserEntity(parser.NamespaceParser, Entity):
         class Args(Entity.Args):
             device_value: NotRequired[Any]
 
-        NS_CHANNELS: ClassVar[tuple[int, ...] | None]
-        """
-        This is related to NamespaceHandler registration. For entity classes where we know
-        the ns exposes fixed channel layouts (i.e. PhysicalLock) which are not exposed in any digest key
-        we can set this to (0,) or more funny presets so that namespace initialization will also
-        automatically build the needed entity(ies).
-        Setting to None means 'scan digests for channels'.
-        This is actually not mandatory though since only used for NamespaceHandler.register_entity_class.
-        """
-        NS_CHANNELS_SINGLE: Final[tuple[int, ...]]
-        """Preset singleton for entities to be configured with a single channel in 0."""
-
         _parse_togglex: Callable[[JsonDict], Any]
 
     NamespaceValue = parser.NamespaceValue
     NamespaceGroupValue = parser.NamespaceGroupValue
-
-    NS_CHANNELS = None  # scan digests for channels
-    NS_CHANNELS_SINGLE = (0,)
 
     __slots__ = parser.NamespaceParser.__SLOTS__
 
@@ -395,14 +381,6 @@ class ParserEntity(parser.NamespaceParser, Entity):
         self.available = False
         self.ns_payload = mn.EMPTY_DICT
         self.flush_state()
-
-    @classmethod
-    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        """Helper to register a specialized entity class to the proper namespace.
-        This is going to be used on Device initialization fo various entities sharing
-        common semantics in namespace parsing/handling."""
-        assert ns is cls.ns
-        NamespaceHandler(ns, device).register_entity_class(cls, cls.NS_CHANNELS)
 
 
 class ValueParser(parser.NamespaceValue, ParserEntity):

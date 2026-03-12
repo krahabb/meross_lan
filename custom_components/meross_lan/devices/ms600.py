@@ -2,7 +2,8 @@ from typing import TYPE_CHECKING, override
 
 from ..binary_sensor import BinarySensor
 from ..const import hac
-from ..helpers.namespaces import mc, mn
+from ..helpers.entity import ValueParser
+from ..helpers.namespaces import NamespaceHandler, mc, mn
 from ..number import NumberParser
 from ..select import SelectParser
 from ..sensor import SensorParser
@@ -10,11 +11,11 @@ from ..sensor import SensorParser
 if TYPE_CHECKING:
     from typing import Final, Unpack
 
-    from ..helpers.device import BaseDevice
+    from ..helpers.device import BaseDevice, Device
     from ..helpers.entity import ChannelType
 
 
-class PresenceConfigBase(SelectParser.NamespaceGroupValue):
+class PresenceConfigBase(ValueParser.NamespaceGroupValue, ValueParser):
     """Mixin style base class for all of the entities managed in Appliance.Control.Presence.Config"""
 
     ns = mn.Appliance_Control_Presence_Config
@@ -33,7 +34,7 @@ class PresenceConfigSelectBase(PresenceConfigBase, SelectParser):
     """Base class for config values represented as Select entities in HA."""
 
 
-class PresenceConfigModeBase(PresenceConfigSelectBase):
+class PresenceConfigMode(PresenceConfigSelectBase):
 
     key_group = mc.KEY_MODE
 
@@ -46,9 +47,13 @@ class PresenceConfigModeBase(PresenceConfigSelectBase):
     }
 
     def __init__(self, channel: "ChannelType | None", parent: "BaseDevice", key: str):
-        self.key_value = key
         PresenceConfigSelectBase.__init__(
-            self, channel, parent, entity_key=f"presence_config_mode_{key}", name=key
+            self,
+            channel,
+            parent,
+            entity_key=f"presence_config_mode_{key}",
+            name=key,
+            key_value=key,
         )
 
 
@@ -121,20 +126,21 @@ class PresenceConfigMthX(PresenceConfigNumberBase):
         )
 
 
-class PresenceConfigMode(PresenceConfigModeBase):
-
-    def __init__(self, channel: "ChannelType | None", device: "BaseDevice", /):
-        PresenceConfigModeBase.__init__(self, channel, device, mc.KEY_WORKMODE)
-        device.get_handler(mn.Appliance_Control_Presence_Config).register_parsers(
-            self,
-            PresenceConfigModeBase(channel, device, mc.KEY_TESTMODE),
-            PresenceConfigNoBodyTime(channel, device),
-            PresenceConfigDistance(channel, device),
-            PresenceConfigSensitivity(channel, device),
-            PresenceConfigMthX(channel, device, mc.KEY_MTH1),
-            PresenceConfigMthX(channel, device, mc.KEY_MTH2),
-            PresenceConfigMthX(channel, device, mc.KEY_MTH3),
-        )
+def namespace_init_presence_config(ns: mn.Namespace, device: "Device", /):
+    """Helper to register a specialized entity class to the proper namespace.
+    This is going to be used on Device initialization for various entities sharing
+    common semantics in namespace parsing/handling."""
+    handler = NamespaceHandler(ns, device)
+    handler.register_parsers(
+        PresenceConfigMode(0, device, mc.KEY_WORKMODE),
+        PresenceConfigMode(0, device, mc.KEY_TESTMODE),
+        PresenceConfigNoBodyTime(0, device),
+        PresenceConfigDistance(0, device),
+        PresenceConfigSensitivity(0, device),
+        PresenceConfigMthX(0, device, mc.KEY_MTH1),
+        PresenceConfigMthX(0, device, mc.KEY_MTH2),
+        PresenceConfigMthX(0, device, mc.KEY_MTH3),
+    )
 
 
 class PresenceSensor(SensorParser):

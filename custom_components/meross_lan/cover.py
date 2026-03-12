@@ -52,11 +52,15 @@ class Cover(ParserEntity, cover.CoverEntity):
         "is_opening",
     )
 
-    def __init__(self, channel: int, parent: "Device", /):
+    def __init__(self, channel: int, device: "Device", /):
         self.is_closed = None
         self.is_closing = False
         self.is_opening = False
-        super().__init__(channel, parent)
+        super().__init__(channel, device)
+        # ToggleX behavior in cover (garage/rollershutter) is not very clear
+        # most devices expose the ns in abilities and maybe also channel indexes in digest
+        # but the effect of toggling is unknown. We just silence any incoming message here.
+        device.register_togglex_channel(self, False)
 
     async def async_will_remove_from_hass(self):
         self._transition_cancel()

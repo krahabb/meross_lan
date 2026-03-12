@@ -4,7 +4,6 @@ from custom_components.meross_lan import climate, siren
 from custom_components.meross_lan.devices.diffuser import DiffuserSpray
 from custom_components.meross_lan.devices.ms600 import (
     PresenceConfigMode,
-    PresenceConfigModeBase,
     PresenceConfigSensitivity,
 )
 from custom_components.meross_lan.devices.spray import Spray
@@ -38,7 +37,7 @@ class EntityTest(EntityComponentTest):
         mn.Appliance_Control_TempUnit: [MtsTempUnit],
         mn.Appliance_Control_Presence_Config: [
             PresenceConfigMode,
-            PresenceConfigModeBase,
+            PresenceConfigMode,
             PresenceConfigSensitivity,
         ],
         mn_t.Appliance_Control_Thermostat_HoldAction: [MtsHoldAction],

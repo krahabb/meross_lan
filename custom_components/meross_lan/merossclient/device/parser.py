@@ -5,21 +5,7 @@ from .. import logging, merge_dicts
 from ..protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
-    from typing import (
-        Any,
-        Callable,
-        ClassVar,
-        Coroutine,
-        Final,
-        Generator,
-        Iterable,
-        Mapping,
-        NotRequired,
-        Protocol,
-        Self,
-        TypedDict,
-        Unpack,
-    )
+    from typing import Any, ClassVar, Final, Iterable
 
     from . import Device, PhysicalDevice
     from ..protocol.types import (
@@ -74,6 +60,18 @@ class NamespaceParser(logging.Loggable):
         # These properties must be implemented in derived classes according to the
         # namespace payload syntax. NamespaceHandler will lookup any of these when
         # establishing the link between the handler and the parser
+        NS_CHANNELS: ClassVar[tuple[int, ...] | None]
+        """
+        This is related to NamespaceHandler registration. For entity classes where we know
+        the ns exposes fixed channel layouts (i.e. PhysicalLock) which are not exposed in any digest key
+        we can set this to (0,) or more funny presets so that namespace initialization will also
+        automatically build the needed entity(ies).
+        Setting to None means 'scan digests for channels'.
+        This is actually not mandatory though since only used for NamespaceHandler.register_entity_class.
+        """
+        NS_CHANNELS_SINGLE: Final[tuple[int, ...]]
+        """Preset singleton for entities to be configured with a single channel in 0."""
+
         parent: Final[PhysicalDevice]  # type: ignore[override]
         ns: mn.Namespace  # TODO: rename uppercase
         channel: PayloadIndexType | None  # type: ignore[assignment] # TODO: rename to 'index'
@@ -85,6 +83,9 @@ class NamespaceParser(logging.Loggable):
         _ns_handlers: set[NamespaceHandler]
         """Set of NamespaceHandlers this parser is registered to. This is used to manage the link back
         to the handler for issuing requests and for cleanup on shutdown."""
+
+    NS_CHANNELS = None  # scan digests for channels
+    NS_CHANNELS_SINGLE = (0,)
 
     __SLOTS__ = ("channel", "ns_payload", "_ns_handlers")
 
@@ -156,6 +157,29 @@ class NamespaceParser(logging.Loggable):
             _payload=payload,
             timeout=14400,
         )
+
+    @classmethod
+    def digest_init(
+        cls, device: "Device", digest: "JsonList", /
+    ) -> "Device.DigestInitReturnType":
+        """Helper to register and instantiate a specialized entity class to the proper namespace.
+        This is going to be used on Device initialization for entities that maps to device
+        digest payload. This kind of initialization is alternative to namespace_init and
+        generally richer (not every namespace has 'digest' entities though - namespace_init is
+        for that semantics)."""
+        handler = device._create_handler(cls.ns)
+        handler.register_parser_class(
+            cls, (_digest[mc.KEY_CHANNEL] for _digest in digest)
+        )
+        return handler.parse_list, (handler,)
+
+    @classmethod
+    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
+        """Helper to register a specialized entity class to the proper namespace.
+        This is going to be used on Device initialization for various entities sharing
+        common semantics in namespace parsing/handling."""
+        assert ns is cls.ns
+        device._create_handler(ns).register_parser_class(cls, cls.NS_CHANNELS)
 
 
 class NamespaceValue(NamespaceParser):

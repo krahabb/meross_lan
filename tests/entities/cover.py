@@ -2,7 +2,7 @@ from homeassistant.components import cover as haec
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.cover import Cover
-from custom_components.meross_lan.devices.garagedoor import GarageDoor
+from custom_components.meross_lan.devices.garagedoor import Garagedoor
 from custom_components.meross_lan.devices.rollershutter import RollerShutter
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
@@ -18,7 +18,7 @@ class EntityTest(EntityComponentTest):
     ENTITY_TYPE = haec.CoverEntity
 
     DIGEST_ENTITIES = {
-        mc.KEY_GARAGEDOOR: [GarageDoor],
+        mc.KEY_GARAGEDOOR: [Garagedoor],
     }
 
     NAMESPACES_ENTITIES = {
@@ -41,7 +41,7 @@ class EntityTest(EntityComponentTest):
     async def async_test_each_callback(self, entity: Cover):
         await super().async_test_each_callback(entity)
 
-        if isinstance(entity, GarageDoor):
+        if isinstance(entity, Garagedoor):
             assert (
                 entity.supported_features
                 == haec.CoverEntityFeature.OPEN | haec.CoverEntityFeature.CLOSE
@@ -64,7 +64,7 @@ class EntityTest(EntityComponentTest):
 
     async def async_test_enabled_callback(self, entity: Cover):
         states = self.hass_states
-        if isinstance(entity, GarageDoor):
+        if isinstance(entity, Garagedoor):
             await self._async_test_cover_transition(entity)
             await self._async_test_cover_transition(entity)
         elif isinstance(entity, RollerShutter):

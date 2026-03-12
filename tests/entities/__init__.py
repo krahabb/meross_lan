@@ -7,7 +7,7 @@ from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
 )
-from custom_components.meross_lan.switch import ToggleXSwitch
+from custom_components.meross_lan.switch import Togglex
 
 from tests.helpers import DeviceContext
 
@@ -122,4 +122,4 @@ class EntityComponentTest:
         """
         for togglex_digest in self.digest.get(mc.KEY_TOGGLEX, []):
             if togglex_digest[mc.KEY_CHANNEL] == entity.channel:
-                EntityComponentTest.expected_entity_types.remove(ToggleXSwitch)
+                EntityComponentTest.expected_entity_types.remove(Togglex)

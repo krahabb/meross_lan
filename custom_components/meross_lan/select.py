@@ -12,7 +12,6 @@ if TYPE_CHECKING:
 
     from .helpers.device import BaseDevice
     from .helpers.entity import ChannelType
-    from .helpers.manager import EntityManager
 
 
 async def async_setup_entry(
@@ -66,7 +65,7 @@ class SelectParser(mle.ValueParser, SelectEntity):
         OPTIONS_MAP: ClassVar[dict[Any, str]]
         options_map: dict[Any, str]
 
-        class Args(SelectEntity.Args):
+        class Args(mle.ValueParser.Args):
             pass
 
     # configure initial options(map) through a class default

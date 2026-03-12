@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, override
 
-from ..helpers.namespaces import NamespaceHandler, mc, mlc, mn
+from ..helpers.namespaces import NamespaceHandler, mc, mn
 from ..light import (
     ATTR_BRIGHTNESS,
     ATTR_EFFECT,
@@ -45,14 +45,14 @@ def digest_init_diffuser(
     diffuser_light_handler = NamespaceHandler(
         mn.Appliance_Control_Diffuser_Light, device
     )
-    diffuser_light_handler.register_entity_class(
+    diffuser_light_handler.register_parser_class(
         DiffuserLight, (light[mc.KEY_CHANNEL] for light in digest[mc.KEY_LIGHT])
     )
 
     diffuser_spray_handler = NamespaceHandler(
         mn.Appliance_Control_Diffuser_Spray, device
     )
-    diffuser_spray_handler.register_entity_class(
+    diffuser_spray_handler.register_parser_class(
         DiffuserSpray, (spray[mc.KEY_CHANNEL] for spray in digest[mc.KEY_SPRAY])
     )
 

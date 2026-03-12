@@ -59,7 +59,6 @@ class Fan(mle.ToggleXParser, fan.FanEntity):
         self.speed_count = 1  # safe default: auto-inc when 'fan' payload updates
         self._saved_speed = 1
         super().__init__(channel, device)
-        device.register_parser_entity(self)
 
     # interface: fan.FanEntity
     @override
@@ -113,20 +112,11 @@ class Fan(mle.ToggleXParser, fan.FanEntity):
             self.flush_state()
 
 
-def digest_init_fan(
-    device: "Device", digest: "JsonList", /
-) -> "Device.DigestInitReturnType":
-    """[{ "channel": 2, "speed": 3, "maxSpeed": 3 }]"""
-    for channel_digest in digest:
-        Fan(channel_digest[mc.KEY_CHANNEL], device)
-    handler = device.get_handler(mn.Appliance_Control_Fan)
-    return handler.parse_list, (handler,)
-
-
 def namespace_init_fan(ns: mn.Namespace, device: "Device", /):
     """Special care for NS_FAN since it might have been initialized in digest_init"""
     if mc.KEY_FAN not in device.descriptor.digest:
         # actually only map100 (so far)
-        Fan(0, device)
+        handler = NamespaceHandler(ns, device)
+        handler.register_parser(Fan(0, device))
         # setup a polling strategy since state is not carried in digest
-        device.get_handler(ns).polling_strategy = NamespaceHandler.async_poll_default
+        handler.polling_strategy = NamespaceHandler.async_poll_default

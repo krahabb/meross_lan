@@ -109,8 +109,6 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
             is_on=False,
         )
         self.switch_patch_hvacaction.register_state_callback(self.flush_state)
-        for _entity in (self.number_adjust_temperature, self.schedule):
-            subdevice.parent.register_parser_entity(_entity)
 
     def shutdown(self):
         super().shutdown()

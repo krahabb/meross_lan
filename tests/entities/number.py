@@ -93,7 +93,7 @@ class EntityTest(EntityComponentTest):
     }
 
     async def async_test_each_callback(self, entity: number.NumberEntity):
-        if type(entity) is gd.EmulatedNumber and type(entity.parent) is gd.GarageDoor:
+        if type(entity) is gd.EmulatedNumber and type(entity.parent) is gd.Garagedoor:
             EntityComponentTest.expected_entity_types.remove(gd.GarageConfigNumber)
 
         if isinstance(entity, MtsCommonTemperatureExtNumber):

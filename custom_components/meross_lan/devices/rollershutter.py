@@ -80,18 +80,14 @@ class RollerShutter(Cover):
         Cover.__init__(self, channel, device)
         device.register_parser_ex(
             self,
-            self.ns,
             mn.Appliance_RollerShutter_Config,
             mn.Appliance_RollerShutter_State,
         )
-        if mn.Appliance_Control_ToggleX in descriptor.ability:
-            # This is still to be understood. This call will do nothing
-            # since the digest seen so far carries an empty list of channels
-            # even though the abilities show ToggleX support.
-            device.register_togglex_channel(self, False)
         if mn.Appliance_RollerShutter_Adjust in descriptor.ability:
             # unknown use: actually the polling period is set on a very high timeout
-            device.register_parser_entity(RollerShutterAdjustSwitch(channel, device))
+            device.get_handler(mn.Appliance_RollerShutter_Adjust).register_parser(
+                RollerShutterAdjustSwitch(channel, device)
+            )
         self.number_signalOpen = RollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
         self.number_signalClose = RollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
 
