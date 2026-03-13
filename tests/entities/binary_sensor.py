@@ -3,7 +3,6 @@ from homeassistant.components import binary_sensor as haec
 from custom_components.meross_lan.binary_sensor import BinarySensor
 from custom_components.meross_lan.devices import garagedoor as gd, hub
 from custom_components.meross_lan.devices.thermostat import (
-    MtsWarningSensor,
     MtsWindowOpened,
 )
 from custom_components.meross_lan.devices.thermostat.mts960 import Mts960Climate
@@ -37,8 +36,6 @@ class EntityTest(EntityComponentTest):
             # but we use this namespace to detect presence capability (ms600)
             BinarySensor,
         ],
-        mn_t.Appliance_Control_Thermostat_Frost: [MtsWarningSensor],
-        mn_t.Appliance_Control_Thermostat_Overheat: [MtsWarningSensor],
         mn_t.Appliance_Control_Thermostat_WindowOpened: [MtsWindowOpened],
     }
 

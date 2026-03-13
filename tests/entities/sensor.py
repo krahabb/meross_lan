@@ -79,7 +79,11 @@ class EntityTest(EntityComponentTest):
             SensorParser,  # additional (disabled) current temperature sensor
             SensorParser,  # additional (disabled) current humidity sensor
         ],
-        mn_t.Appliance_Control_Thermostat_Overheat: [SensorParser],
+        mn_t.Appliance_Control_Thermostat_Frost: [EnumParser],  # warning sensor
+        mn_t.Appliance_Control_Thermostat_Overheat: [
+            EnumParser,  # warning sensor,
+            SensorParser,  # external temperature sensor
+        ],
         mn.Appliance_Control_Sensor_Latest: [SensorParser],  # mts200 (some models)
         mn.Appliance_System_Runtime: [SignalStrengthSensor],
     }

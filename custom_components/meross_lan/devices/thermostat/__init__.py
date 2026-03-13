@@ -59,39 +59,6 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
         )
 
 
-class MtsWarningSensor(EnumParser):
-
-    def __init__(
-        self, number_temperature: "MtsCommonTemperatureExtNumber", native_value, /
-    ):
-        entity_key = f"{number_temperature.entitykey}_warning"
-        EnumParser.__init__(
-            self,
-            number_temperature.channel,
-            number_temperature.parent,
-            entity_key=entity_key,
-            native_value=native_value,
-            translation_key=f"mts_{entity_key}",
-        )
-
-
-class MtsConfigSwitch(SwitchParser):
-
-    def __init__(
-        self, number_temperature: "MtsCommonTemperatureExtNumber", device_value, /
-    ):
-        self.ns = number_temperature.ns
-        SwitchParser.__init__(
-            self,
-            number_temperature.channel,
-            number_temperature.parent,
-            entity_key=f"{number_temperature.entitykey}_switch",
-            device_value=device_value,
-            name=(f"{number_temperature.entitykey} Alarm").capitalize(),
-        )
-        self.register_state_callback(number_temperature._switch_state_callback)
-
-
 class MtsCommonTemperatureNumber(NumberParser):
 
     if TYPE_CHECKING:
@@ -101,13 +68,13 @@ class MtsCommonTemperatureNumber(NumberParser):
 
     _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
 
-    def __init__(self, climate: "MtsThermostatClimate", /):
+    def __init__(self, channel: int, device: "Device", /):
         NumberParser.__init__(
             self,
-            climate.channel,
-            climate.parent,
-            entity_key=self.__class__.ns.slug_end,
-            device_scale=climate.device_scale,
+            channel,
+            device,
+            entity_key=self.ns.slug_end,
+            device_scale=device.entities[channel].device_scale,  # type: ignore (access MtsThermostatClimate.device_scale)
         )
 
     def _parse(self, payload: "mt_t.CommonTemperature_C", /):
@@ -122,33 +89,43 @@ class MtsCommonTemperatureNumber(NumberParser):
 class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
 
     if TYPE_CHECKING:
-        sensor_warning: MtsWarningSensor
-        switch: MtsConfigSwitch
+        sensor_warning: EnumParser
+        switch: SwitchParser
 
     __slots__ = (
         "sensor_warning",
         "switch",
     )
 
-    def __init__(self, climate: "MtsThermostatClimate", /):
-        MtsCommonTemperatureNumber.__init__(self, climate)
-        device = self.parent
-        # preset entity platforms since these might be instantiated later
-        device.platforms.setdefault(MtsConfigSwitch.PLATFORM)
-        device.platforms.setdefault(MtsWarningSensor.PLATFORM)
-
     def _parse(self, payload: "mt_t.CommonTemperatureExt_C", /):
         try:
-            self.sensor_warning.update_device_value(payload[mc.KEY_WARNING])
+            warning = payload[mc.KEY_WARNING]
+            self.sensor_warning.update_device_value(warning)
         except AttributeError:
-            self.sensor_warning = MtsWarningSensor(self, payload[mc.KEY_WARNING])
+            entity_key = f"{self.entitykey}_warning"
+            self.sensor_warning = EnumParser(
+                self.channel,
+                self.parent,
+                entity_key=entity_key,
+                key_value=mc.KEY_WARNING,
+                device_value=warning,
+                translation_key=f"mts_{entity_key}",
+            )
         except KeyError:
             pass
         try:
             self.available = bool(payload[mc.KEY_ONOFF])
             self.switch.update_boolean_value(self.available)
         except AttributeError:
-            self.switch = MtsConfigSwitch(self, self.available)
+            self.switch = SwitchParser(
+                self.channel,
+                self.parent,
+                entity_key=f"{self.entitykey}_switch",
+                is_on=self.available,
+                name=(f"{self.entitykey} Alarm").capitalize(),
+            )
+            self.switch.ns = self.ns
+            self.switch.register_state_callback(self._switch_state_callback)
         except KeyError:
             pass
         MtsCommonTemperatureNumber._parse(self, payload)
@@ -160,6 +137,8 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
             self.flush_state()
 
 
+# TODO: add 'ns' kwarg management to base parser so we can drop all these static class definitions
+# in favor of simple kwargs sets to be used for initialization.
 class MtsDeadZoneNumber(MtsCommonTemperatureNumber):
     """
     adjust "dead zone" i.e. the threshold for the temperature control
@@ -224,9 +203,6 @@ class MtsWindowOpened(BinarySensorParser):
 
     _attr_device_class = BinarySensorParser.DeviceClass.WINDOW
 
-    def __init__(self, climate: "MtsThermostatClimate", /):
-        BinarySensorParser.__init__(self, climate.channel, climate.parent)
-
 
 class MtsExternalSensorSwitch(SwitchParser):
     # External sensor mode: use internal(0) vs external(1) sensor as temperature loopback.
@@ -234,9 +210,6 @@ class MtsExternalSensorSwitch(SwitchParser):
     ENTITY_KEY = "external sensor mode"
     ns = mn_t.Appliance_Control_Thermostat_Sensor
     key_value = mc.KEY_MODE
-
-    def __init__(self, climate: "MtsThermostatClimate", /):
-        SwitchParser.__init__(self, climate.channel, climate.parent)
 
 
 class MtsHoldAction(SelectParser):
@@ -256,11 +229,11 @@ class MtsHoldAction(SelectParser):
 
     __slots__ = ("number_time",)
 
-    def __init__(self, climate: "MtsThermostatClimate", /):
-        SelectParser.__init__(self, climate.channel, climate.parent)
+    def __init__(self, channel, parent, /):
+        SelectParser.__init__(self, channel, parent)
         self.number_time = NumberParser(
-            climate.channel,
-            climate.parent,
+            channel,
+            parent,
             entity_key="hold_action_time",
             device_scale=1,
             device_class=NumberParser.DEVICE_CLASS_DURATION,
@@ -300,9 +273,6 @@ class MtsTempUnit(SelectParser):
         mc.TEMPUNIT_FAHRENHEIT: mlc.hac.UnitOfTemperature.FAHRENHEIT,
     }
 
-    def __init__(self, climate: "MtsThermostatClimate", /):
-        SelectParser.__init__(self, climate.channel, climate.parent)
-
 
 class MtsThermostatClimate(MtsClimate):
     """
@@ -316,7 +286,7 @@ class MtsThermostatClimate(MtsClimate):
         OPTIONAL_NAMESPACES_INITIALIZERS: Final[tuple[mn.Namespace, ...]]
         """These namespaces handlers will forward message parsing to the climate entity"""
         OPTIONAL_ENTITIES_INITIALIZERS: Final[
-            dict[mn.Namespace, Callable[["MtsThermostatClimate"], Any]]
+            dict[mn.Namespace, Callable[[int, Device], Any]]
         ]
         """Additional entities (linked to the climate one) in case their ns is supported/available"""
 
@@ -363,7 +333,7 @@ class MtsThermostatClimate(MtsClimate):
         ability = device.descriptor.ability
         for _ns, _entity_class in self.OPTIONAL_ENTITIES_INITIALIZERS.items():
             if _ns in ability:
-                device.get_handler(_ns).register_parser(_entity_class(self))
+                device.get_handler(_ns).register_parser(_entity_class(channel, device))
 
     # interface: self
     def _parse_ctlRange(self, payload: dict, /):
@@ -467,6 +437,9 @@ def digest_init_thermostat(
         """
         for ns_key, ns_digest in digest.items():
             digest_parsers[ns_key](ns_digest)
+
+    # switches might be installed on demand while parsing
+    device.platforms.setdefault(SwitchParser.PLATFORM)
 
     return digest_parse_thermostat, digest_pollers
 

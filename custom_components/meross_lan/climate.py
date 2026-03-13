@@ -48,9 +48,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         _attr_name = "Calibration"
         _attr_device_class = NumberParser.DEVICE_CLASS_TEMPERATURE_DELTA
 
-        def __init__(self, climate: "MtsClimate", /):
-            NumberParser.__init__(self, climate.channel, climate.parent)
-
     class SetPointNumber(NumberParser):
         """
         Helper entity to configure MTS100/150/200 setpoints
@@ -503,7 +500,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         self._mts_mode = 0
         self._mts_onoff = 0
         super().__init__(channel, parent)
-        self.number_adjust_temperature = self.__class__.AdjustNumber(self)
+        self.number_adjust_temperature = self.__class__.AdjustNumber(channel, parent)
         self.number_preset_temperature = {}
         SetPointNumber = self.__class__.SetPointNumber
         if SetPointNumber is not MtsClimate.SetPointNumber:
