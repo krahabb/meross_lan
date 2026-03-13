@@ -138,7 +138,6 @@ class NamespaceHandler(logging.Loggable):
     def register_parser(
         self,
         parser: NamespaceParser,
-        extra: "JsonDict" = mn.EMPTY_DICT,
         /,
     ):
         """Installs a dedicated parser for the given channel payload.
@@ -151,8 +150,8 @@ class NamespaceHandler(logging.Loggable):
             parser, f"_parse_{self.id.slug_end}", parser._parse
         )
         parser._namespace_registered(self)
-        self.polling_request_add_channel(channel, extra)
         self.handler = self._handle_list
+        return self.polling_request_add_channel(channel)
 
     def register_parsers(self, *parsers: NamespaceParser):
         """Registers a whole set of parsers at once for the same channel payload.
@@ -165,35 +164,38 @@ class NamespaceHandler(logging.Loggable):
         _parser_method_name = f"_parse_{self.id.slug_end}"
         for parser in parsers:
             assert parser.channel == channel, "All parsers must have the same channel"
-            parser._namespace_registered(self)
             _dispatcher.parsers.append(
                 getattr(parser, _parser_method_name, parser._parse)
             )
-        self.polling_request_add_channel(channel)
-        self.handler = self._handle_list
-
-    def swap_parsers(self, old: NamespaceParser, *parsers: NamespaceParser):
-        if len(parsers) == 1:
-            parser = parsers[0]
-            assert old.channel == parser.channel, "channel mismatch"
-            old._ns_handlers.remove(self)
-            self.parsers[old.channel] = getattr(
-                parser, f"_parse_{self.id.slug_end}", parser._parse
-            )
             parser._namespace_registered(self)
-        else:
+        self.handler = self._handle_list
+        return self.polling_request_add_channel(channel)
+
+    def swap_parsers(
+        self, old: NamespaceParser, new: NamespaceParser, *extra: NamespaceParser
+    ):
+        assert old.channel == new.channel, "channel mismatch"
+        del old.handlers[self.id]
+        if extra:
             # install a dispatcher
-            old._ns_handlers.remove(self)
-            self.parsers[old.channel] = _dispatcher = NamespaceParser.Dispatcher()
-            _parser_method_name = f"_parse_{self.id.slug_end}"
-            for parser in parsers:
+            _parse_method_name = f"_parse_{self.id.slug_end}"
+            self.parsers[new.channel] = _dispatcher = NamespaceParser.Dispatcher(
+                getattr(new, _parse_method_name, new._parse)
+            )
+            new._namespace_registered(self)
+            for parser in extra:
                 assert (
-                    parser.channel == old.channel
+                    parser.channel == new.channel
                 ), "All parsers must have the same channel"
-                parser._namespace_registered(self)
                 _dispatcher.parsers.append(
-                    getattr(parser, _parser_method_name, parser._parse)
+                    getattr(parser, _parse_method_name, parser._parse)
                 )
+                parser._namespace_registered(self)
+        else:
+            self.parsers[new.channel] = getattr(
+                new, f"_parse_{self.id.slug_end}", new._parse
+            )
+            new._namespace_registered(self)
 
     def handle_response(self, response: MerossMessage, /):
         """Entry point for handling a received message for this namespace.
@@ -497,11 +499,13 @@ class NamespaceHandler(logging.Loggable):
             case _:
                 self.polling_request = _payload_type.build_get(ns)
 
-    def polling_request_add_channel(
-        self, channel, extra: "MerossPayloadType" = mn.EMPTY_DICT, /
-    ):
-        # Ensures the channel is set in polling request payload should
-        # the ns need it. Also adjusts the estimated polling_response_size.
+    def polling_request_add_channel(self, channel, /):
+        """Ensures the channel is set in polling request payload should the ns need it.
+        Also adjusts the estimated polling_response_size.
+        Returns the channel payload dict to be used for further updates if needed.
+        Some ns grammar might not have a so called 'channel_payload'. For those ns
+        the return value has no meaning and is an immutable empty dict.
+        """
         try:
             polling_request_channels = self.polling_request_channels
             key_idx = self.id.key_idx
@@ -518,19 +522,17 @@ class NamespaceHandler(logging.Loggable):
                     else {key_idx: channel}
                 )
                 polling_request_channels.append(channel_payload)
-
-            if extra:
-                channel_payload.update(extra)
-
             self.polling_response_size = (
                 self.HEADER_AVG_SIZE
                 + len(polling_request_channels) * self.id.payload_item_size
             )
+            return channel_payload
         except AttributeError:
             # polling_request_channels not used for this ns
             self.polling_response_size = (
                 self.HEADER_AVG_SIZE + len(self.parsers) * self.id.payload_item_size
             )
+            return mn.EMPTY_DICT
 
     def polling_response_size_adj(self, item_count: int, /):
         self.polling_response_size = (

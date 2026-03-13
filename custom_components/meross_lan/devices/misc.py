@@ -131,11 +131,11 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
             SensorParser(
                 0, device, **(SensorParser.LIGHT_ARGS | {"entity_key": "sensor_light"})
             )
-            self.polling_request_add_channel(
-                0, {mc.KEY_DATA: [mc.KEY_PRESENCE, mc.KEY_LIGHT]}
+            self.polling_request_add_channel(0).update(
+                {mc.KEY_DATA: [mc.KEY_PRESENCE, mc.KEY_LIGHT]}
             )
         else:
-            self.polling_request_add_channel(0, {mc.KEY_DATA: []})
+            self.polling_request_add_channel(0).update({mc.KEY_DATA: []})
 
     def _handle_Appliance_Control_Sensor_LatestX(self, message: "MerossMessage", /):
         ns = self.id

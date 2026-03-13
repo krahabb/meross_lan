@@ -632,7 +632,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, SensorParser):
                 self.on_disconnect()
 
     def _parse_beep(self, payload: "mt_h.SubDevice_Beep", /):
-        self.ns_handlers[mn_h.Appliance_Hub_SubDevice_Beep].swap_parsers(
+        self.handlers[mn_h.Appliance_Hub_SubDevice_Beep].swap_parsers(
             self,
             HubBeep(self.id, self, device_value=payload[mc.KEY_ONOFF]),
         )
@@ -925,17 +925,16 @@ class MS100Sensor(SubDeviceEntity, SensorParser):
             )
 
     def _parse_adjust(self, payload: "mt_h.Sensor_Adjust"):
-        subdevice = self.parent
-        subdevice.parent.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
+        self.handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
             self,
             MS100Sensor.AdjustTemperatureNumber(
-                subdevice.id,
-                subdevice,
+                self.channel,
+                self.parent,
                 device_value=payload[mc.KEY_TEMPERATURE],
             ),
             MS100Sensor.AdjustHumidityNumber(
-                subdevice.id,
-                subdevice,
+                self.channel,
+                self.parent,
                 device_value=payload[mc.KEY_HUMIDITY],
             ),
         )
@@ -961,6 +960,7 @@ class MS100Sensor(SubDeviceEntity, SensorParser):
         _poll_adjust = bool(self.update_device_value(temperature))
         _poll_adjust |= bool(self.sensor_humidity.update_device_value(humidity))
         if _poll_adjust:
+
             handler = self.parent.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust]
             if handler.last_poll_epoch < (self.parent.parent.last_rx_epoch - 30):
                 handler.polling_epoch_next = 0.0
@@ -985,7 +985,8 @@ class MS130Sensor(MS100Sensor):
         super().__init__(subid, subdevice)
         self.sensor_light = SensorParser.Light(subid, subdevice)
         subdevice.get_handler(mn_h.Appliance_Control_Sensor_LatestX).register_parser(
-            self,
+            self
+        ).update(
             {"channel": 0, "data": ["light", "temp", "humi"]},
         )
 

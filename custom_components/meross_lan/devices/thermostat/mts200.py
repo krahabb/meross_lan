@@ -91,7 +91,7 @@ class Mts200Climate(MtsThermostatClimate):
             # this is an indicator the device supports it
             summermode = self.HVAC_MODE_TO_MTS_SUMMERMODE[hvac_mode]
             if self._mts_summermode != summermode:
-                await self.parent.ns_handlers[
+                await self.handlers[
                     mn_t.Appliance_Control_Thermostat_SummerMode
                 ].async_set_c_ex({mc.KEY_MODE: summermode}, self)
 

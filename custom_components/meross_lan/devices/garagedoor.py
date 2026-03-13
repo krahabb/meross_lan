@@ -541,7 +541,7 @@ class Garagedoor(Cover):
             # - all channels in an empty dict (only confirmed in 4.0.0+ fw)
             device.ns_handlers[mn.Appliance_System_All].polling_period = 0
 
-        # do not register_entity_class since we don't want to create spurious
+        # do not register_parser_class since we don't want to create spurious
         # GarageDoor at channel 0 (msg200)
         for channel_digest in digest:
             handler.register_parser(Garagedoor(channel_digest[mc.KEY_CHANNEL], device))

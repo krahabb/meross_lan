@@ -180,7 +180,7 @@ class RollerShutter(Cover):
                 )
             )
         else:
-            await self.parent.ns_handlers[mn.Appliance_RollerShutter_State].async_get(
+            await self.handlers[mn.Appliance_RollerShutter_State].async_get(
                 self.channel
             )
             if self._position_native_isgood:

@@ -47,53 +47,50 @@ class NamespaceParser(logging.Loggable):
 
         __slots__ = ("parsers",)
 
-        def __init__(
-            self, parsers: "Iterable[NamespaceHandler.ParserFunc] | None" = None, /
-        ):
-            self.parsers = list(parsers) if parsers is not None else []
+        def __init__(self, *parsers: "NamespaceHandler.ParserFunc"):
+            self.parsers = list(parsers)
 
         def __call__(self, payload: "JsonMapping", /):
             for parser in self.parsers:
                 parser(payload)
 
     if TYPE_CHECKING:
-        # These properties must be implemented in derived classes according to the
-        # namespace payload syntax. NamespaceHandler will lookup any of these when
-        # establishing the link between the handler and the parser
         NS_CHANNELS: ClassVar[tuple[int, ...] | None]
         """
-        This is related to NamespaceHandler registration. For entity classes where we know
+        This is related to NamespaceHandler registration. For parser classes where we know
         the ns exposes fixed channel layouts (i.e. PhysicalLock) which are not exposed in any digest key
         we can set this to (0,) or more funny presets so that namespace initialization will also
-        automatically build the needed entity(ies).
+        automatically build the needed parsers.
         Setting to None means 'scan digests for channels'.
-        This is actually not mandatory though since only used for NamespaceHandler.register_entity_class.
+        This is actually not mandatory though since only used for NamespaceHandler.register_parser_class.
+        in NamespaceParser.namespace_init
         """
         NS_CHANNELS_SINGLE: Final[tuple[int, ...]]
-        """Preset singleton for entities to be configured with a single channel in 0."""
+        """Preset singleton for parsers to be configured with a single channel in 0."""
 
         parent: Final[PhysicalDevice]  # type: ignore[override]
         ns: mn.Namespace  # TODO: rename uppercase
-        channel: PayloadIndexType | None  # type: ignore[assignment] # TODO: rename to 'index'
+        channel: PayloadIndexType | None  # type: ignore[assignment]
         """The channel/id/subId key value according to the namespace (indexed or not).
         This is used by the NamespaceHandler to route messages to the correct parser.
         This is expected to be initialized by derived classes according to the namespace syntax."""
         ns_payload: JsonMapping  # type: ignore[assignment]
         """The last parsed payload."""
-        _ns_handlers: set[NamespaceHandler]
+        handlers: Final[dict[mn.Namespace, NamespaceHandler]]
         """Set of NamespaceHandlers this parser is registered to. This is used to manage the link back
         to the handler for issuing requests and for cleanup on shutdown."""
 
     NS_CHANNELS = None  # scan digests for channels
     NS_CHANNELS_SINGLE = (0,)
 
-    __SLOTS__ = ("channel", "ns_payload", "_ns_handlers")
+    __SLOTS__ = ("channel", "ns_payload", "handlers")
 
     def shutdown(self):
         super().shutdown()
         try:
-            for handler in self._ns_handlers:
-                _dispatcher: NamespaceParser.Dispatcher = handler.parsers[self.channel]  # type: ignore
+            _dispatcher: "NamespaceParser.Dispatcher"
+            for handler in self.handlers.values():
+                _dispatcher = handler.parsers[self.channel]  # type: ignore[assignment]
                 if type(_dispatcher) is NamespaceParser.Dispatcher:
                     # remove from dispatcher
                     _dispatcher.parsers.remove(
@@ -103,7 +100,7 @@ class NamespaceParser(logging.Loggable):
                         del handler.parsers[self.channel]
                 else:
                     del handler.parsers[self.channel]
-            del self._ns_handlers
+            del self.handlers  # type: ignore[assignment]
             del self.handler_ns
         except (TypeError, AttributeError):  # never registered
             pass
@@ -112,11 +109,14 @@ class NamespaceParser(logging.Loggable):
         """This is called by the NamespaceHandler when registering this parser to the handler.
         This is useful to setup the link back to the NamespaceHandler for issuing requests.
         """
-        self.ns_payload = mn.EMPTY_DICT
         try:
-            self._ns_handlers.add(handler)
+            assert (
+                handler.id not in self.handlers
+            ), "NamespaceParser already registered to this NamespaceHandler"
+            self.handlers[handler.id] = handler
         except AttributeError:
-            self._ns_handlers = {handler}
+            self.handlers = {handler.id: handler}  # type: ignore[assignment]
+            self.ns_payload = mn.EMPTY_DICT
 
     @cached_property
     def handler_ns(self):
@@ -130,12 +130,6 @@ class NamespaceParser(logging.Loggable):
 
     async def async_request_parse(self, payload: "JsonDict", /):
         response = await self.async_request_payload(payload)
-        # TODO: consider maybe a dedicated _parse_set_xxxx method?
-        # also, most namespaces SETACK replies are empty dicts
-        # so we just dispatch the request payload (which might be a
-        # subset of the whole GET payload).
-        # Some namespaces though might return different payloads on SETACK
-        # GarageDoor.State or mts100.Temperature
         getattr(self, f"_parse_{self.ns.slug_end}", self._parse)(payload)
         return response
 

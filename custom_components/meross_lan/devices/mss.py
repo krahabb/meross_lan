@@ -373,9 +373,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         device.enable_check_device_time()
 
     @override
-    def polling_request_add_channel(
-        self, channel, extra: "mt.MerossPayloadType" = mn.EMPTY_DICT, /
-    ):
+    def polling_request_add_channel(self, channel, /):
         # disable polling_request_channels setup since we're overriding the default
         # polling mechanics
         pass
