@@ -92,7 +92,6 @@ class SensorEntity(mle.NumericEntity, sensor.SensorEntity):
     # we basically default Sensor.state_class to SensorStateClass.MEASUREMENT
     # except these device classes
     DEVICECLASS_TO_STATECLASS_MAP: dict[DeviceClass | None, StateClass | None] = {
-        None: StateClass.MEASUREMENT,
         DeviceClass.ENERGY: StateClass.TOTAL_INCREASING,
         DeviceClass.ENUM: None,
     }
@@ -102,10 +101,11 @@ class SensorEntity(mle.NumericEntity, sensor.SensorEntity):
         try:
             return self._attr_state_class
         except AttributeError:
-            return self.DEVICECLASS_TO_STATECLASS_MAP.get(
-                self.device_class,
-                sensor.SensorStateClass.MEASUREMENT,
-            )
+            pass
+        try:
+            return self.DEVICECLASS_TO_STATECLASS_MAP[self.device_class]
+        except KeyError:
+            return sensor.SensorStateClass.MEASUREMENT if self.device_class else None
 
 
 class EnumParser(mle.ValueParser, SensorEntity):
@@ -117,7 +117,8 @@ class EnumParser(mle.ValueParser, SensorEntity):
         _attr_state_class: Final[None]
         native_value: sensor.StateType
 
-        class Args(mle.Entity.Args):
+        # class Args(mle.Entity.Args):
+        class Args(SensorEntity.Args, mle.ValueParser.Args):
             native_value: NotRequired[sensor.StateType]
             device_class: NotRequired[Never]
 
@@ -255,9 +256,10 @@ class DiagnosticSensor(SensorEntity):
 
     # HA core entity attributes:
     _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC
+    _attr_state_class = None
 
 
-class DiagnosticParser(mle.ParserEntity, DiagnosticSensor):
+class DiagnosticParser(mle.ValueParser, DiagnosticSensor):
     """
     This is a specialization of DiagnosticSensor which is also a ParserEntity, so that it can be
     easily registered in NamespaceHandler to parse the whole payload of an unexpected namespace and

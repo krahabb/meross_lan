@@ -148,13 +148,21 @@ class BaseDevice(mlm.EntityManager, device.PhysicalDevice):
                     )
                 ].update_device_value(value)
             except KeyError:
-                from ..sensor import DiagnosticSensor
+                from ..sensor import DiagnosticParser
 
-                DiagnosticSensor(
+                DiagnosticParser(
                     channel,
                     self,
                     entity_key=f"{key_parent}_{key}",
-                    native_value=value,
+                    device_value=value,
+                )
+            except Exception as e:
+                self.log_exception(
+                    self.WARNING,
+                    e,
+                    "Error updating diagnostic entity for key '%s' with value '%s'",
+                    key,
+                    value,
                 )
 
     def parse_undefined_list(
