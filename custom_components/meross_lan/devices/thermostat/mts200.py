@@ -10,16 +10,16 @@ if TYPE_CHECKING:
 class Mts200Climate(MtsThermostatClimate):
     """Climate entity for MTS200 devices"""
 
-    ns = mn_t.Appliance_Control_Thermostat_Mode
+    init_ns = mn_t.Appliance_Control_Thermostat_Mode
 
     # MtsClimate class attributes
-    device_scale = mc.MTS200_TEMP_SCALE
+    temperature_scale = mc.MTS200_TEMP_SCALE
 
     class SetPointNumber(MtsThermostatClimate.SetPointNumber):
-        ns = mn_t.Appliance_Control_Thermostat_Mode
+        init_ns = mn_t.Appliance_Control_Thermostat_Mode
 
     class Schedule(MtsThermostatClimate.Schedule):
-        ns = mn_t.Appliance_Control_Thermostat_Schedule
+        init_ns = mn_t.Appliance_Control_Thermostat_Schedule
 
     if TYPE_CHECKING:
         ns_payload: mt_t.Mode_C
@@ -108,7 +108,7 @@ class Mts200Climate(MtsThermostatClimate):
             if key is mc.KEY_MANUALTEMP:
                 mode = mc.MTS200_MODE_MANUAL
 
-        target_temp = round(kwargs[self.ATTR_TEMPERATURE] * self.device_scale)
+        target_temp = round(kwargs[self.ATTR_TEMPERATURE] * self.temperature_scale)
         self.ns_payload[mc.KEY_TARGETTEMP] = target_temp  # optimistic update
         await self.async_request_parse_ex({mc.KEY_MODE: mode, key: target_temp})
 
@@ -135,11 +135,13 @@ class Mts200Climate(MtsThermostatClimate):
         if mc.KEY_CURRENTTEMP in payload:
             self._update_current_temperature(payload[mc.KEY_CURRENTTEMP])
         if mc.KEY_TARGETTEMP in payload:
-            self.target_temperature = payload[mc.KEY_TARGETTEMP] / self.device_scale
+            self.target_temperature = (
+                payload[mc.KEY_TARGETTEMP] / self.temperature_scale
+            )
         if mc.KEY_MIN in payload:
-            self.min_temp = payload[mc.KEY_MIN] / self.device_scale
+            self.min_temp = payload[mc.KEY_MIN] / self.temperature_scale
         if mc.KEY_MAX in payload:
-            self.max_temp = payload[mc.KEY_MAX] / self.device_scale
+            self.max_temp = payload[mc.KEY_MAX] / self.temperature_scale
 
         for (
             key_temp,

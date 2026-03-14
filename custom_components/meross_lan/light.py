@@ -412,7 +412,7 @@ class Light(LightBase):
         - None: the component needs to auto-learn the device behavior
         """
 
-    ns = mn.Appliance_Control_Light
+    init_ns = mn.Appliance_Control_Light
 
     ATTR_TOGGLEX_AUTO = "togglex_auto"
 
@@ -765,9 +765,9 @@ class DNDLight(mle.EntityNamespaceMixin, mle.BinaryParser, light.LightEntity):
 
     POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS
     PLATFORM = light.DOMAIN
-    ENTITY_KEY = "dnd"
-    ns = mn.Appliance_System_DNDMode
-    key_value = mc.KEY_MODE
+    init_entity_key = "dnd"
+    init_ns = mn.Appliance_System_DNDMode
+    init_key_value = mc.KEY_MODE
     native_on = 0
     native_off = 1
     # HA core entity attributes:
@@ -781,7 +781,7 @@ def digest_init_light_effect(
 ) -> "Device.DigestInitReturnType":
     # This is a 'new' (2025-06-17) key appearing in msl320cpr digest.
     # The key itself is 'light.entity' and carries the effect list
-    # (same as ns Appliance.Control.Light.Effect)
+    # (same as Appliance.Control.Light.Effect)
 
     try:
         # EffectLight should be in place

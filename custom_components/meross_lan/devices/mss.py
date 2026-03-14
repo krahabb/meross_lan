@@ -47,7 +47,7 @@ class _ElectricitySensor(SensorParser):
         sensor_consumptionx: "ConsumptionXSensor | None"
         sensor_power: SensorParser
 
-    ENTITY_KEY = "energy_estimate"
+    init_entity_key = "energy_estimate"
     ENTITY_DEFS = {
         mc.KEY_CURRENT: SensorParser.ENTITY_DEF(
             entity_key=mc.KEY_CURRENT,
@@ -210,14 +210,14 @@ class ElectricitySensor(EntityNamespaceMixin, _ElectricitySensor):
 
     POLLING_CONFIG_DEFAULT = EntityNamespaceMixin.POLLING_CONFIG_FASTSENSOR_NS
 
-    ns = mn.Appliance_Control_Electricity
+    init_ns = mn.Appliance_Control_Electricity
 
     # skip EntityNamespaceMixin async_added_to_hass and async_will_remove_from_hass since
     # we want to keep polling this ns even when _ElectricitySensor is disabled
     # (we have to since it carries critical data for the energy estimate and ConsumptionXSensor)
     @classmethod
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        assert ns is cls.ns
+        assert ns is cls.init_ns
         ns_entity = cls(ns, device)
         ns_entity.handler_ns = ns_entity
         return ns_entity
@@ -233,7 +233,7 @@ class ElectricityXSensor(_ElectricitySensor):
         class Args(_ElectricitySensor.Args):
             pass
 
-    ns = mn.Appliance_Control_ElectricityX
+    init_ns = mn.Appliance_Control_ElectricityX
 
     class MConsumeSensor(SensorParser):
         if TYPE_CHECKING:
@@ -304,9 +304,9 @@ class ConsumptionHSensor(SensorParser):
 
         handler_ns: "ConsumptionHNamespaceHandler"
 
-    ENTITY_KEY = mc.KEY_CONSUMPTIONH
-    ns = mn.Appliance_Control_ConsumptionH
-    key_value = mc.KEY_TOTAL
+    init_entity_key = mc.KEY_CONSUMPTIONH
+    init_ns = mn.Appliance_Control_ConsumptionH
+    init_key_value = mc.KEY_TOTAL
 
     _attr_device_class = SensorParser.DeviceClass.ENERGY
     _attr_name = "Consumption"
@@ -458,8 +458,8 @@ class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
         mlc.PARAM_ENERGY_CLOUD_UPDATE_PERIOD,
         EntityNamespaceMixin.async_poll_smart,
     )
-    ENTITY_KEY = "energy"
-    ns = mn.Appliance_Control_ConsumptionX
+    init_entity_key = "energy"
+    init_ns = mn.Appliance_Control_ConsumptionX
     _attr_device_class = SensorParser.DeviceClass.ENERGY
 
     ATTR_OFFSET = "offset"
@@ -503,7 +503,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
 
-        sensor_energy_estimate: ElectricitySensor | None = self.parent.entities.get(ElectricitySensor.ns)  # type: ignore
+        sensor_energy_estimate: ElectricitySensor | None = self.parent.entities.get(ElectricitySensor.init_ns)  # type: ignore
         if sensor_energy_estimate:
             sensor_energy_estimate.sensor_consumptionx = self
         # state restoration is only needed on cold-start and we have to discriminate
@@ -686,9 +686,9 @@ class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
 class OverTempEnableSwitch(EntityNamespaceMixin, SwitchParser):
 
     POLLING_CONFIG_DEFAULT = EntityNamespaceMixin.POLLING_CONFIG_CONFIGURATION_NS
-    ENTITY_KEY = "config_overtemp_enable"
-    ns = mn.Appliance_Config_OverTemp
-    key_value = mc.KEY_ENABLE
+    init_entity_key = "config_overtemp_enable"
+    init_ns = mn.Appliance_Config_OverTemp
+    init_key_value = mc.KEY_ENABLE
 
     __SLOTS__ = ("sensor_overtemp_type",)
 

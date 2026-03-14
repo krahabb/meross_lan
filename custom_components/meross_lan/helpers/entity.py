@@ -69,12 +69,11 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         EntityCategory: Final
 
         PLATFORM: ClassVar[str]
-        CORE_ENTITY_ATTRIBUTES: ClassVar[tuple[str, ...]]
+        HA_ENTITY_ATTRIBUTES: ClassVar[tuple[str, ...]]
         """Provides a list of HA core entity attributes (i.e. 'standard' attributes like 'name')
         which are actually used in meross_lan and so can be set through kwargs in the constructor.
         this class initializer will scan the actual class definition in order to correctly extract
         the eventually provided attributes in kwargs."""
-        ENTITY_KEY: ClassVar[str | None]
         is_diagnostic: ClassVar[bool]  # TODO: type uppercase
         """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
 
@@ -82,7 +81,8 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         channel: (
             ChannelType | None
         )  # TODO: maybe remove since it might only be relevant in ParserEntity
-        entitykey: Final[str | None]
+        init_entity_key: ClassVar[str | None]
+        entity_key: Final[str | None]
         # used to speed-up checks if entity is enabled and loaded
         hass_connected: Final[bool]  # public ReadOnly attribute
 
@@ -109,23 +109,25 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
 
     EntityCategory = entity.EntityCategory
 
-    CORE_ENTITY_ATTRIBUTES = (
+    HA_ENTITY_ATTRIBUTES = (
         "device_class",
         "entity_category",
         "entity_registry_enabled_default",
         "translation_key",
     )
-    ENTITY_KEY = None
     is_diagnostic = False
 
     # HA core entity attributes:
     _attr_available = False  # TODO: review the availability mechanics
 
+    init_entity_key = None
     __slots__ = (
-        "entitykey",
+        "entity_key",
         "hass_connected",
     )
 
+    # TODO: re-organize channel initialization by moving to a kwarg so that we can use base Parser semantics
+    # in related hierarchy tree.
     def __init__(
         self,
         channel: "ChannelType | None",
@@ -139,10 +141,11 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         For entities in subdevices (hub paired devices) the channel is usually the Id of the
         subdevice itself since 'HA wise' and 'meross_lan wise' we still group the entities under
         the same (hub) device
-        - entitykey: is added to provide additional 'uniqueness' should the device have multiple
+        - entity_key: is added to provide additional 'uniqueness' should the device have multiple
         entities for the same channel and usually equal to device_class (but might not be)
         - device_class: used by HA to set some soft 'class properties' for the entity
         """
+
         if type(channel) is mn.Namespace:
             # TODO: ugly trick...let's see if this can be 'linearized' through some future refactoring.
             # this is a special case for 'EntityNamespaceMixin' entities which are also NamespaceHandlers
@@ -152,24 +155,23 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             # variable for later use in parsing and so on.
             id = channel  # ns
             channel = None
-            entitykey = self.__class__.ENTITY_KEY
+            entity_key = self.__class__.init_entity_key
             assert "entity_key" not in kwargs
         else:
-            entitykey = kwargs.pop("entity_key", self.__class__.ENTITY_KEY)
+            entity_key = kwargs.pop("entity_key", self.__class__.init_entity_key)
             id = (
                 channel
-                if entitykey is None
-                else entitykey if channel is None else f"{channel}_{entitykey}"
+                if entity_key is None
+                else entity_key if channel is None else f"{channel}_{entity_key}"
             )
             assert (
                 id is not None
-            ), "provide at least channel or entitykey (cannot be 'None' together)"
+            ), "provide at least channel or entity_key (cannot be 'None' together)"
         assert (
             id not in manager.entities
         ), f"id:{id} is not unique inside parent.entities"
         self.channel = channel
-        self.ns_payload = mn.EMPTY_DICT
-        self.entitykey = entitykey
+        self.entity_key = entity_key
         self.hass_connected = False
         # HA core: rather constant
         self.available = self._attr_available or manager.is_connected
@@ -183,19 +185,20 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         try:
             self.name = kwargs.pop("name") or self._attr_name
         except (KeyError, AttributeError):
-            if entitykey:
-                self.name = entitykey.replace("_", " ").capitalize()
+            if entity_key:
+                self.name = entity_key.replace("_", " ").capitalize()
             else:
                 # as it is now implemented this will instruct HA core
                 # to use device name when it can't provide an entity name
                 self.use_device_name = True
         # simple setting of HA core attributes if provided in kwargs
         # else fallback to HA core mechanics
-        for _attr_name in self.__class__.CORE_ENTITY_ATTRIBUTES:
-            try:
-                setattr(self, _attr_name, kwargs.pop(_attr_name))
-            except KeyError:
-                pass
+        for _attr_name in tuple(
+            _attr_name
+            for _attr_name in kwargs
+            if _attr_name in self.__class__.HA_ENTITY_ATTRIBUTES
+        ):
+            setattr(self, _attr_name, kwargs.pop(_attr_name))
 
         super().__init__(id, manager, **kwargs)
         manager.entities[id] = self
@@ -322,7 +325,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
 
         type: "Final[type[_T]]"
 
-        __slots__ = "type"
+        __slots__ = ("type",)
 
         def __init__(self, type: "type[_T]", **kwargs: "Unpack[Entity.Args]"):
             dict.__init__(self, **kwargs)
@@ -359,15 +362,24 @@ class ParserEntity(parser.NamespaceParser, Entity):
         parent: Final[BaseDevice]  # type: ignore[override]
         handler_ns: NamespaceHandler  # override
 
-        class Args(Entity.Args):
-            device_value: NotRequired[Any]
-
         _parse_togglex: Callable[[JsonDict], Any]
+
+        class Args(Entity.Args, parser.NamespaceParser.Args):
+            pass
+
+        def __init__(
+            self,
+            channel: PayloadIndexType | None,
+            parent: BaseDevice,
+            /,
+            **kwargs: Unpack[Args],
+        ): ...
+
+        @classmethod
+        def ENTITY_DEF(cls, **kwargs: "Unpack[Args]") -> type["Self"]: ...
 
     NamespaceValue = parser.NamespaceValue
     NamespaceGroupValue = parser.NamespaceGroupValue
-
-    __slots__ = parser.NamespaceParser.__SLOTS__
 
     # TODO: add constructor with register_parser_entity ?
 
@@ -392,26 +404,16 @@ class ValueParser(parser.NamespaceValue, ParserEntity):
 
     if TYPE_CHECKING:
 
-        class Args(ParserEntity.Args):
-            key_value: NotRequired[str]
-            device_value: NotRequired[Any]
-
-    __slots__ = parser.NamespaceValue.__SLOTS__
-
-    def __init__(
-        self,
-        channel: "ChannelType | None",
-        parent: "BaseDevice",
-        /,
-        **kwargs: "Unpack[Args]",
-    ):
-        try:
-            # set instance attribute if provided else this should fallback to class attribute
-            self.key_value = kwargs.pop("key_value")  # type: ignore
-        except KeyError:
+        class Args(ParserEntity.Args, parser.NamespaceValue.Args):
             pass
-        self.device_value = kwargs.pop("device_value", None)
-        super().__init__(channel, parent, **kwargs)
+
+        def __init__(
+            self,
+            channel: ChannelType | None,
+            parent: BaseDevice,
+            /,
+            **kwargs: Unpack[Args],
+        ): ...
 
     def set_unavailable(self):
         self.device_value = None
@@ -430,31 +432,28 @@ class NumericEntity(Entity):
 
     if TYPE_CHECKING:
 
-        class Args(Entity.Args):
-            native_value: NotRequired[int | float]
-            native_unit_of_measurement: NotRequired[str | None]
-
         DEVICECLASS_TO_UNIT_MAP: ClassVar[dict[Any | None, str | None]]
 
         # HA core entity attributes:
         _attr_native_unit_of_measurement: ClassVar[str | None]
         native_value: int | float | None
 
-    CORE_ENTITY_ATTRIBUTES = Entity.CORE_ENTITY_ATTRIBUTES + (
-        "native_unit_of_measurement",
-    )
+        class Args(Entity.Args):
+            native_value: NotRequired[int | float]
+            native_unit_of_measurement: NotRequired[str | None]
 
-    __SLOTS__ = ("native_value",)
+        def __init__(
+            self,
+            channel: ChannelType | None,
+            parent: EntityManager,
+            /,
+            **kwargs: Unpack[Args],
+        ): ...
 
-    def __init__(
-        self,
-        channel: "ChannelType | None",
-        parent: "EntityManager",
-        /,
-        **kwargs: "Unpack[Args]",
-    ):
-        self.native_value = kwargs.pop("native_value", None)
-        super().__init__(channel, parent, **kwargs)
+    HA_ENTITY_ATTRIBUTES = Entity.HA_ENTITY_ATTRIBUTES + ("native_unit_of_measurement",)
+
+    SLOTS_AUTO_INIT = ("native_value",)
+    __slots__ = ("native_value",)
 
     def update_native_value(self, native_value: int | float | None, /):
         if self.native_value != native_value:
@@ -475,19 +474,18 @@ class NumericParser(ValueParser, NumericEntity):
 
     if TYPE_CHECKING:
 
-        class Args(ValueParser.Args, NumericEntity.Args):
-            device_scale: NotRequired[int | float]
-
-        _attr_device_scale: ClassVar[int | float]
+        init_device_scale: ClassVar[int | float]
         device_scale: int | float
         """device_scale type need to follow the type supported for device_value.
         This is used in Number entity to do the correct roundings when converting between
         native_value and device_value."""
         device_value: int | float | None
 
-    _attr_device_scale = 1
+        class Args(ValueParser.Args, NumericEntity.Args):
+            device_scale: NotRequired[int | float]
 
-    __slots__ = NumericEntity.__SLOTS__
+    init_device_scale = 1
+    SLOTS_AUTO_INIT = ("device_scale",)
 
     def __init__(
         self,
@@ -496,9 +494,8 @@ class NumericParser(ValueParser, NumericEntity):
         /,
         **kwargs: "Unpack[Args]",
     ):
-        self.device_scale = kwargs.pop("device_scale", self._attr_device_scale)
         try:
-            kwargs["native_value"] = kwargs["device_value"] / self.device_scale  # type: ignore
+            kwargs["native_value"] = kwargs["device_value"] / kwargs.get("device_scale", self.init_device_scale)  # type: ignore
         except KeyError:
             pass
         super().__init__(channel, parent, **kwargs)
@@ -517,22 +514,21 @@ class BinaryEntity(Entity):
 
     if TYPE_CHECKING:
 
+        is_on: Any
+
         class Args(Entity.Args):
             is_on: NotRequired[Any]
 
-        is_on: Any
+        def __init__(
+            self,
+            channel: "ChannelType | None",
+            manager: "EntityManager",
+            /,
+            **kwargs: "Unpack[Args]",
+        ): ...
 
-    __SLOTS__ = ("is_on",)
-
-    def __init__(
-        self,
-        channel: "ChannelType | None",
-        manager: "EntityManager",
-        /,
-        **kwargs: "Unpack[Args]",
-    ):
-        self.is_on = kwargs.pop("is_on", None)
-        super().__init__(channel, manager, **kwargs)
+    SLOTS_AUTO_INIT = ("is_on",)
+    __slots__ = ("is_on",)
 
     def update_boolean_value(self, is_on: "Any", /) -> bool | None:
         if self.is_on != is_on:
@@ -548,9 +544,6 @@ class BinaryParser(parser.NamespaceBoolean, ValueParser, BinaryEntity):
 
         class Args(BinaryEntity.Args, ValueParser.Args):
             pass
-
-    assert BinaryEntity.__SLOTS__ == parser.NamespaceBoolean.__SLOTS__
-    __slots__ = BinaryEntity.__SLOTS__
 
     def __init__(
         self,
@@ -593,16 +586,13 @@ class ToggleXParser(BinaryEntity, ParserEntity):
 
     if TYPE_CHECKING:
 
-        class Args(BinaryEntity.Args, ParserEntity.Args):
-            pass
-
         parent: Final[Device]  # type: ignore[override]
         handler_togglex: Final[NamespaceHandler | None]
 
-    __slots__ = (
-        "is_on",
-        "handler_togglex",
-    )
+        class Args(BinaryEntity.Args, ParserEntity.Args):
+            pass
+
+    __slots__ = ("handler_togglex",)
 
     def __init__(self, channel: int, parent: "Device", /, **kwargs: "Unpack[Args]"):
         super().__init__(channel, parent, **kwargs)
@@ -628,7 +618,7 @@ class EntityNamespaceMixin(NamespaceHandler, ParserEntity):
 
     @classmethod
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        assert ns is cls.ns
+        assert ns is cls.init_ns
         ns_entity = cls(ns, device)
         ns_entity.handler_ns = ns_entity
         ns_entity.polling_strategy = None
@@ -638,9 +628,9 @@ class EntityNamespaceMixin(NamespaceHandler, ParserEntity):
     def unique_id(self) -> str | None:
         # MIGRATE: This is to mantain unique_id compatibility with legacy versions
         # since in v6.x.x entity.id initialization is different (at least for EntityNamespaceMixin entities)
-        # and is not based on channel/entitykey but just on NamespaceHandler.id (mn.Namespace).
+        # and is not based on channel/entity_key but just on NamespaceHandler.id (mn.Namespace).
         # keep in mind these entities were already init'ed with channel = None
-        return f"{self.parent.id}_{self.entitykey}"
+        return f"{self.parent.id}_{self.entity_key}"
 
     async def async_added_to_hass(self):
         self.polling_strategy = self.POLLING_CONFIG_DEFAULT[-1]

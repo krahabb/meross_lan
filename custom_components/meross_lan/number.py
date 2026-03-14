@@ -60,7 +60,7 @@ class NumberEntity(mle.NumericEntity, number.NumberEntity):
         ): ...
 
     PLATFORM = number.DOMAIN
-    CORE_ENTITY_ATTRIBUTES = mle.NumericEntity.CORE_ENTITY_ATTRIBUTES + (
+    HA_ENTITY_ATTRIBUTES = mle.NumericEntity.HA_ENTITY_ATTRIBUTES + (
         "mode",
         "native_max_value",
         "native_min_value",

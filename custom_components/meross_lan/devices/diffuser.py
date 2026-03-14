@@ -117,7 +117,7 @@ class DiffuserLight(LightBase):
     if TYPE_CHECKING:
         effect_list: list[str]
 
-    ns = mn.Appliance_Control_Diffuser_Light
+    init_ns = mn.Appliance_Control_Diffuser_Light
 
     def __init__(self, channel: int, manager: "Device", /):
         self.supported_color_modes = {ColorMode.RGB}
@@ -178,12 +178,12 @@ class DiffuserLight(LightBase):
 
 class DiffuserSpray(Spray):
 
-    ns = mn.Appliance_Control_Diffuser_Spray
+    init_ns = mn.Appliance_Control_Diffuser_Spray
 
-    OPTIONS_MAP = {
-        mc.DIFFUSER_SPRAY_MODE_OFF: Spray.OPTIONS_MAP[mc.SPRAY_MODE_OFF],
-        mc.DIFFUSER_SPRAY_MODE_ECO: Spray.OPTIONS_MAP[mc.SPRAY_MODE_INTERMITTENT],
-        mc.DIFFUSER_SPRAY_MODE_FULL: Spray.OPTIONS_MAP[mc.SPRAY_MODE_CONTINUOUS],
+    init_options_map = {
+        mc.DIFFUSER_SPRAY_MODE_OFF: Spray.init_options_map[mc.SPRAY_MODE_OFF],
+        mc.DIFFUSER_SPRAY_MODE_ECO: Spray.init_options_map[mc.SPRAY_MODE_INTERMITTENT],
+        mc.DIFFUSER_SPRAY_MODE_FULL: Spray.init_options_map[mc.SPRAY_MODE_CONTINUOUS],
     }
 
 

@@ -24,7 +24,7 @@ class EntityTest(EntityComponentTest):
     async def async_test_enabled_callback(self, entity: Button):
         # TODO: test each expected outcome according to the button type
 
-        if entity.entitykey in ("button_refresh", "button_reload"):
+        if entity.entity_key in ("button_refresh", "button_reload"):
             return  # skip reload button testing
 
         await self.async_service_call_check(
@@ -33,7 +33,7 @@ class EntityTest(EntityComponentTest):
 
     async def async_test_disabled_callback(self, entity: Button):
 
-        if entity.entitykey in ("button_refresh", "button_reload"):
+        if entity.entity_key in ("button_refresh", "button_reload"):
             return  # skip reload button testing
 
         await entity.async_press()

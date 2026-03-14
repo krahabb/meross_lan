@@ -117,8 +117,6 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
         ),
     }
 
-    __slots__ = ()
-
     def __init__(self, ns: mn.Namespace, device: "Device", /):
         NamespaceHandler.__init__(
             self,

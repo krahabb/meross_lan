@@ -33,7 +33,7 @@ class UpdateEntity(Entity, update.UpdateEntity):
     PLATFORM = update.DOMAIN
     DeviceClass = update.UpdateDeviceClass
 
-    ENTITY_KEY = "firmware_update"
+    init_entity_key = "firmware_update"
 
     # HA core entity attributes:
     _attr_available = False

@@ -44,8 +44,8 @@ if TYPE_CHECKING:
 class HubBeep(SwitchParser):
     """Generic switch to map Appliance.Hub.SubDevice.Beep namespace."""
 
-    ns = mn_h.Appliance_Hub_SubDevice_Beep
-    ENTITY_KEY = f"{ns.slug}__{SwitchParser.key_value}"
+    init_ns = mn_h.Appliance_Hub_SubDevice_Beep
+    init_entity_key = f"{init_ns.slug}__{SwitchParser.init_key_value}"
 
     _attr_name = "Beep alarm"
 
@@ -73,7 +73,7 @@ class HubSubIdDeviceCfgMixin(mle.ParserEntity.NamespaceGroupValue):
     Mixin implementation for protocol method 'SET' on 'Appliance.Config.DeviceCfg'.
     """
 
-    ns = mn_h.Appliance_Config_DeviceCfg
+    init_ns = mn_h.Appliance_Config_DeviceCfg
 
     @override
     async def async_request_value(self, device_value, /):
@@ -423,7 +423,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, SensorParser):
         class methods or building diagnostic entities in case."""
 
     # NumericSensor attributes
-    # ENTITY_KEY = mc.KEY_BATTERY
+    # init_entity_key = mc.KEY_BATTERY
     _attr_device_class = SensorParser.DeviceClass.BATTERY
 
     NS_SUBDEVICE = (
@@ -475,7 +475,9 @@ class SubDevice(mld.BaseDevice, device.SubDevice, SensorParser):
         if entity_class:
             subdev_entity = entity_class(subid, self)
             self._digest_parse = subdev_entity._parse
-            hub.register_parser_ex(subdev_entity, entity_class.ns, *entity_class.NS_HUB)
+            hub.register_parser_ex(
+                subdev_entity, entity_class.init_ns, *entity_class.NS_HUB
+            )
         else:
 
             def _digest_parse(_payload, /):
@@ -729,6 +731,7 @@ class SubDeviceEntity(mle.ParserEntity):
     NS_HUB = ()
 
     def __init_subclass__(cls):
+        super().__init_subclass__()
         try:
             cls.DIGEST_MAP[cls.KEY_DIGEST] = cls
         except AttributeError:
@@ -759,9 +762,9 @@ class SmokeAlarmSensor(SubDeviceEntity, EnumParser):
     KEY_DIGEST = mc.KEY_SMOKEALARM
     NS_HUB = (mn_h.Appliance_Hub_Sensor_All, *SubDeviceEntity.NS_HUB)
 
-    ns = mn_h.Appliance_Hub_Sensor_Smoke
-    ENTITY_KEY = mc.KEY_STATUS
-    key_value = mc.KEY_STATUS
+    init_ns = mn_h.Appliance_Hub_Sensor_Smoke
+    init_entity_key = mc.KEY_STATUS
+    init_key_value = mc.KEY_STATUS
 
     STATUS_MAP = {
         17: "error_temperature",
@@ -847,9 +850,9 @@ class MS100Sensor(SubDeviceEntity, SensorParser):
 
     class SensorAdjustNumber(NumberParser):
 
-        ns = mn_h.Appliance_Hub_Sensor_Adjust
+        init_ns = mn_h.Appliance_Hub_Sensor_Adjust
 
-        _attr_device_scale = 10
+        init_device_scale = 10
 
         @override
         async def async_request_value(self, device_value, /):
@@ -866,22 +869,20 @@ class MS100Sensor(SubDeviceEntity, SensorParser):
 
     class AdjustTemperatureNumber(SensorAdjustNumber):
 
-        ENTITY_KEY = "config_adjust_temperature"
-        key_value = mc.KEY_TEMPERATURE
+        init_entity_key = "config_adjust_temperature"
+        init_key_value = mc.KEY_TEMPERATURE
         _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
         _attr_name = "Adjust temperature"
-
         _attr_native_min_value = -5
         _attr_native_max_value = 5
         _attr_native_step = 0.1
 
     class AdjustHumidityNumber(SensorAdjustNumber):
 
-        ENTITY_KEY = "config_adjust_humidity"
-        key_value = mc.KEY_HUMIDITY
+        init_entity_key = "config_adjust_humidity"
+        init_key_value = mc.KEY_HUMIDITY
         _attr_device_class = NumberParser.DeviceClass.HUMIDITY
         _attr_name = "Adjust humidity"
-
         _attr_native_min_value = -20
         _attr_native_max_value = 20
         _attr_native_step = 1
@@ -895,7 +896,7 @@ class MS100Sensor(SubDeviceEntity, SensorParser):
         *SubDeviceEntity.NS_HUB,
     )
 
-    ns = mn_h.Appliance_Hub_Sensor_TempHum
+    init_ns = mn_h.Appliance_Hub_Sensor_TempHum
 
     __slots__ = ("sensor_humidity",)
 
@@ -977,7 +978,7 @@ class MS130Sensor(MS100Sensor):
     MODEL = mc.TYPE_MS130
     KEY_DIGEST = mc.KEY_TEMPHUMI
     NS_HUB = (mn_h.Appliance_Config_DeviceCfg, *MS100Sensor.NS_HUB)
-    _attr_device_scale = 100
+    init_device_scale = 100
 
     __slots__ = ("sensor_light",)
 
@@ -1057,11 +1058,9 @@ class DoorWindowSensor(SubDeviceEntity, BinarySensor):
     MODEL = mc.TYPE_MS200
     KEY_DIGEST = mc.KEY_DOORWINDOW
     NS_HUB = (mn_h.Appliance_Hub_Sensor_All, *SubDeviceEntity.NS_HUB)
-
-    ENTITY_KEY = BinarySensor.DeviceClass.WINDOW
-    ns = mn_h.Appliance_Hub_Sensor_DoorWindow
-    key_value = mc.KEY_STATUS
-
+    init_entity_key = BinarySensor.DeviceClass.WINDOW
+    init_ns = mn_h.Appliance_Hub_Sensor_DoorWindow
+    init_key_value = mc.KEY_STATUS
     _attr_device_class = BinarySensor.DeviceClass.WINDOW
 
 
@@ -1069,11 +1068,9 @@ class WaterLeakSensor(SubDeviceEntity, BinarySensor):
     MODEL = mc.TYPE_MS400
     KEY_DIGEST = mc.KEY_WATERLEAK
     NS_HUB = (mn_h.Appliance_Hub_Sensor_All, *SubDeviceEntity.NS_HUB)
-
-    ENTITY_KEY = mc.KEY_WATERLEAK
-    ns = mn_h.Appliance_Hub_Sensor_WaterLeak
-    key_value = mc.KEY_LATESTWATERLEAK
-
+    init_entity_key = mc.KEY_WATERLEAK
+    init_ns = mn_h.Appliance_Hub_Sensor_WaterLeak
+    init_key_value = mc.KEY_LATESTWATERLEAK
     _attr_device_class = BinarySensor.DeviceClass.SAFETY
 
 
@@ -1105,10 +1102,9 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, SwitchParser):
     class WateringDurationNumber(HubSubIdDeviceCfgMixin, NumberParser):
         """Number to set watering duration."""
 
-        ENTITY_KEY = mc.KEY_DURATION
-        key_group = "mstCfg"
-        key_value = "dura"
-
+        init_entity_key = mc.KEY_DURATION
+        init_key_group = "mstCfg"
+        init_key_value = "dura"
         # HA core entity attributes:
         _attr_name = "Watering duration"
         _attr_device_class = NumberParser.DEVICE_CLASS_DURATION
@@ -1121,9 +1117,8 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, SwitchParser):
     MODEL = mc.TYPE_MST100
     KEY_DIGEST = mc.KEY_MST
     NS_HUB = (mn_h.Appliance_Config_DeviceCfg, *SubDeviceEntity.NS_HUB)
-
-    ENTITY_KEY = mc.KEY_ONOFF
-    ns = mn_h.Appliance_Control_Water
+    init_entity_key = mc.KEY_ONOFF
+    init_ns = mn_h.Appliance_Control_Water
     native_on = 1
     native_off = 2
 

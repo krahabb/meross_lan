@@ -69,16 +69,17 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         def __init__(self, climate: "MtsClimate", preset_mode: "MtsClimate.Preset", /):
             self.climate = climate
             self.icon = climate.PRESET_TO_ICON_MAP[preset_mode]
-            self.key_value = climate.MTS_MODE_TO_TEMPERATUREKEY_MAP[
+            key_value = climate.MTS_MODE_TO_TEMPERATUREKEY_MAP[
                 reverse_lookup(climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
             ]
             NumberParser.__init__(
                 self,
                 climate.channel,
                 climate.parent,
-                entity_key=f"config_temperature_{self.key_value}",
+                entity_key=f"config_temperature_{key_value}",
                 name=f"{preset_mode} temperature",
-                device_scale=climate.device_scale,
+                key_value=key_value,
+                device_scale=climate.temperature_scale,
             )
 
         # TODO: remove properties and fix these values when updated on MtsClimate
@@ -119,10 +120,16 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             TRACKING_DEADTIME: Final[int]
             """minimum delay (dead-time) between trying to adjust the climate entity."""
             climate: "MtsClimate"
-            # HA core entity attributes:
-            current_option: str
 
-        ENTITY_KEY = "tracked_sensor"
+            def __init__(
+                self,
+                channel: ChannelType | None,
+                parent: BaseDevice,
+                /,
+                climate: "MtsClimate",
+            ): ...
+
+        init_entity_key = "tracked_sensor"
         TRACKING_DELAY = 5
         TRACKING_DEADTIME = 60
 
@@ -130,21 +137,14 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         _attr_available = True
         _attr_entity_registry_enabled_default = False
 
-        __slots__ = SelectEntity._calc_slots(
+        init__track_last_epoch = 0
+        SLOTS_AUTO_INIT = (
             "climate",
             "_tracking_state",
             "_tracking_state_change_unsub",
             "_track_last_epoch",
         )
-
-        def __init__(self, climate: "MtsClimate", /):
-            self.current_option = hac.STATE_OFF
-            self.options = []
-            self.climate = climate
-            self._tracking_state = None
-            self._tracking_state_change_unsub = None
-            self._track_last_epoch = 0
-            super().__init__(climate.channel, climate.parent)
+        __slots__ = ()
 
         @override
         async def async_shutdown(self):
@@ -159,7 +159,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         async def async_added_to_hass(self):
             hass = self.hass
 
-            if self.current_option is hac.STATE_OFF:
+            if not self.current_option:
                 with self.exception_warning("restoring previous state"):
                     if last_state := await self.get_last_state_available():
                         self.current_option = last_state.state
@@ -172,7 +172,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
                 # when persisting the state and we could loose the
                 # current restored state if we don't setup the tracking
                 # list soon enough
-                self.options = [self.current_option]
                 hass.bus.async_listen_once(
                     hac.EVENT_HOMEASSISTANT_STARTED,
                     self._setup_tracking_entities,
@@ -244,12 +243,12 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
                 hac.UnitOfTemperature.CELSIUS,
                 hac.UnitOfTemperature.FAHRENHEIT,
             )
-            self.options = [
+            self.options = [hac.STATE_OFF]
+            self.options.extend(
                 entity.entity_id
                 for entity in self.hass.data[sensor.DATA_COMPONENT].entities
                 if getattr(entity, "native_unit_of_measurement", None) in _units
-            ]
-            self.options.append(hac.STATE_OFF)
+            )
             if self.current_option not in self.options:
                 # this might happen when restoring a not anymore valid entity
                 self.current_option = hac.STATE_OFF
@@ -261,6 +260,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             self._tracking_stop()
             entity_id = self.current_option
             if entity_id not in (
+                None,
                 hac.STATE_OFF,
                 hac.STATE_UNKNOWN,
                 hac.STATE_UNAVAILABLE,
@@ -316,7 +316,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
                     )
                 error_temperature = tracked_temperature - current_temperature
                 native_error_temperature = round(
-                    error_temperature * climate.device_scale
+                    error_temperature * climate.temperature_scale
                 )
                 if not native_error_temperature:
                     # tracking error within device resolution limits..we're ok
@@ -381,7 +381,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         ATTR_TARGET_TEMP_HIGH: Final
         ATTR_TARGET_TEMP_LOW: Final
 
-        device_scale: ClassVar[int]
+        temperature_scale: ClassVar[int]
 
         TARGET_TEMPERATURE_STEP: ClassVar[float]
 
@@ -434,7 +434,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
     HVACAction = climate.HVACAction
     HVACMode = climate.HVACMode
 
-    device_scale = 1
+    temperature_scale = 1
 
     TARGET_TEMPERATURE_STEP = 0.5
     PRESET_TO_ICON_MAP = {
@@ -511,7 +511,9 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
                     number_preset_temperature
                 )
         self.schedule = self.__class__.Schedule(self)
-        self.select_track_sensor = MtsClimate.TrackSensorSelect(self)
+        self.select_track_sensor = MtsClimate.TrackSensorSelect(
+            channel, parent, climate=self
+        )
         self.sensor_current_temperature = SensorParser.Temperature(
             channel, parent, entity_registry_enabled_default=False
         )
@@ -572,7 +574,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         """
         Common handler for incoming room temperature value
         """
-        current_temperature = current_temperature / self.device_scale
+        current_temperature = current_temperature / self.temperature_scale
         if self.current_temperature != current_temperature:
             self.current_temperature = current_temperature
             self.sensor_current_temperature.update_native_value(current_temperature)

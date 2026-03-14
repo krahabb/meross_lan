@@ -19,6 +19,7 @@ if TYPE_CHECKING:
         ClassVar,
         Coroutine,
         Final,
+        Iterable,
         NotRequired,
         Protocol,
         TypedDict,
@@ -198,6 +199,16 @@ class Loggable(metaclass=abc.ABCMeta):
 
     if TYPE_CHECKING:
         __SLOTS__: ClassVar[tuple[str, ...]]
+        SLOTS_AUTO_INIT: ClassVar[tuple[str, ...]]
+        """Provides a list of slotted attributes which need to be initialized during construction.
+        Some of these attributes might be retrieved from kwargs. If not available these need to be retrieved from
+        class instance defaults or set to None as last resort.
+        This attribute will be read during class construction in order to update the internal cache (__SLOTS_AUTO_INIT)
+        of all the inherited 'auto init slots' (See __init_subclass__).
+        Attributes listed here will also be automatically added to the class __SLOTS__ so they'd not need to be defined twice."""
+        __SLOTS_AUTO_INIT: Final[tuple[str, ...]]
+        """Auto-built cache of all the 'SLOTS_AUTO_INIT' defined for the full class hierarchy so that
+        the constructor doesn't have to traverse the mro every time in order to apply initialization."""
 
         id: Final[Any]
         parent: Final[LoggerType]
@@ -232,6 +243,31 @@ class Loggable(metaclass=abc.ABCMeta):
         "__dict__",
     )
     __SLOTS__ = ()
+    __SLOTS_AUTO_INIT = ()
+
+    def __init_subclass__(cls, *args, **kwargs):
+        slots_auto_init = set()
+
+        for _base in cls.__bases__:
+            try:
+                slots_auto_init.update(_base.__SLOTS_AUTO_INIT)
+            except AttributeError:
+                pass
+        try:
+            _slots_auto_init = cls.__dict__["SLOTS_AUTO_INIT"]
+            slots_auto_init.update(_slots_auto_init)
+            try:
+                # if class defines its own slots then we update it so that it is not needed to duplicate typing
+                existing_slots = set(cls.__dict__["__slots__"])
+                existing_slots.update(_slots_auto_init)
+                cls.__slots__ = tuple(existing_slots)
+            except KeyError:
+                pass
+        except KeyError:
+            pass  # no SLOTS_AUTO_INIT defined in this class, just inherit from parent
+
+        if len(slots_auto_init) > len(cls.__SLOTS_AUTO_INIT):
+            cls.__SLOTS_AUTO_INIT = tuple(slots_auto_init)  # type: ignore
 
     @classmethod
     def _calc_slots(cls, *slots: "Unpack[tuple[str, ...]]"):
@@ -243,6 +279,10 @@ class Loggable(metaclass=abc.ABCMeta):
         for _base in cls.__mro__:
             try:
                 _added_slots.update(_base.__dict__["__SLOTS__"])
+            except KeyError:
+                pass
+            try:
+                _added_slots.update(_base.__dict__["SLOTS_AUTO_INIT"])
             except KeyError:
                 pass
             try:
@@ -264,6 +304,15 @@ class Loggable(metaclass=abc.ABCMeta):
             or getattr(parent, "loop", None)
             or asyncio.get_event_loop()
         )
+        _cls = self.__class__
+        for _attr in _cls.__SLOTS_AUTO_INIT:
+            try:
+                # extract from kwargs
+                setattr(self, _attr, kwargs.pop(_attr))
+            except KeyError:
+                # else retrieve from class attr or just 'None'
+                setattr(self, _attr, getattr(_cls, f"init_{_attr}", None))
+
         self.shutdown_broadcast = broadcast.Broadcast()
         self.async_shutdown_broadcast = broadcast.Broadcast()
         self.time = time

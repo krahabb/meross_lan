@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 class Mts960Climate(MtsThermostatClimate):
     """Climate entity for MTS960 devices"""
 
-    ns = mn_t.Appliance_Control_Thermostat_ModeB
-    device_scale = mc.MTS960_TEMP_SCALE
+    init_ns = mn_t.Appliance_Control_Thermostat_ModeB
+    temperature_scale = mc.MTS960_TEMP_SCALE
 
     class Preset(enum.StrEnum):
         HEATING = enum.auto()
@@ -29,11 +29,11 @@ class Mts960Climate(MtsThermostatClimate):
         TIMER_COUNTDOWN_OFF = enum.auto()
 
     class Schedule(MtsThermostatClimate.Schedule):
-        ns = mn_t.Appliance_Control_Thermostat_ScheduleB
+        init_ns = mn_t.Appliance_Control_Thermostat_ScheduleB
 
     class PlugState(BinarySensor):
 
-        ENTITY_KEY = "plug_state"
+        init_entity_key = "plug_state"
 
         # HA core entity attributes:
         _attr_entity_registry_enabled_default = False
@@ -323,7 +323,7 @@ class Mts960Climate(MtsThermostatClimate):
                 mc.KEY_MODE: mc.MTS960_MODE_HEAT_COOL,
                 mc.KEY_WORKING: self._mts_working or mc.MTS960_WORKING_HEAT,
                 mc.KEY_TARGETTEMP: round(
-                    kwargs[self.ATTR_TEMPERATURE] * self.device_scale
+                    kwargs[self.ATTR_TEMPERATURE] * self.temperature_scale
                 ),
             },
         )
@@ -380,7 +380,7 @@ class Mts960Climate(MtsThermostatClimate):
             self._update_current_temperature(payload[mc.KEY_CURRENTTEMP])
         if mc.KEY_TARGETTEMP in payload:
             self.target_temperature = (
-                (payload[mc.KEY_TARGETTEMP] / self.device_scale)
+                (payload[mc.KEY_TARGETTEMP] / self.temperature_scale)
                 if self._mts_mode != mc.MTS960_MODE_TIMER
                 else None
             )

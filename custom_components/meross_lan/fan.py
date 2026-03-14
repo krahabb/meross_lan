@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.components import fan
 
-from .helpers import entity as mle
+from .helpers.entity import ToggleXParser
 from .helpers.namespaces import NamespaceHandler, mn
 from .merossclient.protocol import const as mc
 
@@ -14,12 +14,12 @@ if TYPE_CHECKING:
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
-    mle.ValueParser.platform_setup_entry(
+    ToggleXParser.platform_setup_entry(
         hass, config_entry, async_add_devices, fan.DOMAIN
     )
 
 
-class Fan(mle.ToggleXParser, fan.FanEntity):
+class Fan(ToggleXParser, fan.FanEntity):
     """
     Fan entity for map100 Air Purifier (or any device implementing Appliance.Control.Fan)
     """
@@ -33,7 +33,7 @@ class Fan(mle.ToggleXParser, fan.FanEntity):
 
     PLATFORM = fan.DOMAIN
 
-    ns = mn.Appliance_Control_Fan
+    init_ns = mn.Appliance_Control_Fan
 
     # HA core entity attributes:
     try:

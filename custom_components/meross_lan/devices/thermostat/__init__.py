@@ -20,9 +20,9 @@ if TYPE_CHECKING:
 
 class ScreenBrightnessNumber(NumberParser):
 
-    ns = mn.Appliance_Control_Screen_Brightness
+    init_ns = mn.Appliance_Control_Screen_Brightness
 
-    _attr_device_scale = 1.0
+    init_device_scale = 1.0
     # HA core entity attributes:
     _attr_icon = "mdi:brightness-percent"
     _attr_native_unit_of_measurement = mlc.hac.PERCENTAGE
@@ -40,11 +40,7 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
     POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS
 
     def __init__(self, ns: "mn.Namespace", device: "Device", /):
-        NamespaceHandler.__init__(
-            self,
-            ns,
-            device,
-        )
+        NamespaceHandler.__init__(self, ns, device)
         self.register_parsers(
             *(
                 ScreenBrightnessNumber(
@@ -64,7 +60,7 @@ class MtsCommonTemperatureNumber(NumberParser):
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
 
-    key_value = mc.KEY_VALUE
+    init_key_value = mc.KEY_VALUE
 
     _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
 
@@ -73,8 +69,8 @@ class MtsCommonTemperatureNumber(NumberParser):
             self,
             channel,
             device,
-            entity_key=self.ns.slug_end,
-            device_scale=device.entities[channel].device_scale,  # type: ignore (access MtsThermostatClimate.device_scale)
+            entity_key=self.init_ns.slug_end,
+            device_scale=device.entities[channel].temperature_scale,  # type: ignore (access MtsThermostatClimate.temperature_scale)
         )
 
     def _parse(self, payload: "mt_t.CommonTemperature_C", /):
@@ -102,7 +98,7 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
             warning = payload[mc.KEY_WARNING]
             self.sensor_warning.update_device_value(warning)
         except AttributeError:
-            entity_key = f"{self.entitykey}_warning"
+            entity_key = f"{self.entity_key}_warning"
             self.sensor_warning = EnumParser(
                 self.channel,
                 self.parent,
@@ -120,11 +116,11 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
             self.switch = SwitchParser(
                 self.channel,
                 self.parent,
-                entity_key=f"{self.entitykey}_switch",
+                entity_key=f"{self.entity_key}_switch",
                 is_on=self.available,
-                name=(f"{self.entitykey} Alarm").capitalize(),
+                name=(f"{self.entity_key} Alarm").capitalize(),
+                ns=self.ns,
             )
-            self.switch.ns = self.ns
             self.switch.register_state_callback(self._switch_state_callback)
         except KeyError:
             pass
@@ -147,7 +143,7 @@ class MtsDeadZoneNumber(MtsCommonTemperatureNumber):
     payload will carry the values and so set them
     """
 
-    ns = mn_t.Appliance_Control_Thermostat_DeadZone
+    init_ns = mn_t.Appliance_Control_Thermostat_DeadZone
 
     _attr_device_class = NumberParser.DEVICE_CLASS_TEMPERATURE_DELTA
     _attr_native_max_value = 3.5
@@ -157,7 +153,7 @@ class MtsDeadZoneNumber(MtsCommonTemperatureNumber):
 
 class MtsFrostNumber(MtsCommonTemperatureExtNumber):
 
-    ns = mn_t.Appliance_Control_Thermostat_Frost
+    init_ns = mn_t.Appliance_Control_Thermostat_Frost
 
     _attr_native_max_value = 15
     _attr_native_min_value = 5
@@ -169,7 +165,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
     if TYPE_CHECKING:
         sensor_external_temperature: SensorParser
 
-    ns = mn_t.Appliance_Control_Thermostat_Overheat
+    init_ns = mn_t.Appliance_Control_Thermostat_Overheat
 
     __slots__ = ("sensor_external_temperature",)
 
@@ -197,9 +193,9 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
 class MtsWindowOpened(BinarySensorParser):
     # Specialized binary sensor for Thermostat.WindowOpened entity used in Mts200-Mts960(maybe).
 
-    ENTITY_KEY = mc.KEY_WINDOWOPENED
-    ns = mn_t.Appliance_Control_Thermostat_WindowOpened
-    key_value = mc.KEY_STATUS
+    init_entity_key = mc.KEY_WINDOWOPENED
+    init_ns = mn_t.Appliance_Control_Thermostat_WindowOpened
+    init_key_value = mc.KEY_STATUS
 
     _attr_device_class = BinarySensorParser.DeviceClass.WINDOW
 
@@ -207,9 +203,9 @@ class MtsWindowOpened(BinarySensorParser):
 class MtsExternalSensorSwitch(SwitchParser):
     # External sensor mode: use internal(0) vs external(1) sensor as temperature loopback.
 
-    ENTITY_KEY = "external sensor mode"
-    ns = mn_t.Appliance_Control_Thermostat_Sensor
-    key_value = mc.KEY_MODE
+    init_entity_key = "external sensor mode"
+    init_ns = mn_t.Appliance_Control_Thermostat_Sensor
+    init_key_value = mc.KEY_MODE
 
 
 class MtsHoldAction(SelectParser):
@@ -217,11 +213,10 @@ class MtsHoldAction(SelectParser):
     if TYPE_CHECKING:
         number_time: NumberParser
 
-    ENTITY_KEY = "hold action"
-    ns = mn_t.Appliance_Control_Thermostat_HoldAction
-    key_value = mc.KEY_MODE
-
-    OPTIONS_MAP = {
+    init_entity_key = "hold action"
+    init_ns = mn_t.Appliance_Control_Thermostat_HoldAction
+    init_key_value = mc.KEY_MODE
+    init_options_map = {
         mc.MTS_HOLDACTION_PERMANENT: "permanent",
         mc.MTS_HOLDACTION_NEXT_SCHEDULE: "next_schedule",
         mc.MTS_HOLDACTION_TIMER: "timer",
@@ -264,11 +259,10 @@ class MtsHoldAction(SelectParser):
 
 class MtsTempUnit(SelectParser):
 
-    ENTITY_KEY = "display_temperature_unit"
-    ns = mn.Appliance_Control_TempUnit
-    key_value = mc.KEY_TEMPUNIT
-
-    OPTIONS_MAP = {
+    init_entity_key = "display_temperature_unit"
+    init_ns = mn.Appliance_Control_TempUnit
+    init_key_value = mc.KEY_TEMPUNIT
+    init_options_map = {
         mc.TEMPUNIT_CELSIUS: mlc.hac.UnitOfTemperature.CELSIUS,
         mc.TEMPUNIT_FAHRENHEIT: mlc.hac.UnitOfTemperature.FAHRENHEIT,
     }
@@ -320,7 +314,7 @@ class MtsThermostatClimate(MtsClimate):
         {"channel":0,"value":-270,"min":-2000,"max":2000} - mts960
         """
 
-        ns = mn_t.Appliance_Control_Thermostat_Calibration
+        init_ns = mn_t.Appliance_Control_Thermostat_Calibration
 
         _attr_device_class = NumberParser.DEVICE_CLASS_TEMPERATURE_DELTA
         _attr_native_max_value = 8
@@ -346,8 +340,8 @@ class MtsThermostatClimate(MtsClimate):
             "ctlMin": 300,
         }
         """
-        self.max_temp = payload[mc.KEY_CTLMAX] / self.device_scale
-        self.min_temp = payload[mc.KEY_CTLMIN] / self.device_scale
+        self.max_temp = payload[mc.KEY_CTLMAX] / self.temperature_scale
+        self.min_temp = payload[mc.KEY_CTLMIN] / self.temperature_scale
 
     def _parse_summerMode(self, payload: dict, /):
         # needed to silently support registering OPTIONAL_NAMESPACES_INITIALIZERS

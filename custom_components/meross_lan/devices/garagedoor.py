@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 class GarageTimeoutBinarySensor(BinarySensor):
 
-    ENTITY_KEY = "problem"
+    init_entity_key = "problem"
 
     # the time at which the transition timeout occurred
     ATTR_TRANSITION_TIMEOUT = "transition_timeout"
@@ -70,7 +70,7 @@ class GarageConfigMixin(ValueParser if TYPE_CHECKING else object):
 
     # Assuming by default we're parsing MultipleConfig
     # This will be overriden when creating entities for Appliance.GarageDoor.Config
-    ns = mn.Appliance_GarageDoor_MultipleConfig
+    init_ns = mn.Appliance_GarageDoor_MultipleConfig
 
     def __init__(
         self,
@@ -166,7 +166,7 @@ class GarageConfigNumber(GarageConfigMixin, NumberParser):
     # these are ok for almost all config entities (they're mostly durations with
     # milliseconds device_value)
     # customize those when needed...
-    _attr_device_scale = 1000
+    init_device_scale = 1000
     # HA core entity attributes:
     _attr_device_class = NumberParser.DEVICE_CLASS_DURATION
     _attr_native_max_value = 60
@@ -225,8 +225,9 @@ class Garagedoor(Cover):
         number_doorCloseDuration: NumberEntity | _DurationHelper
         number_doorOpenDuration: NumberEntity | _DurationHelper
 
-    ns = mn.Appliance_GarageDoor_State
-    key_value = mc.KEY_OPEN
+    init_ns = mn.Appliance_GarageDoor_State
+    # TODO: Cover is not really a NamespaceValue parser..this is a remnant...
+    init_key_value = mc.KEY_OPEN
 
     PARAM_TRANSITION_MAXDURATION = 60
     PARAM_TRANSITION_MINDURATION = 10
@@ -290,6 +291,10 @@ class Garagedoor(Cover):
             self.number_doorOpenDuration = _DurationHelper(
                 self, mc.KEY_DOOROPENDURATION
             )
+        # ToggleX behavior in cover (garage/rollershutter) is not very clear
+        # most devices expose the ns in abilities and maybe also channel indexes in digest
+        # but the effect of toggling is unknown. We just silence any incoming message here.
+        device.register_togglex_channel(self, False)
 
     def shutdown(self):
         super().shutdown()
@@ -325,7 +330,7 @@ class Garagedoor(Cover):
     # interface: self
     async def async_request_position(self, open_request: int, /):
         self._transition_cancel()
-        response = await self.async_request_payload({self.key_value: open_request})
+        response = await self.async_request_payload({self.init_key_value: open_request})
         """
         example (historical) payload in SETACK:
         {"state": {"channel": 0, "open": 0, "lmTime": 0, "execute": 1}}
@@ -566,13 +571,20 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
     POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS
 
     ENTITY_DEFS = {
-        mc.KEY_BUZZERENABLE: GarageConfigSwitch,
+        mc.KEY_BUZZERENABLE: GarageConfigSwitch.ENTITY_DEF(
+            ns=mn.Appliance_GarageDoor_Config
+        ),
         mc.KEY_SIGNALDURATION: GarageConfigNumber.ENTITY_DEF(
+            ns=mn.Appliance_GarageDoor_Config,
             native_step=0.1,
             native_min_value=0.1,
         ),
-        mc.KEY_DOORCLOSEDURATION: GarageConfigNumber,
-        mc.KEY_DOOROPENDURATION: GarageConfigNumber,
+        mc.KEY_DOORCLOSEDURATION: GarageConfigNumber.ENTITY_DEF(
+            ns=mn.Appliance_GarageDoor_Config
+        ),
+        mc.KEY_DOOROPENDURATION: GarageConfigNumber.ENTITY_DEF(
+            ns=mn.Appliance_GarageDoor_Config
+        ),
     }
 
     _check_missing_config_keys = True
@@ -585,9 +597,7 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
             try:
                 entities[f"config_{key}"].update_device_value(value)
             except KeyError:
-                self.ENTITY_DEFS[key](None, self.parent, key, device_value=value).ns = (
-                    self.id
-                )
+                self.ENTITY_DEFS[key](None, self.parent, key, device_value=value)
 
         if self._check_missing_config_keys:
             # mc.KEY_DOOROPENDURATION and mc.KEY_DOORCLOSEDURATION config keys have been

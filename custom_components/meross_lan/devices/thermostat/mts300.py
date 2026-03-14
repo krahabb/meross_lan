@@ -43,19 +43,19 @@ class Mts300Climate(MtsThermostatClimate):
                     device_class=NumberParser.DeviceClass.HUMIDITY,
                     device_scale=10,
                     device_value=humidity,
+                    ns=self.ns,
                     key_value="humiValue",
                     native_max_value=5,
                     native_min_value=-5,
                     native_step=0.1,
                 )
-                self.number_calibration_humi.ns = self.ns
             except KeyError:  # missing humiValue
                 pass
 
             super()._parse(payload)
 
     class Schedule(MtsThermostatClimate.Schedule):
-        ns = mn_t.Appliance_Control_Thermostat_ScheduleB
+        init_ns = mn_t.Appliance_Control_Thermostat_ScheduleB
 
         # TODO: customize parsing of native payload since we have 2 temperatures
 
@@ -64,10 +64,10 @@ class Mts300Climate(MtsThermostatClimate):
         Configures internal/external sensor association for temperature readings in mts300.
         """
 
-        ns = mn.Appliance_Config_Sensor_Association
-        key_group = mc.KEY_TEMP
-        key_value = ns.slug_end
-        ENTITY_KEY = f"{ns.slug}__{key_group}_{key_value}"
+        init_ns = mn.Appliance_Config_Sensor_Association
+        init_key_group = mc.KEY_TEMP
+        init_key_value = init_ns.slug_end
+        init_entity_key = f"{init_ns.slug}__{init_key_group}_{init_key_value}"
 
         _attr_entity_category = SelectParser.EntityCategory.DIAGNOSTIC
         _attr_name = "Sensor Association"
@@ -75,7 +75,7 @@ class Mts300Climate(MtsThermostatClimate):
         """ TODO: get a description of possible options and implement either translations or constant symbols
         so that we can change also the entity category to CONFIG
         """
-        OPTIONS_MAP = {
+        init_options_map = {
             2: "Internal sensor",  # almost sure
         }
 
@@ -98,8 +98,8 @@ class Mts300Climate(MtsThermostatClimate):
         select_temp_association: SensorAssociationSelect
 
     # MtsClimate class attributes
-    ns = mn_t.Appliance_Control_Thermostat_ModeC
-    device_scale = mc.MTS300_TEMP_SCALE
+    init_ns = mn_t.Appliance_Control_Thermostat_ModeC
+    temperature_scale = mc.MTS300_TEMP_SCALE
 
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS300_WORK_MANUAL: MtsThermostatClimate.Preset.CUSTOM,
@@ -237,7 +237,7 @@ class Mts300Climate(MtsThermostatClimate):
         )
 
     async def async_set_temperature(self, **kwargs):
-        format_temp = lambda t: round(t * self.device_scale)
+        format_temp = lambda t: round(t * self.temperature_scale)
 
         try:
             mode = self.HVAC_MODE_TO_MODE_MAP[kwargs[self.ATTR_HVAC_MODE]]
@@ -332,8 +332,8 @@ class Mts300Climate(MtsThermostatClimate):
             )
 
             targetTemp = payload["targetTemp"]
-            self.target_temperature_high = targetTemp["cold"] / self.device_scale
-            self.target_temperature_low = targetTemp["heat"] / self.device_scale
+            self.target_temperature_high = targetTemp["cold"] / self.temperature_scale
+            self.target_temperature_low = targetTemp["heat"] / self.temperature_scale
             more = payload["more"]
             self.sensor_current_humidity.update_device_value(more["humi"])
             self.current_humidity = self.sensor_current_humidity.native_value

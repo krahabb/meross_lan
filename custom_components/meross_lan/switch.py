@@ -50,8 +50,6 @@ class EmulatedSwitch(SwitchEntity):
     behaviors for meross_lan entities.
     """
 
-    __slots__ = SwitchEntity._calc_slots()
-
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
         with self.exception_warning("restoring previous state"):
@@ -78,16 +76,16 @@ class SwitchParser(mle.BinaryParser, SwitchEntity):
 
 class PhysicalLockSwitch(SwitchParser):
 
-    ENTITY_KEY = mc.KEY_LOCK
-    ns = mn.Appliance_Control_PhysicalLock
     NS_CHANNELS = SwitchParser.NS_CHANNELS_SINGLE
+    init_entity_key = mc.KEY_LOCK
+    init_ns = mn.Appliance_Control_PhysicalLock
 
 
 class Toggle(mle.EntityNamespaceMixin, SwitchParser):
 
     POLLING_CONFIG_DEFAULT = mle.EntityNamespaceMixin.POLLING_CONFIG_STATE_NS
-    ENTITY_KEY = "0"  # used to keep unique_id compatibility with legacy versions
-    ns = mn.Appliance_Control_Toggle
+    init_entity_key = "0"  # used to keep unique_id compatibility with legacy versions
+    init_ns = mn.Appliance_Control_Toggle
     # HA core entity attributes:
     _attr_device_class = SwitchEntity.DeviceClass.OUTLET
     _attr_entity_category = None
@@ -104,7 +102,7 @@ class Toggle(mle.EntityNamespaceMixin, SwitchParser):
 
 class Togglex(SwitchParser):
 
-    ns = mn.Appliance_Control_ToggleX
+    init_ns = mn.Appliance_Control_ToggleX
 
     # HA core entity attributes:
     _attr_device_class = SwitchEntity.DeviceClass.OUTLET

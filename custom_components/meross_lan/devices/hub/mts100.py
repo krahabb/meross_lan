@@ -18,10 +18,10 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
 
     class AdjustNumber(MtsClimate.AdjustNumber):
 
-        ns = mn_h.Appliance_Hub_Mts100_Adjust
-        key_value = mc.KEY_TEMPERATURE
-        ENTITY_KEY = f"config_{ns.key}_{key_value}"
-        _attr_device_scale = 100
+        init_ns = mn_h.Appliance_Hub_Mts100_Adjust
+        init_key_value = mc.KEY_TEMPERATURE
+        init_entity_key = f"config_{init_ns.key}_{init_key_value}"
+        init_device_scale = 100
         _attr_native_max_value = 5
         _attr_native_min_value = -5
         _attr_native_step = 0.5
@@ -31,14 +31,14 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         customize SetPointNumber to interact with Mts100 family valves
         """
 
-        ns = mn_h.Appliance_Hub_Mts100_Temperature
+        init_ns = mn_h.Appliance_Hub_Mts100_Temperature
 
     class Schedule(MtsClimate.Schedule):
-        ns = mn_h.Appliance_Hub_Mts100_ScheduleB
+        init_ns = mn_h.Appliance_Hub_Mts100_ScheduleB
 
         def __init__(self, climate: "Mts100Climate", /):
             MtsClimate.Schedule.__init__(self, climate)
-            self._schedule_unit_time = climate.parent.parent.descriptor.ability.get(
+            self._schedule_unit_time = climate.parent.descriptor.ability.get(
                 mn_h.Appliance_Hub_Mts100_ScheduleB, {}
             ).get(mc.KEY_SCHEDULEUNITTIME, 15)
 
@@ -53,10 +53,10 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         mn_h.Appliance_Hub_ToggleX,
         *SubDeviceEntity.NS_HUB,
     )
-    ns = mn_h.Appliance_Hub_Mts100_Temperature
+    init_ns = mn_h.Appliance_Hub_Mts100_Temperature
 
     # MtsClimate class attributes
-    device_scale = mc.MTS100_TEMP_SCALE
+    temperature_scale = mc.MTS100_TEMP_SCALE
 
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS100_MODE_CUSTOM: MtsClimate.Preset.CUSTOM,
@@ -174,7 +174,11 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
 
         key = mc.MTS100_MODE_TO_CURRENTSET_MAP.get(self._mts_mode) or mc.KEY_CUSTOM
         await self.async_request_parse_ex(
-            {key: round(kwargs[Mts100Climate.ATTR_TEMPERATURE] * self.device_scale)}
+            {
+                key: round(
+                    kwargs[Mts100Climate.ATTR_TEMPERATURE] * self.temperature_scale
+                )
+            }
         )
 
     @override
@@ -192,7 +196,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         try:
             target_temperature = self.ns_payload[mc.MTS100_MODE_TO_CURRENTSET_MAP[mode]]
             self.ns_payload[mc.KEY_CURRENTSET] = target_temperature
-            self.target_temperature = target_temperature / self.device_scale
+            self.target_temperature = target_temperature / self.temperature_scale
         except KeyError:
             pass
         self.flush_state()
@@ -241,7 +245,9 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         if mc.KEY_ROOM in payload:
             self._update_current_temperature(payload[mc.KEY_ROOM])
         if mc.KEY_CURRENTSET in payload:
-            self.target_temperature = payload[mc.KEY_CURRENTSET] / self.device_scale
+            self.target_temperature = (
+                payload[mc.KEY_CURRENTSET] / self.temperature_scale
+            )
             if (
                 len(payload) == 2
             ):  # { "id: "...", "room": ...} or { "id: "...", "currentSet": ...}
@@ -251,9 +257,9 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
                 self.handlers[mn_h.Appliance_Hub_Mts100_Mode].schedule_get(self.id)
                 return
         if mc.KEY_MIN in payload:
-            self.min_temp = payload[mc.KEY_MIN] / self.device_scale
+            self.min_temp = payload[mc.KEY_MIN] / self.temperature_scale
         if mc.KEY_MAX in payload:
-            self.max_temp = payload[mc.KEY_MAX] / self.device_scale
+            self.max_temp = payload[mc.KEY_MAX] / self.temperature_scale
         if mc.KEY_HEATING in payload:
             self._mts_active = payload[mc.KEY_HEATING]
         if mc.KEY_OPENWINDOW in payload:

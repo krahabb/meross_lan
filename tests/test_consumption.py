@@ -73,9 +73,9 @@ def _configure_dates(tz):
 
 
 def _get_sensors(device: "Device"):
-    sensor_consumption = device.entities[ConsumptionXSensor.ns]
+    sensor_consumption = device.entities[ConsumptionXSensor.init_ns]
     assert isinstance(sensor_consumption, ConsumptionXSensor)
-    sensor_electricity = device.entities[ElectricitySensor.ns]
+    sensor_electricity = device.entities[ElectricitySensor.init_ns]
     assert isinstance(sensor_electricity, ElectricitySensor)
     return sensor_consumption, sensor_electricity
 

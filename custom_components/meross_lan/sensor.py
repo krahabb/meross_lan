@@ -64,7 +64,7 @@ class SensorEntity(mle.NumericEntity, sensor.SensorEntity):
         ): ...
 
     PLATFORM = sensor.DOMAIN
-    CORE_ENTITY_ATTRIBUTES = mle.NumericEntity.CORE_ENTITY_ATTRIBUTES + (
+    HA_ENTITY_ATTRIBUTES = mle.NumericEntity.HA_ENTITY_ATTRIBUTES + (
         "state_class",
         "suggested_display_precision",
     )
@@ -282,7 +282,7 @@ class ProtocolSensor(SensorEntity):
         parent: Final[Device]  # type: ignore[override]
         native_value: str
 
-    ENTITY_KEY = "sensor_protocol"
+    init_entity_key = "sensor_protocol"
 
     STATE_DISCONNECTED = "disconnected"
     STATE_ACTIVE = "active"
@@ -303,14 +303,6 @@ class ProtocolSensor(SensorEntity):
         Transport.MQTT,
     ]
 
-    @staticmethod
-    def _get_client_attr_state(client: "AbstractClient | None"):
-        return (
-            ProtocolSensor.STATE_ACTIVE
-            if client and client.is_connected
-            else ProtocolSensor.STATE_INACTIVE
-        )
-
     def __init__(self, parent: "Device"):
         self.extra_state_attributes = {}
         super().__init__(None, parent, native_value=ProtocolSensor.STATE_DISCONNECTED)  # type: ignore
@@ -327,15 +319,20 @@ class ProtocolSensor(SensorEntity):
     def on_client_add(self, client: "AbstractClient", /):
         client.connect_broadcast.add(self.on_client_connect)
         client.disconnect_broadcast.add(self.on_client_disconnect)
-        self.extra_state_attributes[client.TRANSPORT] = self._get_client_attr_state(
-            client
+        self.extra_state_attributes[client.TRANSPORT] = (
+            ProtocolSensor.STATE_ACTIVE
+            if client and client.is_connected
+            else ProtocolSensor.STATE_INACTIVE
         )
+
         if client.TRANSPORT is Transport.MQTT:
             connection: "MQTTConnection" = client.connection  # type: ignore
             connection.connect_broadcast.add(self.on_broker_connect)
             connection.disconnect_broadcast.add(self.on_broker_disconnect)
             self.extra_state_attributes[self.ATTR_MQTT_BROKER] = (
-                self._get_client_attr_state(connection)
+                ProtocolSensor.STATE_ACTIVE
+                if connection and connection.is_connected
+                else ProtocolSensor.STATE_INACTIVE
             )
             if sensor := connection.sensor_connection:
                 sensor.update_devices()
@@ -375,9 +372,9 @@ class SignalStrengthSensor(mle.EntityNamespaceMixin, SensorParser):
 
     POLLING_CONFIG_DEFAULT = mle.EntityNamespaceMixin.POLLING_CONFIG_SLOWSENSOR_NS
 
-    ENTITY_KEY = "signal_strength"
-    ns = mn.Appliance_System_Runtime
-    key_value = mc.KEY_SIGNAL
+    init_entity_key = "signal_strength"
+    init_ns = mn.Appliance_System_Runtime
+    init_key_value = mc.KEY_SIGNAL
     # HA core entity attributes:
     _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC
     _attr_native_unit_of_measurement = mlc.hac.PERCENTAGE
@@ -386,10 +383,10 @@ class SignalStrengthSensor(mle.EntityNamespaceMixin, SensorParser):
 
 class FilterMaintenanceSensor(SensorParser):
 
-    ENTITY_KEY = mc.KEY_FILTER
-    ns = mn.Appliance_Control_FilterMaintenance
     NS_CHANNELS = SensorParser.NS_CHANNELS_SINGLE
-    key_value = mc.KEY_LIFE
+    init_entity_key = mc.KEY_FILTER
+    init_ns = mn.Appliance_Control_FilterMaintenance
+    init_key_value = mc.KEY_LIFE
 
     # HA core entity attributes:
     _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC

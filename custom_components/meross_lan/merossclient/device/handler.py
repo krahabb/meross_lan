@@ -127,12 +127,13 @@ class NamespaceHandler(logging.Loggable):
     def register_parser_class(
         self, parser_class: type[NamespaceParser], channels: "Iterable[int] | None", /
     ):
+        # TODO: remove this check. Instead use this method to set the parser_class.init_ns
+        assert parser_class.init_ns == self.id
         self.parser_class = parser_class
         self.handler = self._handle_list
         for channel in (
             self.parent.descriptor.channels if channels is None else channels
         ):
-            assert parser_class.ns == self.id
             self.register_parser(parser_class(channel, self.parent))
 
     def register_parser(

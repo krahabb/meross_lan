@@ -66,7 +66,7 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
         CURRENT_TEMPERATURE_DELTA: ClassVar[float]
         CURRENT_TEMPERATURE_PERIOD: ClassVar[float]
 
-        device_scale: int
+        temperature_scale: int
         p_mode: mt_t.Mode_C | mt_t.ModeB_C | mt_t.ModeC_C
 
     MAP_DEVICE = {
@@ -111,7 +111,7 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
                 break
         else:
             raise RuntimeError("Unsupported thermostat type " + descriptor.type)
-        self.device_scale = self.MAP_DEVICE[_type][0]
+        self.temperature_scale = self.MAP_DEVICE[_type][0]
 
         super().__init__(descriptor, key)
 
@@ -131,9 +131,9 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
                 Emulator.NSDefaultMode.MixOut,
                 {
                     "channel": 0,
-                    "value": 0.5 * self.device_scale,
-                    "max": 3.5 * self.device_scale,
-                    "min": 0.5 * self.device_scale,
+                    "value": 0.5 * self.temperature_scale,
+                    "max": 3.5 * self.temperature_scale,
+                    "min": 0.5 * self.temperature_scale,
                 },
             )
         ns = mn_t.Appliance_Control_Thermostat_Frost
@@ -143,9 +143,9 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
                 Emulator.NSDefaultMode.MixOut,
                 {
                     "channel": 0,
-                    "value": 0.5 * self.device_scale,
-                    "max": 3.5 * self.device_scale,
-                    "min": 0.5 * self.device_scale,
+                    "value": 0.5 * self.temperature_scale,
+                    "max": 3.5 * self.temperature_scale,
+                    "min": 0.5 * self.temperature_scale,
                     "onoff": 0,
                     "warning": 0,
                 },
@@ -157,12 +157,12 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
                 Emulator.NSDefaultMode.MixOut,
                 {
                     "channel": 0,
-                    "value": 32 * self.device_scale,
-                    "max": 70 * self.device_scale,
-                    "min": 20 * self.device_scale,
+                    "value": 32 * self.temperature_scale,
+                    "max": 70 * self.temperature_scale,
+                    "min": 20 * self.temperature_scale,
                     "onoff": 0,
                     "warning": 0,
-                    "currentTemp": 32 * self.device_scale,
+                    "currentTemp": 32 * self.temperature_scale,
                 },
             )
 
@@ -191,8 +191,8 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
                 mn_t.Appliance_Control_Thermostat_ModeC
             ][mn_t.Appliance_Control_Thermostat_ModeC.key][0]
             self.p_mode = p_modec
-            self.temp_min = 5 * self.device_scale
-            self.temp_max = 35 * self.device_scale
+            self.temp_min = 5 * self.temperature_scale
+            self.temp_max = 35 * self.temperature_scale
             self.update_state_func = lambda: self._update_ModeC(p_modec)
         else:
             raise RuntimeError("Unsupported thermostat")
@@ -245,7 +245,7 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
                         p_channel_state[mc.KEY_WARNING] = randint(0, 2)
                     if mc.KEY_CURRENTTEMP in p_channel_state and randint(0, 5):
                         current_temp = p_channel_state[mc.KEY_CURRENTTEMP]
-                        current_temp += randint(-1, 1) * self.device_scale
+                        current_temp += randint(-1, 1) * self.temperature_scale
                         p_channel_state[mc.KEY_CURRENTTEMP] = clamp(
                             current_temp,
                             p_channel_state[mc.KEY_MIN],
@@ -383,7 +383,8 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
                 p_more["hdStatus"] = 0
             case mc.MTS300_MODE_HEAT:
                 delta_t = round(
-                    (p_modec["targetTemp"]["heat"] - current_temp) / self.device_scale
+                    (p_modec["targetTemp"]["heat"] - current_temp)
+                    / self.temperature_scale
                 )
                 p_more["hStatus"] = (
                     0 if delta_t <= 0 else 3 if delta_t >= 3 else delta_t
@@ -393,7 +394,8 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
             case mc.MTS300_MODE_COOL:
                 p_more["hStatus"] = 0
                 delta_t = round(
-                    (current_temp - p_modec["targetTemp"]["cold"]) / self.device_scale
+                    (current_temp - p_modec["targetTemp"]["cold"])
+                    / self.temperature_scale
                 )
                 p_more["cStatus"] = (
                     0 if delta_t <= 0 else 2 if delta_t >= 2 else delta_t
@@ -403,7 +405,7 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
 
                 p_targettemp = p_modec["targetTemp"]
                 delta_t = round(
-                    (p_targettemp["heat"] - current_temp) / self.device_scale
+                    (p_targettemp["heat"] - current_temp) / self.temperature_scale
                 )
                 if delta_t >= 0:
                     p_more["hStatus"] = 3 if delta_t >= 3 else delta_t
@@ -411,7 +413,7 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
                     p_more["fStatus"] = fan_speed or p_more["hStatus"]
                 else:
                     delta_t = round(
-                        (current_temp - p_targettemp["cold"]) / self.device_scale
+                        (current_temp - p_targettemp["cold"]) / self.temperature_scale
                     )
                     p_more["hStatus"] = 0
                     p_more["cStatus"] = (
@@ -429,7 +431,7 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
                 + self.CURRENT_TEMPERATURE_DELTA
                 * math.sin(self.epoch * 2 * math.pi / self.CURRENT_TEMPERATURE_PERIOD)
             )
-            * self.device_scale
+            * self.temperature_scale
         )
         _current_temp = clamp(
             p_calibration[mc.KEY_VALUE] + _current_temp,

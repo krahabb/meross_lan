@@ -25,8 +25,8 @@ class Cover(ParserEntity, cover.CoverEntity):
         # HA core entity attributes:
         _attr_device_class: ClassVar[cover.CoverDeviceClass | None]
         is_closed: bool | None
-        is_closing: bool
-        is_opening: bool
+        is_closing: bool | None
+        is_opening: bool | None
 
     PLATFORM = cover.DOMAIN
 
@@ -46,21 +46,12 @@ class Cover(ParserEntity, cover.CoverEntity):
     DeviceClass = cover.CoverDeviceClass
     EntityFeature = cover.CoverEntityFeature
 
-    __slots__ = (
+    SLOTS_AUTO_INIT = (
         "is_closed",
         "is_closing",
         "is_opening",
     )
-
-    def __init__(self, channel: int, device: "Device", /):
-        self.is_closed = None
-        self.is_closing = False
-        self.is_opening = False
-        super().__init__(channel, device)
-        # ToggleX behavior in cover (garage/rollershutter) is not very clear
-        # most devices expose the ns in abilities and maybe also channel indexes in digest
-        # but the effect of toggling is unknown. We just silence any incoming message here.
-        device.register_togglex_channel(self, False)
+    __slots__ = ()
 
     async def async_will_remove_from_hass(self):
         self._transition_cancel()
@@ -69,8 +60,8 @@ class Cover(ParserEntity, cover.CoverEntity):
     def set_unavailable(self):
         self._transition_cancel()
         self.is_closed = None
-        self.is_closing = False
-        self.is_opening = False
+        self.is_closing = None
+        self.is_opening = None
         super().set_unavailable()
 
     # interface: self

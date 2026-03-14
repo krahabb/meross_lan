@@ -18,12 +18,12 @@ if TYPE_CHECKING:
 class PresenceConfigBase(ValueParser.NamespaceGroupValue, ValueParser):
     """Mixin style base class for all of the entities managed in Appliance.Control.Presence.Config"""
 
-    ns = mn.Appliance_Control_Presence_Config
+    init_ns = mn.Appliance_Control_Presence_Config
 
     # HA core entity attributes:
     _attr_entity_category = SelectParser.EntityCategory.CONFIG
 
-    # TODO: generalize entitykey generation
+    # TODO: generalize entity_key generation
 
 
 class PresenceConfigNumberBase(PresenceConfigBase, NumberParser):
@@ -36,11 +36,11 @@ class PresenceConfigSelectBase(PresenceConfigBase, SelectParser):
 
 class PresenceConfigMode(PresenceConfigSelectBase):
 
-    key_group = mc.KEY_MODE
+    init_key_group = mc.KEY_MODE
 
     # TODO: configure real labels
     # This map would actually be shared between workMode and testMode though
-    OPTIONS_MAP = {
+    init_options_map = {
         0: "0",
         1: "1",
         2: "2",
@@ -59,10 +59,10 @@ class PresenceConfigMode(PresenceConfigSelectBase):
 
 class PresenceConfigNoBodyTime(PresenceConfigNumberBase):
 
-    ENTITY_KEY = "presence_config_noBodyTime_time"
+    init_entity_key = "presence_config_noBodyTime_time"
 
-    key_group = mc.KEY_NOBODYTIME
-    key_value = mc.KEY_TIME
+    init_key_group = mc.KEY_NOBODYTIME
+    init_key_value = mc.KEY_TIME
 
     # HA core entity attributes:
     _attr_device_class = NumberParser.DEVICE_CLASS_DURATION
@@ -74,16 +74,15 @@ class PresenceConfigNoBodyTime(PresenceConfigNumberBase):
 
 class PresenceConfigDistance(PresenceConfigNumberBase):
 
-    ENTITY_KEY = "presence_config_distance_value"
+    init_entity_key = "presence_config_distance_value"
 
-    key_group = mc.KEY_DISTANCE
-    key_value = mc.KEY_VALUE
-
-    _attr_name = mc.KEY_DISTANCE
-    _attr_device_scale = 1000
+    init_key_group = mc.KEY_DISTANCE
+    init_key_value = mc.KEY_VALUE
+    init_device_scale = 1000
 
     # HA core entity attributes:
     _attr_device_class = NumberParser.DeviceClass.DISTANCE
+    _attr_name = mc.KEY_DISTANCE
     _attr_native_unit_of_measurement = hac.UnitOfLength.METERS
     _attr_native_max_value = 12
     _attr_native_min_value = 0.1
@@ -92,14 +91,14 @@ class PresenceConfigDistance(PresenceConfigNumberBase):
 
 class PresenceConfigSensitivity(PresenceConfigSelectBase):
 
-    ENTITY_KEY = "presence_config_sensitivity_level"
+    init_entity_key = "presence_config_sensitivity_level"
 
-    key_group = mc.KEY_SENSITIVITY
-    key_value = mc.KEY_LEVEL
+    init_key_group = mc.KEY_SENSITIVITY
+    init_key_value = mc.KEY_LEVEL
 
     _attr_name = mc.KEY_SENSITIVITY
     # TODO: configure real labels
-    OPTIONS_MAP = {
+    init_options_map = {
         0: "0",
         1: "1",
         2: "2",
@@ -107,7 +106,7 @@ class PresenceConfigSensitivity(PresenceConfigSelectBase):
 
 
 class PresenceConfigMthX(PresenceConfigNumberBase):
-    key_group = mc.KEY_MTHX
+    init_key_group = mc.KEY_MTHX
     # HA core entity attributes:
     _attr_native_max_value = 1000
     _attr_native_min_value = 1
@@ -150,7 +149,7 @@ class PresenceSensor(SensorParser):
         # manager: "Device" pass
         pass
 
-    ENTITY_KEY = "sensor_presence"
+    init_entity_key = "sensor_presence"
 
     _attr_name = "Presence"
 
@@ -171,7 +170,7 @@ class PresenceSensor(SensorParser):
         self.sensor_distance = SensorParser(
             channel,
             device,
-            entity_key=f"{self.entitykey}_distance",
+            entity_key=f"{self.entity_key}_distance",
             device_scale=1000,
             device_class=SensorParser.DeviceClass.DISTANCE,
             native_unit_of_measurement=hac.UnitOfLength.METERS,
@@ -181,13 +180,13 @@ class PresenceSensor(SensorParser):
         self.binary_sensor_motion = BinarySensor(
             channel,
             device,
-            entity_key=f"{self.entitykey}_motion",
+            entity_key=f"{self.entity_key}_motion",
             device_class=BinarySensor.DeviceClass.MOTION,
         )
         self.sensor_times = SensorParser(
             channel,
             device,
-            entity_key=f"{self.entitykey}_times",
+            entity_key=f"{self.entity_key}_times",
             name="Presence times",
         )
 

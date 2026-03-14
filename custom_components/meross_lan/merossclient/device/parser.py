@@ -5,7 +5,7 @@ from .. import logging, merge_dicts
 from ..protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
-    from typing import Any, ClassVar, Final, Iterable
+    from typing import Any, ClassVar, Final, NotRequired, Unpack
 
     from . import Device, PhysicalDevice
     from ..protocol.types import (
@@ -69,7 +69,10 @@ class NamespaceParser(logging.Loggable):
         """Preset singleton for parsers to be configured with a single channel in 0."""
 
         parent: Final[PhysicalDevice]  # type: ignore[override]
-        ns: mn.Namespace  # TODO: rename uppercase
+        init_ns: ClassVar[mn.Namespace]
+        """Class default used to initialize the 'ns' instance attribute."""
+        ns: mn.Namespace
+        """The (primary) namespace this parser is associated with. This is used to issue requests."""
         channel: PayloadIndexType | None  # type: ignore[assignment]
         """The channel/id/subId key value according to the namespace (indexed or not).
         This is used by the NamespaceHandler to route messages to the correct parser.
@@ -80,10 +83,27 @@ class NamespaceParser(logging.Loggable):
         """Set of NamespaceHandlers this parser is registered to. This is used to manage the link back
         to the handler for issuing requests and for cleanup on shutdown."""
 
+        class Args(logging.Loggable.Args):
+            ns: NotRequired[mn.Namespace]
+            # channel: NotRequired[PayloadIndexType | None]
+
+        def __init__(
+            self,
+            channel: PayloadIndexType | None,
+            parent: PhysicalDevice,
+            /,
+            **kwargs: Unpack[Args],
+        ): ...
+
     NS_CHANNELS = None  # scan digests for channels
     NS_CHANNELS_SINGLE = (0,)
 
-    __SLOTS__ = ("channel", "ns_payload", "handlers")
+    init_ns_payload = mn.EMPTY_DICT
+    SLOTS_AUTO_INIT = (
+        "ns",
+        "ns_payload",
+    )
+    __SLOTS__ = ("channel", "handlers")
 
     def shutdown(self):
         super().shutdown()
@@ -161,7 +181,7 @@ class NamespaceParser(logging.Loggable):
         digest payload. This kind of initialization is alternative to namespace_init and
         generally richer (not every namespace has 'digest' entities though - namespace_init is
         for that semantics)."""
-        handler = device._create_handler(cls.ns)
+        handler = device._create_handler(cls.init_ns)
         handler.register_parser_class(
             cls, (_digest[mc.KEY_CHANNEL] for _digest in digest)
         )
@@ -172,7 +192,7 @@ class NamespaceParser(logging.Loggable):
         """Helper to register a specialized entity class to the proper namespace.
         This is going to be used on Device initialization for various entities sharing
         common semantics in namespace parsing/handling."""
-        assert ns is cls.ns
+        assert ns is cls.init_ns
         device._create_handler(ns).register_parser_class(cls, cls.NS_CHANNELS)
 
 
@@ -181,13 +201,18 @@ class NamespaceValue(NamespaceParser):
     a single item value in the namespace payload."""
 
     if TYPE_CHECKING:
-        key_value: ClassVar[str] | str
+
+        init_key_value: ClassVar[str]
+        key_value: str
         device_value: Any
 
-    key_value = mc.KEY_VALUE
-    device_value = None
+        class Args(NamespaceParser.Args):
+            key_value: NotRequired[str]
+            device_value: NotRequired[Any]
 
-    __SLOTS__ = ("device_value",)
+    init_key_value = mc.KEY_VALUE
+
+    SLOTS_AUTO_INIT = ("key_value", "device_value")
 
     def update_device_value(self, device_value, /) -> bool | None:
         # Called when the device value is being updated, either by parsing a new payload or by issuing a request.
@@ -223,12 +248,14 @@ class NamespaceBoolean(NamespaceValue):
         """The actual device value representing the 'off' state."""
         is_on: bool | None
 
-    key_value = mc.KEY_ONOFF
+        class Args(NamespaceValue.Args):
+            is_on: NotRequired[bool]
+
+    init_key_value = mc.KEY_ONOFF
     native_on = 1
     native_off = 0
-    is_on = False
 
-    __SLOTS__ = ("is_on",)
+    SLOTS_AUTO_INIT = ("is_on",)
 
     @override
     def update_device_value(self, device_value, /) -> bool | None:
@@ -260,8 +287,15 @@ class NamespaceGroupValue(NamespaceValue):
     """
 
     if TYPE_CHECKING:
-        key_group: ClassVar[str] | str
-        key_value: ClassVar[str] | str
+        init_key_group: ClassVar[str]
+        key_group: str
+
+        class Args(NamespaceValue.Args):
+            key_group: NotRequired[str]
+
+    init_key_group = mc.KEY_VALUE
+
+    SLOTS_AUTO_INIT = ("key_group",)
 
     @override
     async def async_request_value(self, device_value, /):

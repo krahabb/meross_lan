@@ -43,8 +43,8 @@ class Mp3Player(ParserEntity, media_player.MediaPlayerEntity):
         volume_level: float | None
 
     PLATFORM = media_player.DOMAIN
-    ENTITY_KEY = mc.KEY_MP3
-    ns = mn.Appliance_Control_Mp3
+    init_entity_key = mc.KEY_MP3
+    init_ns = mn.Appliance_Control_Mp3
 
     # HA core entity attributes:
     _attr_device_class = media_player.MediaPlayerDeviceClass.SPEAKER
@@ -60,21 +60,14 @@ class Mp3Player(ParserEntity, media_player.MediaPlayerEntity):
     )
     _attr_volume_step = 1 / mc.HP110A_MP3_VOLUME_MAX
 
-    __slots__ = (
+    SLOTS_AUTO_INIT = (
         "is_volume_muted",
         "media_title",
         "media_track",
         "state",
         "volume_level",
     )
-
-    def __init__(self, channel: "ChannelType", device: "Device", /, **kwargs):
-        self.is_volume_muted = None
-        self.media_title = None
-        self.media_track = None
-        self.state = None
-        self.volume_level = None
-        super().__init__(channel, device, **kwargs)
+    __slots__ = ()
 
     def set_unavailable(self):
         self.is_volume_muted = None

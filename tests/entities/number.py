@@ -105,7 +105,7 @@ class EntityTest(EntityComponentTest):
             assert ison is entity.available  # either both True or False
             if not ison:
                 await _switch.async_turn_on()
-        elif entity.entitykey == "fan_hold_time":
+        elif entity.entity_key == "fan_hold_time":
             # This entity too (mts300) might be unavailable if
             # the device is configured to disable 'fan hold'.
             # Again we can control this function through a dedicated switch.

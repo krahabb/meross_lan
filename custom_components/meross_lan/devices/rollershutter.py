@@ -26,8 +26,9 @@ class RollerShutter(Cover):
         supported_features: Cover.EntityFeature  # slot override base property
 
     # TODO: switchover main ns to State so we could use device_value for _mrs_state
-    ns = mn.Appliance_RollerShutter_Position
-    key_value = mc.KEY_POSITION
+    init_ns = mn.Appliance_RollerShutter_Position
+    # TODO: Cover is not really a NamespaceValue parser..this is a remnant...
+    init_key_value = mc.KEY_POSITION
 
     ATTR_POSITION_NATIVE = "position_native"
     PARAM_TRANSITION_POLL_TIMEOUT = 2
@@ -90,6 +91,10 @@ class RollerShutter(Cover):
             )
         self.number_signalOpen = RollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
         self.number_signalClose = RollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
+        # ToggleX behavior in cover (garage/rollershutter) is not very clear
+        # most devices expose the ns in abilities and maybe also channel indexes in digest
+        # but the effect of toggling is unknown. We just silence any incoming message here.
+        device.register_togglex_channel(self, False)
 
     def set_unavailable(self):
         self._mrs_state = None
@@ -167,7 +172,7 @@ class RollerShutter(Cover):
     # interface: self
     async def async_request_position(self, position: int):
         self._transition_cancel()
-        await self.async_request_payload({self.key_value: position})
+        await self.async_request_payload({self.init_key_value: position})
         self._transition_cancel()
         await self._async_read_state()
 
@@ -331,12 +336,12 @@ class RollerShutterAdjustSwitch(SwitchParser):
     which seems to start some kind of adjustment operation.
     """
 
-    ns = mn.Appliance_RollerShutter_Adjust
-    key_value = mc.KEY_VALUE  # used to configure method SET
+    init_ns = mn.Appliance_RollerShutter_Adjust
+    init_key_value = mc.KEY_VALUE
     native_on = 1
     native_off = 2
 
-    ENTITY_KEY = f"{ns.slug}__{key_value}"
+    init_entity_key = f"{init_ns.slug}__{init_key_value}"
 
     _attr_name = "Auto Calibration"
 
@@ -358,9 +363,9 @@ class RollerShutterConfigNumber(NumberParser):
     Helper entity to configure MRS open/close duration
     """
 
-    ns = mn.Appliance_RollerShutter_Config
+    init_ns = mn.Appliance_RollerShutter_Config
 
-    _attr_device_scale = 1000
+    init_device_scale = 1000
 
     # HA core entity attributes:
     _attr_device_class = NumberParser.DEVICE_CLASS_DURATION

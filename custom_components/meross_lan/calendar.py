@@ -87,7 +87,7 @@ class MtsScheduleEntry:
         return calendar.CalendarEvent(
             start=dt.as_utc(event_begin),
             end=dt.as_utc(event_end),
-            summary=f"{self.data[1] / climate.device_scale} {climate.temperature_unit}",
+            summary=f"{self.data[1] / climate.temperature_scale} {climate.temperature_unit}",
             description="",
             uid=f"{MTS_SCHEDULE_WEEKDAY[self.weekday_index]}#{self.index}",
             rrule=MTS_SCHEDULE_RRULE,
@@ -144,7 +144,7 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
         # shown/available in the calendar UI.
         self._schedule_entry_count_max = 0
         self._schedule_entry_count_min = 0
-        super().__init__(climate.channel, climate.parent, entity_key=self.ns.key)
+        super().__init__(climate.channel, climate.parent, entity_key=self.init_ns.key)
         climate.parent.enable_check_device_time()
 
     def shutdown(self):
@@ -334,7 +334,7 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
                     self.climate.min_temp,
                     self.climate.max_temp,
                 )
-                * self.climate.device_scale
+                * self.climate.temperature_scale
             )
         else:
             raise Exception("Provide a valid temperature in the summary field")
