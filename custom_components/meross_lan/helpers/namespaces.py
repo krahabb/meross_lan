@@ -115,7 +115,7 @@ class NamespaceHandler(_NH):
 
         # TODO: move to base. We must decide on diagnostic parser installations
         if self.parser_class:
-            self.register_parser(self.parser_class(channel, self.parent))
+            self.register_parser(self.parser_class(channel, self.parent, ns=self.id))
         elif self.parent.create_diagnostic_entities:
             from ..sensor import DiagnosticParser
 

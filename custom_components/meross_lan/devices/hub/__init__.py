@@ -44,8 +44,9 @@ if TYPE_CHECKING:
 class HubBeep(SwitchParser):
     """Generic switch to map Appliance.Hub.SubDevice.Beep namespace."""
 
-    init_ns = mn_h.Appliance_Hub_SubDevice_Beep
-    init_entity_key = f"{init_ns.slug}__{SwitchParser.init_key_value}"
+    init_entity_key = (
+        f"{mn_h.Appliance_Hub_SubDevice_Beep.slug}__{SwitchParser.init_key_value}"
+    )
 
     _attr_name = "Beep alarm"
 
@@ -636,7 +637,12 @@ class SubDevice(mld.BaseDevice, device.SubDevice, SensorParser):
     def _parse_beep(self, payload: "mt_h.SubDevice_Beep", /):
         self.handlers[mn_h.Appliance_Hub_SubDevice_Beep].swap_parsers(
             self,
-            HubBeep(self.id, self, device_value=payload[mc.KEY_ONOFF]),
+            HubBeep(
+                self.id,
+                self,
+                ns=mn_h.Appliance_Hub_SubDevice_Beep,
+                device_value=payload[mc.KEY_ONOFF],
+            ),
         )
 
     def _parse_version(self, payload: "mt_h.SubDevice_Version", /):

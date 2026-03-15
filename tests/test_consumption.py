@@ -18,7 +18,10 @@ from custom_components.meross_lan.devices.mss import (
     ConsumptionXSensor,
     ElectricitySensor,
 )
-from custom_components.meross_lan.merossclient.protocol import const as mc
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 from custom_components.meross_lan.sensor import SensorParser
 from emulator.mixins.electricity import (
     ConsumptionXMixin as EmulatorConsumptionMixin,
@@ -73,9 +76,9 @@ def _configure_dates(tz):
 
 
 def _get_sensors(device: "Device"):
-    sensor_consumption = device.entities[ConsumptionXSensor.init_ns]
+    sensor_consumption = device.entities[mn.Appliance_Control_ConsumptionX]
     assert isinstance(sensor_consumption, ConsumptionXSensor)
-    sensor_electricity = device.entities[ElectricitySensor.init_ns]
+    sensor_electricity = device.entities[mn.Appliance_Control_Electricity]
     assert isinstance(sensor_electricity, ElectricitySensor)
     return sensor_consumption, sensor_electricity
 

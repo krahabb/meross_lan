@@ -10,20 +10,12 @@ if TYPE_CHECKING:
 class Mts200Climate(MtsThermostatClimate):
     """Climate entity for MTS200 devices"""
 
-    init_ns = mn_t.Appliance_Control_Thermostat_Mode
-
-    # MtsClimate class attributes
-    temperature_scale = mc.MTS200_TEMP_SCALE
-
-    class SetPointNumber(MtsThermostatClimate.SetPointNumber):
-        init_ns = mn_t.Appliance_Control_Thermostat_Mode
-
-    class Schedule(MtsThermostatClimate.Schedule):
-        init_ns = mn_t.Appliance_Control_Thermostat_Schedule
-
     if TYPE_CHECKING:
         ns_payload: mt_t.Mode_C
 
+    # MtsClimate class attributes
+    temperature_scale = mc.MTS200_TEMP_SCALE
+    SCHEDULE_NS = mn_t.Appliance_Control_Thermostat_Schedule
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS200_MODE_MANUAL: MtsThermostatClimate.Preset.CUSTOM,
         mc.MTS200_MODE_HEAT: MtsThermostatClimate.Preset.COMFORT,
@@ -54,8 +46,8 @@ class Mts200Climate(MtsThermostatClimate):
         "_mts_summermode_supported",
     )
 
-    def __init__(self, channel: int, device: "Device", /):
-        MtsThermostatClimate.__init__(self, channel, device)
+    def __init__(self, channel: int, device: "Device", /, **kwargs):
+        MtsThermostatClimate.__init__(self, channel, device, **kwargs)
         self._mts_summermode = None
         self._mts_summermode_supported = (
             mn_t.Appliance_Control_Thermostat_SummerMode in device.descriptor.ability
@@ -143,12 +135,11 @@ class Mts200Climate(MtsThermostatClimate):
         if mc.KEY_MAX in payload:
             self.max_temp = payload[mc.KEY_MAX] / self.temperature_scale
 
-        for (
-            key_temp,
-            number_preset_temperature,
-        ) in self.number_preset_temperature.items():
+        for _number in self.number_preset_temperature:
             try:
-                number_preset_temperature.update_device_value(payload[key_temp])
+                _number.native_max_value = self.max_temp
+                _number.native_min_value = self.min_temp
+                _number._parse(payload)
             except KeyError:
                 pass
         self.flush_state()

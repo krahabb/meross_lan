@@ -26,22 +26,6 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         _attr_native_min_value = -5
         _attr_native_step = 0.5
 
-    class SetPointNumber(MtsClimate.SetPointNumber):
-        """
-        customize SetPointNumber to interact with Mts100 family valves
-        """
-
-        init_ns = mn_h.Appliance_Hub_Mts100_Temperature
-
-    class Schedule(MtsClimate.Schedule):
-        init_ns = mn_h.Appliance_Hub_Mts100_ScheduleB
-
-        def __init__(self, climate: "Mts100Climate", /):
-            MtsClimate.Schedule.__init__(self, climate)
-            self._schedule_unit_time = climate.parent.descriptor.ability.get(
-                mn_h.Appliance_Hub_Mts100_ScheduleB, {}
-            ).get(mc.KEY_SCHEDULEUNITTIME, 15)
-
     if TYPE_CHECKING:
         ns_payload: mt_h._Mts100_Temperature
         binary_sensor_window: BinarySensor
@@ -57,7 +41,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
 
     # MtsClimate class attributes
     temperature_scale = mc.MTS100_TEMP_SCALE
-
+    SCHEDULE_NS = mn_h.Appliance_Hub_Mts100_ScheduleB
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS100_MODE_CUSTOM: MtsClimate.Preset.CUSTOM,
         mc.MTS100_MODE_HEAT: MtsClimate.Preset.COMFORT,
@@ -96,6 +80,9 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
                 self._parse = self._parse_mts150
 
         super().__init__(subid, subdevice)
+        self.schedule._schedule_unit_time = subdevice.descriptor.ability.get(
+            mn_h.Appliance_Hub_Mts100_ScheduleB, {}
+        ).get(mc.KEY_SCHEDULEUNITTIME, 15)
         self.binary_sensor_window = BinarySensor(
             subid,
             subdevice,
@@ -265,12 +252,11 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         if mc.KEY_OPENWINDOW in payload:
             self.binary_sensor_window.update_boolean_value(payload[mc.KEY_OPENWINDOW])
 
-        for (
-            key_temp,
-            number_preset_temperature,
-        ) in self.number_preset_temperature.items():
+        for _number in self.number_preset_temperature:
             try:
-                number_preset_temperature.update_device_value(payload[key_temp])
+                _number.native_max_value = self.max_temp
+                _number.native_min_value = self.min_temp
+                _number._parse(payload)
             except KeyError:
                 pass
         self.flush_state()

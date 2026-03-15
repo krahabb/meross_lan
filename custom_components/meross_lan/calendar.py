@@ -18,15 +18,17 @@ from .helpers.entity import ParserEntity
 from .merossclient.protocol import const as mc
 
 if TYPE_CHECKING:
-    from typing import Any, Final
+    from typing import Any, Final, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
     from .climate import MtsClimate
     from .helpers.device import BaseDevice
+    from .helpers.entity import ChannelType
+    from .merossclient.protocol import namespaces as mn
 
-    # TODO: mode the payload structure definition to merossclient.types
+    # TODO: model the payload structure definition to merossclient.types
     MtsScheduleNativeEntry = list[int]
     MtsScheduleNativeDayEntry = list[MtsScheduleNativeEntry]
     MtsScheduleNativeType = dict[str, MtsScheduleNativeDayEntry]
@@ -98,9 +100,41 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
 
     if TYPE_CHECKING:
         parent: Final[BaseDevice]  # type: ignore[override]
-        climate: Final[MtsClimate]
+        climate: Final[MtsClimate]  # type: ignore[assignment]
+
+        flatten: Final[bool]  # type: ignore[assignment]
+        # save a flattened version of the device schedule to ease/optimize CalendarEvent management
+        # since the original schedule has a fixed number of contiguous events spanning the day(s) (6 on my MTS100)
+        # we might 'compress' these when 2 or more consecutive entries don't change the temperature
+        # ns_payload carries the original unpacked schedule payload from the device representing
+        # its effective state
         ns_payload: MtsScheduleNativeType | None
         _schedule: MtsScheduleNativeType | None
+        # set the 'granularity' of the schedule entries i.e. the schedule duration
+        # must be a multiple of this time (in minutes). It is set lately by customized
+        # implementations
+        _schedule_unit_time: int
+        # number of schedules per day supported by the device. Mines (mts100) default to 6
+        # The exact value should be extracted from scheduleBMode for mts100.
+        # mts200 instead are showing a "section" == 8 value in their .Schedule payload which
+        # could represent this information. Being not sure we're skipping that.
+        # The default here (=0) disables any schedule entry count check in building payloads
+        # meaning we're sending (more or less) the effective number of entries (per day) as
+        # shown/available in the calendar UI.
+        _schedule_entry_count_max: int
+        _schedule_entry_count_min: int
+
+        class Args(ParserEntity.Args):
+            climate: MtsClimate
+            ns: mn.Namespace
+
+        def __init__(
+            self,
+            channel: ChannelType,
+            parent: BaseDevice,
+            /,
+            **kwargs: Unpack[Args],
+        ): ...
 
     PLATFORM = calendar.DOMAIN
 
@@ -113,39 +147,19 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
         | calendar.CalendarEntityFeature.UPDATE_EVENT
     )
 
-    __slots__ = (
+    init_flatten = True
+    init__schedule_unit_time = 15
+    init__schedule_entry_count_max = 0
+    init__schedule_entry_count_min = 0
+    SLOTS_AUTO_INIT = (
         "climate",
-        "_flatten",
+        "flatten",
         "_schedule",
         "_schedule_unit_time",
         "_schedule_entry_count_max",
         "_schedule_entry_count_min",
     )
-
-    def __init__(self, climate: "MtsClimate"):
-        self.climate = climate
-        self._flatten = True
-        # save a flattened version of the device schedule to ease/optimize CalendarEvent management
-        # since the original schedule has a fixed number of contiguous events spanning the day(s) (6 on my MTS100)
-        # we might 'compress' these when 2 or more consecutive entries don't change the temperature
-        # ns_payload carries the original unpacked schedule payload from the device representing
-        # its effective state
-        self._schedule = None
-        # set the 'granularity' of the schedule entries i.e. the schedule duration
-        # must be a multiple of this time (in minutes). It is set lately by customized
-        # implementations
-        self._schedule_unit_time = 15
-        # number of schedules per day supported by the device. Mines (mts100) default to 6
-        # The exact value should be extracted from scheduleBMode for mts100.
-        # mts200 instead are showing a "section" == 8 value in their .Schedule payload which
-        # could represent this information. Being not sure we're skipping that.
-        # The default here (=0) disables any schedule entry count check in building payloads
-        # meaning we're sending (more or less) the effective number of entries (per day) as
-        # shown/available in the calendar UI.
-        self._schedule_entry_count_max = 0
-        self._schedule_entry_count_min = 0
-        super().__init__(climate.channel, climate.parent, entity_key=self.init_ns.key)
-        climate.parent.enable_check_device_time()
+    __slots__ = ()
 
     def shutdown(self):
         super().shutdown()
@@ -325,31 +339,29 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
                 data=schedule_native_entry,
             )
 
-    def _extract_rfc5545_temp(self, event: "dict[str, Any]") -> int:
-        match = re.search(r"[-+]?(?:\d*\.*\d+)", event[EVENT_SUMMARY])
-        if match:
-            return round(
-                clamp(
-                    float(match.group()),
-                    self.climate.min_temp,
-                    self.climate.max_temp,
-                )
-                * self.climate.temperature_scale
-            )
-        else:
-            raise Exception("Provide a valid temperature in the summary field")
-
     def _extract_rfc5545_info(
         self, event: "dict[str, Any]"
     ) -> tuple[datetime, datetime, int]:
         """Returns event start,end,temperature from an RFC5545 dict. Throws exception if
         the temperature cannot be parsed (expecting the SUMMARY field to carry the T value)
         """
-        return (
-            event[EVENT_START],
-            event[EVENT_END],
-            self._extract_rfc5545_temp(event),
-        )
+        match = re.search(r"[-+]?(?:\d*\.*\d+)", event[EVENT_SUMMARY])
+        if match:
+            climate = self.climate
+            return (
+                event[EVENT_START],
+                event[EVENT_END],
+                round(
+                    clamp(
+                        float(match.group()),
+                        climate.min_temp,
+                        climate.max_temp,
+                    )
+                    * climate.temperature_scale
+                ),
+            )
+        else:
+            raise Exception("Provide a valid temperature in the summary field")
 
     def _internal_delete_event(self, uid: str):
         schedule = self._schedule
@@ -579,7 +591,7 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
                     try:
                         weekday_state = payload[weekday]
                         # weekday_state = [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]]
-                        if self._flatten:
+                        if self.flatten:
                             current_entry = None
                             for entry in weekday_state:
                                 if current_entry and (entry[1] == current_entry[1]):

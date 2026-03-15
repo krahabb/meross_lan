@@ -373,7 +373,6 @@ class SignalStrengthSensor(mle.EntityNamespaceMixin, SensorParser):
     POLLING_CONFIG_DEFAULT = mle.EntityNamespaceMixin.POLLING_CONFIG_SLOWSENSOR_NS
 
     init_entity_key = "signal_strength"
-    init_ns = mn.Appliance_System_Runtime
     init_key_value = mc.KEY_SIGNAL
     # HA core entity attributes:
     _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC
@@ -385,7 +384,6 @@ class FilterMaintenanceSensor(SensorParser):
 
     NS_CHANNELS = SensorParser.NS_CHANNELS_SINGLE
     init_entity_key = mc.KEY_FILTER
-    init_ns = mn.Appliance_Control_FilterMaintenance
     init_key_value = mc.KEY_LIFE
 
     # HA core entity attributes:

@@ -60,11 +60,12 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             entity_key: NotRequired[str | None]
             # HA core entity attributes:
             device_class: NotRequired[str | None]
-            device_entry: NotRequired[DeviceEntry | None]
+            device_entry: NotRequired[DeviceEntry]
             entity_category: NotRequired[entity.EntityCategory | None]
             entity_registry_enabled_default: NotRequired[bool]
             name: NotRequired[str | None]
             translation_key: NotRequired[str]
+            icon: NotRequired[str]
 
         EntityCategory: Final
 
@@ -114,6 +115,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         "entity_category",
         "entity_registry_enabled_default",
         "translation_key",
+        "icon",
     )
     is_diagnostic = False
 
@@ -145,7 +147,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         entities for the same channel and usually equal to device_class (but might not be)
         - device_class: used by HA to set some soft 'class properties' for the entity
         """
-
+        entity_key = kwargs.pop("entity_key", self.__class__.init_entity_key)
         if type(channel) is mn.Namespace:
             # TODO: ugly trick...let's see if this can be 'linearized' through some future refactoring.
             # this is a special case for 'EntityNamespaceMixin' entities which are also NamespaceHandlers
@@ -155,10 +157,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             # variable for later use in parsing and so on.
             id = channel  # ns
             channel = None
-            entity_key = self.__class__.init_entity_key
-            assert "entity_key" not in kwargs
         else:
-            entity_key = kwargs.pop("entity_key", self.__class__.init_entity_key)
             id = (
                 channel
                 if entity_key is None
@@ -179,18 +178,22 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         self.has_entity_name = True
         self.should_poll = False
         # HA core special handling
-        self.device_entry = kwargs.pop(
-            "device_entry", None
-        ) or manager.get_device_entry(channel)
         try:
-            self.name = kwargs.pop("name") or self._attr_name
-        except (KeyError, AttributeError):
-            if entity_key:
-                self.name = entity_key.replace("_", " ").capitalize()
-            else:
-                # as it is now implemented this will instruct HA core
-                # to use device name when it can't provide an entity name
-                self.use_device_name = True
+            self.device_entry = kwargs.pop("device_entry")
+        except KeyError:
+            self.device_entry = manager.get_device_entry(channel)
+        try:
+            self.name = kwargs.pop("name")
+        except KeyError:
+            try:
+                self.name = self._attr_name
+            except AttributeError:
+                if entity_key:
+                    self.name = entity_key.replace("_", " ").capitalize()
+                else:
+                    # as it is now implemented this will instruct HA core
+                    # to use device name when it can't provide an entity name
+                    self.use_device_name = True
         # simple setting of HA core attributes if provided in kwargs
         # else fallback to HA core mechanics
         for _attr_name in tuple(
@@ -609,6 +612,21 @@ class EntityNamespaceMixin(NamespaceHandler, ParserEntity):
     should they're disabled in HA.
     """
 
+    if TYPE_CHECKING:
+
+        parent: Final[Device]  # type: ignore[override]
+
+        class Args(ParserEntity.Args):
+            pass
+
+        def __init__(
+            self,
+            id: mn.Namespace,
+            parent: "Device",
+            /,
+            **kwargs: "Unpack[Args]",
+        ): ...
+
     def __init_subclass__(cls):
         super().__init_subclass__()
         # Since NamespaceHandler cannot be slotted itself because of mixin-ing with ParserEntity
@@ -618,8 +636,7 @@ class EntityNamespaceMixin(NamespaceHandler, ParserEntity):
 
     @classmethod
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        assert ns is cls.init_ns
-        ns_entity = cls(ns, device)
+        ns_entity = cls(ns, device, ns=ns)
         ns_entity.handler_ns = ns_entity
         ns_entity.polling_strategy = None
         return ns_entity

@@ -64,10 +64,10 @@ class EntityTest(EntityComponentTest):
             gd.GarageConfigNumber,
             gd.GarageConfigNumber,
         ],
-        mn.Appliance_RollerShutter_Config: [rs.RollerShutterConfigNumber] * 2,
+        mn.Appliance_RollerShutter_Config: [rs.NumberParser] * 2,
         mn.Appliance_Control_Presence_Config: [
-            ms600.PresenceConfigNoBodyTime,
-            ms600.PresenceConfigDistance,
+            ms600.PresenceConfigNumber,
+            ms600.PresenceConfigNumber,
         ]
         + [ms600.PresenceConfigMthX] * 3,
         mn.Appliance_Control_Screen_Brightness: [ScreenBrightnessNumber] * 2,

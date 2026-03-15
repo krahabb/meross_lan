@@ -44,7 +44,6 @@ class Mp3Player(ParserEntity, media_player.MediaPlayerEntity):
 
     PLATFORM = media_player.DOMAIN
     init_entity_key = mc.KEY_MP3
-    init_ns = mn.Appliance_Control_Mp3
 
     # HA core entity attributes:
     _attr_device_class = media_player.MediaPlayerDeviceClass.SPEAKER

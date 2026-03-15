@@ -54,11 +54,6 @@ class Mts300Climate(MtsThermostatClimate):
 
             super()._parse(payload)
 
-    class Schedule(MtsThermostatClimate.Schedule):
-        init_ns = mn_t.Appliance_Control_Thermostat_ScheduleB
-
-        # TODO: customize parsing of native payload since we have 2 temperatures
-
     class SensorAssociationSelect(SelectParser.NamespaceGroupValue, SelectParser):
         """
         Configures internal/external sensor association for temperature readings in mts300.
@@ -98,9 +93,9 @@ class Mts300Climate(MtsThermostatClimate):
         select_temp_association: SensorAssociationSelect
 
     # MtsClimate class attributes
-    init_ns = mn_t.Appliance_Control_Thermostat_ModeC
     temperature_scale = mc.MTS300_TEMP_SCALE
-
+    SCHEDULE_NS = mn_t.Appliance_Control_Thermostat_ScheduleB
+    # TODO: customize parsing of native payload since we have 2 temperatures
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS300_WORK_MANUAL: MtsThermostatClimate.Preset.CUSTOM,
         mc.MTS300_WORK_SCHEDULE: MtsThermostatClimate.Preset.AUTO,
@@ -186,7 +181,7 @@ class Mts300Climate(MtsThermostatClimate):
     ) + tuple(f"sensor_{_key}" for _key in ENTITY_ARGS)
 
     def __init__(self, channel: int, device: "Device", /, **kwargs):
-        super().__init__(channel, device)
+        super().__init__(channel, device, **kwargs)
         self.fan_mode = None
         self.fan_modes = self._attr_fan_modes
         self.target_temperature_high = None

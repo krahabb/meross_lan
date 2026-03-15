@@ -258,7 +258,9 @@ class Garagedoor(Cover):
         "number_doorOpenDuration",
     )
 
-    def __init__(self, channel: int, device: "Device", /):
+    def __init__(
+        self, channel: int, device: "Device", /, **kwargs: "Unpack[Cover.Args]"
+    ):
         self._config = {}
         self._transition_duration = (
             self.PARAM_TRANSITION_MAXDURATION + self.PARAM_TRANSITION_MINDURATION
@@ -267,7 +269,7 @@ class Garagedoor(Cover):
         self.extra_state_attributes = {
             self.ATTR_TRANSITION_DURATION: self._transition_duration
         }
-        Cover.__init__(self, channel, device)
+        Cover.__init__(self, channel, device, **kwargs)
         self.binary_sensor_timeout = GarageTimeoutBinarySensor(self)
         if mn.Appliance_GarageDoor_MultipleConfig in device.descriptor.ability:
             # historically, when MultipleConfig appeared, these used to be
@@ -528,7 +530,7 @@ class Garagedoor(Cover):
         device.platforms.setdefault(NumberParser.PLATFORM, None)
         device.platforms.setdefault(SwitchParser.PLATFORM, None)
 
-        handler = NamespaceHandler(mn.Appliance_GarageDoor_State, device)
+        handler = NamespaceHandler(Garagedoor.init_ns, device)
         descriptor = device.descriptor
         if descriptor.type.startswith(mc.TYPE_MSG200) and (
             descriptor.firmware_version <= (4, 2, 1)

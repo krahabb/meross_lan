@@ -78,14 +78,12 @@ class PhysicalLockSwitch(SwitchParser):
 
     NS_CHANNELS = SwitchParser.NS_CHANNELS_SINGLE
     init_entity_key = mc.KEY_LOCK
-    init_ns = mn.Appliance_Control_PhysicalLock
 
 
 class Toggle(mle.EntityNamespaceMixin, SwitchParser):
 
     POLLING_CONFIG_DEFAULT = mle.EntityNamespaceMixin.POLLING_CONFIG_STATE_NS
     init_entity_key = "0"  # used to keep unique_id compatibility with legacy versions
-    init_ns = mn.Appliance_Control_Toggle
     # HA core entity attributes:
     _attr_device_class = SwitchEntity.DeviceClass.OUTLET
     _attr_entity_category = None
@@ -101,8 +99,6 @@ class Toggle(mle.EntityNamespaceMixin, SwitchParser):
 
 
 class Togglex(SwitchParser):
-
-    init_ns = mn.Appliance_Control_ToggleX
 
     # HA core entity attributes:
     _attr_device_class = SwitchEntity.DeviceClass.OUTLET

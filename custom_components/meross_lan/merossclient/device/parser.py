@@ -192,7 +192,6 @@ class NamespaceParser(logging.Loggable):
         """Helper to register a specialized entity class to the proper namespace.
         This is going to be used on Device initialization for various entities sharing
         common semantics in namespace parsing/handling."""
-        assert ns is cls.init_ns
         device._create_handler(ns).register_parser_class(cls, cls.NS_CHANNELS)
 
 
@@ -209,6 +208,14 @@ class NamespaceValue(NamespaceParser):
         class Args(NamespaceParser.Args):
             key_value: NotRequired[str]
             device_value: NotRequired[Any]
+
+        def __init__(
+            self,
+            channel: PayloadIndexType | None,
+            parent: PhysicalDevice,
+            /,
+            **kwargs: Unpack[Args],
+        ): ...
 
     init_key_value = mc.KEY_VALUE
 
@@ -251,6 +258,14 @@ class NamespaceBoolean(NamespaceValue):
         class Args(NamespaceValue.Args):
             is_on: NotRequired[bool]
 
+        def __init__(
+            self,
+            channel: PayloadIndexType | None,
+            parent: PhysicalDevice,
+            /,
+            **kwargs: Unpack[Args],
+        ): ...
+
     init_key_value = mc.KEY_ONOFF
     native_on = 1
     native_off = 0
@@ -292,6 +307,14 @@ class NamespaceGroupValue(NamespaceValue):
 
         class Args(NamespaceValue.Args):
             key_group: NotRequired[str]
+
+        def __init__(
+            self,
+            channel: PayloadIndexType | None,
+            parent: PhysicalDevice,
+            /,
+            **kwargs: Unpack[Args],
+        ): ...
 
     init_key_group = mc.KEY_VALUE
 

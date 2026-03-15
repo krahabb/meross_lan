@@ -13,14 +13,13 @@ if TYPE_CHECKING:
     from typing import Any, Callable, ClassVar, Final, Unpack
 
     from ...helpers.device import Device, MerossMessage
+    from ...helpers.entity import ParserEntity
     from ...merossclient.device.handler import NamespaceHandler as _NamespaceHandler
     from ...merossclient.protocol.namespaces import Namespace
     from ...merossclient.protocol.types import JsonDict, thermostat as mt_t
 
 
 class ScreenBrightnessNumber(NumberParser):
-
-    init_ns = mn.Appliance_Control_Screen_Brightness
 
     init_device_scale = 1.0
     # HA core entity attributes:
@@ -48,6 +47,7 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
                     device,
                     entity_key=f"screenbrightness_{key}",
                     name=f"Screen brightness ({key})",
+                    ns=ns,
                     key_value=key,
                 )
                 for key in (mc.KEY_OPERATION, mc.KEY_STANDBY)
@@ -64,12 +64,13 @@ class MtsCommonTemperatureNumber(NumberParser):
 
     _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
 
-    def __init__(self, channel: int, device: "Device", /):
+    def __init__(self, channel: int, device: "Device", /, **kwargs):
         NumberParser.__init__(
             self,
             channel,
             device,
-            entity_key=self.init_ns.slug_end,
+            **kwargs,
+            entity_key=kwargs["ns"].slug_end,  # TODO: generalize entity_key defaulting?
             device_scale=device.entities[channel].temperature_scale,  # type: ignore (access MtsThermostatClimate.temperature_scale)
         )
 
@@ -143,8 +144,6 @@ class MtsDeadZoneNumber(MtsCommonTemperatureNumber):
     payload will carry the values and so set them
     """
 
-    init_ns = mn_t.Appliance_Control_Thermostat_DeadZone
-
     _attr_device_class = NumberParser.DEVICE_CLASS_TEMPERATURE_DELTA
     _attr_native_max_value = 3.5
     _attr_native_min_value = 0.5
@@ -152,8 +151,6 @@ class MtsDeadZoneNumber(MtsCommonTemperatureNumber):
 
 
 class MtsFrostNumber(MtsCommonTemperatureExtNumber):
-
-    init_ns = mn_t.Appliance_Control_Thermostat_Frost
 
     _attr_native_max_value = 15
     _attr_native_min_value = 5
@@ -164,8 +161,6 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
 
     if TYPE_CHECKING:
         sensor_external_temperature: SensorParser
-
-    init_ns = mn_t.Appliance_Control_Thermostat_Overheat
 
     __slots__ = ("sensor_external_temperature",)
 
@@ -194,7 +189,6 @@ class MtsWindowOpened(BinarySensorParser):
     # Specialized binary sensor for Thermostat.WindowOpened entity used in Mts200-Mts960(maybe).
 
     init_entity_key = mc.KEY_WINDOWOPENED
-    init_ns = mn_t.Appliance_Control_Thermostat_WindowOpened
     init_key_value = mc.KEY_STATUS
 
     _attr_device_class = BinarySensorParser.DeviceClass.WINDOW
@@ -204,7 +198,6 @@ class MtsExternalSensorSwitch(SwitchParser):
     # External sensor mode: use internal(0) vs external(1) sensor as temperature loopback.
 
     init_entity_key = "external sensor mode"
-    init_ns = mn_t.Appliance_Control_Thermostat_Sensor
     init_key_value = mc.KEY_MODE
 
 
@@ -214,7 +207,6 @@ class MtsHoldAction(SelectParser):
         number_time: NumberParser
 
     init_entity_key = "hold action"
-    init_ns = mn_t.Appliance_Control_Thermostat_HoldAction
     init_key_value = mc.KEY_MODE
     init_options_map = {
         mc.MTS_HOLDACTION_PERMANENT: "permanent",
@@ -224,27 +216,23 @@ class MtsHoldAction(SelectParser):
 
     __slots__ = ("number_time",)
 
-    def __init__(self, channel, parent, /):
-        SelectParser.__init__(self, channel, parent)
-        self.number_time = NumberParser(
-            channel,
-            parent,
-            entity_key="hold_action_time",
-            device_scale=1,
-            device_class=NumberParser.DEVICE_CLASS_DURATION,
-            native_unit_of_measurement=mlc.hac.UnitOfTime.MINUTES,
-        )
-        self.number_time.async_request_value = self._async_request_value_number_time
-
-    def shutdown(self):
-        SelectParser.shutdown(self)
-        del self.number_time
-
     # interface: self
-    def _parse_holdAction(self, payload: "mt_t.HoldAction_C", /):
-        self.update_device_value(payload[mc.KEY_MODE])
+    def _parse(self, payload: "mt_t.HoldAction_C", /):
+        self.update_device_value(payload[self.key_value])
         try:
-            self.number_time.update_device_value(payload[mc.KEY_TIME])  # type: ignore
+            time = payload[mc.KEY_TIME]  # type: ignore
+            self.number_time.update_device_value(time)
+        except AttributeError:
+            self.number_time = NumberParser(
+                self.channel,
+                self.parent,
+                entity_key="hold_action_time",
+                device_scale=1,
+                device_value=time,
+                device_class=NumberParser.DEVICE_CLASS_DURATION,
+                native_unit_of_measurement=mlc.hac.UnitOfTime.MINUTES,
+            )
+            self.number_time.async_request_value = self._async_request_value_number_time
         except KeyError:
             pass
 
@@ -260,7 +248,6 @@ class MtsHoldAction(SelectParser):
 class MtsTempUnit(SelectParser):
 
     init_entity_key = "display_temperature_unit"
-    init_ns = mn.Appliance_Control_TempUnit
     init_key_value = mc.KEY_TEMPUNIT
     init_options_map = {
         mc.TEMPUNIT_CELSIUS: mlc.hac.UnitOfTemperature.CELSIUS,
@@ -279,9 +266,7 @@ class MtsThermostatClimate(MtsClimate):
 
         OPTIONAL_NAMESPACES_INITIALIZERS: Final[tuple[mn.Namespace, ...]]
         """These namespaces handlers will forward message parsing to the climate entity"""
-        OPTIONAL_ENTITIES_INITIALIZERS: Final[
-            dict[mn.Namespace, Callable[[int, Device], Any]]
-        ]
+        OPTIONAL_ENTITIES_INITIALIZERS: Final[dict[mn.Namespace, type[ParserEntity]]]
         """Additional entities (linked to the climate one) in case their ns is supported/available"""
 
         # Overrides
@@ -321,13 +306,15 @@ class MtsThermostatClimate(MtsClimate):
         _attr_native_min_value = -8
         _attr_native_step = 0.1
 
-    def __init__(self, channel: int, device: "Device", /):
-        MtsClimate.__init__(self, channel, device)
+    def __init__(self, channel: int, device: "Device", /, **kwargs):
+        MtsClimate.__init__(self, channel, device, **kwargs)
         device.register_parser_ex(self, *self.OPTIONAL_NAMESPACES_INITIALIZERS)
         ability = device.descriptor.ability
         for _ns, _entity_class in self.OPTIONAL_ENTITIES_INITIALIZERS.items():
             if _ns in ability:
-                device.get_handler(_ns).register_parser(_entity_class(channel, device))
+                device.get_handler(_ns).register_parser(
+                    _entity_class(channel, device, ns=_ns)
+                )
 
     # interface: self
     def _parse_ctlRange(self, payload: dict, /):
@@ -363,6 +350,8 @@ class MtsThermostatClimate(MtsClimate):
 from .mts200 import Mts200Climate
 from .mts960 import Mts960Climate
 
+# TODO: These maps should be placed in a global DIGEST<->NAMESPACE map of the Meross ecosystem
+# so to remove those ns mappings distributed across classes.
 CLIMATE_INITIALIZERS: dict[str, type["MtsThermostatClimate"]] = {
     mc.KEY_MODE: Mts200Climate,
     mc.KEY_MODEB: Mts960Climate,

@@ -21,7 +21,7 @@ from .merossclient.protocol import const as mc, namespaces as mn
 from .merossclient.protocol.message import MerossMessage
 
 if TYPE_CHECKING:
-    from typing import Final
+    from typing import Final, NotRequired, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -180,8 +180,6 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
         EFFECT_OFF: Final
         T_RESOLUTION_MIN: Final[float]
 
-        parent: Final[Device]  # type: ignore[override]
-
         _t_begin: float
         _t_end: float
         _t_duration: float
@@ -207,6 +205,12 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
         rgb_color: tuple[int, int, int] | None
         supported_color_modes: set[ColorMode]
         supported_features: LightEntityFeature
+
+        parent: Final[Device]  # type: ignore[override]
+
+        class Args(mle.ToggleXParser.Args):
+            effect_list: NotRequired[list[str]]
+            pass
 
     PLATFORM = light.DOMAIN
 
@@ -246,9 +250,7 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
         "supported_features",
     )
 
-    def __init__(
-        self, channel: int, device: "Device", effect_list: list[str] | None = None, /
-    ):
+    def __init__(self, channel: int, device: "Device", /, **kwargs: "Unpack[Args]"):
         self._rgb_to_native = rgb_to_native
         self._native_to_rgb = native_to_rgb
         self.brightness = None
@@ -256,15 +258,15 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
         self.color_temp_kelvin = None
         self.effect = None
         self.rgb_color = None
-        if effect_list is None:
-            self.effect_list = None
-            self.supported_features = LightEntityFeature.TRANSITION
-        else:
-            self.effect_list = effect_list
+        try:
+            self.effect_list = kwargs.pop("effect_list")  # type: ignore
             self.supported_features = (
                 LightEntityFeature.EFFECT | LightEntityFeature.TRANSITION
             )
-        super().__init__(channel, device)
+        except KeyError:
+            self.effect_list = None
+            self.supported_features = LightEntityFeature.TRANSITION
+        super().__init__(channel, device, **kwargs)
 
     @override
     def set_unavailable(self):
@@ -400,9 +402,6 @@ class Light(LightBase):
 
     if TYPE_CHECKING:
 
-        class Args(LightBase.Args):
-            pass
-
         ATTR_TOGGLEX_AUTO: Final[str]
 
         _togglex_auto: bool | None
@@ -411,6 +410,9 @@ class Light(LightBase):
         - True: the device automatically turns on when setting 'Appliance.Control.Light' (very fragile though)
         - None: the component needs to auto-learn the device behavior
         """
+
+        class Args(LightBase.Args):
+            pass
 
     init_ns = mn.Appliance_Control_Light
 
@@ -426,9 +428,7 @@ class Light(LightBase):
 
     __slots__ = ("_togglex_auto",)
 
-    def __init__(
-        self, channel: int, device: "Device", effect_list: list[str] | None = None
-    ):
+    def __init__(self, channel: int, device: "Device", /, **kwargs: "Unpack[Args]"):
         # we'll use the (eventual) togglex payload to
         # see if we have to toggle the light by togglex or so
         # with msl120j (fw 3.1.4) I've discovered that any 'light' payload sent will turn on the light
@@ -456,7 +456,7 @@ class Light(LightBase):
             else:
                 supported_color_modes.add(ColorMode.ONOFF)
 
-        LightBase.__init__(self, channel, device, effect_list)
+        LightBase.__init__(self, channel, device, **kwargs)
         self._togglex_auto = None if self.handler_togglex else False
 
     @override
@@ -599,14 +599,17 @@ class Light(LightBase):
     def digest_init(
         cls, device: "Device", digest: "JsonDict", /
     ) -> "Device.DigestInitReturnType":
-
         ability = device.descriptor.ability
-        handler = NamespaceHandler(mn.Appliance_Control_Light, device)
+        handler = NamespaceHandler(Light.init_ns, device)
         handler.register_parser(
             EffectLight(digest[mc.KEY_CHANNEL], device)
             if mn.Appliance_Control_Light_Effect in ability
             else (
-                Light(digest[mc.KEY_CHANNEL], device, mc.HP110A_LIGHT_EFFECT_LIST)
+                Light(
+                    digest[mc.KEY_CHANNEL],
+                    device,
+                    effect_list=mc.HP110A_LIGHT_EFFECT_LIST,
+                )
                 if mn.Appliance_Control_Mp3 in ability
                 else Light(digest[mc.KEY_CHANNEL], device)
             )
@@ -620,17 +623,20 @@ class EffectLight(Light):
     like msl320
     """
 
-    # HA core entity attributes:
-    effect_list: list[str]
+    if TYPE_CHECKING:
+
+        _light_effects: list[JsonDict]
+        # HA core entity attributes:
+        effect_list: list[str]
 
     __slots__ = (
-        "_light_effect_list",
+        "_light_effects",
         "handler_light_effect",
     )
 
     def __init__(self, channel: int, device: "Device", /):
-        self._light_effect_list: list[dict] = []
-        Light.__init__(self, channel, device, [])
+        self._light_effects = []
+        Light.__init__(self, channel, device, effect_list=[])
         self.handler_light_effect = NamespaceHandler(
             mn.Appliance_Control_Light_Effect,
             device,
@@ -655,7 +661,7 @@ class EffectLight(Light):
     def _flush_light_effect(self, effect: int, /):
         self.handler_light_effect.polling_period = 0
         try:
-            _light_effect = self._light_effect_list[effect]
+            _light_effect = self._light_effects[effect]
         except IndexError:
             # our _light_effect_list might be stale
             return
@@ -678,14 +684,14 @@ class EffectLight(Light):
         if ATTR_EFFECT in kwargs:
             _light = dict(self.ns_payload)
             effect_index = self.effect_list.index(kwargs[ATTR_EFFECT])  # type: ignore
-            if effect_index == len(self._light_effect_list):  # EFFECT_OFF
+            if effect_index == len(self._light_effects):  # EFFECT_OFF
                 _light.pop(mc.KEY_EFFECT, None)
                 _light[mc.KEY_CAPACITY] = (
                     _light[mc.KEY_CAPACITY] & ~mc.LIGHT_CAPACITY_EFFECT
                 )
                 await self.async_request_light_on_flush(_light)
             else:
-                _light_effect = self._light_effect_list[effect_index]
+                _light_effect = self._light_effects[effect_index]
                 _light_effect[mc.KEY_ENABLE] = 1
                 await self.handler_light_effect.async_set(_light_effect)
                 _light[mc.KEY_EFFECT] = effect_index
@@ -704,7 +710,7 @@ class EffectLight(Light):
                 _light_effect = None
                 try:
                     effect_index = _light[mc.KEY_EFFECT]
-                    _light_effect = self._light_effect_list[effect_index]
+                    _light_effect = self._light_effects[effect_index]
                     member = _light_effect[mc.KEY_MEMBER]
                     brightness = kwargs[ATTR_BRIGHTNESS]
                     luminance = brightness_to_native(brightness)
@@ -746,11 +752,11 @@ class EffectLight(Light):
             ]
         }
         """
-        _light_effect_list = message.payload[mc.KEY_EFFECT]
-        if self._light_effect_list != _light_effect_list:
-            self._light_effect_list = _light_effect_list
+        _light_effects = message.payload[mc.KEY_EFFECT]
+        if self._light_effects != _light_effects:
+            self._light_effects = _light_effects
             self.effect_list = [
-                _light_effect[mc.KEY_EFFECTNAME] for _light_effect in _light_effect_list
+                _light_effect[mc.KEY_EFFECTNAME] for _light_effect in _light_effects
             ] + [LightBase.EFFECT_OFF]
             # add a 'fake' key so the next update will force-flush
             self.ns_payload["_"] = None  # type: ignore
@@ -766,7 +772,6 @@ class DNDLight(mle.EntityNamespaceMixin, mle.BinaryParser, light.LightEntity):
     POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS
     PLATFORM = light.DOMAIN
     init_entity_key = "dnd"
-    init_ns = mn.Appliance_System_DNDMode
     init_key_value = mc.KEY_MODE
     native_on = 0
     native_off = 1
@@ -789,7 +794,7 @@ def digest_init_light_effect(
         if isinstance(light, EffectLight):
             # initialize light effect_list (we're loading config at device init time
             # so this could be outdated but..)
-            light._light_effect_list = digest
+            light._light_effects = digest
             light.effect_list = [
                 _light_effect[mc.KEY_EFFECTNAME] for _light_effect in digest
             ] + [LightBase.EFFECT_OFF]

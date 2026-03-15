@@ -16,9 +16,6 @@ if TYPE_CHECKING:
 class Mts960Climate(MtsThermostatClimate):
     """Climate entity for MTS960 devices"""
 
-    init_ns = mn_t.Appliance_Control_Thermostat_ModeB
-    temperature_scale = mc.MTS960_TEMP_SCALE
-
     class Preset(enum.StrEnum):
         HEATING = enum.auto()
         COOLING = enum.auto()
@@ -27,9 +24,6 @@ class Mts960Climate(MtsThermostatClimate):
         TIMER_CYCLE = enum.auto()
         TIMER_COUNTDOWN_ON = enum.auto()
         TIMER_COUNTDOWN_OFF = enum.auto()
-
-    class Schedule(MtsThermostatClimate.Schedule):
-        init_ns = mn_t.Appliance_Control_Thermostat_ScheduleB
 
     class PlugState(BinarySensor):
 
@@ -66,6 +60,8 @@ class Mts960Climate(MtsThermostatClimate):
         number_timer_cycle_off_duration: TimerConfigNumber
         number_timer_cycle_on_duration: TimerConfigNumber
 
+    temperature_scale = mc.MTS960_TEMP_SCALE
+    SCHEDULE_NS = mn_t.Appliance_Control_Thermostat_ScheduleB
     MTS_MODE_TO_PRESET_MAP = {}
 
     TIMER_TYPE_KEY = {
@@ -101,11 +97,11 @@ class Mts960Climate(MtsThermostatClimate):
         "_mts_timer_mode",
     )
 
-    def __init__(self, channel: int, device: "Device", /):
+    def __init__(self, channel: int, device: "Device", /, **kwargs):
         self._mts_working = None
         self._mts_timer_payload = None
         self._mts_timer_mode = None
-        super().__init__(channel, device)
+        super().__init__(channel, device, **kwargs)
         self.binary_sensor_plug_state = Mts960Climate.PlugState(channel, device)
         self.number_timer_down_duration = Mts960Climate.TimerConfigNumber(
             self, "timer_down_duration"

@@ -18,7 +18,7 @@ from ..sensor import SensorParser
 from .spray import Spray
 
 if TYPE_CHECKING:
-    from typing import Final
+    from typing import Final, Unpack
 
     from ..helpers.device import Device, MerossMessage
     from ..merossclient.protocol.types import JsonDict
@@ -114,14 +114,18 @@ class DiffuserLight(LightBase):
     light entity for Meross diffuser (MOD100)
     """
 
+    # TODO: migrate to HA core entity init mechanics so to skip constructor implementation
+    # This needs a bit of refactor in LightBase
     if TYPE_CHECKING:
         effect_list: list[str]
 
-    init_ns = mn.Appliance_Control_Diffuser_Light
-
-    def __init__(self, channel: int, manager: "Device", /):
+    def __init__(
+        self, channel: int, manager: "Device", /, **kwargs: "Unpack[LightBase.Args]"
+    ):
         self.supported_color_modes = {ColorMode.RGB}
-        LightBase.__init__(self, channel, manager, mc.DIFFUSER_LIGHT_MODE_LIST)
+        LightBase.__init__(
+            self, channel, manager, **kwargs, effect_list=mc.DIFFUSER_LIGHT_MODE_LIST
+        )
 
     @override
     def _parse_light(self, payload, /):
@@ -177,8 +181,6 @@ class DiffuserLight(LightBase):
 
 
 class DiffuserSpray(Spray):
-
-    init_ns = mn.Appliance_Control_Diffuser_Spray
 
     init_options_map = {
         mc.DIFFUSER_SPRAY_MODE_OFF: Spray.init_options_map[mc.SPRAY_MODE_OFF],

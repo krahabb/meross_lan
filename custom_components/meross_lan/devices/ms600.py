@@ -9,7 +9,7 @@ from ..select import SelectParser
 from ..sensor import SensorParser
 
 if TYPE_CHECKING:
-    from typing import Final, Unpack
+    from typing import Final, Self, Unpack
 
     from ..helpers.device import BaseDevice, Device
     from ..helpers.entity import ChannelType
@@ -18,25 +18,40 @@ if TYPE_CHECKING:
 class PresenceConfigBase(ValueParser.NamespaceGroupValue, ValueParser):
     """Mixin style base class for all of the entities managed in Appliance.Control.Presence.Config"""
 
-    init_ns = mn.Appliance_Control_Presence_Config
+    if TYPE_CHECKING:
+
+        class Args(ValueParser.NamespaceGroupValue.Args, ValueParser.Args):
+            pass
 
     # HA core entity attributes:
     _attr_entity_category = SelectParser.EntityCategory.CONFIG
 
-    # TODO: generalize entity_key generation
 
-
-class PresenceConfigNumberBase(PresenceConfigBase, NumberParser):
+class PresenceConfigNumber(PresenceConfigBase, NumberParser):
     """Base class for config values represented as Number entities in HA."""
 
+    if TYPE_CHECKING:
 
-class PresenceConfigSelectBase(PresenceConfigBase, SelectParser):
+        class Args(PresenceConfigBase.Args, NumberParser.Args):
+            pass
+
+        @classmethod
+        def ENTITY_DEF(cls, **kwargs: "Unpack[Args]") -> type["Self"]: ...
+
+
+class PresenceConfigSelect(PresenceConfigBase, SelectParser):
     """Base class for config values represented as Select entities in HA."""
 
+    if TYPE_CHECKING:
 
-class PresenceConfigMode(PresenceConfigSelectBase):
+        class Args(PresenceConfigBase.Args, SelectParser.Args):
+            pass
 
-    init_key_group = mc.KEY_MODE
+        @classmethod
+        def ENTITY_DEF(cls, **kwargs: "Unpack[Args]") -> type["Self"]: ...
+
+
+class PresenceConfigMode(PresenceConfigSelect):
 
     # TODO: configure real labels
     # This map would actually be shared between workMode and testMode though
@@ -46,57 +61,9 @@ class PresenceConfigMode(PresenceConfigSelectBase):
         2: "2",
     }
 
-    def __init__(self, channel: "ChannelType | None", parent: "BaseDevice", key: str):
-        PresenceConfigSelectBase.__init__(
-            self,
-            channel,
-            parent,
-            entity_key=f"presence_config_mode_{key}",
-            name=key,
-            key_value=key,
-        )
 
+class PresenceConfigSensitivity(PresenceConfigSelect):
 
-class PresenceConfigNoBodyTime(PresenceConfigNumberBase):
-
-    init_entity_key = "presence_config_noBodyTime_time"
-
-    init_key_group = mc.KEY_NOBODYTIME
-    init_key_value = mc.KEY_TIME
-
-    # HA core entity attributes:
-    _attr_device_class = NumberParser.DEVICE_CLASS_DURATION
-    _attr_name = mc.KEY_NOBODYTIME
-    _attr_native_max_value = 3600  # 1 hour ?
-    _attr_native_min_value = 1
-    _attr_native_step = 1
-
-
-class PresenceConfigDistance(PresenceConfigNumberBase):
-
-    init_entity_key = "presence_config_distance_value"
-
-    init_key_group = mc.KEY_DISTANCE
-    init_key_value = mc.KEY_VALUE
-    init_device_scale = 1000
-
-    # HA core entity attributes:
-    _attr_device_class = NumberParser.DeviceClass.DISTANCE
-    _attr_name = mc.KEY_DISTANCE
-    _attr_native_unit_of_measurement = hac.UnitOfLength.METERS
-    _attr_native_max_value = 12
-    _attr_native_min_value = 0.1
-    _attr_native_step = 0.1
-
-
-class PresenceConfigSensitivity(PresenceConfigSelectBase):
-
-    init_entity_key = "presence_config_sensitivity_level"
-
-    init_key_group = mc.KEY_SENSITIVITY
-    init_key_value = mc.KEY_LEVEL
-
-    _attr_name = mc.KEY_SENSITIVITY
     # TODO: configure real labels
     init_options_map = {
         0: "0",
@@ -105,24 +72,71 @@ class PresenceConfigSensitivity(PresenceConfigSelectBase):
     }
 
 
-class PresenceConfigMthX(PresenceConfigNumberBase):
+class PresenceConfigMthX(PresenceConfigNumber):
     init_key_group = mc.KEY_MTHX
     # HA core entity attributes:
     _attr_native_max_value = 1000
     _attr_native_min_value = 1
     _attr_native_step = 1
 
-    def __init__(
-        self, channel: "ChannelType | None", parent: "BaseDevice", key: str, /
-    ):
-        PresenceConfigNumberBase.__init__(
-            self,
-            channel,
-            parent,
-            entity_key=f"presence_config_mthx_{key}",
-            name=key,
-            key_value=key,
-        )
+
+ENTITY_DEFS = (
+    PresenceConfigMode.ENTITY_DEF(
+        entity_key=f"presence_config_{mc.KEY_MODE}_{mc.KEY_WORKMODE}",
+        key_group=mc.KEY_MODE,
+        key_value=mc.KEY_WORKMODE,
+        name=mc.KEY_WORKMODE,
+    ),
+    PresenceConfigMode.ENTITY_DEF(
+        entity_key=f"presence_config_{mc.KEY_MODE}_{mc.KEY_TESTMODE}",
+        key_group=mc.KEY_MODE,
+        key_value=mc.KEY_TESTMODE,
+        name=mc.KEY_TESTMODE,
+    ),
+    PresenceConfigNumber.ENTITY_DEF(
+        entity_key=f"presence_config_{mc.KEY_NOBODYTIME}_{mc.KEY_TIME}",
+        key_group=mc.KEY_NOBODYTIME,
+        key_value=mc.KEY_TIME,
+        name=mc.KEY_NOBODYTIME,
+        device_class=NumberParser.DEVICE_CLASS_DURATION,
+        native_max_value=3600,  # 1 hour ?
+        native_min_value=1,
+        native_step=1,
+    ),
+    PresenceConfigNumber.ENTITY_DEF(
+        entity_key=f"presence_config_{mc.KEY_DISTANCE}_{mc.KEY_VALUE}",
+        key_group=mc.KEY_DISTANCE,
+        key_value=mc.KEY_VALUE,
+        device_scale=1000,
+        name=mc.KEY_DISTANCE,
+        device_class=NumberParser.DeviceClass.DISTANCE,
+        native_unit_of_measurement=hac.UnitOfLength.METERS,
+        native_max_value=12,
+        native_min_value=0.1,
+        native_step=0.1,
+    ),
+    PresenceConfigSensitivity.ENTITY_DEF(
+        entity_key=f"presence_config_{mc.KEY_SENSITIVITY}_{mc.KEY_LEVEL}",
+        key_group=mc.KEY_SENSITIVITY,
+        key_value=mc.KEY_LEVEL,
+        name=mc.KEY_SENSITIVITY,
+    ),
+    PresenceConfigMthX.ENTITY_DEF(
+        entity_key=f"presence_config_{mc.KEY_MTHX}_{mc.KEY_MTH1}",
+        key_value=mc.KEY_MTH1,
+        name=mc.KEY_MTH1,
+    ),
+    PresenceConfigMthX.ENTITY_DEF(
+        entity_key=f"presence_config_{mc.KEY_MTHX}_{mc.KEY_MTH2}",
+        key_value=mc.KEY_MTH2,
+        name=mc.KEY_MTH2,
+    ),
+    PresenceConfigMthX.ENTITY_DEF(
+        entity_key=f"presence_config_{mc.KEY_MTHX}_{mc.KEY_MTH3}",
+        key_value=mc.KEY_MTH3,
+        name=mc.KEY_MTH3,
+    ),
+)
 
 
 def namespace_init_presence_config(ns: mn.Namespace, device: "Device", /):
@@ -131,23 +145,19 @@ def namespace_init_presence_config(ns: mn.Namespace, device: "Device", /):
     common semantics in namespace parsing/handling."""
     handler = NamespaceHandler(ns, device)
     handler.register_parsers(
-        PresenceConfigMode(0, device, mc.KEY_WORKMODE),
-        PresenceConfigMode(0, device, mc.KEY_TESTMODE),
-        PresenceConfigNoBodyTime(0, device),
-        PresenceConfigDistance(0, device),
-        PresenceConfigSensitivity(0, device),
-        PresenceConfigMthX(0, device, mc.KEY_MTH1),
-        PresenceConfigMthX(0, device, mc.KEY_MTH2),
-        PresenceConfigMthX(0, device, mc.KEY_MTH3),
+        *(
+            entity_def(
+                0,
+                device,
+                ns=ns,
+            )
+            for entity_def in ENTITY_DEFS
+        )
     )
 
 
 class PresenceSensor(SensorParser):
     """ms600 presence sensor."""
-
-    if TYPE_CHECKING:
-        # manager: "Device" pass
-        pass
 
     init_entity_key = "sensor_presence"
 

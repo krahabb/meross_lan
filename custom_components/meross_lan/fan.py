@@ -48,17 +48,10 @@ class Fan(ToggleXParser, fan.FanEntity):
 
     _enable_turn_on_off_backwards_compatibility = False
 
-    __slots__ = (
-        "percentage",
-        "speed_count",
-        "_saved_speed",  # used to restore previous speed when turning on/off
-    )
-
-    def __init__(self, channel: int, device: "Device", /):
-        self.percentage = None
-        self.speed_count = 1  # safe default: auto-inc when 'fan' payload updates
-        self._saved_speed = 1
-        super().__init__(channel, device)
+    init_speed_count = 1
+    init__saved_speed = 1
+    SLOTS_AUTO_INIT = ("percentage", "speed_count", "_saved_speed")
+    __slots__ = ()
 
     # interface: fan.FanEntity
     @override

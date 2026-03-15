@@ -30,16 +30,14 @@ class Siren(BinaryParser, siren.SirenEntity):
     """
 
     class EnableSwitch(SwitchParser):
-        init_ns = mn.Appliance_Config_Alarm
         NS_CHANNELS = SwitchParser.NS_CHANNELS_SINGLE
         init_key_value = mc.KEY_ENABLE
-        init_entity_key = f"{init_ns.slug}__{init_key_value}"
+        init_entity_key = f"{mn.Appliance_Config_Alarm.slug}__{init_key_value}"
 
     class SongSelect(SelectParser):
-        init_ns = mn.Appliance_Config_Alarm
         NS_CHANNELS = SelectParser.NS_CHANNELS_SINGLE
         init_key_value = mc.KEY_SONG
-        init_entity_key = f"{init_ns.slug}__{init_key_value}"
+        init_entity_key = f"{mn.Appliance_Config_Alarm.slug}__{init_key_value}"
 
         init_options_map = {
             1: "Siren",
@@ -52,10 +50,9 @@ class Siren(BinaryParser, siren.SirenEntity):
         }
 
     class VolumeNumber(NumberParser):
-        init_ns = mn.Appliance_Config_Alarm
         NS_CHANNELS = NumberParser.NS_CHANNELS_SINGLE
         init_key_value = mc.KEY_VOLUME
-        init_entity_key = f"{init_ns.slug}__{init_key_value}"
+        init_entity_key = f"{mn.Appliance_Config_Alarm.slug}__{init_key_value}"
         _attr_native_max_value = 100
         _attr_native_min_value = 0
 
@@ -69,10 +66,9 @@ class Siren(BinaryParser, siren.SirenEntity):
             pass
 
     PLATFORM = siren.DOMAIN
-    init_ns = mn.Appliance_Control_Alarm
     NS_CHANNELS = BinaryParser.NS_CHANNELS_SINGLE
     init_key_value = "event_security_value"
-    init_entity_key = f"{init_ns.slug}__{init_key_value}"
+    init_entity_key = f"{mn.Appliance_Control_Alarm.slug}__{init_key_value}"
     native_on = 1
     native_off = 2
 
@@ -89,14 +85,15 @@ class Siren(BinaryParser, siren.SirenEntity):
     }
 
     def __init__(self, channel: int, device: "Device", /, **kwargs: "Unpack[Args]"):
-        if mn.Appliance_Config_Alarm in device.descriptor.ability:
-            song_select = self.SongSelect(channel, device)
-            self.available_tones = song_select.init_options_map
+        ns_config_alarm = mn.Appliance_Config_Alarm
+        if ns_config_alarm in device.descriptor.ability:
+            song_select = self.SongSelect(channel, device, ns=ns_config_alarm)
+            self.available_tones = song_select.options_map
             self.supported_features = self._attr_supported_features
-            device.get_handler(mn.Appliance_Config_Alarm).register_parsers(
-                self.EnableSwitch(channel, device),
+            device.get_handler(ns_config_alarm).register_parsers(
+                self.EnableSwitch(channel, device, ns=ns_config_alarm),
                 song_select,
-                self.VolumeNumber(channel, device),
+                self.VolumeNumber(channel, device, ns=ns_config_alarm),
             )
         else:
             self.available_tones = {}

@@ -9,7 +9,7 @@ from ..number import NumberParser
 from ..switch import SwitchParser
 
 if TYPE_CHECKING:
-    from typing import ClassVar, NotRequired
+    from typing import ClassVar, Unpack
 
     from ..helpers.device import Device
     from ..merossclient.protocol.types import rollershutter as mt_rs
@@ -24,15 +24,25 @@ class RollerShutter(Cover):
         current_cover_position: int | None
         _attr_supported_features: ClassVar[Cover.EntityFeature]
         supported_features: Cover.EntityFeature  # slot override base property
+        number_signalOpen: NumberParser
+        number_signalClose: NumberParser
 
     # TODO: switchover main ns to State so we could use device_value for _mrs_state
-    init_ns = mn.Appliance_RollerShutter_Position
+    # init_ns = mn.Appliance_RollerShutter_Position
     # TODO: Cover is not really a NamespaceValue parser..this is a remnant...
     init_key_value = mc.KEY_POSITION
 
     ATTR_POSITION_NATIVE = "position_native"
     PARAM_TRANSITION_POLL_TIMEOUT = 2
     """used when polling the cover state to monitor an ongoing transition"""
+    NUMBER_CONFIG_DEF = NumberParser.ENTITY_DEF(
+        ns=mn.Appliance_RollerShutter_Config,
+        device_scale=1000,
+        device_class=NumberParser.DeviceClass.DURATION,
+        native_max_value=60,
+        native_min_value=1,
+        native_step=1,
+    )
 
     # HA core entity attributes:
     _attr_assumed_state = True
@@ -53,7 +63,9 @@ class RollerShutter(Cover):
         "_position_starttime",
     )
 
-    def __init__(self, channel: int, device: "Device", /):
+    def __init__(
+        self, channel: int, device: "Device", /, **kwargs: "Unpack[Cover.Args]"
+    ):
         self.current_cover_position = None
         self.extra_state_attributes = {}
         self.supported_features = self._attr_supported_features
@@ -78,19 +90,33 @@ class RollerShutter(Cover):
 
         except Exception:
             self._position_native_isgood = False
-        Cover.__init__(self, channel, device)
-        device.register_parser_ex(
-            self,
-            mn.Appliance_RollerShutter_Config,
-            mn.Appliance_RollerShutter_State,
-        )
-        if mn.Appliance_RollerShutter_Adjust in descriptor.ability:
+        Cover.__init__(self, channel, device, **kwargs)
+        device.register_parser_ex(self, mn.Appliance_RollerShutter_State)
+        ns_adjust = mn.Appliance_RollerShutter_Adjust
+        if ns_adjust in descriptor.ability:
             # unknown use: actually the polling period is set on a very high timeout
-            device.get_handler(mn.Appliance_RollerShutter_Adjust).register_parser(
-                RollerShutterAdjustSwitch(channel, device)
+            device.get_handler(ns_adjust).register_parser(
+                RollerShutterAdjustSwitch(channel, device, ns=ns_adjust)
             )
-        self.number_signalOpen = RollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
-        self.number_signalClose = RollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
+
+        ns_config = mn.Appliance_RollerShutter_Config
+        for _key_value in (mc.KEY_SIGNALOPEN, mc.KEY_SIGNALCLOSE):
+            setattr(
+                self,
+                f"number_{_key_value}",
+                self.NUMBER_CONFIG_DEF(
+                    channel,
+                    device,
+                    entity_key=f"config_{_key_value}",
+                    key_value=_key_value,
+                    name=_key_value,
+                ),
+            )
+        if ns_config in descriptor.ability:
+            device.get_handler(ns_config).register_parsers(
+                self.number_signalOpen, self.number_signalClose
+            )
+
         # ToggleX behavior in cover (garage/rollershutter) is not very clear
         # most devices expose the ns in abilities and maybe also channel indexes in digest
         # but the effect of toggling is unknown. We just silence any incoming message here.
@@ -190,17 +216,6 @@ class RollerShutter(Cover):
             )
             if self._position_native_isgood:
                 await self.handler_ns.async_get(self.channel)
-
-    def _parse_config(self, payload: dict):
-        # payload = {"channel": 0, "signalOpen": 50000, "signalClose": 50000}
-        try:
-            self.number_signalOpen.update_device_value(payload[mc.KEY_SIGNALOPEN])
-        except KeyError:
-            pass
-        try:
-            self.number_signalClose.update_device_value(payload[mc.KEY_SIGNALCLOSE])
-        except KeyError:
-            pass
 
     def _parse_position(self, payload: "mt_rs.Position_C"):
         """
@@ -336,12 +351,11 @@ class RollerShutterAdjustSwitch(SwitchParser):
     which seems to start some kind of adjustment operation.
     """
 
-    init_ns = mn.Appliance_RollerShutter_Adjust
     init_key_value = mc.KEY_VALUE
     native_on = 1
     native_off = 2
 
-    init_entity_key = f"{init_ns.slug}__{init_key_value}"
+    init_entity_key = f"{mn.Appliance_RollerShutter_Adjust.slug}__{init_key_value}"
 
     _attr_name = "Auto Calibration"
 
@@ -356,34 +370,6 @@ class RollerShutterAdjustSwitch(SwitchParser):
             self.update_device_value(payload[self.key_value])
         except KeyError:
             self.update_boolean_value(payload[mc.KEY_STATUS] != 0)
-
-
-class RollerShutterConfigNumber(NumberParser):
-    """
-    Helper entity to configure MRS open/close duration
-    """
-
-    init_ns = mn.Appliance_RollerShutter_Config
-
-    init_device_scale = 1000
-
-    # HA core entity attributes:
-    _attr_device_class = NumberParser.DEVICE_CLASS_DURATION
-    # these are ok for open/close durations
-    # customize those when needed...
-    _attr_native_max_value = 60
-    _attr_native_min_value = 1
-    _attr_native_step = 1
-
-    def __init__(self, cover: "RollerShutter", key: str):
-        NumberParser.__init__(
-            self,
-            cover.channel,
-            cover.parent,
-            entity_key=f"config_{key}",
-            name=key,
-            key_value=key,
-        )
 
 
 NamespaceHandler.POLLING_CONFIG_MAP.update(

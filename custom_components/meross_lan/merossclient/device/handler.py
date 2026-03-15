@@ -7,7 +7,16 @@ from ..protocol.message import MerossMessage
 from .parser import NamespaceParser
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, ClassVar, Coroutine, Final, Iterable
+    from typing import (
+        Any,
+        Callable,
+        ClassVar,
+        Coroutine,
+        Final,
+        Iterable,
+        NotRequired,
+        Unpack,
+    )
 
     from . import Device
     from ..protocol.types import (
@@ -49,8 +58,8 @@ class NamespaceHandler(logging.Loggable):
         """Centralized polling config parameters for namespaces. This is used if no config is being passed
         at NamespaceHandler initialization time."""
 
-        parent: Final["Device"]  # type: ignore[override]
         id: Final[mn.Namespace]  # type: ignore[override]
+        parent: Final["Device"]  # type: ignore[override]
 
         handler: HandlerFunc
         parser_class: type[NamespaceParser] | None
@@ -62,6 +71,10 @@ class NamespaceHandler(logging.Loggable):
 
         last_rx_push: JsonDict | None
         # TODO: implement caching of all methods responses
+
+        class Args(logging.Loggable.Args):
+            handler: NotRequired["NamespaceHandler.HandlerFunc"]
+            config: NotRequired["NamespaceHandler.PollingConfigType"]
 
     HEADER_AVG_SIZE = 300
     POLLING_CONFIG_DEFAULT = (0, 0, None)
@@ -85,37 +98,41 @@ class NamespaceHandler(logging.Loggable):
 
     def __init__(
         self,
-        ns: "mn.Namespace",
-        device: "Device",
+        id: "mn.Namespace",
+        parent: "Device",
         /,
-        *,
-        handler: "HandlerFunc | None" = None,
-        config: "PollingConfigType | None" = None,
+        **kwargs: "Unpack[NamespaceHandler.Args]",
     ):
-        assert ns not in device.ns_handlers, ("Namespace already registered", ns)
-        super().__init__(ns, device)
-        self.handler = handler or getattr(
-            device, f"_handle_{ns.replace('.', '_')}", self._handle
-        )
+        assert id not in parent.ns_handlers, ("Namespace already registered", id)
+        try:
+            self.handler = kwargs.pop("handler")
+        except KeyError:
+            self.handler = getattr(
+                parent, f"_handle_{id.replace('.', '_')}", self._handle
+            )
         self.parser_class = None
         self.parsers = {}
         self.last_rx_epoch = self.last_poll_epoch = self.polling_epoch_next = 0.0
-        if not config:
-            config = self.POLLING_CONFIG_MAP.get(ns, self.POLLING_CONFIG_DEFAULT)
-        self.polling_period = config[0]
-        self.polling_period_cloud = config[1]
-        self.polling_strategy = config[2]
+        try:
+            self.polling_period, self.polling_period_cloud, self.polling_strategy = (
+                kwargs.pop("config")
+            )
+        except KeyError:
+            self.polling_period, self.polling_period_cloud, self.polling_strategy = (
+                self.POLLING_CONFIG_MAP.get(id, self.POLLING_CONFIG_DEFAULT)
+            )
         # by default we calculate 1 item/channel per payload but we should
         # refine this whenever needed
-        self.polling_response_size = self.HEADER_AVG_SIZE + ns.payload_item_size
+        self.polling_response_size = self.HEADER_AVG_SIZE + id.payload_item_size
         self.last_rx_push = None
+        super().__init__(id, parent, **kwargs)
         self.polling_request_configure(
             mn.PayloadType.LIST_IDX_STRICT
             if self.polling_strategy is NamespaceHandler.async_poll_chunked
             else None
         )
-        device.ns_handlers[ns] = self
-        device.shutdown_broadcast.add(self.shutdown)
+        parent.ns_handlers[id] = self
+        parent.shutdown_broadcast.add(self.shutdown)
 
     def shutdown(self):
         super().shutdown()
@@ -127,14 +144,12 @@ class NamespaceHandler(logging.Loggable):
     def register_parser_class(
         self, parser_class: type[NamespaceParser], channels: "Iterable[int] | None", /
     ):
-        # TODO: remove this check. Instead use this method to set the parser_class.init_ns
-        assert parser_class.init_ns == self.id
         self.parser_class = parser_class
         self.handler = self._handle_list
         for channel in (
             self.parent.descriptor.channels if channels is None else channels
         ):
-            self.register_parser(parser_class(channel, self.parent))
+            self.register_parser(parser_class(channel, self.parent, ns=self.id))
 
     def register_parser(
         self,

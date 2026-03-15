@@ -210,15 +210,12 @@ class ElectricitySensor(EntityNamespaceMixin, _ElectricitySensor):
 
     POLLING_CONFIG_DEFAULT = EntityNamespaceMixin.POLLING_CONFIG_FASTSENSOR_NS
 
-    init_ns = mn.Appliance_Control_Electricity
-
     # skip EntityNamespaceMixin async_added_to_hass and async_will_remove_from_hass since
     # we want to keep polling this ns even when _ElectricitySensor is disabled
     # (we have to since it carries critical data for the energy estimate and ConsumptionXSensor)
     @classmethod
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        assert ns is cls.init_ns
-        ns_entity = cls(ns, device)
+        ns_entity = cls(ns, device, ns=ns)
         ns_entity.handler_ns = ns_entity
         return ns_entity
 
@@ -232,8 +229,6 @@ class ElectricityXSensor(_ElectricitySensor):
 
         class Args(_ElectricitySensor.Args):
             pass
-
-    init_ns = mn.Appliance_Control_ElectricityX
 
     class MConsumeSensor(SensorParser):
         if TYPE_CHECKING:
@@ -305,7 +300,6 @@ class ConsumptionHSensor(SensorParser):
         handler_ns: "ConsumptionHNamespaceHandler"
 
     init_entity_key = mc.KEY_CONSUMPTIONH
-    init_ns = mn.Appliance_Control_ConsumptionH
     init_key_value = mc.KEY_TOTAL
 
     _attr_device_class = SensorParser.DeviceClass.ENERGY
@@ -459,7 +453,6 @@ class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
         EntityNamespaceMixin.async_poll_smart,
     )
     init_entity_key = "energy"
-    init_ns = mn.Appliance_Control_ConsumptionX
     _attr_device_class = SensorParser.DeviceClass.ENERGY
 
     ATTR_OFFSET = "offset"
@@ -476,7 +469,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
         "_tomorrow_midnight_epoch",
     )
 
-    def __init__(self, channel, device: "Device", /):
+    def __init__(self, id, device: "Device", /, **kwargs):
         self.offset = 0
         self.reset_ts = 0
         self.energy_estimate = 0.0
@@ -490,7 +483,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
         self._today_midnight_epoch = 0  # 12:00 am today
         self._tomorrow_midnight_epoch = 0  # 12:00 am tomorrow
         self.extra_state_attributes = {}
-        super().__init__(channel, device)
+        super().__init__(id, device, **kwargs)
         self.polling_response_size_adj(30)  # maximum item count for payload
         device.enable_check_device_time()
 
@@ -503,9 +496,10 @@ class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
 
-        sensor_energy_estimate: ElectricitySensor | None = self.parent.entities.get(ElectricitySensor.init_ns)  # type: ignore
-        if sensor_energy_estimate:
-            sensor_energy_estimate.sensor_consumptionx = self
+        try:
+            self.parent.entities[mn.Appliance_Control_Electricity].sensor_consumptionx = self  # type: ignore
+        except KeyError:
+            pass
         # state restoration is only needed on cold-start and we have to discriminate
         # from when this happens while the device is already working. In general
         # the sensor state is always kept in the instance even when it's disabled
@@ -687,7 +681,6 @@ class OverTempEnableSwitch(EntityNamespaceMixin, SwitchParser):
 
     POLLING_CONFIG_DEFAULT = EntityNamespaceMixin.POLLING_CONFIG_CONFIGURATION_NS
     init_entity_key = "config_overtemp_enable"
-    init_ns = mn.Appliance_Config_OverTemp
     init_key_value = mc.KEY_ENABLE
 
     __SLOTS__ = ("sensor_overtemp_type",)
@@ -698,13 +691,14 @@ class OverTempEnableSwitch(EntityNamespaceMixin, SwitchParser):
         self.ns_payload = overtemp = message.payload[mc.KEY_OVERTEMP]
         self.update_device_value(overtemp[self.key_value])
         try:
-            self.sensor_overtemp_type.update_device_value(overtemp[mc.KEY_TYPE])
+            type = overtemp[mc.KEY_TYPE]
+            self.sensor_overtemp_type.update_device_value(type)
         except AttributeError:
             self.sensor_overtemp_type = EnumParser(
                 self.channel,
                 self.parent,
                 entity_key="config_overtemp_type",
-                native_value=overtemp[mc.KEY_TYPE],
+                native_value=type,
             )
         except KeyError:
             pass

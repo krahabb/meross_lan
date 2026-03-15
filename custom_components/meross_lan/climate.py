@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
     from .helpers.device import BaseDevice, Device
     from .helpers.entity import ChannelType
+    from .helpers.namespaces import mn
 
 
 async def async_setup_entry(
@@ -38,9 +39,9 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
     class Preset(enum.StrEnum):
         CUSTOM = "custom"
-        COMFORT = "comfort"
-        SLEEP = "sleep"
-        AWAY = "away"
+        COMFORT = climate.PRESET_COMFORT
+        SLEEP = climate.PRESET_SLEEP
+        AWAY = climate.PRESET_AWAY
         AUTO = "auto"
 
     class AdjustNumber(NumberParser):
@@ -55,41 +56,25 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         """
 
         if TYPE_CHECKING:
-            # HA core entity attributes:
-            icon: Final[str]
+            climate: "MtsClimate"
+
+            class Args(NumberParser.Args):
+                climate: "MtsClimate"
+                ns: mn.Namespace
+                key_value: str
+
+            def __init__(
+                self,
+                channel: ChannelType,
+                parent: BaseDevice,
+                /,
+                **kwargs: Unpack[Args],
+            ): ...
 
         _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
-        _attr_native_step = 0.5
 
-        __slots__ = (
-            "climate",
-            "icon",
-        )
-
-        def __init__(self, climate: "MtsClimate", preset_mode: "MtsClimate.Preset", /):
-            self.climate = climate
-            self.icon = climate.PRESET_TO_ICON_MAP[preset_mode]
-            key_value = climate.MTS_MODE_TO_TEMPERATUREKEY_MAP[
-                reverse_lookup(climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
-            ]
-            NumberParser.__init__(
-                self,
-                climate.channel,
-                climate.parent,
-                entity_key=f"config_temperature_{key_value}",
-                name=f"{preset_mode} temperature",
-                key_value=key_value,
-                device_scale=climate.temperature_scale,
-            )
-
-        # TODO: remove properties and fix these values when updated on MtsClimate
-        @property
-        def native_max_value(self):
-            return self.climate.max_temp
-
-        @property
-        def native_min_value(self):
-            return self.climate.min_temp
+        SLOTS_AUTO_INIT = ("climate", "icon")
+        __slots__ = ()
 
         async def async_request_value(self, device_value, /):
             # This implementation is only valid for mts100/mts200 where
@@ -101,10 +86,8 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
                 {self.key_value: device_value}
             )
 
-    class Schedule(MtsSchedule):
-        """Overriden in derived to provide specific behavior."""
-
-        pass
+    Schedule = MtsSchedule
+    """Overriden in derived to provide specific behavior."""
 
     class TrackSensorSelect(SelectEntity):
         """
@@ -383,22 +366,23 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
         temperature_scale: ClassVar[int]
 
+        SCHEDULE_NS: ClassVar[mn.Namespace]
+        Schedule: ClassVar[type[MtsSchedule]]
         TARGET_TEMPERATURE_STEP: ClassVar[float]
-
         MTS_MODE_TO_PRESET_MAP: ClassVar[dict[int | None, str]]
-        """maps device 'mode' value to the HA climate.preset_mode"""
+        """Maps device 'mode' value to the HA climate.preset_mode"""
         MTS_MODE_TO_TEMPERATUREKEY_MAP: ClassVar[dict[int | None, str]]
-        """maps the current mts mode to the name of temperature setpoint key"""
-        PRESET_TO_ICON_MAP: Final[dict[Preset, str]]
-        """Used in Number entities for temperatues setpoint."""
+        """Maps the current mts mode to the name of a temperature setpoint key.
+        Used also to setup SetPointNumber entities (when empty -> no setpoints)."""
+        SETPOINT_ICON_MAP: Final[dict[Preset, str]]
+        """Simple map to configure SetPointNumber icons."""
         SET_TEMP_FORCE_MANUAL_MODE: Final[bool]
         """Determines the behavior of async_set_temperature."""
 
         parent: Final[BaseDevice]  # type: ignore[override]
         channel: Final[ChannelType]  # type: ignore[override]
-
         number_adjust_temperature: Final[NumberParser]
-        number_preset_temperature: Final[dict[str, "MtsClimate.SetPointNumber"]]
+        number_preset_temperature: Final[set[SetPointNumber]]
         schedule: Final[MtsSchedule]
         select_track_sensor: Final[TrackSensorSelect]
         sensor_current_temperature: Final[SensorParser]
@@ -437,12 +421,12 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
     temperature_scale = 1
 
     TARGET_TEMPERATURE_STEP = 0.5
-    PRESET_TO_ICON_MAP = {
+    MTS_MODE_TO_TEMPERATUREKEY_MAP = {}
+    SETPOINT_ICON_MAP = {
         Preset.COMFORT: "mdi:sun-thermometer",
         Preset.SLEEP: "mdi:power-sleep",
         Preset.AWAY: "mdi:bag-checked",
     }
-    """lookups used in MtsSetpointNumber to map a pretty icon to the setpoint entity"""
     SET_TEMP_FORCE_MANUAL_MODE = True
     """Determines the behavior of async_set_temperature."""
     # HA core entity attributes:
@@ -482,7 +466,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         "sensor_current_temperature",
     )
 
-    def __init__(self, channel: "ChannelType", parent: "BaseDevice", /):
+    def __init__(self, channel: "ChannelType", parent: "BaseDevice", /, **kwargs):
         self.current_humidity = None
         self.current_temperature = None
         self.hvac_action = None
@@ -499,21 +483,44 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         self._mts_active = False
         self._mts_mode = 0
         self._mts_onoff = 0
-        super().__init__(channel, parent)
-        self.number_adjust_temperature = self.__class__.AdjustNumber(channel, parent)
-        self.number_preset_temperature = {}
-        SetPointNumber = self.__class__.SetPointNumber
-        if SetPointNumber is not MtsClimate.SetPointNumber:
-            # Some derived have no setpoints at all
-            for preset in MtsClimate.PRESET_TO_ICON_MAP.keys():
-                number_preset_temperature = SetPointNumber(self, preset)
-                self.number_preset_temperature[number_preset_temperature.key_value] = (
-                    number_preset_temperature
-                )
-        self.schedule = self.__class__.Schedule(self)
-        self.select_track_sensor = MtsClimate.TrackSensorSelect(
-            channel, parent, climate=self
+        super().__init__(channel, parent, **kwargs)
+
+        cls = self.__class__
+        self.number_adjust_temperature = cls.AdjustNumber(
+            channel, parent, ns=cls.AdjustNumber.init_ns
         )
+
+        if cls.MTS_MODE_TO_TEMPERATUREKEY_MAP:
+            self.number_preset_temperature = set(
+                cls.SetPointNumber(
+                    channel,
+                    parent,
+                    climate=self,
+                    entity_key=f"config_temperature_{key_value}",
+                    ns=self.ns,
+                    key_value=key_value,
+                    device_scale=self.temperature_scale,
+                    native_max_value=self.max_temp,
+                    native_min_value=self.min_temp,
+                    native_step=self.target_temperature_step,
+                    name=f"{preset} temperature",
+                    icon=cls.SETPOINT_ICON_MAP[preset],
+                )
+                for preset, key_value in {
+                    preset: cls.MTS_MODE_TO_TEMPERATUREKEY_MAP[
+                        reverse_lookup(cls.MTS_MODE_TO_PRESET_MAP, preset)
+                    ]
+                    for preset in cls.SETPOINT_ICON_MAP
+                }.items()
+            )
+
+        schedule_ns = cls.SCHEDULE_NS
+        self.schedule = cls.Schedule(
+            channel, parent, climate=self, ns=schedule_ns, entity_key=schedule_ns.key
+        )
+        parent.enable_check_device_time()  # useful for schedule entity times
+
+        self.select_track_sensor = cls.TrackSensorSelect(channel, parent, climate=self)
         self.sensor_current_temperature = SensorParser.Temperature(
             channel, parent, entity_registry_enabled_default=False
         )
@@ -526,7 +533,10 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         del self.select_track_sensor  # type: ignore
         del self.schedule  # type: ignore
         del self.number_adjust_temperature  # type: ignore
-        self.number_preset_temperature.clear()
+        try:
+            del self.number_preset_temperature  # type: ignore
+        except AttributeError:
+            pass
 
     def set_unavailable(self):
         self.current_humidity = None
