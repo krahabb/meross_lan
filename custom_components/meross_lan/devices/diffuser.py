@@ -43,17 +43,18 @@ def digest_init_diffuser(
     """
 
     diffuser_light_handler = NamespaceHandler(
-        mn.Appliance_Control_Diffuser_Light, device
+        mn.Appliance_Control_Diffuser_Light,
+        device,
+        config=NamespaceHandler.POLLING_CONFIG_DIGEST_NS,
+        parser_class=DiffuserLight,
+        channels=(light[mc.KEY_CHANNEL] for light in digest[mc.KEY_LIGHT]),
     )
-    diffuser_light_handler.register_parser_class(
-        DiffuserLight, (light[mc.KEY_CHANNEL] for light in digest[mc.KEY_LIGHT])
-    )
-
     diffuser_spray_handler = NamespaceHandler(
-        mn.Appliance_Control_Diffuser_Spray, device
-    )
-    diffuser_spray_handler.register_parser_class(
-        DiffuserSpray, (spray[mc.KEY_CHANNEL] for spray in digest[mc.KEY_SPRAY])
+        mn.Appliance_Control_Diffuser_Spray,
+        device,
+        config=NamespaceHandler.POLLING_CONFIG_DIGEST_NS,
+        parser_class=DiffuserSpray,
+        channels=(spray[mc.KEY_CHANNEL] for spray in digest[mc.KEY_SPRAY]),
     )
 
     if mn.Appliance_Control_Diffuser_Sensor in device.descriptor.ability:
@@ -90,6 +91,7 @@ def digest_init_diffuser(
             mn.Appliance_Control_Diffuser_Sensor,
             device,
             handler=_handle_Appliance_Control_Diffuser_Sensor,
+            config=NamespaceHandler.POLLING_CONFIG_SLOWSENSOR_NS,
         )
 
     diffuser_light_parser = diffuser_light_handler.parse_list
@@ -119,13 +121,8 @@ class DiffuserLight(LightBase):
     if TYPE_CHECKING:
         effect_list: list[str]
 
-    def __init__(
-        self, channel: int, manager: "Device", /, **kwargs: "Unpack[LightBase.Args]"
-    ):
-        self.supported_color_modes = {ColorMode.RGB}
-        LightBase.__init__(
-            self, channel, manager, **kwargs, effect_list=mc.DIFFUSER_LIGHT_MODE_LIST
-        )
+    init_effect_list = mc.DIFFUSER_LIGHT_MODE_LIST
+    _attr_supported_color_modes = {ColorMode.RGB}
 
     @override
     def _parse_light(self, payload, /):
@@ -187,12 +184,3 @@ class DiffuserSpray(Spray):
         mc.DIFFUSER_SPRAY_MODE_ECO: Spray.init_options_map[mc.SPRAY_MODE_INTERMITTENT],
         mc.DIFFUSER_SPRAY_MODE_FULL: Spray.init_options_map[mc.SPRAY_MODE_CONTINUOUS],
     }
-
-
-NamespaceHandler.POLLING_CONFIG_MAP.update(
-    {
-        mn.Appliance_Control_Diffuser_Light: NamespaceHandler.POLLING_CONFIG_DIGEST_NS,
-        mn.Appliance_Control_Diffuser_Spray: NamespaceHandler.POLLING_CONFIG_DIGEST_NS,
-        mn.Appliance_Control_Diffuser_Sensor: NamespaceHandler.POLLING_CONFIG_SLOWSENSOR_NS,
-    }
-)

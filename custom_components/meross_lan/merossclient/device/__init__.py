@@ -116,7 +116,9 @@ class PhysicalDevice(AbstractClient):
     def ns_handlers(self, /) -> "Mapping[str, NamespaceHandler]": ...
 
     @abstractmethod
-    def _create_handler(self, ns: "mn.Namespace", /) -> "NamespaceHandler": ...
+    def _create_handler(
+        self, ns: "mn.Namespace", /, **kwargs: "Unpack[NamespaceHandler.Args]"
+    ) -> "NamespaceHandler": ...
 
     def get_handler(self, ns: "mn.Namespace", /):
         try:
@@ -659,11 +661,13 @@ class Device(PhysicalDevice):
         self.log(self.DEBUG, "Switching transport to %s", self.transport)
 
     @override
-    def _create_handler(self, ns: "mn.Namespace", /):
+    def _create_handler(
+        self, ns: "mn.Namespace", /, **kwargs: "Unpack[NamespaceHandler.Args]"
+    ):
         """Called by the base device message parsing chain when a new
         NamespaceHandler need to be defined (This happens the first time
         the namespace enters the message handling flow)"""
-        return NamespaceHandler(ns, self)
+        return NamespaceHandler(ns, self, **kwargs)
 
     def get_handler_by_name(self, namespace: str, /):
         try:
@@ -1050,7 +1054,9 @@ class SubDevice(PhysicalDevice):
 
     @override
     # parent._create_handler is being cached in self._create_handler
-    def _create_handler(self, ns: "mn.Namespace", /) -> "NamespaceHandler": ...
+    def _create_handler(
+        self, ns: "mn.Namespace", /, **kwargs: "Unpack[NamespaceHandler.Args]"
+    ) -> "NamespaceHandler": ...
 
     # TODO: implement maybe something for firmware_version
     @override

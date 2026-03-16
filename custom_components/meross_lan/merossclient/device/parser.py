@@ -136,7 +136,6 @@ class NamespaceParser(logging.Loggable):
             self.handlers[handler.id] = handler
         except AttributeError:
             self.handlers = {handler.id: handler}  # type: ignore[assignment]
-            self.ns_payload = mn.EMPTY_DICT
 
     @cached_property
     def handler_ns(self):
@@ -181,9 +180,10 @@ class NamespaceParser(logging.Loggable):
         digest payload. This kind of initialization is alternative to namespace_init and
         generally richer (not every namespace has 'digest' entities though - namespace_init is
         for that semantics)."""
-        handler = device._create_handler(cls.init_ns)
-        handler.register_parser_class(
-            cls, (_digest[mc.KEY_CHANNEL] for _digest in digest)
+        handler = device._create_handler(
+            cls.init_ns,
+            parser_class=cls,
+            channels=(_digest[mc.KEY_CHANNEL] for _digest in digest),
         )
         return handler.parse_list, (handler,)
 
@@ -192,7 +192,7 @@ class NamespaceParser(logging.Loggable):
         """Helper to register a specialized entity class to the proper namespace.
         This is going to be used on Device initialization for various entities sharing
         common semantics in namespace parsing/handling."""
-        device._create_handler(ns).register_parser_class(cls, cls.NS_CHANNELS)
+        device._create_handler(ns, parser_class=cls, channels=cls.NS_CHANNELS)
 
 
 class NamespaceValue(NamespaceParser):

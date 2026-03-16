@@ -1252,11 +1252,13 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         handler.handle_response(message)
 
     @override
-    def _create_handler(self, ns: "mn.Namespace", /):
+    def _create_handler(
+        self, ns: "mn.Namespace", /, **kwargs: "Unpack[NamespaceHandler.Args]"
+    ):
         """Called by the base device message parsing chain when a new
         NamespaceHandler need to be defined (This happens the first time
         the namespace enters the message handling flow)"""
-        return NamespaceHandler(ns, self)
+        return NamespaceHandler(ns, self, **kwargs)
 
     def _handle_Appliance_Mcu_Firmware(self, message: MerossMessage, /):
         self.descriptor.mcu = message.payload[mc.KEY_FIRMWARE]

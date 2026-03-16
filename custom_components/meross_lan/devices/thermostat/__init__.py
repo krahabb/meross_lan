@@ -396,14 +396,19 @@ def digest_init_thermostat(
                 digest_parsers[ns_key] = device.digest_parse_empty
                 continue
 
-        handler = device.get_handler(ns)
+        try:
+            climate_class = CLIMATE_INITIALIZERS[ns_key]
+        except KeyError:
+            handler = device.get_handler(ns)
+        else:
+            handler = NamespaceHandler(
+                ns,
+                device,
+                parser_class=climate_class,
+                channels=(_digest[mc.KEY_CHANNEL] for _digest in ns_digest),
+            )
         digest_parsers[ns_key] = handler.parse_list
         digest_pollers.add(handler)
-
-        if climate_class := CLIMATE_INITIALIZERS.get(ns_key):
-            handler.register_parser_class(
-                climate_class, (_digest[mc.KEY_CHANNEL] for _digest in ns_digest)
-            )
 
     def digest_parse_thermostat(digest: "JsonDict", /):
         """

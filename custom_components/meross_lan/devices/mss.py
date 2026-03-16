@@ -361,8 +361,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
 
     def __init__(self, ns: "mn.Namespace", device: "Device", /):
         self._channels_to_poll = []
-        NamespaceHandler.__init__(self, ns, device)
-        self.register_parser_class(ConsumptionHSensor, device.descriptor.channels)
+        NamespaceHandler.__init__(self, ns, device, parser_class=ConsumptionHSensor)
         self.polling_strategy = ConsumptionHNamespaceHandler.async_poll_probe  # type: ignore
         device.enable_check_device_time()
 

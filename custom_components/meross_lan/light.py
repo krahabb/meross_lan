@@ -21,7 +21,7 @@ from .merossclient.protocol import const as mc, namespaces as mn
 from .merossclient.protocol.message import MerossMessage
 
 if TYPE_CHECKING:
-    from typing import Final, NotRequired, Unpack
+    from typing import ClassVar, Final, NotRequired, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -177,7 +177,6 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
 
     if TYPE_CHECKING:
 
-        EFFECT_OFF: Final
         T_RESOLUTION_MIN: Final[float]
 
         _t_begin: float
@@ -196,17 +195,16 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
 
         # HA core entity attributes:
         brightness: int | None
-        color_mode: ColorMode
+        rgb_color: tuple[int, int, int] | None
         color_temp_kelvin: int | None
+        color_mode: ColorMode
+        supported_color_modes: set[ColorMode]
         effect: str | None
         effect_list: list[str] | None
-        max_color_temp_kelvin: Final[int]
-        min_color_temp_kelvin: Final[int]
-        rgb_color: tuple[int, int, int] | None
-        supported_color_modes: set[ColorMode]
         supported_features: LightEntityFeature
 
         parent: Final[Device]  # type: ignore[override]
+        init_effect_list: ClassVar[list[str] | None]
 
         class Args(mle.ToggleXParser.Args):
             effect_list: NotRequired[list[str]]
@@ -214,15 +212,12 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
 
     PLATFORM = light.DOMAIN
 
-    # define our own EFFECT_OFF semantically compatible to the 'new' HA core
-    # symbol in order to mantain a sort of backward compatibility
-    EFFECT_OFF = "off"
-
     T_RESOLUTION_MIN = 0.2
+    init_effect_list = None
 
     # HA core entity attributes:
-    max_color_temp_kelvin = MSL_KELVIN_MAX
-    min_color_temp_kelvin = MSL_KELVIN_MIN
+    _attr_max_color_temp_kelvin = MSL_KELVIN_MAX
+    _attr_min_color_temp_kelvin = MSL_KELVIN_MIN
 
     __slots__ = (
         "_rgb_to_native",
@@ -241,12 +236,11 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
         "_t_rgb_end",
         "_t_rgb_r",
         "brightness",
-        "color_mode",
+        "rgb_color",
         "color_temp_kelvin",
+        "color_mode",
         "effect",
         "effect_list",
-        "rgb_color",
-        "supported_color_modes",
         "supported_features",
     )
 
@@ -254,18 +248,16 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
         self._rgb_to_native = rgb_to_native
         self._native_to_rgb = native_to_rgb
         self.brightness = None
+        self.rgb_color = None
         self.color_mode = ColorMode.UNKNOWN
         self.color_temp_kelvin = None
         self.effect = None
-        self.rgb_color = None
-        try:
-            self.effect_list = kwargs.pop("effect_list")  # type: ignore
-            self.supported_features = (
-                LightEntityFeature.EFFECT | LightEntityFeature.TRANSITION
-            )
-        except KeyError:
-            self.effect_list = None
-            self.supported_features = LightEntityFeature.TRANSITION
+        self.effect_list = kwargs.pop("effect_list", self.init_effect_list)
+        self.supported_features = (
+            (LightEntityFeature.EFFECT | LightEntityFeature.TRANSITION)
+            if self.effect_list
+            else LightEntityFeature.TRANSITION
+        )
         super().__init__(channel, device, **kwargs)
 
     @override
@@ -426,7 +418,10 @@ class Light(LightBase):
         }
     )
 
-    __slots__ = ("_togglex_auto",)
+    __slots__ = (
+        "_togglex_auto",
+        "supported_color_modes",
+    )
 
     def __init__(self, channel: int, device: "Device", /, **kwargs: "Unpack[Args]"):
         # we'll use the (eventual) togglex payload to
@@ -441,7 +436,6 @@ class Light(LightBase):
         # api and show a glitch when used this way (ToggleX + Light)
         # State-of-the-art is now to auto-detect (when booting the entity) what is the behavior
         ability = device.descriptor.ability
-
         capacity = ability[mn.Appliance_Control_Light].get(
             mc.KEY_CAPACITY, mc.LIGHT_CAPACITY_LUMINANCE
         )
@@ -455,7 +449,6 @@ class Light(LightBase):
                 supported_color_modes.add(ColorMode.BRIGHTNESS)
             else:
                 supported_color_modes.add(ColorMode.ONOFF)
-
         LightBase.__init__(self, channel, device, **kwargs)
         self._togglex_auto = None if self.handler_togglex else False
 
@@ -624,19 +617,23 @@ class EffectLight(Light):
     """
 
     if TYPE_CHECKING:
-
         _light_effects: list[JsonDict]
         # HA core entity attributes:
+        init_effect_list: Final[list[str]]
         effect_list: list[str]
+
+    init_effect_list = [light.EFFECT_OFF]
 
     __slots__ = (
         "_light_effects",
         "handler_light_effect",
     )
 
-    def __init__(self, channel: int, device: "Device", /):
+    def __init__(
+        self, channel: int, device: "Device", /, **kwargs: "Unpack[Light.Args]"
+    ):
+        Light.__init__(self, channel, device, **kwargs)
         self._light_effects = []
-        Light.__init__(self, channel, device, effect_list=[])
         self.handler_light_effect = NamespaceHandler(
             mn.Appliance_Control_Light_Effect,
             device,
@@ -663,7 +660,7 @@ class EffectLight(Light):
         try:
             _light_effect = self._light_effects[effect]
         except IndexError:
-            # our _light_effect_list might be stale
+            # our _light_effects might be stale
             return
         self.effect = _light_effect[mc.KEY_EFFECTNAME]
         try:
@@ -757,7 +754,7 @@ class EffectLight(Light):
             self._light_effects = _light_effects
             self.effect_list = [
                 _light_effect[mc.KEY_EFFECTNAME] for _light_effect in _light_effects
-            ] + [LightBase.EFFECT_OFF]
+            ] + EffectLight.init_effect_list
             # add a 'fake' key so the next update will force-flush
             self.ns_payload["_"] = None  # type: ignore
             self.handler_ns.schedule_get()
@@ -776,9 +773,9 @@ class DNDLight(mle.EntityNamespaceMixin, mle.BinaryParser, light.LightEntity):
     native_on = 0
     native_off = 1
     # HA core entity attributes:
-    color_mode: ColorMode = ColorMode.ONOFF
+    _attr_color_mode = ColorMode.ONOFF
     _attr_entity_category = mle.BinaryParser.EntityCategory.CONFIG
-    supported_color_modes: set[ColorMode] = {ColorMode.ONOFF}
+    _attr_supported_color_modes = {ColorMode.ONOFF}
 
 
 def digest_init_light_effect(
@@ -797,7 +794,7 @@ def digest_init_light_effect(
             light._light_effects = digest
             light.effect_list = [
                 _light_effect[mc.KEY_EFFECTNAME] for _light_effect in digest
-            ] + [LightBase.EFFECT_OFF]
+            ] + EffectLight.init_effect_list
 
             handler = device.ns_handlers[mn.Appliance_Control_Light_Effect]
 

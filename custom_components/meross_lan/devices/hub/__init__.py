@@ -24,6 +24,7 @@ if TYPE_CHECKING:
         NotRequired,
         Self,
         TypedDict,
+        Unpack,
     )
 
     from ...helpers.device import Device, MerossMessage
@@ -91,10 +92,18 @@ class HubNamespaceHandler(NamespaceHandler):
     relevant subdevice instance.
     """
 
-    parent: "Hub"  # type: ignore[override]
+    if TYPE_CHECKING:
+        parent: "Hub"  # type: ignore[override]
 
-    def __init__(self, ns: "Namespace", device: "Hub", /):
-        NamespaceHandler.__init__(self, ns, device, handler=self._handle_list)
+    def __init__(
+        self,
+        ns: "Namespace",
+        device: "Hub",
+        /,
+        **kwargs: "Unpack[NamespaceHandler.Args]",
+    ):
+        kwargs["handler"] = self._handle_list
+        NamespaceHandler.__init__(self, ns, device, **kwargs)
 
     def _handle_list(self, message: "MerossMessage"):
         """Generalized Hub namespace dispatcher to subdevices.
@@ -182,15 +191,17 @@ class Hub(Device if TYPE_CHECKING else object):
         return entities
 
     @override
-    def _create_handler(self, ns: "Namespace", /):
+    def _create_handler(
+        self, ns: mn.Namespace, /, **kwargs: "Unpack[NamespaceHandler.Args]"
+    ):
         if ns.key_idx in (mc.KEY_ID, mc.KEY_SUBID):
             # This rule states that the payload is a list of subdevices indexed by 'id'.
             # Newer devices (2024) started using namespaces/payload indexed by 'subid'
             # and 'channel'. These will be handled by the base class NamespaceHandler
             # using SubDevice/Entity as NamespaceParser.
-            return HubNamespaceHandler(ns, self)
+            return HubNamespaceHandler(ns, self, **kwargs)
         else:
-            return super()._create_handler(ns)
+            return NamespaceHandler(ns, self, **kwargs)
 
     @override
     def update_device_info(

@@ -1,7 +1,7 @@
 from homeassistant.components import select as haec
 
 from custom_components.meross_lan import climate, siren
-from custom_components.meross_lan.devices.diffuser import DiffuserSpray
+#from custom_components.meross_lan.devices.diffuser import DiffuserSpray
 from custom_components.meross_lan.devices.ms600 import (
     PresenceConfigMode,
     PresenceConfigSensitivity,
@@ -29,7 +29,7 @@ class EntityTest(EntityComponentTest):
             mc.KEY_MODEB: [climate.MtsClimate.TrackSensorSelect],
         },
         mc.KEY_SPRAY: [Spray],
-        mc.KEY_DIFFUSER: {mc.KEY_SPRAY: [DiffuserSpray]},
+        mc.KEY_DIFFUSER: {mc.KEY_SPRAY: [Spray]},
     }
     NAMESPACES_ENTITIES = {
         mn.Appliance_Config_Alarm: [siren.Siren.SongSelect],

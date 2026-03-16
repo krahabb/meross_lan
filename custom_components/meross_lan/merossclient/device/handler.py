@@ -62,8 +62,8 @@ class NamespaceHandler(logging.Loggable):
         parent: Final["Device"]  # type: ignore[override]
 
         handler: HandlerFunc
-        parser_class: type[NamespaceParser] | None
         parsers: Final[dict[object, ParserFunc]]
+        parser_class: type[NamespaceParser] | None
 
         polling_strategy: PollingStrategyFunc | None
         polling_request: MerossRequestType
@@ -75,6 +75,8 @@ class NamespaceHandler(logging.Loggable):
         class Args(logging.Loggable.Args):
             handler: NotRequired["NamespaceHandler.HandlerFunc"]
             config: NotRequired["NamespaceHandler.PollingConfigType"]
+            parser_class: NotRequired[type[NamespaceParser]]
+            channels: NotRequired[Iterable[int] | None]
 
     HEADER_AVG_SIZE = 300
     POLLING_CONFIG_DEFAULT = (0, 0, None)
@@ -82,8 +84,8 @@ class NamespaceHandler(logging.Loggable):
 
     __SLOTS__ = (
         "handler",
-        "parser_class",
         "parsers",
+        "parser_class",
         "last_rx_epoch",
         "last_poll_epoch",
         "polling_epoch_next",
@@ -104,14 +106,40 @@ class NamespaceHandler(logging.Loggable):
         **kwargs: "Unpack[NamespaceHandler.Args]",
     ):
         assert id not in parent.ns_handlers, ("Namespace already registered", id)
-        try:
-            self.handler = kwargs.pop("handler")
-        except KeyError:
-            self.handler = getattr(
-                parent, f"_handle_{id.replace('.', '_')}", self._handle
-            )
-        self.parser_class = None
         self.parsers = {}
+        try:
+            self.parser_class = parser_class = kwargs.pop("parser_class")
+        except KeyError:
+            self.parser_class = None
+            # by default we calculate 1 item/channel per payload but we should
+            # refine this whenever needed
+            self.polling_response_size = self.HEADER_AVG_SIZE + id.payload_item_size
+            try:
+                self.handler = kwargs.pop("handler")
+            except KeyError:
+                self.handler = getattr(
+                    parent, f"_handle_{id.replace('.', '_')}", self._handle
+                )
+        else:
+            assert (
+                "handler" not in kwargs
+            ), "Cannot specify both handler and parser_class"
+            # optimized register_parser_class and register_parser
+            self.id = id  # preset self.id for parser._namespace_registered
+            self.handler = self._handle_list
+            for channel in kwargs.pop("channels", None) or parent.descriptor.channels:
+                parser = parser_class(channel, parent, ns=id)
+                self.parsers[channel] = getattr(
+                    parser, f"_parse_{id.slug_end}", parser._parse
+                )
+                parser._namespace_registered(self)
+                # polling_request_channels will be eventually setup
+                # by polling_request_configure later on
+
+            self.polling_response_size = (
+                self.HEADER_AVG_SIZE + len(self.parsers) * id.payload_item_size
+            )
+
         self.last_rx_epoch = self.last_poll_epoch = self.polling_epoch_next = 0.0
         try:
             self.polling_period, self.polling_period_cloud, self.polling_strategy = (
@@ -121,10 +149,8 @@ class NamespaceHandler(logging.Loggable):
             self.polling_period, self.polling_period_cloud, self.polling_strategy = (
                 self.POLLING_CONFIG_MAP.get(id, self.POLLING_CONFIG_DEFAULT)
             )
-        # by default we calculate 1 item/channel per payload but we should
-        # refine this whenever needed
-        self.polling_response_size = self.HEADER_AVG_SIZE + id.payload_item_size
         self.last_rx_push = None
+
         super().__init__(id, parent, **kwargs)
         self.polling_request_configure(
             mn.PayloadType.LIST_IDX_STRICT
@@ -482,16 +508,15 @@ class NamespaceHandler(logging.Loggable):
         device configuration/type at runtime. Needs to be called early on before
         registering any parser.
         Passing None as payload_type configures the default for the namespace.
-        TODO: this need further attention when used after the handler initialization (
-        in async_trace for example) because the polling_request_channels might have
-        already been set and this method would override them losing channels.
         """
         ns = self.id
         _payload_type = payload_type or ns.payload_get
         if (_payload_type is mn.PayloadType.LIST_IDX_STRICT) or (
             _payload_type is mn.PayloadType.LIST_IDX_DATA_STRICT
         ):
-            self.polling_request_channels = []
+            self.polling_request_channels = [
+                {ns.key_idx: channel} for channel in self.parsers
+            ]
             self.polling_request = (
                 ns,
                 mc.METHOD_GET,
