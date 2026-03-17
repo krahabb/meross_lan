@@ -6,12 +6,11 @@ from homeassistant.components import sensor
 from . import const as mlc
 from .helpers import entity as mle
 from .merossclient.client import Transport
-from .merossclient.protocol import const as mc, namespaces as mn
+from .merossclient.protocol import const as mc
 from .merossclient.protocol.message import json_dumps
 
 if TYPE_CHECKING:
     from typing import (
-        Callable,
         ClassVar,
         Final,
         Never,
@@ -108,24 +107,26 @@ class SensorEntity(mle.NumericEntity, sensor.SensorEntity):
             return sensor.SensorStateClass.MEASUREMENT if self.device_class else None
 
 
-class EnumParser(mle.ValueParser, SensorEntity):
-    """Specialized class for enum sensors bound to a namespace parser."""
+class EnumSensorEntity(SensorEntity):
+    """Base wrapper around HA core SensorEntity with enum device class."""
 
     if TYPE_CHECKING:
 
-        _attr_device_class: Final[sensor.SensorDeviceClass]
-        _attr_state_class: Final[None]
+        _attr_device_class: Final
+        _attr_state_class: Final
+        _attr_suggested_display_precision: Final
         native_value: sensor.StateType
 
-        # class Args(mle.Entity.Args):
-        class Args(SensorEntity.Args, mle.ValueParser.Args):
-            native_value: NotRequired[sensor.StateType]
-            device_class: NotRequired[Never]
+        class Args(SensorEntity.Args):
+            native_value: NotRequired[sensor.StateType]  # Override
+            device_class: NotRequired[Never]  # Override
+            state_class: NotRequired[Never]  # Override
+            suggested_display_precision: NotRequired[Never]  # Override
 
         def __init__(
             self,
             channel: ChannelType | None,
-            parent: BaseDevice,
+            parent: EntityManager,
             /,
             **kwargs: Unpack[Args],
         ): ...
@@ -140,6 +141,27 @@ class EnumParser(mle.ValueParser, SensorEntity):
     # HA core entity attributes:
     _attr_device_class = sensor.SensorDeviceClass.ENUM
     _attr_state_class = None
+    _attr_suggested_display_precision = None
+
+
+class EnumParser(mle.ValueParser, EnumSensorEntity):
+    """Specialized class for enum sensors bound to a namespace parser."""
+
+    if TYPE_CHECKING:
+
+        class Args(EnumSensorEntity.Args, mle.ValueParser.Args):
+            pass
+
+        def __init__(
+            self,
+            channel: ChannelType | None,
+            parent: BaseDevice,
+            /,
+            **kwargs: Unpack[Args],
+        ): ...
+
+        @classmethod
+        def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
     @override
     def update_device_value(self, device_value: sensor.StateType, /):
@@ -276,7 +298,7 @@ class DiagnosticParser(mle.ValueParser, DiagnosticSensor):
         self.update_device_value(json_dumps(payload))
 
 
-class ProtocolSensor(SensorEntity):
+class ProtocolSensor(EnumSensorEntity):
 
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
@@ -291,10 +313,8 @@ class ProtocolSensor(SensorEntity):
 
     # HA core entity attributes:
     _attr_available = True
-    _attr_device_class = sensor.SensorDeviceClass.ENUM
     _attr_entity_category = SensorEntity.EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
-    _attr_state_class = None
 
     options: list[str] = [
         STATE_DISCONNECTED,

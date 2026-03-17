@@ -77,6 +77,7 @@ class ConnectionSensor(DiagnosticSensor):
 
     # HA core entity attributes:
     _attr_available = True
+    _attr_device_class = DiagnosticSensor.DeviceClass.ENUM
     _unrecorded_attributes = frozenset(
         {
             ATTR_DEVICES,
