@@ -49,3 +49,5 @@ class BinarySensorParser(mle.BinaryParser, BinarySensor):
             /,
             **kwargs: Unpack[Args],
         ): ...
+
+    __slots__ = mle.BinaryParser._calc_slots()

@@ -770,8 +770,8 @@ class DNDLight(mle.EntityNamespaceMixin, mle.BinaryParser, light.LightEntity):
     PLATFORM = light.DOMAIN
     init_entity_key = "dnd"
     init_key_value = mc.KEY_MODE
-    native_on = 0
-    native_off = 1
+    init_value_on = 0
+    init_value_off = 1
     # HA core entity attributes:
     _attr_color_mode = ColorMode.ONOFF
     _attr_entity_category = mle.BinaryParser.EntityCategory.CONFIG

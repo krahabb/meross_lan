@@ -545,7 +545,7 @@ class BinaryParser(parser.NamespaceBoolean, ValueParser, BinaryEntity):
 
     if TYPE_CHECKING:
 
-        class Args(BinaryEntity.Args, ValueParser.Args):
+        class Args(parser.NamespaceBoolean.Args, ValueParser.Args, BinaryEntity.Args):
             pass
 
     def __init__(
@@ -555,15 +555,19 @@ class BinaryParser(parser.NamespaceBoolean, ValueParser, BinaryEntity):
         /,
         **kwargs: "Unpack[Args]",
     ):
-        # TODO: maybe remove this init code:
         # This is due for entities which are created after entry setup when device is already loaded
         # and we want to flush the initial state during HA entry adding (which happens in Entity constructor)
-        # without having to flush twice (UNKNOWN -> device state)
+        # without having to flush twice (UNKNOWN -> device state).
         try:
-            match kwargs["device_value"]:  # type: ignore
-                case self.native_on:
+            # if device_value is not provided this code is unnecessary and
+            # the eventual other arguments will be managed by bases.
+            self.device_value = kwargs.pop("device_value")
+            self.value_on = kwargs.pop("value_on", self.init_value_on)
+            self.value_off = kwargs.pop("value_off", self.init_value_off)
+            match self.device_value:
+                case self.value_on:
                     kwargs["is_on"] = True
-                case self.native_off:
+                case self.value_off:
                     kwargs["is_on"] = False
         except KeyError:
             pass

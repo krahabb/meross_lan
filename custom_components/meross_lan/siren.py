@@ -69,8 +69,8 @@ class Siren(BinaryParser, siren.SirenEntity):
     NS_CHANNELS = BinaryParser.NS_CHANNELS_SINGLE
     init_key_value = "event_security_value"
     init_entity_key = f"{mn.Appliance_Control_Alarm.slug}__{init_key_value}"
-    native_on = 1
-    native_off = 2
+    init_value_on = 1
+    init_value_off = 2
 
     _attr_supported_features = (
         siren.SirenEntityFeature.TURN_ON
@@ -83,6 +83,8 @@ class Siren(BinaryParser, siren.SirenEntity):
         siren.ATTR_TONE: "song",
         siren.ATTR_VOLUME_LEVEL: "volume",
     }
+
+    __slots__ = BinaryParser._calc_slots()
 
     def __init__(self, channel: int, device: "Device", /, **kwargs: "Unpack[Args]"):
         ns_config_alarm = mn.Appliance_Config_Alarm
@@ -122,7 +124,7 @@ class Siren(BinaryParser, siren.SirenEntity):
                 *mn.Appliance_Config_Alarm.request_set(payload, self.channel)
             )
 
-        await self.async_request_value(self.native_on)
+        await self.async_request_value(self.value_on)
 
     # interface: self
     def _parse_alarm(self, payload: "JsonDict") -> None:

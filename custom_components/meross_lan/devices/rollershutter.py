@@ -352,8 +352,8 @@ class RollerShutterAdjustSwitch(SwitchParser):
     """
 
     init_key_value = mc.KEY_VALUE
-    native_on = 1
-    native_off = 2
+    init_value_on = 1
+    init_value_off = 2
 
     init_entity_key = f"{mn.Appliance_RollerShutter_Adjust.slug}__{init_key_value}"
 

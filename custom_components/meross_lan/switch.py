@@ -71,7 +71,7 @@ class SwitchParser(mle.BinaryParser, SwitchEntity):
     It just need to be configured and linked to a proper ns/channel/key_value in order to work.
     """
 
-    pass
+    __slots__ = mle.BinaryParser._calc_slots()
 
 
 class PhysicalLockSwitch(SwitchParser):

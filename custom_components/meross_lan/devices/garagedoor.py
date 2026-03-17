@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 class GarageTimeoutBinarySensor(BinarySensor):
 
     init_entity_key = "problem"
-
+    init_is_on = False
     # the time at which the transition timeout occurred
     ATTR_TRANSITION_TIMEOUT = "transition_timeout"
     # the target state which was not reached
@@ -42,7 +42,7 @@ class GarageTimeoutBinarySensor(BinarySensor):
 
     def __init__(self, garage: "Garagedoor", /):
         self.extra_state_attributes = {}
-        super().__init__(garage.channel, garage.parent, is_on=False)
+        super().__init__(garage.channel, garage.parent)
 
     def update_ok(self, was_closing, /):
         extra_state_attributes = self.extra_state_attributes

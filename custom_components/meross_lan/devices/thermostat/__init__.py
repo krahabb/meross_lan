@@ -111,6 +111,8 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
         except KeyError:
             pass
         try:
+            # 'pre' set 'available' here so that _switch_state_callback
+            # doesn't flush before this number has been parsed in full
             self.available = bool(payload[mc.KEY_ONOFF])
             self.switch.update_boolean_value(self.available)
         except AttributeError:

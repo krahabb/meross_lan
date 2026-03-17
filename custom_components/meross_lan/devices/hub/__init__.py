@@ -1136,8 +1136,8 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, SwitchParser):
     NS_HUB = (mn_h.Appliance_Config_DeviceCfg, *SubDeviceEntity.NS_HUB)
     init_entity_key = mc.KEY_ONOFF
     init_ns = mn_h.Appliance_Control_Water
-    native_on = 1
-    native_off = 2
+    init_value_on = 1
+    init_value_off = 2
 
     _attr_name = "Watering"
 

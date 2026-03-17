@@ -246,40 +246,34 @@ class NamespaceValue(NamespaceParser):
 class NamespaceBoolean(NamespaceValue):
     """A specialization of NamespaceValue to manage boolean values with custom on/off values in the device.
     By default it assumes that the device uses 1 for 'on' and 0 for 'off', but this can be customized by setting the
-    'native_on' and 'native_off' class (or instance) attributes."""
+    'value_on' and 'value_off' attributes."""
 
     if TYPE_CHECKING:
-        native_on: ClassVar[int] | int
+        value_on: int
         """The actual device value representing the 'on' state."""
-        native_off: ClassVar[int] | int
+        value_off: int
         """The actual device value representing the 'off' state."""
         is_on: bool | None
 
         class Args(NamespaceValue.Args):
+            value_on: NotRequired[int]
+            value_off: NotRequired[int]
             is_on: NotRequired[bool]
 
-        def __init__(
-            self,
-            channel: PayloadIndexType | None,
-            parent: PhysicalDevice,
-            /,
-            **kwargs: Unpack[Args],
-        ): ...
-
     init_key_value = mc.KEY_ONOFF
-    native_on = 1
-    native_off = 0
+    init_value_on = 1
+    init_value_off = 0
 
-    SLOTS_AUTO_INIT = ("is_on",)
+    SLOTS_AUTO_INIT = ("value_on", "value_off", "is_on")
 
     @override
     def update_device_value(self, device_value, /) -> bool | None:
         if self.device_value != device_value:
             self.device_value = device_value
             match device_value:
-                case self.native_on:
+                case self.value_on:
                     self.is_on = True
-                case self.native_off:
+                case self.value_off:
                     self.is_on = False
                 case _:
                     self.is_on = None
@@ -288,10 +282,10 @@ class NamespaceBoolean(NamespaceValue):
     # interface compatibility with HA toggle entities, allowing to use this class as a
     # mixin with other NamespaceParser specializations
     async def async_turn_on(self, **kwargs):
-        await self.async_request_value(self.native_on)
+        await self.async_request_value(self.value_on)
 
     async def async_turn_off(self, **kwargs):
-        await self.async_request_value(self.native_off)
+        await self.async_request_value(self.value_off)
 
 
 class NamespaceGroupValue(NamespaceValue):
