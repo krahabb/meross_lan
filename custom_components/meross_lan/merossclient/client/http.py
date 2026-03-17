@@ -13,13 +13,8 @@ from yarl import URL
 
 from . import AbstractClient
 from .. import MEROSSDEBUG
-from ..protocol import (
-    AESCipher,
-    MerossKeyError,
-    MerossTransportError,
-    const as mc,
-    md5hexdigest,
-)
+from ..exceptions import MerossKeyError, MerossTransportError
+from ..protocol import AESCipher, const as mc, md5hexdigest
 from ..protocol.message import MerossMessage
 
 if TYPE_CHECKING:
@@ -225,7 +220,9 @@ class HttpClient(AbstractClient):
                 self.on_disconnect()
             response.raise_for_status()
             # we should never get here since raise_for_status raises for 4xx and 5xx
-            raise MerossTransportError(f"Unexpected response status {response.status}")
+            raise MerossTransportError(
+                self, f"Unexpected response status {response.status}"
+            )
         except Exception as e:
             self.log_exception(self.WARNING, e, "async_request_raw")
             raise

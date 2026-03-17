@@ -346,7 +346,7 @@ class Loggable(metaclass=abc.ABCMeta):
                 self.log(self.DEBUG, "Shutting down pending task %r", task)
                 task.cancel(f"{self} shutdown")
                 try:
-                    async with asyncio.timeout(0.5):
+                    async with asyncio.Timeout(self.loop.time() + 0.5):
                         await task
                 except asyncio.CancelledError:
                     continue

@@ -40,11 +40,8 @@ from .merossclient import (
 from .merossclient.client import Transport
 from .merossclient.client.http import HttpClient
 from .merossclient.client.mqtt import MQTTDeviceClient
-from .merossclient.protocol import (
-    MerossKeyError,
-    const as mc,
-    namespaces as mn,
-)
+from .merossclient.exceptions import MerossKeyError
+from .merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar, Final, Mapping, NotRequired, TypedDict

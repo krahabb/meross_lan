@@ -7,11 +7,8 @@ from uuid import uuid4
 import aiohttp
 
 from . import MEROSSDEBUG, logging
-from .protocol import (
-    MerossProtocolError,
-    const as mc,
-    md5hexdigest,
-)
+from .exceptions import MerossProtocolError
+from .protocol import const as mc, md5hexdigest
 from .protocol.message import json_dumps, json_loads
 
 if typing.TYPE_CHECKING:

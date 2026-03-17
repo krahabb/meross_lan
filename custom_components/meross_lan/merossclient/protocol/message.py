@@ -4,7 +4,8 @@ import os
 from time import time
 from typing import TYPE_CHECKING
 
-from . import MerossKeyError, MerossProtocolError, const as mc, md5hexdigest
+from . import const as mc, md5hexdigest
+from ..exceptions import MerossKeyError, MerossProtocolError
 
 if TYPE_CHECKING:
     from .types import KeyType, MerossHeaderType, MerossPayloadType

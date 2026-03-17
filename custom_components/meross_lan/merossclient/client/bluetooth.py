@@ -6,7 +6,7 @@ from bleak import BleakClient, uuids
 from bleak.backends.bluezdbus.client import BleakClientBlueZDBus
 
 from . import AbstractClient
-from ..protocol import MerossError
+from ..exceptions import MerossTransportError
 
 if TYPE_CHECKING:
     from typing import (
@@ -41,7 +41,7 @@ uuids.register_uuids(
 )
 
 
-class BluetoothError(MerossError):
+class BluetoothError(MerossTransportError):
     pass
 
 
@@ -120,7 +120,9 @@ class BluetoothClient(AbstractClient, BleakClient):
     @override  # AbstractClient
     async def async_connect(self, /, **kwargs: "Unpack[ConnectArgs]"):
         try:
-            async with asyncio.timeout(kwargs.get("timeout", self.timeout)):
+            async with asyncio.Timeout(
+                self.loop.time() + kwargs.get("timeout", self.timeout)
+            ):
                 async with self._connect_lock:
                     if self.is_connected:
                         return
@@ -154,13 +156,16 @@ class BluetoothClient(AbstractClient, BleakClient):
                         service = self.services.get_service(BL_SERVICE_UUID)
                         if not service:
                             raise BluetoothError(
-                                "Meross bluetooth service unavailable", BL_SERVICE_UUID
+                                self,
+                                "Meross bluetooth service unavailable",
+                                BL_SERVICE_UUID,
                             )
                         _char_write = service.get_characteristic(
                             BL_SERVICE_CHAR_WRITE_UUID
                         )
                         if not _char_write:
                             raise BluetoothError(
+                                self,
                                 "Meross bluetooth write characteristic unavailable",
                                 BL_SERVICE_CHAR_WRITE_UUID,
                             )
@@ -169,6 +174,7 @@ class BluetoothClient(AbstractClient, BleakClient):
                         )
                         if not _char_notify:
                             raise BluetoothError(
+                                self,
                                 "Meross bluetooth notify characteristic unavailable",
                                 BL_SERVICE_CHAR_NOTIFY_UUID,
                             )
@@ -178,6 +184,7 @@ class BluetoothClient(AbstractClient, BleakClient):
                         )
                         if not write_enable_descr:
                             raise BluetoothError(
+                                self,
                                 "Meross bluetooth notify enable descriptor unavailable",
                                 BL_SERVICE_CHAR_NOTIFY_DESCR_ENABLE_UUID,
                             )
@@ -223,50 +230,53 @@ class BluetoothClient(AbstractClient, BleakClient):
     ):
         self.on_tx(request)
         try:
-            async with asyncio.timeout(kwargs.get("timeout", self.timeout)):
-                async with self._tx_lock:
+            async with asyncio.Timeout(
+                self.loop.time() + kwargs.get("timeout", self.timeout)
+            ):
+                await self._tx_lock.acquire()
 
-                    if not self.is_connected:
-                        await self.async_connect()
+                if not self.is_connected:
+                    await self.async_connect()
 
-                    self._rx_future = self.loop.create_future()
-                    self._rx_frame_size = 0  # flush receive buffer
-                    tx_frame = request.json.encode()
-                    tx_frame_size = len(tx_frame)
-                    checksum = crc32(tx_frame)
-                    tx_frame = bytes(
-                        (
-                            0x55,
-                            0xAA,
-                            tx_frame_size // 256,
-                            tx_frame_size % 256,
-                            *tx_frame,
-                            (checksum >> 24) & 0xFF,
-                            (checksum >> 16) & 0xFF,
-                            (checksum >> 8) & 0xFF,
-                            checksum & 0xFF,
-                            0xAA,
-                            0x55,
-                        )
+                tx_frame = request.json.encode()
+                tx_frame_size = len(tx_frame)
+                checksum = crc32(tx_frame)
+                tx_frame = bytes(
+                    (
+                        0x55,
+                        0xAA,
+                        tx_frame_size // 256,
+                        tx_frame_size % 256,
+                        *tx_frame,
+                        (checksum >> 24) & 0xFF,
+                        (checksum >> 16) & 0xFF,
+                        (checksum >> 8) & 0xFF,
+                        checksum & 0xFF,
+                        0xAA,
+                        0x55,
                     )
-                    chunk_size = self.mtu_size - 3
-                    for chunk in (
-                        tx_frame[i : i + chunk_size]
-                        for i in range(0, len(tx_frame), chunk_size)
-                    ):
-                        await self.write_gatt_char(
-                            self._char_write, chunk, response=False
-                        )
-
-                    self.log(self.VERBOSE, "Transmitted frame: %s", tx_frame)
-
-                    return self.on_rx_raw(await self._rx_future)
+                )
+                chunk_size = self.mtu_size - 3
+                for chunk in (
+                    tx_frame[i : i + chunk_size]
+                    for i in range(0, len(tx_frame), chunk_size)
+                ):
+                    await self.write_gatt_char(self._char_write, chunk, response=False)
+                # BEWARE: optimistic concurrency ?
+                self._rx_frame_size = 0  # flush receive buffer
+                self._rx_future = self.loop.create_future()
+                self.log(self.VERBOSE, "Transmitted frame: %s", tx_frame)
+                return self.on_rx_raw(await self._rx_future)
 
         except Exception as e:
             self.log_exception(self.WARNING, e, "async_request_raw")
             raise
         finally:
             self._rx_future = None
+            try:
+                self._tx_lock.release()
+            except RuntimeError:
+                pass  # lock was not acquired (unlikely), ignore
 
     def _packet_handler(self, data: bytearray, /):
         self.log(self.VERBOSE, "Received %s", data)
@@ -298,7 +308,7 @@ class BluetoothClient(AbstractClient, BleakClient):
                         self.log(self.DEBUG, "Frame error: invalid checksum")
                         if self._rx_future:
                             self._rx_future.set_exception(
-                                BluetoothFrameError("Received invalid checksum")
+                                BluetoothFrameError(self, "Received invalid checksum")
                             )
                     return
 
@@ -312,7 +322,7 @@ class BluetoothClient(AbstractClient, BleakClient):
                     )
                     if self._rx_future:
                         self._rx_future.set_exception(
-                            BluetoothFrameError("Size mismatch")
+                            BluetoothFrameError(self, "Size mismatch")
                         )
                     return
 
@@ -326,7 +336,7 @@ class BluetoothClient(AbstractClient, BleakClient):
                     self.log(self.DEBUG, "Frame error: packet too short")
                     if self._rx_future:
                         self._rx_future.set_exception(
-                            BluetoothFrameError("Packet too short")
+                            BluetoothFrameError(self, "Packet too short")
                         )
         except Exception as e:
             self.log_exception(self.WARNING, e, "_packet_handler")

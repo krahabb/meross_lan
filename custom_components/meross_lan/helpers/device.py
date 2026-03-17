@@ -23,8 +23,9 @@ from ..merossclient import (
 from ..merossclient.client import AbstractClient, Direction, Transport
 from ..merossclient.client.http import HttpClient
 from ..merossclient.device.handler import VoidNamespaceHandler
+from ..merossclient.exceptions import MerossError
 from ..merossclient.obfuscate import OBFUSCATE_DICT
-from ..merossclient.protocol import MerossError, const as mc, namespaces as mn
+from ..merossclient.protocol import const as mc, namespaces as mn
 from ..merossclient.protocol.message import MerossMessage, MerossResponse
 from ..merossclient.protocol.namespaces import thermostat as mn_t
 from ..sensor import ProtocolSensor

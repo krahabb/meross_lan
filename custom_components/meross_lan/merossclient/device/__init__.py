@@ -13,16 +13,13 @@ from .. import (
     versiontuple,
 )
 from ..client import AbstractClient
-from ..protocol import (
-    MerossError,
-    const as mc,
-    namespaces as mn,
-)
+from ..exceptions import MerossTransportError
+from ..protocol import const as mc, namespaces as mn
 from ..protocol.message import MerossMessage
 from .handler import NamespaceHandler
 
 if TYPE_CHECKING:
-    from asyncio import Task, TimerHandle
+    from asyncio import Task
     from typing import (
         Any,
         Callable,
@@ -509,7 +506,9 @@ class Device(PhysicalDevice):
                 tryed_clients = {self.client}
             else:
                 if not self._clients:
-                    raise MerossError("No transport available to send the request")
+                    raise MerossTransportError(
+                        self, "No transport available to send the request"
+                    )
                 tryed_clients = set()
 
         self.log(

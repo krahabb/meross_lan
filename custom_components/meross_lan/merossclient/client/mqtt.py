@@ -376,7 +376,10 @@ class AbstractMQTTConnection(AbstractClient):
         This method performs application level transaction mgmt (matching request-reply, timeouts, etc).
         To actually just publish a message without waiting for the reply use the async_publish... path.
         """
-        async with asyncio.timeout(kwargs.get("timeout", self.timeout)):
+
+        async with asyncio.Timeout(
+            self.loop.time() + kwargs.get("timeout", self.timeout)
+        ):
             async with MQTTConnection.Transaction(
                 self, request, kwargs["uuid"]
             ) as transaction:
@@ -519,7 +522,9 @@ class MQTTConnection(AbstractMQTTConnection):
     @override
     async def async_connect(self, /, **kwargs: "Unpack[ConnectArgs]"):
         try:
-            async with asyncio.timeout(kwargs.get("timeout", self.timeout)):
+            async with asyncio.Timeout(
+                self.loop.time() + kwargs.get("timeout", self.timeout)
+            ):
                 future = self._connect_future
                 if not future:
                     self._connect_future = future = self.loop.create_future()
