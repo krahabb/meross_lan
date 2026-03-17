@@ -104,7 +104,11 @@ class SensorEntity(mle.NumericEntity, sensor.SensorEntity):
         try:
             return self.DEVICECLASS_TO_STATECLASS_MAP[self.device_class]
         except KeyError:
-            return sensor.SensorStateClass.MEASUREMENT if self.device_class else None
+            return (
+                sensor.SensorStateClass.MEASUREMENT
+                if self.native_unit_of_measurement
+                else None
+            )
 
 
 class EnumSensorEntity(SensorEntity):
