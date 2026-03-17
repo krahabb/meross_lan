@@ -558,7 +558,10 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         await self.async_request_onoff(0)
 
     async def async_set_hvac_mode(self, hvac_mode: climate.HVACMode):
-        raise NotImplementedError()
+        if hvac_mode == MtsClimate.HVACMode.OFF:
+            await self.async_request_onoff(0)
+            return
+        await self.async_request_onoff(1)
 
     async def async_set_preset_mode(self, preset_mode: str):
         mode = reverse_lookup(self.MTS_MODE_TO_PRESET_MAP, preset_mode)

@@ -3,6 +3,7 @@ from homeassistant.components.climate import ClimateEntity, HVACMode
 
 from custom_components.meross_lan.climate import MtsClimate
 from custom_components.meross_lan.devices.hub.mts100 import Mts100Climate
+from custom_components.meross_lan.devices import thermostat as mts
 from custom_components.meross_lan.devices.thermostat.mts200 import Mts200Climate
 from custom_components.meross_lan.devices.thermostat.mts300 import Mts300Climate
 from custom_components.meross_lan.devices.thermostat.mts960 import Mts960Climate
@@ -18,7 +19,7 @@ from tests.entities import EntityComponentTest
 
 HVAC_MODES: dict[type[MtsClimate], set[HVACMode]] = {
     Mts100Climate: {HVACMode.OFF, HVACMode.HEAT},
-    Mts200Climate: {HVACMode.OFF, HVACMode.HEAT},
+    Mts200Climate: {HVACMode.OFF},  # heat/cool depends on summer mode
     Mts300Climate: {HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.HEAT_COOL},
     Mts960Climate: {HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO},
 }
@@ -69,8 +70,6 @@ class EntityTest(EntityComponentTest):
         entity_hvac_modes = set(entity.hvac_modes)
         expected_hvac_modes = HVAC_MODES[entity.__class__]
         assert expected_hvac_modes.issubset(entity_hvac_modes)
-        if mn_t.Appliance_Control_Thermostat_SummerMode in self.ability:
-            assert HVACMode.COOL in entity_hvac_modes
 
         try:
             class_preset_modes = PRESET_MODES[entity.__class__]
@@ -93,10 +92,33 @@ class EntityTest(EntityComponentTest):
             assert entity.current_humidity is not None
 
     async def async_test_enabled_callback(self, entity: MtsClimate):
-        for hvac_mode in entity.hvac_modes:
-            await self.async_service_call_check(
-                haec.SERVICE_SET_HVAC_MODE, hvac_mode, {haec.ATTR_HVAC_MODE: hvac_mode}
-            )
+        if mn_t.Appliance_Control_Thermostat_SummerMode in self.ability:
+            switch_summermode: mts.MtsSummerMode = self.device_context.device.entities[
+                f"{entity.channel}_{mn_t.Appliance_Control_Thermostat_SummerMode.slug}__{mc.KEY_MODE}"
+            ]  # type: ignore[assignment]
+            await switch_summermode.async_turn_on()
+            assert entity.hvac_modes == [haec.HVACMode.OFF, haec.HVACMode.COOL]
+            for hvac_mode in entity.hvac_modes:
+                await self.async_service_call_check(
+                    haec.SERVICE_SET_HVAC_MODE,
+                    hvac_mode,
+                    {haec.ATTR_HVAC_MODE: hvac_mode},
+                )
+            await switch_summermode.async_turn_off()
+            assert entity.hvac_modes == [haec.HVACMode.OFF, haec.HVACMode.HEAT]
+            for hvac_mode in entity.hvac_modes:
+                await self.async_service_call_check(
+                    haec.SERVICE_SET_HVAC_MODE,
+                    hvac_mode,
+                    {haec.ATTR_HVAC_MODE: hvac_mode},
+                )
+        else:
+            for hvac_mode in entity.hvac_modes:
+                await self.async_service_call_check(
+                    haec.SERVICE_SET_HVAC_MODE,
+                    hvac_mode,
+                    {haec.ATTR_HVAC_MODE: hvac_mode},
+                )
 
         for preset_mode in entity.preset_modes:
             state = await self.async_service_call(

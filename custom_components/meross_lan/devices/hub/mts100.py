@@ -130,12 +130,6 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
             self.hvac_action = MtsClimate.HVACAction.OFF
         MtsClimate.flush_state(self)
 
-    async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode, /):
-        if hvac_mode == MtsClimate.HVACMode.OFF:
-            await self.async_request_onoff(0)
-            return
-        await self.async_request_onoff(1)
-
     async def async_set_temperature(self, **kwargs):
         if (
             self.SET_TEMP_FORCE_MANUAL_MODE and self._mts_mode != mc.MTS100_MODE_CUSTOM

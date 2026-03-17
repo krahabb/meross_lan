@@ -7,9 +7,7 @@ from custom_components.meross_lan.devices import (
     hub,
     mss,
     rollershutter as rs,
-)
-from custom_components.meross_lan.devices.thermostat import (
-    MtsExternalSensorSwitch,
+    thermostat as mts,
 )
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
@@ -45,9 +43,14 @@ class EntityTest(EntityComponentTest):
         mn_t.Appliance_Control_Thermostat_ModeC: [
             switch.EmulatedSwitch,  # fan_hold_enable
         ],
-        mn_t.Appliance_Control_Thermostat_Frost: [switch.SwitchParser],
-        mn_t.Appliance_Control_Thermostat_Sensor: [MtsExternalSensorSwitch],
-        mn_t.Appliance_Control_Thermostat_Overheat: [switch.SwitchParser],
+        mn_t.Appliance_Control_Thermostat_Frost: [
+            switch.SwitchParser
+        ],  # optional enabler
+        mn_t.Appliance_Control_Thermostat_Sensor: [mts.MtsExternalSensorSwitch],
+        mn_t.Appliance_Control_Thermostat_Overheat: [
+            switch.SwitchParser
+        ],  # optional enabler
+        mn_t.Appliance_Control_Thermostat_SummerMode: [mts.MtsSummerMode],
         mn.Appliance_Control_Toggle: [switch.Toggle],
         mn.Appliance_RollerShutter_Adjust: [rs.RollerShutterAdjustSwitch],
     }

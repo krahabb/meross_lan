@@ -67,15 +67,25 @@ class EntityComponentTest:
     HUB_SUBDEVICES_ENTITIES = {}
 
     async def async_service_call(self, service: str, service_data: dict = {}):
+        """Helper to assert execution of a service call and return the resulting state.
+        The entity_id service data is automatically defaulted to the current entity,
+        nevertheless it can be overridden by providing an 'entity_id' key in the service_data dict,
+        so only the service specific data needs to be provided."""
+        try:
+            entity_id = service_data["entity_id"]
+        except KeyError:
+            entity_id = self.entity_id
+            service_data = dict(service_data)
+            service_data["entity_id"] = entity_id
         await self.hass_service_call(
             self.DOMAIN,
             service,
-            service_data=service_data | {"entity_id": self.entity_id},
+            service_data=service_data,
             blocking=True,
         )
-        assert (state := self.hass_states.get(self.entity_id)), (
+        assert (state := self.hass_states.get(entity_id)), (
             "missing state",
-            self.entity_id,
+            entity_id,
         )
         return state
 
@@ -83,7 +93,7 @@ class EntityComponentTest:
         return await self.hass_service_call(
             self.DOMAIN,
             service,
-            service_data=service_data | {"entity_id": self.entity_id},
+            service_data={"entity_id": self.entity_id} | service_data,
             blocking=True,
             return_response=True,
         )

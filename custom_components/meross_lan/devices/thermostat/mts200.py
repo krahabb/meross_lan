@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING
 from . import MtsThermostatClimate, mc, mn_t
 
 if TYPE_CHECKING:
-    from ...helpers.device import Device
     from ...merossclient.protocol.types import thermostat as mt_t
 
 
@@ -25,47 +24,17 @@ class Mts200Climate(MtsThermostatClimate):
     }
     MTS_MODE_TO_TEMPERATUREKEY_MAP = mc.MTS200_MODE_TO_TARGETTEMP_MAP
 
-    # right now we're only sure summermode == '1' is 'HEAT'
-    MTS_SUMMERMODE_TO_HVAC_MODE = {
-        None: MtsThermostatClimate.HVACMode.HEAT,  # mapping when no summerMode avail
-        mc.MTS200_SUMMERMODE_COOL: MtsThermostatClimate.HVACMode.COOL,
-        mc.MTS200_SUMMERMODE_HEAT: MtsThermostatClimate.HVACMode.HEAT,
-    }
-    HVAC_MODE_TO_MTS_SUMMERMODE = {
-        MtsThermostatClimate.HVACMode.HEAT: mc.MTS200_SUMMERMODE_HEAT,
-        MtsThermostatClimate.HVACMode.COOL: mc.MTS200_SUMMERMODE_COOL,
-    }
-    MTS_SUMMERMODE_TO_HVAC_ACTION: dict[int | None, MtsThermostatClimate.HVACAction] = {
-        None: MtsThermostatClimate.HVACAction.HEATING,  # mapping when no summerMode avail
-        mc.MTS200_SUMMERMODE_COOL: MtsThermostatClimate.HVACAction.COOLING,
-        mc.MTS200_SUMMERMODE_HEAT: MtsThermostatClimate.HVACAction.HEATING,
-    }
-
-    __slots__ = (
-        "_mts_summermode",
-        "_mts_summermode_supported",
-    )
-
-    def __init__(self, channel: int, device: "Device", /, **kwargs):
-        MtsThermostatClimate.__init__(self, channel, device, **kwargs)
-        self._mts_summermode = None
-        self._mts_summermode_supported = (
-            mn_t.Appliance_Control_Thermostat_SummerMode in device.descriptor.ability
-        )
-        if self._mts_summermode_supported:
-            self.hvac_modes = [
-                MtsThermostatClimate.HVACMode.OFF,
-                MtsThermostatClimate.HVACMode.HEAT,
-                MtsThermostatClimate.HVACMode.COOL,
-            ]
-
     # interface: MtsClimate
     def flush_state(self, /):
         self.preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)
         if self._mts_onoff:
-            self.hvac_mode = self.MTS_SUMMERMODE_TO_HVAC_MODE.get(self._mts_summermode)
+            self.hvac_mode = self.hvac_modes[1]
             self.hvac_action = (
-                self.MTS_SUMMERMODE_TO_HVAC_ACTION.get(self._mts_summermode)
+                (
+                    MtsThermostatClimate.HVACAction.HEATING
+                    if self.hvac_mode == MtsThermostatClimate.HVACMode.HEAT
+                    else MtsThermostatClimate.HVACAction.COOLING
+                )
                 if self._mts_active
                 else MtsThermostatClimate.HVACAction.IDLE
             )
@@ -73,21 +42,6 @@ class Mts200Climate(MtsThermostatClimate):
             self.hvac_mode = MtsThermostatClimate.HVACMode.OFF
             self.hvac_action = MtsThermostatClimate.HVACAction.OFF
         MtsThermostatClimate.flush_state(self)
-
-    async def async_set_hvac_mode(self, hvac_mode: MtsThermostatClimate.HVACMode, /):
-        if hvac_mode == MtsThermostatClimate.HVACMode.OFF:
-            await self.async_request_onoff(0)
-            return
-
-        if self._mts_summermode_supported:
-            # this is an indicator the device supports it
-            summermode = self.HVAC_MODE_TO_MTS_SUMMERMODE[hvac_mode]
-            if self._mts_summermode != summermode:
-                await self.handlers[
-                    mn_t.Appliance_Control_Thermostat_SummerMode
-                ].async_set_c_ex({mc.KEY_MODE: summermode}, self)
-
-        await self.async_request_onoff(1)
 
     async def async_set_temperature(self, /, **kwargs):
         mode = self._mts_mode

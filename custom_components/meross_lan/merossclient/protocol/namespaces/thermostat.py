@@ -56,14 +56,14 @@ Appliance_Control_Thermostat_Sensor = mn.ns(
     "Appliance.Control.Thermostat.Sensor", mc.KEY_SENSOR, 40, GETSETPSH
 )
 Appliance_Control_Thermostat_SummerMode = mn.ns(
-    "Appliance.Control.Thermostat.SummerMode", mc.KEY_SUMMERMODE, -1, GETSETPSH
+    "Appliance.Control.Thermostat.SummerMode", mc.KEY_SUMMERMODE, 22, GETSETPSH
 )
 Appliance_Control_Thermostat_System = mn.ns(
-    "Appliance.Control.Thermostat.System", mc.KEY_CONTROL, -1, GETSETPSQ
+    "Appliance.Control.Thermostat.System", mc.KEY_CONTROL, 580, GETSETPSQ
 )
 Appliance_Control_Thermostat_Timer = mn.ns(
     "Appliance.Control.Thermostat.Timer", mc.KEY_TIMER, 550, GETSETPSH
 )
 Appliance_Control_Thermostat_WindowOpened = mn.ns(
-    "Appliance.Control.Thermostat.WindowOpened", mc.KEY_WINDOWOPENED, -1, GETPSH
+    "Appliance.Control.Thermostat.WindowOpened", mc.KEY_WINDOWOPENED, 132, GETPSH
 )

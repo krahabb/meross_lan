@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from ...binary_sensor import BinarySensorParser
 from ...climate import MtsClimate
@@ -74,6 +74,7 @@ class MtsCommonTemperatureNumber(NumberParser):
             device_scale=device.entities[channel].temperature_scale,  # type: ignore (access MtsThermostatClimate.temperature_scale)
         )
 
+    @override
     def _parse(self, payload: "mt_t.CommonTemperature_C", /):
         try:
             self.native_max_value = payload[mc.KEY_MAX] / self.device_scale
@@ -94,6 +95,7 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
         "switch",
     )
 
+    @override
     def _parse(self, payload: "mt_t.CommonTemperatureExt_C", /):
         try:
             warning = payload[mc.KEY_WARNING]
@@ -170,6 +172,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
     _attr_native_min_value = 20
     _attr_native_step = MtsClimate.TARGET_TEMPERATURE_STEP
 
+    @override
     def _parse(self, payload: "mt_t.Overheat_C", /):
         try:
             current_temp = payload[mc.KEY_CURRENTTEMP]
@@ -185,6 +188,39 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
         except KeyError:
             pass
         MtsCommonTemperatureExtNumber._parse(self, payload)
+
+
+class MtsSummerMode(SwitchParser):
+    """
+    Summer mode switch for mts200.
+    This is a simple on/off switch but the device expects it to be sent as part of the Mode namespace
+    so we need a custom parser to manage it.
+    """
+
+    init_key_value = mc.KEY_MODE
+    init_value_on = mc.MTS200_SUMMERMODE_COOL
+    init_value_off = mc.MTS200_SUMMERMODE_HEAT
+    init_entity_key = (
+        f"{mn_t.Appliance_Control_Thermostat_SummerMode.slug}__{init_key_value}"
+    )
+
+    _attr_name = "Summer mode"
+
+    @override
+    def flush_state(self):
+        super().flush_state()
+        climate: "MtsThermostatClimate" = self.parent.entities[self.channel]  # type: ignore
+        if self.is_on:
+            climate.hvac_modes = [
+                MtsThermostatClimate.HVACMode.OFF,
+                MtsThermostatClimate.HVACMode.COOL,
+            ]
+        else:
+            climate.hvac_modes = [
+                MtsThermostatClimate.HVACMode.OFF,
+                MtsThermostatClimate.HVACMode.HEAT,
+            ]
+        climate.flush_state()
 
 
 class MtsWindowOpened(BinarySensorParser):
@@ -277,7 +313,6 @@ class MtsThermostatClimate(MtsClimate):
 
     OPTIONAL_NAMESPACES_INITIALIZERS = (
         mn_t.Appliance_Control_Thermostat_CtlRange,  # mts960
-        mn_t.Appliance_Control_Thermostat_SummerMode,  # mts200
         mn_t.Appliance_Control_Thermostat_System,  # mts300
         mn_t.Appliance_Control_Thermostat_Timer,  # mts960
         mn.Appliance_Config_Sensor_Association,  # mts300
@@ -290,6 +325,7 @@ class MtsThermostatClimate(MtsClimate):
         mn_t.Appliance_Control_Thermostat_HoldAction: MtsHoldAction,
         mn_t.Appliance_Control_Thermostat_Overheat: MtsOverheatNumber,
         mn_t.Appliance_Control_Thermostat_Sensor: MtsExternalSensorSwitch,
+        mn_t.Appliance_Control_Thermostat_SummerMode: MtsSummerMode,
         mn_t.Appliance_Control_Thermostat_WindowOpened: MtsWindowOpened,
     }
 
@@ -331,10 +367,6 @@ class MtsThermostatClimate(MtsClimate):
         """
         self.max_temp = payload[mc.KEY_CTLMAX] / self.temperature_scale
         self.min_temp = payload[mc.KEY_CTLMIN] / self.temperature_scale
-
-    def _parse_summerMode(self, payload: dict, /):
-        # needed to silently support registering OPTIONAL_NAMESPACES_INITIALIZERS
-        pass
 
     def _parse_system(self, payload: dict, /):
         # needed to silently support registering OPTIONAL_NAMESPACES_INITIALIZERS

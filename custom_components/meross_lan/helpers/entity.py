@@ -548,6 +548,9 @@ class BinaryParser(parser.NamespaceBoolean, ValueParser, BinaryEntity):
         class Args(parser.NamespaceBoolean.Args, ValueParser.Args, BinaryEntity.Args):
             pass
 
+        @classmethod
+        def ENTITY_DEF(cls, **kwargs: "Unpack[Args]") -> type["Self"]: ...
+
     def __init__(
         self,
         channel: "ChannelType | None",
