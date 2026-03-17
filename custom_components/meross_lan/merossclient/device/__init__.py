@@ -495,15 +495,17 @@ class Device(PhysicalDevice):
         current protocol. When switching transport the message is recomputed to
         avoid reusing the same (old) timestamps and messageids.
         """
+        # save a copy since any transport error might 'flip' self.client
+        _client = self.client
         try:
-            # We expect this to work most of the time, so we try it first and
-            # catch any exception to trigger the fallback logic.
-            return await self.client.async_request(*args, **kwargs)  # type: ignore[union-attr]
+            # We expect this to work most of the time, so we try it first without checking
+            # for _client validity and catch any exception to trigger the fallback logic.
+            return await _client.async_request(*args, **kwargs)  # type: ignore
         except Exception as e:
-            if self.client:
+            if _client:
                 if len(self._clients) < 2:
                     raise
-                tryed_clients = {self.client}
+                tryed_clients = {_client}
             else:
                 if not self._clients:
                     raise MerossTransportError(
@@ -514,8 +516,8 @@ class Device(PhysicalDevice):
         self.log(
             self.DEBUG,
             "Request failed on current transport (%s client:%s): trying fall-back",
-            self.transport,
-            self.client,
+            _client.TRANSPORT,  # type: ignore
+            _client,
         )
         while True:
             for _client in self._clients_connected.values():
