@@ -756,6 +756,7 @@ class Device(PhysicalDevice):
                         (mqtt := self.mqtt)
                         and mqtt.connection.can_publish
                         and ((epoch - mqtt.last_rx_epoch) > self.HEARTBEAT_TIMEOUT)
+                        and ((epoch - mqtt.last_tx_epoch) > self.HEARTBEAT_TIMEOUT)
                     ):
                         try:
                             handler_all = self.get_handler(mn.Appliance_System_All)
