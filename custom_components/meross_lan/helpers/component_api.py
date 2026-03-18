@@ -71,7 +71,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
             self,
             HostAddress("homeassistant", 0),
             api,
-            from_=mc.TOPIC_REQUEST.format(mlc.DOMAIN),
+            from_=mc.TOPIC_RESPONSE.format(mlc.DOMAIN),
             loop=api.loop,
         )
         self._mqtt_subscribe_unsub = None
