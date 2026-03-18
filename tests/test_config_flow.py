@@ -47,7 +47,7 @@ async def _cleanup_config_entry(hass: "HomeAssistant", result: ConfigFlowResult)
     await hass.config_entries.async_remove(config_entry.entry_id)
 
 
-async def test_device_config_flow(hass: "HomeAssistant", aioclient_mock):
+async def test_device_config_flow(hass: "HomeAssistant", aioclient_mock, hamqtt_mock):
     """
     Test standard manual device entry config flow
     """
