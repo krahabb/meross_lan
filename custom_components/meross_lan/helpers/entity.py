@@ -435,7 +435,7 @@ class NumericEntity(Entity):
 
     if TYPE_CHECKING:
 
-        DEVICECLASS_TO_UNIT_MAP: ClassVar[dict[Any | None, str | None]]
+        DEVICECLASS_TO_UNIT_MAP: ClassVar[dict[str | None, str | None]]
 
         # HA core entity attributes:
         _attr_native_unit_of_measurement: ClassVar[str | None]
@@ -453,8 +453,10 @@ class NumericEntity(Entity):
             **kwargs: Unpack[Args],
         ): ...
 
+    # We rely on our sensor entity to be initialized for sure since it's going to provide the symbols for
+    # device classes which are nevertheless shared between sensor and number entities. Tha mapping should
+    # be done by str value despite the fact numbers and sensors each defines their own enums.
     HA_ENTITY_ATTRIBUTES = Entity.HA_ENTITY_ATTRIBUTES + ("native_unit_of_measurement",)
-
     SLOTS_AUTO_INIT = ("native_value",)
     __slots__ = ("native_value",)
 
@@ -469,7 +471,10 @@ class NumericEntity(Entity):
         try:
             return self._attr_native_unit_of_measurement
         except AttributeError:
-            return self.DEVICECLASS_TO_UNIT_MAP.get(self.device_class)
+            try:
+                return self.DEVICECLASS_TO_UNIT_MAP[self.device_class]
+            except KeyError:
+                return None
 
 
 class NumericParser(ValueParser, NumericEntity):

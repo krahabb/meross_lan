@@ -2,8 +2,8 @@ from functools import cached_property
 from typing import TYPE_CHECKING, override
 
 from homeassistant.components import sensor
+from homeassistant import const as hac
 
-from . import const as mlc
 from .helpers import entity as mle
 from .merossclient.client import Transport
 from .merossclient.protocol import const as mc
@@ -75,16 +75,18 @@ class SensorEntity(mle.NumericEntity, sensor.SensorEntity):
         DeviceClass, "TEMPERATURE_DELTA", DeviceClass.TEMPERATURE
     )
 
-    DEVICECLASS_TO_UNIT_MAP = {
-        DeviceClass.POWER: mlc.hac.UnitOfPower.WATT,
-        DeviceClass.CURRENT: mlc.hac.UnitOfElectricCurrent.AMPERE,
-        DeviceClass.VOLTAGE: mlc.hac.UnitOfElectricPotential.VOLT,
-        DeviceClass.ENERGY: mlc.hac.UnitOfEnergy.WATT_HOUR,
-        DeviceClass.TEMPERATURE: mlc.hac.UnitOfTemperature.CELSIUS,
-        DEVICE_CLASS_TEMPERATURE_DELTA: mlc.hac.UnitOfTemperature.CELSIUS,
-        DeviceClass.HUMIDITY: mlc.hac.PERCENTAGE,
-        DeviceClass.BATTERY: mlc.hac.PERCENTAGE,
-        DeviceClass.ILLUMINANCE: mlc.hac.LIGHT_LUX,
+    mle.NumericEntity.DEVICECLASS_TO_UNIT_MAP = {
+        None: None,
+        DeviceClass.POWER: hac.UnitOfPower.WATT,
+        DeviceClass.CURRENT: hac.UnitOfElectricCurrent.AMPERE,
+        DeviceClass.VOLTAGE: hac.UnitOfElectricPotential.VOLT,
+        DeviceClass.ENERGY: hac.UnitOfEnergy.WATT_HOUR,
+        DeviceClass.TEMPERATURE: hac.UnitOfTemperature.CELSIUS,
+        DEVICE_CLASS_TEMPERATURE_DELTA: hac.UnitOfTemperature.CELSIUS,
+        DeviceClass.HUMIDITY: hac.PERCENTAGE,
+        DeviceClass.BATTERY: hac.PERCENTAGE,
+        DeviceClass.ILLUMINANCE: hac.LIGHT_LUX,
+        DeviceClass.DURATION: hac.UnitOfTime.SECONDS,
         DeviceClass.ENUM: None,
     }
 
@@ -400,7 +402,7 @@ class SignalStrengthSensor(mle.EntityNamespaceMixin, SensorParser):
     init_key_value = mc.KEY_SIGNAL
     # HA core entity attributes:
     _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC
-    _attr_native_unit_of_measurement = mlc.hac.PERCENTAGE
+    _attr_native_unit_of_measurement = hac.PERCENTAGE
     _attr_icon = "mdi:wifi"
 
 
@@ -412,4 +414,4 @@ class FilterMaintenanceSensor(SensorParser):
 
     # HA core entity attributes:
     _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC
-    _attr_native_unit_of_measurement = mlc.hac.PERCENTAGE
+    _attr_native_unit_of_measurement = hac.PERCENTAGE

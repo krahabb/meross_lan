@@ -2,7 +2,6 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components import number
 
-from .const import hac
 from .helpers import entity as mle
 
 if TYPE_CHECKING:
@@ -74,14 +73,7 @@ class NumberEntity(mle.NumericEntity, number.NumberEntity):
     DEVICE_CLASS_TEMPERATURE_DELTA = getattr(
         DeviceClass, "TEMPERATURE_DELTA", DeviceClass.TEMPERATURE
     )
-
-    DEVICECLASS_TO_UNIT_MAP = {
-        None: None,
-        DEVICE_CLASS_DURATION: hac.UnitOfTime.SECONDS,
-        DeviceClass.HUMIDITY: hac.PERCENTAGE,
-        DeviceClass.TEMPERATURE: hac.UnitOfTemperature.CELSIUS,
-        DEVICE_CLASS_TEMPERATURE_DELTA: hac.UnitOfTemperature.CELSIUS,
-    }
+    assert mle.NumericEntity.DEVICECLASS_TO_UNIT_MAP
 
     # HA core entity attributes:
     _attr_entity_category = mle.Entity.EntityCategory.CONFIG
