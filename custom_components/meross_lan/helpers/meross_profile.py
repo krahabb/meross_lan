@@ -515,9 +515,7 @@ class MerossProfile(mlq.MQTTProfile):
             self.log(
                 self.DEBUG,
                 "Querying device info - last query was at: %s",
-                datetime_from_epoch(
-                    self._device_info_time, dt_util.DEFAULT_TIME_ZONE
-                ).isoformat(),
+                datetime_from_epoch(self._device_info_time, dt_util.DEFAULT_TIME_ZONE),
             )
             self._device_info_time = self.time()
             if self.config.get(mlc.CONF_CHECK_FIRMWARE_UPDATES):

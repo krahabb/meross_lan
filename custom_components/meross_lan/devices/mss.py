@@ -188,7 +188,7 @@ class _ElectricitySensor(SensorParser):
         t = _now + timedelta(days=1)
         t = datetime(year=t.year, month=t.month, day=t.day, tzinfo=t.tzinfo)
         self.schedule_callback((t - _now).total_seconds(), self._reset)
-        self.log(self.DEBUG, "_schedule_reset at %s", t.isoformat())
+        self.log(self.DEBUG, "_schedule_reset at %s", t)
 
     def _reset(self, /):
         self._schedule_reset()
@@ -564,9 +564,9 @@ class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
                 self.log(
                     self.DEBUG,
                     "updated midnight epochs: yesterday=%s - today=%s - tomorrow=%s",
-                    devtime_yesterday_midnight.isoformat(),
-                    devtime_today_midnight.isoformat(),
-                    devtime_tomorrow_midnight.isoformat(),
+                    devtime_yesterday_midnight,
+                    devtime_today_midnight,
+                    devtime_tomorrow_midnight,
                 )
 
         # the days array contains a month worth of data
