@@ -7,7 +7,6 @@ import weakref
 
 from homeassistant.components import persistent_notification as pn
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr, issue_registry as ir
 
 from .. import const as mlc
@@ -254,7 +253,7 @@ class ConfigEntryManager(EntityManager):
         kwargs.setdefault("loop", api.hass.loop)
         super().__init__(id, api, **kwargs)
 
-    async def async_shutdown(self):
+    def shutdown(self):
         """
         Cleanup code called when the config entry is unloaded.
         Beware, when a derived class owns some direct member pointers to entities,
@@ -263,8 +262,7 @@ class ConfigEntryManager(EntityManager):
         their async polling before invalidating the member pointers (which are
         usually referred to inside the polling /parsing code)
         """
-        await super().async_shutdown()
-        # TODO: register trace_close in shutdown callback
+        super().shutdown()
         if self.is_tracing:
             self.trace_close()
 
@@ -351,6 +349,7 @@ class ConfigEntryManager(EntityManager):
         ):
             return False
         self._entry_update_listener_unsub()
+        del self._entry_update_listener_unsub
         self.platforms.clear()
         self.config = {}
         await self.async_shutdown()

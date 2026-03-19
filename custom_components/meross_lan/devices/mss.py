@@ -2,8 +2,6 @@ from bisect import insort_right
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, override
 
-from homeassistant.core import callback
-from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.util import dt as dt_util
 
 from .. import const as mlc
@@ -79,7 +77,6 @@ class _ElectricitySensor(SensorParser):
     __slots__ = (
         "_estimate",
         "_electricity_lastepoch",
-        "_reset_unsub",
         "sensor_consumptionx",
         "sensor_power",
     )
@@ -96,7 +93,7 @@ class _ElectricitySensor(SensorParser):
         self.sensor_consumptionx = None
         kwargs["device_value"] = 0
         super().__init__(ns_or_channel, device, **kwargs)
-        self._schedule_reset(dt_util.now())
+        self._schedule_reset()
         channel = self.channel
         for _entity_def in self.ENTITY_DEFS.values():
             _entity_def(channel, device)
@@ -107,12 +104,8 @@ class _ElectricitySensor(SensorParser):
         # 0 power readings when not able to sync time and/or correctly configured
         device.enable_check_device_time()
 
-    async def async_shutdown(self):
-        try:
-            self._reset_unsub()
-        except Exception:
-            pass
-        await super().async_shutdown()
+    def shutdown(self):
+        super().shutdown()
         del self.sensor_consumptionx
         del self.sensor_power
 
@@ -190,18 +183,15 @@ class _ElectricitySensor(SensorParser):
 
         self._electricity_lastepoch = device.device_timestamp
 
-    def _schedule_reset(self, _now: datetime, /):
+    def _schedule_reset(self, /):
+        _now = dt_util.now()
         t = _now + timedelta(days=1)
         t = datetime(year=t.year, month=t.month, day=t.day, tzinfo=t.tzinfo)
-        self._reset_unsub = async_track_point_in_time(
-            self.parent.api.hass, self._reset, t
-        )
+        self.schedule_callback((t - _now).total_seconds(), self._reset)
         self.log(self.DEBUG, "_schedule_reset at %s", t.isoformat())
 
-    @callback
-    def _reset(self, _now: datetime, /):
-        self.log(self.DEBUG, "_reset at %s", _now.isoformat())
-        self._schedule_reset(_now)
+    def _reset(self, /):
+        self._schedule_reset()
         self._estimate -= self.native_value  # preserve fraction
         self.update_native_value(0)
 

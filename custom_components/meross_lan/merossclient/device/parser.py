@@ -121,8 +121,11 @@ class NamespaceParser(logging.Loggable):
                 else:
                     del handler.parsers[self.channel]
             del self.handlers  # type: ignore
-            del self.handler_ns
         except AttributeError:  # never registered
+            pass
+        try:
+            del self.__dict__["handler_ns"]  # type: ignore
+        except KeyError:
             pass
 
     def _namespace_registered(self, handler: "NamespaceHandler", /):
