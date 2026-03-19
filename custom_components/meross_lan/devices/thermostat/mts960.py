@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from typing import Final
 
     from ...helpers.device import Device
-    from ...merossclient.protocol.types import thermostat as mt_t
+    from ...merossclient.protocol import types as mt
 
 
 class Mts960Climate(MtsThermostatClimate):
@@ -54,7 +54,7 @@ class Mts960Climate(MtsThermostatClimate):
             )
 
     if TYPE_CHECKING:
-        ns_payload: mt_t.ModeB_C
+        ns_payload: mt.thermostat.ModeB_C
         binary_sensor_plug_state: PlugState
         number_timer_down_duration: TimerConfigNumber
         number_timer_cycle_off_duration: TimerConfigNumber
@@ -359,7 +359,7 @@ class Mts960Climate(MtsThermostatClimate):
         )
 
     # message handlers
-    def _parse(self, payload: "mt_t.ModeB_C", /):
+    def _parse(self, payload: "mt.thermostat.ModeB_C", /):
         if self.ns_payload == payload:
             return
         self.ns_payload = payload
@@ -397,7 +397,7 @@ class Mts960Climate(MtsThermostatClimate):
 
         self.flush_state()
 
-    def _parse_timer(self, payload: "mt_t.Timer_C", /):
+    def _parse_timer(self, payload: "mt.thermostat.Timer_C", /):
         """
         {'channel': 0, 'type': 1, 'down': {'duration': 1, 'end': 1718724107, 'onoff': 2}} ==> Count down Off
         {'channel': 0, 'type': 1, 'down': {'duration': 1, 'end': 1718724107, 'onoff': 1}} ==> Count down On
@@ -409,7 +409,7 @@ class Mts960Climate(MtsThermostatClimate):
         self._mts_timer_payload = payload
         match payload[mc.KEY_TYPE]:
             case mc.MTS960_TIMER_TYPE_COUNTDOWN:
-                p_down: "mt_t.Timer_Down" = payload[mc.KEY_DOWN]  # type: ignore
+                p_down: "mt.thermostat.Timer_Down" = payload[mc.KEY_DOWN]  # type: ignore
                 self._mts_timer_mode = (
                     mc.MTS960_TIMER_TYPE_COUNTDOWN,
                     p_down[mc.KEY_ONOFF],
@@ -418,7 +418,7 @@ class Mts960Climate(MtsThermostatClimate):
                     p_down[mc.KEY_DURATION]
                 )
             case mc.MTS960_TIMER_TYPE_CYCLE:
-                p_cycle: "mt_t.Timer_Cycle" = payload[mc.KEY_CYCLE]  # type: ignore
+                p_cycle: "mt.thermostat.Timer_Cycle" = payload[mc.KEY_CYCLE]  # type: ignore
                 self._mts_timer_mode = (mc.MTS960_TIMER_TYPE_CYCLE, None)
                 self.number_timer_cycle_off_duration.update_native_value(
                     p_cycle[mc.KEY_OFFDURATION]

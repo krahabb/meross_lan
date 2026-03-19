@@ -39,8 +39,9 @@ if TYPE_CHECKING:
     from ..client.bluetooth import BluetoothClient
     from ..client.http import HttpClient
     from ..client.mqtt import AbstractMQTTConnection
-    from ..cloudapi import DeviceInfoType, LatestVersionType
+    from ..cloudapi import LatestVersionType
     from ..logging import LoggerType
+    from ..protocol import types as mt
     from ..protocol.message import MerossRequest, MerossResponse
     from ..protocol.types import (
         JsonDict,
@@ -49,11 +50,6 @@ if TYPE_CHECKING:
         MerossMessageType,
         MerossPayloadType,
         MerossRequestType,
-        VersionTupleType,
-        config as mt_cf,
-        control as mt_c,
-        hub as mt_h,
-        mcu as mt_m,
     )
     from .handler import NamespaceParser
 
@@ -93,7 +89,7 @@ class PhysicalDevice(AbstractClient):
         raise NotImplementedError("firmware_version")
 
     @abstractmethod
-    def get_upgrade_payload(self, /) -> "mt_c.Upgrade":
+    def get_upgrade_payload(self, /) -> "mt.control.Upgrade":
         """Builds and returns the correct upgrade payload if an upgrade is available, otherwise returns None/empty dict."""
         raise NotImplementedError("get_upgrade_payload")
 
@@ -556,7 +552,7 @@ class Device(PhysicalDevice):
         return self.descriptor.firmwareVersion
 
     @override
-    def get_upgrade_payload(self, /) -> "mt_c.Upgrade":
+    def get_upgrade_payload(self, /) -> "mt.control.Upgrade":
         return self.descriptor.build_upgrade_payload(self.latest_version)
 
     @override
@@ -1062,7 +1058,7 @@ class SubDevice(PhysicalDevice):
 
     # TODO: implement maybe something for firmware_version
     @override
-    def get_upgrade_payload(self, /) -> "mt_c.Upgrade":
+    def get_upgrade_payload(self, /) -> "mt.control.Upgrade":
         # start from hub upgrade payload (eventually)
         upgrade_payload = self.parent.get_upgrade_payload()
         latest_version = self.latest_version

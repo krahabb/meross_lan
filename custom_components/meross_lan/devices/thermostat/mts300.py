@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from typing import ClassVar, Final
 
     from ...helpers.device import Device
-    from ...merossclient.protocol.types import thermostat as mt_t
+    from ...merossclient.protocol import types as mt
 
 
 class Mts300Climate(MtsThermostatClimate):
@@ -31,7 +31,7 @@ class Mts300Climate(MtsThermostatClimate):
 
         __slots__ = ("number_calibration_humi",)
 
-        def _parse(self, payload: "mt_t.Calibration_C", /):
+        def _parse(self, payload: "mt.thermostat.Calibration_C", /):
             try:
                 humidity = payload["humiValue"]  # type: ignore
                 self.number_calibration_humi.update_device_value(humidity)
@@ -76,7 +76,7 @@ class Mts300Climate(MtsThermostatClimate):
 
     if TYPE_CHECKING:
         # overrides
-        ns_payload: mt_t.ModeC_C
+        ns_payload: mt.thermostat.ModeC_C
 
         HVAC_MODE_TO_MODE_MAP: ClassVar
         ENTITY_ARGS: Final[dict[str, EnumParser.Args]]
@@ -304,7 +304,7 @@ class Mts300Climate(MtsThermostatClimate):
         return self._mts_onoff and self._mts_work == mc.MTS300_WORK_SCHEDULE
 
     @override
-    def _parse(self, payload: "mt_t.ModeC_C", /):
+    def _parse(self, payload: "mt.thermostat.ModeC_C", /):
         if self.ns_payload == payload:
             return
         self.ns_payload = payload

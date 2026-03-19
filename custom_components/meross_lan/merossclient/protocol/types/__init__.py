@@ -63,7 +63,7 @@ class ChannelPayload(TypedDict):
     As an internal convention, inherited types (i.e. specific ns payloads)
     are coded with a _C suffix."""
 
-    channel: PayloadIndexType
+    channel: int
 
 
 class ChannelOnOff(ChannelPayload):

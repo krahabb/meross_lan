@@ -12,11 +12,12 @@ from ...switch import SwitchParser
 if TYPE_CHECKING:
     from typing import Any, Callable, ClassVar, Final, Unpack
 
-    from ...helpers.device import Device, MerossMessage
+    from ...helpers.device import Device
     from ...helpers.entity import ParserEntity
     from ...merossclient.device.handler import NamespaceHandler as _NamespaceHandler
+    from ...merossclient.protocol import types as mt
     from ...merossclient.protocol.namespaces import Namespace
-    from ...merossclient.protocol.types import JsonDict, thermostat as mt_t
+    from ...merossclient.protocol.types import JsonDict
 
 
 class ScreenBrightnessNumber(NumberParser):
@@ -75,7 +76,7 @@ class MtsCommonTemperatureNumber(NumberParser):
         )
 
     @override
-    def _parse(self, payload: "mt_t.CommonTemperature_C", /):
+    def _parse(self, payload: "mt.thermostat.CommonTemperature_C", /):
         try:
             self.native_max_value = payload[mc.KEY_MAX] / self.device_scale
             self.native_min_value = payload[mc.KEY_MIN] / self.device_scale
@@ -96,7 +97,7 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
     )
 
     @override
-    def _parse(self, payload: "mt_t.CommonTemperatureExt_C", /):
+    def _parse(self, payload: "mt.thermostat.CommonTemperatureExt_C", /):
         try:
             warning = payload[mc.KEY_WARNING]
             self.sensor_warning.update_device_value(warning)
@@ -173,7 +174,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
     _attr_native_step = MtsClimate.TARGET_TEMPERATURE_STEP
 
     @override
-    def _parse(self, payload: "mt_t.Overheat_C", /):
+    def _parse(self, payload: "mt.thermostat.Overheat_C", /):
         try:
             current_temp = payload[mc.KEY_CURRENTTEMP]
             self.sensor_external_temperature.update_device_value(current_temp)
@@ -255,7 +256,7 @@ class MtsHoldAction(SelectParser):
     __slots__ = ("number_time",)
 
     # interface: self
-    def _parse(self, payload: "mt_t.HoldAction_C", /):
+    def _parse(self, payload: "mt.thermostat.HoldAction_C", /):
         self.update_device_value(payload[self.key_value])
         try:
             time = payload[mc.KEY_TIME]  # type: ignore

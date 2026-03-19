@@ -31,16 +31,12 @@ if TYPE_CHECKING:
 
     from cloudapi import LatestVersionType
 
+    from .protocol import types as mt
     from .protocol.types import (
         JsonDict,
         JsonList,
         JsonMapping,
         VersionTupleType,
-        config as mt_cf,
-        control as mt_c,
-        hub as mt_h,
-        mcu as mt_m,
-        system as mt_s,
     )
 
     _ASYNC_LOCK: Final[asyncio.Lock]
@@ -550,7 +546,7 @@ class DeviceDescriptor:
         time: dict
         timezone: str | None
         is_hub: bool
-        subdevices: list[mt_h.Digest_SubDevice] | None
+        subdevices: list[mt.hub.Digest_SubDevice] | None
         # computed cached helpers
         productname: str
         productnametype: str
@@ -559,7 +555,7 @@ class DeviceDescriptor:
         is_refoss: bool
         firmware_version: VersionTupleType
         # devices with additional mcu firmware
-        mcu: mt_m.Firmware | JsonDict | None
+        mcu: mt.mcu.Firmware | JsonDict | None
 
     NO_CHANNEL = frozenset()
     SINGLE_CHANNEL = frozenset({0})
@@ -677,7 +673,7 @@ class DeviceDescriptor:
             except Exception:
                 pass
 
-    def update_time(self, p_time: "mt_s.Time"):
+    def update_time(self, p_time: "mt.system.Time"):
         self.system[mc.KEY_TIME] = p_time
         for key in (mc.KEY_TIME, mc.KEY_TIMEZONE):
             try:
@@ -717,12 +713,12 @@ class DeviceDescriptor:
         self,
         latest_version: "LatestVersionType",
         /,
-    ) -> "mt_c.Upgrade":
+    ) -> "mt.control.Upgrade":
         assert (
             self.type == latest_version[mc.KEY_TYPE]
             and self.subType == latest_version[mc.KEY_SUBTYPE]
         )
-        upgrade_payload: "mt_c.Upgrade" = {}
+        upgrade_payload: "mt.control.Upgrade" = {}
         if versiontuple(latest_version[mc.KEY_VERSION]) > self.firmware_version:
             upgrade_payload[mc.KEY_URL] = latest_version[mc.KEY_URL]
             upgrade_payload[mc.KEY_MD5] = latest_version[mc.KEY_MD5]

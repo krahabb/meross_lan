@@ -33,13 +33,6 @@ if TYPE_CHECKING:
     from ...merossclient.cloudapi import SubDeviceInfoType
     from ...merossclient.protocol import types as mt
     from ...merossclient.protocol.namespaces import Namespace
-    from ...merossclient.protocol.types import (
-        JsonDict,
-        JsonList,
-        control as mt_c,
-        hub as mt_h,
-        sensor as mt_s,
-    )
 
 
 class HubBeep(SwitchParser):
@@ -239,7 +232,7 @@ class Hub(Device if TYPE_CHECKING else object):
             timeout=604800,  # 1 week
         )
 
-    def _subdevice_build(self, p_subdevice: "mt_h.Digest_SubDevice", /):
+    def _subdevice_build(self, p_subdevice: "mt.hub.Digest_SubDevice", /):
         # parses the subdevice payload in 'digest' to look for a well-known type
         # and builds accordingly
         subid = p_subdevice[mc.KEY_ID]
@@ -330,7 +323,7 @@ class Hub(Device if TYPE_CHECKING else object):
     # Those mechanics rely on NamespaceParser digest_init classmethod to instantiate parsers..here we
     # use a more tricky approach leveraging that callback to slightly customize the device itself
     def digest_init(
-        cls, device: "Hub", digest: "mt_h.Digest_Hub", /
+        cls, device: "Hub", digest: "mt.hub.Digest_Hub", /
     ) -> "Device.DigestInitReturnType":
         # This is a trick to dynamically mixin the HubMixin capabilities
         # into the device instance. Historically we were mixing HubMixin
@@ -546,7 +539,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, SensorParser):
                 self.device_entry.id, name=name
             )
 
-    def parse_digest(self, payload: "mt_h.Digest_SubDevice", /):
+    def parse_digest(self, payload: "mt.hub.Digest_SubDevice", /):
         """
         Heuristic/Generalized parser for subdevice digest payloads.
         This is called by HubMixin when parsing the hub digest either in Appliance.System.All
@@ -633,7 +626,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, SensorParser):
         # and the device. We might put up a binary sensor.
         self.log(self.WARNING, "Received exception payload: %s", str(payload))
 
-    def _parse_online(self, payload: "mt_h._Online", /):
+    def _parse_online(self, payload: "mt.hub._Online", /):
         if payload[mc.KEY_STATUS] == mc.STATUS_ONLINE:
             if not self.is_connected:
                 self.on_connect()
@@ -641,7 +634,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, SensorParser):
             if self.is_connected:
                 self.on_disconnect()
 
-    def _parse_beep(self, payload: "mt_h.SubDevice_Beep", /):
+    def _parse_beep(self, payload: "mt.hub.SubDevice_Beep", /):
         self.handlers[mn_h.Appliance_Hub_SubDevice_Beep].swap_parsers(
             self,
             HubBeep(
@@ -652,7 +645,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, SensorParser):
             ),
         )
 
-    def _parse_version(self, payload: "mt_h.SubDevice_Version", /):
+    def _parse_version(self, payload: "mt.hub.SubDevice_Version", /):
         device_entry = self.device_entry
         kwargs = {}
         hw_version = payload[mc.KEY_HARDWARE]
@@ -756,7 +749,7 @@ class SubDeviceEntity(mle.ParserEntity):
         if "_parse_digest_" not in cls.__dict__:
             cls._parse_digest_ = cls._parse
 
-    def _parse_digest_(self, payload: dict, /): ...
+    def _parse_digest_(self, payload, /): ...
 
     # Stub definition to be actually overridden by subclasses.
     # By default, __init_subclass__ will point this stub method to the default
@@ -837,7 +830,7 @@ class SmokeAlarmSensor(SubDeviceEntity, EnumParser):
         Button(subid, subdevice, self.async_mute, name="Mute")
         Button(subid, subdevice, self.async_test, name="Test")
 
-    def _parse(self, payload: "mt_h._smokeAlarm", /):
+    def _parse(self, payload: "mt.hub._smokeAlarm", /):
         self.device_value = value = payload[mc.KEY_STATUS]
         self.update_native_value(self.STATUS_MAP.get(value, value))
         self.binary_sensor_alarm.update_boolean_value(value in self.STATUS_ALARM)
@@ -935,13 +928,13 @@ class MS100Sensor(SubDeviceEntity, SensorParser):
         del self.sensor_humidity
 
     @override
-    def _parse(self, payload: "mt_h.Sensor_TempHum | mt_h._ms100", /):
+    def _parse(self, payload: "mt.hub.Sensor_TempHum | mt.hub._ms100", /):
         self._update_sensors(
             payload[mc.KEY_LATESTTEMPERATURE], payload[mc.KEY_LATESTHUMIDITY]
         )
 
     @override
-    def _parse_all(self, payload: "mt_h.Sensor_All_ms100", /):
+    def _parse_all(self, payload: "mt.hub.Sensor_All_ms100", /):
         self.parent._parse_online(payload[mc.KEY_ONLINE])
         if self.available:
             self._update_sensors(
@@ -949,7 +942,7 @@ class MS100Sensor(SubDeviceEntity, SensorParser):
                 payload[mc.KEY_HUMIDITY][mc.KEY_LATEST],
             )
 
-    def _parse_adjust(self, payload: "mt_h.Sensor_Adjust"):
+    def _parse_adjust(self, payload: "mt.hub.Sensor_Adjust"):
         self.handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
             self,
             MS100Sensor.AdjustTemperatureNumber(
@@ -966,7 +959,7 @@ class MS100Sensor(SubDeviceEntity, SensorParser):
         # swap also the update_sensors method to a smarter one
         self._update_sensors = self._update_sensors_adjust
 
-    def _parse_latest(self, payload: "mt_h.Sensor_Latest"):
+    def _parse_latest(self, payload: "mt.hub.Sensor_Latest"):
         self._update_sensors(
             payload[mc.KEY_TEMPERATURE]["sample"],
             payload[mc.KEY_HUMIDITY]["sample"],
@@ -1020,10 +1013,10 @@ class MS130Sensor(MS100Sensor):
         del self.sensor_light
 
     @override
-    def _parse(self, payload: "mt_h._tempHumi", /):
+    def _parse(self, payload: "mt.hub._tempHumi", /):
         self._update_sensors(payload[mc.KEY_TEMP], payload[mc.KEY_HUMI])
 
-    def _parse_deviceCfg(self, payload: "mt_h.SubIdPayload", /):
+    def _parse_deviceCfg(self, payload: "mt.hub.SubIdPayload", /):
         """TODO: implement entities
         {
             "calibrateCfg": {
@@ -1049,7 +1042,7 @@ class MS130Sensor(MS100Sensor):
         """
         pass
 
-    def _parse_latestx(self, payload: "mt_s.LatestXResponse_C", /):
+    def _parse_latestx(self, payload: "mt.sensor.LatestXResponse_C", /):
         """parser for Appliance.Control.Sensor.LatestX:
         {
             "latest": [
@@ -1115,11 +1108,11 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, SwitchParser):
             wfm: int  # water flow measurement
             calibration: "MstSwitch.DeviceCfg_mstCfg_calibration"
 
-        class DeviceCfg(mt_h.SubIdPayload):
+        class DeviceCfg(mt.hub.SubIdPayload):
             mstCfg: "MstSwitch.DeviceCfg_mstCfg"
 
         # Appliance.Control.Water payload structure
-        class Water(mt_h.SubIdPayload):
+        class Water(mt.hub.SubIdPayload):
             dura: NotRequired[int]  # duration in seconds
             onoff: int  # 1: on, 2: off
 
@@ -1159,7 +1152,7 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, SwitchParser):
         del self.number_duration
 
     @override
-    def _parse_digest_(self, payload: "mt_h._mst", /):
+    def _parse_digest_(self, payload: "mt.hub._mst", /):
         # unknown payload semantic
         pass
 

@@ -3,14 +3,14 @@ from typing import TYPE_CHECKING
 from . import MtsThermostatClimate, mc, mn_t
 
 if TYPE_CHECKING:
-    from ...merossclient.protocol.types import thermostat as mt_t
+    from ...merossclient.protocol import types as mt
 
 
 class Mts200Climate(MtsThermostatClimate):
     """Climate entity for MTS200 devices"""
 
     if TYPE_CHECKING:
-        ns_payload: mt_t.Mode_C
+        ns_payload: mt.thermostat.Mode_C
 
     # MtsClimate class attributes
     temperature_scale = mc.MTS200_TEMP_SCALE
@@ -67,7 +67,7 @@ class Mts200Climate(MtsThermostatClimate):
     def is_mts_scheduled(self, /):
         return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
 
-    def _parse(self, payload: "mt_t.Mode_C", /):
+    def _parse(self, payload: "mt.thermostat.Mode_C", /):
         if self.ns_payload == payload:
             return
         self.ns_payload = payload

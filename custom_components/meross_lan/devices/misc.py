@@ -17,7 +17,6 @@ if TYPE_CHECKING:
 
     from ..helpers.device import Device, MerossMessage
     from ..merossclient.protocol import types as mt
-    from ..merossclient.protocol.types import sensor as mt_s
 
 
 class SensorLatestNamespaceHandler(NamespaceHandler):
@@ -139,7 +138,7 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
         ns = self.id
         key_idx = ns.key_idx
         entities = self.parent.entities
-        p_channel: "mt_s.LatestXResponse_C"
+        p_channel: "mt.sensor.LatestXResponse_C"
         for p_channel in message.payload[ns.key]:
             channel: int = p_channel[key_idx]
             for data_key, data_value in p_channel[mc.KEY_DATA].items():

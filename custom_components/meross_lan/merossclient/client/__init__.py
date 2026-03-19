@@ -30,25 +30,12 @@ if TYPE_CHECKING:
         Unpack,
     )
 
-    from cloudapi import LatestVersionType
-
     from ..device import Device
     from ..logging import LoggerType
+    from ..protocol import types as mt
     from ..protocol.message import MerossMessage
     from ..protocol.namespaces import Namespace
-    from ..protocol.types import (
-        JsonDict,
-        JsonList,
-        JsonMapping,
-        MerossPayloadType,
-        MerossRequestType,
-        VersionTupleType,
-        config as mt_cf,
-        control as mt_c,
-        hub as mt_h,
-        mcu as mt_m,
-        system as mt_s,
-    )
+    from ..protocol.types import MerossPayloadType, MerossRequestType
 
 
 class Direction(StrEnum):
@@ -368,7 +355,7 @@ class AbstractClient(logging.Loggable):
         sort_key must be a valid dict key available in the native payload
         (see protocol.types.config.Wifi)."""
 
-        p_wifilist: "mt_cf.WifiList" = await self.async_request_ns_payload(
+        p_wifilist: "mt.config.WifiList" = await self.async_request_ns_payload(
             mn.Appliance_Config_WifiList, **kwargs
         )
         if sort_key:
@@ -438,18 +425,18 @@ class AbstractClient(logging.Loggable):
             # brutal patch for missing tz names (AEST #402)
             tzname = {"AEST": "Australia/Brisbane"}.get(tzname, tzname)
             timestamp = int(self.time())
-            p_time: "mt_s.Time"
+            p_time: "mt.system.Time"
 
             try:
 
-                def _build_timerules() -> list["mt_s._Timerule"]:
+                def _build_timerules() -> list["mt.system._Timerule"]:
 
                     import pytz
 
                     tz_pytz = pytz.timezone(tzname)
                     if isinstance(tz_pytz, pytz.tzinfo.DstTzInfo):
 
-                        def _timerule_from_pytz(idx: int) -> "mt_s._Timerule":
+                        def _timerule_from_pytz(idx: int) -> "mt.system._Timerule":
                             _transition_info = tz_pytz._transition_info[idx]  # type: ignore
                             return [
                                 int(tz_pytz._utc_transition_times[idx].timestamp()),  # type: ignore

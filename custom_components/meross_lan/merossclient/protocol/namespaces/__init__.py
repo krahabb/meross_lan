@@ -22,7 +22,10 @@ if TYPE_CHECKING:
         Unpack,
     )
 
-    from ..types import MerossPayloadType, MerossRequestType
+    from ..types import (
+        MerossPayloadType,
+        MerossRequestType,
+    )
 
     type NamespacesMapType = Mapping[str, "Namespace"]
     NAMESPACES: Final[NamespacesMapType]

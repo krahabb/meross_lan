@@ -33,7 +33,7 @@ from ..update import UpdateEntity
 from .namespaces import NamespaceHandler
 
 if TYPE_CHECKING:
-    from asyncio import Future, Task, TimerHandle
+    from asyncio import Task
     from typing import (
         Any,
         Callable,
@@ -57,7 +57,6 @@ if TYPE_CHECKING:
         MerossMessageType,
         MerossPayloadType,
         MerossRequestType,
-        control as mt_c,
     )
     from .component_api import ComponentApi
     from .entity import ChannelType, Entity, ParserEntity

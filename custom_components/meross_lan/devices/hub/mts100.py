@@ -1,16 +1,15 @@
 from typing import TYPE_CHECKING, override
 
-from . import SubDeviceEntity
+from . import SubDeviceEntity, mc, mn_h
 from ...binary_sensor import BinarySensor
 from ...climate import MtsClimate
-from ...merossclient.protocol import const as mc
-from ...merossclient.protocol.namespaces import hub as mn_h
 from ...switch import EmulatedSwitch
 
 if TYPE_CHECKING:
     from typing import Unpack
 
-    from . import SubDevice, mt_h
+    from . import SubDevice
+    from ...merossclient.protocol import types as mt
 
 
 class Mts100Climate(SubDeviceEntity, MtsClimate):
@@ -27,7 +26,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         _attr_native_step = 0.5
 
     if TYPE_CHECKING:
-        ns_payload: mt_h._Mts100_Temperature
+        ns_payload: mt.hub._Mts100_Temperature
         binary_sensor_window: BinarySensor
         switch_patch_hvacaction: EmulatedSwitch
 
@@ -195,7 +194,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         return self._mts_onoff and self._mts_mode == mc.MTS100_MODE_AUTO
 
     @override
-    def _parse(self, payload: "mt_h._Mts100_Temperature", /):
+    def _parse(self, payload: "mt.hub._Mts100_Temperature", /):
         if self.ns_payload == payload:
             return
         self.ns_payload = payload
@@ -232,7 +231,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         self.flush_state()
 
     # interface: SubDeviceEntity
-    def _parse_all(self, payload: "mt_h.Mts100_All", /):
+    def _parse_all(self, payload: "mt.hub.Mts100_All", /):
         self.parent._parse_online(payload[mc.KEY_ONLINE])
         if not self.available:
             return
@@ -248,20 +247,20 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
             self.flush_state()
 
     # interface: self
-    def _parse_togglex(self, payload: "mt_h.ToggleX", /):
+    def _parse_togglex(self, payload: "mt.hub.ToggleX", /):
         self._mts_onoff = payload[mc.KEY_ONOFF]
         self.flush_state()
 
-    def _parse_mode(self, payload: "mt_h._Mts100_Mode", /):
+    def _parse_mode(self, payload: "mt.hub._Mts100_Mode", /):
         self._mts_mode = payload[mc.KEY_STATE]
         self.flush_state()
 
-    def _parse_mts100(self, payload, /):
+    def _parse_mts100(self, payload: "mt.hub._mts100v3", /):
         """parse digest key for mts100/mts100v3 subdevice"""
         self._mts_mode = payload[mc.KEY_MODE]
         self.flush_state()
 
-    def _parse_mts150(self, payload, /):
+    def _parse_mts150(self, payload: "mt.hub._mts150", /):
         """parse digest key for mts150/mts150p subdevice"""
         self._mts_mode = payload[mc.KEY_MODE]
         # TODO: parse more keys?

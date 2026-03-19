@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from typing import ClassVar, Unpack
 
     from ..helpers.device import Device
-    from ..merossclient.protocol.types import rollershutter as mt_rs
+    from ..merossclient.protocol import types as mt
 
 
 class RollerShutter(Cover):
@@ -220,7 +220,7 @@ class RollerShutter(Cover):
                 )
 
     @override
-    def _parse(self, payload: "mt_rs.Position_C"):
+    def _parse(self, payload: "mt.rollershutter.Position_C"):
         """
         legacy devices only reported 0 or 100 as position
         so we used to store this as an extra attribute and perform
@@ -269,7 +269,7 @@ class RollerShutter(Cover):
 
         self.flush_state()
 
-    def _parse_state(self, payload: "mt_rs.Status_C"):
+    def _parse_state(self, payload: "mt.rollershutter.Status_C"):
         state = payload[mc.KEY_STATE]
         if not self._position_native_isgood:
             epoch = self.parent.last_rx_epoch
@@ -363,7 +363,7 @@ class RollerShutterAdjustSwitch(SwitchParser):
     _attr_name = "Auto Calibration"
 
     @override
-    def _parse(self, payload: "mt_rs.AdjustResponse_C"):
+    def _parse(self, payload: "mt.rollershutter.AdjustResponse_C"):
         # payload = {"channel": 0, "status": 0}
         try:
             # As noted in the docstring, meaning of status is unknown
