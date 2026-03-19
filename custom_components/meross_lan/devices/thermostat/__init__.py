@@ -390,7 +390,7 @@ CLIMATE_INITIALIZERS: dict[str, type["MtsThermostatClimate"]] = {
     mc.KEY_MODE: Mts200Climate,
     mc.KEY_MODEB: Mts960Climate,
 }
-"""Core (climate) entities to initialize in _init_thermostat"""
+"""Core (climate) entities to initialize in digest_init_thermostat."""
 
 DIGEST_KEY_TO_NAMESPACE: dict[str, "Namespace"] = {
     mc.KEY_MODE: mn_t.Appliance_Control_Thermostat_Mode,

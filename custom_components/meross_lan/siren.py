@@ -126,8 +126,8 @@ class Siren(BinaryParser, siren.SirenEntity):
 
         await self.async_request_value(self.value_on)
 
-    # interface: self
-    def _parse_alarm(self, payload: "JsonDict") -> None:
+    @override
+    def _parse(self, payload: "JsonDict") -> None:
         """Parse Appliance.Control.Alarm message."""
         try:
             self.update_device_value(payload["event"]["security"]["value"])

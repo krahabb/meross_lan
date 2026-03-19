@@ -375,7 +375,8 @@ class Garagedoor(Cover):
 
         self.flush_state()
 
-    def _parse_state(self, payload: dict, /):
+    @override
+    def _parse(self, payload: dict, /):
         """
         {
             "channel": 0,
@@ -461,7 +462,7 @@ class Garagedoor(Cover):
                 self.log_exception(
                     self.WARNING,
                     exception,
-                    "_parse_config (payload=%s)",
+                    "_parse_multipleConfig (payload=%s)",
                     _payload=payload,
                 )
 
@@ -484,7 +485,7 @@ class Garagedoor(Cover):
         was_closing = self.is_closing
         if was_closing:
             # when closing we expect this callback not to be called since
-            # the transition should be terminated by '_parse_state' provided it gets
+            # the transition should be terminated by '_parse' provided it gets
             # called on time (on polling this is not guaranteed).
             # If we're here, we still havent received a proper 'physical close'
             # because our configured closeduration is too short

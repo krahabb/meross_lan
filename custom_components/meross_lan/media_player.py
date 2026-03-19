@@ -9,8 +9,7 @@ from homeassistant.components.media_player.const import (
 
 from .helpers import clamp
 from .helpers.entity import ParserEntity
-from .merossclient.protocol import const as mc, namespaces as mn
-
+from .merossclient.protocol import const as mc
 if TYPE_CHECKING:
     from typing import ClassVar, Final, NotRequired
 
@@ -121,7 +120,7 @@ class Mp3Player(ParserEntity, media_player.MediaPlayerEntity):
             }
         )
 
-    def _parse_mp3(self, payload: dict, /):
+    def _parse(self, payload: dict, /):
         """
         {"channel": 0, "lmTime": 1630691532, "song": 9, "mute": 1, "volume": 11}
         """

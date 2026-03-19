@@ -125,7 +125,7 @@ class DiffuserLight(LightBase):
     _attr_supported_color_modes = {ColorMode.RGB}
 
     @override
-    def _parse_light(self, payload, /):
+    def _parse(self, payload, /):
         # taken from https://github.com/bwp91/homebridge-meross/blob/latest/lib/device/diffuser.js
         if self.ns_payload != payload:
             self.ns_payload = payload

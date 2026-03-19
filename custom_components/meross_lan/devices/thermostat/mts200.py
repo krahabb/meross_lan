@@ -67,8 +67,7 @@ class Mts200Climate(MtsThermostatClimate):
     def is_mts_scheduled(self, /):
         return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
 
-    # interface: self
-    def _parse_mode(self, payload: "mt_t.Mode_C", /):
+    def _parse(self, payload: "mt_t.Mode_C", /):
         if self.ns_payload == payload:
             return
         self.ns_payload = payload
@@ -97,10 +96,3 @@ class Mts200Climate(MtsThermostatClimate):
             except KeyError:
                 pass
         self.flush_state()
-
-    def _parse_summerMode(self, payload: dict, /):
-        """{ "channel": 0, "mode": 0 }"""
-        summermode = payload[mc.KEY_MODE]
-        if self._mts_summermode != summermode:
-            self._mts_summermode = summermode
-            self.flush_state()

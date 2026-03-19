@@ -87,7 +87,7 @@ class Fan(ToggleXParser, fan.FanEntity):
             await self.async_request_parse_ex({mc.KEY_SPEED: 0})
 
     # interface: self
-    def _parse_fan(self, payload: dict, /):
+    def _parse(self, payload: dict, /):
         """payload = {"channel": 0, "speed": 3, "maxSpeed": 4}"""
         if self.ns_payload != payload:
             self.ns_payload = payload

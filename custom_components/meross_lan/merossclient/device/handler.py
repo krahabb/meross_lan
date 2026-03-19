@@ -273,7 +273,7 @@ class NamespaceHandler(logging.Loggable):
         splits and forwards the received NS payload to
         the registered entity(es).
         This handler si optimized for list payloads:
-        "payload": { "{self.ns.key}": [{"{self.ns.key_idx}":...., ...}] }
+        "payload": { "{self.id.key}": [{"{self.id.key_idx}":...., ...}] }
         Under normal conditions the loop is optimized with direct parser lookup
         and invocation without caching any intermediate variable since this is the 99%
         expected pattern. The most-likely exceptions are when no parser is registered
@@ -457,9 +457,8 @@ class NamespaceHandler(logging.Loggable):
         If parser is provided, it will be called back on its _parse method and
         the SET command payload will be automatically set to the parser's channel.
         """
-        ns = self.id
         response = await self.parent.async_request(
-            *ns.request_set(payload, parser.channel if parser else None)
+            *self.id.request_set(payload, parser.channel if parser else None)
         )
         if parser:
             # TODO: consider maybe a dedicated _parse_set_xxxx method?
@@ -468,7 +467,7 @@ class NamespaceHandler(logging.Loggable):
             # subset of the whole GET payload).
             # Some namespaces though might return different payloads on SETACK
             # GarageDoor.State or mts100.Temperature
-            getattr(parser, f"_parse_{ns.slug_end}", parser._parse)(
+            getattr(parser, f"_parse_{self.id.slug_end}", parser._parse)(
                 merge_dicts(dict(state), payload) if state else payload
             )
         return response
@@ -617,7 +616,7 @@ class NamespaceHandler(logging.Loggable):
         if (
             device._mqtt_active
             and self.polling_epoch_next
-            and (self.ns.payload_psh or self.last_rx_push)
+            and (self.id.payload_psh or self.last_rx_push)
         ):
             # on MQTT no need for updates since they're being PUSHed
             return

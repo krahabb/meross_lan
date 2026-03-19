@@ -420,6 +420,8 @@ class SubDevice(mld.BaseDevice, device.SubDevice, SensorParser):
     The SubDevice will appear in the containing Hub entities container together with
     some other general entities (almost appearing in any other device) strictly related to
     the Hub device itself (like signal level or so).
+    TODO: re-refactor this trying to incorporate the 'main entity' into the
+    SubDevice (adding the battery sensor as simple child)
     """
 
     if TYPE_CHECKING:
@@ -427,7 +429,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, SensorParser):
         # self
         NS_SUBDEVICE: ClassVar[Iterable[Namespace]]
         model: Final[str]
-        _digest_parse: Final[Callable[[dict], None]]
         """Internally invoked by parse_digest to parse subdevice-specific digest payloads.
         When a specialized SubDeviceEntity is installed this attribute will be redirected
         to the entity generic '_parse' method.
@@ -449,7 +450,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, SensorParser):
     __slots__ = mld.BaseDevice._calc_slots(
         "key_digest",
         "model",
-        "_digest_parse",
         "enable_check_device_time",
     )
 
@@ -486,22 +486,15 @@ class SubDevice(mld.BaseDevice, device.SubDevice, SensorParser):
         hub.register_parser_ex(self, *self.NS_SUBDEVICE)
         if entity_class:
             subdev_entity = entity_class(subid, self)
-            self._digest_parse = subdev_entity._parse
+            self._parse_digest_ = subdev_entity._parse_digest_
             hub.register_parser_ex(
                 subdev_entity, entity_class.init_ns, *entity_class.NS_HUB
             )
-        else:
-
-            def _digest_parse(_payload, /):
-                self._hub_parse(self.key_digest, _payload)
-
-            self._digest_parse = _digest_parse
 
     def shutdown(self):
         # fool the python inheritance pattern
         super().shutdown()
         del self.enable_check_device_time
-        del self._digest_parse  # type: ignore[assignment]
         for _parse_method in tuple(
             _p for _p in self.__dict__ if _p.startswith("_parse_")
         ):
@@ -589,7 +582,10 @@ class SubDevice(mld.BaseDevice, device.SubDevice, SensorParser):
         """
         self._parse_online(payload)
         if self.is_connected:
-            self._digest_parse(payload[self.key_digest])
+            self._parse_digest_(payload[self.key_digest])
+
+    def _parse_digest_(self, payload, /):
+        self._hub_parse(self.key_digest, payload)
 
     def _parse_all(self, payload: dict, /):
         """
@@ -755,11 +751,22 @@ class SubDeviceEntity(mle.ParserEntity):
             # KEY_DIGEST not defined...we need to allow for intermediate classes
             pass
 
+        # By default, the digest key (key_digest) has the same payload as the default
+        # parser (i.e. _parse) so we can just point the digest parsing to the default one.
+        if "_parse_digest_" not in cls.__dict__:
+            cls._parse_digest_ = cls._parse
+
+    def _parse_digest_(self, payload: dict, /): ...
+
+    # Stub definition to be actually overridden by subclasses.
+    # By default, __init_subclass__ will point this stub method to the default
+    # _parse method.
+
     def _parse_all(self, payload: dict, /):
         self.parent._parse_online(payload[mc.KEY_ONLINE])
         if not self.available:
             return
-        self._parse(payload[self.parent.key_digest])
+        self._parse_digest_(payload[self.parent.key_digest])
 
 
 # TODO: this lame import is to be later refactored to use lazy imports
@@ -1152,11 +1159,9 @@ class MstSwitch(SubDeviceEntity, HubSubIdChannelMixin, SwitchParser):
         del self.number_duration
 
     @override
-    def _parse(self, payload: "mt_h._mst", /):
+    def _parse_digest_(self, payload: "mt_h._mst", /):
         # unknown payload semantic
         pass
-
-    _parse_water = SwitchParser._parse
 
     def _parse_deviceCfg(self, payload: "DeviceCfg", /):
         self.number_duration._parse(payload)

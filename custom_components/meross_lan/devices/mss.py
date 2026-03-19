@@ -314,7 +314,7 @@ class ConsumptionHSensor(SensorParser):
         self.handler_ns.channel_polling_remove(self.channel)
         return await SensorParser.async_will_remove_from_hass(self)
 
-    def _parse_consumptionH(self, payload: dict):
+    def _parse(self, payload: dict):
         """
         {"channel": 1, "total": 958, "data": [{"timestamp": 1721548740, "value": 0}]}
         """

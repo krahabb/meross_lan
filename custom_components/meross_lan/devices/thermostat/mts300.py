@@ -303,8 +303,8 @@ class Mts300Climate(MtsThermostatClimate):
     def is_mts_scheduled(self, /):
         return self._mts_onoff and self._mts_work == mc.MTS300_WORK_SCHEDULE
 
-    # interface: self
-    def _parse_modeC(self, payload: "mt_t.ModeC_C", /):
+    @override
+    def _parse(self, payload: "mt_t.ModeC_C", /):
         if self.ns_payload == payload:
             return
         self.ns_payload = payload
@@ -397,6 +397,7 @@ class Mts300Climate(MtsThermostatClimate):
         except Exception as e:
             self.log_exception(self.WARNING, e, "parsing thermostat ModeC", timeout=300)
 
+    # interface: self
     def _parse_association(self, payload: dict, /):
         try:
             self.select_temp_association._parse(payload)

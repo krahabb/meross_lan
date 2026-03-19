@@ -207,7 +207,7 @@ class RollerShutter(Cover):
             await self.parent.async_handle_request_multiple(
                 (
                     mn.Appliance_RollerShutter_State.request_default,
-                    self.ns.request_default,
+                    mn.Appliance_RollerShutter_Position.request_default,
                 )
             )
         else:
@@ -215,9 +215,12 @@ class RollerShutter(Cover):
                 self.channel
             )
             if self._position_native_isgood:
-                await self.handler_ns.async_get(self.channel)
+                await self.handlers[mn.Appliance_RollerShutter_Position].async_get(
+                    self.channel
+                )
 
-    def _parse_position(self, payload: "mt_rs.Position_C"):
+    @override
+    def _parse(self, payload: "mt_rs.Position_C"):
         """
         legacy devices only reported 0 or 100 as position
         so we used to store this as an extra attribute and perform
@@ -293,7 +296,7 @@ class RollerShutter(Cover):
                 if not self.is_opening:
                     if self.current_cover_position is None:
                         # this should never really happen since we've
-                        # already set current_cover_position in _parse_position
+                        # already set current_cover_position in _parse
                         self.current_cover_position = mc.ROLLERSHUTTER_POSITION_CLOSED
                         self.supported_features |= Cover.EntityFeature.SET_POSITION
                     self._position_start = self.current_cover_position
@@ -359,7 +362,8 @@ class RollerShutterAdjustSwitch(SwitchParser):
 
     _attr_name = "Auto Calibration"
 
-    def _parse_adjust(self, payload: "mt_rs.AdjustResponse_C"):
+    @override
+    def _parse(self, payload: "mt_rs.AdjustResponse_C"):
         # payload = {"channel": 0, "status": 0}
         try:
             # As noted in the docstring, meaning of status is unknown

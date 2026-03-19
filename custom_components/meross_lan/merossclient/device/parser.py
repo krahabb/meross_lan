@@ -120,9 +120,9 @@ class NamespaceParser(logging.Loggable):
                         del handler.parsers[self.channel]
                 else:
                     del handler.parsers[self.channel]
-            del self.handlers  # type: ignore[assignment]
+            del self.handlers  # type: ignore
             del self.handler_ns
-        except (TypeError, AttributeError):  # never registered
+        except AttributeError:  # never registered
             pass
 
     def _namespace_registered(self, handler: "NamespaceHandler", /):
@@ -141,27 +141,32 @@ class NamespaceParser(logging.Loggable):
     def handler_ns(self):
         return self.parent.ns_handlers[self.ns]
 
-    # TODO: rename to async_request
+    # TODO: maybe rename to async_request
     async def async_request_payload(self, payload: "JsonDict", /):
         return await self.parent.async_request(
             *self.ns.request_set(payload, self.channel)
         )
 
     async def async_request_parse(self, payload: "JsonDict", /):
-        response = await self.async_request_payload(payload)
-        getattr(self, f"_parse_{self.ns.slug_end}", self._parse)(payload)
+        response = await self.parent.async_request(
+            *self.ns.request_set(payload, self.channel)
+        )
+        self._parse(payload)
         return response
 
     async def async_request_parse_ex(self, payload: "JsonDict", /):
-        response = await self.async_request_payload(payload)
-        getattr(self, f"_parse_{self.ns.slug_end}", self._parse)(
-            merge_dicts(dict(self.ns_payload), payload)
+        response = await self.parent.async_request(
+            *self.ns.request_set(payload, self.channel)
         )
+        self._parse(merge_dicts(dict(self.ns_payload), payload))
         return response
 
     def _parse(self, payload: "JsonMapping", /):
         """Default payload message parser. This is invoked by the NamespaceHandler
-        default routing mechanics when the parser is registered to a NamespaceHandler.
+        routing mechanics when the parser is registered as a sink and no specific
+        _parse_{NamespaceHandler.id.slug_end} is available.
+        As a convention this is also the 'official' parser method for self.ns related
+        payloads and thus invoked as a callback when succesfully sending SET requests.
         """
         self.ns_payload = payload
         self.log(

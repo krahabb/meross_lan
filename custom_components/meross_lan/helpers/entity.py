@@ -670,4 +670,4 @@ class EntityNamespaceMixin(NamespaceHandler, ParserEntity):
         return await super().async_will_remove_from_hass()
 
     def _handle(self, message: "MerossMessage", /):
-        self._parse(message.payload[self.ns.key])
+        self._parse(message.payload[self.id.key])

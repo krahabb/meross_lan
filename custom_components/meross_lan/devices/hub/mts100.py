@@ -73,11 +73,11 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         self.extra_state_attributes = {}
         match subdevice.key_digest:
             case mc.TYPE_MTS100 | mc.TYPE_MTS100V3:
-                self._parse = self._parse_mts100
+                self._parse_digest_ = self._parse_mts100
             case mc.TYPE_MTS150 | mc.TYPE_MTS150P:
                 # mts150p subdevs should still report their key_digest as mts150
                 # but we handle that option as possible though
-                self._parse = self._parse_mts150
+                self._parse_digest_ = self._parse_mts150
 
         super().__init__(subid, subdevice)
         self.schedule._schedule_unit_time = subdevice.descriptor.ability.get(
@@ -101,7 +101,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         super().shutdown()
         del self.binary_sensor_window
         del self.switch_patch_hvacaction
-        del self._parse
+        del self._parse_digest_
 
     # interface: MtsClimate
     @override
@@ -194,32 +194,8 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
     def is_mts_scheduled(self, /):
         return self._mts_onoff and self._mts_mode == mc.MTS100_MODE_AUTO
 
-    # interface: SubDeviceEntity
-    def _parse_all(self, payload: "mt_h.Mts100_All", /):
-        self.parent._parse_online(payload[mc.KEY_ONLINE])
-        if not self.available:
-            return
-        if mc.KEY_SCHEDULEBMODE in payload:
-            self.update_scheduleb_mode(payload[mc.KEY_SCHEDULEBMODE])
-        if p_mode := payload.get(mc.KEY_MODE):
-            self._mts_mode = p_mode[mc.KEY_STATE]
-        if p_togglex := payload.get(mc.KEY_TOGGLEX):
-            self._mts_onoff = p_togglex[mc.KEY_ONOFF]
-        if p_temperature := payload.get(mc.KEY_TEMPERATURE):
-            self._parse_temperature(p_temperature)
-        else:
-            self.flush_state()
-
-    # interface: self
-    def _parse_togglex(self, payload: "mt_h.ToggleX", /):
-        self._mts_onoff = payload[mc.KEY_ONOFF]
-        self.flush_state()
-
-    def _parse_mode(self, payload: "mt_h._Mts100_Mode", /):
-        self._mts_mode = payload[mc.KEY_STATE]
-        self.flush_state()
-
-    def _parse_temperature(self, payload: "mt_h._Mts100_Temperature", /):
+    @override
+    def _parse(self, payload: "mt_h._Mts100_Temperature", /):
         if self.ns_payload == payload:
             return
         self.ns_payload = payload
@@ -253,6 +229,31 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
                 _number._parse(payload)
             except KeyError:
                 pass
+        self.flush_state()
+
+    # interface: SubDeviceEntity
+    def _parse_all(self, payload: "mt_h.Mts100_All", /):
+        self.parent._parse_online(payload[mc.KEY_ONLINE])
+        if not self.available:
+            return
+        if mc.KEY_SCHEDULEBMODE in payload:
+            self.update_scheduleb_mode(payload[mc.KEY_SCHEDULEBMODE])
+        if p_mode := payload.get(mc.KEY_MODE):
+            self._mts_mode = p_mode[mc.KEY_STATE]
+        if p_togglex := payload.get(mc.KEY_TOGGLEX):
+            self._mts_onoff = p_togglex[mc.KEY_ONOFF]
+        if p_temperature := payload.get(mc.KEY_TEMPERATURE):
+            self._parse(p_temperature)
+        else:
+            self.flush_state()
+
+    # interface: self
+    def _parse_togglex(self, payload: "mt_h.ToggleX", /):
+        self._mts_onoff = payload[mc.KEY_ONOFF]
+        self.flush_state()
+
+    def _parse_mode(self, payload: "mt_h._Mts100_Mode", /):
+        self._mts_mode = payload[mc.KEY_STATE]
         self.flush_state()
 
     def _parse_mts100(self, payload, /):

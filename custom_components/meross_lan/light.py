@@ -271,8 +271,6 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
         super().set_unavailable()
 
     # interface: self
-    def _parse_light(self, payload, /): ...
-
     def _transition_setup(self, _light: dict, kwargs: dict, /) -> float | None:
         self._t_duration = _t_duration = kwargs[ATTR_TRANSITION]
         self._t_begin = monotonic()
@@ -453,7 +451,7 @@ class Light(LightBase):
         self._togglex_auto = None if self.handler_togglex else False
 
     @override
-    def _parse_light(self, payload: "JsonMapping", /):
+    def _parse(self, payload: "JsonMapping", /):
         if self.ns_payload != payload:
             self.ns_payload = payload
             if mc.KEY_ONOFF in payload:
@@ -695,7 +693,7 @@ class EffectLight(Light):
                 _light[mc.KEY_CAPACITY] = (
                     _light[mc.KEY_CAPACITY] | mc.LIGHT_CAPACITY_EFFECT
                 )
-                self._parse_light(_light)
+                self._parse(_light)
                 if not self.is_on:
                     await self.async_request_onoff(1)
             return
