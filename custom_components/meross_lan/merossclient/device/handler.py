@@ -59,10 +59,10 @@ class NamespaceHandler(logging.Loggable):
         at NamespaceHandler initialization time."""
 
         id: Final[mn.Namespace]  # type: ignore[override]
-        parent: Final["Device"]  # type: ignore[override]
+        parent: Final[Device]  # type: ignore[override]
 
         handler: HandlerFunc
-        parsers: Final[dict[object, ParserFunc]]
+        parsers: Final[dict[Any, ParserFunc]]
         parser_class: type[NamespaceParser] | None
 
         polling_strategy: PollingStrategyFunc | None

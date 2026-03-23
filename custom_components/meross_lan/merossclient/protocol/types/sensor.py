@@ -2,7 +2,7 @@
 A collection of typing definitions for payloads in Appliance.Control.Sensor.*
 """
 
-from . import Any, ChannelPayload, HistoryData, TypedDict
+from . import Any, ChannelPayload, SensorData, TypedDict
 
 
 class SensorXRequest_C(ChannelPayload):
@@ -30,7 +30,7 @@ class LatestXRequest_C(SensorXRequest_C):
 
 
 class LatestXResponse_C(SensorXResponse_C):
-    data: dict[str, list[HistoryData]]
+    data: dict[str, list[SensorData]]
 
 
 class LatestXResponse(TypedDict):

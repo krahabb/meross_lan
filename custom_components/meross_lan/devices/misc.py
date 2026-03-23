@@ -7,7 +7,7 @@ a dedicated unit for each of them would increase the number of small modules.
 from typing import TYPE_CHECKING
 
 from ..climate import MtsClimate
-from ..helpers.namespaces import NamespaceHandler, mn
+from ..helpers.namespaces import EntityDefNamespaceHandler, NamespaceHandler, mn
 from ..merossclient.protocol import const as mc
 from ..sensor import SensorParser
 from .ms600 import PresenceSensor
@@ -95,7 +95,7 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                             pass
 
 
-class SensorLatestXNamespaceHandler(NamespaceHandler):
+class SensorLatestXNamespaceHandler(EntityDefNamespaceHandler):
     """
     Specialized handler for Appliance.Control.Sensor.LatestX. This ns carries
     a variadic payload of sensor values (seen on Hub/ms130 and ms600).
@@ -104,25 +104,20 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
     """
 
     if TYPE_CHECKING:
-        ENTITY_DEFS: Final[dict[str, SensorParser.Initializer]]
+        init_entity_defs: Final[dict[str, SensorParser.Initializer]]
 
     # many of these defs are guesses
-    ENTITY_DEFS = {
+    init_entity_defs = {
         mc.KEY_HUMI: SensorParser.Humidity,
         mc.KEY_LIGHT: SensorParser.Light,
-        mc.KEY_PRESENCE: PresenceSensor,
+        mc.KEY_PRESENCE: PresenceSensor.ENTITY_DEF(),
         mc.KEY_TEMP: SensorParser.ENTITY_DEF(
             **(SensorParser.TEMPERATURE_ARGS | {"device_scale": 100})
         ),
     }
 
     def __init__(self, ns: mn.Namespace, device: "Device", /):
-        NamespaceHandler.__init__(
-            self,
-            ns,
-            device,
-            handler=self._handle_Appliance_Control_Sensor_LatestX,
-        )
+        NamespaceHandler.__init__(self, ns, device)
         if device.descriptor.type.startswith(mc.TYPE_MS600):
             PresenceSensor(0, device)
             SensorParser(
@@ -134,7 +129,7 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
         else:
             self.polling_request_add_channel(0).update({mc.KEY_DATA: []})
 
-    def _handle_Appliance_Control_Sensor_LatestX(self, message: "MerossMessage", /):
+    def _handle(self, message: "MerossMessage", /):
         ns = self.id
         key_idx = ns.key_idx
         entities = self.parent.entities
@@ -150,9 +145,7 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
                     # Likely missing the entity for this channel/data_key. It might also be
                     # a KeyError raised by accessing data_value[0]["value"] (or IndexError)
                     # but it will be raised again when constructing the entity.
-                    SensorLatestXNamespaceHandler.ENTITY_DEFS.get(
-                        data_key, SensorParser
-                    )(
+                    self.entity_defs.get(data_key, SensorParser)(
                         channel,
                         self.parent,
                         entity_key=f"sensor_{data_key}",

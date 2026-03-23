@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, override
 
-from ..helpers.namespaces import NamespaceHandler, mc, mn
+from ..helpers.namespaces import EntityDefNamespaceHandler, NamespaceHandler, mc, mn
 from ..light import (
     ATTR_BRIGHTNESS,
     ATTR_EFFECT,
@@ -18,97 +18,11 @@ from ..sensor import SensorParser
 from .spray import Spray
 
 if TYPE_CHECKING:
-    from typing import Final, Unpack
+    from typing import ClassVar, Final, Mapping, Unpack
 
     from ..helpers.device import Device, MerossMessage
+    from ..merossclient.protocol import types as mt
     from ..merossclient.protocol.types import JsonDict
-
-    DIFFUSER_SENSOR_ENTITY_ARGS: Final
-
-DIFFUSER_SENSOR_ENTITY_ARGS = {
-    mc.KEY_HUMIDITY: SensorParser.HUMIDITY_ARGS,
-    mc.KEY_TEMPERATURE: SensorParser.TEMPERATURE_ARGS,
-}
-
-
-def digest_init_diffuser(
-    device: "Device", digest: "JsonDict", /
-) -> "Device.DigestInitReturnType":
-    """
-    {
-        "type": "mod100",
-        "light": [{"channel": 0, "onoff": 0, "lmTime": 1639082117, "mode": 0, "luminance": 100, "rgb": 4129023}],
-        "spray": [{"channel": 0, "mode": 2, "lmTime": 1644353195}]
-    }
-    """
-
-    diffuser_light_handler = NamespaceHandler(
-        mn.Appliance_Control_Diffuser_Light,
-        device,
-        config=NamespaceHandler.POLLING_CONFIG_DIGEST_NS,
-        parser_class=DiffuserLight,
-        channels=(light[mc.KEY_CHANNEL] for light in digest[mc.KEY_LIGHT]),
-    )
-    diffuser_spray_handler = NamespaceHandler(
-        mn.Appliance_Control_Diffuser_Spray,
-        device,
-        config=NamespaceHandler.POLLING_CONFIG_DIGEST_NS,
-        parser_class=DiffuserSpray,
-        channels=(spray[mc.KEY_CHANNEL] for spray in digest[mc.KEY_SPRAY]),
-    )
-
-    if mn.Appliance_Control_Diffuser_Sensor in device.descriptor.ability:
-        # former mod100 devices reported fake values for sensors, maybe the mod150 and/or a new firmware
-        # are supporting correct values so we implement them (#243)
-        def _handle_Appliance_Control_Diffuser_Sensor(message: "MerossMessage", /):
-            """
-            {
-                "type": "mod100",
-                "humidity": {"value": 0, "lmTime": 0},
-                "temperature": {"value": 0, "lmTime": 0}
-            }
-            """
-            # TODO: access entities by namespace handler parsers instead of by device.entities[key]
-            # (we can store the entity in the handler when we create it)
-            for key in DIFFUSER_SENSOR_ENTITY_ARGS:
-                try:
-                    value = message.payload[key][mc.KEY_VALUE]
-                    try:
-                        device.entities[key].update_device_value(value)
-                    except KeyError:
-                        SensorParser(
-                            None,
-                            device,
-                            **(
-                                DIFFUSER_SENSOR_ENTITY_ARGS[key]
-                                | {"device_value": value}
-                            ),
-                        )
-                except KeyError:
-                    continue
-
-        NamespaceHandler(
-            mn.Appliance_Control_Diffuser_Sensor,
-            device,
-            handler=_handle_Appliance_Control_Diffuser_Sensor,
-            config=NamespaceHandler.POLLING_CONFIG_SLOWSENSOR_NS,
-        )
-
-    diffuser_light_parser = diffuser_light_handler.parse_list
-    diffuser_spray_parser = diffuser_spray_handler.parse_list
-
-    def digest_parse(digest: dict):
-        """
-        {
-            "type": "mod100",
-            "light": [{"channel": 0, "onoff": 0, "lmTime": 1639082117, "mode": 0, "luminance": 100, "rgb": 4129023}],
-            "spray": [{"channel": 0, "mode": 2, "lmTime": 1644353195}]
-        }
-        """
-        diffuser_light_parser(digest[mc.KEY_LIGHT])
-        diffuser_spray_parser(digest[mc.KEY_SPRAY])
-
-    return digest_parse, (diffuser_light_handler, diffuser_spray_handler)
 
 
 class DiffuserLight(LightBase):
@@ -119,13 +33,14 @@ class DiffuserLight(LightBase):
     # TODO: migrate to HA core entity init mechanics so to skip constructor implementation
     # This needs a bit of refactor in LightBase
     if TYPE_CHECKING:
+        ns_payload: mt.diffuser.Light_C
         effect_list: list[str]
 
     init_effect_list = mc.DIFFUSER_LIGHT_MODE_LIST
     _attr_supported_color_modes = {ColorMode.RGB}
 
     @override
-    def _parse(self, payload, /):
+    def _parse(self, payload: "mt.diffuser.Light_C", /):
         # taken from https://github.com/bwp91/homebridge-meross/blob/latest/lib/device/diffuser.js
         if self.ns_payload != payload:
             self.ns_payload = payload
@@ -184,3 +99,82 @@ class DiffuserSpray(Spray):
         mc.DIFFUSER_SPRAY_MODE_ECO: Spray.init_options_map[mc.SPRAY_MODE_INTERMITTENT],
         mc.DIFFUSER_SPRAY_MODE_FULL: Spray.init_options_map[mc.SPRAY_MODE_CONTINUOUS],
     }
+
+
+class DiffuserSensorNamespaceHandler(EntityDefNamespaceHandler):
+
+    if TYPE_CHECKING:
+        # Override entity_defs since these are rather 'entity_args'
+        # in order to minimize object creation (all the parsers are just SensorParsers)
+        init_entity_defs: ClassVar[Mapping[str, SensorParser.Args]]
+        entity_defs: Mapping[str, SensorParser.Args]
+
+    POLLING_CONFIG_DEFAULT = EntityDefNamespaceHandler.POLLING_CONFIG_SLOWSENSOR_NS
+
+    init_entity_defs = {
+        mc.KEY_HUMIDITY: SensorParser.HUMIDITY_ARGS,
+        mc.KEY_TEMPERATURE: SensorParser.TEMPERATURE_ARGS,
+    }
+
+    def _handle(self, message: "MerossMessage", /):
+        for key in self.entity_defs:
+            try:
+                value = message.payload[key][mc.KEY_VALUE]
+                try:
+                    self.parsers[key].update_device_value(value)
+                except KeyError:
+                    self.parsers[key] = SensorParser(
+                        None,
+                        self.parent,
+                        **(self.entity_defs[key] | {"device_value": value}),
+                    )
+            except KeyError:
+                continue
+
+
+def digest_init_diffuser(
+    device: "Device", digest: "JsonDict", /
+) -> "Device.DigestInitReturnType":
+    """
+    {
+        "type": "mod100",
+        "light": [{"channel": 0, "onoff": 0, "lmTime": 1639082117, "mode": 0, "luminance": 100, "rgb": 4129023}],
+        "spray": [{"channel": 0, "mode": 2, "lmTime": 1644353195}]
+    }
+    """
+
+    diffuser_light_handler = NamespaceHandler(
+        mn.Appliance_Control_Diffuser_Light,
+        device,
+        config=NamespaceHandler.POLLING_CONFIG_DIGEST_NS,
+        parser_class=DiffuserLight,
+        channels=(light[mc.KEY_CHANNEL] for light in digest[mc.KEY_LIGHT]),
+    )
+    diffuser_spray_handler = NamespaceHandler(
+        mn.Appliance_Control_Diffuser_Spray,
+        device,
+        config=NamespaceHandler.POLLING_CONFIG_DIGEST_NS,
+        parser_class=DiffuserSpray,
+        channels=(spray[mc.KEY_CHANNEL] for spray in digest[mc.KEY_SPRAY]),
+    )
+
+    if mn.Appliance_Control_Diffuser_Sensor in device.descriptor.ability:
+        # former mod100 devices reported fake values for sensors, maybe the mod150 and/or a new firmware
+        # are supporting correct values so we implement them (#243)
+        DiffuserSensorNamespaceHandler(mn.Appliance_Control_Diffuser_Sensor, device)
+
+    diffuser_light_parser = diffuser_light_handler.parse_list
+    diffuser_spray_parser = diffuser_spray_handler.parse_list
+
+    def digest_parse(digest: dict):
+        """
+        {
+            "type": "mod100",
+            "light": [{"channel": 0, "onoff": 0, "lmTime": 1639082117, "mode": 0, "luminance": 100, "rgb": 4129023}],
+            "spray": [{"channel": 0, "mode": 2, "lmTime": 1644353195}]
+        }
+        """
+        diffuser_light_parser(digest[mc.KEY_LIGHT])
+        diffuser_spray_parser(digest[mc.KEY_SPRAY])
+
+    return digest_parse, (diffuser_light_handler, diffuser_spray_handler)

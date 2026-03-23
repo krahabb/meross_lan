@@ -72,7 +72,16 @@ class ChannelOnOff(ChannelPayload):
     onoff: int
 
 
-class HistoryData(TypedDict):
+class SensorDataL(TypedDict):
+    """
+    A common struct for sensor values reporting.
+    """
+
+    value: int
+    lmTime: int
+
+
+class SensorData(TypedDict):
     """
     A common struct usually appearing in a list of historical data points (LatestX, ConsumptionH).
     """
@@ -81,4 +90,14 @@ class HistoryData(TypedDict):
     timestamp: int
 
 
-from . import config, control, hub, mcu, rollershutter, sensor, system, thermostat
+from . import (
+    config,
+    control,
+    diffuser,
+    hub,
+    mcu,
+    rollershutter,
+    sensor,
+    system,
+    thermostat,
+)

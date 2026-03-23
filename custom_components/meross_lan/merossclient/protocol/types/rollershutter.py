@@ -2,7 +2,7 @@
 A collection of typing definitions for payloads in Appliance.RollerShutter.*
 """
 
-from . import ChannelOnOff, ChannelPayload, HistoryData, TypedDict, _MerossPayloadType
+from . import ChannelOnOff, ChannelPayload, SensorData, TypedDict, _MerossPayloadType
 
 
 class AdjustRequest_C(ChannelPayload):

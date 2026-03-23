@@ -28,6 +28,7 @@ if TYPE_CHECKING:
         Final,
         Iterable,
         Literal,
+        Mapping,
         NotRequired,
         Self,
         TypedDict,

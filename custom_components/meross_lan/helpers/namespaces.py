@@ -6,11 +6,11 @@ from ..merossclient.device.parser import NamespaceParser
 from ..merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
-    from typing import Final
+    from typing import ClassVar, Final, Mapping, NotRequired
 
     from ..merossclient.protocol.message import MerossMessage
     from .device import Device
-    from .entity import ParserEntity
+    from .entity import ParserEntity, ValueParser
 
 
 class NamespaceHandler(_NH):
@@ -126,3 +126,51 @@ class NamespaceHandler(_NH):
             self.parsers[channel] = self._parse_stub
 
         self.parsers[channel](p_channel)
+
+
+class EntityDefNamespaceHandler(NamespaceHandler):
+    """
+    Special 'entity definer' namespace handler used to define entities based on the presence of keys in the payload.
+    This is intended to be used with namespaces which have a 'flat' payload structure with multiple keys representing
+    different entities (like Appliance.Control.Diffuser.Sensor).
+    The parsers member is hacked a bit so this could be dangerous with lifecycle management.
+    Entities are typically created on the fly and stored in parsers (instead of registering the ParserFunc).
+    The entities cleanup/shutdown will be managed by the device as usual but we have to cleanup the parsers map.
+    """
+
+    if TYPE_CHECKING:
+
+        parsers: Final[dict[str, ValueParser]]  # type: ignore[override]
+
+        init_entity_defs: ClassVar[Mapping[str, type[ValueParser]]]
+        entity_defs: Mapping[str, type[ValueParser]]
+
+        class Args(NamespaceHandler.Args):
+            entity_defs: NotRequired[Mapping[str, type[ValueParser]]]
+
+    SLOTS_AUTO_INIT = ("entity_defs",)
+
+    def shutdown(self):
+        self.parsers.clear()
+        super().shutdown()
+
+    def _handle(self, message: "MerossMessage", /):
+
+        parsers = self.parsers
+        for key, value in message.payload[self.id.key].items():
+            try:
+                parsers[key].update_device_value(value)
+            except KeyError:
+                # assert KeyError is due to missing parser ?
+                try:
+                    parsers[key] = self.entity_defs[key](
+                        None, self.parent, ns=self.id, key_value=key, device_value=value
+                    )
+                except Exception as e:
+                    self.log_exception(
+                        self.DEBUG,
+                        e,
+                        "creating entity for '%s' key in '%s' namespace",
+                        key,
+                        self.id,
+                    )

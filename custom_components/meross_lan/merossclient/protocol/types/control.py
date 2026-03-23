@@ -6,8 +6,8 @@ A collection of typing definitions for payloads in Appliance.Control.*
 from . import (
     ChannelOnOff,
     ChannelPayload,
-    HistoryData,
     NotRequired,
+    SensorData,
     TypedDict,
     _MerossPayloadType,
 )
@@ -21,7 +21,7 @@ class ConsumptionH_C(ChannelPayload):
     """Appliance.Control.ConsumptionH"""
 
     total: int  # [Wh]
-    data: list[HistoryData]
+    data: list[SensorData]
 
 
 class Electricity_C(ChannelPayload):

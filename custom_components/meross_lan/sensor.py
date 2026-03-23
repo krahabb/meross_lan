@@ -220,6 +220,7 @@ class SensorParser(mle.NumericParser, SensorEntity):
         cls,
         channel: "ChannelType | None",
         manager: "Device",
+        /,
         **kwargs: "Unpack[Args]",
     ) -> "Self":
         return cls(channel, manager, **(cls.HUMIDITY_ARGS | kwargs))
@@ -235,6 +236,7 @@ class SensorParser(mle.NumericParser, SensorEntity):
         cls,
         channel: "ChannelType | None",
         manager: "Device",
+        /,
         **kwargs: "Unpack[Args]",
     ) -> "Self":
         return cls(channel, manager, **(cls.LIGHT_ARGS | kwargs))
@@ -251,6 +253,7 @@ class SensorParser(mle.NumericParser, SensorEntity):
         cls,
         channel: "ChannelType | None",
         manager: "Device",
+        /,
         **kwargs: "Unpack[Args]",
     ) -> "Self":
         return cls(channel, manager, **(cls.TEMPERATURE_ARGS | kwargs))

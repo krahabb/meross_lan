@@ -95,7 +95,7 @@ class _ElectricitySensor(SensorParser):
         super().__init__(ns_or_channel, device, **kwargs)
         self._schedule_reset()
         channel = self.channel
-        for _entity_def in self.ENTITY_DEFS.values():
+        for _entity_def in self.__class__.ENTITY_DEFS.values():
             _entity_def(channel, device)
         self.sensor_power = device.entities[
             mc.KEY_POWER if channel is None else f"{channel}_{mc.KEY_POWER}"
@@ -149,7 +149,7 @@ class _ElectricitySensor(SensorParser):
         channel = self.channel
         last_power = self.sensor_power.native_value
 
-        for key in self.ENTITY_DEFS:
+        for key in self.__class__.ENTITY_DEFS:
             try:
                 entities[
                     key if channel is None else f"{channel}_{key}"
