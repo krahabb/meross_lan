@@ -502,14 +502,15 @@ class Emulator:
                     )
                 response_method = mc.METHOD_SETACK
                 response_payload = {mc.KEY_MULTIPLE: multiple}
-            elif handler := getattr(
-                self, f"_{method}_{namespace.replace('.', '_')}", None
-            ):
-                response_method, response_payload = handler(header, payload)
             else:
-                response_method, response_payload = self._handler_default(
-                    method, namespace, payload
-                )
+                try:
+                    response_method, response_payload = getattr(
+                        self, f"_{method}_{namespace.replace('.', '_')}"
+                    )(header, payload)
+                except AttributeError:
+                    response_method, response_payload = self._handler_default(
+                        method, namespace, payload
+                    )
 
         except Exception as e:
             self._log_message(e.__class__.__name__, str(e))

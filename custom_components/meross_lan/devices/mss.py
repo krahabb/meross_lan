@@ -352,14 +352,12 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
     def __init__(self, ns: "mn.Namespace", device: "Device", /):
         self._channels_to_poll = []
         NamespaceHandler.__init__(self, ns, device, parser_class=ConsumptionHSensor)
-        self.polling_strategy = ConsumptionHNamespaceHandler.async_poll_probe  # type: ignore
+        self.polling_strategy = (
+            ConsumptionHNamespaceHandler.async_poll_probe
+            if len(device.descriptor.channels) > 1
+            else ConsumptionHNamespaceHandler.async_poll_smartchunk
+        )
         device.enable_check_device_time()
-
-    @override
-    def polling_request_add_channel(self, channel, /):
-        # disable polling_request_channels setup since we're overriding the default
-        # polling mechanics
-        pass
 
     def channel_polling_add(self, channel, delay: float = 0, /):
         # assert not already present ?
@@ -401,6 +399,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         self.polling_response_size = (
             self.HEADER_AVG_SIZE + 3 * self.id.payload_item_size
         )
+        self.polling_request_channels.clear()
         await self.parent.async_poll_request(self)
         self.polling_request_channels.append({})
         self.polling_response_size = self.HEADER_AVG_SIZE + self.id.payload_item_size

@@ -558,16 +558,16 @@ class DeviceDescriptor:
         mcu: mt.mcu.Firmware | JsonDict | None
 
     NO_CHANNEL = frozenset()
-    SINGLE_CHANNEL = frozenset({0})
+    SINGLE_CHANNEL = frozenset((0,))
     TYPE_CHANNELS_MAP = {
         # some lookup when digest euristic parsing doesn't work
-        "em06": frozenset({1, 2, 3, 4, 5, 6}),
-        "hp110": SINGLE_CHANNEL,  # Mp3 player/light device (Smart Cherub)
-        "mfc100": frozenset(
-            {2}
+        mc.RefossModel.em06.name: frozenset((1, 2, 3, 4, 5, 6)),
+        mc.TYPE_HP110A: SINGLE_CHANNEL,  # Mp3 player/light device (Smart Cherub)
+        mc.TYPE_MFC100: frozenset(
+            (2,)
         ),  # This device is tricky since it exposes features on different channels
         "mrs100": SINGLE_CHANNEL,
-        "ms600": SINGLE_CHANNEL,
+        mc.TYPE_MS600: SINGLE_CHANNEL,
         "mts300": SINGLE_CHANNEL,
     }
 

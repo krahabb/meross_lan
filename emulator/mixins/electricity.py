@@ -139,6 +139,11 @@ class ElectricityXMixin(Emulator if TYPE_CHECKING else object):
 
 class ConsumptionHMixin(Emulator if TYPE_CHECKING else object):
 
+    EM06_CHANNEL_BANK = {
+        True: [{"channel": channel} for channel in range(1, 4)],
+        False: [{"channel": channel} for channel in range(4, 7)],
+    }
+
     def __init__(self, descriptor: "EmulatorDescriptor", key):
         super().__init__(descriptor, key)
 
@@ -153,6 +158,21 @@ class ConsumptionHMixin(Emulator if TYPE_CHECKING else object):
                 }
                 for channel in descriptor.channels
             ],
+        )
+        if self.descriptor.type.startswith(mc.RefossModel.em06.name):
+            self.__channel_payload = False
+            self._GET_Appliance_Control_ConsumptionH = (
+                self._GET_Appliance_Control_ConsumptionH_em06
+            )
+
+    def _GET_Appliance_Control_ConsumptionH_em06(self, header, payload):
+        if not payload[mc.KEY_CONSUMPTIONH]:
+            self.__channel_payload = not self.__channel_payload
+            payload[mc.KEY_CONSUMPTIONH] = self.EM06_CHANNEL_BANK[
+                self.__channel_payload
+            ]
+        return self._handler_default(
+            mc.METHOD_GET, mn.Appliance_Control_ConsumptionH, payload
         )
 
 
