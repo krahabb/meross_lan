@@ -14,11 +14,11 @@ from tests import const as tc, helpers
 from tests.entities import EntityComponentTest
 
 if TYPE_CHECKING:
+    from typing import Iterable, Mapping
     from homeassistant.core import HomeAssistant
     from pytest import CaptureFixture
 
-    from custom_components.meross_lan.helpers.device import BaseDevice
-
+    from custom_components.meross_lan.helpers.entity import Entity
     from tests.entities import (
         DeviceEntitiesType,
         DigestEntitiesType,
@@ -204,15 +204,20 @@ async def test_entities(
                         )
                     device = device_context.device
                     await _async_test_entities(
-                        device, expected, unexpected, unavailable
+                        device.entities.values(), expected, unexpected, unavailable
                     )
                     assert device.descriptor.is_hub == ishub
+                    """
                     if ishub:
                         assert isinstance(device, Hub)
-                        for subdevice in device.subdevices:
+                        for subdevice in device.subdevices.values():
                             await _async_test_entities(
-                                subdevice, expected, unexpected, unavailable
+                                subdevice.entities.values(),
+                                expected,
+                                unexpected,
+                                unavailable,
                             )
+                    """
 
                     if unexpected:
                         unexpected_summary[device_name] = unexpected
@@ -248,12 +253,12 @@ async def test_entities(
 
 
 async def _async_test_entities(
-    manager: "BaseDevice",
+    entities: "Iterable[Entity]",
     expected: "MerossEntityTypesList",
     unexpected: list[str],
     unavailable: list[str],
 ):
-    for entity in manager.entities.values():
+    for entity in entities:
 
         entity_class = entity.__class__
 

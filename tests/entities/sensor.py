@@ -89,7 +89,7 @@ class EntityTest(EntityComponentTest):
     }
 
     HUB_SUBDEVICES_ENTITIES = {
-        None: [hub.SubDevice],  # actual implementation of battery sensor
+        None: [SensorParser],  # actual implementation of battery sensor
         mc.TYPE_MS100: [hub.MS100Sensor, SensorParser],
         mc.KEY_TEMPHUMI: [hub.MS130Sensor, SensorParser, SensorParser],
         mc.TYPE_MTS100: [

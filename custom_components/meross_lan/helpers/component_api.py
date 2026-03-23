@@ -13,7 +13,7 @@ from homeassistant.helpers import (
 )
 
 # import core modules instead of symbols to ease patching in a single place
-from . import ConfigEntryType, manager as mlm, mqtt_profile as mlq
+from . import ConfigEntryType, mqtt_profile as mlq
 from .. import const as mlc
 from ..merossclient import HostAddress
 from ..merossclient.client import Transport, bluetooth as m_bt
@@ -25,6 +25,7 @@ from ..merossclient.protocol.message import (
     MerossRequest,
     json_loads,
 )
+from .manager import ConfigEntryManager
 
 if TYPE_CHECKING:
 
@@ -213,9 +214,9 @@ class HAMQTTConnection(mlq.MQTTConnection):
             if device := self.parent.devices[uuid]:
                 key = device.key
             else:  # device not loaded...
-                device_entry = self.parent.get_config_entry(uuid)
-                if device_entry:
-                    key = device_entry.data.get(mlc.CONF_KEY) or ""
+                device_config_entry = self.parent.get_config_entry(uuid)
+                if device_config_entry:
+                    key = device_config_entry.data.get(mlc.CONF_KEY) or ""
                 else:
                     key = self.parent.key
         except KeyError:  # device not configured
@@ -427,9 +428,9 @@ class ComponentApi(mlq.MQTTProfile):
         managers_transient_state: Final[dict[str, dict]]
         """
         This is actually a temporary memory storage used to mantain some info related to
-        an ConfigEntry/EntityManager that we don't want to persist to hass storage (useless overhead)
+        a ConfigEntryManager that we don't want to persist to hass storage (useless overhead)
         since they're just runtime context but we need an independent storage than
-        EntityManager since these info are needed during EntityManager async_setup_entry.
+        ConfigEntryManager since these info are needed during async_setup_entry.
         See the tracing feature activated through the OptionsFlow for insights.
         """
 
@@ -700,7 +701,7 @@ class ComponentApi(mlq.MQTTProfile):
         # while preserving our mqtt_connection and device linking.
         # That's a risky mess
         # for real shutdown there's self.async_terminate
-        await mlm.ConfigEntryManager.async_shutdown(self)
+        await ConfigEntryManager.async_shutdown(self)
 
     @override
     def get_logger_name(self) -> str:

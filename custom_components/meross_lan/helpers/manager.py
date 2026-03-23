@@ -3,7 +3,6 @@ import asyncio
 import os
 from time import localtime, strftime
 from typing import TYPE_CHECKING, final, override
-import weakref
 
 from homeassistant.components import persistent_notification as pn
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
@@ -69,16 +68,11 @@ OBFUSCATE_KEYS |= {
 }
 
 
-class EntityManager(logging.Loggable):
+class ConfigEntryManager(logging.Loggable):
     """
-    This is an abstraction of an actual (device or other) container
-    for Entity(s). This container is very 'hybrid', end its main purpose
-    is to provide interfaces to their owned MerossEntities.
-    It could represent a Device, a SubDevice or an ApiProfile
-    and manages the relation(s) with the ConfigEntry (config, life-cycle).
-    This is a 'partial' base class for ConfigEntryManager which definitely establishes
-    the relationship with the ConfigEntry. This is in turn needed to better establish
-    an isolation level between SubDevice and a ConfigEntry
+    This class manages the relationships with an actual ConfigEntry and its managed
+    device(s) and entities. A typical Meross device inherits from this but also
+    A MerossCloudProfile and the 'MQTTHub'.
     """
 
     if TYPE_CHECKING:
@@ -88,132 +82,53 @@ class EntityManager(logging.Loggable):
 
         type PlatformsType = dict[str, Callable | None]
 
+        ROOT_LOGGER: Final[logging._Logger]
+        DEFAULT_PLATFORMS: ClassVar[PlatformsType]
+
         id: Final[str]  # type: ignore[override]
-        parent: Final[EntityManager]  # type: ignore[override]
-        api: Final[ComponentApi]
-        is_connected: Final[
-            bool
-        ]  # BEWARE: this property could mixin with AbstractClient in Device
-        """Indicates if the manager is 'online' i.e. active (connected to device/cloud)."""
-        device_entry: Final[dr.DeviceEntry | None]
-        """Link to optional DeviceRegistry entry info."""
-
-        platforms: PlatformsType  # init in derived
-        entities: Final[dict[object, Entity]]
-
-        class Args(logging.Loggable.Args):
-            device_entry: NotRequired[dr.DeviceEntry | None]
-
-    ROOT_LOGGER = logging.getLogger(__name__[:-16])
-    """Root meross_lan logger"""
-
-    IssueSeverity = ir.IssueSeverity
-
-    _attr_is_connected: bool = True
-
-    # slots for ConfigEntryManager are defined here since we would have some
-    # multiple inheritance conflicts in Device
-
-    __SLOTS__ = (
-        "api",
-        "is_connected",
-        "device_entry",
-        "platforms",
-        "entities",
-    )
-
-    def __init__(self, id: str, manager: "EntityManager", **kwargs: "Unpack[Args]"):
-        self.api = manager.api
-        self.is_connected = self._attr_is_connected
-        self.device_entry = kwargs.get("device_entry")
-        assert hasattr(self, "platforms"), "platforms must be set in derived classes"
-        self.entities = {}
-        super().__init__(id, manager, **kwargs)
-
-    @property
-    def display_name(self) -> str:
-        """
-        returns a proper (friendly) name for logging purposes
-        """
-        de = self.device_entry
-        return (de and (de.name_by_user or de.name)) or self.logtag
-
-    def managed_entities(self, platform, /):
-        """entities list for platform setup"""
-        return [
-            entity for entity in self.entities.values() if entity.PLATFORM is platform
-        ]
-
-    def generate_unique_id(self, entity: "Entity", /):
-        """
-        flexible policy in order to generate unique_ids for entities:
-        This is an helper needed to better control migrations in code
-        which could/would lead to a unique_id change.
-        We could put here code checks in order to avoid entity_registry
-        migrations
-        """
-        return f"{self.id}_{entity.id}"
-
-    def get_device_entry(self, channel, /):
-        """
-        Return the DeviceRegistry entry for a given channel (if any).
-        By default this returns self.device_entry but derived classes
-        (like Hub) could override this to return different entries
-        for different channels.
-        """
-        return self.device_entry
-
-    @override
-    def create_task[_T](
-        self, target: "Coroutine[Any, Any, _T]", name: str, eager_start: bool = False
-    ):
-        task = self.api.hass.async_create_task(
-            target, f"{self.logtag}{name}", eager_start=eager_start
-        )
-        if eager_start and task.done():
-            return task
-        try:
-            self._tasks.add(task)
-        except AttributeError:
-            self._tasks = {task}
-        task.add_done_callback(self._done_task_callback)
-        return task
-
-
-class ConfigEntryManager(EntityManager):
-    """
-    This class manages the relationships with an actual ConfigEntry and its managed
-    device(s) and entities. A typical Meross device inherits from this but also
-    A MerossCloudProfile and the 'MQTTHub'.
-    """
-
-    if TYPE_CHECKING:
-
-        DEFAULT_PLATFORMS: ClassVar[EntityManager.PlatformsType]
-
         parent: Final[ComponentApi]  # type: ignore[override]
         config_entry: Final[ConfigEntry | None]
         config: Mapping[str, Any]
         key: str
+        obfuscate: bool
+        device_entry: Final[dr.DeviceEntry | None]
+        """Link to optional DeviceRegistry entry info."""
+        platforms: PlatformsType
+        entities: Final[dict[object, Entity]]
         logger: logging._Logger
+        is_connected: Final[
+            bool
+        ]  # BEWARE: this property could mixin with AbstractClient in Device
+        """Indicates if the manager is 'online' i.e. active (connected to device/cloud)."""
         _issues: set[str]  # BEWARE: on demand attribute
         _trace_file: io.TextIOWrapper | None
         _trace_future: asyncio.Future | None
         _trace_data: list | None
         _entry_update_listener_unsub: CALLBACK_TYPE
 
-        class Args(EntityManager.Args):
-            pass
+        class Args(logging.Loggable.Args):
+            device_entry: NotRequired[dr.DeviceEntry | None]
 
+    ROOT_LOGGER = logging.getLogger(__name__[:-16])
+    """Root meross_lan logger"""
     DEFAULT_PLATFORMS = {}
     """Defined at the class level to preset a list of domains for entities
     which could be dynamically added after ConfigEntry loading."""
 
-    __slots__ = EntityManager._calc_slots(
+    IssueSeverity = ir.IssueSeverity
+
+    init_is_connected: bool = True
+
+    __slots__ = logging.Loggable._calc_slots(
         "config_entry",
         "config",
         "key",
         "obfuscate",
+        "device_entry",
+        "platforms",
+        "entities",
+        "logger",
+        "is_connected",
         "_issues",
         "_trace_file",
         "_trace_future",
@@ -224,7 +139,7 @@ class ConfigEntryManager(EntityManager):
     def __init__(
         self,
         id: str,
-        api: "ComponentApi",
+        parent: "ComponentApi",
         config_entry: "ConfigEntry | None" = None,
         /,
         **kwargs: "Unpack[Args]",
@@ -240,18 +155,15 @@ class ConfigEntryManager(EntityManager):
             self.config = {}
             self.key = mlc.PARAM_DEFAULT_KEY
             self.obfuscate = True
-        # when we build an entity we also add the relative platform name here
-        # so that the async_setup_entry for this integration will be able to forward
-        # the setup to the appropriate platform(s).
-        # The item value here will be set to the async_add_entities callback
-        # during the corresponding platform async_setup_entry so to be able
-        # to dynamically add more entities should they 'pop-up' (Hub only?)
+        self.device_entry = kwargs.pop("device_entry", None)
         self.platforms = self.DEFAULT_PLATFORMS.copy()
+        self.entities = {}
+        self.is_connected = self.init_is_connected
         self._trace_file = None
         self._trace_future = None
         self._trace_data = None
-        kwargs.setdefault("loop", api.hass.loop)
-        super().__init__(id, api, **kwargs)
+        kwargs.setdefault("loop", parent.hass.loop)
+        super().__init__(id, parent, **kwargs)
 
     def shutdown(self):
         """
@@ -301,7 +213,31 @@ class ConfigEntryManager(EntityManager):
                 % (args + logging.extract_obfuscated_kwargs(self.obfuscate, kwargs)),
             )
 
-    # interface: EntityManager
+    @override
+    def create_task[_T](
+        self, target: "Coroutine[Any, Any, _T]", name: str, eager_start: bool = False
+    ):
+        # this override is needed to rely on a more reliable eager_start behavior
+        # which should be incorporated in HA core.
+        # Loggable.create_task could be fragile about eager_start since
+        # it uses a kind of 'official' trick in case we're on python < 3.14
+        task = self.parent.hass.async_create_task(
+            target, f"{self.logtag}{name}", eager_start=eager_start
+        )
+        if eager_start and task.done():
+            return task
+        try:
+            self._tasks.add(task)
+        except AttributeError:
+            self._tasks = {task}
+        task.add_done_callback(self._done_task_callback)
+        return task
+
+    # interface: self
+    @property
+    def create_diagnostic_entities(self):
+        return self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
+
     @property
     def display_name(self) -> str:
         de = self.device_entry
@@ -309,17 +245,37 @@ class ConfigEntryManager(EntityManager):
             self.config_entry.title if self.config_entry else self.logtag
         )
 
-    # interface: self
-    @property
-    def create_diagnostic_entities(self):
-        return self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
+    def managed_entities(self, platform, /):
+        """entities list for platform setup"""
+        return [
+            entity for entity in self.entities.values() if entity.PLATFORM is platform
+        ]
+
+    def generate_unique_id(self, entity: "Entity", /):
+        """
+        flexible policy in order to generate unique_ids for entities:
+        This is an helper needed to better control migrations in code
+        which could/would lead to a unique_id change.
+        We could put here code checks in order to avoid entity_registry
+        migrations
+        """
+        return f"{self.id}_{entity.id}"
+
+    def get_device_entry(self, channel, /):
+        """
+        Return the DeviceRegistry entry for a given channel (if any).
+        By default this returns self.device_entry but derived classes
+        (like Hub) could override this to return different entries
+        for different channels.
+        """
+        return self.device_entry
 
     async def async_setup_entry(
         self, hass: "HomeAssistant", config_entry: "ConfigEntry", /
     ):
         assert self.config_entry == config_entry
         config_entry.runtime_data = self
-        api = self.api
+        api = self.parent
         # open the (eventual) trace before adding the entities
         # so we could catch logs in this phase too. See
         # OptionsFlow.async_step_diagnostics for the mechanic.
@@ -364,7 +320,7 @@ class ConfigEntryManager(EntityManager):
         assert self.config_entry
         self.schedule_callback(
             delay,
-            self.api.config_entries.async_schedule_reload,
+            self.parent.config_entries.async_schedule_reload,
             self.config_entry.entry_id,
         )
 
@@ -399,7 +355,7 @@ class ConfigEntryManager(EntityManager):
     async def async_destroy_diagnostic_entities(self, remove: bool = False, /):
         """Cleanup diagnostic entities, when the entry is unloaded. If 'remove' is True
         it will be removed from the entity registry as well."""
-        ent_reg = self.api.entity_registry if remove else None
+        ent_reg = self.parent.entity_registry if remove else None
         for entity in self.managed_entities(SENSOR_DOMAIN):
             if entity.is_diagnostic:
                 if entity.hass_connected:
@@ -424,7 +380,7 @@ class ConfigEntryManager(EntityManager):
                 return
         except AttributeError:
             issues = self._issues = set()
-        self.api.issue_registry.async_get_or_create(
+        self.parent.issue_registry.async_get_or_create(
             mlc.DOMAIN,
             issue_id,
             data=data,
@@ -439,7 +395,7 @@ class ConfigEntryManager(EntityManager):
     def remove_issue_id(self, issue_id: str, /):
         try:
             self._issues.remove(issue_id)
-            self.api.issue_registry.async_delete(mlc.DOMAIN, issue_id)
+            self.parent.issue_registry.async_delete(mlc.DOMAIN, issue_id)
         except (AttributeError, KeyError):
             # either no _issues attr or issue_id not in set
             return
@@ -490,7 +446,7 @@ class ConfigEntryManager(EntityManager):
         try:
             self.log(self.DEBUG, "Tracing start")
             epoch = self.time()
-            hass = self.api.hass
+            hass = self.parent.hass
 
             def _trace_open():
                 tracedir = hass.config.path(
@@ -535,7 +491,7 @@ class ConfigEntryManager(EntityManager):
 
             self._trace_opened(epoch)
             pn.async_create(
-                self.api.hass,
+                self.parent.hass,
                 f"Device: {self.display_name}\nFile: {_t.name}",  # type: ignore
                 "meross_lan tracing started",
                 f"{DOMAIN}.{self.id}.tracing",
@@ -582,7 +538,7 @@ class ConfigEntryManager(EntityManager):
         else:
             notify_title = "Tracing terminated"
         pn.async_create(
-            self.api.hass,
+            self.parent.hass,
             f"Device: {self.display_name}\n{notify_message}",
             notify_title,
             f"{DOMAIN}.{self.id}.tracing",

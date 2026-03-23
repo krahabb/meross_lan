@@ -1,4 +1,3 @@
-from abc import abstractmethod
 import asyncio
 from bisect import bisect_right
 from json import JSONDecodeError
@@ -9,8 +8,6 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
 
-# import core modules instead of symbols to ease patching in a single place
-from . import manager as mlm
 from .. import const as mlc
 from ..button import PersistentButton
 from ..merossclient import (
@@ -30,6 +27,9 @@ from ..merossclient.protocol.message import MerossMessage, MerossResponse
 from ..merossclient.protocol.namespaces import thermostat as mn_t
 from ..sensor import ProtocolSensor
 from ..update import UpdateEntity
+
+# import core modules instead of symbols to ease patching in a single place
+from .manager import ConfigEntryManager
 from .namespaces import NamespaceHandler
 
 if TYPE_CHECKING:
@@ -64,114 +64,42 @@ if TYPE_CHECKING:
     from .mqtt_profile import MQTTConnection, MQTTProfile
 
 
-class BaseDevice(mlm.EntityManager, device.PhysicalDevice):
+class BaseDevice(device.PhysicalDevice):
     """
     Abstract base class for Device and SubDevice (from hub)
-    giving common behaviors like device_registry interface
+    giving common behaviors like device_registry interface.
     """
 
     if TYPE_CHECKING:
 
-        update_firmware: UpdateEntity | None
-        # Overrides
-        device_entry: Final[dr.DeviceEntry]  # type: ignore
+        # to be implemented in derived classes
+        entities: Mapping[object, Entity]
+        display_name: str
 
-        class Args(mlm.EntityManager.Args, device.PhysicalDevice.Args):
+        class Args(device.PhysicalDevice.Args):
             device_entry: dr.DeviceEntry
 
-    _attr_is_connected = False
-
-    __SLOTS__ = ("update_firmware",)
-
-    def __init__(self, id: str, parent: mlm.EntityManager, **kwargs: "Unpack[Args]"):
-        self.update_firmware = None
-        super().__init__(id, parent, **kwargs)
-
-    def shutdown(self):
-        super().shutdown()
-        del self.update_firmware
-
-    @override
-    def on_connect(self, /):
-        super().on_connect()
-        for entity in self.entities.values():
-            entity.set_available()
-
-    @override
-    def on_disconnect(self, /):
-        super().on_disconnect()
-        for entity in self.entities.values():
-            entity.set_unavailable()
+        def __init__(
+            self, id, parent: ConfigEntryManager, /, **kwargs: Unpack[Args]
+        ): ...
 
     # interface: self
-    @abstractmethod
-    def enable_check_device_time(self, /):
-        pass
+    entities = NotImplemented
+    display_name = NotImplemented
 
-    def update_latest_version(self, latest_version: "LatestVersionType"):
-        # TODO: add the update invocation path for Hub Subdevices.
-        self.latest_version = latest_version
-        if self.update_firmware:
-            self.update_firmware.update_info()
-        else:
-            self.update_firmware = UpdateEntity(self)
+    @property
+    def update_firmware(self) -> UpdateEntity | None:
+        # TODO: this is to be refined in Hub SubDevice
+        return self.entities.get(UpdateEntity.init_entity_key)  # type: ignore
 
-    def parse_undefined_dict(
-        self, key_parent: str, payload: dict, channel: "ChannelType | None", /
-    ):
-        device_entities = self.entities
-        excluded = (
-            mc.KEY_ID,
-            mc.KEY_SUBID,
-            mc.KEY_CHANNEL,
-            mc.KEY_LMTIME,
-            mc.KEY_LMTIME_,
-            mc.KEY_SYNCEDTIME,
-            mc.KEY_LATESTSAMPLETIME,
-            "lastActiveTime",
-        )
-        for key, value in payload.items():
-            if key in excluded:
-                continue
-            if type(value) is dict:
-                self.parse_undefined_dict(f"{key_parent}_{key}", value, channel)
-                continue
-            if type(value) is list:
-                self.parse_undefined_list(f"{key_parent}_{key}", value, channel)
-                continue
-            try:
-                device_entities[
-                    (
-                        f"{channel}_{key_parent}_{key}"
-                        if channel is not None
-                        else f"{key_parent}_{key}"
-                    )
-                ].update_device_value(value)
-            except KeyError:
-                from ..sensor import DiagnosticParser
-
-                DiagnosticParser(
-                    channel,
-                    self,
-                    entity_key=f"{key_parent}_{key}",
-                    device_value=value,
-                )
-            except Exception as e:
-                self.log_exception(
-                    self.WARNING,
-                    e,
-                    "Error updating diagnostic entity for key '%s' with value '%s'",
-                    key,
-                    value,
-                )
-
-    def parse_undefined_list(
-        self, key_parent: str, payload: list, channel: "ChannelType | None", /
-    ):
-        pass
+    def check_update_firmware(self):
+        update_firmware: UpdateEntity | None
+        if update_firmware := self.entities.get(UpdateEntity.init_entity_key):  # type: ignore
+            update_firmware.flush_state()
+        return update_firmware
 
 
-class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
+class Device(ConfigEntryManager, device.Device, BaseDevice):
     """
     Generic protocol handler class managing the physical device stack/state
     """
@@ -252,6 +180,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         # Overrides
         config_entry: Final[ConfigEntry]  # type: ignore[override]
         config: mlc.DeviceConfigType
+        device_entry: Final[dr.DeviceEntry]  # type: ignore[override]
 
         descriptor: Final[DeviceDescriptor]  # type: ignore[override]
         bluetooth: Final[ComponentApi.BTClient | None]  # type: ignore[override]
@@ -397,9 +326,11 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         mn.Appliance_Control_Bind,
         mn.Appliance_Control_Unbind,
     )
-    DEFAULT_PLATFORMS = mlm.ConfigEntryManager.DEFAULT_PLATFORMS | {
+    DEFAULT_PLATFORMS = ConfigEntryManager.DEFAULT_PLATFORMS | {
         UpdateEntity.PLATFORM: None,
     }
+
+    init_is_connected = False
 
     __slots__ = device.Device._calc_slots(
         "conf_transport",
@@ -502,11 +433,11 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         # fix transports according to the current configuration and profile
         # linking, and finally (re)start polling.
         try:
-            profile = self.api.profiles[self.descriptor.userId]
+            profile = self.parent.profiles[self.descriptor.userId]
             if profile and (profile.key != self.key):
-                profile = self.api
+                profile = self.parent
         except KeyError:
-            profile = self.api
+            profile = self.parent
         if self.profile == profile:
             self._check_protocol()
         else:
@@ -530,7 +461,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         if self.profile:
             self.profile.unlink(self)
         del self.sensor_protocol
-        self.api.devices[self.id] = None
+        self.parent.devices[self.id] = None
 
     # miscellaneous internals to prepare/refresh internal config
     def _update_config(self):
@@ -558,9 +489,9 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
         if conf_transport is Transport.BLUETOOTH:
             if not self.bluetooth:
-                if _bluetooth := self.api.get_bt_client(self.id):
+                if _bluetooth := self.parent.get_bt_client(self.id):
                     self.add_client(_bluetooth)
-                    self.api.device_registry.async_update_device(
+                    self.parent.device_registry.async_update_device(
                         self.device_entry.id,
                         new_connections={
                             (dr.CONNECTION_NETWORK_MAC, self.descriptor.macAddress),
@@ -570,7 +501,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
         elif self.bluetooth:
             self.remove_client(self.bluetooth)
-            self.api.device_registry.async_update_device(
+            self.parent.device_registry.async_update_device(
                 self.device_entry.id,
                 new_connections={
                     (dr.CONNECTION_NETWORK_MAC, self.descriptor.macAddress)
@@ -657,7 +588,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                         self.transport,
                     )
 
-    # interface: EntityManager
+    # interface: ConfigEntryManager
     @override
     def get_device_entry(self, channel, /):
         if (not channel) or (len(self.descriptor.channels) <= 1):
@@ -671,7 +602,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             pass
 
         self._device_entries[channel] = device_entry = (
-            self.api.device_registry.async_get_or_create(
+            self.parent.device_registry.async_get_or_create(
                 config_entry_id=self.config_entry.entry_id,
                 manufacturer=mc.MANUFACTURER,
                 name=f"{self.device_entry.name} Channel {channel}",
@@ -881,7 +812,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             latest_version = None
             latest_versions = None
         if not latest_version:
-            for _profile in self.api.active_profiles():
+            for _profile in self.parent.active_profiles():
                 if _profile is profile:
                     continue
                 if latest_version := _profile.get_latest_version(
@@ -950,6 +881,8 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
     @override
     def on_connect(self, /):
         super().on_connect()
+        for entity in self.entities.values():
+            entity.set_available()
         if self._check_device_time_enabled:
             self.schedule_callback(
                 self.PARAM_CHECK_DEVICE_TIME_START_DELAY, self._check_device_time
@@ -976,6 +909,8 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         super().on_disconnect()
         self.device_debug = None
         self.cancel_callback(self._check_device_time)
+        for entity in self.entities.values():
+            entity.set_unavailable()
 
     @override
     async def async_request(
@@ -1148,7 +1083,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                         *mn.Appliance_System_Ability.request_default
                     )
                 ).payload[mc.KEY_ABILITY]
-            self.api.config_entries.async_update_entry(self.config_entry, data=data)
+            self.parent.config_entries.async_update_entry(self.config_entry, data=data)
 
         # we also take the time to sync our tz to the device timezone
         await self._async_init_zoneinfo()
@@ -1262,8 +1197,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
     def _handle_Appliance_Mcu_Firmware(self, message: MerossMessage, /):
         self.descriptor.mcu = message.payload[mc.KEY_FIRMWARE]
-        if self.update_firmware:
-            self.update_firmware.update_info()
+        self.check_update_firmware()
 
     _handle_Appliance_Mcu_Hp110_Firmware = _handle_Appliance_Mcu_Firmware
 
@@ -1290,8 +1224,7 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
         if oldfirmware != descr.firmware:
             self.schedule_entry_update(True)
-            if self.update_firmware:
-                self.update_firmware.update_info()
+            self.check_update_firmware()
             if not self.config.get(mlc.CONF_HOST):
                 self._update_host(descr.innerIp)
         elif oldtimezone != descr.timezone:
@@ -1505,7 +1438,6 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
                 translation_placeholders={"device_name": self.display_name},
             )
 
-    @override
     def enable_check_device_time(self, /):
         """Public method to trigger the device time check procedure. If already in place, it will be restarted."""
         self._check_device_time_enabled = True
@@ -1513,6 +1445,60 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
             self.schedule_callback(
                 self.PARAM_CHECK_DEVICE_TIME_START_DELAY, self._check_device_time
             )
+
+    def parse_undefined_dict(
+        self, key_parent: str, payload: dict, channel: "ChannelType | None", /
+    ):
+        device_entities = self.entities
+        excluded = (
+            mc.KEY_ID,
+            mc.KEY_SUBID,
+            mc.KEY_CHANNEL,
+            mc.KEY_LMTIME,
+            mc.KEY_LMTIME_,
+            mc.KEY_SYNCEDTIME,
+            mc.KEY_LATESTSAMPLETIME,
+            "lastActiveTime",
+        )
+        for key, value in payload.items():
+            if key in excluded:
+                continue
+            if type(value) is dict:
+                self.parse_undefined_dict(f"{key_parent}_{key}", value, channel)
+                continue
+            if type(value) is list:
+                self.parse_undefined_list(f"{key_parent}_{key}", value, channel)
+                continue
+            try:
+                device_entities[
+                    (
+                        f"{channel}_{key_parent}_{key}"
+                        if channel is not None
+                        else f"{key_parent}_{key}"
+                    )
+                ].update_device_value(value)
+            except KeyError:
+                from ..sensor import DiagnosticParser
+
+                DiagnosticParser(
+                    channel,
+                    self,
+                    entity_key=f"{key_parent}_{key}",
+                    device_value=value,
+                )
+            except Exception as e:
+                self.log_exception(
+                    self.WARNING,
+                    e,
+                    "Error updating diagnostic entity for key '%s' with value '%s'",
+                    key,
+                    value,
+                )
+
+    def parse_undefined_list(
+        self, key_parent: str, payload: list, channel: "ChannelType | None", /
+    ):
+        pass
 
     def _process_uuid_mismatch(
         self, response_uuid: str, payload_all: "MerossPayloadType | None"
@@ -1543,11 +1529,11 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
         """Called when linked to a (cloud) profile and device info is available or whenever updated."""
         name = device_info.get(mc.KEY_DEVNAME) or self.descriptor.productname
         if name != self.device_entry.name:
-            self.api.device_registry.async_update_device(
+            self.parent.device_registry.async_update_device(
                 self.device_entry.id, name=name
             )
         channel = -1
-        async_update_entity = self.api.entity_registry.async_update_entity
+        async_update_entity = self.parent.entity_registry.async_update_entity
         for device_info_channel in device_info.get("channels", []):
             # we assume the device_info.channels struct are mapped
             # to what we consider 'default' entities for the device
@@ -1570,7 +1556,9 @@ class Device(mlm.ConfigEntryManager, device.Device, BaseDevice):
 
         # check for firmware updates too
         if latest_version := profile.get_latest_version(*self.descriptor.type_subtype):
-            self.update_latest_version(latest_version)
+            self.latest_version = latest_version
+            if not self.check_update_firmware():
+                UpdateEntity(None, self)
 
     async def _async_button_reload_press(self):
         """Reload the config_entry."""

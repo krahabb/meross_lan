@@ -874,7 +874,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         """
         Fills (the bottom of) the schema presented to the UI with common settings
         available for all (or almost) the config flows (properties typically configuring
-        the EntityManager base class).
+        the ConfigEntryManager base class).
         """
 
 
@@ -1486,7 +1486,7 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
     async def async_step_diagnostics(self, user_input: "Mapping | None" = None):
         # when choosing to start a diagnostic from the OptionsFlow UI we'll
         # reload the entry so we trace also the full initialization process
-        # for a more complete insight on the EntityManager context.
+        # for a more complete insight on the ConfigEntryManager context.
         # The info to trigger the trace_open on entry setup is carried through
         # the global ComponentApi.managers_transient_state
         config = self.config

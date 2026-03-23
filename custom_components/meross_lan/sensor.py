@@ -1,8 +1,8 @@
 from functools import cached_property
 from typing import TYPE_CHECKING, override
 
-from homeassistant.components import sensor
 from homeassistant import const as hac
+from homeassistant.components import sensor
 
 from .helpers import entity as mle
 from .merossclient.client import Transport
@@ -23,9 +23,9 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .helpers.device import BaseDevice, Device
+    from .helpers.device import Device
     from .helpers.entity import ChannelType
-    from .helpers.manager import EntityManager
+    from .helpers.manager import ConfigEntryManager
     from .helpers.mqtt_profile import MQTTConnection
     from .merossclient.client import AbstractClient
 
@@ -57,7 +57,7 @@ class SensorEntity(mle.NumericEntity, sensor.SensorEntity):
         def __init__(
             self,
             channel: ChannelType | None,
-            parent: EntityManager,
+            parent: ConfigEntryManager,
             /,
             **kwargs: Unpack[Args],
         ): ...
@@ -132,7 +132,7 @@ class EnumSensorEntity(SensorEntity):
         def __init__(
             self,
             channel: ChannelType | None,
-            parent: EntityManager,
+            parent: ConfigEntryManager,
             /,
             **kwargs: Unpack[Args],
         ): ...
@@ -161,7 +161,7 @@ class EnumParser(mle.ValueParser, EnumSensorEntity):
         def __init__(
             self,
             channel: ChannelType | None,
-            parent: BaseDevice,
+            parent: Device,
             /,
             **kwargs: Unpack[Args],
         ): ...
@@ -192,7 +192,7 @@ class SensorParser(mle.NumericParser, SensorEntity):
             def __call__(
                 self,
                 channel: ChannelType | None,
-                parent: BaseDevice,
+                parent: Device,
                 /,
                 **kwargs: Unpack["SensorParser.Args"],
             ) -> "SensorParser": ...
@@ -200,7 +200,7 @@ class SensorParser(mle.NumericParser, SensorEntity):
         def __init__(
             self,
             channel: ChannelType | None,
-            parent: BaseDevice,
+            parent: Device,
             /,
             **kwargs: Unpack[Args],
         ): ...
@@ -219,7 +219,7 @@ class SensorParser(mle.NumericParser, SensorEntity):
     def Humidity(
         cls,
         channel: "ChannelType | None",
-        manager: "BaseDevice",
+        manager: "Device",
         **kwargs: "Unpack[Args]",
     ) -> "Self":
         return cls(channel, manager, **(cls.HUMIDITY_ARGS | kwargs))
@@ -234,7 +234,7 @@ class SensorParser(mle.NumericParser, SensorEntity):
     def Light(
         cls,
         channel: "ChannelType | None",
-        manager: "BaseDevice",
+        manager: "Device",
         **kwargs: "Unpack[Args]",
     ) -> "Self":
         return cls(channel, manager, **(cls.LIGHT_ARGS | kwargs))
@@ -250,7 +250,7 @@ class SensorParser(mle.NumericParser, SensorEntity):
     def Temperature(
         cls,
         channel: "ChannelType | None",
-        manager: "BaseDevice",
+        manager: "Device",
         **kwargs: "Unpack[Args]",
     ) -> "Self":
         return cls(channel, manager, **(cls.TEMPERATURE_ARGS | kwargs))
@@ -268,7 +268,7 @@ class DiagnosticSensor(SensorEntity):
         def __init__(
             self,
             channel: ChannelType | None,
-            parent: EntityManager,
+            parent: ConfigEntryManager,
             /,
             **kwargs: Unpack[Args],
         ): ...

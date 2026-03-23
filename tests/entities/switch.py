@@ -55,12 +55,15 @@ class EntityTest(EntityComponentTest):
         mn.Appliance_RollerShutter_Adjust: [rs.RollerShutterAdjustSwitch],
     }
     HUB_SUBDEVICES_ENTITIES = {
-        mc.TYPE_MTS100: [switch.EmulatedSwitch],
-        mc.TYPE_MTS100V3: [switch.EmulatedSwitch],
-        mc.TYPE_MTS150: [switch.EmulatedSwitch, hub.HubBeep],
-        mc.KEY_DOORWINDOW: [hub.HubBeep],
+        mc.TYPE_MTS100: [switch.EmulatedSwitch],  # patch_hvacaction
+        mc.TYPE_MTS100V3: [switch.EmulatedSwitch],  # patch_hvacaction
+        mc.TYPE_MTS150: [
+            switch.EmulatedSwitch,  # patch_hvacaction
+            switch.SwitchParser,  # beep
+        ],
+        mc.KEY_DOORWINDOW: [switch.SwitchParser],  # beep
         mc.KEY_MST: [hub.MstSwitch],
-        mc.KEY_WATERLEAK: [hub.HubBeep],
+        mc.KEY_WATERLEAK: [switch.SwitchParser],  # beep
     }
 
     async def async_test_enabled_callback(self, entity):

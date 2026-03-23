@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .helpers.entity import ChannelType
-    from .helpers.manager import EntityManager
+    from .helpers.manager import ConfigEntryManager
 
 
 async def async_setup_entry(
@@ -44,7 +44,7 @@ class Button(Entity, button.ButtonEntity):
     def __init__(
         self,
         channel: "ChannelType | None",
-        parent: "EntityManager",
+        parent: "ConfigEntryManager",
         press_func: "Callable[[], CoroutineType[Any, Any, None]]",
         **kwargs: "Unpack[Button.Args]",
     ):

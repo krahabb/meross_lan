@@ -2,7 +2,6 @@
 meross_lan module interface to access Meross Cloud services
 """
 
-import asyncio
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, override
 
@@ -231,7 +230,7 @@ class MerossProfile(mlq.MQTTProfile):
         await super().async_shutdown()
         await self.apiclient.async_shutdown()
         del self.apiclient
-        self.api.profiles[self.id] = None
+        self.parent.profiles[self.id] = None
 
     # interface: ConfigEntryManager
     @override
@@ -457,13 +456,13 @@ class MerossProfile(mlq.MQTTProfile):
             # since it should still be pending...
             data[mc.KEY_TOKEN] = credentials[mc.KEY_TOKEN]
             self.log(self.INFO, "Meross api token was automatically refreshed")
-            profile_entry = self.api.get_config_entry(f"profile.{self.id}")
+            profile_entry = self.parent.get_config_entry(f"profile.{self.id}")
             if profile_entry:
                 # weird enough if this isnt true...
                 profile_config = dict(profile_entry.data)
                 profile_config.update(credentials)
                 # watchout: this will in turn call self.entry_update_listener
-                self.api.config_entries.async_update_entry(
+                self.parent.config_entries.async_update_entry(
                     profile_entry,
                     data=profile_config,
                 )
@@ -546,7 +545,7 @@ class MerossProfile(mlq.MQTTProfile):
     async def _process_device_info_new(
         self, device_info_list_new: list["DeviceInfoExtType"]
     ):
-        api_devices = self.api.devices
+        api_devices = self.parent.devices
         device_info_dict = self._data[self.KEY_DEVICE_INFO]
         device_info_removed = {device_id for device_id in device_info_dict.keys()}
         device_info_unknown: list["DeviceInfoType"] = []
@@ -615,7 +614,7 @@ class MerossProfile(mlq.MQTTProfile):
                     "Trying/Initiating discovery for (new) uuid:%s",
                     uuid=device_id,
                 )
-                if self.api.get_config_flow(device_id):
+                if self.parent.get_config_flow(device_id):
                     continue  # device configuration already progressing
                 # cloud conf has a new device
                 if domain := device_info.get(mc.KEY_DOMAIN):

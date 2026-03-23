@@ -64,7 +64,7 @@ class HubSubdeviceRemovedFlow(SimpleRepairFlow):
                 device: "Hub | None" = getattr(config_entry, "runtime_data", None)
                 if device:
                     device.remove_issue_id(self.issue_id)
-                    if subdevice_id in device.entities:
+                    if subdevice_id in device.subdevices:
                         # subdevice still registered with hub..abort issue repair
                         return self.async_abort(reason="subdevice_still_registered")
                     logger = device

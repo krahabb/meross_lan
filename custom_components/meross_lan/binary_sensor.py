@@ -45,7 +45,7 @@ class BinarySensorParser(mle.BinaryParser, BinarySensor):
         def __init__(
             self,
             channel: mle.ChannelType | None,
-            parent: mle.BaseDevice,
+            parent: mle.Device,
             /,
             **kwargs: Unpack[Args],
         ): ...

@@ -10,9 +10,9 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .helpers.device import BaseDevice
+    from .helpers.device import Device
     from .helpers.entity import ChannelType
-    from .helpers.manager import EntityManager
+    from .helpers.manager import ConfigEntryManager
 
 
 async def async_setup_entry(
@@ -43,7 +43,7 @@ class SelectEntity(mle.Entity, select.SelectEntity):
         def __init__(
             self,
             channel: ChannelType | None,
-            device: EntityManager,
+            device: ConfigEntryManager,
             /,
             **kwargs: Unpack[Args],
         ): ...
@@ -88,7 +88,7 @@ class SelectParser(mle.ValueParser, SelectEntity):
     def __init__(
         self,
         channel: "ChannelType | None",
-        device: "BaseDevice",
+        device: "Device",
         /,
         **kwargs: "Unpack[Args]",
     ):

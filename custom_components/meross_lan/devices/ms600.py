@@ -11,7 +11,7 @@ from ..sensor import SensorParser
 if TYPE_CHECKING:
     from typing import Final, Self, Unpack
 
-    from ..helpers.device import BaseDevice, Device
+    from ..helpers.device import Device
     from ..helpers.entity import ChannelType
 
 
@@ -172,7 +172,7 @@ class PresenceSensor(SensorParser):
     def __init__(
         self,
         channel: "ChannelType | None",
-        device: "BaseDevice",
+        device: "Device",
         /,
         **kwargs: "Unpack[SensorParser.Args]",
     ):

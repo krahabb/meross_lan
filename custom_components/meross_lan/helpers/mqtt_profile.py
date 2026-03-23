@@ -4,8 +4,6 @@ from typing import TYPE_CHECKING, override
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.core import callback
 
-# import core modules instead of symbols to ease patching in a single place
-from . import manager as mlm
 from .. import const as mlc
 from ..merossclient import HostAddress
 from ..merossclient.client import Transport
@@ -13,6 +11,9 @@ from ..merossclient.client.mqtt import AbstractMQTTConnection
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..merossclient.protocol.message import MerossResponse, get_replykey
 from ..sensor import DiagnosticSensor
+
+# import core modules instead of symbols to ease patching in a single place
+from .manager import ConfigEntryManager
 
 if TYPE_CHECKING:
     from typing import (
@@ -337,7 +338,7 @@ class MQTTConnection(AbstractMQTTConnection):
                     raise
 
             profile = self.parent
-            api = profile.api
+            api = profile.parent
             # device_id is not binded to this MQTTConnection
             if device := api.devices.get(uuid):
                 # check among current loaded devices if they could be re-binded
@@ -521,7 +522,7 @@ class MQTTConnection(AbstractMQTTConnection):
             device_config, descriptor = await self.async_identify_device(
                 uuid, self.parent.key
             )
-            return await self.parent.api.flow_manager.async_init(
+            return await self.parent.parent.flow_manager.async_init(
                 mlc.DOMAIN,
                 context={"source": SOURCE_INTEGRATION_DISCOVERY},
                 data=device_config,
@@ -558,7 +559,7 @@ MQTTConnection.SESSION_HANDLERS = {
 }
 
 
-class MQTTProfile(mlm.ConfigEntryManager):
+class MQTTProfile(ConfigEntryManager):
     """
     Base class for both MerossProfile and ComponentApi allowing lightweight
     sharing of globals and defining some common interfaces.
@@ -568,7 +569,7 @@ class MQTTProfile(mlm.ConfigEntryManager):
         linkeddevices: Final[dict[str, Device]]
         mqttconnections: Final[dict[str, MQTTConnection]]
 
-    DEFAULT_PLATFORMS = mlm.ConfigEntryManager.DEFAULT_PLATFORMS | {
+    DEFAULT_PLATFORMS = ConfigEntryManager.DEFAULT_PLATFORMS | {
         ConnectionSensor.PLATFORM: None,
     }
 

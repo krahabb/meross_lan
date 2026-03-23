@@ -8,7 +8,7 @@ from .helpers.entity import Entity
 if TYPE_CHECKING:
     from typing import Any, NotRequired, Unpack
 
-    from .helpers.manager import EntityManager
+    from .helpers.manager import ConfigEntryManager
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
@@ -53,7 +53,7 @@ class TimeEntity(Entity, time.TimeEntity):
     def __init__(
         self,
         channel: "Any | None",
-        manager: "EntityManager",
+        manager: "ConfigEntryManager",
         **kwargs: "Unpack[Args]",
     ):
         self.native_value = kwargs.pop("native_value", None)

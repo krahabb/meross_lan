@@ -39,8 +39,8 @@ if TYPE_CHECKING:
 
     from ..merossclient.protocol.message import MerossMessage
     from ..merossclient.protocol.types import JsonDict, JsonList, PayloadIndexType
-    from .device import BaseDevice, Device
-    from .manager import ConfigEntryManager, EntityManager
+    from .device import Device
+    from .manager import ConfigEntryManager
 
     type ChannelType = PayloadIndexType
 
@@ -78,7 +78,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         is_diagnostic: ClassVar[bool]  # TODO: type uppercase
         """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
 
-        parent: Final[EntityManager]  # type: ignore[override]
+        parent: Final[ConfigEntryManager]  # type: ignore[override]
         channel: (
             ChannelType | None
         )  # TODO: maybe remove since it might only be relevant in ParserEntity
@@ -133,7 +133,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
     def __init__(
         self,
         channel: "ChannelType | None",
-        manager: "EntityManager",
+        manager: "ConfigEntryManager",
         /,
         **kwargs: "Unpack[Args]",
     ):
@@ -362,7 +362,7 @@ class ParserEntity(parser.NamespaceParser, Entity):
     for some 'general' entities like 'DeviceInfo' or so."""
 
     if TYPE_CHECKING:
-        parent: Final[BaseDevice]  # type: ignore[override]
+        parent: Final[Device]  # type: ignore[override]
         handler_ns: NamespaceHandler  # override
 
         _parse_togglex: Callable[[JsonDict], Any]
@@ -373,7 +373,7 @@ class ParserEntity(parser.NamespaceParser, Entity):
         def __init__(
             self,
             channel: PayloadIndexType | None,
-            parent: BaseDevice,
+            parent: Device,
             /,
             **kwargs: Unpack[Args],
         ): ...
@@ -413,7 +413,7 @@ class ValueParser(parser.NamespaceValue, ParserEntity):
         def __init__(
             self,
             channel: ChannelType | None,
-            parent: BaseDevice,
+            parent: Device,
             /,
             **kwargs: Unpack[Args],
         ): ...
@@ -448,7 +448,7 @@ class NumericEntity(Entity):
         def __init__(
             self,
             channel: ChannelType | None,
-            parent: EntityManager,
+            parent: ConfigEntryManager,
             /,
             **kwargs: Unpack[Args],
         ): ...
@@ -498,7 +498,7 @@ class NumericParser(ValueParser, NumericEntity):
     def __init__(
         self,
         channel: "ChannelType | None",
-        parent: "BaseDevice",
+        parent: "Device",
         /,
         **kwargs: "Unpack[Args]",
     ):
@@ -530,7 +530,7 @@ class BinaryEntity(Entity):
         def __init__(
             self,
             channel: "ChannelType | None",
-            manager: "EntityManager",
+            manager: "ConfigEntryManager",
             /,
             **kwargs: "Unpack[Args]",
         ): ...
@@ -559,7 +559,7 @@ class BinaryParser(parser.NamespaceBoolean, ValueParser, BinaryEntity):
     def __init__(
         self,
         channel: "ChannelType | None",
-        parent: "BaseDevice",
+        parent: "Device",
         /,
         **kwargs: "Unpack[Args]",
     ):

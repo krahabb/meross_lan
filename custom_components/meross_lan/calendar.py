@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .climate import MtsClimate
-    from .helpers.device import BaseDevice
+    from .helpers.device import Device
     from .helpers.entity import ChannelType
     from .merossclient.protocol import namespaces as mn
 
@@ -99,7 +99,6 @@ class MtsScheduleEntry:
 class MtsSchedule(ParserEntity, calendar.CalendarEntity):
 
     if TYPE_CHECKING:
-        parent: Final[BaseDevice]  # type: ignore[override]
         climate: Final[MtsClimate]  # type: ignore[assignment]
 
         flatten: Final[bool]  # type: ignore[assignment]
@@ -131,7 +130,7 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
         def __init__(
             self,
             channel: ChannelType,
-            parent: BaseDevice,
+            parent: Device,
             /,
             **kwargs: Unpack[Args],
         ): ...

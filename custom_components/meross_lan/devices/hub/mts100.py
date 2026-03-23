@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, override
 
-from . import SubDeviceEntity, mc, mn_h
+from . import SubDevice, mc, mn_h
 from ...binary_sensor import BinarySensor
 from ...climate import MtsClimate
 from ...switch import EmulatedSwitch
@@ -8,11 +8,11 @@ from ...switch import EmulatedSwitch
 if TYPE_CHECKING:
     from typing import Unpack
 
-    from . import SubDevice
+    from . import Hub
     from ...merossclient.protocol import types as mt
 
 
-class Mts100Climate(SubDeviceEntity, MtsClimate):
+class Mts100Climate(SubDevice, MtsClimate):
     """Climate entity for hub paired devices MTS100, MTS100V3, MTS150"""
 
     class AdjustNumber(MtsClimate.AdjustNumber):
@@ -34,7 +34,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         mn_h.Appliance_Hub_Mts100_All,
         mn_h.Appliance_Hub_Mts100_Mode,
         mn_h.Appliance_Hub_ToggleX,
-        *SubDeviceEntity.NS_HUB,
+        *SubDevice.NS_HUB,
     )
     init_ns = mn_h.Appliance_Hub_Mts100_Temperature
 
@@ -68,9 +68,9 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         "switch_patch_hvacaction",
     )
 
-    def __init__(self, subid: str, subdevice: "SubDevice", /):
+    def __init__(self, subid: str, hub: "Hub", key_digest: str):
         self.extra_state_attributes = {}
-        match subdevice.key_digest:
+        match key_digest:
             case mc.TYPE_MTS100 | mc.TYPE_MTS100V3:
                 self._parse_digest_ = self._parse_mts100
             case mc.TYPE_MTS150 | mc.TYPE_MTS150P:
@@ -78,19 +78,19 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
                 # but we handle that option as possible though
                 self._parse_digest_ = self._parse_mts150
 
-        super().__init__(subid, subdevice)
-        self.schedule._schedule_unit_time = subdevice.descriptor.ability.get(
+        super().__init__(subid, hub, key_digest)
+        self.schedule._schedule_unit_time = hub.descriptor.ability.get(
             mn_h.Appliance_Hub_Mts100_ScheduleB, {}
         ).get(mc.KEY_SCHEDULEUNITTIME, 15)
         self.binary_sensor_window = BinarySensor(
             subid,
-            subdevice,
+            hub,
             entity_key=str(BinarySensor.DeviceClass.WINDOW),
             device_class=BinarySensor.DeviceClass.WINDOW,
         )
         self.switch_patch_hvacaction = EmulatedSwitch(
             subid,
-            subdevice,
+            hub,
             entity_key="patch_hvacaction",
             is_on=False,
         )
@@ -100,7 +100,6 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
         super().shutdown()
         del self.binary_sensor_window
         del self.switch_patch_hvacaction
-        del self._parse_digest_
 
     # interface: MtsClimate
     @override
@@ -232,7 +231,7 @@ class Mts100Climate(SubDeviceEntity, MtsClimate):
 
     # interface: SubDeviceEntity
     def _parse_all(self, payload: "mt.hub.Mts100_All", /):
-        self.parent._parse_online(payload[mc.KEY_ONLINE])
+        self._parse_online(payload[mc.KEY_ONLINE])
         if not self.available:
             return
         if mc.KEY_SCHEDULEBMODE in payload:

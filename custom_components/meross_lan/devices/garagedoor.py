@@ -128,7 +128,7 @@ class GarageEnableSwitch(GarageConfigSwitch):
     def _channel_enable(self, enabled, /):
         """enables/disables all the entities of this channel garageDoor in the
         entity registry"""
-        registry_update_entity = self.parent.api.entity_registry.async_update_entity
+        registry_update_entity = self.parent.parent.entity_registry.async_update_entity
         disabler = er.RegistryEntryDisabler.INTEGRATION
         for entity in self.parent.entities.values():
             if (

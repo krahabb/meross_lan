@@ -1,5 +1,4 @@
 import enum
-from functools import cached_property
 from typing import TYPE_CHECKING, override
 
 from homeassistant.components import climate, sensor
@@ -22,7 +21,7 @@ if TYPE_CHECKING:
     from homeassistant.core import Event, HomeAssistant, State
     from homeassistant.helpers.event import EventStateChangedData
 
-    from .helpers.device import BaseDevice, Device
+    from .helpers.device import Device
     from .helpers.entity import ChannelType
     from .helpers.namespaces import mn
 
@@ -66,7 +65,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             def __init__(
                 self,
                 channel: ChannelType,
-                parent: BaseDevice,
+                parent: Device,
                 /,
                 **kwargs: Unpack[Args],
             ): ...
@@ -107,7 +106,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             def __init__(
                 self,
                 channel: ChannelType | None,
-                parent: BaseDevice,
+                parent: Device,
                 /,
                 climate: "MtsClimate",
             ): ...
@@ -379,7 +378,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         SET_TEMP_FORCE_MANUAL_MODE: Final[bool]
         """Determines the behavior of async_set_temperature."""
 
-        parent: Final[BaseDevice]  # type: ignore[override]
         channel: Final[ChannelType]  # type: ignore[override]
         number_adjust_temperature: Final[NumberParser]
         number_preset_temperature: Final[set[SetPointNumber]]
@@ -466,7 +464,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         "sensor_current_temperature",
     )
 
-    def __init__(self, channel: "ChannelType", parent: "BaseDevice", /, **kwargs):
+    def __init__(self, channel: "ChannelType", parent: "Device", /, **kwargs):
         self.current_humidity = None
         self.current_temperature = None
         self.hvac_action = None

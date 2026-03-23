@@ -10,9 +10,9 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .helpers.device import BaseDevice
+    from .helpers.device import Device
     from .helpers.entity import ChannelType
-    from .helpers.manager import EntityManager
+    from .helpers.manager import ConfigEntryManager
 
 
 async def async_setup_entry(
@@ -53,7 +53,7 @@ class NumberEntity(mle.NumericEntity, number.NumberEntity):
         def __init__(
             self,
             channel: ChannelType | None,
-            parent: EntityManager,
+            parent: ConfigEntryManager,
             /,
             **kwargs: Unpack[Args],
         ): ...
@@ -94,7 +94,7 @@ class NumberParser(mle.NumericParser, NumberEntity):
         def __init__(
             self,
             channel: ChannelType | None,
-            parent: BaseDevice,
+            parent: Device,
             /,
             **kwargs: Unpack[Args],
         ): ...

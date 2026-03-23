@@ -9,7 +9,7 @@ from .merossclient.protocol import namespaces as mn
 if TYPE_CHECKING:
     from typing import ClassVar, Final, NotRequired
 
-    from .helpers.device import BaseDevice
+    from .helpers.device import ChannelType, Device
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
@@ -18,17 +18,15 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
 
 class UpdateEntity(Entity, update.UpdateEntity):
     if TYPE_CHECKING:
-
-        class Args(Entity.Args):
-            device_class: NotRequired[update.UpdateDeviceClass | None]
-
-        parent: Final[BaseDevice]  # type: ignore[override]
-
+        parent: Final[Device]  # type: ignore[override]
         # HA core entity attributes:
         _attr_device_class: ClassVar[update.UpdateDeviceClass | None]
         installed_version: str | None
         latest_version: str | None
         release_summary: str | None
+
+        class Args(Entity.Args):
+            device_class: NotRequired[update.UpdateDeviceClass | None]
 
     PLATFORM = update.DOMAIN
     DeviceClass = update.UpdateDeviceClass
@@ -45,7 +43,7 @@ class UpdateEntity(Entity, update.UpdateEntity):
         "title",
     )
 
-    def __init__(self, device: "BaseDevice", /):
+    def __init__(self, channel: "ChannelType | None", device: "Device", /):
         self.device_class = update.UpdateDeviceClass.FIRMWARE
         self.supported_features = update.UpdateEntityFeature.INSTALL
         self.title = device.display_name
@@ -53,21 +51,21 @@ class UpdateEntity(Entity, update.UpdateEntity):
         self.installed_version, self.latest_version, self.release_summary = (
             device.get_upgrade_info()
         )
-        super().__init__(None, device)
+        Entity.__init__(self, channel, device)
 
-    def update_info(self, /):
+    def flush_state(self):
         self.installed_version, self.latest_version, self.release_summary = (
             self.parent.get_upgrade_info()
         )
-        self.flush_state()
+        super().flush_state()
 
     async def async_install(self, version: str | None, backup: bool, **kwargs):
-        basedevice = self.parent
-        if not basedevice.is_connected:
+        device = self.parent
+        if not device.is_connected:
             raise HomeAssistantError("Device is offline")
-        upgrade_payload = basedevice.get_upgrade_payload()
+        upgrade_payload = device.get_upgrade_payload()
         if not upgrade_payload:
             raise HomeAssistantError("No upgrade available")
-        await basedevice.async_request(
+        await device.async_request(
             *mn.Appliance_Control_Upgrade.request_set(upgrade_payload),
         )
