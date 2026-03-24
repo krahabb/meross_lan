@@ -120,21 +120,21 @@ class EntityTest(EntityComponentTest):
 
     async def async_test_enabled_callback(self, entity: number.NumberEntity):
         is_config_number = isinstance(entity, number.NumberParser)
-        states = self.hass_states
+        get_hass_state = EntityComponentTest.get_hass_state
         time_mocker = self.device_context.time_mock
         await self.async_service_call(
             haec.SERVICE_SET_VALUE, {haec.ATTR_VALUE: entity.max_value}
         )
         if is_config_number:
             await time_mocker.async_tick(entity.DEBOUNCE_DELAY)
-        assert (state := states.get(self.entity_id))
+        assert (state := get_hass_state(self.entity_id))
         assert float(state.state) == entity.max_value, "max_value"
         await self.async_service_call(
             haec.SERVICE_SET_VALUE, {haec.ATTR_VALUE: entity.min_value}
         )
         if is_config_number:
             await time_mocker.async_tick(entity.DEBOUNCE_DELAY)
-        assert (state := states.get(self.entity_id))
+        assert (state := get_hass_state(self.entity_id))
         assert float(state.state) == entity.min_value, "min_value"
 
     async def async_test_disabled_callback(self, entity: number.NumberEntity):

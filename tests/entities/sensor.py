@@ -11,8 +11,8 @@ from custom_components.meross_lan.merossclient.protocol.namespaces import (
 from custom_components.meross_lan.sensor import (
     EnumParser,
     FilterMaintenanceSensor,
-    SensorParser,
     ProtocolSensor,
+    SensorParser,
     SignalStrengthSensor,
 )
 

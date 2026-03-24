@@ -68,7 +68,7 @@ if TYPE_CHECKING:
         ConfigFlowResult,
         OptionsFlowManager,
     )
-    from homeassistant.core import HomeAssistant
+    from homeassistant.core import HomeAssistant, State
 
     MqttMockPahoClient = MagicMock
     """MagicMock for `paho.mqtt.client.Client`"""
@@ -531,8 +531,12 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
         config_entry_id: Final
         auto_setup: Final
 
+        @staticmethod
+        def get_hass_state(entity_id: str) -> State | None: ...
+
     __slots__ = (
         "hass",
+        "get_hass_state",
         "config_entry",
         "config_entry_id",
         "auto_setup",
@@ -548,6 +552,7 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
     ) -> None:
         super().__init__(request)
         self.hass = hass
+        self.get_hass_state = hass.states.get
         config_entry_kwargs = {
             "domain": mlc.DOMAIN,
             "data": kwargs.get("data"),
@@ -864,7 +869,7 @@ class DeviceContext(ConfigEntryMocker):
             emulator = build_emulator(emulator)
         self.emulator = emulator
         self.device_id = emulator.uuid
-        self.auto_poll = kwargs.get("auto_poll", False)
+        self.auto_poll = kwargs.pop("auto_poll", False)
         kwargs["data"] = build_emulator_config_entry(
             emulator, config_data=kwargs.get("data")
         )
@@ -877,7 +882,7 @@ class DeviceContext(ConfigEntryMocker):
             **kwargs,
         )
         try:
-            self.time_mock.time.move_to(kwargs["time"])  # type: ignore
+            self.time_mock.time.move_to(kwargs.pop("time"))
         except KeyError:
             pass
 

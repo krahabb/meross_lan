@@ -2,8 +2,8 @@ from homeassistant.components import climate as haec
 from homeassistant.components.climate import ClimateEntity, HVACMode
 
 from custom_components.meross_lan.climate import MtsClimate
-from custom_components.meross_lan.devices.hub.mts100 import Mts100Climate
 from custom_components.meross_lan.devices import thermostat as mts
+from custom_components.meross_lan.devices.hub.mts100 import Mts100Climate
 from custom_components.meross_lan.devices.thermostat.mts200 import Mts200Climate
 from custom_components.meross_lan.devices.thermostat.mts300 import Mts300Climate
 from custom_components.meross_lan.devices.thermostat.mts960 import Mts960Climate

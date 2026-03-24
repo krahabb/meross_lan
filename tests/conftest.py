@@ -101,8 +101,8 @@ def disable_entity_registry_update():
     the entity registry."""
 
     from custom_components.meross_lan.devices.garagedoor import (
-        GarageEnableSwitch,
         GarageConfigSwitch,
+        GarageEnableSwitch,
     )
 
     saved = GarageEnableSwitch.update_boolean_value

@@ -15,10 +15,12 @@ from tests.entities import EntityComponentTest
 
 if TYPE_CHECKING:
     from typing import Iterable, Mapping
+
     from homeassistant.core import HomeAssistant
     from pytest import CaptureFixture
 
     from custom_components.meross_lan.helpers.entity import Entity
+
     from tests.entities import (
         DeviceEntitiesType,
         DigestEntitiesType,
@@ -111,8 +113,8 @@ async def test_entities(
     # TODO add expected GarageTimeoutBinarySensor for GarageDoor (and maybe some others in garageConfig)
     """
     EntityComponentTest.hass = hass
-    EntityComponentTest.hass_states = hass.states
-    EntityComponentTest.hass_service_call = hass.services.async_call
+    EntityComponentTest.get_hass_state = hass.states.get
+    EntityComponentTest.async_hass_service_call = hass.services.async_call
 
     unexpected_summary: dict[str, list[str]] = {}
     unavailable_summary: dict[str, list[str]] = {}
@@ -223,8 +225,8 @@ async def test_entities(
                     EntityComponentTest.entity_id = ""
     finally:
         EntityComponentTest.hass = None  # type: ignore
-        EntityComponentTest.hass_states = None  # type: ignore
-        EntityComponentTest.hass_service_call = None  # type: ignore
+        EntityComponentTest.get_hass_state = None  # type: ignore
+        EntityComponentTest.async_hass_service_call = None  # type: ignore
 
     with capsys.disabled():
         print("\nUnexpected entities:")
@@ -271,7 +273,7 @@ async def _async_test_entities(
         else:
             unexpected.append(entity.logtag)
 
-        state = EntityComponentTest.hass_states.get(entity_id)
+        state = EntityComponentTest.get_hass_state(entity_id)
         if state:
             assert entity.hass_connected
             if state.state == STATE_UNAVAILABLE:

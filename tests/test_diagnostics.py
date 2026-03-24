@@ -125,7 +125,6 @@ async def test_device_tracing(request, hass: "HomeAssistant"):
         ) as context:
             await _async_configure_options_tracing(context)
             # We now need to 'coldstart' again the device
-            await context.perform_coldstart()
             device = context.device
             async for time in context.time_mock.async_warp_iterator(
                 tc.MOCK_TRACE_TIMEOUT,

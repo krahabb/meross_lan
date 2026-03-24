@@ -63,7 +63,7 @@ class EntityTest(EntityComponentTest):
             )
 
     async def async_test_enabled_callback(self, entity: Cover):
-        states = self.hass_states
+        get_hass_state = EntityComponentTest.get_hass_state
         if isinstance(entity, Garagedoor):
             await self._async_test_cover_transition(entity)
             await self._async_test_cover_transition(entity)
@@ -91,7 +91,7 @@ class EntityTest(EntityComponentTest):
                 RollerShutter.PARAM_TRANSITION_POLL_TIMEOUT
             )
             # ensure we're still opening
-            assert (state := states.get(self.entity_id))
+            assert (state := get_hass_state(self.entity_id))
             assert (
                 state.state == haec.CoverState.OPENING
             ), f"{haec.SERVICE_SET_COVER_POSITION}: state!={haec.CoverState.OPENING}"
@@ -109,8 +109,8 @@ class EntityTest(EntityComponentTest):
     async def _async_test_cover_transition(self, entity):
         """Start and follow the transition from open to close or
         close to open depending on current state."""
-        states = self.hass_states
-        assert (state := states.get(self.entity_id))
+        get_hass_state = EntityComponentTest.get_hass_state
+        assert (state := get_hass_state(self.entity_id))
         trans = self.COVER_TRANSITIONS[state.state]
         state = await self.async_service_call(trans[0])
         assert state.state == trans[1], trans[1]
@@ -122,7 +122,7 @@ class EntityTest(EntityComponentTest):
             40,
             tick=1,
         )
-        assert (state := states.get(self.entity_id))
+        assert (state := get_hass_state(self.entity_id))
         assert state.state == trans[2], trans[2]
         return state
 
@@ -203,7 +203,7 @@ class EntityTest(EntityComponentTest):
             _transition_timer is None
         ), f"transition to {target_position} still pending:current_epoch=={current_epoch} transition_end={_transition_timer.when()}"
 
-        assert (state := self.hass_states.get(self.entity_id))
+        assert (state := EntityComponentTest.get_hass_state(self.entity_id))
         expected_state = (
             haec.CoverState.OPEN if target_position else haec.CoverState.CLOSED
         )

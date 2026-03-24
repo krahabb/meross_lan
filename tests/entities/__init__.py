@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from homeassistant.core import HomeAssistant, StateMachine
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity
 
 from custom_components.meross_lan.merossclient.protocol import (
@@ -12,7 +12,9 @@ from custom_components.meross_lan.switch import Togglex
 from tests.helpers import DeviceContext
 
 if TYPE_CHECKING:
-    from typing import Any, ClassVar
+    from typing import Any, Callable, ClassVar
+
+    from homeassistant.core import Context, ServiceResponse, State
 
     from custom_components.meross_lan.helpers.entity import Entity
 
@@ -38,8 +40,21 @@ class EntityComponentTest:
     if TYPE_CHECKING:
         # static test context
         hass: ClassVar[HomeAssistant]
-        hass_service_call: ClassVar
-        hass_states: ClassVar[StateMachine]
+
+        @staticmethod
+        def get_hass_state(entity_id: str) -> State | None: ...
+
+        @staticmethod
+        async def async_hass_service_call(
+            domain: str,
+            service: str,
+            service_data: dict[str, Any] | None = None,
+            blocking: bool = False,
+            context: Context | None = None,
+            target: dict[str, Any] | None = None,
+            return_response: bool = False,
+        ) -> ServiceResponse: ...
+
         ability: ClassVar[dict[str, Any]]
         digest: ClassVar[dict[str, Any]]
         expected_entity_types: ClassVar[MerossEntityTypesList]
@@ -77,20 +92,20 @@ class EntityComponentTest:
             entity_id = self.entity_id
             service_data = dict(service_data)
             service_data["entity_id"] = entity_id
-        await self.hass_service_call(
+        await self.async_hass_service_call(
             self.DOMAIN,
             service,
             service_data=service_data,
             blocking=True,
         )
-        assert (state := self.hass_states.get(entity_id)), (
+        assert (state := EntityComponentTest.get_hass_state(entity_id)), (
             "missing state",
             entity_id,
         )
         return state
 
     async def async_service_response(self, service: str, service_data: dict = {}):
-        return await self.hass_service_call(
+        return await self.async_hass_service_call(
             self.DOMAIN,
             service,
             service_data={"entity_id": self.entity_id} | service_data,
@@ -106,7 +121,7 @@ class EntityComponentTest:
             state.state == expected_state
         ), f"service:{service} - result:{state.state} - expected:{expected_state}"
         await self.device_context.async_poll_single()
-        assert (state := self.hass_states.get(self.entity_id)), (
+        assert (state := EntityComponentTest.get_hass_state(self.entity_id)), (
             "missing state",
             self.entity_id,
         )

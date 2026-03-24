@@ -241,7 +241,7 @@ async def test_meross_profile_with_device(
         )
         update_firmware = device.update_firmware
         assert update_firmware
-        update_firmware_state = hass.states.get(update_firmware.entity_id)
+        update_firmware_state = device_context.get_hass_state(update_firmware.entity_id)
         assert update_firmware_state and update_firmware_state.state == "on"
 
         # this conditions needs testing after the mqtt client schedule_connect
