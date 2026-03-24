@@ -20,22 +20,11 @@ if TYPE_CHECKING:
         Unpack,
     )
 
-    from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
-
     from .helpers.device import Device
     from .helpers.entity import ChannelType
     from .helpers.manager import ConfigEntryManager
     from .helpers.mqtt_profile import MQTTConnection
     from .merossclient.client import AbstractClient
-
-
-async def async_setup_entry(
-    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
-):
-    mle.Entity.platform_setup_entry(
-        hass, config_entry, async_add_devices, sensor.DOMAIN
-    )
 
 
 class SensorEntity(mle.NumericEntity, sensor.SensorEntity):
@@ -260,21 +249,18 @@ class SensorParser(mle.NumericParser, SensorEntity):
 
 
 class DiagnosticSensor(SensorEntity):
+    """These are entities always added later (when config entry is already setup) on demand
+    to provide diagnostic/debug informations when the entry is configured so.
+    They're typically installed while parsing unknown namespaces to expose the raw payload values
+    as simple sensors.
+    """
 
     if TYPE_CHECKING:
         is_diagnostic: Final
         native_value: sensor.StateType
 
-        class Args(mle.Entity.Args):
+        class Args(SensorEntity.Args):
             native_value: NotRequired[sensor.StateType]
-
-        def __init__(
-            self,
-            channel: ChannelType | None,
-            parent: ConfigEntryManager,
-            /,
-            **kwargs: Unpack[Args],
-        ): ...
 
         @classmethod
         def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
@@ -284,6 +270,16 @@ class DiagnosticSensor(SensorEntity):
         ) -> bool | None: ...
 
     is_diagnostic = True
+
+    def __init__(
+        self,
+        channel: "ChannelType | None",
+        parent: "ConfigEntryManager",
+        /,
+        **kwargs: Unpack[Args],
+    ):
+        super().__init__(channel, parent, **kwargs)  # type: ignore
+        parent.add_entity(self)
 
     # HA core entity attributes:
     _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC
@@ -418,3 +414,6 @@ class FilterMaintenanceSensor(SensorParser):
     # HA core entity attributes:
     _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC
     _attr_native_unit_of_measurement = hac.PERCENTAGE
+
+
+async_setup_entry = SensorEntity.platform_setup_entry

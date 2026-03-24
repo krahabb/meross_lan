@@ -11,10 +11,6 @@ if TYPE_CHECKING:
     from .helpers.manager import ConfigEntryManager
 
 
-async def async_setup_entry(hass, config_entry, async_add_devices):
-    Entity.platform_setup_entry(hass, config_entry, async_add_devices, time.DOMAIN)
-
-
 class TimeEntity(Entity, time.TimeEntity):
     """
     This first implementation was mostly tailored to suit mts300 'fan hold time' feature
@@ -93,3 +89,6 @@ class TimeEntity(Entity, time.TimeEntity):
             self.native_value = native_value
             self.flush_state()
             return True
+
+
+async_setup_entry = TimeEntity.platform_setup_entry

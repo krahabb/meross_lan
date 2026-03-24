@@ -115,7 +115,11 @@ class NamespaceHandler(_NH):
 
         # TODO: move to base. We must decide on diagnostic parser installations
         if self.parser_class:
-            self.register_parser(self.parser_class(channel, self.parent, ns=self.id))
+            self.register_parser(
+                self.parent.add_entity(
+                    self.parser_class(channel, self.parent, ns=self.id)
+                )
+            )
         elif self.parent.create_diagnostic_entities:
             from ..sensor import DiagnosticParser
 
@@ -163,8 +167,14 @@ class EntityDefNamespaceHandler(NamespaceHandler):
             except KeyError:
                 # assert KeyError is due to missing parser ?
                 try:
-                    parsers[key] = self.entity_defs[key](
-                        None, self.parent, ns=self.id, key_value=key, device_value=value
+                    parsers[key] = self.parent.add_entity(
+                        self.entity_defs[key](
+                            None,
+                            self.parent,
+                            ns=self.id,
+                            key_value=key,
+                            device_value=value,
+                        )
                     )
                 except Exception as e:
                     self.log_exception(

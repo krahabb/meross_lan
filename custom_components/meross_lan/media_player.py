@@ -10,23 +10,11 @@ from homeassistant.components.media_player.const import (
 from .helpers import clamp
 from .helpers.entity import ParserEntity
 from .merossclient.protocol import const as mc
+
 if TYPE_CHECKING:
     from typing import ClassVar, Final, NotRequired
 
-    from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
-
     from .helpers.device import Device
-    from .helpers.entity import ChannelType
-    from .merossclient.protocol.types import JsonDict
-
-
-async def async_setup_entry(
-    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
-):
-    ParserEntity.platform_setup_entry(
-        hass, config_entry, async_add_devices, media_player.DOMAIN
-    )
 
 
 class Mp3Player(ParserEntity, media_player.MediaPlayerEntity):
@@ -137,3 +125,6 @@ class Mp3Player(ParserEntity, media_player.MediaPlayerEntity):
                     payload[mc.KEY_VOLUME] / mc.HP110A_MP3_VOLUME_MAX, 0.0, 1.0
                 )
             self.flush_state()
+
+
+async_setup_entry = Mp3Player.platform_setup_entry

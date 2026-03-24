@@ -127,15 +127,14 @@ class RollerShutter(Cover):
         Cover.set_unavailable(self)
 
     async def async_added_to_hass(self):
-        await Cover.async_added_to_hass(self)
         """
         we're trying to recover the 'timed' position from previous state
         if it happens it wasn't updated too far in time
         """
-        with self.exception_warning("restoring previous state"):
-            if last_state := await self.get_last_state_available():
-                if not self._position_native_isgood:
-                    # at this stage, the euristic on fw version doesn't say anything
+        if not self._position_native_isgood:
+            # at this stage, the euristic on fw version doesn't say anything
+            with self.exception_warning("restoring previous state"):
+                if last_state := await self.get_last_state_available():
                     try:
                         self.extra_state_attributes[
                             RollerShutter.ATTR_POSITION_NATIVE
@@ -149,6 +148,7 @@ class RollerShutter(Cover):
                         self.supported_features |= Cover.EntityFeature.SET_POSITION
                     except KeyError:
                         pass
+        await Cover.async_added_to_hass(self)
 
     # interface: cover.CoverEntity
     async def async_open_cover(self, **kwargs):

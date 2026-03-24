@@ -17,21 +17,12 @@ from .sensor import SensorParser
 if TYPE_CHECKING:
     from typing import ClassVar, Final, Unpack
 
-    from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import Event, HomeAssistant, State
+    from homeassistant.core import Event, State
     from homeassistant.helpers.event import EventStateChangedData
 
     from .helpers.device import Device
     from .helpers.entity import ChannelType
     from .helpers.namespaces import mn
-
-
-async def async_setup_entry(
-    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
-):
-    ParserEntity.platform_setup_entry(
-        hass, config_entry, async_add_devices, climate.DOMAIN
-    )
 
 
 class MtsClimate(ParserEntity, climate.ClimateEntity):
@@ -610,3 +601,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             self,
             self.ns_payload,
         )
+
+
+async_setup_entry = MtsClimate.platform_setup_entry

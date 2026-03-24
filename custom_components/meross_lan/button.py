@@ -9,17 +9,8 @@ if TYPE_CHECKING:
     from types import CoroutineType
     from typing import Any, Callable, ClassVar, NotRequired, Unpack
 
-    from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
-
     from .helpers.entity import ChannelType
     from .helpers.manager import ConfigEntryManager
-
-
-async def async_setup_entry(
-    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
-):
-    Entity.platform_setup_entry(hass, config_entry, async_add_devices, button.DOMAIN)
 
 
 class Button(Entity, button.ButtonEntity):
@@ -61,3 +52,6 @@ class PersistentButton(Button):
 
     # HA core entity attributes:
     _attr_available = True
+
+
+async_setup_entry = Button.platform_setup_entry

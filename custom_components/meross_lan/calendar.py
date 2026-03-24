@@ -20,9 +20,6 @@ from .merossclient.protocol import const as mc
 if TYPE_CHECKING:
     from typing import Any, Final, Unpack
 
-    from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
-
     from .climate import MtsClimate
     from .helpers.device import Device
     from .helpers.entity import ChannelType
@@ -32,14 +29,6 @@ if TYPE_CHECKING:
     MtsScheduleNativeEntry = list[int]
     MtsScheduleNativeDayEntry = list[MtsScheduleNativeEntry]
     MtsScheduleNativeType = dict[str, MtsScheduleNativeDayEntry]
-
-
-async def async_setup_entry(
-    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
-):
-    ParserEntity.platform_setup_entry(
-        hass, config_entry, async_add_devices, calendar.DOMAIN
-    )
 
 
 MTS_SCHEDULE_WEEKDAY = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
@@ -633,3 +622,6 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
             # and max (key "section"). This needs to be confirmed though.
         self._build_internal_schedule()
         self.flush_state()
+
+
+async_setup_entry = MtsSchedule.platform_setup_entry

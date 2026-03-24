@@ -241,8 +241,6 @@ class MQTTConnection(AbstractMQTTConnection):
             **kwargs,
         )
         profile.mqttconnections[str(broker)] = self
-        if profile.create_diagnostic_entities:
-            ConnectionSensor(self)
 
     def shutdown(self):
         super().shutdown()
@@ -568,10 +566,6 @@ class MQTTProfile(ConfigEntryManager):
     if TYPE_CHECKING:
         linkeddevices: Final[dict[str, Device]]
         mqttconnections: Final[dict[str, MQTTConnection]]
-
-    DEFAULT_PLATFORMS = ConfigEntryManager.DEFAULT_PLATFORMS | {
-        ConnectionSensor.PLATFORM: None,
-    }
 
     __slots__ = (
         "linkeddevices",

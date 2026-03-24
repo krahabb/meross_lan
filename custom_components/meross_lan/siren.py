@@ -12,13 +12,7 @@ if TYPE_CHECKING:
     from typing import Any, Final, NotRequired, Unpack
 
     from .helpers.device import Device
-    from .merossclient.protocol.types import JsonDict, JsonMapping
-
-
-async def async_setup_entry(hass, config_entry, async_add_devices):
-    BinaryParser.platform_setup_entry(
-        hass, config_entry, async_add_devices, siren.DOMAIN
-    )
+    from .merossclient.protocol.types import JsonDict
 
 
 class Siren(BinaryParser, siren.SirenEntity):
@@ -133,3 +127,6 @@ class Siren(BinaryParser, siren.SirenEntity):
             self.update_device_value(payload["event"]["security"]["value"])
         except KeyError:
             pass
+
+
+async_setup_entry = Siren.platform_setup_entry

@@ -10,19 +10,8 @@ from .merossclient.protocol import const as mc, namespaces as mn
 if TYPE_CHECKING:
     from typing import ClassVar, NotRequired, Unpack
 
-    from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
-
     from .helpers.device import Device
     from .merossclient.protocol.types import JsonDict, JsonList
-
-
-async def async_setup_entry(
-    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
-):
-    mle.Entity.platform_setup_entry(
-        hass, config_entry, async_add_devices, switch.DOMAIN
-    )
 
 
 class SwitchEntity(mle.BinaryEntity, switch.SwitchEntity):
@@ -51,10 +40,10 @@ class EmulatedSwitch(SwitchEntity):
     """
 
     async def async_added_to_hass(self):
-        await super().async_added_to_hass()
         with self.exception_warning("restoring previous state"):
             if last_state := await self.get_last_state_available():
                 self.is_on = last_state.state == hac.STATE_ON
+        await super().async_added_to_hass()
 
     @override
     async def async_turn_on(self, **kwargs):
@@ -150,3 +139,6 @@ class Togglex(SwitchParser):
                 handler.id
             )
         return handler.parse_list, (handler,)
+
+
+async_setup_entry = SwitchEntity.platform_setup_entry

@@ -10,13 +10,6 @@ if TYPE_CHECKING:
     from typing import Final
 
     from .helpers.device import Device
-    from .merossclient.protocol.types import JsonList
-
-
-async def async_setup_entry(hass, config_entry, async_add_devices):
-    ToggleXParser.platform_setup_entry(
-        hass, config_entry, async_add_devices, fan.DOMAIN
-    )
 
 
 class Fan(ToggleXParser, fan.FanEntity):
@@ -113,3 +106,6 @@ def namespace_init_fan(ns: mn.Namespace, device: "Device", /):
         handler.register_parser(Fan(0, device))
         # setup a polling strategy since state is not carried in digest
         handler.polling_strategy = NamespaceHandler.async_poll_default
+
+
+async_setup_entry = Fan.platform_setup_entry

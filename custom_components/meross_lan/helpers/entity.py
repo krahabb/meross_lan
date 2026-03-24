@@ -14,6 +14,7 @@ except ImportError:
     get_last_state_changes = None
 
 from homeassistant.helpers import entity
+from homeassistant.helpers.entity_platform import async_get_current_platform
 
 from ..merossclient.device import parser
 from ..merossclient.logging import Loggable
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.helpers.device_registry import DeviceEntry
+    from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
     from ..merossclient.protocol.message import MerossMessage
     from ..merossclient.protocol.types import JsonDict, JsonList, PayloadIndexType
@@ -207,13 +209,6 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         super().__init__(id, manager, **kwargs)
         manager.entities[id] = self
         manager.async_shutdown_broadcast.add(self.async_shutdown)
-        try:
-            manager.platforms[self.PLATFORM]([self])  # type: ignore
-        except KeyError:
-            # platform never registered before for this manager
-            manager.platforms[self.PLATFORM] = None
-        except TypeError:
-            pass  # platform setup not yet done
 
     def shutdown(self):
         super().shutdown()
@@ -230,14 +225,14 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         return self.parent.generate_unique_id(self)
 
     async def async_added_to_hass(self):
+        await super().async_added_to_hass()
         self.log(self.VERBOSE, "Added to HomeAssistant")
         self.hass_connected = True  # type: ignore
-        return await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
+        await super().async_will_remove_from_hass()
         self.log(self.VERBOSE, "Removed from HomeAssistant")
         self.hass_connected = False  # type: ignore
-        return await super().async_will_remove_from_hass()
 
     # interface: self
     @final
@@ -310,17 +305,24 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             "update_device_value must be implemented by subclasses if used in parsing scheme"
         )
 
-    @staticmethod
+    @classmethod
     def platform_setup_entry(
+        cls,
         hass,
         config_entry: "ConfigEntry[ConfigEntryManager]",
-        async_add_devices,
-        platform: str,
+        async_add_entities: "AddConfigEntryEntitiesCallback",
     ):
+        platform = cls.PLATFORM
         manager = config_entry.runtime_data
         manager.log(manager.DEBUG, "platform_setup_entry { platform: %s }", platform)
-        manager.platforms[platform] = async_add_devices
-        async_add_devices(manager.managed_entities(platform))
+        manager.platforms[platform] = async_get_current_platform()
+        async_add_entities(
+            [
+                entity
+                for entity in manager.entities.values()
+                if (entity.PLATFORM is platform) and not entity.platform
+            ]
+        )
 
     class EntityDef[_T: Entity](dict):
         """Descriptor class used when populating maps used to dynamically instantiate
@@ -664,11 +666,11 @@ class EntityNamespaceMixin(NamespaceHandler, ParserEntity):
 
     async def async_added_to_hass(self):
         self.polling_strategy = self.POLLING_CONFIG_DEFAULT[-1]
-        return await super().async_added_to_hass()
+        await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
         self.polling_strategy = None
-        return await super().async_will_remove_from_hass()
+        await super().async_will_remove_from_hass()
 
     def _handle(self, message: "MerossMessage", /):
         self._parse(message.payload[self.id.key])

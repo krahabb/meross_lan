@@ -207,17 +207,6 @@ async def test_entities(
                         device.entities.values(), expected, unexpected, unavailable
                     )
                     assert device.descriptor.is_hub == ishub
-                    """
-                    if ishub:
-                        assert isinstance(device, Hub)
-                        for subdevice in device.subdevices.values():
-                            await _async_test_entities(
-                                subdevice.entities.values(),
-                                expected,
-                                unexpected,
-                                unavailable,
-                            )
-                    """
 
                     if unexpected:
                         unexpected_summary[device_name] = unexpected
@@ -269,6 +258,7 @@ async def _async_test_entities(
             continue
 
         EntityComponentTest.entity_id = entity_id = entity.entity_id
+        assert entity_id, "entity not registered %r" % entity
 
         entity_component_test = COMPONENTS_TESTS[entity.PLATFORM]
         assert isinstance(entity, entity_component_test.ENTITY_TYPE)

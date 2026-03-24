@@ -36,18 +36,20 @@ class Mts300Climate(MtsThermostatClimate):
                 humidity = payload["humiValue"]  # type: ignore
                 self.number_calibration_humi.update_device_value(humidity)
             except AttributeError:
-                self.number_calibration_humi = NumberParser(
-                    self.channel,
-                    self.parent,
-                    entity_key="humidity_calibration",
-                    device_class=NumberParser.DeviceClass.HUMIDITY,
-                    device_scale=10,
-                    device_value=humidity,
-                    ns=self.ns,
-                    key_value="humiValue",
-                    native_max_value=5,
-                    native_min_value=-5,
-                    native_step=0.1,
+                self.number_calibration_humi = self.parent.add_entity(
+                    NumberParser(
+                        self.channel,
+                        self.parent,
+                        entity_key="humidity_calibration",
+                        device_class=NumberParser.DeviceClass.HUMIDITY,
+                        device_scale=10,
+                        device_value=humidity,
+                        ns=self.ns,
+                        key_value="humiValue",
+                        native_max_value=5,
+                        native_min_value=-5,
+                        native_step=0.1,
+                    )
                 )
             except KeyError:  # missing humiValue
                 pass
@@ -402,8 +404,8 @@ class Mts300Climate(MtsThermostatClimate):
         try:
             self.select_temp_association._parse(payload)
         except AttributeError:
-            self.select_temp_association = Mts300Climate.SensorAssociationSelect(
-                self.channel, self.parent
+            self.select_temp_association = self.parent.add_entity(
+                Mts300Climate.SensorAssociationSelect(self.channel, self.parent)
             )
             self.select_temp_association._parse(payload)
 

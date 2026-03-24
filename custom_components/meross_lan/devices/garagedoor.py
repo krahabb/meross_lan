@@ -307,7 +307,6 @@ class Garagedoor(Cover):
         del self.number_doorOpenDuration
 
     async def async_added_to_hass(self):
-        await Cover.async_added_to_hass(self)
         with self.exception_warning("restoring previous state"):
             if last_state := await self.get_last_state_available():
                 try:
@@ -320,6 +319,7 @@ class Garagedoor(Cover):
                     )
                 except KeyError:
                     pass
+        await Cover.async_added_to_hass(self)
 
     def set_unavailable(self):
         self._config = {}
@@ -449,21 +449,13 @@ class Garagedoor(Cover):
                 try:
                     entities[f"{entity_id_prefix}{key}"].update_device_value(value)
                 except KeyError:
-                    if key in (mc.KEY_DOORCLOSEDURATION, mc.KEY_DOOROPENDURATION):
-                        setattr(
-                            self,
-                            f"number_{key}",
-                            self.__class__.ENTITY_DEFS[key](
-                                self.channel,
-                                self.parent,
-                                key_value=key,
-                                device_value=value,
-                            ),
-                        )
-                    else:
+                    entity = self.parent.add_entity(
                         self.__class__.ENTITY_DEFS[key](
                             self.channel, self.parent, key_value=key, device_value=value
                         )
+                    )
+                    if key in (mc.KEY_DOORCLOSEDURATION, mc.KEY_DOOROPENDURATION):
+                        setattr(self, f"number_{key}", entity)
             except Exception as exception:
                 self.log_exception(
                     self.WARNING,
@@ -534,9 +526,6 @@ class Garagedoor(Cover):
     def digest_init(
         cls, device: "Device", digest: "JsonList", /
     ) -> "Device.DigestInitReturnType":
-        device.platforms.setdefault(NumberParser.PLATFORM, None)
-        device.platforms.setdefault(SwitchParser.PLATFORM, None)
-
         handler = NamespaceHandler(Garagedoor.init_ns, device)
         descriptor = device.descriptor
         if descriptor.type.startswith(mc.TYPE_MSG200) and (

@@ -154,17 +154,6 @@ class Hub(Device if TYPE_CHECKING else object):
         mn_h.Appliance_Hub_Exception,
         mn_h.Appliance_Hub_Report,
     )
-    # TODO: skip caching add_entity callback and directly access core component method
-    DEFAULT_PLATFORMS = mld.Device.DEFAULT_PLATFORMS | {
-        BinarySensor.PLATFORM: None,
-        Button.PLATFORM: None,
-        MtsSchedule.PLATFORM: None,
-        NumberParser.PLATFORM: None,
-        SensorParser.PLATFORM: None,
-        SwitchParser.PLATFORM: None,
-        MtsClimate.PLATFORM: None,
-        MtsClimate.TrackSensorSelect.PLATFORM: None,
-    }
 
     @override
     def get_device_entry(self, channel, /):
@@ -272,11 +261,12 @@ class Hub(Device if TYPE_CHECKING else object):
                     if subdevice_id in self.subdevices:
                         # this shouldnt but happened in a trace (#331)
                         self.log_duplicated_subdevice(subdevice_id)
-                        continue
-                    subdevice = self._subdevice_build(p_subdevice_digest)
-                    self.schedule_entry_update(True)
-
-                subdevice.parse_digest(p_subdevice_digest)
+                    else:  # full reload to cleanly add a new subdevice
+                        # TODO: we could likely add on the fly (just register newly added entities)
+                        # without reloading but we still should save the new digest in config entry.
+                        self.schedule_entry_update(True)
+                else:
+                    subdevice.parse_digest(p_subdevice_digest)
             except Exception as exception:
                 self.log_exception(
                     self.WARNING, exception, "parse_digest(%s)", p_subdevice_digest
@@ -327,8 +317,6 @@ class Hub(Device if TYPE_CHECKING else object):
         device.__class__ = type(
             f"Hub{device.__class__.__name__}", (cls, device.__class__), {}
         )
-        # temporary patch entry platforms defaults
-        device.platforms = cls.DEFAULT_PLATFORMS.copy() | device.platforms
         device.subdevices = {}
         # Check for unbinded subdevices which are 'still' in the device_registry
         registry_subdevices = {}
@@ -656,15 +644,17 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
     def _parse_beep(self, payload: "mt.hub.SubDevice_Beep", /):
         self.handlers[mn_h.Appliance_Hub_SubDevice_Beep].swap_parsers(
             self,
-            SwitchParser(
-                self.channel,
-                self.parent,
-                ns=mn_h.Appliance_Hub_SubDevice_Beep,
-                entity_key=(
-                    f"{mn_h.Appliance_Hub_SubDevice_Beep.slug}__{SwitchParser.init_key_value}"
-                ),
-                name="Beep alarm",
-                device_value=payload[mc.KEY_ONOFF],
+            self.parent.add_entity(
+                SwitchParser(
+                    self.channel,
+                    self.parent,
+                    ns=mn_h.Appliance_Hub_SubDevice_Beep,
+                    entity_key=(
+                        f"{mn_h.Appliance_Hub_SubDevice_Beep.slug}__{SwitchParser.init_key_value}"
+                    ),
+                    name="Beep alarm",
+                    device_value=payload[mc.KEY_ONOFF],
+                )
             ),
         )
 
@@ -920,17 +910,22 @@ class MS100Sensor(SensorSubDevice, SensorParser):
             )
 
     def _parse_adjust(self, payload: "mt.hub.Sensor_Adjust"):
+        device = self.parent
         self.handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
             self,
-            MS100Sensor.AdjustTemperatureNumber(
-                self.channel,
-                self.parent,
-                device_value=payload[mc.KEY_TEMPERATURE],
-            ),
-            MS100Sensor.AdjustHumidityNumber(
-                self.channel,
-                self.parent,
-                device_value=payload[mc.KEY_HUMIDITY],
+            *device.add_entities(
+                [
+                    MS100Sensor.AdjustTemperatureNumber(
+                        self.channel,
+                        device,
+                        device_value=payload[mc.KEY_TEMPERATURE],
+                    ),
+                    MS100Sensor.AdjustHumidityNumber(
+                        self.channel,
+                        device,
+                        device_value=payload[mc.KEY_HUMIDITY],
+                    ),
+                ]
             ),
         )
         # swap also the update_sensors method to a smarter one

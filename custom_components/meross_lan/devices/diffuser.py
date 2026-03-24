@@ -123,10 +123,12 @@ class DiffuserSensorNamespaceHandler(EntityDefNamespaceHandler):
                 try:
                     self.parsers[key].update_device_value(value)
                 except KeyError:
-                    self.parsers[key] = SensorParser(
-                        None,
-                        self.parent,
-                        **(self.entity_defs[key] | {"device_value": value}),
+                    self.parsers[key] = self.parent.add_entity(
+                        SensorParser(
+                            None,
+                            self.parent,
+                            **(self.entity_defs[key] | {"device_value": value}),
+                        )
                     )
             except KeyError:
                 continue

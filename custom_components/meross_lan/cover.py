@@ -5,15 +5,9 @@ from homeassistant.components import cover
 from .helpers.entity import ParserEntity
 
 if TYPE_CHECKING:
-    from typing import ClassVar, Final, NotRequired
+    from typing import ClassVar, Final
 
     from .helpers.device import Device
-
-
-async def async_setup_entry(hass, config_entry, async_add_devices):
-    ParserEntity.platform_setup_entry(
-        hass, config_entry, async_add_devices, cover.DOMAIN
-    )
 
 
 class Cover(ParserEntity, cover.CoverEntity):
@@ -74,3 +68,6 @@ class Cover(ParserEntity, cover.CoverEntity):
 
     async def _async_transition_end_callback(self, /):
         raise NotImplementedError
+
+
+async_setup_entry = Cover.platform_setup_entry

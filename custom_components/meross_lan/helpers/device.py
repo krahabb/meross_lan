@@ -326,9 +326,6 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         mn.Appliance_Control_Bind,
         mn.Appliance_Control_Unbind,
     )
-    DEFAULT_PLATFORMS = ConfigEntryManager.DEFAULT_PLATFORMS | {
-        UpdateEntity.PLATFORM: None,
-    }
 
     init_is_connected = False
 
@@ -648,10 +645,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         self._update_config()
         self.start()
 
-    async def async_create_diagnostic_entities(self):
-        await super().async_create_diagnostic_entities()
-
-    async def async_destroy_diagnostic_entities(self, remove: bool = False):
+    async def async_destroy_diagnostic_entities(self, /):
         try:
             if self._async_create_diagnostic_entities_task.cancel():
                 try:
@@ -668,7 +662,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                 is NamespaceHandler.async_poll_diagnostic
             ):
                 namespace_handler.polling_strategy = None
-        await super().async_destroy_diagnostic_entities(remove)
+        await super().async_destroy_diagnostic_entities()
 
     async def _async_create_diagnostic_entities(self):
         # when create_diagnostic_entities is True, we'll schedule this task

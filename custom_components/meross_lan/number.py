@@ -7,20 +7,9 @@ from .helpers import entity as mle
 if TYPE_CHECKING:
     from typing import ClassVar, Final, NotRequired, Self, Unpack
 
-    from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
-
     from .helpers.device import Device
     from .helpers.entity import ChannelType
     from .helpers.manager import ConfigEntryManager
-
-
-async def async_setup_entry(
-    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
-):
-    mle.Entity.platform_setup_entry(
-        hass, config_entry, async_add_devices, number.DOMAIN
-    )
 
 
 class NumberEntity(mle.NumericEntity, number.NumberEntity):
@@ -153,10 +142,13 @@ class EmulatedNumber(NumberEntity):
     __slots__ = NumberEntity._calc_slots()
 
     async def async_added_to_hass(self):
-        await super().async_added_to_hass()
         with self.exception_warning("restoring previous state"):
             if last_state := await self.get_last_state_available():
                 self.native_value = float(last_state.state)
+        await super().async_added_to_hass()
 
     async def async_set_native_value(self, value: float):
         self.update_native_value(value)
+
+
+async_setup_entry = NumberEntity.platform_setup_entry

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, final, override
 from homeassistant.components import persistent_notification as pn
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.helpers import device_registry as dr, issue_registry as ir
+from homeassistant.helpers.entity_platform import async_get_platforms
 
 from .. import const as mlc
 from ..const import (
@@ -46,6 +47,7 @@ if TYPE_CHECKING:
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import CALLBACK_TYPE, HomeAssistant
+    from homeassistant.helpers.entity_platform import EntityPlatform
 
     from ..merossclient import HostAddress
     from ..merossclient.client import Direction
@@ -80,20 +82,17 @@ class ConfigEntryManager(logging.Loggable):
         class DeviceEntryIdType(TypedDict):
             identifiers: set[tuple[str, str]]
 
-        type PlatformsType = dict[str, Callable | None]
-
         ROOT_LOGGER: Final[logging._Logger]
-        DEFAULT_PLATFORMS: ClassVar[PlatformsType]
 
         id: Final[str]  # type: ignore[override]
         parent: Final[ComponentApi]  # type: ignore[override]
-        config_entry: Final[ConfigEntry | None]
+        config_entry: Final[ConfigEntry]
         config: Mapping[str, Any]
         key: str
         obfuscate: bool
         device_entry: Final[dr.DeviceEntry | None]
         """Link to optional DeviceRegistry entry info."""
-        platforms: PlatformsType
+        platforms: dict[str, EntityPlatform]
         entities: Final[dict[object, Entity]]
         logger: logging._Logger
         is_connected: Final[
@@ -111,9 +110,6 @@ class ConfigEntryManager(logging.Loggable):
 
     ROOT_LOGGER = logging.getLogger(__name__[:-16])
     """Root meross_lan logger"""
-    DEFAULT_PLATFORMS = {}
-    """Defined at the class level to preset a list of domains for entities
-    which could be dynamically added after ConfigEntry loading."""
 
     IssueSeverity = ir.IssueSeverity
 
@@ -144,7 +140,7 @@ class ConfigEntryManager(logging.Loggable):
         /,
         **kwargs: "Unpack[Args]",
     ):
-        self.config_entry = config_entry
+        self.config_entry = config_entry  # type: ignore
         try:
             self.config = config = config_entry.data  # type: ignore
             self.key = config.get(CONF_KEY) or ""
@@ -156,7 +152,7 @@ class ConfigEntryManager(logging.Loggable):
             self.key = mlc.PARAM_DEFAULT_KEY
             self.obfuscate = True
         self.device_entry = kwargs.pop("device_entry", None)
-        self.platforms = self.DEFAULT_PLATFORMS.copy()
+        self.platforms = {}
         self.entities = {}
         self.is_connected = self.init_is_connected
         self._trace_file = None
@@ -245,12 +241,6 @@ class ConfigEntryManager(logging.Loggable):
             self.config_entry.title if self.config_entry else self.logtag
         )
 
-    def managed_entities(self, platform, /):
-        """entities list for platform setup"""
-        return [
-            entity for entity in self.entities.values() if entity.PLATFORM is platform
-        ]
-
     def generate_unique_id(self, entity: "Entity", /):
         """
         flexible policy in order to generate unique_ids for entities:
@@ -273,7 +263,6 @@ class ConfigEntryManager(logging.Loggable):
     async def async_setup_entry(
         self, hass: "HomeAssistant", config_entry: "ConfigEntry", /
     ):
-        assert self.config_entry == config_entry
         config_entry.runtime_data = self
         api = self.parent
         # open the (eventual) trace before adding the entities
@@ -287,27 +276,27 @@ class ConfigEntryManager(logging.Loggable):
             # no CONF_TRACE key and/or no config_entry.entry_id...no tracing configured
             pass
 
-        if self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES):
-            await self.async_create_diagnostic_entities()
-
         await hass.config_entries.async_forward_entry_setups(
-            config_entry, self.platforms.keys()
+            config_entry, set(entity.PLATFORM for entity in self.entities.values())
         )
         self._entry_update_listener_unsub = config_entry.add_update_listener(
             self.entry_update_listener
         )
+        # create diagnostics after platform loading since Diagnostic entities are always
+        # dynamically registering themselves
+        if self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES):
+            await self.async_create_diagnostic_entities()
 
     async def async_unload_entry(
         self, hass: "HomeAssistant", config_entry: "ConfigEntry", /
     ):
         if not await hass.config_entries.async_unload_platforms(
-            config_entry, self.platforms.keys()
+            config_entry, self.platforms
         ):
             return False
         self._entry_update_listener_unsub()
         del self._entry_update_listener_unsub
         self.platforms.clear()
-        self.config = {}
         await self.async_shutdown()
         return True
 
@@ -317,7 +306,6 @@ class ConfigEntryManager(logging.Loggable):
         config_entries.async_schedule_reload is now 'eager' and
         it might execute synchronously leading to unintended semantics.
         """
-        assert self.config_entry
         self.schedule_callback(
             delay,
             self.parent.config_entries.async_schedule_reload,
@@ -346,23 +334,55 @@ class ConfigEntryManager(logging.Loggable):
         if config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES):
             await self.async_create_diagnostic_entities()
         else:
-            await self.async_destroy_diagnostic_entities(True)
+            await self.async_destroy_diagnostic_entities()
 
     async def async_create_diagnostic_entities(self, /):
         """Dynamically create some diagnostic entities depending on configuration"""
         pass
 
-    async def async_destroy_diagnostic_entities(self, remove: bool = False, /):
-        """Cleanup diagnostic entities, when the entry is unloaded. If 'remove' is True
-        it will be removed from the entity registry as well."""
-        ent_reg = self.parent.entity_registry if remove else None
-        for entity in self.managed_entities(SENSOR_DOMAIN):
-            if entity.is_diagnostic:
-                if entity.hass_connected:
-                    await entity.async_remove()
-                await entity.async_shutdown()
-                if ent_reg:
-                    ent_reg.async_remove(entity.entity_id)
+    async def async_destroy_diagnostic_entities(self, /):
+        """Explicit cleanup diagnostic entities. They will be removed from the entity registry as well."""
+        ent_reg = self.parent.entity_registry
+        for entity in tuple(
+            _entity for _entity in self.entities.values() if _entity.is_diagnostic
+        ):
+            if entity.hass_connected:
+                await entity.async_remove()
+            await entity.async_shutdown()
+            ent_reg.async_remove(entity.entity_id)
+
+    def add_entity[_T: "Entity"](self, entity: _T, /):  # type: ignore
+        try:
+            self.create_task(
+                self.platforms[entity.PLATFORM].async_add_entities([entity]),
+                ".add_entity",
+            )
+        except KeyError:
+            self.create_task(
+                self.parent.config_entries.async_forward_entry_setups(
+                    self.config_entry, (entity.PLATFORM,)
+                ),
+                ".add_entity",
+            )
+        return entity
+
+    def add_entities[_T: "Entity"](self, entities: list[_T], /):
+        """Add multiple entities at once. This is more efficient since it allows to forward
+        setup only once per platform. Entities have to be all of the same platform (no check).
+        """
+        try:
+            self.create_task(
+                self.platforms[entities[0].PLATFORM].async_add_entities(entities),
+                ".add_entities",
+            )
+        except KeyError:
+            self.create_task(
+                self.parent.config_entries.async_forward_entry_setups(
+                    self.config_entry, (entities[0].PLATFORM,)
+                ),
+                ".add_entities",
+            )
+        return entities
 
     def create_issue(
         self,

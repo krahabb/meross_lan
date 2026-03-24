@@ -7,20 +7,9 @@ from .helpers import entity as mle, reverse_lookup
 if TYPE_CHECKING:
     from typing import Any, ClassVar, Final, Never, NotRequired, Unpack
 
-    from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
-
     from .helpers.device import Device
     from .helpers.entity import ChannelType
     from .helpers.manager import ConfigEntryManager
-
-
-async def async_setup_entry(
-    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
-):
-    mle.Entity.platform_setup_entry(
-        hass, config_entry, async_add_devices, select.DOMAIN
-    )
 
 
 class SelectEntity(mle.Entity, select.SelectEntity):
@@ -116,3 +105,6 @@ class SelectParser(mle.ValueParser, SelectEntity):
     @override
     async def async_select_option(self, option: str):
         await self.async_request_value(reverse_lookup(self.options_map, option))
+
+
+async_setup_entry = SelectEntity.platform_setup_entry

@@ -69,16 +69,20 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                     try:
                         entities[f"{channel}_sensor_{key}"].update_device_value(value)
                     except KeyError:
-                        SensorParser(
-                            channel,
-                            self.parent,
-                            **(
-                                SensorLatestNamespaceHandler.ENTITY_ARGS.get(key, {})
-                                | {
-                                    "entity_key": f"sensor_{key}",
-                                    "device_value": value,
-                                }
-                            ),
+                        self.parent.add_entity(
+                            SensorParser(
+                                channel,
+                                self.parent,
+                                **(
+                                    SensorLatestNamespaceHandler.ENTITY_ARGS.get(
+                                        key, {}
+                                    )
+                                    | {
+                                        "entity_key": f"sensor_{key}",
+                                        "device_value": value,
+                                    }
+                                ),
+                            )
                         )
                         self.polling_request_add_channel(channel)
 

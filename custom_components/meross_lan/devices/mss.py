@@ -110,7 +110,6 @@ class _ElectricitySensor(SensorParser):
         del self.sensor_power
 
     async def async_added_to_hass(self):
-        await super().async_added_to_hass()
         # state restoration is only needed on cold-start and we have to discriminate
         # from when this happens while the device is already working. In general
         # the sensor state is always kept in the instance even when it's disabled
@@ -120,21 +119,16 @@ class _ElectricitySensor(SensorParser):
         # device reading data). If an entity is disabled on startup of course our state
         # will start resetted and our sums will restart (disabled means not interesting
         # anyway)
-        if self.native_value:
-            return
-
-        with self.exception_warning("restoring previous state"):
-            state = await self.get_last_state_available()
-            if state is None:
-                return
-            if state.last_updated < dt_util.start_of_local_day():
-                # tbh I don't know what when last_update == start_of_day
-                return
-            # state should be an int though but in case we decide some
-            # tweaks here or there this conversion is safer (allowing for a float state)
-            # and more consistent
-            self._estimate = float(state.state)
-            self.native_value = int(self._estimate)
+        if not self.native_value:
+            with self.exception_warning("restoring previous state"):
+                state = await self.get_last_state_available()
+                if state and (state.last_updated >= dt_util.start_of_local_day()):
+                    # state should be an int though but in case we decide some
+                    # tweaks here or there this conversion is safer (allowing for a float state)
+                    # and more consistent
+                    self._estimate = float(state.state)
+                    self.native_value = int(self._estimate)
+        await super().async_added_to_hass()
 
     @override
     def set_available(self):
@@ -298,11 +292,11 @@ class ConsumptionHSensor(SensorParser):
 
     async def async_added_to_hass(self):
         self.handler_ns.channel_polling_add(self.channel)
-        return await SensorParser.async_added_to_hass(self)
+        await SensorParser.async_added_to_hass(self)
 
     async def async_will_remove_from_hass(self):
         self.handler_ns.channel_polling_remove(self.channel)
-        return await SensorParser.async_will_remove_from_hass(self)
+        await SensorParser.async_will_remove_from_hass(self)
 
     def _parse(self, payload: dict):
         """
@@ -482,8 +476,6 @@ class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
         return super().set_unavailable()
 
     async def async_added_to_hass(self):
-        await super().async_added_to_hass()
-
         try:
             self.parent.entities[mn.Appliance_Control_Electricity].sensor_consumptionx = self  # type: ignore
         except KeyError:
@@ -497,39 +489,31 @@ class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
         # device reading data). If an entity is disabled on startup of course our state
         # will start resetted and our sums will restart (disabled means not interesting
         # anyway)
-        if (self.native_value is not None) or self.extra_state_attributes:
-            return
+        if (self.native_value is None) and not self.extra_state_attributes:
+            with self.exception_warning("restoring previous state"):
+                if state := await self.get_last_state_available():
+                    # check if the restored sample is fresh enough i.e. it was
+                    # updated after the device midnight for today..else it is too
+                    # old to be good. Since we don't have actual device epoch we
+                    # 'guess' it is nicely synchronized so we'll use our time
+                    _t = self.parent.get_device_datetime(self.time())
+                    _t_midnight = datetime(_t.year, _t.month, _t.day, tzinfo=_t.tzinfo)
+                    if state.last_updated >= _t_midnight:
+                        for _attr_name in (self.ATTR_OFFSET, self.ATTR_RESET_TS):
+                            if _attr_name in state.attributes:
+                                _attr_value = state.attributes[_attr_name]
+                                self.extra_state_attributes[_attr_name] = _attr_value
+                                # we also set the value as an instance attr for faster access
+                                setattr(self, _attr_name, _attr_value)
+                        # HA adds decimals when the display precision is set for the entity
+                        # according to this issue #268. In order to try not mess statistics
+                        # we're reverting to the old design where the sensor state is
+                        # reported as 'unavailable' when the device is disconnected and so
+                        # we don't restore the state value at all but just wait for a 'fresh'
+                        # consumption value from the device. The attributes restoration will
+                        # instead keep patching the 'consumption reset bug'
 
-        with self.exception_warning("restoring previous state"):
-            state = await self.get_last_state_available()
-            if state is None:
-                return
-            # check if the restored sample is fresh enough i.e. it was
-            # updated after the device midnight for today..else it is too
-            # old to be good. Since we don't have actual device epoch we
-            # 'guess' it is nicely synchronized so we'll use our time
-            devicetime = self.parent.get_device_datetime(self.time())
-            devicetime_today_midnight = datetime(
-                devicetime.year,
-                devicetime.month,
-                devicetime.day,
-                tzinfo=devicetime.tzinfo,
-            )
-            if state.last_updated < devicetime_today_midnight:
-                return
-            for _attr_name in (self.ATTR_OFFSET, self.ATTR_RESET_TS):
-                if _attr_name in state.attributes:
-                    _attr_value = state.attributes[_attr_name]
-                    self.extra_state_attributes[_attr_name] = _attr_value
-                    # we also set the value as an instance attr for faster access
-                    setattr(self, _attr_name, _attr_value)
-            # HA adds decimals when the display precision is set for the entity
-            # according to this issue #268. In order to try not mess statistics
-            # we're reverting to the old design where the sensor state is
-            # reported as 'unavailable' when the device is disconnected and so
-            # we don't restore the state value at all but just wait for a 'fresh'
-            # consumption value from the device. The attributes restoration will
-            # instead keep patching the 'consumption reset bug'
+        await super().async_added_to_hass()
 
     @override
     def _handle(self, message: "MerossMessage", /):
@@ -682,11 +666,13 @@ class OverTempEnableSwitch(EntityNamespaceMixin, SwitchParser):
             type = overtemp[mc.KEY_TYPE]
             self.sensor_overtemp_type.update_device_value(type)
         except AttributeError:
-            self.sensor_overtemp_type = EnumParser(
-                self.channel,
-                self.parent,
-                entity_key="config_overtemp_type",
-                native_value=type,
+            self.sensor_overtemp_type = self.parent.add_entity(
+                EnumParser(
+                    self.channel,
+                    self.parent,
+                    entity_key="config_overtemp_type",
+                    native_value=type,
+                )
             )
         except KeyError:
             pass

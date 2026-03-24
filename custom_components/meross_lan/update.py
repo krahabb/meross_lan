@@ -12,10 +12,6 @@ if TYPE_CHECKING:
     from .helpers.device import ChannelType, Device
 
 
-async def async_setup_entry(hass, config_entry, async_add_devices):
-    Entity.platform_setup_entry(hass, config_entry, async_add_devices, update.DOMAIN)
-
-
 class UpdateEntity(Entity, update.UpdateEntity):
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
@@ -52,6 +48,7 @@ class UpdateEntity(Entity, update.UpdateEntity):
             device.get_upgrade_info()
         )
         Entity.__init__(self, channel, device)
+        device.add_entity(self)
 
     def flush_state(self):
         self.installed_version, self.latest_version, self.release_summary = (
@@ -69,3 +66,6 @@ class UpdateEntity(Entity, update.UpdateEntity):
         await device.async_request(
             *mn.Appliance_Control_Upgrade.request_set(upgrade_payload),
         )
+
+
+async_setup_entry = UpdateEntity.platform_setup_entry
