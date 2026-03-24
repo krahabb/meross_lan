@@ -27,11 +27,6 @@ class RollerShutter(Cover):
         number_signalOpen: NumberParser
         number_signalClose: NumberParser
 
-    # TODO: switchover main ns to State so we could use device_value for _mrs_state
-    # init_ns = mn.Appliance_RollerShutter_Position
-    # TODO: Cover is not really a NamespaceValue parser..this is a remnant...
-    init_key_value = mc.KEY_POSITION
-
     ATTR_POSITION_NATIVE = "position_native"
     PARAM_TRANSITION_POLL_TIMEOUT = 2
     """used when polling the cover state to monitor an ongoing transition"""
@@ -198,7 +193,7 @@ class RollerShutter(Cover):
     # interface: self
     async def async_request_position(self, position: int):
         self._transition_cancel()
-        await self.async_request_payload({self.init_key_value: position})
+        await self.async_request_payload({mc.KEY_POSITION: position})
         self._transition_cancel()
         await self._async_read_state()
 

@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, override
 
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.entity_registry import RegistryEntryDisabler
 from homeassistant.util.dt import now
 
 from ..binary_sensor import BinarySensor
@@ -128,7 +128,7 @@ class GarageEnableSwitch(GarageConfigSwitch):
         """enables/disables all the entities of this channel garageDoor in the
         entity registry"""
         registry_update_entity = self.parent.parent.entity_registry.async_update_entity
-        disabler = er.RegistryEntryDisabler.INTEGRATION
+        disabler = RegistryEntryDisabler.INTEGRATION
         for entity in self.parent.entities.values():
             if (
                 (entity.channel == self.channel)
@@ -225,8 +225,6 @@ class Garagedoor(Cover):
         number_doorOpenDuration: NumberEntity | _DurationHelper
 
     init_ns = mn.Appliance_GarageDoor_State
-    # TODO: Cover is not really a NamespaceValue parser..this is a remnant...
-    init_key_value = mc.KEY_OPEN
 
     PARAM_TRANSITION_MAXDURATION = 60
     PARAM_TRANSITION_MINDURATION = 10
@@ -335,7 +333,7 @@ class Garagedoor(Cover):
     # interface: self
     async def async_request_position(self, open_request: int, /):
         self._transition_cancel()
-        response = await self.async_request_payload({self.init_key_value: open_request})
+        response = await self.async_request_payload({mc.KEY_OPEN: open_request})
         """
         example (historical) payload in SETACK:
         {"state": {"channel": 0, "open": 0, "lmTime": 0, "execute": 1}}
