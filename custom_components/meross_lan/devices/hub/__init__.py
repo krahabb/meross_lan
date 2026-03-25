@@ -124,7 +124,7 @@ class HubNamespaceHandler(NamespaceHandler):
                     subdevice._unknown_ns_parse(self, payload)
                 else:
                     # force a rescan since we discovered a new subdevice
-                    hub.ns_handlers[mn.Appliance_System_All].polling_epoch_next = 0.0
+                    hub.handler_all.polling_epoch_next = 0.0
             except Exception as e:
                 if type(payload) is str:  # enumerating dict keys
                     # This could happen when the main payload is not a list of subdevices

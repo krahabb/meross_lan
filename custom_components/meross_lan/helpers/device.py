@@ -395,16 +395,6 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         self.device_timedelta_log_epoch = 0
         self.device_timedelta_config_epoch = 0
         self.profile = None
-
-        NamespaceHandler(
-            mn.Appliance_System_All,
-            self,
-            config=(
-                self.HEARTBEAT_TIMEOUT,
-                0,
-                NamespaceHandler.async_poll_all,
-            ),
-        )
         self.sensor_protocol = ProtocolSensor(self)
         PersistentButton(
             None,
@@ -1214,7 +1204,8 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         descr = self.descriptor
         oldfirmware = descr.firmware
         oldtimezone = descr.timezone
-        descr.update(message.payload)
+
+        device.Device._handle_Appliance_System_All(self, message)
 
         if oldfirmware != descr.firmware:
             self.schedule_entry_update(True)
@@ -1233,18 +1224,6 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                     self.get_handler(mn.Appliance_System_Debug).schedule_get()
             else:
                 self.device_debug = None
-
-        for key_digest, _digest in descr.digest.items() or descr.control.items():
-            try:
-                self.digest_parsers[key_digest](_digest)
-            except Exception as e:
-                self.log_exception(
-                    self.WARNING,
-                    e,
-                    "parsing digest '%s' with parser '%r'",
-                    key_digest,
-                    self.digest_parsers.get(key_digest),
-                )
 
     def _handle_Appliance_System_Debug(self, message: MerossMessage, /):
         # this ns is queried when we're HTTP connected and the device reports it is

@@ -540,7 +540,7 @@ class Garagedoor(Cover):
             # As we know it now, this namespace accepts this queries:
             # - single channel in a DICT_C_STRICT
             # - all channels in an empty dict (only confirmed in 4.0.0+ fw)
-            device.ns_handlers[mn.Appliance_System_All].polling_period = 0
+            device.handler_all.polling_period = 0
 
         # do not register_parser_class since we don't want to create spurious
         # GarageDoor at channel 0 (msg200)

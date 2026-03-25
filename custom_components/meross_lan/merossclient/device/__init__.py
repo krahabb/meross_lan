@@ -202,6 +202,7 @@ class Device(PhysicalDevice):
         _clients_connected: Final[dict[Transport, AbstractClient]]
 
         ns_handlers: Final[dict[str, NamespaceHandler]]
+        handler_all: Final[NamespaceHandler]
         digest_parsers: Final[dict[str, DigestParseFunc]]
         digest_pollers: Final[set[NamespaceHandler]]
 
@@ -256,6 +257,7 @@ class Device(PhysicalDevice):
         "_clients",
         "_clients_connected",
         "ns_handlers",
+        "handler_all",
         "digest_parsers",
         "digest_pollers",
         "tz",
@@ -284,6 +286,15 @@ class Device(PhysicalDevice):
         self._clients = {}
         self._clients_connected = {}
         self.ns_handlers = {}
+        self.handler_all = NamespaceHandler(
+            mn.Appliance_System_All,
+            self,
+            config=(
+                self.HEARTBEAT_TIMEOUT,
+                0,
+                self._async_poll_all,
+            ),
+        )
         self.digest_parsers = {}
         self.digest_pollers = set()
         self.tz = UTC
@@ -416,6 +427,7 @@ class Device(PhysicalDevice):
         for client in tuple(self._clients.values()):
             await client.async_shutdown()
         await super().async_shutdown()
+        del self.handler_all  # type: ignore
         self.digest_parsers.clear()
         self.digest_pollers.clear()
         self._lazypoll_requests.clear()
@@ -429,12 +441,11 @@ class Device(PhysicalDevice):
     # interface: AbstractClient
     @override
     async def async_connect(self, /, **kwargs: "Unpack[ConnectArgs]"):
-        handler_all = self.get_handler(mn.Appliance_System_All)
         # use pre 3.13 compatible syntax/semantics
         for earliest_connect in asyncio.as_completed(
             {
                 _client.create_task(
-                    _client.async_request(*handler_all.polling_request),
+                    _client.async_request(*self.handler_all.polling_request),
                     f".async_connect_{_client.TRANSPORT}_task",
                     eager_start=True,
                 )
@@ -446,8 +457,8 @@ class Device(PhysicalDevice):
                 response = await earliest_connect
                 if not self.is_connected:
                     self.on_connect()
-                handler_all.handle_response(response)
-                handler_all.polling_response_size = len(response.json)
+                self.handler_all.handle_response(response)
+                self.handler_all.polling_response_size = len(response.json)
                 return response
             except Exception:
                 pass
@@ -741,9 +752,10 @@ class Device(PhysicalDevice):
                         and ((epoch - http.last_tx_epoch) > self.HEARTBEAT_TIMEOUT)
                     ):
                         try:
-                            handler_all = self.get_handler(mn.Appliance_System_All)
-                            handler_all.handle_response(
-                                await http.async_request(*handler_all.polling_request)
+                            self.handler_all.handle_response(
+                                await http.async_request(
+                                    *self.handler_all.polling_request
+                                )
                             )
                         except Exception:
                             pass
@@ -755,9 +767,10 @@ class Device(PhysicalDevice):
                         and ((epoch - mqtt.last_tx_epoch) > self.HEARTBEAT_TIMEOUT)
                     ):
                         try:
-                            handler_all = self.get_handler(mn.Appliance_System_All)
-                            handler_all.handle_response(
-                                await mqtt.async_request(*handler_all.polling_request)
+                            self.handler_all.handle_response(
+                                await mqtt.async_request(
+                                    *self.handler_all.polling_request
+                                )
                             )
                         except Exception:
                             pass
@@ -1000,6 +1013,59 @@ class Device(PhysicalDevice):
             )
         # else go with whatever transport: the device will reset it's configuration
         return await self.async_request(*mn.Appliance_Control_Unbind.request_default)
+
+    def _handle_Appliance_System_All(self, message: MerossMessage, /):
+
+        descr = self.descriptor
+        descr.update(message.payload)
+
+        for key_digest, _digest in descr.digest.items() or descr.control.items():
+            try:
+                self.digest_parsers[key_digest](_digest)
+            except Exception as e:
+                self.log_exception(
+                    self.WARNING,
+                    e,
+                    "parsing digest '%s' with parser '%r'",
+                    key_digest,
+                    self.digest_parsers.get(key_digest),
+                )
+
+    async def _async_poll_all(self, handler_all: NamespaceHandler, /):
+        """
+        This is a special policy for NS_ALL.
+        It is basically an 'async_poll_default' policy so it kicks-in whenever we poll
+        the state in 'device._async_request_updates' but contrary to 'legacy' behavior
+        where NS_ALL was always polled (unless mqtt active).
+        This will alternate polling NS_ALL to the group of namespaces responsible for
+        the state carried in 'digest'. This is an improvement since NS_ALL, even if carrying
+        the whole state in one query, might be huge (because of the 'time' key) but also because
+        most of its data are pretty static (never or seldom changing) info of the device.
+        This new policy will interleave querying NS_ALL once in a while with smaller direct
+        equivalent queries for the state carried in digest. (If the device doesn't support
+        NS_MULTIPLE, it will likely do more queries though but this is unlikely)
+        """
+        if self.mqtt_active:
+            # on MQTT no need for updates since they're being PUSHed
+            if not handler_all.polling_epoch_next:
+                # just when onlining...
+                await self.async_poll_request(handler_all)
+            return
+
+        # here we're missing PUSHed updates so we have to poll...
+        if self.polling_epoch >= handler_all.polling_epoch_next:
+            # at start or periodically ask for NS_ALL..plain
+            await self.async_poll_request(handler_all)
+            return
+
+        # query specific namespaces instead of NS_ALL since we hope this is
+        # better (less overhead/http sessions) together with ns_multiple packing
+        for handler in self.digest_pollers:
+            if handler.parsers:
+                # don't query if digest key/namespace hasn't any entity registered
+                # this also prevents querying a somewhat 'malformed' ToggleX reply
+                # appearing in an mrs100 (#447)
+                await self.async_poll_request(handler)
 
 
 class SubDevice(PhysicalDevice):
