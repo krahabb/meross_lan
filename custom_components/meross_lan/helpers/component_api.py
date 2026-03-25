@@ -712,8 +712,12 @@ class ComponentApi(mlq.MQTTProfile):
         self, hass: "HomeAssistant", config_entry: "ConfigEntry"
     ):
         self.config_entry = config_entry  # type: ignore
-        await self.entry_update_listener(hass, config_entry)
+        config = self.config = config_entry.data
+        self.key = config.get(mlc.CONF_KEY) or ""
+        self.obfuscate = config.get(mlc.CONF_OBFUSCATE, True)
+        self.configure_logger()
         await mlq.MQTTProfile.async_setup_entry(self, hass, config_entry)
+        self.mqtt_connection.entry_update_listener(self)
 
     # interface: MQTTProfile
     @property

@@ -306,7 +306,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         )
 
     @classmethod
-    def platform_setup_entry(
+    async def platform_setup_entry(
         cls,
         hass,
         config_entry: "ConfigEntry[ConfigEntryManager]",

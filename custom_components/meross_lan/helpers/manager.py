@@ -5,9 +5,7 @@ from time import localtime, strftime
 from typing import TYPE_CHECKING, final, override
 
 from homeassistant.components import persistent_notification as pn
-from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant.helpers import device_registry as dr, issue_registry as ir
-from homeassistant.helpers.entity_platform import async_get_platforms
+from homeassistant.helpers.issue_registry import IssueSeverity
 
 from .. import const as mlc
 from ..const import (
@@ -47,6 +45,7 @@ if TYPE_CHECKING:
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import CALLBACK_TYPE, HomeAssistant
+    from homeassistant.helpers.device_registry import DeviceEntry
     from homeassistant.helpers.entity_platform import EntityPlatform
 
     from ..merossclient import HostAddress
@@ -90,7 +89,7 @@ class ConfigEntryManager(logging.Loggable):
         config: Mapping[str, Any]
         key: str
         obfuscate: bool
-        device_entry: Final[dr.DeviceEntry | None]
+        device_entry: Final[DeviceEntry | None]
         """Link to optional DeviceRegistry entry info."""
         platforms: dict[str, EntityPlatform]
         entities: Final[dict[object, Entity]]
@@ -106,12 +105,12 @@ class ConfigEntryManager(logging.Loggable):
         _entry_update_listener_unsub: CALLBACK_TYPE
 
         class Args(logging.Loggable.Args):
-            device_entry: NotRequired[dr.DeviceEntry | None]
+            device_entry: NotRequired[DeviceEntry | None]
 
     ROOT_LOGGER = logging.getLogger(__name__[:-16])
     """Root meross_lan logger"""
 
-    IssueSeverity = ir.IssueSeverity
+    IssueSeverity = IssueSeverity
 
     init_is_connected: bool = True
 
@@ -390,7 +389,7 @@ class ConfigEntryManager(logging.Loggable):
         issue_subkey: str = "",
         *,
         data: dict[str, str | int | float | None] | None = None,
-        severity: ir.IssueSeverity = ir.IssueSeverity.CRITICAL,
+        severity: IssueSeverity = IssueSeverity.CRITICAL,
         translation_placeholders: dict[str, str] | None = None,
     ):
         issue_id = f"{issue_key}.{self.id}.{issue_subkey}"
