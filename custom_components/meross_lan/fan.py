@@ -3,13 +3,7 @@ from typing import TYPE_CHECKING, override
 from homeassistant.components import fan
 
 from .helpers.entity import ToggleXParser
-from .helpers.namespaces import NamespaceHandler, mn
 from .merossclient.protocol import const as mc
-
-if TYPE_CHECKING:
-    from typing import Final
-
-    from .helpers.device import Device
 
 
 class Fan(ToggleXParser, fan.FanEntity):
@@ -25,8 +19,6 @@ class Fan(ToggleXParser, fan.FanEntity):
         _attr_supported_features: fan.FanEntityFeature
 
     PLATFORM = fan.DOMAIN
-
-    init_ns = mn.Appliance_Control_Fan
 
     # HA core entity attributes:
     try:
@@ -96,16 +88,6 @@ class Fan(ToggleXParser, fan.FanEntity):
                 self.is_on = False
                 self.percentage = 0
             self.flush_state()
-
-
-def namespace_init_fan(ns: mn.Namespace, device: "Device", /):
-    """Special care for NS_FAN since it might have been initialized in digest_init"""
-    if mc.KEY_FAN not in device.descriptor.digest:
-        # actually only map100 (so far)
-        handler = NamespaceHandler(ns, device)
-        handler.register_parser(Fan(0, device))
-        # setup a polling strategy since state is not carried in digest
-        handler.polling_strategy = NamespaceHandler.async_poll_default
 
 
 async_setup_entry = Fan.platform_setup_entry

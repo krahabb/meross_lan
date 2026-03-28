@@ -31,7 +31,6 @@ class RollerShutter(Cover):
     PARAM_TRANSITION_POLL_TIMEOUT = 2
     """used when polling the cover state to monitor an ongoing transition"""
     NUMBER_CONFIG_DEF = NumberParser.ENTITY_DEF(
-        ns=mn.Appliance_RollerShutter_Config,
         device_scale=1000,
         device_class=NumberParser.DeviceClass.DURATION,
         native_max_value=60,
@@ -87,22 +86,17 @@ class RollerShutter(Cover):
             self._position_native_isgood = False
         Cover.__init__(self, channel, device, **kwargs)
         device.register_parser_ex(self, mn.Appliance_RollerShutter_State)
-        ns_adjust = mn.Appliance_RollerShutter_Adjust
-        if ns_adjust in descriptor.ability:
-            # unknown use: actually the polling period is set on a very high timeout
-            device.get_handler(ns_adjust).register_parser(
-                RollerShutterAdjustSwitch(channel, device, ns=ns_adjust)
-            )
 
         ns_config = mn.Appliance_RollerShutter_Config
         for _key_value in (mc.KEY_SIGNALOPEN, mc.KEY_SIGNALCLOSE):
             setattr(
                 self,
                 f"number_{_key_value}",
-                self.NUMBER_CONFIG_DEF(
+                self.__class__.NUMBER_CONFIG_DEF(
                     channel,
                     device,
                     entity_key=f"config_{_key_value}",
+                    ns=ns_config,
                     key_value=_key_value,
                     name=_key_value,
                 ),
@@ -373,9 +367,7 @@ class RollerShutterAdjustSwitch(SwitchParser):
 
 NamespaceHandler.POLLING_CONFIG_MAP.update(
     {
-        mn.Appliance_RollerShutter_Adjust: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
-        mn.Appliance_RollerShutter_Config: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
-        mn.Appliance_RollerShutter_Position: NamespaceHandler.POLLING_CONFIG_STATE_NS,
-        mn.Appliance_RollerShutter_State: NamespaceHandler.POLLING_CONFIG_STATE_NS,
+        mn.Appliance_RollerShutter_Adjust: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+        mn.Appliance_RollerShutter_Config: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
     }
 )

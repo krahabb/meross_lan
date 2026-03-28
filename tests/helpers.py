@@ -584,6 +584,10 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
     def config_entry_loaded(self):
         return self.config_entry.state is ce.ConfigEntryState.LOADED
 
+    @property
+    def logtag(self):
+        return f"{self.config_entry.title}({self.config_entry.unique_id})"
+
     async def async_setup(self):
         result = await self.hass.config_entries.async_setup(self.config_entry_id)
         await self.hass.async_block_till_done()
@@ -611,7 +615,7 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
     async def __aexit__(self, exc_type, exc_value, traceback):
         if self.config_entry.state is ce.ConfigEntryState.LOADED:
             assert await self.async_unload()
-        self.flush_logs(self.config_entry.title)
+        self.flush_logs(self.logtag)
         return None
 
 
@@ -748,7 +752,7 @@ def build_emulator_config_entry(
 
     data: mlc.DeviceConfigType = {
         mlc.CONF_DEVICE_ID: emulator.descriptor.uuid,
-        mlc.CONF_HOST: str(id(emulator)),
+        mlc.CONF_HOST: emulator.descriptor.macAddress_fmt,
         mlc.CONF_KEY: emulator.key,
         mlc.CONF_PAYLOAD: {
             mc.KEY_ALL: deepcopy(emulator.descriptor.all),
@@ -787,7 +791,7 @@ class EmulatorContext(contextlib.AbstractContextManager):
         if isinstance(emulator, str):
             emulator = build_emulator(emulator)
         self.emulator = emulator
-        self.host = host or str(id(emulator))
+        self.host = host or emulator.descriptor.macAddress_fmt
         self.aioclient_mock = aioclient_mock
         if frozen_time:
             self.frozen_time = frozen_time

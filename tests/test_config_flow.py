@@ -393,7 +393,7 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
         device = device_context.device
 
         # better be sure our context is consistent with expectations!
-        assert device.host == str(id(device_context.emulator))
+        assert device.host == device_context.emulator.descriptor.macAddress_fmt
         assert device.id == device.descriptor.uuid
         device_macaddress = device.descriptor.macAddress
         # since we check the DHCP renewal comes form a legit device we need to setup

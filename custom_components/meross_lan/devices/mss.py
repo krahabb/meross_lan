@@ -192,7 +192,7 @@ class _ElectricitySensor(SensorParser):
 
 class ElectricitySensor(EntityNamespaceMixin, _ElectricitySensor):
 
-    POLLING_CONFIG_DEFAULT = EntityNamespaceMixin.POLLING_CONFIG_FASTSENSOR_NS
+    POLLING_CONFIG_DEFAULT = EntityNamespaceMixin.POLLING_CONFIG_FASTSENSOR
 
     # skip EntityNamespaceMixin async_added_to_hass and async_will_remove_from_hass since
     # we want to keep polling this ns even when _ElectricitySensor is disabled
@@ -335,22 +335,13 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         _channels_to_poll: list[ChannelToPollType]
         # TODO: reconcile this member with polling_request_channels in base cls
 
-    POLLING_CONFIG_DEFAULT = (
-        mlc.PARAM_ENERGY_UPDATE_PERIOD,
-        mlc.PARAM_ENERGY_CLOUD_UPDATE_PERIOD,
-        NamespaceHandler.async_poll_smart,
-    )
-
     __SLOTS__ = ("_channels_to_poll",)
 
     def __init__(self, ns: "mn.Namespace", device: "Device", /):
         self._channels_to_poll = []
         NamespaceHandler.__init__(self, ns, device, parser_class=ConsumptionHSensor)
-        self.polling_strategy = (
-            ConsumptionHNamespaceHandler.async_poll_probe
-            if len(device.descriptor.channels) > 1
-            else ConsumptionHNamespaceHandler.async_poll_smartchunk
-        )
+        if len(device.descriptor.channels) > 1:
+            self.polling_strategy = ConsumptionHNamespaceHandler.async_poll_probe
         device.enable_check_device_time()
 
     def channel_polling_add(self, channel, delay: float = 0, /):
@@ -391,13 +382,15 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         if not self._channels_to_poll:
             return
         self.polling_response_size = (
-            self.HEADER_AVG_SIZE + 3 * self.id.payload_item_size
+            NamespaceHandler.HEADER_AVG_SIZE + 3 * self.id.payload_item_size
         )
         self.polling_request_channels.clear()
         await self.parent.async_poll_request(self)
         self.polling_request_channels.append({})
-        self.polling_response_size = self.HEADER_AVG_SIZE + self.id.payload_item_size
-        self.polling_strategy = ConsumptionHNamespaceHandler.async_poll_smartchunk  # type: ignore
+        self.polling_response_size = (
+            NamespaceHandler.HEADER_AVG_SIZE + self.id.payload_item_size
+        )
+        self.polling_strategy = ConsumptionHNamespaceHandler.async_poll_smartchunk
 
     async def async_poll_smartchunk(self):
         """This has a huge ns response payload so we need to optimize polling.
@@ -414,7 +407,13 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
                 device._lazypoll_requests, self, key=lambda h: h.last_poll_epoch - epoch
             )
         else:
-            await device.async_poll_request_smart(self)
+            await device.async_poll_request_rl(self)
+
+    POLLING_CONFIG_DEFAULT = (
+        mlc.PARAM_ENERGY_UPDATE_PERIOD,
+        mlc.PARAM_ENERGY_CLOUD_UPDATE_PERIOD,
+        async_poll_smartchunk,
+    )
 
 
 class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
@@ -651,7 +650,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
 
 class OverTempEnableSwitch(EntityNamespaceMixin, SwitchParser):
 
-    POLLING_CONFIG_DEFAULT = EntityNamespaceMixin.POLLING_CONFIG_CONFIGURATION_NS
+    POLLING_CONFIG_DEFAULT = EntityNamespaceMixin.POLLING_CONFIG_CONFIGURATION
     init_entity_key = "config_overtemp_enable"
     init_key_value = mc.KEY_ENABLE
 
@@ -680,6 +679,6 @@ class OverTempEnableSwitch(EntityNamespaceMixin, SwitchParser):
 
 NamespaceHandler.POLLING_CONFIG_MAP.update(
     {
-        mn.Appliance_Control_ElectricityX: NamespaceHandler.POLLING_CONFIG_FASTSENSOR_NS,
+        mn.Appliance_Control_ElectricityX: NamespaceHandler.POLLING_CONFIG_FASTSENSOR,
     }
 )

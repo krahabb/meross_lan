@@ -3,8 +3,6 @@ from typing import TYPE_CHECKING, override
 from ... import const as mlc
 from ...binary_sensor import BinarySensor
 from ...button import Button
-from ...calendar import MtsSchedule
-from ...climate import MtsClimate
 from ...helpers import device as mld, entity as mle
 from ...helpers.namespaces import NamespaceHandler
 from ...merossclient import device, get_productname, get_subdevice_key_digest
@@ -80,6 +78,9 @@ class HubNamespaceHandler(NamespaceHandler):
     if TYPE_CHECKING:
         parent: "Hub"  # type: ignore[override]
 
+    # Do not poll unless explitly confgured
+    POLLING_CONFIG_DEFAULT = (0, 0, None)
+
     def __init__(
         self,
         ns: "Namespace",
@@ -124,7 +125,7 @@ class HubNamespaceHandler(NamespaceHandler):
                     subdevice._unknown_ns_parse(self, payload)
                 else:
                     # force a rescan since we discovered a new subdevice
-                    hub.handler_all.polling_epoch_next = 0.0
+                    hub.handler_all.next_poll_epoch = 0.0
             except Exception as e:
                 if type(payload) is str:  # enumerating dict keys
                     # This could happen when the main payload is not a list of subdevices
@@ -247,7 +248,7 @@ class Hub(Device if TYPE_CHECKING else object):
 
         return subdevice_class(subid, self, key_digest)
 
-    def parse_digest(self, p_hub: dict, /):
+    def parse_digest(self, p_hub, /):
         # Usually called by _handle_Appliance_System_All as part of the digest parsing
         # Here we'll check the fresh subdevice list against the actual one and
         # eventually manage newly added subdevices or removed ones #119
@@ -294,20 +295,26 @@ class Hub(Device if TYPE_CHECKING else object):
                     eager_start=True,
                 )
 
+    def _handle_Appliance_Digest_Hub(self, message: "MerossMessage"):
+        self.ns_handlers[mn_h.Appliance_Digest_Hub].digest = digest = message.payload[
+            mc.KEY_HUB
+        ]
+        self.parse_digest(digest)
+
+    def _handle_Appliance_System_All(self, message: MerossMessage, /):
+        super()._handle_Appliance_System_All(message)
+        self.parse_digest(self.descriptor.digest[mc.KEY_HUB])
+
     @classmethod
     # @override
-    # In order to configure the Hub, we use the Device machanics in async_init where it looks for keys in digest
-    # in order to setup the parsers/handlers.
-    # Those mechanics rely on NamespaceParser digest_init classmethod to instantiate parsers..here we
-    # use a more tricky approach leveraging that callback to slightly customize the device itself
-    def digest_init(
-        cls, device: "Hub", digest: "mt.hub.Digest_Hub", /
-    ) -> "Device.DigestInitReturnType":
-        # This is a trick to dynamically mixin the HubMixin capabilities
-        # into the device instance. Historically we were mixing HubMixin
+    # In order to configure the Hub, we use the Device mechanics in async_init where it looks
+    # for abilities in order to setup the parsers/handlers.
+    def namespace_init(cls, ns: mn.Namespace, device: "Hub", /):
+        # This is a trick to dynamically mixin the Hub capabilities
+        # into the device instance. Historically we were mixing Hub
         # as a subclass of the device class at ConfigEntry load time in ComponentApi
         # but this new approach requires less coding.
-        # BEWARE: this works if we don't need special __init__ logic in HubMixin
+        # BEWARE: this works if we don't need special __init__ logic in Hub
         # because the instance is already initialized here and we're called in the
         # context of Device.async_init method. This happens rather soon but surely
         # after Device.__init__
@@ -338,7 +345,18 @@ class Hub(Device if TYPE_CHECKING else object):
                     if identifiers[0] == mlc.DOMAIN:
                         registry_subdevices[identifiers[1]] = device_entry
 
-        for p_subdevice_digest in digest[mc.KEY_SUBDEVICE]:
+        if mn_h.Appliance_Digest_Hub in device.descriptor.ability:
+            handler = NamespaceHandler(mn_h.Appliance_Digest_Hub, device)
+            handler.parsers = device.subdevices  # type: ignore
+            handler.parse_digest = device.parse_digest
+        else:
+            # We don't have the 'official' digest carrying ns so we have to intercept
+            # ns_all in order to have a chance to parse the hub digest
+            device.handler_all.handler = device._handle_Appliance_System_All
+
+        for p_subdevice_digest in device.descriptor.digest[mc.KEY_HUB][
+            mc.KEY_SUBDEVICE
+        ]:
             try:
                 subdevice_id = p_subdevice_digest[mc.KEY_ID]
                 if subdevice_id in device.subdevices:
@@ -354,7 +372,7 @@ class Hub(Device if TYPE_CHECKING else object):
                 device.log_exception(
                     device.WARNING,
                     exception,
-                    "digest_init_hub (payload: %s)",
+                    "hub digest scan (subdevice digest: %s)",
                     _payload=p_subdevice_digest,
                 )
 
@@ -365,18 +383,6 @@ class Hub(Device if TYPE_CHECKING else object):
                 severity=device.IssueSeverity.WARNING,
                 translation_placeholders={"device_name": device_entry.name},
             )
-
-        ability = device.descriptor.ability
-        if mn_h.Appliance_Digest_Hub in ability:
-            NamespaceHandler(
-                mn_h.Appliance_Digest_Hub,
-                device,
-                handler=lambda message: device.parse_digest(
-                    message.payload[mc.KEY_HUB]
-                ),
-            )
-
-        return device.parse_digest, ()
 
 
 class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
@@ -953,7 +959,7 @@ class MS100Sensor(SensorSubDevice, SensorParser):
 
             handler = self.parent.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust]
             if handler.last_poll_epoch < (self.parent.last_rx_epoch - 30):
-                handler.polling_epoch_next = 0.0
+                handler.next_poll_epoch = 0.0
 
 
 class MS100FSensor(MS100Sensor):
@@ -1130,17 +1136,16 @@ class MstSwitch(SubDevice, HubSubIdChannelMixin, SwitchParser):
 
 NamespaceHandler.POLLING_CONFIG_MAP.update(
     {
-        mn_h.Appliance_Config_DeviceCfg: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
-        mn_h.Appliance_Control_Sensor_LatestX: NamespaceHandler.POLLING_CONFIG_FASTSENSOR_NS,
-        mn_h.Appliance_Control_Water: NamespaceHandler.POLLING_CONFIG_STATE_NS,
+        mn_h.Appliance_Config_DeviceCfg: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+        mn_h.Appliance_Control_Sensor_LatestX: NamespaceHandler.POLLING_CONFIG_FASTSENSOR,
         mn_h.Appliance_Hub_Battery: (
             3600,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
             NamespaceHandler.async_poll_smart,
         ),
-        mn_h.Appliance_Hub_Mts100_Adjust: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
+        mn_h.Appliance_Hub_Mts100_Adjust: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
         mn_h.Appliance_Hub_Mts100_All: (
-            device.Device.HEARTBEAT_TIMEOUT,
+            0,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
             NamespaceHandler.async_poll_chunked,
         ),
@@ -1149,13 +1154,13 @@ NamespaceHandler.POLLING_CONFIG_MAP.update(
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
             NamespaceHandler.async_poll_chunked,
         ),
-        mn_h.Appliance_Hub_Sensor_Adjust: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
+        mn_h.Appliance_Hub_Sensor_Adjust: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
         mn_h.Appliance_Hub_Sensor_All: (
-            device.Device.HEARTBEAT_TIMEOUT,
+            0,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
             NamespaceHandler.async_poll_chunked,
         ),
-        mn_h.Appliance_Hub_SubDevice_Beep: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
-        mn_h.Appliance_Hub_SubDevice_Version: NamespaceHandler.POLLING_CONFIG_SINGLEPOLL_NS,
+        mn_h.Appliance_Hub_SubDevice_Beep: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+        mn_h.Appliance_Hub_SubDevice_Version: NamespaceHandler.POLLING_CONFIG_ONCE,
     }
 )

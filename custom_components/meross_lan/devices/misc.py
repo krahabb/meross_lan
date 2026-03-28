@@ -165,7 +165,7 @@ class SensorLatestXNamespaceHandler(EntityDefNamespaceHandler):
                             {key_idx: channel, mc.KEY_DATA: [data_key]}
                         )
                         self.polling_response_size = (
-                            self.HEADER_AVG_SIZE
+                            NamespaceHandler.HEADER_AVG_SIZE
                             + len(polling_request_channels) * ns.payload_item_size
                         )
 

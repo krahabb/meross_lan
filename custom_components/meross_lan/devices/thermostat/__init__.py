@@ -37,7 +37,7 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
     nevertheless live in its own module (or in 'misc' maybe)
     """
 
-    POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS
+    POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_CONFIGURATION
 
     def __init__(self, ns: "mn.Namespace", device: "Device", /):
         NamespaceHandler.__init__(self, ns, device)
@@ -311,32 +311,9 @@ class MtsThermostatClimate(MtsClimate):
 
     if TYPE_CHECKING:
 
-        OPTIONAL_NAMESPACES_INITIALIZERS: Final[tuple[mn.Namespace, ...]]
-        """These namespaces handlers will forward message parsing to the climate entity"""
-        OPTIONAL_ENTITIES_INITIALIZERS: Final[dict[mn.Namespace, type[ParserEntity]]]
-        """Additional entities (linked to the climate one) in case their ns is supported/available"""
-
         # Overrides
         parent: Final[Device]  # type: ignore
         channel: Final[int]  # type: ignore
-
-    OPTIONAL_NAMESPACES_INITIALIZERS = (
-        mn_t.Appliance_Control_Thermostat_CtlRange,  # mts960
-        mn_t.Appliance_Control_Thermostat_System,  # mts300
-        mn_t.Appliance_Control_Thermostat_Timer,  # mts960
-        mn.Appliance_Config_Sensor_Association,  # mts300
-    )
-
-    OPTIONAL_ENTITIES_INITIALIZERS = {
-        mn.Appliance_Control_TempUnit: MtsTempUnit,
-        mn_t.Appliance_Control_Thermostat_DeadZone: MtsDeadZoneNumber,
-        mn_t.Appliance_Control_Thermostat_Frost: MtsFrostNumber,
-        mn_t.Appliance_Control_Thermostat_HoldAction: MtsHoldAction,
-        mn_t.Appliance_Control_Thermostat_Overheat: MtsOverheatNumber,
-        mn_t.Appliance_Control_Thermostat_Sensor: MtsExternalSensorSwitch,
-        mn_t.Appliance_Control_Thermostat_SummerMode: MtsSummerMode,
-        mn_t.Appliance_Control_Thermostat_WindowOpened: MtsWindowOpened,
-    }
 
     class AdjustNumber(MtsCommonTemperatureNumber):
         """
@@ -353,138 +330,18 @@ class MtsThermostatClimate(MtsClimate):
         _attr_native_min_value = -8
         _attr_native_step = 0.1
 
-    def __init__(self, channel: int, device: "Device", /, **kwargs):
-        MtsClimate.__init__(self, channel, device, **kwargs)
-        device.register_parser_ex(self, *self.OPTIONAL_NAMESPACES_INITIALIZERS)
-        ability = device.descriptor.ability
-        for _ns, _entity_class in self.OPTIONAL_ENTITIES_INITIALIZERS.items():
-            if _ns in ability:
-                device.get_handler(_ns).register_parser(
-                    _entity_class(channel, device, ns=_ns)
-                )
-
-    # interface: self
-    def _parse_ctlRange(self, payload: dict, /):
-        """
-        {
-            "channel": 0,
-            "max": 11000,
-            "min": -3000,
-            "ctlMax": 3600,
-            "ctlMin": 300,
-        }
-        """
-        self.max_temp = payload[mc.KEY_CTLMAX] / self.temperature_scale
-        self.min_temp = payload[mc.KEY_CTLMIN] / self.temperature_scale
-
-    def _parse_system(self, payload: dict, /):
-        # needed to silently support registering OPTIONAL_NAMESPACES_INITIALIZERS
-        pass
-
-    def _parse_timer(self, payload: dict, /):
-        # needed to silently support registering OPTIONAL_NAMESPACES_INITIALIZERS
-        pass
-
-    def _parse_association(self, payload: dict, /):
-        # needed to silently support registering OPTIONAL_NAMESPACES_INITIALIZERS
-        pass
-
-
-from .mts200 import Mts200Climate
-from .mts960 import Mts960Climate
-
-# TODO: These maps should be placed in a global DIGEST<->NAMESPACE map of the Meross ecosystem
-# so to remove those ns mappings distributed across classes.
-CLIMATE_INITIALIZERS: dict[str, type["MtsThermostatClimate"]] = {
-    mc.KEY_MODE: Mts200Climate,
-    mc.KEY_MODEB: Mts960Climate,
-}
-"""Core (climate) entities to initialize in digest_init_thermostat."""
-
-DIGEST_KEY_TO_NAMESPACE: dict[str, "Namespace"] = {
-    mc.KEY_MODE: mn_t.Appliance_Control_Thermostat_Mode,
-    mc.KEY_MODEB: mn_t.Appliance_Control_Thermostat_ModeB,
-    mc.KEY_SUMMERMODE: mn_t.Appliance_Control_Thermostat_SummerMode,
-    mc.KEY_WINDOWOPENED: mn_t.Appliance_Control_Thermostat_WindowOpened,
-}
-"""Maps the digest key to the associated namespace handler (used in _parse_thermostat)"""
-
-# "Mode", "ModeB","SummerMode","WindowOpened" are carried in digest so we don't poll them
-# We're using PollingStrategy for namespaces actually confirmed (by trace/diagnostics)
-# to be PUSHED when over MQTT. The rest are either 'never seen' or 'not pushed'
-
-
-def digest_init_thermostat(
-    device: "Device", digest: "JsonDict", /
-) -> "Device.DigestInitReturnType":
-
-    ability = device.descriptor.ability
-
-    digest_parsers: dict[str, "Device.DigestParseFunc"] = {}
-    digest_pollers: set["_NamespaceHandler"] = set()
-
-    for ns_key, ns_digest in digest.items():
-
-        try:
-            ns = DIGEST_KEY_TO_NAMESPACE[ns_key]
-        except KeyError:
-            # ns_key is still not mapped in DIGEST_KEY_TO_NAMESPACE
-            for namespace in ability:
-                ns = mn.NAMESPACES[namespace]
-                if ns.is_thermostat and (ns.key == ns_key):
-                    DIGEST_KEY_TO_NAMESPACE[ns_key] = ns
-                    break
-            else:
-                # ns_key is really unknown..
-                digest_parsers[ns_key] = device.digest_parse_empty
-                continue
-
-        try:
-            climate_class = CLIMATE_INITIALIZERS[ns_key]
-        except KeyError:
-            handler = device.get_handler(ns)
-        else:
-            handler = NamespaceHandler(
-                ns,
-                device,
-                parser_class=climate_class,
-                channels=(_digest[mc.KEY_CHANNEL] for _digest in ns_digest),
-            )
-        digest_parsers[ns_key] = handler.parse_list
-        digest_pollers.add(handler)
-
-    def digest_parse_thermostat(digest: "JsonDict", /):
-        """
-        MTS200 typically carries:
-        {
-            "mode": [...],
-            "summerMode": [],
-            "windowOpened": []
-        }
-        MTS960 typically carries:
-        {
-            "modeB": [...]
-        }
-        """
-        for ns_key, ns_digest in digest.items():
-            digest_parsers[ns_key](ns_digest)
-
-    return digest_parse_thermostat, digest_pollers
-
 
 NamespaceHandler.POLLING_CONFIG_MAP.update(
     {
-        mn.Appliance_Control_TempUnit: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
-        mn_t.Appliance_Control_Thermostat_Calibration: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
-        mn_t.Appliance_Control_Thermostat_CtlRange: NamespaceHandler.POLLING_CONFIG_SINGLEPOLL_NS,
-        mn_t.Appliance_Control_Thermostat_DeadZone: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
-        mn_t.Appliance_Control_Thermostat_Frost: NamespaceHandler.POLLING_CONFIG_SLOWSENSOR_NS,
-        mn_t.Appliance_Control_Thermostat_HoldAction: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
-        mn_t.Appliance_Control_Thermostat_ModeC: NamespaceHandler.POLLING_CONFIG_STATE_NS,
-        mn_t.Appliance_Control_Thermostat_Overheat: NamespaceHandler.POLLING_CONFIG_SLOWSENSOR_NS,
-        mn_t.Appliance_Control_Thermostat_Timer: NamespaceHandler.POLLING_CONFIG_STATE_NS,
-        mn_t.Appliance_Control_Thermostat_Schedule: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
-        mn_t.Appliance_Control_Thermostat_ScheduleB: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
-        mn_t.Appliance_Control_Thermostat_Sensor: NamespaceHandler.POLLING_CONFIG_SLOWSENSOR_NS,
+        mn.Appliance_Control_TempUnit: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+        mn_t.Appliance_Control_Thermostat_Calibration: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+        mn_t.Appliance_Control_Thermostat_CtlRange: NamespaceHandler.POLLING_CONFIG_ONCE,
+        mn_t.Appliance_Control_Thermostat_DeadZone: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+        mn_t.Appliance_Control_Thermostat_Frost: NamespaceHandler.POLLING_CONFIG_SLOWSENSOR,
+        mn_t.Appliance_Control_Thermostat_HoldAction: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+        mn_t.Appliance_Control_Thermostat_Overheat: NamespaceHandler.POLLING_CONFIG_SLOWSENSOR,
+        mn_t.Appliance_Control_Thermostat_Schedule: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+        mn_t.Appliance_Control_Thermostat_ScheduleB: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+        mn_t.Appliance_Control_Thermostat_Sensor: NamespaceHandler.POLLING_CONFIG_SLOWSENSOR,
     }
 )

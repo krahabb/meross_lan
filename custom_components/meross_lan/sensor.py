@@ -395,7 +395,7 @@ class ProtocolSensor(EnumSensorEntity):
 
 class SignalStrengthSensor(mle.EntityNamespaceMixin, SensorParser):
 
-    POLLING_CONFIG_DEFAULT = mle.EntityNamespaceMixin.POLLING_CONFIG_SLOWSENSOR_NS
+    POLLING_CONFIG_DEFAULT = mle.EntityNamespaceMixin.POLLING_CONFIG_SLOWSENSOR
 
     init_entity_key = "signal_strength"
     init_key_value = mc.KEY_SIGNAL
@@ -407,7 +407,6 @@ class SignalStrengthSensor(mle.EntityNamespaceMixin, SensorParser):
 
 class FilterMaintenanceSensor(SensorParser):
 
-    NS_CHANNELS = SensorParser.NS_CHANNELS_SINGLE
     init_entity_key = mc.KEY_FILTER
     init_key_value = mc.KEY_LIFE
 

@@ -20,50 +20,40 @@ class NamespaceHandler(_NH):
         type ParserFunc = _NH.ParserFunc
         type PollingStrategyFunc = _NH.PollingStrategyFunc
         type PollingConfigType = _NH.PollingConfigType
-        POLLING_CONFIG_STATE_NS: Final[PollingConfigType]
-        """Common polling configuration for namespaces carrying state information which need to be polled at every cycle."""
-        POLLING_CONFIG_DIGEST_NS: Final[PollingConfigType]
-        """Namespaces which need not to be polled since they're already carried in digest payload (see async_poll_all)"""
-        POLLING_CONFIG_FASTSENSOR_NS: Final[PollingConfigType]
-        POLLING_CONFIG_SLOWSENSOR_NS: Final[PollingConfigType]
-        POLLING_CONFIG_CONFIGURATION_NS: Final[PollingConfigType]
+        POLLING_CONFIG_FASTSENSOR: Final[PollingConfigType]
+        POLLING_CONFIG_SLOWSENSOR: Final[PollingConfigType]
+        POLLING_CONFIG_CONFIGURATION: Final[PollingConfigType]
         """Common polling configuration for namespaces carrying configuration parameters.
         These are polled on a longer period since we don't expect them to change very often."""
-        POLLING_CONFIG_SINGLEPOLL_NS: Final[PollingConfigType]
-        """Common polling configuration for namespaces carrying configuration parameters.
-        These are polled on a longer period since we don't expect them to change very often."""
+        POLLING_CONFIG_ONCE: Final[PollingConfigType]
+        """Common polling configuration for namespaces carrying fixed info."""
+        POLLING_CONFIG_DIAGNOSTIC: Final[PollingConfigType]
+        """Configuration to be used for unknown/unmanaged namespaces."""
         parent: Final[Device]  # type: ignore[override]
         parser_class: type[ParserEntity] | None  # type: ignore[override]
 
-    POLLING_CONFIG_DEFAULT = (300, mlc.PARAM_CLOUD_UPDATE_PERIOD, None)
-    """Default polling configuration. This is intended for unknown/unmanaged namespaces since it should
-    be overriden whenever installing a namespace actually used in meross_lan."""
-    POLLING_CONFIG_STATE_NS = (0, 0, _NH.async_poll_default)
-    POLLING_CONFIG_DIGEST_NS = (0, 0, None)
-    POLLING_CONFIG_FASTSENSOR_NS = (0, 180, _NH.async_poll_smart)
-    POLLING_CONFIG_SLOWSENSOR_NS = (300, 600, _NH.async_poll_smart)
-    POLLING_CONFIG_CONFIGURATION_NS = (
+    POLLING_CONFIG_FASTSENSOR = (0, 180, _NH.async_poll_smart)
+    POLLING_CONFIG_SLOWSENSOR = (300, 600, _NH.async_poll_smart)
+    POLLING_CONFIG_CONFIGURATION = (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
         _NH.async_poll_smart,
     )
-    POLLING_CONFIG_SINGLEPOLL_NS = (0, 0, _NH.async_poll_once)
+    POLLING_CONFIG_ONCE = (0, 0, _NH.async_poll_once)
+    POLLING_CONFIG_DIAGNOSTIC = (300, mlc.PARAM_CLOUD_UPDATE_PERIOD, None)
     _NH.POLLING_CONFIG_MAP.update(
         {
-            mn.Appliance_System_Debug: (0, 0, None),
-            mn.Appliance_Config_Alarm: POLLING_CONFIG_CONFIGURATION_NS,
-            mn.Appliance_Config_Sensor_Association: POLLING_CONFIG_CONFIGURATION_NS,
-            mn.Appliance_Control_Alarm: POLLING_CONFIG_CONFIGURATION_NS,
-            mn.Appliance_Control_Fan: POLLING_CONFIG_DIGEST_NS,
-            mn.Appliance_Control_FilterMaintenance: POLLING_CONFIG_SLOWSENSOR_NS,
-            mn.Appliance_Control_Light_Effect: POLLING_CONFIG_CONFIGURATION_NS,
-            mn.Appliance_Control_Mp3: POLLING_CONFIG_STATE_NS,
-            mn.Appliance_Control_PhysicalLock: POLLING_CONFIG_CONFIGURATION_NS,
-            mn.Appliance_Control_Presence_Config: POLLING_CONFIG_CONFIGURATION_NS,
-            mn.Appliance_Control_Sensor_Latest: POLLING_CONFIG_FASTSENSOR_NS,
-            mn.Appliance_Control_Sensor_LatestX: POLLING_CONFIG_FASTSENSOR_NS,
-            mn.Appliance_Mcu_Firmware: POLLING_CONFIG_SINGLEPOLL_NS,
-            mn.Appliance_Mcu_Hp110_Firmware: POLLING_CONFIG_SINGLEPOLL_NS,
+            mn.Appliance_Config_Alarm: POLLING_CONFIG_CONFIGURATION,
+            mn.Appliance_Config_Sensor_Association: POLLING_CONFIG_CONFIGURATION,
+            mn.Appliance_Control_Alarm: POLLING_CONFIG_CONFIGURATION,
+            mn.Appliance_Control_FilterMaintenance: POLLING_CONFIG_SLOWSENSOR,
+            mn.Appliance_Control_Light_Effect: POLLING_CONFIG_CONFIGURATION,
+            mn.Appliance_Control_PhysicalLock: POLLING_CONFIG_CONFIGURATION,
+            mn.Appliance_Control_Presence_Config: POLLING_CONFIG_CONFIGURATION,
+            mn.Appliance_Control_Sensor_Latest: POLLING_CONFIG_FASTSENSOR,
+            mn.Appliance_Control_Sensor_LatestX: POLLING_CONFIG_FASTSENSOR,
+            mn.Appliance_Mcu_Firmware: POLLING_CONFIG_ONCE,
+            mn.Appliance_Mcu_Hp110_Firmware: POLLING_CONFIG_ONCE,
         }
     )
 

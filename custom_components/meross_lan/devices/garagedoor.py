@@ -16,7 +16,6 @@ if TYPE_CHECKING:
 
     from ..helpers.device import Device, MerossMessage
     from ..helpers.entity import ValueParser
-    from ..merossclient.protocol.types import JsonList
     from ..number import NumberEntity
 
 
@@ -40,7 +39,7 @@ class GarageTimeoutBinarySensor(BinarySensor):
         }
     )
 
-    def __init__(self, garage: "Garagedoor", /):
+    def __init__(self, garage: "GarageDoor", /):
         self.extra_state_attributes = {}
         super().__init__(garage.channel, garage.parent)
 
@@ -182,12 +181,12 @@ class _DurationHelper:
     """
 
     if TYPE_CHECKING:
-        garage_door: Final["Garagedoor"]
+        garage_door: Final["GarageDoor"]
         key: Final[str]
 
     __slots__ = ("garage_door", "key")
 
-    def __init__(self, garage_door: "Garagedoor", key: str):
+    def __init__(self, garage_door: "GarageDoor", key: str):
         self.garage_door = garage_door
         self.key = key
 
@@ -214,7 +213,7 @@ class _DurationHelper:
         return number.native_value
 
 
-class Garagedoor(Cover):
+class GarageDoor(Cover):
 
     if TYPE_CHECKING:
 
@@ -223,8 +222,6 @@ class Garagedoor(Cover):
         binary_sensor_timeout: GarageTimeoutBinarySensor
         number_doorCloseDuration: NumberEntity | _DurationHelper
         number_doorOpenDuration: NumberEntity | _DurationHelper
-
-    init_ns = mn.Appliance_GarageDoor_State
 
     PARAM_TRANSITION_MAXDURATION = 60
     PARAM_TRANSITION_MINDURATION = 10
@@ -438,7 +435,7 @@ class Garagedoor(Cover):
         entities = self.parent.entities
         entity_id_prefix = f"{self.channel}_config_"
         for key, value in payload.items():
-            if key in Garagedoor.CONFIG_KEY_EXCLUDED or (
+            if key in GarageDoor.CONFIG_KEY_EXCLUDED or (
                 self._config.get(key) == value
             ):
                 continue
@@ -521,10 +518,8 @@ class Garagedoor(Cover):
 
     @classmethod
     @override
-    def digest_init(
-        cls, device: "Device", digest: "JsonList", /
-    ) -> "Device.DigestInitReturnType":
-        handler = NamespaceHandler(Garagedoor.init_ns, device)
+    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
+        handler = NamespaceHandler(ns, device)
         descriptor = device.descriptor
         if descriptor.type.startswith(mc.TYPE_MSG200) and (
             descriptor.firmware_version <= (4, 2, 1)
@@ -544,20 +539,15 @@ class Garagedoor(Cover):
 
         # do not register_parser_class since we don't want to create spurious
         # GarageDoor at channel 0 (msg200)
-        for channel_digest in digest:
-            handler.register_parser(Garagedoor(channel_digest[mc.KEY_CHANNEL], device))
-
-        if mn.Appliance_GarageDoor_Config in descriptor.ability:
-            GarageDoorConfigNamespaceHandler(mn.Appliance_GarageDoor_Config, device)
-
-        return handler.parse_list, (handler,)
+        for channel_digest in ns.get_digest(descriptor.digest):
+            handler.register_parser(
+                GarageDoor(channel_digest[mc.KEY_CHANNEL], device, ns=ns)
+            )
 
 
-# TODO: generalize similar namespaces where no channel indexing is in place (much like EntityNamespaceMixin)
-# but we have multiple (likely dynamic) parsers to register (see Appliance.Control.Sensor.Latest/latestX)
 class GarageDoorConfigNamespaceHandler(EntityDefNamespaceHandler):
 
-    POLLING_CONFIG_DEFAULT = EntityDefNamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS
+    POLLING_CONFIG_DEFAULT = EntityDefNamespaceHandler.POLLING_CONFIG_CONFIGURATION
 
     init_entity_defs = {
         mc.KEY_BUZZERENABLE: GarageConfigSwitch.ENTITY_DEF(),
@@ -591,6 +581,6 @@ class GarageDoorConfigNamespaceHandler(EntityDefNamespaceHandler):
 
 NamespaceHandler.POLLING_CONFIG_MAP.update(
     {
-        mn.Appliance_GarageDoor_MultipleConfig: NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS,
+        mn.Appliance_GarageDoor_MultipleConfig: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
     }
 )

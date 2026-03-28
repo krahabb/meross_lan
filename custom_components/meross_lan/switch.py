@@ -11,7 +11,6 @@ if TYPE_CHECKING:
     from typing import ClassVar, NotRequired, Unpack
 
     from .helpers.device import Device
-    from .merossclient.protocol.types import JsonDict, JsonList
 
 
 class SwitchEntity(mle.BinaryEntity, switch.SwitchEntity):
@@ -65,29 +64,18 @@ class SwitchParser(mle.BinaryParser, SwitchEntity):
 
 class PhysicalLockSwitch(SwitchParser):
 
-    NS_CHANNELS = SwitchParser.NS_CHANNELS_SINGLE
     init_entity_key = mc.KEY_LOCK
 
 
 class Toggle(mle.EntityNamespaceMixin, SwitchParser):
 
-    POLLING_CONFIG_DEFAULT = mle.EntityNamespaceMixin.POLLING_CONFIG_STATE_NS
     init_entity_key = "0"  # used to keep unique_id compatibility with legacy versions
     # HA core entity attributes:
     _attr_device_class = SwitchEntity.DeviceClass.OUTLET
     _attr_entity_category = None
 
-    @classmethod
-    @override
-    def digest_init(
-        cls, device: "Device", digest: "JsonDict", /
-    ) -> "Device.DigestInitReturnType":
-        """{"onoff": 0, "lmTime": 1645391086}"""
-        handler = Toggle.namespace_init(mn.Appliance_Control_Toggle, device)
-        return handler._parse, (handler.handler_ns,)
 
-
-class Togglex(SwitchParser):
+class ToggleX(SwitchParser):
 
     # HA core entity attributes:
     _attr_device_class = SwitchEntity.DeviceClass.OUTLET
@@ -95,25 +83,17 @@ class Togglex(SwitchParser):
 
     @classmethod
     @override
-    def digest_init(
-        cls, device: "Device", togglex_digest: "JsonList", /
-    ) -> "Device.DigestInitReturnType":
-        # We don't initialize every switch/ToggleX here since the digest reported channels
+    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
+        # We don't initialize every channel here since the digest reported channels
         # might be mapped to more specialized entities:
-        # this is true for lights, garageDoor and fan though
-        # and maybe some more others.
-        # In general, it is not very clear how and when these ToggleX entities are really needed
-        # so we have some euristics in place to fix 'this and that'.
-        # The general rule is to let the togglex namespace/channel be managed by the
-        # aforementioned specialized entity, while, if no channel match exists, create a disabled
-        # (by default) switch entity. When  switches are really switches (like mssXXX series) instead,
-        # we'll setup proper ToggleXSwitch (this is detected by the fact no specialized entity exists in
-        # device definition)
-
-        channels = {togglex[mc.KEY_CHANNEL] for togglex in togglex_digest}
-
+        # this is true for lights, garageDoor and fan though.
+        # When this happens we link the ToggleX ns to that more specialized parser entity
+        # and we shouldnt build a ToggleX.
+        # BEWARE: this ns registration must be done before those others in order to properly
+        # link the channels and/or setup the correct entities.
         digest = device.descriptor.digest
-
+        ns_digest: list = ns.get_digest(digest)
+        channels = {togglex[mc.KEY_CHANNEL] for togglex in ns_digest}
         for _key in (mc.KEY_FAN, mc.KEY_GARAGEDOOR, mc.KEY_LIGHT):
             if _key in digest:
                 for _key_digest in extract_dict_payloads(digest[_key]):
@@ -121,7 +101,6 @@ class Togglex(SwitchParser):
                         channels.remove(_key_digest[mc.KEY_CHANNEL])
                     except KeyError:
                         pass
-
         # the fan controller 'map100' doesn't expose a fan in digest but it has one at channel 0
         if (mn.Appliance_Control_Fan in device.descriptor.ability) and (
             mc.KEY_FAN not in digest
@@ -131,14 +110,11 @@ class Togglex(SwitchParser):
             except KeyError:
                 pass
 
-        # don't explicitly create the handler since it might have been created by other digest entities
-        handler = device.get_handler(mn.Appliance_Control_ToggleX)
-        handler.register_parser_class(Togglex, channels)
+        handler = device._create_handler(ns, parser_class=ToggleX, channels=channels)
         if device.descriptor.is_refoss:
             handler.polling_request = mn.PayloadType.DICT_IDX_65535.build_get(
                 handler.id
             )
-        return handler.parse_list, (handler,)
 
 
 async_setup_entry = SwitchEntity.platform_setup_entry

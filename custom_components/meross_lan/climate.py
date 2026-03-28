@@ -585,8 +585,8 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             # we'll speed up polling for the adjust/calibration ns
             try:
                 handler = self.number_adjust_temperature.handler_ns
-                if handler.polling_epoch_next > (handler.parent.last_rx_epoch + 30):
-                    handler.polling_epoch_next = 0.0
+                if handler.next_poll_epoch > (handler.parent.last_rx_epoch + 30):
+                    handler.next_poll_epoch = 0.0
             except:
                 # in case the ns is not available for this device
                 pass

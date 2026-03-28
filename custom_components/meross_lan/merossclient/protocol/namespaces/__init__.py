@@ -15,6 +15,7 @@ if TYPE_CHECKING:
         Any,
         Callable,
         Final,
+        Literal,
         Mapping,
         NotRequired,
         Protocol,
@@ -23,11 +24,17 @@ if TYPE_CHECKING:
     )
 
     from ..types import (
+        JsonDict,
+        JsonList,
+        JsonMapping,
         MerossPayloadType,
         MerossRequestType,
     )
 
     type NamespacesMapType = Mapping[str, "Namespace"]
+    EMPTY_DICT: Final[JsonDict]
+    EMPTY_LIST: Final[list[JsonDict]]
+
     NAMESPACES: Final[NamespacesMapType]
     HUB_NAMESPACES: Final[NamespacesMapType]
 
@@ -74,7 +81,6 @@ def _heuristic_args(name: str, kwargs: "Namespace.Args") -> "Namespace.Args":
                 kwargs["key_idx"] = mc.KEY_CHANNEL
             kwargs["payload_get"] = PayloadType.LIST_IDX_STRICT
         case (_, "Control", "Thermostat", *_):
-            kwargs["is_thermostat"] = True
             kwargs["key_idx"] = mc.KEY_CHANNEL
             kwargs["payload_get"] = PayloadType.LIST_IDX_STRICT
         case _:
@@ -182,8 +188,8 @@ class _immutablelist(_immutable, list[_immutabledict]):
         return [value.clone() for value in self]
 
 
-EMPTY_DICT: "Final" = _immutabledict()
-EMPTY_LIST: "Final" = _immutablelist()
+EMPTY_DICT = _immutabledict()
+EMPTY_LIST = _immutablelist()  # type: ignore
 
 
 class _PayloadType:
@@ -312,52 +318,52 @@ class Namespace(str):
 
     if TYPE_CHECKING:
 
+        key: Final[str]
+        """The root key of the payload"""
+        payload_item_size: Final[int]
+        """The average size of an item in the payload list/dict. This might be used to estimate the size of the response."""
+        # These indicate support and format for the corresponding verb. None means not supported.
+        payload_get: Final[PayloadType]
+        """If not None Namespace supports GET verb with this payload type."""
+        payload_set: Final[PayloadType]
+        """If not None Namespace supports SET verb with this payload type."""
+        payload_del: Final[PayloadType]
+        """If not None Namespace supports DELETE verb with this payload type."""
+        payload_psh: Final[PayloadType]
+        """If not None Namespace supports PUSH verb with this payload type."""
+        key_idx: Final[str]
+        """The key used to index items in list payloads. If None/empty no indexing is used."""
+        indexed: Final[bool]
+        """Indicates if the namespace uses indexed payloads for any verb. This is typically true for 'index based' namespaces."""
+        key_digest: Final[str | None]
+        """Indicates the root key in Appliance.System.All payload 'digest' if any."""
+        grammar: Final[Grammar]
+        """The grammar stability level for this namespace."""
+
         class Args(TypedDict):
             """Args are often mututally exclusive and allow for a cascading of heuristics.
             We'll use a set of simple dicts working as small chunks and allowing to build
             concise yet complex definitions (See GET, NO_GET, etc definitions)."""
 
-            map: NotRequired[NamespacesMapType]
-            grammar: NotRequired[Grammar]
-            key_idx: NotRequired[str]
             payload_get: NotRequired[PayloadType | None]
             payload_set: NotRequired[PayloadType | None]
             payload_del: NotRequired[PayloadType | None]
             payload_psh: NotRequired[PayloadType | None]
-            is_thermostat: NotRequired[bool]
-
-        key: Final[str]  # type: ignore
-        """The root key of the payload"""
-        key_idx: Final[str]  # type: ignore
-        """The key used to index items in list payloads. If None/empty no indexing is used."""
-        # These indicate support and format for the corresponding verb. None means no support.
-        payload_get: Final[PayloadType]  # type: ignore
-        """If not None Namespace supports GET verb with this payload type."""
-        payload_set: Final[PayloadType]  # type: ignore
-        """If not None Namespace supports SET verb with this payload type."""
-        payload_del: Final[PayloadType]  # type: ignore
-        """If not None Namespace supports DELETE verb with this payload type."""
-        payload_psh: Final[PayloadType]  # type: ignore
-        """If not None Namespace supports PUSH verb with this payload type."""
-        payload_item_size: Final[int]  # type: ignore
-        """The average size of an item in the payload list/dict. This might be used to estimate the size of the response."""
-        indexed: Final[bool]
-        """Indicates if the namespace uses indexed payloads for any verb. This is typically true for 'index based' namespaces."""
-
-        is_thermostat: Final[bool]  # type: ignore
-        grammar: Final[Grammar]  # type: ignore
-        """The grammar stability level for this namespace."""
+            key_idx: NotRequired[str]
+            key_digest: NotRequired[str | None]  # True allowed (triggers euristics)
+            grammar: NotRequired[Grammar]
+            map: NotRequired[NamespacesMapType]
 
     __slots__ = (
         "key",
-        "key_idx",
+        "payload_item_size",
         "payload_get",
         "payload_set",
         "payload_del",
         "payload_psh",
-        "payload_item_size",
+        "key_idx",
         "indexed",
-        "is_thermostat",
+        "key_digest",
         "grammar",
         "__dict__",
     )
@@ -425,24 +431,24 @@ class Namespace(str):
         # by composing small 'chunks' like ARGS_GET, ARGS_NO_GET, etc.
         # This also allows us to centralize here the defaults for parameters
         kwargs: "Namespace.Args" = {
-            "map": NAMESPACES,
-            "grammar": Grammar.STABLE,
             "key_idx": mc.KEY_,
-            "is_thermostat": False,
+            "key_digest": None,
+            "grammar": Grammar.STABLE,
+            "map": NAMESPACES,
         }
         for _extra in args:
             kwargs.update(_extra)
 
         self.key = key  # type: ignore
-        self.grammar = kwargs["grammar"]  # type: ignore
-
-        self.key_idx = kwargs["key_idx"]
-        self.is_thermostat = kwargs["is_thermostat"]
+        self.payload_item_size = payload_item_size
         self.payload_get = kwargs.get("payload_get") or PayloadType.UNSUPPORTED
         self.payload_set = kwargs.get("payload_set") or PayloadType.UNSUPPORTED
         self.payload_del = kwargs.get("payload_del") or PayloadType.UNSUPPORTED
         self.payload_psh = kwargs.get("payload_psh") or PayloadType.UNSUPPORTED
-        self.payload_item_size = payload_item_size
+        assert (
+            self.payload_psh in PUSH_PAYLOADS
+        ), f"Namespace {self} has invalid payload_psh {self.payload_psh}"
+        self.key_idx = kwargs["key_idx"]
         if self.payload_get.indexed or self.payload_set.indexed:
             if not self.key_idx:
                 raise ValueError(
@@ -451,10 +457,27 @@ class Namespace(str):
             self.indexed = True
         else:
             self.indexed = False
+        self.key_digest = kwargs["key_digest"]
+        if self.key_digest is True:
+            # We have a digest but we don't know the root key. We'll try to guess it with some euristics.
+            # This is typically true for 'Control' namespaces where the digest structure is not consistent.
+            # A little heuristic
+            ns_split = name.split(".")
 
-        assert (
-            self.payload_psh in PUSH_PAYLOADS
-        ), f"Namespace {self} has invalid payload_psh {self.payload_psh}"
+            if len(ns_split) == 4:
+                self.key_digest = ns_split[2].lower()
+                self.get_digest = self._get_digest_2
+            else:
+                assert len(ns_split) == 3
+                # Appliance.GarageDoor.State is a weird case where the digest key is 'garageDoor'
+                self.key_digest = (
+                    self.key
+                    if ns_split[1] in ("Control", "Digest")
+                    else _slug_split(ns_split[1])
+                )
+                self.get_digest = self._get_digest_1
+
+        self.grammar = kwargs["grammar"]
 
         kwargs["map"][name] = self  # type: ignore
 
@@ -535,6 +558,18 @@ class Namespace(str):
         payload[self.key_idx] = idx
         return (self, mc.METHOD_SET, {self.key: [payload]})
 
+    def get_digest(self, digest: "JsonDict") -> "JsonDict | JsonList":
+        """Retrieves the namespace payload/state from the device digest."""
+        raise NotImplementedError("Namespace has no digest key defined.")
+
+    def _get_digest_1(self, digest):
+        """Helper to get the namespace digest from the device digest."""
+        return digest[self.key_digest]
+
+    def _get_digest_2(self, digest):
+        """Specialized get_digest for namespaces with 2 levels of digest."""
+        return digest[self.key_digest][self.key]
+
 
 ns = Namespace  # shortcut for declarations
 
@@ -567,6 +602,7 @@ D_LI: "ns.Args" = {"payload_del": PayloadType.LIST_IDX}
 PSH: "ns.Args" = {"payload_psh": PayloadType.PUSH}
 PSQ: "ns.Args" = {"payload_psh": PayloadType.PUSH_QUERY}
 
+DIG: "ns.Args" = {"key_digest": True}  # type: ignore[sentinel]
 
 # We predefine grammar for some widely used and well known namespaces either to skip 'euristics'
 # and time consuming evaluation.
@@ -632,13 +668,13 @@ Appliance_Control_ConsumptionX = ns(
     "Appliance.Control.ConsumptionX", mc.KEY_CONSUMPTIONX, 53, G_E, PSH
 )
 Appliance_Control_Diffuser_Light = ns(
-    "Appliance.Control.Diffuser.Light", mc.KEY_LIGHT, 110, G_E, S_LI, PSQ, IDX_C
+    "Appliance.Control.Diffuser.Light", mc.KEY_LIGHT, 110, G_E, S_LI, PSQ, IDX_C, DIG
 )
 Appliance_Control_Diffuser_Sensor = ns(
     "Appliance.Control.Diffuser.Sensor", mc.KEY_, 100, G_E, PSH
 )  # this ns has no ns_key in payload response
 Appliance_Control_Diffuser_Spray = ns(
-    "Appliance.Control.Diffuser.Spray", mc.KEY_SPRAY, 55, G_E, S_LI, PSH, IDX_C
+    "Appliance.Control.Diffuser.Spray", mc.KEY_SPRAY, 55, G_E, S_LI, PSH, IDX_C, DIG
 )
 Appliance_Control_Electricity = ns(
     "Appliance.Control.Electricity", mc.KEY_ELECTRICITY, 130, G_E, PSH
@@ -651,7 +687,9 @@ Appliance_Control_ElectricityX = ns(
     PSH,
     IDX_C | EXP,
 )
-Appliance_Control_Fan = ns("Appliance.Control.Fan", mc.KEY_FAN, 20, G_LIS, S_LI, IDX_C)
+Appliance_Control_Fan = ns(
+    "Appliance.Control.Fan", mc.KEY_FAN, 20, G_LIS, S_LI, IDX_C, DIG
+)
 Appliance_Control_Fan_BtnConfig = ns(
     "Appliance.Control.Fan.BtnConfig", mc.KEY_CONFIG, -1, G_LIS, S_LI, PSQ, IDX_C
 )
@@ -662,7 +700,7 @@ Appliance_Control_FilterMaintenance = ns(
     "Appliance.Control.FilterMaintenance", mc.KEY_FILTER, 35, G_LIS, S_LI, PSQ, IDX_C
 )
 Appliance_Control_Light = ns(
-    "Appliance.Control.Light", mc.KEY_LIGHT, -1, G_E, S_DI, IDX_C
+    "Appliance.Control.Light", mc.KEY_LIGHT, -1, G_E, S_DI, IDX_C, DIG
 )
 Appliance_Control_Light_Effect = ns(
     "Appliance.Control.Light.Effect", mc.KEY_EFFECT, 1550, G_E, S_LI, D_LI, IDX_ID
@@ -710,29 +748,37 @@ Appliance_Control_Sensor_LatestX = ns(
     "Appliance.Control.Sensor.LatestX", mc.KEY_LATEST, 220, G_LIDS, PSH, IDX_C
 )
 Appliance_Control_Spray = ns(
-    "Appliance.Control.Spray", mc.KEY_SPRAY, -1, G_D, S_DI, PSH, IDX_C
+    "Appliance.Control.Spray", mc.KEY_SPRAY, -1, G_D, S_DI, PSH, IDX_C, DIG
 )
 Appliance_Control_TempUnit = ns(
     "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, 30, G_LIS, S_LI, IDX_C
 )
 Appliance_Control_Timer = ns(
-    "Appliance.Control.Timer", mc.KEY_TIMER, -1, G_E, S_DI, D_DI, IDX_ID
-)
+    "Appliance.Control.Timer", mc.KEY_TIMER, -1, G_E, S_DI, D_DI, IDX_ID, DIG
+)  # digest key likely referring to 'control' key (like Appliance.Control.Toggle)
 Appliance_Control_TimerX = ns(
-    "Appliance.Control.TimerX", mc.KEY_TIMERX, -1, G_DI, S_DI, D_DI, IDX_ID
-)
+    "Appliance.Control.TimerX", mc.KEY_TIMERX, -1, G_DI, S_DI, D_DI, IDX_ID, DIG
+)  # ns indexed by both 'channel' and 'id'
 Appliance_Control_Toggle = ns(
-    "Appliance.Control.Toggle", mc.KEY_TOGGLE, 40, G_D, S_D, PSH
-)
+    "Appliance.Control.Toggle", mc.KEY_TOGGLE, 40, G_D, S_D, PSH, DIG
+)  # digest key points to 'control' key in Appliance.System.All payload
 Appliance_Control_ToggleX = ns(
-    "Appliance.Control.ToggleX", mc.KEY_TOGGLEX, 55, G_DI, S_DI, PSH, IDX_C
+    "Appliance.Control.ToggleX", mc.KEY_TOGGLEX, 55, G_DI, S_DI, PSH, IDX_C, DIG
 )
 Appliance_Control_Trigger = ns(
-    "Appliance.Control.Trigger", mc.KEY_TRIGGER, -1, G_E, S_DI, D_DI, PSH, IDX_ID
-)
+    "Appliance.Control.Trigger", mc.KEY_TRIGGER, -1, G_E, S_DI, D_DI, PSH, IDX_ID, DIG
+)  # digest key likely referring to 'control' key (like Appliance.Control.Toggle)
 Appliance_Control_TriggerX = ns(
-    "Appliance.Control.TriggerX", mc.KEY_TRIGGERX, -1, G_DI, S_DI, D_DI, PSH, IDX_ID
-)
+    "Appliance.Control.TriggerX",
+    mc.KEY_TRIGGERX,
+    -1,
+    G_DI,
+    S_DI,
+    D_DI,
+    PSH,
+    IDX_ID,
+    DIG,
+)  # ns indexed by both 'channel' and 'id'
 Appliance_Control_Unbind = ns("Appliance.Control.Unbind", mc.KEY_, -1, PSQ)
 Appliance_Control_Upgrade = ns(
     "Appliance.Control.Upgrade", "upgrade", -1, S_D
@@ -752,9 +798,8 @@ Appliance_GarageDoor_MultipleConfig = ns(
     "Appliance.GarageDoor.MultipleConfig", mc.KEY_CONFIG, 140, G_LIS, S_LI, IDX_C
 )
 Appliance_GarageDoor_State = ns(
-    "Appliance.GarageDoor.State", mc.KEY_STATE, -1, G_DIS, S_DI, IDX_C, EXP
+    "Appliance.GarageDoor.State", mc.KEY_STATE, -1, G_DIS, S_DI, IDX_C, DIG, EXP
 )
-
 
 Appliance_Mcu_Firmware = ns("Appliance.Mcu.Firmware", mc.KEY_FIRMWARE, 80, G_E)
 Appliance_Mcu_Upgrade = ns("Appliance.Mcu.Upgrade", mc.KEY_UPGRADE, -1, S_D)

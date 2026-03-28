@@ -672,5 +672,10 @@ class EntityNamespaceMixin(NamespaceHandler, ParserEntity):
         self.polling_strategy = None
         await super().async_will_remove_from_hass()
 
+    @override
     def _handle(self, message: "MerossMessage", /):
         self._parse(message.payload[self.id.key])
+
+    @override
+    def parse_digest(self, digest: "JsonDict", /):
+        self._parse(digest)

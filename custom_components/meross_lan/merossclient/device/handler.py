@@ -1,7 +1,7 @@
 from bisect import insort_right
 from typing import TYPE_CHECKING, override
 
-from .. import logging, merge_dicts
+from .. import extract_dict_payloads, logging, merge_dicts
 from ..protocol import const as mc, namespaces as mn
 from ..protocol.message import MerossMessage
 from .parser import NamespaceParser
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from . import Device
     from ..protocol.types import (
         JsonDict,
+        JsonList,
         JsonMapping,
         MerossPayloadType,
         MerossRequestType,
@@ -64,6 +65,7 @@ class NamespaceHandler(logging.Loggable):
         handler: HandlerFunc
         parsers: Final[dict[Any, ParserFunc]]
         parser_class: type[NamespaceParser] | None
+        digest: JsonDict | JsonList | None
 
         polling_strategy: PollingStrategyFunc | None
         polling_request: MerossRequestType
@@ -76,19 +78,16 @@ class NamespaceHandler(logging.Loggable):
             handler: NotRequired["NamespaceHandler.HandlerFunc"]
             config: NotRequired["NamespaceHandler.PollingConfigType"]
             parser_class: NotRequired[type[NamespaceParser]]
-            channels: NotRequired[Iterable[int] | None]
-
-    HEADER_AVG_SIZE = 300
-    POLLING_CONFIG_DEFAULT = (0, 0, None)
-    POLLING_CONFIG_MAP = {}
+            channels: NotRequired[Iterable[int]]
 
     __SLOTS__ = (
         "handler",
         "parsers",
         "parser_class",
+        "digest",
         "last_rx_epoch",
         "last_poll_epoch",
-        "polling_epoch_next",
+        "next_poll_epoch",
         "polling_strategy",
         "polling_period",
         "polling_period_cloud",
@@ -107,13 +106,36 @@ class NamespaceHandler(logging.Loggable):
     ):
         assert id not in parent.ns_handlers, ("Namespace already registered", id)
         self.parsers = {}
+
+        try:
+            self.polling_period, self.polling_period_cloud, self.polling_strategy = (
+                kwargs.pop("config")
+            )
+        except KeyError:
+            self.polling_period, self.polling_period_cloud, self.polling_strategy = (
+                self.POLLING_CONFIG_MAP.get(id, self.POLLING_CONFIG_DEFAULT)
+            )
+
+        if id.key_digest:
+            try:
+                # probe existence of digest for this namespace to speed up later checks when parsing messages
+                self.digest = id.get_digest(
+                    parent.descriptor.digest or parent.descriptor.control
+                )
+            except (KeyError, NotImplementedError) as e:
+                self.digest = None
+        else:
+            self.digest = None
+
         try:
             self.parser_class = parser_class = kwargs.pop("parser_class")
         except KeyError:
             self.parser_class = None
             # by default we calculate 1 item/channel per payload but we should
             # refine this whenever needed
-            self.polling_response_size = self.HEADER_AVG_SIZE + id.payload_item_size
+            self.polling_response_size = (
+                NamespaceHandler.HEADER_AVG_SIZE + id.payload_item_size
+            )
             try:
                 self.handler = kwargs.pop("handler")
             except KeyError:
@@ -127,7 +149,7 @@ class NamespaceHandler(logging.Loggable):
             # optimized register_parser_class and register_parser
             self.id = id  # preset self.id for parser._namespace_registered
             self.handler = self._handle_list
-            for channel in kwargs.pop("channels", None) or parent.descriptor.channels:
+            for channel in kwargs.pop("channels", parent.descriptor.channels):
                 parser = parser_class(channel, parent, ns=id)
                 self.parsers[channel] = getattr(
                     parser, f"_parse_{id.slug_end}", parser._parse
@@ -135,20 +157,11 @@ class NamespaceHandler(logging.Loggable):
                 parser._namespace_registered(self)
                 # polling_request_channels will be eventually setup
                 # by polling_request_configure later on
-
             self.polling_response_size = (
-                self.HEADER_AVG_SIZE + len(self.parsers) * id.payload_item_size
+                NamespaceHandler.HEADER_AVG_SIZE
+                + len(self.parsers) * id.payload_item_size
             )
-
-        self.last_rx_epoch = self.last_poll_epoch = self.polling_epoch_next = 0.0
-        try:
-            self.polling_period, self.polling_period_cloud, self.polling_strategy = (
-                kwargs.pop("config")
-            )
-        except KeyError:
-            self.polling_period, self.polling_period_cloud, self.polling_strategy = (
-                self.POLLING_CONFIG_MAP.get(id, self.POLLING_CONFIG_DEFAULT)
-            )
+        self.last_rx_epoch = self.last_poll_epoch = self.next_poll_epoch = 0.0
         self.last_rx_push = None
 
         super().__init__(id, parent, **kwargs)
@@ -166,16 +179,6 @@ class NamespaceHandler(logging.Loggable):
         del self.parent.ns_handlers[self.id]
         del self.handler  # especially this one
         assert not self.parsers, "parsers should have been cleared before shutdown"
-
-    def register_parser_class(
-        self, parser_class: type[NamespaceParser], channels: "Iterable[int] | None", /
-    ):
-        self.parser_class = parser_class
-        self.handler = self._handle_list
-        for channel in (
-            self.parent.descriptor.channels if channels is None else channels
-        ):
-            self.register_parser(parser_class(channel, self.parent, ns=self.id))
 
     def register_parser(
         self,
@@ -241,13 +244,14 @@ class NamespaceHandler(logging.Loggable):
 
     def handle_response(self, response: MerossMessage, /):
         """Entry point for handling a received message for this namespace.
-        This is invoked by Device._handle after routing the message to
-        the proper NamespaceHandler based off the namespace in the header.
+        This is invoked by Device whenever a message for this ns is received.
+        This method acts as a wrapper for the actual handler to catch and
+        log any exception that might occur and to do some house-keeping.
         """
         # TODO: save all of the last sent/received payloads for a ns_handler
         # for diagnostics (GET/ACK/SET/PUSH/DEL)
         self.last_rx_epoch = self.parent.last_rx_epoch
-        self.polling_epoch_next = self.last_rx_epoch + self.polling_period
+        self.next_poll_epoch = self.last_rx_epoch + self.polling_period
         try:
             self.handler(response)
         except Exception as exception:
@@ -358,22 +362,15 @@ class NamespaceHandler(logging.Loggable):
             self.DEBUG, "Handler undefined (message:%s)", _message=msg, timeout=14400
         )
 
-    def parse_list(self, digest: list, /):
-        """twin method for _handle_list (same job - different context).
-        Used when parsing digest(s) in NS_ALL"""
-        key_idx = self.id.key_idx
-        for p_channel in digest:
+    def parse_digest(self, digest: "JsonDict | JsonList", /):
+        """Used when parsing digest(s) in Appliance.System.All."""
+        for p_channel in extract_dict_payloads(digest):
             try:
-                self.parsers[p_channel[key_idx]](p_channel)
+                self.parsers[p_channel[self.id.key_idx]](p_channel)
             except KeyError as ke:
                 self._handle_missing_parser(p_channel, ke)
             except Exception as e:
                 self.log_parser_exception(e, p_channel)
-
-    def parse_dict(self, digest: dict, /):
-        """twin method for _handle_dict (same job - different context).
-        Used when parsing digest(s) in NS_ALL"""
-        self.parsers[digest[self.id.key_idx]](digest)
 
     def _parse_stub(self, payload, /):
         self.log(
@@ -407,14 +404,13 @@ class NamespaceHandler(logging.Loggable):
         handler bypassing the Device message routing.
         if channel is None the whole namespace is requested.
         """
-        if channels:
-            ns = self.id
-            response = await self.parent.async_request(
-                *ns.payload_get.build_get(ns, *channels)
+        response = await self.parent.async_request(
+            *(
+                self.id.payload_get.build_get(self.id, *channels)
+                if channels
+                else self.polling_request
             )
-        else:
-            response = await self.parent.async_request(*self.polling_request)
-
+        )
         self.handle_response(response)
         return response
 
@@ -563,20 +559,21 @@ class NamespaceHandler(logging.Loggable):
                 )
                 polling_request_channels.append(channel_payload)
             self.polling_response_size = (
-                self.HEADER_AVG_SIZE
+                NamespaceHandler.HEADER_AVG_SIZE
                 + len(polling_request_channels) * self.id.payload_item_size
             )
             return channel_payload
         except AttributeError:
             # polling_request_channels not used for this ns
             self.polling_response_size = (
-                self.HEADER_AVG_SIZE + len(self.parsers) * self.id.payload_item_size
+                NamespaceHandler.HEADER_AVG_SIZE
+                + len(self.parsers) * self.id.payload_item_size
             )
             return mn.EMPTY_DICT
 
     def polling_response_size_adj(self, item_count: int, /):
         self.polling_response_size = (
-            self.HEADER_AVG_SIZE + item_count * self.id.payload_item_size
+            NamespaceHandler.HEADER_AVG_SIZE + item_count * self.id.payload_item_size
         )
 
     def channels_to_poll(self):
@@ -591,12 +588,15 @@ class NamespaceHandler(logging.Loggable):
         This is a basic 'default' policy:
         - avoid the request when MQTT available (this is for general 'state' namespaces like NS_ALL) and
         we expect this namespace to be updated by PUSH(es)
-        - unless the 'polling_epoch_next' is 0 which means we're re-onlining the device and so
+        - unless the 'next_poll_epoch' is 0 which means we're re-onlining the device and so
         we like to re-query the full state (even on MQTT)
         """
         device = self.parent
-        if not (device.mqtt_active and self.polling_epoch_next):
-            await device.async_poll_request(self)
+        if (device.mqtt_active and self.next_poll_epoch) or (
+            device.polling_epoch < self.next_poll_epoch
+        ):
+            return
+        await device.async_poll_request_rl(self)
 
     async def async_poll_smart(self):
         """
@@ -615,14 +615,14 @@ class NamespaceHandler(logging.Loggable):
         PUSHed namespaces is not perfect yet and we're skipping needed polls (#607 #609).
         if (
             device._mqtt_active
-            and self.polling_epoch_next
+            and self.next_poll_epoch
             and (self.id.payload_psh or self.last_rx_push)
         ):
             # on MQTT no need for updates since they're being PUSHed
             return
         """
-        if device.polling_epoch >= self.polling_epoch_next:
-            if await device.async_poll_request_smart(self):
+        if device.polling_epoch >= self.next_poll_epoch:
+            if await device.async_poll_request_rl(self):
                 return
 
         # Insert into the lazypoll_requests ordering by least recently polled
@@ -637,8 +637,8 @@ class NamespaceHandler(logging.Loggable):
         need to be requested once (after onlining that is). When polling use
         same queueing policy as async_poll_smart to don't overwhelm the cloud mqtt
         """
-        if not self.polling_epoch_next:
-            await self.parent.async_poll_request_smart(self)
+        if not self.next_poll_epoch:
+            await self.parent.async_poll_request_rl(self)
 
     async def async_poll_chunked(self):
         """
@@ -651,18 +651,21 @@ class NamespaceHandler(logging.Loggable):
         response buffer in one go and avoid all of this mess.
         """
         device = self.parent
-        if device.mqtt_active and (device.polling_epoch < self.polling_epoch_next):
-            # this check is the same as async_poll_default where we expect this ns to be
-            # PUSHed when on MQTT
+        if (device.mqtt_active and self.next_poll_epoch) or (
+            device.polling_epoch < self.next_poll_epoch
+        ):
             return
 
         payload_item_size = self.id.payload_item_size
-        size_available = device.polling_response_size_available - self.HEADER_AVG_SIZE
+        size_available = (
+            device.polling_response_size_available - NamespaceHandler.HEADER_AVG_SIZE
+        )
         if size_available < payload_item_size:
             if device._multiple_requests:
                 await device.async_poll_flush()
                 size_available = (
-                    device.polling_response_size_available - self.HEADER_AVG_SIZE
+                    device.polling_response_size_available
+                    - NamespaceHandler.HEADER_AVG_SIZE
                 )
             else:
                 self.log(
@@ -684,7 +687,7 @@ class NamespaceHandler(logging.Loggable):
         channels = iter(self.channels_to_poll())
         channels_payload = self.polling_request_channels
         channels_payload.clear()
-        self.polling_response_size = self.HEADER_AVG_SIZE
+        self.polling_response_size = NamespaceHandler.HEADER_AVG_SIZE
         while True:
             if size_available > payload_item_size:
                 try:
@@ -707,9 +710,10 @@ class NamespaceHandler(logging.Loggable):
 
             # reset for next chunk
             channels_payload.clear()
-            self.polling_response_size = self.HEADER_AVG_SIZE
+            self.polling_response_size = NamespaceHandler.HEADER_AVG_SIZE
             size_available = (
-                device.polling_response_size_available - self.HEADER_AVG_SIZE
+                device.polling_response_size_available
+                - NamespaceHandler.HEADER_AVG_SIZE
             )
             if size_available < payload_item_size:
                 # This is pathological since we've just flushed everything
@@ -730,12 +734,12 @@ class NamespaceHandler(logging.Loggable):
         The strategy itself is the same as async_poll_smart.
         """
         device = self.parent
-        if device.mqtt_active and self.polling_epoch_next and self.id.has_psh:
+        if device.mqtt_active and self.next_poll_epoch and self.id.has_psh:
             # on MQTT no need for updates since they're being PUSHed
             return
 
-        if device.polling_epoch >= self.polling_epoch_next:
-            await device.async_poll_request_smart(self)
+        if device.polling_epoch >= self.next_poll_epoch:
+            await device.async_poll_request_rl(self)
 
     async def async_trace(self, async_request_func: "Device.AsyncRequestFunc", /):
         """
@@ -936,6 +940,10 @@ class NamespaceHandler(logging.Loggable):
                                 ]
                             },
                         )
+
+    HEADER_AVG_SIZE = 300
+    POLLING_CONFIG_DEFAULT = (0, 0, async_poll_default)
+    POLLING_CONFIG_MAP = {}
 
 
 class VoidNamespaceHandler(NamespaceHandler):

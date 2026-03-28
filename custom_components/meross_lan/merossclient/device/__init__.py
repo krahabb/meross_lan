@@ -4,12 +4,13 @@ from datetime import UTC, tzinfo
 from functools import cached_property
 from typing import TYPE_CHECKING, override
 
+from custom_components.meross_lan.helpers import device
+
 from .. import (
     DeviceDescriptor,
     async_import_module,
     datetime_from_epoch,
     is_device_online,
-    simple_slug,
     versiontuple,
 )
 from ..client import AbstractClient
@@ -106,7 +107,7 @@ class PhysicalDevice(AbstractClient):
 
     @cached_property
     @abstractmethod
-    def ns_handlers(self, /) -> "Mapping[str, NamespaceHandler]": ...
+    def ns_handlers(self, /) -> "Mapping[mn.Namespace, NamespaceHandler]": ...
 
     @abstractmethod
     def _create_handler(
@@ -153,34 +154,16 @@ class Device(PhysicalDevice):
         when needed to extend with other namespaces (this is actually true for Hub). This
         way, when we're working only with standard devices we don't need to import the namespaces
         only relevant to hubs."""
-        DIGEST_INIT_PACKAGE: ClassVar[str]
-        """package/module path where to look for digest initialization functions."""
-        DIGEST_INIT: ClassVar[dict[str, Any]]
-        """ Static dict of 'digest initialization function(s)'.
-        This is built on demand during Device init whenever a new digest key
-        is encountered. This static dict in turn is used to setup the Device instance
-        'digest_handlers' dict which contains a lookup to the digest parsing function when
-        an Appliance.System.All message is received/parsed.
-        The 'digest initialization function' will (at device init time) parse the digest to
-        setup the dedicated entities for the particular digest key.
-        The definition of this init function is looked up at runtime by an algorithm that:
-        - looks-up if the digest key is in DIGEST_INITIALIZERS where it'll find either the
-        function or the (str) module coordinates of the init function for the digest key.
-        - if not configured, the algorithm will try load the module in meross_lan/devices
-        with the same name as the digest key.
-        - if any is not found we'll set a 'digest_init_empty' function in order to not
-        repeat the lookup process. That function will just pass so that the key
-        init/parsing will just default to do nothing and not harm."""
         NAMESPACE_INIT_PACKAGE: ClassVar[str]
-        """package/module path where to look for namespace initialization functions."""
-        NAMESPACE_INIT: ClassVar[dict[mn.Namespace, Any]]
-        """ Static dict of namespace initialization functions. This will be looked up
+        """Package/module path where to look for namespace initialization functions."""
+        NAMESPACE_INIT: ClassVar[dict[str, Any]]
+        """Static dict of namespace initialization functions. This will be looked up
         and matched against the current device abilities (at device init time) and
         usually setups a dedicated namespace handler and/or a dedicated entity.
         As far as the initialization functions are looked up in related modules,
         they'll be cached in the dict.
-        Namespace handlers will be initialized in the order as they appear in the dict
-        and this could have consequences in the order of polls."""
+        Namespace handlers will be initialized in the order as they appear in NAMESPACE_INIT
+        so that dependencies are initialized in a consistent way."""
 
         # Configuration
         preferred_transport: Transport
@@ -201,10 +184,8 @@ class Device(PhysicalDevice):
         _clients: Final[dict[Transport, AbstractClient]]
         _clients_connected: Final[dict[Transport, AbstractClient]]
 
-        ns_handlers: Final[dict[str, NamespaceHandler]]
+        ns_handlers: Final[dict[mn.Namespace, NamespaceHandler]]
         handler_all: Final[NamespaceHandler]
-        digest_parsers: Final[dict[str, DigestParseFunc]]
-        digest_pollers: Final[set[NamespaceHandler]]
 
         tz: tzinfo
 
@@ -226,23 +207,11 @@ class Device(PhysicalDevice):
     NAMESPACES = mn.NAMESPACES
 
     @staticmethod
-    def digest_parse_empty(digest: "JsonDict | JsonList"):
-        pass
-
-    @staticmethod
-    def digest_init_empty(
-        device: "Device", digest: "JsonDict | JsonList"
-    ) -> "DigestInitReturnType":
-        return Device.digest_parse_empty, ()
-
-    @staticmethod
     def namespace_init_empty(ns: mn.Namespace, device: "Device", /):
         pass
 
     # TODO: define global symbol for merossclient package/library
-    DIGEST_INIT_PACKAGE = "merossclient"
-    DIGEST_INIT = {}
-    NAMESPACE_INIT_PACKAGE = DIGEST_INIT_PACKAGE
+    NAMESPACE_INIT_PACKAGE = "merossclient"
     NAMESPACE_INIT = {}
 
     __SLOTS__ = (
@@ -258,8 +227,6 @@ class Device(PhysicalDevice):
         "_clients_connected",
         "ns_handlers",
         "handler_all",
-        "digest_parsers",
-        "digest_pollers",
         "tz",
         "device_response_size_min",
         "device_response_size_max",
@@ -295,8 +262,6 @@ class Device(PhysicalDevice):
                 self._async_poll_all,
             ),
         )
-        self.digest_parsers = {}
-        self.digest_pollers = set()
         self.tz = UTC
         self.device_response_size_min = 1000
         self.device_response_size_max = (
@@ -316,70 +281,17 @@ class Device(PhysicalDevice):
         self.polling_epoch = self.time()
 
     async def async_init(self):
-        digest_init_func: "Device.DigestInitFunc"
         ns_init_func: "Device.NamespaceInitFunc"
 
         await self._async_init_zoneinfo()
 
-        descriptor = self.descriptor
-        for key_digest, _digest in (
-            descriptor.digest.items() or descriptor.control.items()
-        ):
-            try:
-                try:
-                    self.digest_parsers[key_digest], _digest_pollers = self.DIGEST_INIT[
-                        key_digest
-                    ](self, _digest)
-                except (KeyError, TypeError):
-                    # KeyError: key is unknown to our code (fallback to lookup ".devices.{key_digest}")
-                    # TypeError: key is a string containing the module path
-                    key_slug = simple_slug(key_digest)
-                    _module_path = self.DIGEST_INIT.get(
-                        key_digest, f".devices.{key_slug}"
-                    )
-                    if type(_module_path) is not str:
-                        # This means we catched an error inside the digest init func
-                        raise
-                    try:
-                        _module = await async_import_module(
-                            _module_path, self.DIGEST_INIT_PACKAGE
-                        )
-                        # Lookup a class with the same name as the digest key.
-                        # This is going to be the default parser class for the digest
-                        # key and it has to implement a 'digest_init' classmethod with the proper signature.
-                        try:
-                            digest_init_func = getattr(
-                                _module, key_slug.capitalize()
-                            ).digest_init
-                        except AttributeError:
-                            # else fallback to a function with the same name as the digest key and the proper signature.
-                            digest_init_func = getattr(
-                                _module, f"digest_init_{key_slug}"
-                            )
-                    except Exception as exception:
-                        self.log_exception(
-                            self.WARNING,
-                            exception,
-                            "loading digest initializer for key '%s'",
-                            key_digest,
-                        )
-                        digest_init_func = Device.digest_init_empty
-                    self.DIGEST_INIT[key_digest] = digest_init_func
-                    self.digest_parsers[key_digest], _digest_pollers = digest_init_func(
-                        self, _digest
-                    )
-                self.digest_pollers.update(_digest_pollers)
-
-            except Exception as exception:
-                self.log_exception(
-                    self.WARNING, exception, "initializing digest key '%s'", key_digest
-                )
-                self.digest_parsers[key_digest] = Device.digest_parse_empty
-
-        ability = descriptor.ability
-        for ns, ns_init_func in self.NAMESPACE_INIT.items():
-            if ns not in ability:
-                continue
+        namespaces = self.__class__.NAMESPACES
+        namespace_init = self.__class__.NAMESPACE_INIT
+        for ns, ns_init_func in {
+            namespaces[_ability]: _ns_init_conf
+            for _ability, _ns_init_conf in namespace_init.items()
+            if _ability in self.descriptor.ability
+        }.items():
             try:
                 try:
                     ns_init_func(ns, self)
@@ -398,13 +310,13 @@ class Device(PhysicalDevice):
                             "loading namespace initializer for %s",
                             ns,
                         )
-                        self.NAMESPACE_INIT[ns] = Device.namespace_init_empty
+                        namespace_init[ns] = Device.namespace_init_empty
                     else:
                         try:
                             ns_init_func = ns_init_func.namespace_init
                         except AttributeError:
                             pass
-                        self.NAMESPACE_INIT[ns] = ns_init_func
+                        namespace_init[ns] = ns_init_func
                         ns_init_func(ns, self)
 
             except Exception as exception:
@@ -428,8 +340,6 @@ class Device(PhysicalDevice):
             await client.async_shutdown()
         await super().async_shutdown()
         del self.handler_all  # type: ignore
-        self.digest_parsers.clear()
-        self.digest_pollers.clear()
         self._lazypoll_requests.clear()
         # This must be by design
         assert self.is_connected is False, "Device shutdown failed: still connected"
@@ -489,7 +399,7 @@ class Device(PhysicalDevice):
         self.client = None  # type: ignore[assignment]
         self.mqtt_active = False  # type: ignore[assignment]
         for handler in self.ns_handlers.values():
-            handler.polling_epoch_next = 0.0
+            handler.next_poll_epoch = 0.0
 
     @override
     async def async_request(
@@ -679,9 +589,9 @@ class Device(PhysicalDevice):
 
     def get_handler_by_name(self, namespace: str, /):
         try:
-            return self.ns_handlers[namespace]
+            return self.ns_handlers[namespace]  # type: ignore
         except KeyError:
-            return self._create_handler(self.NAMESPACES[namespace])
+            return self._create_handler(self.__class__.NAMESPACES[namespace])
 
     @property
     def polling_response_size_available(self):
@@ -792,7 +702,13 @@ class Device(PhysicalDevice):
                 self._lazypoll_requests.clear()
                 # self.ns_handlers could change at any time due to async
                 # message parsing (handlers might be dynamically created by then)
-                for handler in [handler for handler in self.ns_handlers.values()]:
+                # Also, we skip ns polling for data wich might be carried in ns_all digest
+                # since self._async_poll_all is already automatically taking care of this.
+                for handler in [
+                    handler
+                    for handler in self.ns_handlers.values()
+                    if not handler.digest
+                ]:
                     if handler.polling_strategy:
                         await handler.polling_strategy(handler)
                         if not self.is_connected:
@@ -827,7 +743,7 @@ class Device(PhysicalDevice):
         except (AttributeError, KeyError):
             pass  # do not (re)schedule if we're not polling already
         for handler in self.ns_handlers.values():
-            handler.polling_epoch_next = 0.0
+            handler.next_poll_epoch = 0.0
         await self.async_poll()
 
     async def async_poll_flush(self):
@@ -849,7 +765,7 @@ class Device(PhysicalDevice):
                         handler.polling_response_size + multiple_response_size
                     ) < self.device_response_size_max:
                         handler.last_poll_epoch = self.polling_epoch
-                        handler.polling_epoch_next = (
+                        handler.next_poll_epoch = (
                             handler.last_poll_epoch + handler.polling_period
                         )
                         multiple_requests.append(handler)
@@ -952,7 +868,7 @@ class Device(PhysicalDevice):
 
     async def async_poll_request(self, handler: NamespaceHandler, /):
         handler.last_poll_epoch = self.polling_epoch
-        handler.polling_epoch_next = handler.last_poll_epoch + handler.polling_period
+        handler.next_poll_epoch = handler.last_poll_epoch + handler.polling_period
         if (not self.multiple_max) or (
             handler.polling_response_size >= self.device_response_size_max
         ):
@@ -981,7 +897,7 @@ class Device(PhysicalDevice):
         if len(self._multiple_requests) >= self.multiple_max:
             await self.async_poll_flush()
 
-    async def async_poll_request_smart(self, handler: NamespaceHandler, /):
+    async def async_poll_request_rl(self, handler: NamespaceHandler, /):
         if self.should_limit_cloud_polling and (
             (self.polling_epoch - handler.last_poll_epoch)
             < handler.polling_period_cloud
@@ -1019,17 +935,13 @@ class Device(PhysicalDevice):
         descr = self.descriptor
         descr.update(message.payload)
 
-        for key_digest, _digest in descr.digest.items() or descr.control.items():
-            try:
-                self.digest_parsers[key_digest](_digest)
-            except Exception as e:
-                self.log_exception(
-                    self.WARNING,
-                    e,
-                    "parsing digest '%s' with parser '%r'",
-                    key_digest,
-                    self.digest_parsers.get(key_digest),
-                )
+        digest = descr.digest or descr.control
+        for handler in (
+            _handler for _handler in self.ns_handlers.values() if _handler.digest
+        ):
+            handler.next_poll_epoch = self.last_rx_epoch + handler.polling_period
+            handler.digest = handler.id.get_digest(digest)
+            handler.parse_digest(handler.digest)
 
     async def _async_poll_all(self, handler_all: NamespaceHandler, /):
         """
@@ -1047,25 +959,36 @@ class Device(PhysicalDevice):
         """
         if self.mqtt_active:
             # on MQTT no need for updates since they're being PUSHed
-            if not handler_all.polling_epoch_next:
+            if not handler_all.next_poll_epoch:
                 # just when onlining...
                 await self.async_poll_request(handler_all)
             return
 
         # here we're missing PUSHed updates so we have to poll...
-        if self.polling_epoch >= handler_all.polling_epoch_next:
+        if self.polling_epoch >= handler_all.next_poll_epoch:
             # at start or periodically ask for NS_ALL..plain
             await self.async_poll_request(handler_all)
             return
 
         # query specific namespaces instead of NS_ALL since we hope this is
-        # better (less overhead/http sessions) together with ns_multiple packing
-        for handler in self.digest_pollers:
-            if handler.parsers:
-                # don't query if digest key/namespace hasn't any entity registered
-                # this also prevents querying a somewhat 'malformed' ToggleX reply
-                # appearing in an mrs100 (#447)
-                await self.async_poll_request(handler)
+        # better (less overhead/http sessions) together with ns_multiple packing.
+        # Here, we don't query if digest key/namespace hasn't any entity registered
+        # this also prevents querying a somewhat 'malformed' ToggleX reply
+        # appearing in an mrs100 (#447)
+        # TODO: consider refining this one
+        # possible issues are:
+        # - polling some unneeded ns since digest association is static but we might have some
+        # outliers where data are not provided in digest like Appliance.Control.Fan for map100
+        # or Appliance.Control.ToggleX for covers (data maybe provided but useless since the
+        # ToggleX doesn't look like providing any info)
+        # - resulting request being bulkier than using ns_all
+        for handler in [
+            _handler
+            for _handler in self.ns_handlers.values()
+            if _handler.digest and _handler.parsers
+        ]:
+            if handler.polling_strategy:
+                await handler.polling_strategy(handler)
 
 
 class SubDevice(PhysicalDevice):

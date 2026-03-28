@@ -55,7 +55,7 @@ Appliance_Control_WaterPlan_Skip = mn.ns(
     "Appliance.Control.WaterPlan.Skip", mc.KEY_CONTROL, -1, GETSET_SUBID, mn.EXP
 )  # mst100 (allows the device to query cloud server about whether to skip execution on a specific day based on weather conditions)
 
-Appliance_Digest_Hub = mn.ns("Appliance.Digest.Hub", mc.KEY_HUB, -1, mn.G_D, H)
+Appliance_Digest_Hub = mn.ns("Appliance.Digest.Hub", mc.KEY_HUB, -1, mn.G_D, H, mn.DIG)
 Appliance_Digest_WaterPlan = mn.ns(
     "Appliance.Digest.WaterPlan", mc.KEY_DIGEST, -1, GETSET_SUBID, mn.EXP
 )  # mst100 (used to read/write watering schedules)
@@ -63,7 +63,9 @@ Appliance_Hub_Battery = mn.ns("Appliance.Hub.Battery", mc.KEY_BATTERY, 40, GETPS
 Appliance_Hub_Exception = mn.ns(
     "Appliance.Hub.Exception", mc.KEY_EXCEPTION, -1, mn.PSQ, ID
 )
-Appliance_Hub_ExtraInfo = mn.ns("Appliance.Hub.ExtraInfo", "extraInfo", -1, mn.G_D, H)
+Appliance_Hub_ExtraInfo = mn.ns(
+    "Appliance.Hub.ExtraInfo", "extraInfo", -1, mn.G_D, H
+)  # upgrade info for subdevices
 Appliance_Hub_Mts100_Adjust = mn.ns(
     "Appliance.Hub.Mts100.Adjust", mc.KEY_ADJUST, 40, GETSET_ID
 )

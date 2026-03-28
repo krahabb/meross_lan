@@ -157,23 +157,14 @@ async def test_entities(
                                 for channel_digest in sub_digest[sub_digest_key]:
                                     _add_func(sub_entity_types)
 
-            for ns, entity_types in NAMESPACES_ENTITIES.items():
-                if ns in ability:
-                    if ns.indexed and ns.key_idx == mc.KEY_CHANNEL:
-                        for entity_type in entity_types:
-                            if issubclass(entity_type, ParserEntity):
-                                _add_func(
-                                    [entity_type]
-                                    * (
-                                        len(descriptor.channels)
-                                        if entity_type.NS_CHANNELS is None
-                                        else len(entity_type.NS_CHANNELS)
-                                    )
-                                )
-                            else:
-                                _add_func([entity_type] * (len(descriptor.channels)))
-                    else:
-                        _add_func(entity_types)
+            _ns_channels = len(descriptor.channels) or 1
+            for ns in (_ns for _ns in NAMESPACES_ENTITIES if _ns in ability):
+                _add_func(
+                    NAMESPACES_ENTITIES[ns] * _ns_channels
+                    if ns.indexed and ns.key_idx == mc.KEY_CHANNEL
+                    else NAMESPACES_ENTITIES[ns]
+                )
+
             if ishub:
                 subdevice_ids = set()
                 for p_subdevice in digest[mc.KEY_HUB][mc.KEY_SUBDEVICE]:
@@ -198,7 +189,7 @@ async def test_entities(
             ) as device_context:
                 EntityComponentTest.device_context = device_context
                 try:
-                    device_name = device_context.config_entry.title
+                    device_name = device_context.logtag
                     with capsys.disabled():
                         print(f"\nTesting {device_name}")
                         print(

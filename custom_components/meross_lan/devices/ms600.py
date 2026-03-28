@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, override
 from ..binary_sensor import BinarySensor
 from ..const import hac
 from ..helpers.entity import ValueParser
-from ..helpers.namespaces import NamespaceHandler, mc, mn
+from ..helpers.namespaces import mc, mn
 from ..number import NumberParser
 from ..select import SelectParser
 from ..sensor import SensorParser
@@ -143,8 +143,7 @@ def namespace_init_presence_config(ns: mn.Namespace, device: "Device", /):
     """Helper to register a specialized entity class to the proper namespace.
     This is going to be used on Device initialization for various entities sharing
     common semantics in namespace parsing/handling."""
-    handler = NamespaceHandler(ns, device)
-    handler.register_parsers(
+    device._create_handler(ns).register_parsers(
         *(
             entity_def(
                 0,

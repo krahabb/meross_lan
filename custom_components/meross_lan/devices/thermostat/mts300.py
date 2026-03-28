@@ -2,11 +2,18 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.components.climate import const as hacc
 
-from . import MtsThermostatClimate, mc, mlc, mn, mn_t
+from . import (
+    EnumParser,
+    MtsThermostatClimate,
+    NumberParser,
+    SelectParser,
+    SensorParser,
+    mc,
+    mlc,
+    mn,
+    mn_t,
+)
 from ...helpers import reverse_lookup
-from ...number import NumberParser
-from ...select import SelectParser
-from ...sensor import EnumParser, SensorParser
 from ...switch import EmulatedSwitch
 
 if TYPE_CHECKING:
@@ -184,6 +191,11 @@ class Mts300Climate(MtsThermostatClimate):
 
     def __init__(self, channel: int, device: "Device", /, **kwargs):
         super().__init__(channel, device, **kwargs)
+        device.register_parser_ex(
+            self,
+            mn.Appliance_Config_Sensor_Association,
+            mn_t.Appliance_Control_Thermostat_System,
+        )
         self.fan_mode = None
         self.fan_modes = self._attr_fan_modes
         self.target_temperature_high = None
@@ -408,6 +420,9 @@ class Mts300Climate(MtsThermostatClimate):
                 Mts300Climate.SensorAssociationSelect(self.channel, self.parent)
             )
             self.select_temp_association._parse(payload)
+
+    def _parse_system(self, payload: dict, /):
+        pass
 
     async def _async_request_value_number_fan_hold(self, device_value, /):
         await self.async_request_parse_ex({mc.KEY_FAN: {"hTime": device_value}})

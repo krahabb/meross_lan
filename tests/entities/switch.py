@@ -27,7 +27,7 @@ class EntityTest(EntityComponentTest):
     # special care here since light and cover entity could manage the togglex
     # namespace
     DIGEST_ENTITIES = {
-        mc.KEY_TOGGLEX: [switch.Togglex],
+        mc.KEY_TOGGLEX: [switch.ToggleX],
     }
     NAMESPACES_ENTITIES = {
         mn.Appliance_Config_Alarm: [siren.Siren.EnableSwitch],

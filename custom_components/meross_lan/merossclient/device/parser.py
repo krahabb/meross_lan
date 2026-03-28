@@ -55,19 +55,6 @@ class NamespaceParser(logging.Loggable):
                 parser(payload)
 
     if TYPE_CHECKING:
-        NS_CHANNELS: ClassVar[tuple[int, ...] | None]
-        """
-        This is related to NamespaceHandler registration. For parser classes where we know
-        the ns exposes fixed channel layouts (i.e. PhysicalLock) which are not exposed in any digest key
-        we can set this to (0,) or more funny presets so that namespace initialization will also
-        automatically build the needed parsers.
-        Setting to None means 'scan digests for channels'.
-        This is actually not mandatory though since only used for NamespaceHandler.register_parser_class.
-        in NamespaceParser.namespace_init
-        """
-        NS_CHANNELS_SINGLE: Final[tuple[int, ...]]
-        """Preset singleton for parsers to be configured with a single channel in 0."""
-
         parent: Final[PhysicalDevice]  # type: ignore[override]
         init_ns: ClassVar[mn.Namespace]
         """Class default used to initialize the 'ns' instance attribute."""
@@ -94,9 +81,6 @@ class NamespaceParser(logging.Loggable):
             /,
             **kwargs: Unpack[Args],
         ): ...
-
-    NS_CHANNELS = None  # scan digests for channels
-    NS_CHANNELS_SINGLE = (0,)
 
     init_ns_payload = mn.EMPTY_DICT
     SLOTS_AUTO_INIT = (
@@ -180,27 +164,11 @@ class NamespaceParser(logging.Loggable):
         )
 
     @classmethod
-    def digest_init(
-        cls, device: "Device", digest: "JsonList", /
-    ) -> "Device.DigestInitReturnType":
-        """Helper to register and instantiate a specialized entity class to the proper namespace.
-        This is going to be used on Device initialization for entities that maps to device
-        digest payload. This kind of initialization is alternative to namespace_init and
-        generally richer (not every namespace has 'digest' entities though - namespace_init is
-        for that semantics)."""
-        handler = device._create_handler(
-            cls.init_ns,
-            parser_class=cls,
-            channels=(_digest[mc.KEY_CHANNEL] for _digest in digest),
-        )
-        return handler.parse_list, (handler,)
-
-    @classmethod
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
         """Helper to register a specialized entity class to the proper namespace.
         This is going to be used on Device initialization for various entities sharing
         common semantics in namespace parsing/handling."""
-        device._create_handler(ns, parser_class=cls, channels=cls.NS_CHANNELS)
+        device._create_handler(ns, parser_class=cls)
 
 
 class NamespaceValue(NamespaceParser):

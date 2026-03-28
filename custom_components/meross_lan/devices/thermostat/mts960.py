@@ -102,6 +102,11 @@ class Mts960Climate(MtsThermostatClimate):
         self._mts_timer_payload = None
         self._mts_timer_mode = None
         super().__init__(channel, device, **kwargs)
+        device.register_parser_ex(
+            self,
+            mn_t.Appliance_Control_Thermostat_CtlRange,
+            mn_t.Appliance_Control_Thermostat_Timer,
+        )
         self.binary_sensor_plug_state = Mts960Climate.PlugState(channel, device)
         self.number_timer_down_duration = Mts960Climate.TimerConfigNumber(
             self, "timer_down_duration"
@@ -396,6 +401,19 @@ class Mts960Climate(MtsThermostatClimate):
                         )
 
         self.flush_state()
+
+    def _parse_ctlRange(self, payload: dict, /):
+        """
+        {
+            "channel": 0,
+            "max": 11000,
+            "min": -3000,
+            "ctlMax": 3600,
+            "ctlMin": 300,
+        }
+        """
+        self.max_temp = payload[mc.KEY_CTLMAX] / self.temperature_scale
+        self.min_temp = payload[mc.KEY_CTLMIN] / self.temperature_scale
 
     def _parse_timer(self, payload: "mt.thermostat.Timer_C", /):
         """

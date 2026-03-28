@@ -24,7 +24,6 @@ from ..merossclient.exceptions import MerossError
 from ..merossclient.obfuscate import OBFUSCATE_DICT
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..merossclient.protocol.message import MerossMessage, MerossResponse
-from ..merossclient.protocol.namespaces import thermostat as mn_t
 from ..sensor import ProtocolSensor
 from ..update import UpdateEntity
 
@@ -186,7 +185,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         bluetooth: Final[ComponentApi.BTClient | None]  # type: ignore[override]
         http: Final[Http | None]  # type: ignore[override]
         mqtt: Final[MQTTConnection.Client | None]  # type: ignore[override]
-        ns_handlers: Final[dict[str, NamespaceHandler]]  # type: ignore[override]
+        ns_handlers: Final[dict[mn.Namespace, NamespaceHandler]]  # type: ignore[override]
 
         def get_handler(self, ns: mn.Namespace) -> NamespaceHandler: ...
 
@@ -233,21 +232,12 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
     PARAM_TRACING_ABILITY_POLL_TIMEOUT = 2
     """Used to delay the iteration of abilities scan while tracing."""
 
-    DIGEST_INIT_PACKAGE = "custom_components.meross_lan"
-    DIGEST_INIT = {
-        mc.KEY_FAN: ".fan",
-        mc.KEY_HUB: ".devices.hub",
-        mc.KEY_LIGHT: ".light",
-        "light.effect": ".light",
-        mc.KEY_TIMER: device.Device.digest_init_empty,
-        mc.KEY_TIMERX: device.Device.digest_init_empty,
-        mc.KEY_TOGGLE: ".switch",
-        mc.KEY_TOGGLEX: ".switch",
-        mc.KEY_TRIGGER: device.Device.digest_init_empty,
-        mc.KEY_TRIGGERX: device.Device.digest_init_empty,
-    }
-    NAMESPACE_INIT_PACKAGE = DIGEST_INIT_PACKAGE
+    NAMESPACE_INIT_PACKAGE = "custom_components.meross_lan"
     NAMESPACE_INIT = {
+        mn.Appliance_Control_Toggle: (".switch", "Toggle"),
+        # ToggleX need to be created before any other possible 'conflicting' ns
+        # like .Light or .Fan
+        mn.Appliance_Control_ToggleX: (".switch", "ToggleX"),
         mn.Appliance_Config_OverTemp: (".devices.mss", "OverTempEnableSwitch"),
         mn.Appliance_Control_Alarm: (".siren", "Siren"),
         mn.Appliance_Control_Electricity: (
@@ -260,11 +250,15 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             "ConsumptionHNamespaceHandler",
         ),
         mn.Appliance_Control_ConsumptionX: (".devices.mss", "ConsumptionXSensor"),
-        mn.Appliance_Control_Fan: (".fan", "namespace_init_fan"),
+        mn.Appliance_Control_Diffuser_Light: (".devices.diffuser", "DiffuserLight"),
+        mn.Appliance_Control_Diffuser_Sensor: (".devices.diffuser", "DiffuserSensor"),
+        mn.Appliance_Control_Diffuser_Spray: (".devices.diffuser", "DiffuserSpray"),
+        mn.Appliance_Control_Fan: (".fan", "Fan"),
         mn.Appliance_Control_FilterMaintenance: (
             ".sensor",
             "FilterMaintenanceSensor",
         ),
+        mn.Appliance_Control_Light: (".light", "Light"),
         mn.Appliance_Control_Mp3: (".media_player", "Mp3Player"),
         mn.Appliance_Control_PhysicalLock: (".switch", "PhysicalLockSwitch"),
         mn.Appliance_Control_Presence_Config: (
@@ -283,10 +277,55 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             ".devices.misc",
             "namespace_init_sensor_latestx",
         ),
-        mn_t.Appliance_Control_Thermostat_ModeC: (
+        mn.Appliance_Control_Spray: (".devices.spray", "Spray"),
+        mn.Appliance_Control_TempUnit: (".devices.thermostat", "MtsTempUnit"),
+        # TODO: find a better way to register thermostat handlers
+        "Appliance.Control.Thermostat.Mode": (
+            ".devices.thermostat.mts200",
+            "Mts200Climate",
+        ),
+        "Appliance.Control.Thermostat.ModeB": (
+            ".devices.thermostat.mts960",
+            "Mts960Climate",
+        ),
+        "Appliance.Control.Thermostat.ModeC": (
             ".devices.thermostat.mts300",
             "Mts300Climate",
         ),
+        "Appliance.Control.Thermostat.DeadZone": (
+            ".devices.thermostat",
+            "MtsDeadZoneNumber",
+        ),
+        "Appliance.Control.Thermostat.Frost": (
+            ".devices.thermostat",
+            "MtsFrostNumber",
+        ),
+        "Appliance.Control.Thermostat.HoldAction": (
+            ".devices.thermostat",
+            "MtsHoldAction",
+        ),
+        "Appliance.Control.Thermostat.Overheat": (
+            ".devices.thermostat",
+            "MtsOverheatNumber",
+        ),
+        "Appliance.Control.Thermostat.Sensor": (
+            ".devices.thermostat",
+            "MtsExternalSensorSwitch",
+        ),
+        "Appliance.Control.Thermostat.SummerMode": (
+            ".devices.thermostat",
+            "MtsSummerMode",
+        ),
+        "Appliance.Control.Thermostat.WindowOpened": (
+            ".devices.thermostat",
+            "MtsWindowOpened",
+        ),
+        mn.Appliance_GarageDoor_Config: (
+            ".devices.garagedoor",
+            "GarageDoorConfigNamespaceHandler",
+        ),
+        mn.Appliance_GarageDoor_State: (".devices.garagedoor", "GarageDoor"),
+        "Appliance.Hub.SubdeviceList": (".devices.hub", "Hub"),
         mn.Appliance_Mcu_Firmware: (
             ".helpers.namespaces",
             "NamespaceHandler",  # handler in Device._handle_XXX
@@ -299,6 +338,10 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             ".devices.rollershutter",
             "RollerShutter",
         ),
+        mn.Appliance_RollerShutter_Adjust: (
+            ".devices.rollershutter",
+            "RollerShutterAdjustSwitch",
+        ),
         mn.Appliance_System_DNDMode: (".light", "DNDLight"),
         mn.Appliance_System_Runtime: (".sensor", "SignalStrengthSensor"),
     }
@@ -306,6 +349,10 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         mn.Appliance_Config_Info,
         mn.Appliance_Control_Bind,
         mn.Appliance_Control_ConsumptionConfig,
+        mn.Appliance_Control_Timer,
+        mn.Appliance_Control_TimerX,
+        mn.Appliance_Control_Trigger,
+        mn.Appliance_Control_TriggerX,
         mn.Appliance_System_Clock,
         mn.Appliance_System_Online,
         mn.Appliance_System_Report,
@@ -828,19 +875,20 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             },
             "namespace_handlers": {
                 handler.id: {
-                    "last_poll_epoch": handler.last_poll_epoch,
                     "last_rx_epoch": handler.last_rx_epoch,
-                    "lastpush": (
-                        OBFUSCATE_DICT(handler.last_rx_push)
-                        if (handler.last_rx_push and self.obfuscate)
-                        else handler.last_rx_push
-                    ),
-                    "polling_epoch_next": handler.polling_epoch_next,
+                    "last_poll_epoch": handler.last_poll_epoch,
+                    "next_poll_epoch": handler.next_poll_epoch,
                     "polling_strategy": (
                         handler.polling_strategy.__name__
                         if handler.polling_strategy
                         else None
                     ),
+                    "lastpush": (
+                        OBFUSCATE_DICT(handler.last_rx_push)
+                        if (handler.last_rx_push and self.obfuscate)
+                        else handler.last_rx_push
+                    ),
+                    "digest": handler.digest,
                 }
                 for handler in self.ns_handlers.values()
             },
@@ -1136,7 +1184,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             # more 'smart' since we can eventually add a grammar (mn.Namespace)
             # on the fly by inspecting the received message in case the ns is
             # not yet normalized.
-            handler = self.ns_handlers[message.namespace]
+            handler = self.ns_handlers[message.namespace]  # type: ignore
         except KeyError:
             # we don't have an handler in place and this is typically due to
             # PUSHES of unknown/unmanaged namespaces
@@ -1154,13 +1202,18 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             # here the namespace might be unknown to our definitions (mn.Namespace)
             # so we try, in case, to build a new one with good presets
             if namespace in self.NAMESPACE_IGNORE:
-                handler = VoidNamespaceHandler(self.NAMESPACES[namespace], self)
+                handler = VoidNamespaceHandler(
+                    self.NAMESPACES[namespace],
+                    self,
+                    config=NamespaceHandler.POLLING_CONFIG_DIAGNOSTIC,
+                )
             else:
                 handler = self._create_handler(
                     self.NAMESPACES.get(namespace)
                     or mn.Namespace.from_message(
                         namespace, method, message.payload, self.NAMESPACES
-                    )
+                    ),
+                    config=NamespaceHandler.POLLING_CONFIG_DIAGNOSTIC,
                 )
 
         if method == mc.METHOD_PUSH:

@@ -16,7 +16,6 @@ import homeassistant.util.color as color_util
 
 from . import const as mlc
 from .helpers import clamp, entity as mle
-from .helpers.namespaces import NamespaceHandler
 from .merossclient.protocol import const as mc, namespaces as mn
 from .merossclient.protocol.message import MerossMessage
 
@@ -395,8 +394,6 @@ class Light(LightBase):
         class Args(LightBase.Args):
             pass
 
-    init_ns = mn.Appliance_Control_Light
-
     ATTR_TOGGLEX_AUTO = "togglex_auto"
 
     # HA core entity attributes:
@@ -578,25 +575,24 @@ class Light(LightBase):
 
     @classmethod
     @override
-    def digest_init(
-        cls, device: "Device", digest: "JsonDict", /
-    ) -> "Device.DigestInitReturnType":
-        ability = device.descriptor.ability
-        handler = NamespaceHandler(Light.init_ns, device)
+    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
+        handler = device._create_handler(ns)
+        descriptor = device.descriptor
+        ns_digest: dict = ns.get_digest(descriptor.digest)
         handler.register_parser(
-            EffectLight(digest[mc.KEY_CHANNEL], device)
-            if mn.Appliance_Control_Light_Effect in ability
+            EffectLight(ns_digest[mc.KEY_CHANNEL], device, ns=ns)
+            if mn.Appliance_Control_Light_Effect in descriptor.ability
             else (
                 Light(
-                    digest[mc.KEY_CHANNEL],
+                    ns_digest[mc.KEY_CHANNEL],
                     device,
+                    ns=ns,
                     effect_list=mc.HP110A_LIGHT_EFFECT_LIST,
                 )
-                if mn.Appliance_Control_Mp3 in ability
-                else Light(digest[mc.KEY_CHANNEL], device)
+                if mn.Appliance_Control_Mp3 in descriptor.ability
+                else Light(ns_digest[mc.KEY_CHANNEL], device, ns=ns)
             )
         )
-        return handler.parse_dict, (handler,)
 
 
 class EffectLight(Light):
@@ -621,13 +617,42 @@ class EffectLight(Light):
     def __init__(
         self, channel: int, device: "Device", /, **kwargs: "Unpack[Light.Args]"
     ):
+        try:
+            # This is a 'new' (2025-06-17) key appearing in msl320cpr digest.
+            # The key itself is 'light.entity' and carries the effect list
+            # (same as Appliance.Control.Light.Effect)
+            self._light_effects = device.descriptor.digest["light.entity"]
+            kwargs["effect_list"] = [
+                _light_effect[mc.KEY_EFFECTNAME]
+                for _light_effect in self._light_effects
+            ] + EffectLight.init_effect_list
+        except KeyError:
+            self._light_effects = []
         Light.__init__(self, channel, device, **kwargs)
-        self._light_effects = []
-        self.handler_light_effect = NamespaceHandler(
+
+        self.handler_light_effect = device._create_handler(
             mn.Appliance_Control_Light_Effect,
-            device,
             handler=self._handle_Appliance_Control_Light_Effect,
         )
+        """TODO/FIXME: restore digset parsing
+        stub_message = MerossMessage(
+            {
+                mc.KEY_HEADER: {
+                    mc.KEY_NAMESPACE: mn.Appliance_Control_Light_Effect,
+                    mc.KEY_METHOD: mc.METHOD_GETACK,
+                },
+                mc.KEY_PAYLOAD: {mc.KEY_EFFECT: ns_digest},
+            }
+        )
+
+        # custom parser for the case
+        def _parse(digest: list):
+            # This is called inside ns_all parsing at the device handler
+            stub_message.payload[mc.KEY_EFFECT] = digest
+            handler.handle_response(stub_message)
+
+        # FIXME: setup digest parsing return _parse, ()
+        """
         if device.descriptor.type.startswith(mc.TYPE_MSL320_PRO):
             # special rgb channels mgmt here
             self._rgb_to_native = rgbw_patch_to_native
@@ -755,7 +780,7 @@ class DNDLight(mle.EntityNamespaceMixin, mle.BinaryParser, light.LightEntity):
     through a light feature (presence light or so)
     """
 
-    POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_CONFIGURATION_NS
+    POLLING_CONFIG_DEFAULT = mle.EntityNamespaceMixin.POLLING_CONFIG_CONFIGURATION
     PLATFORM = light.DOMAIN
     init_entity_key = "dnd"
     init_key_value = mc.KEY_MODE
@@ -765,49 +790,6 @@ class DNDLight(mle.EntityNamespaceMixin, mle.BinaryParser, light.LightEntity):
     _attr_color_mode = ColorMode.ONOFF
     _attr_entity_category = mle.BinaryParser.EntityCategory.CONFIG
     _attr_supported_color_modes = {ColorMode.ONOFF}
-
-
-def digest_init_light_effect(
-    device: "Device", digest: "JsonList", /
-) -> "Device.DigestInitReturnType":
-    # This is a 'new' (2025-06-17) key appearing in msl320cpr digest.
-    # The key itself is 'light.entity' and carries the effect list
-    # (same as Appliance.Control.Light.Effect)
-
-    try:
-        # EffectLight should be in place
-        light = device.entities[0]
-        if isinstance(light, EffectLight):
-            # initialize light effect_list (we're loading config at device init time
-            # so this could be outdated but..)
-            light._light_effects = digest
-            light.effect_list = [
-                _light_effect[mc.KEY_EFFECTNAME] for _light_effect in digest
-            ] + EffectLight.init_effect_list
-
-            handler = device.ns_handlers[mn.Appliance_Control_Light_Effect]
-
-            stub_message = MerossMessage(
-                {
-                    mc.KEY_HEADER: {
-                        mc.KEY_NAMESPACE: mn.Appliance_Control_Light_Effect,
-                        mc.KEY_METHOD: mc.METHOD_GETACK,
-                    },
-                    mc.KEY_PAYLOAD: {mc.KEY_EFFECT: digest},
-                }
-            )
-
-            # custom parser for the case
-            def _parse(digest: list):
-                # This is called inside ns_all parsing at the device handler
-                stub_message.payload[mc.KEY_EFFECT] = digest
-                handler.handle_response(stub_message)
-
-            return _parse, ()
-    except KeyError:
-        pass
-
-    return lambda digest: None, ()
 
 
 async_setup_entry = LightBase.platform_setup_entry
