@@ -8,8 +8,8 @@ from zoneinfo import ZoneInfo
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.merossclient import (
-    HostAddress,
     DeviceDescriptor,
+    HostAddress,
     extract_dict_payloads,
     get_element_by_key,
     get_element_by_key_safe,
@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 
     import paho.mqtt.client as mqtt
 
+    from custom_components.meross_lan.merossclient.protocol import types as mt
     from custom_components.meross_lan.merossclient.protocol.namespaces import Namespace
     from custom_components.meross_lan.merossclient.protocol.types import (
         MerossHeaderType,
@@ -785,14 +786,14 @@ class Emulator:
         return mc.METHOD_GETACK, {mc.KEY_HARDWARE: self.descriptor.hardware}
 
     def _GET_Appliance_System_Online(self, header, payload, /):
-        return mc.METHOD_GETACK, {mc.KEY_ONLINE: self.descriptor.all[mc.KEY_ONLINE]}
+        return mc.METHOD_GETACK, {mc.KEY_ONLINE: self.descriptor.system[mc.KEY_ONLINE]}
 
     def _SET_Appliance_System_Time(self, header, payload, /):
         self.descriptor.update_time(payload[mc.KEY_TIME])
         self.update_epoch()
         return mc.METHOD_SETACK, {}
 
-    def _get_ns_state(self, namespace: str, /) -> tuple[mn.Namespace, dict]:
+    def _get_ns_state(self, namespace: str, /) -> tuple[mn.Namespace, "mt.JsonDict"]:
         """
         general device state is usually carried in NS_ALL into the "digest" key
         and is also almost regularly keyed by using the camelCase of the last verb
@@ -821,7 +822,7 @@ class Emulator:
 
             try:
                 if type(p_digest[ns.key]) in (dict, list):
-                    return ns, p_digest
+                    return ns, p_digest  # type: ignore
             except (KeyError, TypeError):
                 # KeyError: ns.key not in digest
                 # TypeError: p_digest is not a dict

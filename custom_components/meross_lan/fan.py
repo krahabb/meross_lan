@@ -5,6 +5,9 @@ from homeassistant.components import fan
 from .helpers.entity import ToggleXParser
 from .merossclient.protocol import const as mc
 
+if TYPE_CHECKING:
+    from .merossclient.protocol import types as mt
+
 
 class Fan(ToggleXParser, fan.FanEntity):
     """
@@ -12,7 +15,7 @@ class Fan(ToggleXParser, fan.FanEntity):
     """
 
     if TYPE_CHECKING:
-
+        ns_payload: mt.control.Fan
         # HA core entity attributes:
         percentage: int | None
         speed_count: int
@@ -67,12 +70,12 @@ class Fan(ToggleXParser, fan.FanEntity):
     @override
     async def async_turn_off(self, **kwargs):
         if self.handler_togglex:
-            await self.handler_togglex.async_set({mc.KEY_ONOFF: 0}, self)
+            await self.handler_togglex.async_set_parse({mc.KEY_ONOFF: 0}, self)
         else:
             await self.async_request_parse_ex({mc.KEY_SPEED: 0})
 
     # interface: self
-    def _parse(self, payload: dict, /):
+    def _parse(self, payload: "mt.control.Fan", /):
         """payload = {"channel": 0, "speed": 3, "maxSpeed": 4}"""
         if self.ns_payload != payload:
             self.ns_payload = payload

@@ -248,7 +248,7 @@ class Hub(Device if TYPE_CHECKING else object):
 
         return subdevice_class(subid, self, key_digest)
 
-    def parse_digest(self, p_hub, /):
+    def parse_digest(self, p_hub: "mt.hub.Digest", /):
         # Usually called by _handle_Appliance_System_All as part of the digest parsing
         # Here we'll check the fresh subdevice list against the actual one and
         # eventually manage newly added subdevices or removed ones #119
@@ -348,7 +348,7 @@ class Hub(Device if TYPE_CHECKING else object):
         if mn_h.Appliance_Digest_Hub in device.descriptor.ability:
             handler = NamespaceHandler(mn_h.Appliance_Digest_Hub, device)
             handler.parsers = device.subdevices  # type: ignore
-            handler.parse_digest = device.parse_digest
+            handler.parse_digest = device.parse_digest  # type: ignore
         else:
             # We don't have the 'official' digest carrying ns so we have to intercept
             # ns_all in order to have a chance to parse the hub digest
@@ -1020,7 +1020,7 @@ class MS130Sensor(MS100Sensor):
         """
         pass
 
-    def _parse_latestx(self, payload: "mt.sensor.LatestXResponse_C", /):
+    def _parse_latestx(self, payload: "mt.sensor.LatestX_C", /):
         """parser for Appliance.Control.Sensor.LatestX:
         {
             "latest": [

@@ -2,7 +2,17 @@
 A collection of typing definitions for payloads in Appliance.System.*
 """
 
-from . import NotRequired, TypedDict
+from . import (
+    Any,
+    NotRequired,
+    TypedDict,
+    control,
+    diffuser,
+    garagedoor,
+    hub,
+    thermostat,
+)
+from .. import types as mt
 
 
 class Debug_System(TypedDict):
@@ -72,9 +82,87 @@ class Debug(TypedDict):
     hub: NotRequired[Debug_Hub]
 
 
-type _Timerule = list[int]  # [timestamp, offset, dst]
+class Hardware(TypedDict):
+    """Appliance.System.Hardware"""
+
+    type: str  # msh450
+    subType: str  # un
+    version: str  # 9.0.0
+    chipType: str  # rtl8720cm
+    uuid: str
+    macAddress: str
+
+
+class Firmware(TypedDict):
+    """Appliance.System.Firmware"""
+
+    version: str  # 9.1.17
+    compileTime: str  # 2025/08/28-09:11:02
+    encrypt: int  # 1
+    wifiMac: str
+    innerIp: str
+    server: str
+    port: int
+    secondServer: str  # lately NotRequired
+    secondPort: int  # lately NotRequired
+    userId: int
+
+
+type Time_Timerule = list[int]  # [timestamp, offset, dst]
 
 
 class Time(TypedDict):
-    timezone: str  # Europe/Rome
-    timeRule: list[_Timerule]
+    """Appliance.System.Time"""
+
+    timestamp: NotRequired[int]
+    timezone: str
+    timeRule: list[Time_Timerule]
+
+
+class Online(TypedDict):
+    """Appliance.System.Online"""
+
+    status: int  # see mc.STATUS_ symbols
+    bindId: NotRequired[str]  # VStpNGCZi8AGQPRG
+    who: NotRequired[int]  # 1
+
+
+class All_System(TypedDict):
+    hardware: Hardware
+    firmware: Firmware
+    time: Time
+    online: Online
+
+
+# This keys are all optional depending on the device layout.
+# Here we'll set them as available to ease type-checking.
+# TODO: detail type-hints
+All_Digest = TypedDict(
+    "All_Digest",
+    {
+        "diffuser": diffuser.Digest,
+        "fan": list[control.Fan],
+        "garageDoor": list[garagedoor.State],
+        "hub": hub.Digest,
+        "thermostat": thermostat.Digest,
+        "togglex": list[mt.ChannelOnOff],
+        "triggerx": mt.JsonList,
+        "timerx": mt.JsonList,
+        "light": control.Light,
+        "light.effect": list[control.Light_Effect],
+        "spray": list[control.Spray],
+    },
+)
+
+
+class All_Control(TypedDict):
+
+    toggle: mt.JsonDict
+    trigger: Any
+    timer: Any
+
+
+class All(TypedDict):
+    system: All_System
+    digest: All_Digest
+    control: All_Control  # 'legacy' key only seen in mss210 (same meaning as 'digest though')

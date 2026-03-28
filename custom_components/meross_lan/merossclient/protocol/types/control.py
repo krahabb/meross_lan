@@ -3,28 +3,22 @@ A collection of typing definitions for payloads in Appliance.Control.*
 (excluding Appliance.Control.Sensor.* and Appliance.Control.Thermostat.*)
 """
 
-from . import (
-    ChannelOnOff,
-    ChannelPayload,
-    NotRequired,
-    SensorData,
-    TypedDict,
-    _MerossPayloadType,
-)
+from . import NotRequired, TypedDict
+from .. import types as mt
 
 
-class Beep_C(ChannelOnOff):
+class Beep(mt.ChannelOnOff):
     """Appliance.Control.Beep"""
 
 
-class ConsumptionH_C(ChannelPayload):
+class ConsumptionH(mt.ChannelPayload):
     """Appliance.Control.ConsumptionH"""
 
     total: int  # [Wh]
-    data: list[SensorData]
+    data: list[mt.SensorData]
 
 
-class Electricity_C(ChannelPayload):
+class Electricity(mt.ChannelPayload):
     """Appliance.Control.Electricity"""
 
     current: int  # [mA]
@@ -32,7 +26,7 @@ class Electricity_C(ChannelPayload):
     power: int  # [mW]
 
 
-class ElectricityX_C(Electricity_C):
+class ElectricityX(Electricity):
     """Appliance.Control.ElectricityX"""
 
     voltage: int  # [mV]
@@ -40,8 +34,53 @@ class ElectricityX_C(Electricity_C):
     factor: float  # power factor (0.0-1.0)
 
 
-class TempUnit_C(ChannelPayload):
-    """Appliance.Control.TempUnit"""
+class Fan(mt.ChannelPayload):
+    """Appliance.Control.Fan channel payload."""
+
+    speed: int
+    maxSpeed: int
+
+
+class Light(mt.ChannelPayload):
+    """Appliance.Control.Light channel payload."""
+
+    # "onoff" is not always available though..depends on model
+    onoff: NotRequired[int]
+    capacity: int
+    luminance: int
+    rgb: int
+    temperature: int
+    effect: int
+
+
+class Light_Effect_Member(TypedDict):
+    luminance: int
+    rgb: NotRequired[int]
+    temperature: NotRequired[int]
+
+
+class Light_Effect(mt.IdPayload):
+    """Appliance.Control.Light.Effect."""
+
+    effectName: str
+    iconName: str
+    enable: int
+    mode: int
+    speed: int
+    member: list[Light_Effect_Member]
+
+
+class Spray(mt.ChannelPayload):
+    """Appliance.Control.Spray channel payload."""
+
+    mode: int  # 0: off, 1: on, 2: auto (guessing)
+    lmTime: int
+    lastMode: int
+    onoffTime: int
+
+
+class TempUnit(mt.ChannelPayload):
+    """Appliance.Control.TempUnit channel payload."""
 
     tempUnit: int  # 1: Celsius 2: Fahreneit TODO add a select entity for configuration
 
@@ -56,14 +95,8 @@ class OverTemp(TypedDict):
     type: int  # 2 is the only detected type in app.
 
 
-class PhysicalLock_C(ChannelOnOff):
+class PhysicalLock(mt.ChannelOnOff):
     """Appliance.Control.PhysicalLock channel payload."""
-
-
-class PhysicalLock(_MerossPayloadType):
-    """Appliance.Control.PhysicalLock payload containing a list of channel payloads."""
-
-    lock: list[PhysicalLock_C]
 
 
 class Upgrade_Mcu(TypedDict):

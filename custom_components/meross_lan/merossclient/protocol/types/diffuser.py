@@ -2,42 +2,35 @@
 A collection of typing definitions for payloads in Appliance.Control.Diffuser.*
 """
 
-from . import (
-    ChannelOnOff,
-    ChannelPayload,
-    NotRequired,
-    SensorDataL,
-    TypedDict,
-    _MerossPayloadType,
-)
+from . import TypedDict
+from .. import types as mt
 
 
-class Light_C(ChannelOnOff):
-    lmTime: int  # 1639082117
-    mode: int  # 0
-    luminance: int  # 100
-    rgb: int  # 4129023
+class Light(mt.ChannelOnOff):
+    """Appliance.Control.Diffuser.Light channel payload."""
+
+    lmTime: int
+    mode: int
+    luminance: int
+    rgb: int
 
 
-class Light(_MerossPayloadType):
-    """Appliance.Control.Diffuser.Light"""
+class Spray(mt.ChannelPayload):
+    """Appliance.Control.Diffuser.Spray channel payload."""
 
-    light: list[Light_C]
-
-
-class Spray_C(ChannelPayload):
-    mode: int  # 2
-    lmTime: int  # 1644353195
+    mode: int
+    lmTime: int
 
 
-class Spray(_MerossPayloadType):
-    """Appliance.Control.Diffuser.Spray"""
-
-    spray: list[Spray_C]
-
-
-class Sensor(_MerossPayloadType):
+class Sensor(mt._MerossPayloadType):
     """Appliance.Control.Diffuser.Sensor"""
+
     type: str  # "mod100"
-    humidity: SensorDataL  # {"value": 0, "lmTime": 0}
-    temperature: SensorDataL  # {"value": 0, "lmTime": 0}
+    humidity: mt.SensorDataL  # {"value": 0, "lmTime": 0}
+    temperature: mt.SensorDataL  # {"value": 0, "lmTime": 0}
+
+
+class Digest(TypedDict):
+
+    light: list[Light]
+    spray: list[Spray]

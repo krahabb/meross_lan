@@ -47,7 +47,7 @@ class GarageDoorMixin(Emulator if TYPE_CHECKING else object):
         p_config: list = self.namespaces[mn.Appliance_GarageDoor_MultipleConfig][
             mc.KEY_CONFIG
         ]
-        p_state: list = self.descriptor.digest[mc.KEY_GARAGEDOOR]
+        p_state = self.descriptor.digest[mc.KEY_GARAGEDOOR]
         for p_payload_channel in payload[mc.KEY_CONFIG]:
             """{"channel":3,"doorEnable":0,"timestamp":1699130748,"timestampMs":663,"signalClose":10000,"signalOpen":10000,"buzzerEnable":1}"""
             p_config_channel = update_dict_strict_by_key(p_config, p_payload_channel)
@@ -66,7 +66,7 @@ class GarageDoorMixin(Emulator if TYPE_CHECKING else object):
 
     def _GET_Appliance_GarageDoor_State(self, header, payload):
         # return everything...at the moment we always query all
-        p_garageDoor: list = self.descriptor.digest[mc.KEY_GARAGEDOOR]
+        p_garageDoor = self.descriptor.digest[mc.KEY_GARAGEDOOR]
         if len(p_garageDoor) == 1:
             # for msg100 we had, historically, just dict payloads
             # in this ns but now it appears as though some devices/queries

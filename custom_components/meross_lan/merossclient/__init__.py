@@ -19,12 +19,15 @@ if TYPE_CHECKING:
         Any,
         Callable,
         ClassVar,
+        Container,
         Final,
         Generator,
         Iterable,
         Mapping,
+        MutableSequence,
         NotRequired,
         Protocol,
+        Sequence,
         TypedDict,
         Unpack,
     )
@@ -32,12 +35,6 @@ if TYPE_CHECKING:
     from cloudapi import LatestVersionType
 
     from .protocol import types as mt
-    from .protocol.types import (
-        JsonDict,
-        JsonList,
-        JsonMapping,
-        VersionTupleType,
-    )
 
     _ASYNC_LOCK: Final[asyncio.Lock]
     _AVAILABLE_TIMEZONES: Final[list[str]]
@@ -99,7 +96,7 @@ except Exception:
 #
 # General purpose utilities for payload handling
 #
-def get_element_by_key[_T: dict](payload: list[_T], key: str, value) -> _T:
+def get_element_by_key[_T: "Mapping"](payload: list[_T], key: str, value) -> _T:
     """
     scans the payload(list) looking for the first item matching
     the key value. Usually looking for the matching channel payload
@@ -113,7 +110,9 @@ def get_element_by_key[_T: dict](payload: list[_T], key: str, value) -> _T:
     )
 
 
-def get_element_by_key_safe[_T: dict](payload: list[_T], key: str, value) -> _T | None:
+def get_element_by_key_safe[_T: "Mapping"](
+    payload: list[_T], key: str, value
+) -> _T | None:
     """
     scans the payload (expecting a list) looking for the first item matching
     the key value. Usually looking for the matching channel payload
@@ -128,9 +127,9 @@ def get_element_by_key_safe[_T: dict](payload: list[_T], key: str, value) -> _T 
     return None
 
 
-def delete_element_by_key(payload: "JsonList", key: str, value):
+def delete_element_by_key(payload: list, key: str, value):
     """
-    Scans the payload(list) removinf (dict) elements whose 'key' matches value.
+    Scans the payload(list) removing (dict) elements whose 'key' matches value.
     """
     for p in tuple(payload):
         try:
@@ -256,7 +255,7 @@ def merge_lists(
         return list(update)
 
 
-def update_dict_strict(dst_dict: dict, src_dict: "Mapping"):
+def update_dict_strict(dst_dict: "mt.JsonDict | Any", src_dict: "mt.JsonMapping"):
     """Updates (merge) the dst_dict with values from src_dict checking
     their existence in dst_dict before applying. Used in emulators to update
     current state when receiving a SET payload. This is needed for testing so
@@ -274,7 +273,7 @@ def update_dict_strict(dst_dict: dict, src_dict: "Mapping"):
                     dst_dict[key] = value
 
 
-def update_dict_strict_by_key[_T: "JsonDict"](
+def update_dict_strict_by_key[_T: "mt.JsonMapping"](
     dst_lst: "Iterable[_T]", src_dict: _T, key: str = mc.KEY_CHANNEL
 ) -> _T:
     """
@@ -291,7 +290,7 @@ def update_dict_strict_by_key[_T: "JsonDict"](
     raise KeyError(f"No match for key '{key}' on value:'{str(key_value)}' in {dst_lst}")
 
 
-def extract_dict_payloads[_T](payload: _T | list[_T]) -> "Iterable[_T]":
+def extract_dict_payloads[_T](payload: "_T | Sequence[_T]") -> "Iterable[_T]":
     """
     Helper generator to manage payloads which might carry list of payloads:
     payload = { "channel": 0, "onoff": 1}
@@ -328,7 +327,7 @@ def simple_slug(value: str):
     return value.lower().replace(".", "_")
 
 
-def versiontuple(version: str) -> "VersionTupleType":
+def versiontuple(version: str) -> "mt.VersionTupleType":
     """
     Splits a version string like "1.2.3" into a tuple of integers (1,2,3)
     """
@@ -453,14 +452,14 @@ def fmt_macaddress(macaddress: str):
     return macaddress.replace(":", "").lower()
 
 
-def is_device_online(payload: "JsonDict") -> bool:
+def is_device_online(payload: "mt.JsonMapping") -> bool:
     try:
         return payload[mc.KEY_ONLINE][mc.KEY_STATUS] == mc.STATUS_ONLINE
     except Exception:
         return False
 
 
-def get_port_safe(p_dict: "JsonDict", key: str) -> int:
+def get_port_safe(p_dict: "mt.JsonMapping", key: str) -> int:
     """
     Parses the "firmware" dict in device descriptor (coming from NS_ALL)
     or the "debug" dict and returns the broker port value or what we know
@@ -472,7 +471,7 @@ def get_port_safe(p_dict: "JsonDict", key: str) -> int:
         return mc.MQTT_DEFAULT_PORT
 
 
-def get_active_broker(p_debug: "JsonDict"):
+def get_active_broker(p_debug: "mt.JsonMapping"):
     """
     Parses the "debug" dict coming from NS_SYSTEM_DEBUG and returns
     current MQTT active broker
@@ -505,7 +504,7 @@ def get_productnametype(producttype: str) -> str:
     return f"{name} ({producttype})" if name is not producttype else producttype
 
 
-def get_subdevice_key_digest(digest: "JsonMapping") -> str:
+def get_subdevice_key_digest(digest: "mt.JsonMapping") -> str:
     """Parses the subdevice dict from the hub digest to identify it's 'type'.
     Raises StopIteration if unable to find a valid digest key."""
     return (
@@ -523,17 +522,17 @@ class DeviceDescriptor:
 
         DYNAMIC_ATTRS: Final[Mapping[str, Callable[["DeviceDescriptor"], Any]]]
 
-        payload: Final[JsonDict]
-        channels: Final[frozenset[int]]
+        payload: Final[mt.JsonDict]
+        channels: Final[Sequence[int]]
         # cached accessors to native keys in Appliance.System.All payload
-        all: JsonDict
-        ability: JsonDict
-        digest: JsonDict
-        control: JsonDict
-        system: JsonDict
-        hardware: JsonDict
-        firmware: JsonDict
-        online: JsonDict
+        all: mt.system.All
+        ability: mt.JsonMapping
+        digest: mt.system.All_Digest
+        control: mt.system.All_Control
+        system: mt.system.All_System
+        hardware: mt.system.Hardware
+        firmware: mt.system.Firmware
+        online: mt.system.Online
         type: str
         subType: str
         hardwareVersion: str
@@ -543,7 +542,7 @@ class DeviceDescriptor:
         innerIp: str | None
         userId: str
         firmwareVersion: str
-        time: dict
+        time: mt.system.Time
         timezone: str | None
         is_hub: bool
         subdevices: list[mt.hub.Digest_SubDevice] | None
@@ -553,18 +552,17 @@ class DeviceDescriptor:
         productmodel: str
         type_subtype: tuple[str, str]
         is_refoss: bool
-        firmware_version: VersionTupleType
+        firmware_version: mt.VersionTupleType
         # devices with additional mcu firmware
-        mcu: mt.mcu.Firmware | JsonDict | None
+        mcu: mt.mcu.Firmware | mt.JsonDict | None
 
-    NO_CHANNEL = frozenset()
-    SINGLE_CHANNEL = frozenset((0,))
+    SINGLE_CHANNEL = (0,)
     TYPE_CHANNELS_MAP = {
         # some lookup when digest euristic parsing doesn't work
-        mc.RefossModel.em06.name: frozenset((1, 2, 3, 4, 5, 6)),
+        mc.RefossModel.em06.name: (1, 2, 3, 4, 5, 6),
         mc.TYPE_HP110A: SINGLE_CHANNEL,  # Mp3 player/light device (Smart Cherub)
-        mc.TYPE_MFC100: frozenset(
-            (2,)
+        mc.TYPE_MFC100: (
+            2,
         ),  # This device is tricky since it exposes features on different channels
         "mrs100": SINGLE_CHANNEL,
         mc.TYPE_MS600: SINGLE_CHANNEL,
@@ -613,7 +611,7 @@ class DeviceDescriptor:
         "__dict__",
     )
 
-    def __init__(self, payload: "JsonDict"):
+    def __init__(self, payload: "mt.JsonDict"):
         self.payload = payload
         # infer supported channels from device type
         device_type = self.type
@@ -625,7 +623,7 @@ class DeviceDescriptor:
             # infer from digest payload
             _channels = set()
 
-            def _search_channels(d: dict):
+            def _search_channels(d: "mt.JsonMapping"):
                 try:
                     channel = d[mc.KEY_CHANNEL]
                     if isinstance(channel, int):
@@ -641,9 +639,7 @@ class DeviceDescriptor:
                                     _search_channels(item)
 
             _search_channels(self.digest)
-            self.channels = (
-                frozenset(_channels) if _channels else DeviceDescriptor.NO_CHANNEL
-            )
+            self.channels = tuple(_channels)
 
         # mcu firmware info need to be filled at runtime when/if needed by querying
         # firmware namespaces. When 'None' it means we have no mcu upgrade needs while
@@ -660,7 +656,7 @@ class DeviceDescriptor:
         setattr(self, name, value)
         return value
 
-    def update(self, payload: "JsonDict"):
+    def update(self, payload: "mt.JsonDict"):
         """
         reset the cached pointers
         """

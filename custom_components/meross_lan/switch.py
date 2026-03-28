@@ -92,7 +92,7 @@ class ToggleX(SwitchParser):
         # BEWARE: this ns registration must be done before those others in order to properly
         # link the channels and/or setup the correct entities.
         digest = device.descriptor.digest
-        ns_digest: list = ns.get_digest(digest)
+        ns_digest = ns.get_digest(digest)
         channels = {togglex[mc.KEY_CHANNEL] for togglex in ns_digest}
         for _key in (mc.KEY_FAN, mc.KEY_GARAGEDOOR, mc.KEY_LIGHT):
             if _key in digest:

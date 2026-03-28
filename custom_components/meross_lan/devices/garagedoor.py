@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
     from ..helpers.device import Device, MerossMessage
     from ..helpers.entity import ValueParser
+    from ..merossclient.protocol import types as mt
     from ..number import NumberEntity
 
 
@@ -374,7 +375,7 @@ class GarageDoor(Cover):
         self.flush_state()
 
     @override
-    def _parse(self, payload: dict, /):
+    def _parse(self, payload: "mt.garagedoor.State", /):
         """
         {
             "channel": 0,

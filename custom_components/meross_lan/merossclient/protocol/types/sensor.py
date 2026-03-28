@@ -15,7 +15,7 @@ class SensorXRequest_C(ChannelPayload):
     data: list[str]
 
 
-class SensorXResponse_C(ChannelPayload):
+class SensorX_C(ChannelPayload):
     """
     Response format for LatestX and likely HistoryX payloads.
     The 'data' dict contains sensor keys and a list of dicts.
@@ -29,12 +29,12 @@ class LatestXRequest_C(SensorXRequest_C):
     pass
 
 
-class LatestXResponse_C(SensorXResponse_C):
+class LatestX_C(SensorX_C):
     data: dict[str, list[SensorData]]
 
 
-class LatestXResponse(TypedDict):
-    """
+class LatestX(TypedDict):
+    """Appliance.Control.Sensor.LatestX
     {
         "latest": [
             {
@@ -61,4 +61,4 @@ class LatestXResponse(TypedDict):
     Example taken from ms600
     """
 
-    latest: list[LatestXResponse_C]
+    latest: list[LatestX_C]

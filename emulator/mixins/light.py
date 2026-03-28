@@ -9,6 +9,7 @@ from custom_components.meross_lan.merossclient import (
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
+    types as mt,
 )
 
 if TYPE_CHECKING:
@@ -37,9 +38,9 @@ class LightMixin(Emulator if TYPE_CHECKING else object):
         # need to override basic handler since lights turning on/off is tricky between
         # various firmwares: some supports onoff in light payload some use the togglex
         p_digest = self.descriptor.digest
-        p_digest_light: dict = p_digest[mc.KEY_LIGHT]
-        p_digest_light_saved = dict(p_digest_light)
-        p_light: dict = payload[mc.KEY_LIGHT]
+        p_digest_light = p_digest[mc.KEY_LIGHT]
+        p_digest_light_saved = p_digest_light.copy()
+        p_light: "mt.control.Light" = payload[mc.KEY_LIGHT]
         channel = p_light[mc.KEY_CHANNEL]
         if channel != p_digest_light[mc.KEY_CHANNEL]:
             raise Exception("wrong request channel")
@@ -48,7 +49,7 @@ class LightMixin(Emulator if TYPE_CHECKING else object):
         # the device is not using togglex
         if self._togglex_switch:
             if mc.KEY_ONOFF in p_digest_light:
-                p_digest_togglex: dict = p_digest[mc.KEY_TOGGLEX][channel]
+                p_digest_togglex = p_digest[mc.KEY_TOGGLEX][channel]
                 if p_digest_togglex[mc.KEY_ONOFF] != p_digest_light[mc.KEY_ONOFF]:
                     p_digest_togglex[mc.KEY_ONOFF] = p_digest_light[mc.KEY_ONOFF]
                     if self.mqtt_connected:
@@ -58,7 +59,7 @@ class LightMixin(Emulator if TYPE_CHECKING else object):
                         )
             else:
                 if not self._togglex_mode:
-                    p_digest_togglex: dict = p_digest[mc.KEY_TOGGLEX][channel]
+                    p_digest_togglex = p_digest[mc.KEY_TOGGLEX][channel]
                     if not p_digest_togglex.get(mc.KEY_ONOFF):
                         p_digest_togglex[mc.KEY_ONOFF] = 1
                         if self.mqtt_connected:
@@ -105,7 +106,7 @@ class LightMixin(Emulator if TYPE_CHECKING else object):
                     effect_index = index
             index += 1
 
-        p_light: dict = self.descriptor.digest[mc.KEY_LIGHT]
+        p_light = self.descriptor.digest[mc.KEY_LIGHT]
         p_light_saved = dict(p_light)
         if effect_index == -1:
             p_light.pop(mc.KEY_EFFECT, None)

@@ -429,14 +429,14 @@ class AbstractClient(logging.Loggable):
 
             try:
 
-                def _build_timerules() -> list["mt.system._Timerule"]:
+                def _build_timerules() -> list["mt.system.Time_Timerule"]:
 
                     import pytz
 
                     tz_pytz = pytz.timezone(tzname)
                     if isinstance(tz_pytz, pytz.tzinfo.DstTzInfo):
 
-                        def _timerule_from_pytz(idx: int) -> "mt.system._Timerule":
+                        def _timerule_from_pytz(idx: int) -> "mt.system.Time_Timerule":
                             _transition_info = tz_pytz._transition_info[idx]  # type: ignore
                             return [
                                 int(tz_pytz._utc_transition_times[idx].timestamp()),  # type: ignore

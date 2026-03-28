@@ -23,6 +23,7 @@ if TYPE_CHECKING:
         Unpack,
     )
 
+    from .. import types as mt
     from ..types import (
         JsonDict,
         JsonList,
@@ -558,7 +559,7 @@ class Namespace(str):
         payload[self.key_idx] = idx
         return (self, mc.METHOD_SET, {self.key: [payload]})
 
-    def get_digest(self, digest: "JsonDict") -> "JsonDict | JsonList":
+    def get_digest[_T: "JsonMapping | JsonList"](self, digest: "mt.system.All_Digest") -> _T:  # type: ignore
         """Retrieves the namespace payload/state from the device digest."""
         raise NotImplementedError("Namespace has no digest key defined.")
 
@@ -748,7 +749,7 @@ Appliance_Control_Sensor_LatestX = ns(
     "Appliance.Control.Sensor.LatestX", mc.KEY_LATEST, 220, G_LIDS, PSH, IDX_C
 )
 Appliance_Control_Spray = ns(
-    "Appliance.Control.Spray", mc.KEY_SPRAY, -1, G_D, S_DI, PSH, IDX_C, DIG
+    "Appliance.Control.Spray", mc.KEY_SPRAY, 90, G_D, S_DI, PSH, IDX_C, DIG
 )
 Appliance_Control_TempUnit = ns(
     "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, 30, G_LIS, S_LI, IDX_C

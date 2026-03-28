@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from typing import ClassVar, Final, NotRequired, Unpack
 
     from .helpers.device import Device
-    from .merossclient.protocol.types import JsonDict, JsonList, JsonMapping
+    from .merossclient.protocol import types as mt
 
 
 MSL_LUMINANCE_MIN = 1
@@ -261,7 +261,7 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
         super().set_unavailable()
 
     # interface: self
-    def _transition_setup(self, _light: dict, kwargs: dict, /) -> float | None:
+    def _transition_setup(self, _light: "mt.JsonDict", kwargs: dict, /) -> float | None:
         self._t_duration = _t_duration = kwargs[ATTR_TRANSITION]
         self._t_begin = monotonic()
         self._t_end = self._t_begin + _t_duration
@@ -381,9 +381,9 @@ class Light(LightBase):
     """
 
     if TYPE_CHECKING:
+        ns_payload: mt.control.Light
 
         ATTR_TOGGLEX_AUTO: Final[str]
-
         _togglex_auto: bool | None
         """
         - False: the device needs to use TOGGLEX
@@ -439,7 +439,7 @@ class Light(LightBase):
         self._togglex_auto = None if self.handler_togglex else False
 
     @override
-    def _parse(self, payload: "JsonMapping", /):
+    def _parse(self, payload: "mt.control.Light", /):
         if self.ns_payload != payload:
             self.ns_payload = payload
             if mc.KEY_ONOFF in payload:
@@ -526,11 +526,11 @@ class Light(LightBase):
     # interface: self
     async def async_request_onoff(self, onoff: int):
         if self.handler_togglex:
-            await self.handler_togglex.async_set({mc.KEY_ONOFF: onoff}, self)
+            await self.handler_togglex.async_set_parse({mc.KEY_ONOFF: onoff}, self)
         else:
             await self.async_request_parse_ex({mc.KEY_ONOFF: onoff})
 
-    async def async_request_light_on_flush(self, _light: dict):
+    async def async_request_light_on_flush(self, _light: "mt.JsonDict", /):
         if mc.KEY_ONOFF in _light:
             _light[mc.KEY_ONOFF] = 1
         else:
@@ -578,7 +578,7 @@ class Light(LightBase):
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
         handler = device._create_handler(ns)
         descriptor = device.descriptor
-        ns_digest: dict = ns.get_digest(descriptor.digest)
+        ns_digest = ns.get_digest(descriptor.digest)
         handler.register_parser(
             EffectLight(ns_digest[mc.KEY_CHANNEL], device, ns=ns)
             if mn.Appliance_Control_Light_Effect in descriptor.ability
@@ -602,7 +602,7 @@ class EffectLight(Light):
     """
 
     if TYPE_CHECKING:
-        _light_effects: list[JsonDict]
+        _light_effects: list[mt.control.Light_Effect]
         # HA core entity attributes:
         init_effect_list: Final[list[str]]
         effect_list: list[str]
@@ -621,7 +621,7 @@ class EffectLight(Light):
             # This is a 'new' (2025-06-17) key appearing in msl320cpr digest.
             # The key itself is 'light.entity' and carries the effect list
             # (same as Appliance.Control.Light.Effect)
-            self._light_effects = device.descriptor.digest["light.entity"]
+            self._light_effects = device.descriptor.digest[mc.KEY_LIGHT_EFFECT]
             kwargs["effect_list"] = [
                 _light_effect[mc.KEY_EFFECTNAME]
                 for _light_effect in self._light_effects
@@ -693,14 +693,14 @@ class EffectLight(Light):
 
         # intercept light command if it is related to effects (on/off/change of luminance)
         if ATTR_EFFECT in kwargs:
-            _light = dict(self.ns_payload)
-            effect_index = self.effect_list.index(kwargs[ATTR_EFFECT])  # type: ignore
+            _light = self.ns_payload.copy()
+            effect_index = self.effect_list.index(kwargs[ATTR_EFFECT])
             if effect_index == len(self._light_effects):  # EFFECT_OFF
                 _light.pop(mc.KEY_EFFECT, None)
                 _light[mc.KEY_CAPACITY] = (
                     _light[mc.KEY_CAPACITY] & ~mc.LIGHT_CAPACITY_EFFECT
                 )
-                await self.async_request_light_on_flush(_light)
+                await self.async_request_light_on_flush(_light) # type: ignore
             else:
                 _light_effect = self._light_effects[effect_index]
                 _light_effect[mc.KEY_ENABLE] = 1

@@ -19,13 +19,7 @@ if TYPE_CHECKING:
     )
 
     from . import Device
-    from ..protocol.types import (
-        JsonDict,
-        JsonList,
-        JsonMapping,
-        MerossPayloadType,
-        MerossRequestType,
-    )
+    from ..protocol import types as mt
 
 
 class NamespaceHandler(logging.Loggable):
@@ -43,7 +37,7 @@ class NamespaceHandler(logging.Loggable):
 
     if TYPE_CHECKING:
         type HandlerFunc = Callable[[MerossMessage], None]
-        type ParserFunc = Callable[[JsonMapping], None]
+        type ParserFunc = Callable[[mt.JsonMapping], None]
         # need to use Any because of covariance issues with NamespaceHandler
         type PollingStrategyFunc = Callable[[Any], Coroutine]
         type PollingConfigType = tuple[int, int, PollingStrategyFunc | None]
@@ -65,13 +59,13 @@ class NamespaceHandler(logging.Loggable):
         handler: HandlerFunc
         parsers: Final[dict[Any, ParserFunc]]
         parser_class: type[NamespaceParser] | None
-        digest: JsonDict | JsonList | None
+        digest: mt.JsonMapping | mt.JsonArray | None
 
         polling_strategy: PollingStrategyFunc | None
-        polling_request: MerossRequestType
-        polling_request_channels: list[dict[str, Any]]  # on demand instance
+        polling_request: mt.MerossRequestType
+        polling_request_channels: mt.JsonList  # on demand instance
 
-        last_rx_push: JsonDict | None
+        last_rx_push: mt.JsonMapping | None
         # TODO: implement caching of all methods responses
 
         class Args(logging.Loggable.Args):
@@ -362,7 +356,7 @@ class NamespaceHandler(logging.Loggable):
             self.DEBUG, "Handler undefined (message:%s)", _message=msg, timeout=14400
         )
 
-    def parse_digest(self, digest: "JsonDict | JsonList", /):
+    def parse_digest(self, digest: "mt.JsonMapping | mt.JsonArray", /):
         """Used when parsing digest(s) in Appliance.System.All."""
         for p_channel in extract_dict_payloads(digest):
             try:
@@ -380,7 +374,7 @@ class NamespaceHandler(logging.Loggable):
             timeout=14400,
         )
 
-    def _handle_missing_parser(self, p_channel: dict, ke: KeyError, /):
+    def _handle_missing_parser(self, p_channel: "mt.JsonMapping", ke: KeyError, /):
         """
         Smart handler for KeyError raised when dispatching
         a channel payload to a parser.
@@ -439,11 +433,15 @@ class NamespaceHandler(logging.Loggable):
             self.async_get(*channels), task_name or self.id, eager_start=True
         )
 
-    async def async_set(
+    async def async_set(self, payload: "mt.JsonMapping", /):
+        """Helper to request method SET."""
+        return await self.parent.async_request(*self.id.request_set(payload))
+
+    async def async_set_parse(
         self,
-        payload: "JsonDict",
-        parser: NamespaceParser | None = None,
-        state: "JsonMapping" = mn.EMPTY_DICT,
+        payload: "mt.JsonDict",
+        parser: NamespaceParser,
+        state: "mt.JsonMapping" = mn.EMPTY_DICT,
         /,
     ):
         """
@@ -454,22 +452,25 @@ class NamespaceHandler(logging.Loggable):
         the SET command payload will be automatically set to the parser's channel.
         """
         response = await self.parent.async_request(
-            *self.id.request_set(payload, parser.channel if parser else None)
+            *self.id.request_set(payload, parser.channel)
         )
-        if parser:
-            # TODO: consider maybe a dedicated _parse_set_xxxx method?
-            # also, most namespaces SETACK replies are empty dicts
-            # so we just dispatch the request payload (which might be a
-            # subset of the whole GET payload).
-            # Some namespaces though might return different payloads on SETACK
-            # GarageDoor.State or mts100.Temperature
-            getattr(parser, f"_parse_{self.id.slug_end}", parser._parse)(
-                merge_dicts(dict(state), payload) if state else payload
-            )
+        # TODO: consider maybe a dedicated _parse_set_xxxx method?
+        # also, most namespaces SETACK replies are empty dicts
+        # so we just dispatch the request payload (which might be a
+        # subset of the whole GET payload).
+        # Some namespaces though might return different payloads on SETACK
+        # GarageDoor.State or mts100.Temperature
+        getattr(parser, f"_parse_{self.id.slug_end}", parser._parse)(
+            merge_dicts(dict(state), payload) if state else payload
+        )
         return response
 
-    async def async_set_c_ex(
-        self, payload, parser: NamespaceParser, state: "JsonMapping" = mn.EMPTY_DICT, /
+    async def async_set_parse_ex(
+        self,
+        payload,
+        parser: NamespaceParser,
+        state: "mt.JsonMapping" = mn.EMPTY_DICT,
+        /,
     ):
         """
         Helper to request method SET (only for LIST_C payload types)and eventually dispatch the response to the parser
@@ -755,7 +756,7 @@ class NamespaceHandler(logging.Loggable):
 
         ns = self.id
 
-        async def _async_wrapped_get(payload: "JsonDict"):
+        async def _async_wrapped_get(payload: "mt.JsonDict"):
             try:
                 return await async_request_func(ns, mc.METHOD_GET, payload)
             except Exception:
@@ -827,7 +828,7 @@ class NamespaceHandler(logging.Loggable):
                 # If any of these works it will candidate for this NamespaceHandler polling_request format.
                 detected_request_payload_type: mn.PayloadType | None = None
 
-                async def _async_check(_payload: "MerossPayloadType"):
+                async def _async_check(_payload: "mt.MerossPayloadType"):
                     try:
                         _response = await async_request_func(
                             ns, mc.METHOD_GET, _payload

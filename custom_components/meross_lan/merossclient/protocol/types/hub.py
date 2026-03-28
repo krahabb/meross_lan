@@ -3,10 +3,7 @@ A collection of typing definitions for payloads in Appliance.Hub.*
 """
 
 from . import NotRequired, TypedDict
-
-
-class IdPayload(TypedDict):
-    id: str
+from .. import types as mt
 
 
 class SubIdPayload(TypedDict):
@@ -14,7 +11,7 @@ class SubIdPayload(TypedDict):
     channel: int
 
 
-class Battery(IdPayload):
+class Battery(mt.IdPayload):
     """Appliance.Hub.Battery"""
 
     value: int
@@ -25,7 +22,7 @@ class _Online(TypedDict):
     lastActiveTime: int
 
 
-class Online(_Online, IdPayload):
+class Online(_Online, mt.IdPayload):
     """Appliance.Hub.Online"""
 
 
@@ -33,7 +30,7 @@ class _ToggleX(TypedDict):
     onoff: int  # 1: on, 0: off
 
 
-class ToggleX(_ToggleX, IdPayload):
+class ToggleX(_ToggleX, mt.IdPayload):
     """Appliance.Hub.ToggleX"""
 
     pass
@@ -45,7 +42,7 @@ class _Mts100_Mode(TypedDict):
     state: int  # MTS100_MODE_* constants
 
 
-class Mts100_Mode(_Mts100_Mode, IdPayload):
+class Mts100_Mode(_Mts100_Mode, mt.IdPayload):
     """Appliance.Hub.Mts100.Mode"""
 
     pass
@@ -65,13 +62,13 @@ class _Mts100_Temperature(TypedDict):
     openWindow: int  # 1: open, 0: closed
 
 
-class Mts100_Temperature(_Mts100_Temperature, IdPayload):
+class Mts100_Temperature(_Mts100_Temperature, mt.IdPayload):
     """Appliance.Hub.Mts100.Temperature"""
 
     pass
 
 
-class Mts100_All(IdPayload):
+class Mts100_All(mt.IdPayload):
     """Appliance.Hub.Mts100.All"""
 
     online: _Online
@@ -81,7 +78,7 @@ class Mts100_All(IdPayload):
     temperature: NotRequired[_Mts100_Temperature]
 
 
-class Sensor_Adjust(IdPayload):
+class Sensor_Adjust(mt.IdPayload):
     """Appliance.Hub.Sensor.Adjust"""
 
     temperature: int
@@ -94,14 +91,14 @@ class _Sensor_LatestSample(TypedDict):
     time: int
 
 
-class Sensor_Latest(IdPayload):
+class Sensor_Latest(mt.IdPayload):
     """Appliance.Hub.Sensor.Latest"""
 
     temperature: _Sensor_LatestSample
     humidity: _Sensor_LatestSample
 
 
-class Sensor_TempHum(IdPayload):
+class Sensor_TempHum(mt.IdPayload):
     """Appliance.Hub.Sensor.TempHum"""
 
     latestTemperature: int
@@ -116,13 +113,13 @@ class _smokeAlarm(TypedDict):
     interConn: int
 
 
-class Sensor_Smoke(_smokeAlarm, IdPayload):
+class Sensor_Smoke(_smokeAlarm, mt.IdPayload):
     """Appliance.Hub.Sensor.Smoke"""
 
     pass
 
 
-class Sensor_All(IdPayload):
+class Sensor_All(mt.IdPayload):
     """Appliance.Hub.Sensor.All"""
 
     online: _Online
@@ -154,20 +151,20 @@ class Sensor_All_gs559(Sensor_All):
     smokeAlarm: _smokeAlarm
 
 
-class SubDevice_Beep(IdPayload):
+class SubDevice_Beep(mt.IdPayload):
     """Appliance.Hub.SubDevice.Beep"""
 
     onoff: int  # 1: on, 0: off
 
 
-class SubDevice_Version(IdPayload):
+class SubDevice_Version(mt.IdPayload):
     """Appliance.Hub.SubDevice.Version"""
 
     hardware: str
     firmware: str
 
 
-class Digest_SubDevice(_Online, ToggleX, IdPayload):
+class Digest_SubDevice(_Online, ToggleX, mt.IdPayload):
     """Common fields for subdevices in hub digest."""
 
     pass
@@ -239,7 +236,7 @@ class Digest_mst100(Digest_SubDevice):
     mst: _mst
 
 
-class Digest_Hub(TypedDict):
+class Digest(TypedDict):
     """Appliance.Digest.Hub"""
 
     hubId: int

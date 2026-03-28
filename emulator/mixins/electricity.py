@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 class ElectricityMixin(Emulator if TYPE_CHECKING else object):
 
     if TYPE_CHECKING:
-        electricity: mt.control.Electricity_C
+        electricity: mt.control.Electricity
     # used to 'fix' and control the power level in tests
     # if None (default) it will generate random values
     _power_set: int | None = None
@@ -79,7 +79,7 @@ class ElectricityMixin(Emulator if TYPE_CHECKING else object):
 class ElectricityXMixin(Emulator if TYPE_CHECKING else object):
 
     if TYPE_CHECKING:
-        electricityx: list[mt.control.ElectricityX_C]
+        electricityx: list[mt.control.ElectricityX]
 
     VOLTAGEX_AVERAGE = 228000  # in millivolts
 

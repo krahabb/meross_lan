@@ -9,6 +9,7 @@ type JsonDict = dict[str, Any]
 type JsonMapping = Mapping[str, Any]
 """Generic data-dict carried in Meross messages."""
 type JsonList = list[JsonDict]
+type JsonArray = list[JsonMapping]
 """Generic data-list carried in Meross messages."""
 type JsonType = Union[JsonDict, JsonList, str, int, float, bool, None]
 """Generic data-type carried in Meross messages."""
@@ -72,6 +73,14 @@ class ChannelOnOff(ChannelPayload):
     onoff: int
 
 
+class IdPayload(TypedDict):
+    """Common payload including an 'id' field.
+    This payload structure is typical for hub subdevices but also in many
+    other namespaces reporting a list of items (e.g. timers, effects, etc.)."""
+
+    id: str
+
+
 class SensorDataL(TypedDict):
     """
     A common struct for sensor values reporting.
@@ -94,6 +103,7 @@ from . import (
     config,
     control,
     diffuser,
+    garagedoor,
     hub,
     mcu,
     rollershutter,

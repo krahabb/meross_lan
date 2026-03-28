@@ -33,14 +33,14 @@ class DiffuserLight(LightBase):
     # TODO: migrate to HA core entity init mechanics so to skip constructor implementation
     # This needs a bit of refactor in LightBase
     if TYPE_CHECKING:
-        ns_payload: mt.diffuser.Light_C
+        ns_payload: mt.diffuser.Light
         effect_list: list[str]
 
     init_effect_list = mc.DIFFUSER_LIGHT_MODE_LIST
     _attr_supported_color_modes = {ColorMode.RGB}
 
     @override
-    def _parse(self, payload: "mt.diffuser.Light_C", /):
+    def _parse(self, payload: "mt.diffuser.Light", /):
         # taken from https://github.com/bwp91/homebridge-meross/blob/latest/lib/device/diffuser.js
         if self.ns_payload != payload:
             self.ns_payload = payload

@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from homeassistant.core import Context, ServiceResponse, State
 
     from custom_components.meross_lan.helpers.entity import Entity
+    from custom_components.meross_lan.merossclient.protocol import types as mt
 
     EntityType = type[entity.Entity]
     MerossEntityTypesList = list[type[Entity]]
@@ -55,8 +56,8 @@ class EntityComponentTest:
             return_response: bool = False,
         ) -> ServiceResponse: ...
 
-        ability: ClassVar[dict[str, Any]]
-        digest: ClassVar[dict[str, Any]]
+        ability: ClassVar[mt.JsonMapping]
+        digest: ClassVar[mt.system.All_Digest]
         expected_entity_types: ClassVar[MerossEntityTypesList]
         device_context: ClassVar[DeviceContext]
         entity_id: ClassVar[str]
