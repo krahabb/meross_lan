@@ -14,8 +14,6 @@ from ..merossclient import (
     DeviceDescriptor,
     datetime_from_epoch,
     device,
-    get_active_broker,
-    is_device_online,
 )
 from ..merossclient.client import AbstractClient, Direction, Transport
 from ..merossclient.client.http import HttpClient
@@ -380,7 +378,6 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         "conf_transport",
         "host",
         "_device_entries",
-        "device_debug",
         "device_timestamp",
         "device_timedelta",
         "_check_device_time_enabled",
@@ -435,7 +432,6 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             key=config_entry.data.get(mlc.CONF_KEY) or "",  # type: ignore[argument]
             descriptor=descriptor,  # type: ignore[argument],
         )
-        self.device_debug = None
         self.device_timestamp = 0
         self.device_timedelta = 0
         self._check_device_time_enabled = False
@@ -939,7 +935,6 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
     @override
     def on_disconnect(self, /):
         super().on_disconnect()
-        self.device_debug = None
         self.cancel_callback(self._check_device_time)
         for entity in self.entities.values():
             entity.set_unavailable()
@@ -1052,11 +1047,6 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         super()._switch_client(client)
         if self.is_connected:
             self.sensor_protocol.set_available()
-
-    @override
-    async def async_poll_full(self):
-        self.device_debug = None
-        await super().async_poll_full()
 
     # interface: self
     def register_togglex_channel(self, entity: "ParserEntity", active: bool, /):
@@ -1267,37 +1257,6 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                 self._update_host(descr.innerIp)
         elif oldtimezone != descr.timezone:
             self.schedule_entry_update(False)
-
-        if self.configured_transport is Transport.AUTO:
-            if (mqtt := self.mqtt) and mqtt.is_connected:
-                if not is_device_online(descr.system):
-                    mqtt.on_disconnect()
-            elif is_device_online(descr.system):
-                if not self.device_debug:
-                    self.get_handler(mn.Appliance_System_Debug).schedule_get()
-            else:
-                self.device_debug = None
-
-    def _handle_Appliance_System_Debug(self, message: MerossMessage, /):
-        # this ns is queried when we're HTTP connected and the device reports it is
-        # also MQTT connected but meross_lan has no confirmation (_mqtt_active == None)
-        # we're then going to inspect the device reported broker and see if
-        # our config allow to connect
-        self.device_debug = message.payload[mc.KEY_DEBUG]
-        if mqtt := self.mqtt:
-            broker = get_active_broker(self.device_debug)
-            if mqtt.id.host == broker.host:
-                if mqtt.connection.is_connected and not mqtt.is_connected:
-                    mqtt.on_connect()
-                    if self.transport is not self.preferred_transport:
-                        try:
-                            self._switch_client(
-                                self._clients_connected[self.preferred_transport]
-                            )
-                        except KeyError:
-                            pass
-            elif mqtt.connection.is_cloud:
-                self.remove_client(mqtt)
 
     def _handle_Appliance_System_Time(self, message: MerossMessage, /):
         self.descriptor.update_time(message.payload[mc.KEY_TIME])

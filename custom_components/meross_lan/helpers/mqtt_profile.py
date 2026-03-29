@@ -543,9 +543,10 @@ class MQTTConnection(AbstractMQTTConnection):
         to notify the app of the device connection state. We then intercept
         this message which is not intended for the device though and act accordingly
         here at our 'session management state'. At any rate, this will be set to be
-        handled in every MQTTConnection (cloud, local) so we process even messages
-        originated from the device itself.
-        Returns False when device is online and the message pipe should continue processing.
+        handled in every MQTTConnection (cloud, local) so we process messages
+        eventually originated from the device itself.
+        Returns False when device is online so that device message handling will
+        trigger onlining the device itself.
         """
         return (message.method != mc.METHOD_PUSH) or (
             message.payload[mc.KEY_ONLINE].get(mc.KEY_STATUS) != mc.STATUS_ONLINE

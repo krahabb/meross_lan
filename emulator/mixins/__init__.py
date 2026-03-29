@@ -920,9 +920,12 @@ class Emulator:
         mqtt_client.publish(mqtt_client.topic_publish, message)
 
     def _mqtt_setup(self):
-        broker = self.descriptor.main_broker
         self.mqtt_client = mqtt_client = MQTTDeviceClient(
-            broker, None, key=self.key, uuid=self.uuid, user_id=self.descriptor.userId
+            self.descriptor.server,
+            None,
+            key=self.key,
+            uuid=self.uuid,
+            user_id=self.descriptor.userId,
         )
         mqtt_client.on_connect = self._mqtt_connect
         mqtt_client.on_disconnect = self._mqtt_disconnect

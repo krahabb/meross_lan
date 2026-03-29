@@ -542,7 +542,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         device_descriptor = self.device_descriptor
         device_config = self.device_config
         device_ssid = None
-        device_server = str(device_descriptor.main_broker)
+        device_server = str(device_descriptor.server)
         device_key = device_config.get(mc.KEY_KEY) or ""
         try:
             bind_config = self.bind_config
@@ -572,7 +572,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                 and _device.mqtt.is_connected
                 and (_device.mqtt.connection is ha_mqtt_connection)
             ):
-                _broker = _device.descriptor.main_broker
+                _broker = _device.descriptor.server
                 mqtt_connections[f"HomeAssistant (mqtt://{_broker})"] = (
                     ha_mqtt_connection,
                     _broker,

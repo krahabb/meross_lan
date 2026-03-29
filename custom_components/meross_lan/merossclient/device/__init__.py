@@ -4,8 +4,6 @@ from datetime import UTC, tzinfo
 from functools import cached_property
 from typing import TYPE_CHECKING, override
 
-from custom_components.meross_lan.helpers import device
-
 from .. import (
     DeviceDescriptor,
     async_import_module,
@@ -934,6 +932,20 @@ class Device(PhysicalDevice):
 
         descr = self.descriptor
         descr.update(message.payload)
+
+        if (self.client is self.http) and (mqtt := self.mqtt):
+            # speed up MQTT online/offline detection by checking device reported state
+            if mqtt.is_connected:
+                if not is_device_online(descr.system):
+                    mqtt.on_disconnect()
+            elif is_device_online(descr.system):
+                connection = mqtt.connection
+                # if connection.id != descr.server we cannot assume anything since
+                # host name might have different labels but still refer to the same host
+                if connection.is_connected and (connection.id == descr.server):
+                    mqtt.on_connect()
+                    if self.preferred_transport is Transport.MQTT:
+                        self._switch_client(mqtt)
 
         digest = descr.digest or descr.control
         for handler in (

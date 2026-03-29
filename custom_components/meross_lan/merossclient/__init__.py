@@ -546,6 +546,8 @@ class DeviceDescriptor:
         timezone: str | None
         is_hub: bool
         subdevices: list[mt.hub.Digest_SubDevice] | None
+        server: Final[HostAddress]  # type: ignore
+        secondServer: Final[HostAddress]  # type: ignore
         # computed cached helpers
         productname: str
         productnametype: str
@@ -592,6 +594,13 @@ class DeviceDescriptor:
         "is_hub": lambda _self: mc.KEY_HUB in _self.digest,
         "subdevices": lambda _self: (
             _self.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE] if _self.is_hub else None
+        ),
+        "server": lambda _self: HostAddress(
+            _self.firmware[mc.KEY_SERVER], get_port_safe(_self.firmware, mc.KEY_PORT)
+        ),
+        "secondServer": lambda _self: HostAddress(
+            _self.firmware[mc.KEY_SECONDSERVER],
+            get_port_safe(_self.firmware, mc.KEY_SECONDPORT),
         ),
         "productname": lambda _self: get_productname(_self.type),
         "productnametype": lambda _self: get_productnametype(_self.type),
@@ -678,32 +687,16 @@ class DeviceDescriptor:
                 pass
 
     @property
-    def main_broker(self) -> HostAddress:
+    def servers(self):
         """list of configured brokers in the device"""
-        fw = self.firmware
-        return HostAddress(fw[mc.KEY_SERVER], get_port_safe(fw, mc.KEY_PORT))
-
-    @property
-    def alt_broker(self) -> HostAddress:
-        """list of configured brokers in the device"""
-        fw = self.firmware
-        return HostAddress(
-            fw[mc.KEY_SECONDSERVER], get_port_safe(fw, mc.KEY_SECONDPORT)
-        )
-
-    @property
-    def brokers(self) -> list[HostAddress]:
-        """list of configured brokers in the device"""
-        _brokers: list[HostAddress] = []
-        fw = self.firmware
-        if server := fw.get(mc.KEY_SERVER):
-            _brokers.append(HostAddress(server, get_port_safe(fw, mc.KEY_PORT)))
-        if second_server := fw.get(mc.KEY_SECONDSERVER):
-            if second_server != server:
-                _brokers.append(
-                    HostAddress(second_server, get_port_safe(fw, mc.KEY_SECONDPORT))
-                )
-        return _brokers
+        _servers: list[HostAddress] = []
+        try:
+            _servers.append(self.server)
+            if self.secondServer != _servers[0]:
+                _servers.append(self.secondServer)
+        except KeyError:
+            pass
+        return _servers
 
     def build_upgrade_payload(
         self,

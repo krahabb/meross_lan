@@ -15,7 +15,7 @@ from . import (
     mqtt_profile as mlq,
 )
 from .. import const as mlc
-from ..merossclient import HostAddress, cloudapi, datetime_from_epoch, get_active_broker
+from ..merossclient import HostAddress, cloudapi, datetime_from_epoch
 from ..merossclient.client.mqtt import MQTTAppClient
 from ..merossclient.obfuscate import OBFUSCATE_DICT, OBFUSCATE_UUID_MAP
 from ..merossclient.protocol import const as mc
@@ -307,13 +307,7 @@ class MerossProfile(mlq.MQTTProfile):
     def get_connection(self, device: "Device"):
         try:
             if device.is_connected:
-                if device.device_debug:
-                    try:
-                        broker = get_active_broker(device.device_debug)
-                    except Exception:
-                        broker = device.descriptor.main_broker
-                else:
-                    broker = device.descriptor.main_broker
+                broker = device.descriptor.server
             else:
                 # decide which broker to connect to based off the most recent info
                 descr = device.descriptor
@@ -321,7 +315,7 @@ class MerossProfile(mlq.MQTTProfile):
                 timestamp_fw = descr.time.get(mc.KEY_TIMESTAMP, 0)
                 timestamp_di = self._data[self.KEY_DEVICE_INFO_TIME]
                 if timestamp_fw > timestamp_di:
-                    broker = descr.main_broker
+                    broker = descr.server
                 else:
                     if domain := device_info.get(mc.KEY_DOMAIN):
                         broker = HostAddress.build(domain)
