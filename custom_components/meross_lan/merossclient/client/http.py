@@ -185,26 +185,14 @@ class HttpClient(AbstractClient):
             # reason we're using an increasing timeout loop to try recover
             # when this timeout is transient. This will lead to a total timeout
             # (for the caller) exceeding the value(s) actually set in self.timeout
-            _timeout = kwargs.get("timeout", self.timeout)
-            _connect_timeout = 1
-            while True:
-                try:
-                    response = await self._session.post(
-                        url=self._requesturl,
-                        data=data,
-                        headers=headers,
-                        timeout=aiohttp.ClientTimeout(
-                            total=_timeout, connect=_connect_timeout
-                        ),
-                    )
-                    break
-                except aiohttp.ServerTimeoutError:
-                    self._check_terminated()
-                    if _connect_timeout < _timeout:
-                        _connect_timeout = _connect_timeout * 2
-                    else:
-                        raise
-
+            response = await self._session.post(
+                url=self._requesturl,
+                data=data,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(
+                    total=kwargs.get("timeout", self.timeout)
+                ),
+            )
             self._check_terminated()
             if response.status < 400:
                 if not self.is_connected:
@@ -223,6 +211,10 @@ class HttpClient(AbstractClient):
             raise MerossTransportError(
                 self, f"Unexpected response status {response.status}"
             )
+        except asyncio.TimeoutError:
+            if self.is_connected:
+                self.on_disconnect()
+            raise
         except Exception as e:
             self.log_exception(self.WARNING, e, "async_request_raw")
             raise

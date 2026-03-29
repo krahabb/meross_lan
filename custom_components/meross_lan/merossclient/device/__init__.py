@@ -1,4 +1,5 @@
 from abc import abstractmethod
+import aiohttp
 import asyncio
 from datetime import UTC, tzinfo
 from functools import cached_property
@@ -338,7 +339,6 @@ class Device(PhysicalDevice):
             await client.async_shutdown()
         await super().async_shutdown()
         del self.handler_all  # type: ignore
-        self._lazypoll_requests.clear()
         # This must be by design
         assert self.is_connected is False, "Device shutdown failed: still connected"
         assert not self.client, "Device shutdown failed: client still set"
@@ -395,6 +395,7 @@ class Device(PhysicalDevice):
     def on_disconnect(self, /):
         super().on_disconnect()
         self.client = None  # type: ignore[assignment]
+        self.transport = self.TRANSPORT  # type: ignore[assignment]
         self.mqtt_active = False  # type: ignore[assignment]
         for handler in self.ns_handlers.values():
             handler.next_poll_epoch = 0.0
@@ -427,13 +428,14 @@ class Device(PhysicalDevice):
                         self, "No transport available to send the request"
                     )
                 tryed_clients = set()
+            self.log_exception(
+                self.DEBUG,
+                e,
+                "%s request (client:%s): trying fall-back",
+                _client.TRANSPORT,  # type: ignore
+                _client,
+            )
 
-        self.log(
-            self.DEBUG,
-            "Request failed on current transport (%s client:%s): trying fall-back",
-            _client.TRANSPORT,  # type: ignore
-            _client,
-        )
         while True:
             for _client in self._clients_connected.values():
                 if _client in tryed_clients:
@@ -697,7 +699,6 @@ class Device(PhysicalDevice):
                 on the next polling cycle. This will 'spread' smart requests over
                 subsequent polls
                 """
-                self._lazypoll_requests.clear()
                 # self.ns_handlers could change at any time due to async
                 # message parsing (handlers might be dynamically created by then)
                 # Also, we skip ns polling for data wich might be carried in ns_all digest
@@ -708,11 +709,20 @@ class Device(PhysicalDevice):
                     if not handler.digest
                 ]:
                     if handler.polling_strategy:
-                        await handler.polling_strategy(handler)
-                        if not self.is_connected:
-                            break  # do not return: do the flush first!
+                        try:
+                            await handler.polling_strategy(handler)
+                        except asyncio.TimeoutError:
+                            raise
+                        except Exception as e:
+                            self.log_exception(
+                                self.WARNING,
+                                e,
+                                "%s for %s",
+                                handler.polling_strategy.__name__,
+                                handler.id,
+                            )
+                            continue
 
-                # needed even if offline: it takes care of resetting the ns_multiple state
                 if self._multiple_requests:
                     await self.async_poll_flush()
 
@@ -729,6 +739,9 @@ class Device(PhysicalDevice):
             except Exception as e:
                 self.log_exception(self.WARNING, e, "async_poll")
             finally:
+                self._multiple_requests.clear()
+                self._multiple_response_size = NamespaceHandler.HEADER_AVG_SIZE
+                self._lazypoll_requests.clear()
                 self._polling_task = None
             self.log(self.DEBUG, "Polling end")
 
@@ -777,46 +790,44 @@ class Device(PhysicalDevice):
                     break  # while
 
             if requests_len == 1:
-                await multiple_requests[0].async_get_safe()
+                await multiple_requests[0].async_get()
                 return
 
             try:
                 response = await self.async_request_multiple(
                     (handler.polling_request for handler in multiple_requests),
                 )
-            except Exception as e:
-                # the ns_multiple failed but the reason could be the device
+            except (aiohttp.ServerDisconnectedError, asyncio.TimeoutError) as e:
+                if not self.is_connected:
+                    raise
+                # The ns_multiple failed but the reason could be the device
                 # did overflow somehow. I've seen 2 kind of errors so far on the
                 # HTTP client: typically the device returns an incomplete json
                 # and this is partly recovered in our http interface. One(old)
                 # bulb (msl120) instead completely disconnects (ServerDisconnectedException
                 # in http client) and so we get here with no response. The same
-                # msl bulb timeouts completely on MQTT, so the response to our mqtt requests
-                # is None again. At this point, if the device is still online we're
-                # trying a last resort issue of single requests
-                if self.is_connected:
-                    self.log(
-                        self.DEBUG,
-                        "Appliance.Control.Multiple failed with '%s' (requests=%d expected size=%d)",
-                        str(e) or e.__class__.__name__,
-                        requests_len,
-                        multiple_response_size,
-                    )
-                    # Here we reduce the device_response_size_max so that
-                    # next ns_multiple will be less demanding. device_response_size_min
-                    # is another dynamic param representing the biggest payload ever received
-                    self.device_response_size_max = (
-                        self.device_response_size_max + self.device_response_size_min
-                    ) / 2  # type: ignore
-                    self.log(
-                        self.DEBUG,
-                        "Updating device_response_size_max:%d",
-                        self.device_response_size_max,
-                    )
-                    for handler in multiple_requests:
-                        if not self.is_connected:  # TODO: remove these online checks
-                            break
-                        await handler.async_get_safe()
+                # msl bulb timeouts completely on MQTT. At this point, if the device is
+                # still online we're trying a last resort issue of single requests
+                self.log(
+                    self.DEBUG,
+                    "Appliance.Control.Multiple failed with '%s' (requests=%d expected size=%d)",
+                    str(e) or e.__class__.__name__,
+                    requests_len,
+                    multiple_response_size,
+                )
+                # Here we reduce the device_response_size_max so that
+                # next ns_multiple will be less demanding. device_response_size_min
+                # is another dynamic param representing the biggest payload ever received
+                self.device_response_size_max = (
+                    self.device_response_size_max + self.device_response_size_min
+                ) / 2  # type: ignore
+                self.log(
+                    self.DEBUG,
+                    "Updating device_response_size_max:%d",
+                    self.device_response_size_max,
+                )
+                for handler in multiple_requests:
+                    await handler.async_get()
                 return
 
             multiple_responses = response[mc.KEY_PAYLOAD][mc.KEY_MULTIPLE]
@@ -831,9 +842,7 @@ class Device(PhysicalDevice):
                     timeout=14400,
                 )
                 for handler in multiple_requests:
-                    if not self.is_connected:
-                        break
-                    await handler.async_get_safe()
+                    await handler.async_get()
                 return
 
             responses_len = len(multiple_responses)
@@ -872,7 +881,7 @@ class Device(PhysicalDevice):
         ):
             # multiple requests are disabled
             # or this request alone would overflow the device response size limit
-            await handler.async_get_safe()
+            await handler.async_get()
             return
         # estimate the size of the multiple response
         multiple_response_size = (
@@ -883,7 +892,7 @@ class Device(PhysicalDevice):
             # would overflow the device response size limit
             if not self._multiple_requests:
                 # again this request alone would overflow the device response size limit
-                await handler.async_get_safe()
+                await handler.async_get()
                 return
             # flush the pending multiple requests
             await self.async_poll_flush()

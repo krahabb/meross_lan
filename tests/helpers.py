@@ -1031,12 +1031,10 @@ class CloudApiMocker(contextlib.AbstractContextManager):
                 return AiohttpClientMockResponse(method, url, json=result)
             except Exception:
                 return AiohttpClientMockResponse(
-                    method, url, exc=aiohttp.ServerConnectionError()
+                    method, url, exc=aiohttp.ServerTimeoutError()
                 )
 
-        return AiohttpClientMockResponse(
-            method, url, exc=aiohttp.ServerConnectionError()
-        )
+        return AiohttpClientMockResponse(method, url, exc=aiohttp.ServerTimeoutError())
 
     def _v1_auth_login(self, request: dict):
         response = {}
