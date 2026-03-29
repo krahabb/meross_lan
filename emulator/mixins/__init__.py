@@ -38,16 +38,14 @@ if TYPE_CHECKING:
     import paho.mqtt.client as mqtt
 
     from custom_components.meross_lan.merossclient.protocol import types as mt
-    from custom_components.meross_lan.merossclient.protocol.namespaces import Namespace
     from custom_components.meross_lan.merossclient.protocol.types import (
         MerossHeaderType,
-        MerossNamespaceType,
         MerossPayloadType,
     )
 
 
 class EmulatorDescriptor(DeviceDescriptor):
-    namespaces: "dict[MerossNamespaceType, MerossPayloadType]"
+    namespaces: "dict[str, MerossPayloadType]"
 
     __slots__ = ("namespaces",)
 
@@ -209,16 +207,16 @@ class EmulatorDescriptor(DeviceDescriptor):
 
         def _update_namespace_state(_namespace: str, payload: dict, /):
             try:
-                p_namespace = self.namespaces[_namespace]
+                ns_state = self.namespaces[_namespace]
             except KeyError:
                 self.namespaces[_namespace] = payload
                 return
 
             try:
-                merge_dicts(p_namespace, payload)
+                merge_dicts(ns_state, payload)
             except Exception as e:
                 # whatever goes wrong we just overwrite
-                p_namespace.update(payload)
+                ns_state.update(payload)
 
         match method:
             case mc.METHOD_GETACK | mc.METHOD_PUSH:
@@ -258,7 +256,7 @@ class Emulator:
         MAXIMUM_RESPONSE_SIZE: ClassVar
 
         type NSDefaultArgs = tuple[NSDefaultMode, dict]
-        type NSDefault = dict[Namespace, NSDefaultArgs]
+        type NSDefault = dict[mn.Namespace, NSDefaultArgs]
         NAMESPACES_DEFAULT: ClassVar[NSDefault]
         """Contains default data for namespaces initialization.
         Some traces could miss some important namespaces because of the way they're collected
@@ -267,7 +265,7 @@ class Emulator:
         This container must be defined in every custom mixin with defaults
         relevant for the features they're implementing. The complete class defaults
         will be 'explored' in MerossEmulator.__init__."""
-        NAMESPACES_DEFAULT_IGNORE: ClassVar[tuple[Namespace, ...]]
+        NAMESPACES_DEFAULT_IGNORE: ClassVar[tuple[mn.Namespace, ...]]
 
     NAMESPACES = mn.NAMESPACES
 
@@ -279,9 +277,6 @@ class Emulator:
     }
 
     NAMESPACES_DEFAULT_IGNORE = (
-        mn.Appliance_Control_Diffuser_Light,
-        mn.Appliance_Control_Diffuser_Sensor,
-        mn.Appliance_Control_Diffuser_Spray,
         mn.Appliance_Control_Multiple,
         mn.Appliance_System_Clock,
         mn.Appliance_System_Debug,
@@ -311,6 +306,8 @@ class Emulator:
         self.key = key
         self.descriptor = descriptor
         self.namespaces = namespaces = descriptor.namespaces
+
+        # Sanitization
         namespaces_default: "Emulator.NSDefault" = {}
         namespaces_default_ignore = []
         for cls in self.__class__.mro():
@@ -326,6 +323,8 @@ class Emulator:
             except AttributeError:
                 pass
 
+        digest = descriptor.digest or descriptor.control
+
         for ability in descriptor.ability:
             ns = self.NAMESPACES.get(ability)
             if ns and (ns.grammar is not mn.Grammar.UNKNOWN):
@@ -334,18 +333,28 @@ class Emulator:
                 if (not ns.can_query) or (ns in namespaces_default_ignore):
                     continue
 
+                try:
+                    p_namespace = namespaces[ns]
+                except KeyError:
+                    namespaces[ns] = p_namespace = {}
+
+                # Link ns state to digest key where needed so we have a single point of truth.
+                # We assume digest is always available (ns_all is always present in the traces we have)
+                if ns.key_digest:
+                    try:
+                        p_namespace[ns.key] = ns.get_digest(digest)
+                    except KeyError:
+                        # some edge cases where our grammar cannot cope (Applaince.Control.Fan)
+                        pass
+
                 if ns in namespaces_default:
                     _nsdefaultmode, _payload = namespaces_default[ns]
                     self.update_namespace_state(ns, _nsdefaultmode, _payload)
                     continue
 
                 # no default state set in NAMESPACES_DEFAULT
-                try:
-                    p_namespace = namespaces[ability]
-                    if ns.key in p_namespace:
-                        continue
-                except KeyError:
-                    namespaces[ability] = p_namespace = {}
+                if ns.key in p_namespace:
+                    continue
                 # Either namespace missing or malformed according to our grammar.
                 # Setup a 'default' (which will not work for hubs though...)
                 # but we cannot use copy because PayloadType.value is immutable
@@ -547,7 +556,8 @@ class Emulator:
         If the state is not stored in all->digest we'll search our namespace(s) list for
         state carried through our GETACK messages in the trace
         """
-        ns, p_state = self._get_ns_state(namespace)
+
+        ns = self.NAMESPACES[namespace]
 
         match method:
             case mc.METHOD_GET:
@@ -589,11 +599,9 @@ class Emulator:
                             channels = None
 
                     if channels is None:
-                        # TODO: this is wrong when p_state comes from all->digest
-                        # we should globally link namespace states to their digest counterparts if any
-                        return mc.METHOD_GETACK, p_state
+                        return mc.METHOD_GETACK, self.namespaces[ns]
                     else:
-                        p_state = p_state[ns.key]
+                        p_state = self.namespaces[ns][ns.key]
                         assert type(p_state) is list
                         return mc.METHOD_GETACK, {
                             ns.key: [
@@ -624,7 +632,7 @@ class Emulator:
                         return mc.METHOD_SETACK, {}
 
                 key_payload = payload[ns.key]
-                p_state = p_state[ns.key]
+                p_state = self.namespaces[ns][ns.key]
 
                 match ns.payload_set:
                     case mn.PayloadType.LIST_IDX:
@@ -664,7 +672,7 @@ class Emulator:
             case mc.METHOD_PUSH:
                 if not ns.has_psq:
                     raise Exception(f"{method} not supported for {namespace}")
-                return mc.METHOD_PUSH, p_state
+                return mc.METHOD_PUSH, self.namespaces[ns]
 
         raise Exception(f"{method} not supported in emulator for {namespace}")
 
@@ -793,46 +801,6 @@ class Emulator:
         self.update_epoch()
         return mc.METHOD_SETACK, {}
 
-    def _get_ns_state(self, namespace: str, /) -> tuple[mn.Namespace, "mt.JsonDict"]:
-        """
-        general device state is usually carried in NS_ALL into the "digest" key
-        and is also almost regularly keyed by using the camelCase of the last verb
-        in namespace.
-        For some devices not all state is carried there tho, so we'll inspect the
-        GETACK payload for the relevant namespace looking for state there too
-        """
-        ns = self.NAMESPACES[namespace]
-
-        try:
-            match namespace.split("."):
-                case (_, "Control", _):
-                    p_digest = self.descriptor.digest
-                case (_, "Control", ns_2, _):
-                    # e.g. Appliance.Control.Thermostat.*
-                    # Appliance.Control.Diffuser.*
-                    # Appliance.Control.Light.*
-                    # Appliance.Control.Fan.*
-                    p_digest = self.descriptor.digest
-                    try:
-                        p_digest = p_digest["".join((ns_2[0].lower(), ns_2[1:]))]
-                    except KeyError:
-                        pass
-                case _:
-                    return ns, self.namespaces[namespace]
-
-            try:
-                if type(p_digest[ns.key]) in (dict, list):
-                    return ns, p_digest  # type: ignore
-            except (KeyError, TypeError):
-                # KeyError: ns.key not in digest
-                # TypeError: p_digest is not a dict
-                pass
-
-            return ns, self.namespaces[namespace]
-
-        except KeyError:
-            raise Exception(f"{namespace} not defined in emulator trace")
-
     def _get_control_key(self, key, /):
         """Extracts the legacy 'control' key from NS_ALL (previous to 'digest' introduction)."""
         p_control = self.descriptor.all.get(mc.KEY_CONTROL)
@@ -855,12 +823,12 @@ class Emulator:
         )
         self.update_epoch()
 
-    def get_namespace_state(self, ns: "Namespace", channel, /):
+    def get_namespace_state(self, ns: mn.Namespace, channel, /):
         return get_element_by_key(self.namespaces[ns][ns.key], ns.key_idx, channel)
 
     def update_namespace_state(
         self,
-        ns: "Namespace",
+        ns: mn.Namespace,
         nsdefaultmode: NSDefaultMode,
         payload: dict | list,
         /,

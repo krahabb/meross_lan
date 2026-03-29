@@ -19,13 +19,9 @@ from custom_components.meross_lan.merossclient.protocol.namespaces import hub as
 from . import Emulator
 
 if TYPE_CHECKING:
-    from typing import Any, Mapping
+    from typing import Any
 
     from custom_components.meross_lan.merossclient.protocol import types as mt
-    from custom_components.meross_lan.merossclient.protocol.types import (
-        JsonDict,
-        JsonMapping,
-    )
 
     from . import EmulatorDescriptor
 
@@ -34,7 +30,7 @@ if TYPE_CHECKING:
 # to manage type/version and common info (like id/online maybe more)
 
 
-def get_mts_digest(digest: "JsonMapping") -> "JsonDict | None":
+def get_mts_digest(digest: "mt.JsonMapping") -> "mt.JsonDict | None":
     """Parses the subdevice dict from the hub digest to identify if it's
     an mts-like (and so queried through 'Hub.Mts100.All')."""
     subdevtype = get_subdevice_key_digest(digest)
@@ -103,7 +99,7 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
         namespaces = descriptor.namespaces
         ability = descriptor.ability
 
-        ns_state: dict[mn.Namespace, list[dict]] = {
+        ns_state: dict[mn.Namespace, mt.JsonList] = {
             ns: namespaces[ns].setdefault(ns.key, [])
             for ns in (
                 mn_h.Appliance_Hub_Mts100_Adjust,
@@ -148,7 +144,7 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
             for _, _ns_state in ns_state.items():
                 delete_element_by_key(_ns_state, mc.KEY_ID, subdevice_id_remove)
 
-        p_subdevice_all: "JsonDict | None"
+        p_subdevice_all: "mt.JsonDict | None"
 
         for p_subdevice_digest in self.subdevices:
             subdevice_id = p_subdevice_digest[mc.KEY_ID]

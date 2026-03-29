@@ -228,7 +228,7 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
 
         ns = self.NAMESPACES[namespace]
         ns_key = ns.key
-        p_state: list[dict[str, Any]] = self.namespaces[namespace][ns_key]
+        p_state: list[dict[str, Any]] = self.namespaces[ns][ns_key]
         match method:
             case mc.METHOD_GET:
                 response_list = []
