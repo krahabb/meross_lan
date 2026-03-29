@@ -551,12 +551,16 @@ class Namespace(str):
     def request_set_dict(self, payload, *args) -> "MerossRequestType":
         return self, mc.METHOD_SET, {self.key: payload}
 
-    def request_set_dict_c(self, payload, idx, /) -> "MerossRequestType":
-        payload[self.key_idx] = idx
+    def request_set_dict_c(self, payload, *idxs) -> "MerossRequestType":
+        for idx in idxs:
+            # 'idxs' is expected to be the eventual channel (or any index key) value
+            # if empty we assume the payload is already properly structured.
+            payload[self.key_idx] = idx
         return (self, mc.METHOD_SET, {self.key: payload})
 
-    def request_set_list_c(self, payload, idx, /) -> "MerossRequestType":
-        payload[self.key_idx] = idx
+    def request_set_list_c(self, payload, *idxs) -> "MerossRequestType":
+        for idx in idxs:
+            payload[self.key_idx] = idx
         return (self, mc.METHOD_SET, {self.key: [payload]})
 
     def get_digest[_T: "JsonMapping | JsonList"](self, digest: "mt.system.All_Digest") -> _T:  # type: ignore
