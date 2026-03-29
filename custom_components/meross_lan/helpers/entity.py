@@ -600,7 +600,9 @@ class ToggleXParser(BinaryEntity, ParserEntity):
     """Special parser entity which is also linked to Appliance.Control.ToggleX namespace.
     This is intended to add Appliance.Control.ToggleX namespace handling/parsing
     to entities which are represented in HA as more sophisticated entities than simple toggles
-    (like Fan-Light)."""
+    (like Fan-Light).
+    Since this entity is linked to multiple ns it would be better to use schedule_flush_state
+    to avoid multiple flush in case both ns are present in the same payload."""
 
     if TYPE_CHECKING:
 
@@ -617,7 +619,10 @@ class ToggleXParser(BinaryEntity, ParserEntity):
         self.handler_togglex = parent.register_togglex_channel(self, True)  # type: ignore
 
     def _parse_togglex(self, payload: dict, /):
-        self.update_boolean_value(payload[mc.KEY_ONOFF])
+        is_on = bool(payload[mc.KEY_ONOFF])
+        if self.is_on != is_on:
+            self.is_on = is_on
+            self.flush_state()
 
 
 class EntityNamespaceMixin(NamespaceHandler, ParserEntity):

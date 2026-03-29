@@ -1,3 +1,4 @@
+from homeassistant import const as hac
 from homeassistant.components import fan as haec
 
 from custom_components.meross_lan.fan import Fan
@@ -25,6 +26,10 @@ class EntityTest(EntityComponentTest):
         self._check_remove_togglex(entity)
 
     async def async_test_enabled_callback(self, entity: Fan):
+        # TODO: implement a common EntityTest for toggle-like entities (switch/light/fan)
+        await self.async_service_call_check(haec.SERVICE_TURN_OFF, hac.STATE_OFF)
+        await self.async_service_call_check(haec.SERVICE_TURN_ON, hac.STATE_ON)
+
         speed_count = entity.speed_count
         for speed in range(0, speed_count):
             percentage = round(speed * 100 / speed_count)
@@ -33,5 +38,10 @@ class EntityTest(EntityComponentTest):
             )
             assert state.attributes[haec.ATTR_PERCENTAGE] == percentage, "percentage"
 
+        await self.async_service_call_check(haec.SERVICE_TURN_OFF, hac.STATE_OFF)
+
     async def async_test_disabled_callback(self, entity: Fan):
-        pass
+        await entity.async_turn_on()
+        assert entity.is_on
+        await entity.async_turn_off()
+        assert not entity.is_on

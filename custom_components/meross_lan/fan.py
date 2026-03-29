@@ -57,6 +57,8 @@ class Fan(ToggleXParser, fan.FanEntity):
             await self.handler_togglex.async_set(
                 {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: 1}
             )
+            self.is_on = True
+            self.ns_payload[mc.KEY_SPEED] = 0  # force _parse flushing
         await self.async_request_parse_ex(
             {
                 mc.KEY_SPEED: (
@@ -82,14 +84,15 @@ class Fan(ToggleXParser, fan.FanEntity):
             self.speed_count = payload.get(mc.KEY_MAXSPEED, self.speed_count)
             speed = payload[mc.KEY_SPEED]
             if speed:
-                self.is_on = True
                 if speed > self.speed_count:
                     self.speed_count = speed
                 self.percentage = round(speed * 100 / self.speed_count)
                 self._saved_speed = speed
             else:
-                self.is_on = False
                 self.percentage = 0
+            if not self.handler_togglex:
+                # if togglex is not present we manage the on/off state based on speed value
+                self.is_on = bool(speed)
             self.flush_state()
 
 
