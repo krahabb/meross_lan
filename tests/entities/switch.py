@@ -1,4 +1,3 @@
-from homeassistant import const as hac
 from homeassistant.components import switch as haec
 
 from custom_components.meross_lan import siren, switch
@@ -17,10 +16,10 @@ from custom_components.meross_lan.merossclient.protocol.namespaces import (
     thermostat as mn_t,
 )
 
-from tests.entities import EntityComponentTest
+from tests.entities import ToggleEntityComponentTest
 
 
-class EntityTest(EntityComponentTest):
+class EntityTest(ToggleEntityComponentTest):
 
     ENTITY_TYPE = haec.SwitchEntity
 
@@ -65,13 +64,3 @@ class EntityTest(EntityComponentTest):
         mc.KEY_MST: [hub.MstSwitch],
         mc.KEY_WATERLEAK: [switch.SwitchParser],  # beep
     }
-
-    async def async_test_enabled_callback(self, entity):
-        await self.async_service_call_check(haec.SERVICE_TURN_ON, hac.STATE_ON)
-        await self.async_service_call_check(haec.SERVICE_TURN_OFF, hac.STATE_OFF)
-
-    async def async_test_disabled_callback(self, entity: haec.SwitchEntity):
-        await entity.async_turn_on()
-        assert entity.is_on
-        await entity.async_turn_off()
-        assert not entity.is_on

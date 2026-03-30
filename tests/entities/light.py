@@ -16,10 +16,10 @@ from custom_components.meross_lan.merossclient.protocol import (
     namespaces as mn,
 )
 
-from tests.entities import EntityComponentTest
+from tests.entities import ToggleEntityComponentTest
 
 
-class EntityTest(EntityComponentTest):
+class EntityTest(ToggleEntityComponentTest):
 
     ENTITY_TYPE = LightEntity
 
@@ -74,18 +74,19 @@ class EntityTest(EntityComponentTest):
                     assert LightEntityFeature.EFFECT in supported_features
                     assert entity.effect_list, "effect_list"
                     # need to manually remove Light instance since it's also requested in digest
-                    EntityComponentTest.expected_entity_types.remove(Light)
+                    ToggleEntityComponentTest.expected_entity_types.remove(Light)
                 if mn.Appliance_Control_Mp3 in ability:
                     assert LightEntityFeature.EFFECT in supported_features
                     assert (
                         entity.effect_list == mc.HP110A_LIGHT_EFFECT_LIST
                     ), "effect_list"
                     # need to manually remove Light instance since it's also requested in digest
-                    EntityComponentTest.expected_entity_types.remove(Light)
+                    ToggleEntityComponentTest.expected_entity_types.remove(Light)
 
     async def async_test_enabled_callback(
         self, entity: Light | DiffuserLight | DNDLight
     ):
+        # Invoking super() to do the toggling here hangs the test on msl320...
         await self.async_service_call_check(haec.SERVICE_TURN_OFF, hac.STATE_OFF)
         await self.async_service_call_check(haec.SERVICE_TURN_ON, hac.STATE_ON)
 
@@ -111,6 +112,7 @@ class EntityTest(EntityComponentTest):
             ), "rgb_to_native"
 
         if ColorMode.COLOR_TEMP in supported_color_modes:
+            assert isinstance(entity, Light)
             check_brightness = True
             KELVIN_TO_TEMPERATURE = {
                 entity.min_color_temp_kelvin: 1,
@@ -142,12 +144,3 @@ class EntityTest(EntityComponentTest):
                     state.attributes[haec.ATTR_BRIGHTNESS] == brightness
                     and entity.ns_payload[mc.KEY_LUMINANCE] == luminance
                 ), "brightness_to_native"
-
-    async def async_test_disabled_callback(
-        self,
-        entity: Light | DiffuserLight | DNDLight,
-    ):
-        await entity.async_turn_on()
-        assert entity.is_on
-        await entity.async_turn_off()
-        assert not entity.is_on

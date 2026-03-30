@@ -6,10 +6,10 @@ from custom_components.meross_lan.merossclient.protocol import (
     namespaces as mn,
 )
 
-from tests.entities import EntityComponentTest
+from tests.entities import ToggleEntityComponentTest
 
 
-class EntityTest(EntityComponentTest):
+class EntityTest(ToggleEntityComponentTest):
 
     ENTITY_TYPE = haec.SirenEntity
 
@@ -20,11 +20,7 @@ class EntityTest(EntityComponentTest):
     }
 
     async def async_test_enabled_callback(self, entity: siren.Siren):
-        await self.async_service_call_check(haec.SERVICE_TURN_ON, hac.STATE_ON)
-        await self.async_service_call_check(haec.SERVICE_TURN_OFF, hac.STATE_OFF)
+        await super().async_test_enabled_callback(entity)
 
     async def async_test_disabled_callback(self, entity: siren.Siren):
-        await entity.async_turn_on()
-        assert entity.is_on
-        await entity.async_turn_off()
-        assert not entity.is_on
+        await super().async_test_disabled_callback(entity)

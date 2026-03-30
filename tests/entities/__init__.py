@@ -1,7 +1,8 @@
 from typing import TYPE_CHECKING
 
+from homeassistant import const as hac
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity
+from homeassistant.helpers import entity as haec
 
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
@@ -16,11 +17,11 @@ if TYPE_CHECKING:
 
     from homeassistant.core import Context, ServiceResponse, State
 
-    from custom_components.meross_lan.helpers.entity import Entity
+    from custom_components.meross_lan.helpers import entity as mle
     from custom_components.meross_lan.merossclient.protocol import types as mt
 
-    EntityType = type[entity.Entity]
-    MerossEntityTypesList = list[type[Entity]]
+    EntityType = type[haec.Entity]
+    MerossEntityTypesList = list[type[mle.Entity]]
     type MerossEntityTypesDigestContainer = (
         MerossEntityTypesList | dict[str, MerossEntityTypesList]
     )
@@ -131,17 +132,17 @@ class EntityComponentTest:
         ), f"service:{service} - result:{state.state} - expected:{expected_state}"
         return state
 
-    async def async_test_each_callback(self, entity: "Entity"):
+    async def async_test_each_callback(self, entity: "mle.Entity"):
         # manager should be online so this should always be true
         assert entity.available, f"entity {entity.entity_id} not available"
 
-    async def async_test_enabled_callback(self, entity: "Entity"):
+    async def async_test_enabled_callback(self, entity: "mle.Entity"):
         pass
 
-    async def async_test_disabled_callback(self, entity: "Entity"):
+    async def async_test_disabled_callback(self, entity: "mle.Entity"):
         pass
 
-    def _check_remove_togglex(self, entity: "Entity"):
+    def _check_remove_togglex(self, entity: "mle.Entity"):
         """
         Use to remove expected (but not instantiated) ToggleXSwitch entities
         for those hybrid entities which overtake ToggleX behavior
@@ -149,3 +150,17 @@ class EntityComponentTest:
         for togglex_digest in self.digest.get(mc.KEY_TOGGLEX, []):
             if togglex_digest[mc.KEY_CHANNEL] == entity.channel:
                 EntityComponentTest.expected_entity_types.remove(ToggleX)
+
+
+class ToggleEntityComponentTest(EntityComponentTest):
+    """Partial specialization for platforms derived from core ToggleEntity."""
+
+    async def async_test_enabled_callback(self, entity: haec.ToggleEntity):
+        await self.async_service_call_check(hac.SERVICE_TURN_ON, hac.STATE_ON)
+        await self.async_service_call_check(hac.SERVICE_TURN_OFF, hac.STATE_OFF)
+
+    async def async_test_disabled_callback(self, entity: haec.ToggleEntity):
+        await entity.async_turn_on()
+        assert entity.is_on
+        await entity.async_turn_off()
+        assert not entity.is_on
