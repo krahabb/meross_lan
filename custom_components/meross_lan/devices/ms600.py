@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, override
 
-from ..binary_sensor import BinarySensor
+from ..binary_sensor import BinarySensorEntity
 from ..const import hac
 from ..helpers.entity import ValueParser
 from ..helpers.namespaces import mc, mn
@@ -186,11 +186,11 @@ class PresenceSensor(SensorParser):
             suggested_display_precision=2,
             name="Presence distance",
         )
-        self.binary_sensor_motion = BinarySensor(
+        self.binary_sensor_motion = BinarySensorEntity(
             channel,
             device,
             entity_key=f"{self.entity_key}_motion",
-            device_class=BinarySensor.DeviceClass.MOTION,
+            device_class=BinarySensorEntity.DeviceClass.MOTION,
         )
         self.sensor_times = SensorParser(
             channel,

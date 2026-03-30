@@ -1,6 +1,6 @@
 from homeassistant.components import binary_sensor as haec
 
-from custom_components.meross_lan.binary_sensor import BinarySensor
+from custom_components.meross_lan.binary_sensor import BinarySensorEntity
 from custom_components.meross_lan.devices import garagedoor as gd, hub
 from custom_components.meross_lan.devices.thermostat import (
     MtsWindowOpened,
@@ -34,20 +34,20 @@ class EntityTest(EntityComponentTest):
         mn.Appliance_Control_Presence_Config: [
             # These are entities installed by mn.Appliance_Control_Sensor_LatestX
             # but we use this namespace to detect presence capability (ms600)
-            BinarySensor,
+            BinarySensorEntity,
         ],
         mn_t.Appliance_Control_Thermostat_WindowOpened: [MtsWindowOpened],
     }
 
     HUB_SUBDEVICES_ENTITIES = {
-        mc.TYPE_MTS100: [BinarySensor],  # window opened
-        mc.TYPE_MTS100V3: [BinarySensor],  # window opened
-        mc.TYPE_MTS150: [BinarySensor],  # window opened
+        mc.TYPE_MTS100: [BinarySensorEntity],  # window opened
+        mc.TYPE_MTS100V3: [BinarySensorEntity],  # window opened
+        mc.TYPE_MTS150: [BinarySensorEntity],  # window opened
         mc.KEY_DOORWINDOW: [hub.DoorWindowSensor],
         mc.KEY_SMOKEALARM: [
-            BinarySensor,  # alarm
-            BinarySensor,  # error
-            BinarySensor,  # muted
+            BinarySensorEntity,  # alarm
+            BinarySensorEntity,  # error
+            BinarySensorEntity,  # muted
         ],
         mc.KEY_WATERLEAK: [hub.WaterLeakSensor],
     }

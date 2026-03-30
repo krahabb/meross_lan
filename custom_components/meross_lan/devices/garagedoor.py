@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, override
 from homeassistant.helpers.entity_registry import RegistryEntryDisabler
 from homeassistant.util.dt import now
 
-from ..binary_sensor import BinarySensor
+from ..binary_sensor import BinarySensorEntity
 from ..cover import Cover
 from ..helpers import clamp
 from ..helpers.namespaces import EntityDefNamespaceHandler, NamespaceHandler, mc, mn
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from ..number import NumberEntity
 
 
-class GarageTimeoutBinarySensor(BinarySensor):
+class GarageTimeoutBinarySensor(BinarySensorEntity):
 
     init_entity_key = "problem"
     init_is_on = False
@@ -30,19 +30,19 @@ class GarageTimeoutBinarySensor(BinarySensor):
     ATTR_TRANSITION_TARGET = "transition_target"
 
     # HA core entity attributes:
-    _attr_device_class = BinarySensor.DeviceClass.PROBLEM
-    _attr_entity_category = BinarySensor.EntityCategory.DIAGNOSTIC
+    _attr_device_class = BinarySensorEntity.DeviceClass.PROBLEM
+    _attr_entity_category = BinarySensorEntity.EntityCategory.DIAGNOSTIC
     _unrecorded_attributes = frozenset(
         {
             ATTR_TRANSITION_TARGET,
             ATTR_TRANSITION_TIMEOUT,
-            *BinarySensor._unrecorded_attributes,
+            *BinarySensorEntity._unrecorded_attributes,
         }
     )
 
     def __init__(self, garage: "GarageDoor", /):
         self.extra_state_attributes = {}
-        BinarySensor.__init__(self, garage.channel, garage.parent)
+        BinarySensorEntity.__init__(self, garage.channel, garage.parent)
 
     def update_ok(self, was_closing, /):
         extra_state_attributes = self.extra_state_attributes

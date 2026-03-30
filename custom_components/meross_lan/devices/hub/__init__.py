@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, override
 
 from ... import const as mlc
-from ...binary_sensor import BinarySensor
+from ...binary_sensor import BinarySensorEntity, BinarySensorParser
 from ...button import Button
 from ...helpers import device as mld, entity as mle
 from ...helpers.namespaces import NamespaceHandler
@@ -78,7 +78,7 @@ class HubNamespaceHandler(NamespaceHandler):
     if TYPE_CHECKING:
         parent: "Hub"  # type: ignore[override]
 
-    # Do not poll unless explitly confgured
+    # Do not poll unless explitly configured
     POLLING_CONFIG_DEFAULT = (0, 0, None)
 
     def __init__(
@@ -789,19 +789,19 @@ class SmokeAlarmSensor(SensorSubDevice, EnumParser):
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, /):
         SensorSubDevice.__init__(self, subid, hub, key_digest)
-        self.binary_sensor_alarm = BinarySensor(
+        self.binary_sensor_alarm = BinarySensorEntity(
             subid,
             hub,
             entity_key=mc.KEY_ALARM,
-            device_class=BinarySensor.DeviceClass.SAFETY,
+            device_class=BinarySensorEntity.DeviceClass.SAFETY,
         )
-        self.binary_sensor_error = BinarySensor(
+        self.binary_sensor_error = BinarySensorEntity(
             subid,
             hub,
             entity_key=mc.KEY_ERROR,
-            device_class=BinarySensor.DeviceClass.PROBLEM,
+            device_class=BinarySensorEntity.DeviceClass.PROBLEM,
         )
-        self.binary_sensor_muted = BinarySensor(subid, hub, entity_key="muted")
+        self.binary_sensor_muted = BinarySensorEntity(subid, hub, entity_key="muted")
         self.sensor_interConn = EnumParser(subid, hub, entity_key=mc.KEY_INTERCONN)
         Button(subid, hub, self.async_mute, name="Mute")
         Button(subid, hub, self.async_test, name="Test")
@@ -1051,22 +1051,22 @@ class MS130Sensor(MS100Sensor):
                 pass
 
 
-class DoorWindowSensor(SensorSubDevice, BinarySensor):
+class DoorWindowSensor(SensorSubDevice, BinarySensorParser):
     MODEL = mc.TYPE_MS200
     KEY_DIGEST = mc.KEY_DOORWINDOW
-    init_entity_key = BinarySensor.DeviceClass.WINDOW
+    init_entity_key = BinarySensorParser.DeviceClass.WINDOW
     init_ns = mn_h.Appliance_Hub_Sensor_DoorWindow
     init_key_value = mc.KEY_STATUS
-    _attr_device_class = BinarySensor.DeviceClass.WINDOW
+    _attr_device_class = BinarySensorParser.DeviceClass.WINDOW
 
 
-class WaterLeakSensor(SensorSubDevice, BinarySensor):
+class WaterLeakSensor(SensorSubDevice, BinarySensorParser):
     MODEL = mc.TYPE_MS400
     KEY_DIGEST = mc.KEY_WATERLEAK
     init_entity_key = mc.KEY_WATERLEAK
     init_ns = mn_h.Appliance_Hub_Sensor_WaterLeak
     init_key_value = mc.KEY_LATESTWATERLEAK
-    _attr_device_class = BinarySensor.DeviceClass.SAFETY
+    _attr_device_class = BinarySensorParser.DeviceClass.SAFETY
 
 
 class MstSwitch(SubDevice, HubSubIdChannelMixin, SwitchParser):
@@ -1139,6 +1139,7 @@ class MstSwitch(SubDevice, HubSubIdChannelMixin, SwitchParser):
 NamespaceHandler.POLLING_CONFIG_MAP.update(
     {
         mn_h.Appliance_Config_DeviceCfg: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+        mn_h.Appliance_Control_Water: NamespaceHandler.POLLING_CONFIG_DEFAULT,
         mn_h.Appliance_Control_Sensor_LatestX: NamespaceHandler.POLLING_CONFIG_FASTSENSOR,
         mn_h.Appliance_Hub_Battery: (
             3600,

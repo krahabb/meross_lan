@@ -2,7 +2,7 @@ import enum
 from typing import TYPE_CHECKING, override
 
 from . import MtsThermostatClimate, mc, mlc, mn_t
-from ...binary_sensor import BinarySensor
+from ...binary_sensor import BinarySensorEntity
 from ...number import EmulatedNumber
 from ...sensor import DiagnosticSensor
 
@@ -25,7 +25,7 @@ class Mts960Climate(MtsThermostatClimate):
         TIMER_COUNTDOWN_ON = enum.auto()
         TIMER_COUNTDOWN_OFF = enum.auto()
 
-    class PlugState(BinarySensor):
+    class PlugState(BinarySensorEntity):
 
         init_entity_key = "plug_state"
 

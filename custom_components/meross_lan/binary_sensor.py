@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from typing import ClassVar, NotRequired, Unpack
 
 
-class BinarySensor(mle.BinaryEntity, binary_sensor.BinarySensorEntity):
+class BinarySensorEntity(mle.BinaryEntity, binary_sensor.BinarySensorEntity):
     """Simple 'passive' binary sensor entity."""
 
     if TYPE_CHECKING:
@@ -23,12 +23,12 @@ class BinarySensor(mle.BinaryEntity, binary_sensor.BinarySensorEntity):
     DeviceClass = binary_sensor.BinarySensorDeviceClass
 
 
-class BinarySensorParser(mle.BinaryParser, BinarySensor):
+class BinarySensorParser(mle.BinaryParser, BinarySensorEntity):
     """Binary sensor entity automatically linked to namespace handling/parsing."""
 
     if TYPE_CHECKING:
 
-        class Args(BinarySensor.Args, mle.BinaryParser.Args):
+        class Args(BinarySensorEntity.Args, mle.BinaryParser.Args):
             pass
 
         def __init__(
@@ -42,4 +42,4 @@ class BinarySensorParser(mle.BinaryParser, BinarySensor):
     __slots__ = mle.BinaryParser._calc_slots()
 
 
-async_setup_entry = BinarySensor.platform_setup_entry
+async_setup_entry = BinarySensorEntity.platform_setup_entry

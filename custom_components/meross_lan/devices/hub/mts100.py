@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, override
 
 from . import SubDevice, mc, mn_h
-from ...binary_sensor import BinarySensor
+from ...binary_sensor import BinarySensorEntity
 from ...climate import MtsClimate
 from ...switch import EmulatedSwitch
 
@@ -27,7 +27,7 @@ class Mts100Climate(SubDevice, MtsClimate):
 
     if TYPE_CHECKING:
         ns_payload: mt.hub._Mts100_Temperature
-        binary_sensor_window: BinarySensor
+        binary_sensor_window: BinarySensorEntity
         switch_patch_hvacaction: EmulatedSwitch
 
     NS_HUB = (
@@ -82,11 +82,11 @@ class Mts100Climate(SubDevice, MtsClimate):
         self.schedule._schedule_unit_time = hub.descriptor.ability.get(
             mn_h.Appliance_Hub_Mts100_ScheduleB, {}
         ).get(mc.KEY_SCHEDULEUNITTIME, 15)
-        self.binary_sensor_window = BinarySensor(
+        self.binary_sensor_window = BinarySensorEntity(
             subid,
             hub,
-            entity_key=str(BinarySensor.DeviceClass.WINDOW),
-            device_class=BinarySensor.DeviceClass.WINDOW,
+            entity_key=str(BinarySensorEntity.DeviceClass.WINDOW),
+            device_class=BinarySensorEntity.DeviceClass.WINDOW,
         )
         self.switch_patch_hvacaction = EmulatedSwitch(
             subid,
