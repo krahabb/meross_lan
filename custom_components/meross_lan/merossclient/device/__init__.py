@@ -138,9 +138,7 @@ class Device(PhysicalDevice):
     if TYPE_CHECKING:
 
         type DigestParseFunc = Callable[[JsonDict], None] | Callable[[JsonList], None]
-        type DigestInitReturnType = tuple[DigestParseFunc, Iterable[NamespaceHandler]]
-        type DigestInitFunc = Callable[[Device, Any], DigestInitReturnType]
-        type NamespaceInitFunc = Callable[[mn.Namespace, Device], None]
+        type NamespaceInitFunc = Callable[[mn.Namespace, Self], Any]
 
         class Args(AbstractClient.Args):
             descriptor: NotRequired[DeviceDescriptor]

@@ -137,6 +137,49 @@ class HubNamespaceHandler(NamespaceHandler):
                 self.log_parser_exception(e, payload)
 
 
+class ApplianceDigestHubHandler(NamespaceHandler):
+    """
+    Specialized handler for the 'Appliance.Digest.Hub' namespace which is the 'official' way to report
+    the hub digest carrying the subdevice list. This handler is used when the namespace is present in
+    the device abilities and it is responsible to parse the digest and manage subdevices list
+    accordingly (add/remove).
+    """
+
+    if TYPE_CHECKING:
+        parent: "Hub"  # type: ignore[override]
+        digest: "mt.hub.Digest"
+
+    def __init__(self, ns: "Namespace", device: "Hub", /):
+        NamespaceHandler.__init__(self, ns, device)
+        # We need to make the 'parsers' attribute evaluate to True else
+        # the mechanics for digest parsing/polling in base classes will not dispatch to this.
+        self.parsers = device.subdevices  # type: ignore
+
+    def _handle(self, message: "MerossMessage"):
+        self.digest = message.payload[mc.KEY_HUB]
+        self.parent.parse_digest(self.digest)
+
+    def parse_digest(self, digest: "mt.hub.Digest", /):
+        self.parent.parse_digest(digest)
+
+
+def namespace_init_appliance_hub_pairsubdev(ns: "Namespace", device: "Hub", /):
+    Button(
+        None,
+        device,
+        device.async_pairsubdev,
+        name="Pair Subdevice",
+        device_class=Button.DeviceClass.IDENTIFY,
+        entity_category=Button.EntityCategory.CONFIG,
+    )
+
+
+HUB_NAMESPACE_INIT: dict[mn.Namespace, "Hub.NamespaceInitFunc"] = {
+    mn_h.Appliance_Digest_Hub: ApplianceDigestHubHandler,
+    mn_h.Appliance_Hub_PairSubDev: namespace_init_appliance_hub_pairsubdev,
+}
+
+
 class Hub(Device if TYPE_CHECKING else object):
     """
     Specialized Device for smart hub(s) like MSH300
@@ -204,6 +247,9 @@ class Hub(Device if TYPE_CHECKING else object):
             subdevice_id,
             timeout=604800,  # 1 week
         )
+
+    async def async_pairsubdev(self, /):
+        await self.async_request(*mn_h.Appliance_Hub_PairSubDev.request_set())
 
     def _subdevice_build(self, p_subdevice: "mt.hub.Digest_SubDevice", /):
         # parses the subdevice payload in 'digest' to look for a well-known type
@@ -295,12 +341,6 @@ class Hub(Device if TYPE_CHECKING else object):
                     eager_start=True,
                 )
 
-    def _handle_Appliance_Digest_Hub(self, message: "MerossMessage"):
-        self.ns_handlers[mn_h.Appliance_Digest_Hub].digest = digest = message.payload[
-            mc.KEY_HUB
-        ]
-        self.parse_digest(digest)
-
     def _handle_Appliance_System_All(self, message: MerossMessage, /):
         super()._handle_Appliance_System_All(message)
         self.parse_digest(self.descriptor.digest[mc.KEY_HUB])
@@ -345,11 +385,15 @@ class Hub(Device if TYPE_CHECKING else object):
                     if identifiers[0] == mlc.DOMAIN:
                         registry_subdevices[identifiers[1]] = device_entry
 
-        if mn_h.Appliance_Digest_Hub in device.descriptor.ability:
-            handler = NamespaceHandler(mn_h.Appliance_Digest_Hub, device)
-            handler.parsers = device.subdevices  # type: ignore
-            handler.parse_digest = device.parse_digest  # type: ignore
-        else:
+        ability = device.descriptor.ability
+        for ns, ns_init_func in {
+            _ns: _ns_init_func
+            for _ns, _ns_init_func in HUB_NAMESPACE_INIT.items()
+            if _ns in ability
+        }.items():
+            ns_init_func(ns, device)
+
+        if mn_h.Appliance_Digest_Hub not in ability:
             # We don't have the 'official' digest carrying ns so we have to intercept
             # ns_all in order to have a chance to parse the hub digest
             device.handler_all.handler = device._handle_Appliance_System_All

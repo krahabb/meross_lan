@@ -3,6 +3,9 @@ from homeassistant.util import dt as dt_util
 
 from custom_components.meross_lan.button import Button, PersistentButton
 from custom_components.meross_lan.merossclient.protocol import const as mc
+from custom_components.meross_lan.merossclient.protocol.namespaces import (
+    hub as mn_h,
+)
 
 from tests.entities import EntityComponentTest
 
@@ -15,7 +18,9 @@ class EntityTest(EntityComponentTest):
 
     DIGEST_ENTITIES = {}
 
-    NAMESPACES_ENTITIES = {}
+    NAMESPACES_ENTITIES = {
+        mn_h.Appliance_Hub_PairSubDev: [Button],  # pair subdevice button
+    }
 
     HUB_SUBDEVICES_ENTITIES = {
         mc.KEY_SMOKEALARM: [Button, Button],  # mute, test
