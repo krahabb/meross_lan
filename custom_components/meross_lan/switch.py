@@ -42,7 +42,7 @@ class EmulatedSwitch(SwitchEntity):
         with self.exception_warning("restoring previous state"):
             if last_state := await self.get_last_state_available():
                 self.is_on = last_state.state == hac.STATE_ON
-        await super().async_added_to_hass()
+        await SwitchEntity.async_added_to_hass(self)
 
     @override
     async def async_turn_on(self, **kwargs):

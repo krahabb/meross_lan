@@ -215,7 +215,7 @@ class MtsSummerMode(SwitchParser):
 
     @override
     def flush_state(self):
-        super().flush_state()
+        SwitchParser.flush_state(self)
         climate: "MtsThermostatClimate" = self.parent.entities[self.channel]  # type: ignore
         if self.is_on:
             climate.hvac_modes = [

@@ -89,7 +89,7 @@ class Siren(BinaryParser, siren.SirenEntity):
             self.supported_features = (
                 siren.SirenEntityFeature.TURN_ON | siren.SirenEntityFeature.TURN_OFF
             )
-        super().__init__(channel, device, **kwargs)
+        BinaryParser.__init__(self, channel, device, **kwargs)
 
     @override
     async def async_request_value(self, device_value, /) -> None:

@@ -109,7 +109,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         @override
         def on_rx_raw(self, raw: bytes | bytearray, /) -> MerossMessage:
             try:
-                response = super().on_rx_raw(raw)
+                response = HttpClient.on_rx_raw(self, raw)
                 # add a sanity check here since we have some issues (#341)
                 # that might be related to misconfigured devices where the
                 # host address points to a different device than configured.
@@ -414,7 +414,8 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                 "the configuration by hitting 'Configure' "
                 "in the integration configuration page"
             )
-        super().__init__(
+        ConfigEntryManager.__init__(
+            self,
             device_id,
             api,
             config_entry,
@@ -487,7 +488,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             # bluetooth client is managed by ComponentApi so we dont shutdown it
             # (super().async_shutdown will also shutdown clients) but just unlink it from the device
             self.remove_client(self.bluetooth)
-        await super().async_shutdown()
+        await ConfigEntryManager.async_shutdown(self)
         if self.profile:
             self.profile.unlink(self)
         del self.sensor_protocol
@@ -674,7 +675,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             self.schedule_reload()
             return
 
-        await super().entry_update_listener(hass, config_entry)
+        await ConfigEntryManager.entry_update_listener(self, hass, config_entry)
         self._update_config()
         self.start()
 
@@ -695,7 +696,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                 is NamespaceHandler.async_poll_diagnostic
             ):
                 namespace_handler.polling_strategy = None
-        await super().async_destroy_diagnostic_entities()
+        await ConfigEntryManager.async_destroy_diagnostic_entities(self)
 
     async def _async_create_diagnostic_entities(self):
         # when create_diagnostic_entities is True, we'll schedule this task
@@ -737,7 +738,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         self, exception: Exception | None = None, error_context: str | None = None
     ):
         self.cancel_callback(self._async_trace_ability)
-        super().trace_close(exception, error_context)
+        ConfigEntryManager.trace_close(self, exception, error_context)
 
     def _trace_ability_next(self, abilities: "Iterator[str]", /):
         ability = next(abilities)
@@ -899,11 +900,11 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
 
     async def async_get_diagnostics(self):
         if self.is_connected:
-            data = await super().async_get_diagnostics()
+            data = await ConfigEntryManager.async_get_diagnostics(self)
             data["trace"] = await self._async_get_diagnostics_trace()
             return data
         else:
-            return await super().async_get_diagnostics()
+            return await ConfigEntryManager.async_get_diagnostics(self)
 
     # interface: AbstractClient
     @override
@@ -949,7 +950,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         HomeAssistantError instead to avoid dumping full stack trace in logs and log a
         concise error message instead on selected exceptions."""
         try:
-            return await super().async_request(*args, **kwargs)
+            return await device.Device.async_request(self, *args, **kwargs)
         except Exception as e:
             raise HomeAssistantError(str(e)) from e
 

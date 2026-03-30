@@ -464,7 +464,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
         self._today_midnight_epoch = 0  # 12:00 am today
         self._tomorrow_midnight_epoch = 0  # 12:00 am tomorrow
         self.extra_state_attributes = {}
-        super().__init__(id, device, **kwargs)
+        EntityNamespaceMixin.__init__(self, id, device, **kwargs)
         self.polling_response_size_adj(30)  # maximum item count for payload
         device.enable_check_device_time()
 
@@ -472,7 +472,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
         self._yesterday_midnight_epoch = 0
         self._today_midnight_epoch = 0
         self._tomorrow_midnight_epoch = 0
-        return super().set_unavailable()
+        return EntityNamespaceMixin.set_unavailable(self)
 
     async def async_added_to_hass(self):
         try:
@@ -512,7 +512,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
                         # consumption value from the device. The attributes restoration will
                         # instead keep patching the 'consumption reset bug'
 
-        await super().async_added_to_hass()
+        await EntityNamespaceMixin.async_added_to_hass(self)
 
     @override
     def _handle(self, message: "MerossMessage", /):

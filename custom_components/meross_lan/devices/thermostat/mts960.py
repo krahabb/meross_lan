@@ -101,7 +101,7 @@ class Mts960Climate(MtsThermostatClimate):
         self._mts_working = None
         self._mts_timer_payload = None
         self._mts_timer_mode = None
-        super().__init__(channel, device, **kwargs)
+        MtsThermostatClimate.__init__(self, channel, device, **kwargs)
         device.register_parser_ex(
             self,
             mn_t.Appliance_Control_Thermostat_CtlRange,
@@ -119,7 +119,7 @@ class Mts960Climate(MtsThermostatClimate):
         )
 
     def shutdown(self):
-        super().shutdown()
+        MtsThermostatClimate.shutdown(self)
         del self.binary_sensor_plug_state
         del self.number_timer_down_duration
         del self.number_timer_cycle_off_duration
@@ -129,7 +129,7 @@ class Mts960Climate(MtsThermostatClimate):
         self._mts_working = None
         self._mts_timer_payload = None
         self._mts_timer_mode = None
-        super().set_unavailable()
+        MtsThermostatClimate.set_unavailable(self)
 
     # interface: MtsThermostatClimate
     def flush_state(self):
@@ -214,7 +214,7 @@ class Mts960Climate(MtsThermostatClimate):
             self.hvac_mode = MtsThermostatClimate.HVACMode.OFF
             self.hvac_action = MtsThermostatClimate.HVACAction.OFF
 
-        super().flush_state()
+        MtsThermostatClimate.flush_state(self)
 
     async def async_set_hvac_mode(self, hvac_mode: MtsThermostatClimate.HVACMode):
         match hvac_mode:

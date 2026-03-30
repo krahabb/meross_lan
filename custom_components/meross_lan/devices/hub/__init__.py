@@ -788,7 +788,7 @@ class SmokeAlarmSensor(SensorSubDevice, EnumParser):
     )
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, /):
-        super().__init__(subid, hub, key_digest)
+        SensorSubDevice.__init__(self, subid, hub, key_digest)
         self.binary_sensor_alarm = BinarySensor(
             subid,
             hub,
@@ -818,7 +818,7 @@ class SmokeAlarmSensor(SensorSubDevice, EnumParser):
             pass
 
     def shutdown(self):
-        super().shutdown()
+        SensorSubDevice.shutdown(self)
         del self.binary_sensor_muted
         del self.binary_sensor_error
         del self.binary_sensor_alarm
@@ -893,11 +893,13 @@ class MS100Sensor(SensorSubDevice, SensorParser):
     __slots__ = ("sensor_humidity",)
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, /):
-        super().__init__(subid, hub, key_digest, **SensorParser.TEMPERATURE_ARGS)
+        SensorSubDevice.__init__(
+            self, subid, hub, key_digest, **SensorParser.TEMPERATURE_ARGS
+        )
         self.sensor_humidity = SensorParser(subid, hub, **SensorParser.HUMIDITY_ARGS)
 
     def shutdown(self):
-        super().shutdown()
+        SensorSubDevice.shutdown(self)
         del self.sensor_humidity
 
     @override
@@ -978,7 +980,7 @@ class MS130Sensor(MS100Sensor):
     __slots__ = ("sensor_light",)
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, /):
-        super().__init__(subid, hub, key_digest)
+        MS100Sensor.__init__(self, subid, hub, key_digest)
         self.sensor_light = SensorParser.Light(subid, hub)
         hub.get_handler(mn_h.Appliance_Control_Sensor_LatestX).register_parser(
             self
@@ -987,7 +989,7 @@ class MS130Sensor(MS100Sensor):
         )
 
     def shutdown(self):
-        super().shutdown()
+        MS100Sensor.shutdown(self)
         del self.sensor_light
 
     @override
@@ -1118,11 +1120,11 @@ class MstSwitch(SubDevice, HubSubIdChannelMixin, SwitchParser):
     __slots__ = ("number_duration",)
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, /):
-        super().__init__(subid, hub, key_digest)
+        SubDevice.__init__(self, subid, hub, key_digest)
         self.number_duration = MstSwitch.WateringDurationNumber(subid, hub)
 
     def shutdown(self):
-        super().shutdown()
+        SubDevice.shutdown(self)
         del self.number_duration
 
     @override

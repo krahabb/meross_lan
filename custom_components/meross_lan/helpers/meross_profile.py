@@ -5,15 +5,15 @@ meross_lan module interface to access Meross Cloud services
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, override
 
-from homeassistant.helpers import storage
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 # import core modules instead of symbols to ease patching in a single place
 from . import (
     get_default_ssl_context,
-    mqtt_profile as mlq,
 )
+from .mqtt_profile import MQTTConnection, MQTTProfile
 from .. import const as mlc
 from ..merossclient import HostAddress, cloudapi, datetime_from_epoch
 from ..merossclient.client.mqtt import MQTTAppClient
@@ -65,12 +65,13 @@ if TYPE_CHECKING:
         tokenRequestTime: float
 
 
-class MerossMQTTConnection(MQTTAppClient, mlq.MQTTConnection):
+class MerossMQTTConnection(MQTTAppClient, MQTTConnection):
 
     __slots__ = MQTTAppClient._calc_slots()
 
     def __init__(self, broker: "HostAddress", profile: "MerossProfile"):
-        super().__init__(
+        MQTTAppClient.__init__(
+            self,
             broker,
             profile,
             app_id=profile.app_id,
@@ -80,11 +81,12 @@ class MerossMQTTConnection(MQTTAppClient, mlq.MQTTConnection):
         )
 
 
-class MerossProfileStore(storage.Store["MerossProfileStoreType"]):
+class MerossProfileStore(Store["MerossProfileStoreType"]):
     VERSION = 1
 
     def __init__(self, hass: "HomeAssistant", profile_id: str):
-        super().__init__(
+        Store.__init__(
+            self,
             hass,
             MerossProfileStore.VERSION,
             f"{mlc.DOMAIN}.profile.{profile_id}",
@@ -92,7 +94,7 @@ class MerossProfileStore(storage.Store["MerossProfileStoreType"]):
 
     async def async_remove_and_logout(self, credentials: "MerossCloudCredentials"):
 
-        await super().async_remove()
+        await Store.async_remove(self)
         await cloudapi.CloudApiClient(
             credentials["userid"],
             credentials=credentials,
@@ -100,7 +102,7 @@ class MerossProfileStore(storage.Store["MerossProfileStoreType"]):
         ).async_logout_safe()
 
 
-class MerossProfile(mlq.MQTTProfile):
+class MerossProfile(MQTTProfile):
     """
     Represents and manages a cloud account profile used to retrieve keys
     and/or to manage cloud mqtt connection(s).
@@ -140,7 +142,7 @@ class MerossProfile(mlq.MQTTProfile):
     )
 
     def __init__(self, id: str, api: "ComponentApi", config_entry: "ConfigEntry", /):
-        mlq.MQTTProfile.__init__(self, id, api, config_entry)
+        MQTTProfile.__init__(self, id, api, config_entry)
         # state of the art for credentials is that they're mixed in
         # into the config_entry.data but this is prone to issues and confusing
         # so we 'might' decide to move them to a dict valued key in configentry.data
@@ -227,7 +229,7 @@ class MerossProfile(mlq.MQTTProfile):
         )
 
     async def async_shutdown(self):
-        await super().async_shutdown()
+        await MQTTProfile.async_shutdown(self)
         await self.apiclient.async_shutdown()
         del self.apiclient
         self.parent.profiles[self.id] = None
@@ -252,7 +254,7 @@ class MerossProfile(mlq.MQTTProfile):
         if self.config.get(mc.KEY_MQTTDOMAIN) != config.get(mc.KEY_MQTTDOMAIN):
             self.schedule_reload()
         else:
-            await super().entry_update_listener(hass, config_entry)
+            await MQTTProfile.entry_update_listener(self, hass, config_entry)
             # the 'async_check_query_devices' will only occur if we didn't refresh
             # on our polling schedule for whatever reason (invalid token -
             # no connection - whatsoever) so, having a fresh token and likely
@@ -374,7 +376,7 @@ class MerossProfile(mlq.MQTTProfile):
         The list is empty if device not configured or if the connection(s) to the brokers
         cannot be established (like broker is down any network issue)
         """
-        mqttconnections: list[mlq.MQTTConnection] = []
+        mqttconnections: list[MQTTConnection] = []
 
         async def _add_connection(domain: str | None):
             if not domain:

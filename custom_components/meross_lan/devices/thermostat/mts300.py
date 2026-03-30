@@ -61,7 +61,7 @@ class Mts300Climate(MtsThermostatClimate):
             except KeyError:  # missing humiValue
                 pass
 
-            super()._parse(payload)
+            MtsThermostatClimate.AdjustNumber._parse(self, payload)
 
     class SensorAssociationSelect(SelectParser.NamespaceGroupValue, SelectParser):
         """
@@ -190,7 +190,7 @@ class Mts300Climate(MtsThermostatClimate):
     ) + tuple(f"sensor_{_key}" for _key in ENTITY_ARGS)
 
     def __init__(self, channel: int, device: "Device", /, **kwargs):
-        super().__init__(channel, device, **kwargs)
+        MtsThermostatClimate.__init__(self, channel, device, **kwargs)
         device.register_parser_ex(
             self,
             mn.Appliance_Config_Sensor_Association,
@@ -226,7 +226,7 @@ class Mts300Climate(MtsThermostatClimate):
         self.switch_fan_hold.async_turn_off = self._async_turn_off_switch_fan_hold
 
     def shutdown(self):
-        super().shutdown()
+        MtsThermostatClimate.shutdown(self)
         del self.switch_fan_hold
         del self.number_fan_hold
         for _key in Mts300Climate.ENTITY_ARGS:
@@ -238,7 +238,7 @@ class Mts300Climate(MtsThermostatClimate):
         self.target_temperature_high = None
         self.target_temperature_low = None
         self._mts_work = None
-        return super().set_unavailable()
+        return MtsThermostatClimate.set_unavailable(self)
 
     async def async_set_hvac_mode(self, hvac_mode: MtsThermostatClimate.HVACMode):
         await self.async_request_parse_ex(

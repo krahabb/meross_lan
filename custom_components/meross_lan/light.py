@@ -248,7 +248,7 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
             if self.effect_list
             else LightEntityFeature.TRANSITION
         )
-        super().__init__(channel, device, **kwargs)
+        mle.ToggleXParser.__init__(self, channel, device, **kwargs)
 
     @override
     def set_unavailable(self):
@@ -258,7 +258,7 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
         self.color_temp_kelvin = None
         self.effect = None
         self.rgb_color = None
-        super().set_unavailable()
+        mle.ToggleXParser.set_unavailable(self)
 
     # interface: self
     def _transition_setup(self, _light: "mt.JsonDict", kwargs: dict, /) -> float | None:
@@ -421,8 +421,7 @@ class Light(LightBase):
         # also (issue #218) the newer mss560-570 dimmer switches are implemented as 'light' devices with ToggleX
         # api and show a glitch when used this way (ToggleX + Light)
         # State-of-the-art is now to auto-detect (when booting the entity) what is the behavior
-        ability = device.descriptor.ability
-        capacity = ability[mn.Appliance_Control_Light].get(
+        capacity = device.descriptor.ability[mn.Appliance_Control_Light].get(
             mc.KEY_CAPACITY, mc.LIGHT_CAPACITY_LUMINANCE
         )
         self.supported_color_modes = supported_color_modes = set()
@@ -665,7 +664,7 @@ class EffectLight(Light):
             if self.is_on and (mc.KEY_EFFECT in self.ns_payload)
             else mlc.PARAM_INFINITE_TIMEOUT
         )
-        return super().flush_state()
+        return Light.flush_state(self)
 
     # interface: Light
     @override
@@ -700,7 +699,7 @@ class EffectLight(Light):
                 _light[mc.KEY_CAPACITY] = (
                     _light[mc.KEY_CAPACITY] & ~mc.LIGHT_CAPACITY_EFFECT
                 )
-                await self.async_request_light_on_flush(_light) # type: ignore
+                await self.async_request_light_on_flush(_light)  # type: ignore
             else:
                 _light_effect = self._light_effects[effect_index]
                 _light_effect[mc.KEY_ENABLE] = 1
@@ -744,7 +743,7 @@ class EffectLight(Light):
 
         # nothing related to effects in this service call so
         # we'll proceed to 'standard' light commands
-        await super().async_turn_on(**kwargs)
+        await Light.async_turn_on(self, **kwargs)
 
     # interface: self
     def _handle_Appliance_Control_Light_Effect(self, message: MerossMessage, /):

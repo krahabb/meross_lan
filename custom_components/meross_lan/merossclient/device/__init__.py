@@ -345,6 +345,10 @@ class Device(PhysicalDevice):
         assert (
             not self.ns_handlers
         ), "Device shutdown failed: namespace handlers still set"
+        assert not self._clients, "Device shutdown failed: clients still set"
+        assert (
+            not self._clients_connected
+        ), "Device shutdown failed: connected clients still set"
 
     # interface: AbstractClient
     @override

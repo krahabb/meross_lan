@@ -93,7 +93,7 @@ class NamespaceHandler(_NH):
                     pass
 
         else:
-            super()._handle(message)
+            _NH._handle(self, message)
 
     @override
     def _handle_missing_parser(self, p_channel: dict, ke: KeyError, /):

@@ -108,7 +108,8 @@ class ConnectionSensor(DiagnosticSensor):
             ConnectionSensor.ATTR_PUBLISHED: 0,
             ConnectionSensor.ATTR_DROPPED: 0,
         }
-        super().__init__(
+        DiagnosticSensor.__init__(
+            self,
             None,
             connection.parent,
             entity_key=str(connection.id),
@@ -121,7 +122,7 @@ class ConnectionSensor(DiagnosticSensor):
         connection.sensor_connection = self
 
     def shutdown(self):
-        super().shutdown()
+        DiagnosticSensor.shutdown(self)
         self.connection.sensor_connection = None
         del self.connection  # type: ignore[del]
 
@@ -178,7 +179,8 @@ class MQTTConnection(AbstractMQTTConnection):
             uuid: str,
             key: str,
         ):
-            super().__init__(
+            AbstractMQTTConnection.Client.__init__(
+                self,
                 connection.id,
                 parent,
                 connection=connection,
@@ -190,7 +192,7 @@ class MQTTConnection(AbstractMQTTConnection):
         @override
         def on_async_mqtt_message(self, message: "MerossMessage", /):
             """Message processing entry point for MQTT (PUSH) messages."""
-            super().on_async_mqtt_message(message)
+            AbstractMQTTConnection.Client.on_async_mqtt_message(self, message)
             device = self.device
             if not device.is_connected:
                 device.on_connect()
@@ -235,7 +237,8 @@ class MQTTConnection(AbstractMQTTConnection):
         kwargs["key"] = profile.key
         kwargs["is_cloud"] = profile.is_cloud_profile
         kwargs["allow_publish"] = profile.allow_mqtt_publish
-        super().__init__(
+        AbstractMQTTConnection.__init__(
+            self,
             broker,
             profile,
             **kwargs,
@@ -243,7 +246,7 @@ class MQTTConnection(AbstractMQTTConnection):
         profile.mqttconnections[str(broker)] = self
 
     def shutdown(self):
-        super().shutdown()
+        AbstractMQTTConnection.shutdown(self)
         self.sensor_connection = None
 
     @override  # Loggable
@@ -255,14 +258,14 @@ class MQTTConnection(AbstractMQTTConnection):
     @callback
     @override
     def on_connect(self, /):
-        super().on_connect()
+        AbstractMQTTConnection.on_connect(self)
         if self.sensor_connection:
             self.sensor_connection.update_native_value(ConnectionSensor.STATE_CONNECTED)
 
     @callback
     @override
     def on_disconnect(self, /):
-        super().on_disconnect()
+        AbstractMQTTConnection.on_disconnect(self)
         if self.sensor_connection:
             self.sensor_connection.update_native_value(
                 ConnectionSensor.STATE_DISCONNECTED
@@ -270,7 +273,7 @@ class MQTTConnection(AbstractMQTTConnection):
 
     @override
     def log_message(self, message: "MerossMessage", direction: "Direction", /):
-        super().log_message(message, direction)
+        AbstractMQTTConnection.log_message(self, message, direction)
         if self.parent.is_tracing:
             self.parent.trace_msg(self.time(), message, self.TRANSPORT, direction)
 
@@ -581,7 +584,7 @@ class MQTTProfile(ConfigEntryManager):
         /,
         **kwargs: "Unpack[MQTTProfile.Args]",
     ):
-        super().__init__(id, api, config_entry, **kwargs)
+        ConfigEntryManager.__init__(self, id, api, config_entry, **kwargs)
         self.linkeddevices = {}
         self.mqttconnections = {}
 
@@ -593,15 +596,15 @@ class MQTTProfile(ConfigEntryManager):
         for device in self.linkeddevices.values():
             device.profile_unlinked()
         self.linkeddevices.clear()
-        await super().async_shutdown()
+        await ConfigEntryManager.async_shutdown(self)
 
     async def entry_update_listener(self, hass, config_entry: "ConfigEntry"):
-        await super().entry_update_listener(hass, config_entry)
+        await ConfigEntryManager.entry_update_listener(self, hass, config_entry)
         for mqttconnection in self.mqttconnections.values():
             mqttconnection.entry_update_listener(self)
 
     async def async_create_diagnostic_entities(self):
-        await super().async_create_diagnostic_entities()
+        await ConfigEntryManager.async_create_diagnostic_entities(self)
         for mqttconnection in self.mqttconnections.values():
             await mqttconnection.async_create_diagnostic_entities()
 

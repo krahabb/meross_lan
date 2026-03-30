@@ -54,7 +54,7 @@ class UpdateEntity(Entity, update.UpdateEntity):
         self.installed_version, self.latest_version, self.release_summary = (
             self.parent.get_upgrade_info()
         )
-        super().flush_state()
+        Entity.flush_state(self)
 
     async def async_install(self, version: str | None, backup: bool, **kwargs):
         device = self.parent

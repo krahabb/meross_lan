@@ -188,7 +188,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
                 self.id.port = conf.get(mlc.hac.CONF_PORT, mqtt.const.DEFAULT_PORT)
                 self.configure_logger()
 
-        super().on_connect()
+        mlq.MQTTConnection.on_connect(self)
 
     # these handlers are used to manage session establishment on MQTT.
     # They are typically sent by the device when they connect to the broker

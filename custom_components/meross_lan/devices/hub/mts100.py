@@ -78,7 +78,7 @@ class Mts100Climate(SubDevice, MtsClimate):
                 # but we handle that option as possible though
                 self._parse_digest_ = self._parse_mts150
 
-        super().__init__(subid, hub, key_digest)
+        SubDevice.__init__(self, subid, hub, key_digest)
         self.schedule._schedule_unit_time = hub.descriptor.ability.get(
             mn_h.Appliance_Hub_Mts100_ScheduleB, {}
         ).get(mc.KEY_SCHEDULEUNITTIME, 15)
@@ -97,7 +97,7 @@ class Mts100Climate(SubDevice, MtsClimate):
         self.switch_patch_hvacaction.register_state_callback(self.flush_state)
 
     def shutdown(self):
-        super().shutdown()
+        SubDevice.shutdown(self)
         del self.binary_sensor_window
         del self.switch_patch_hvacaction
 

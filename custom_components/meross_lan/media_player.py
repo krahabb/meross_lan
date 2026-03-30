@@ -61,7 +61,7 @@ class Mp3Player(ParserEntity, media_player.MediaPlayerEntity):
         self.media_track = None
         self.state = None
         self.volume_level = None
-        super().set_unavailable()
+        ParserEntity.set_unavailable(self)
 
     # interface: MediaPlayerEntity
     async def async_mute_volume(self, mute):

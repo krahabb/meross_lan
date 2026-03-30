@@ -42,7 +42,7 @@ class GarageTimeoutBinarySensor(BinarySensor):
 
     def __init__(self, garage: "GarageDoor", /):
         self.extra_state_attributes = {}
-        super().__init__(garage.channel, garage.parent)
+        BinarySensor.__init__(self, garage.channel, garage.parent)
 
     def update_ok(self, was_closing, /):
         extra_state_attributes = self.extra_state_attributes
@@ -298,7 +298,7 @@ class GarageDoor(Cover):
         device.register_togglex_channel(self, False)
 
     def shutdown(self):
-        super().shutdown()
+        Cover.shutdown(self)
         del self.number_doorCloseDuration
         del self.number_doorOpenDuration
 
@@ -561,7 +561,7 @@ class GarageDoorConfigNamespaceHandler(EntityDefNamespaceHandler):
     }
 
     def _handle(self, message: "MerossMessage", /):
-        super()._handle(message)
+        EntityDefNamespaceHandler._handle(self, message)
         # mc.KEY_DOOROPENDURATION and mc.KEY_DOORCLOSEDURATION config keys have been
         # removed in recent firmwares (migrated to MultipleConfig x channel #82).
         # We keep implementing emulated entities in case for legacy firmwares.

@@ -193,10 +193,6 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             except AttributeError:
                 if entity_key:
                     self.name = entity_key.replace("_", " ").capitalize()
-                else:
-                    # as it is now implemented this will instruct HA core
-                    # to use device name when it can't provide an entity name
-                    self.use_device_name = True
         # simple setting of HA core attributes if provided in kwargs
         # else fallback to HA core mechanics
         for _attr_name in tuple(

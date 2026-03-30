@@ -99,7 +99,7 @@ class ObfuscateUserIdMap(ObfuscateMap):
         except Exception:
             # but we play safe anyway
             pass
-        return super().__call__(value)
+        return ObfuscateMap.__call__(self, value)
 
 
 class ObfuscateServerMap(ObfuscateMap):
@@ -121,11 +121,11 @@ class ObfuscateServerMap(ObfuscateMap):
         except Exception:
             pass
 
-        return super().__call__(value)
+        return ObfuscateMap.__call__(self, value)
 
     def clear(self):
         OBFUSCATE_PORT_MAP.clear()
-        return super().clear()
+        return ObfuscateMap.clear(self)
 
 
 class ObfuscateFrom(ObfuscateRule):

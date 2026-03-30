@@ -40,11 +40,11 @@ class Button(Entity, button.ButtonEntity):
         **kwargs: "Unpack[Button.Args]",
     ):
         kwargs.setdefault("entity_key", f"button_{slugify(kwargs['name'])}")
-        super().__init__(channel, parent, **kwargs)
+        Entity.__init__(self, channel, parent, **kwargs)
         self.async_press = press_func
 
     def shutdown(self):
-        super().shutdown()
+        Entity.shutdown(self)
         del self.async_press
 
 
