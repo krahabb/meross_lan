@@ -526,6 +526,7 @@ TYPE_MS600 = "ms600"
 TYPE_NAME_MAP[TYPE_MS600] = "Presence Sensor"
 
 TYPE_MST100 = "mst100"
+TYPE_MST200 = "mst200"
 TYPE_NAME_MAP["mst"] = "Sprinkler Timer"
 
 # REFOSS device types

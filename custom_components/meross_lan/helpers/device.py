@@ -12,6 +12,7 @@ from .. import const as mlc
 from ..button import PersistentButton
 from ..merossclient import (
     DeviceDescriptor,
+    async_import_module,
     datetime_from_epoch,
     device,
 )
@@ -323,7 +324,6 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             "GarageDoorConfigNamespaceHandler",
         ),
         mn.Appliance_GarageDoor_State: (".devices.garagedoor", "GarageDoor"),
-        "Appliance.Hub.SubdeviceList": (".devices.hub", "Hub"),
         mn.Appliance_Mcu_Firmware: (
             ".helpers.namespaces",
             "NamespaceHandler",  # handler in Device._handle_XXX
@@ -386,6 +386,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         "_profile",
         "_async_create_diagnostic_entities_task",
         "sensor_protocol",
+        "subdevices",  # used in Hub subclass
     )
 
     def __init__(
@@ -620,6 +621,20 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                     )
 
     # interface: ConfigEntryManager
+    @override
+    async def async_setup_entry(
+        self, hass: "HomeAssistant", config_entry: "ConfigEntry"
+    ):
+        if self.descriptor.is_hub:
+            # dynamic subclassing of Device instance
+            if TYPE_CHECKING:
+                from ..devices import hub
+            hub = await async_import_module(".devices.hub", self.NAMESPACE_INIT_PACKAGE)
+            self.__class__ = hub.Hub
+
+        await self.async_init()
+        await ConfigEntryManager.async_setup_entry(self, hass, config_entry)
+
     @override
     def get_device_entry(self, channel, /):
         if (not channel) or (len(self.descriptor.channels) <= 1):

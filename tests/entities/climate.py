@@ -3,7 +3,7 @@ from homeassistant.components.climate import ClimateEntity, HVACMode
 
 from custom_components.meross_lan.climate import MtsClimate
 from custom_components.meross_lan.devices import thermostat as mts
-from custom_components.meross_lan.devices.hub.mts100 import Mts100Climate
+from custom_components.meross_lan.devices.hub.mts import mts100v3, mts150
 from custom_components.meross_lan.devices.thermostat.mts200 import Mts200Climate
 from custom_components.meross_lan.devices.thermostat.mts300 import Mts300Climate
 from custom_components.meross_lan.devices.thermostat.mts960 import Mts960Climate
@@ -18,14 +18,22 @@ from custom_components.meross_lan.merossclient.protocol.namespaces import (
 from tests.entities import EntityComponentTest
 
 HVAC_MODES: dict[type[MtsClimate], set[HVACMode]] = {
-    Mts100Climate: {HVACMode.OFF, HVACMode.HEAT},
+    mts100v3: {HVACMode.OFF, HVACMode.HEAT},
+    mts150: {HVACMode.OFF, HVACMode.HEAT},
     Mts200Climate: {HVACMode.OFF},  # heat/cool depends on summer mode
     Mts300Climate: {HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.HEAT_COOL},
     Mts960Climate: {HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO},
 }
 
 PRESET_MODES: dict[type[MtsClimate], set] = {
-    Mts100Climate: {
+    mts100v3: {
+        mc.MTS100_MODE_CUSTOM,
+        mc.MTS100_MODE_HEAT,
+        mc.MTS100_MODE_COOL,
+        mc.MTS100_MODE_ECO,
+        mc.MTS100_MODE_AUTO,
+    },
+    mts150: {
         mc.MTS100_MODE_CUSTOM,
         mc.MTS100_MODE_HEAT,
         mc.MTS100_MODE_COOL,
@@ -60,9 +68,9 @@ class EntityTest(EntityComponentTest):
         mn_t.Appliance_Control_Thermostat_ModeC: [Mts300Climate],
     }
     HUB_SUBDEVICES_ENTITIES = {
-        mc.TYPE_MTS100: [Mts100Climate],
-        mc.TYPE_MTS100V3: [Mts100Climate],
-        mc.TYPE_MTS150: [Mts100Climate],
+        mc.TYPE_MTS100: [mts100v3],
+        mc.TYPE_MTS100V3: [mts100v3],
+        mc.TYPE_MTS150: [mts150],
     }
 
     async def async_test_each_callback(self, entity: MtsClimate):

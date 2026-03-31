@@ -1,7 +1,8 @@
 from homeassistant.components import binary_sensor as haec
 
 from custom_components.meross_lan.binary_sensor import BinarySensorEntity
-from custom_components.meross_lan.devices import garagedoor as gd, hub
+from custom_components.meross_lan.devices import garagedoor as gd
+from custom_components.meross_lan.devices.hub import ms
 from custom_components.meross_lan.devices.thermostat import (
     MtsWindowOpened,
 )
@@ -43,13 +44,13 @@ class EntityTest(EntityComponentTest):
         mc.TYPE_MTS100: [BinarySensorEntity],  # window opened
         mc.TYPE_MTS100V3: [BinarySensorEntity],  # window opened
         mc.TYPE_MTS150: [BinarySensorEntity],  # window opened
-        mc.KEY_DOORWINDOW: [hub.DoorWindowSensor],
+        mc.KEY_DOORWINDOW: [ms.ms200],
         mc.KEY_SMOKEALARM: [
             BinarySensorEntity,  # alarm
             BinarySensorEntity,  # error
             BinarySensorEntity,  # muted
         ],
-        mc.KEY_WATERLEAK: [hub.WaterLeakSensor],
+        mc.KEY_WATERLEAK: [ms.ms400],
     }
 
     async def async_test_enabled_callback(self, entity):

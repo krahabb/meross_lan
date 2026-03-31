@@ -3,11 +3,11 @@ from homeassistant.components import switch as haec
 from custom_components.meross_lan import siren, switch
 from custom_components.meross_lan.devices import (
     garagedoor as gd,
-    hub,
     mss,
     rollershutter as rs,
     thermostat as mts,
 )
+from custom_components.meross_lan.devices.hub import mst
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
@@ -61,6 +61,6 @@ class EntityTest(ToggleEntityComponentTest):
             switch.SwitchParser,  # beep
         ],
         mc.KEY_DOORWINDOW: [switch.SwitchParser],  # beep
-        mc.KEY_MST: [hub.MstSwitch],
+        mc.KEY_MST: [mst.mst100],
         mc.KEY_WATERLEAK: [switch.SwitchParser],  # beep
     }

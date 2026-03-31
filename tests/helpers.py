@@ -831,7 +831,9 @@ class DeviceContext(ConfigEntryMocker):
         This class can be extended in subclasses of ConfigEntryMocker"""
 
         RAISE_MESSAGES = ConfigEntryMocker.ManagerMock.RAISE_MESSAGES + [
-            (None, re.compile(r".*initializing digest key.*")),
+            (None, re.compile(r".*initializing namespace.*")),
+            (None, re.compile(r".*hub digest scan.*")),
+            (None, re.compile(r".*detecting subdevice model.*")),
         ]
 
     if TYPE_CHECKING:

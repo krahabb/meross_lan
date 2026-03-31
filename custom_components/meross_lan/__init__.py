@@ -43,7 +43,6 @@ async def async_setup_entry(
 
             device = mld.Device(device_id, api, config_entry)
             try:
-                await device.async_init()
                 await device.async_setup_entry(hass, config_entry)
                 api.devices[device_id] = device
                 # this code needs to run after registering api.devices[device_id]

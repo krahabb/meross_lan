@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from ...merossclient.protocol import types as mt
 
 
-class Mts100Climate(SubDevice, MtsClimate):
+class mts100v3(SubDevice, MtsClimate):
     """Climate entity for hub paired devices MTS100, MTS100V3, MTS150"""
 
     class AdjustNumber(MtsClimate.AdjustNumber):
@@ -68,17 +68,9 @@ class Mts100Climate(SubDevice, MtsClimate):
         "switch_patch_hvacaction",
     )
 
-    def __init__(self, subid: str, hub: "Hub", key_digest: str):
+    def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         self.extra_state_attributes = {}
-        match key_digest:
-            case mc.TYPE_MTS100 | mc.TYPE_MTS100V3:
-                self._parse_digest_ = self._parse_mts100
-            case mc.TYPE_MTS150 | mc.TYPE_MTS150P:
-                # mts150p subdevs should still report their key_digest as mts150
-                # but we handle that option as possible though
-                self._parse_digest_ = self._parse_mts150
-
-        SubDevice.__init__(self, subid, hub, key_digest)
+        SubDevice.__init__(self, subid, hub, key_digest, model)
         self.schedule._schedule_unit_time = hub.descriptor.ability.get(
             mn_h.Appliance_Hub_Mts100_ScheduleB, {}
         ).get(mc.KEY_SCHEDULEUNITTIME, 15)
@@ -153,11 +145,7 @@ class Mts100Climate(SubDevice, MtsClimate):
 
         key = mc.MTS100_MODE_TO_CURRENTSET_MAP.get(self._mts_mode) or mc.KEY_CUSTOM
         await self.async_request_parse_ex(
-            {
-                key: round(
-                    kwargs[Mts100Climate.ATTR_TEMPERATURE] * self.temperature_scale
-                )
-            }
+            {key: round(kwargs[mts100v3.ATTR_TEMPERATURE] * self.temperature_scale)}
         )
 
     @override
@@ -254,18 +242,23 @@ class Mts100Climate(SubDevice, MtsClimate):
         self._mts_mode = payload[mc.KEY_STATE]
         self.flush_state()
 
-    def _parse_mts100(self, payload: "mt.hub._mts100v3", /):
+    def _parse_digest_(self, payload: "mt.hub._mts100v3", /):
         """parse digest key for mts100/mts100v3 subdevice"""
         self._mts_mode = payload[mc.KEY_MODE]
-        self.flush_state()
-
-    def _parse_mts150(self, payload: "mt.hub._mts150", /):
-        """parse digest key for mts150/mts150p subdevice"""
-        self._mts_mode = payload[mc.KEY_MODE]
-        # TODO: parse more keys?
         self.flush_state()
 
     def update_scheduleb_mode(self, mode, /):
         self.extra_state_attributes[mc.KEY_SCHEDULEBMODE] = mode
         self.schedule._schedule_entry_count_max = mode
         self.schedule._schedule_entry_count_min = mode
+
+
+class mts150(mts100v3):
+    """Climate entity for hub paired devices MTS150, MTS150P"""
+
+
+    def _parse_digest_(self, payload: "mt.hub._mts100v3", /):
+        """parse digest key for mts150/mts150p subdevice"""
+        self._mts_mode = payload[mc.KEY_MODE]
+        # TODO: parse more keys?
+        self.flush_state()

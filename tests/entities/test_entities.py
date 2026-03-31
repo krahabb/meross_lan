@@ -3,12 +3,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.helpers.entity import STATE_UNAVAILABLE
 
-from custom_components.meross_lan.devices.hub import Hub
-from custom_components.meross_lan.helpers.entity import ParserEntity
-from custom_components.meross_lan.merossclient.protocol import (
-    const as mc,
-    namespaces as mn,
-)
+from custom_components.meross_lan.merossclient.protocol import const as mc
 
 from tests import const as tc, helpers
 from tests.entities import EntityComponentTest
@@ -47,56 +42,6 @@ HUB_SUBDEVICES_ENTITIES = {None: []}
 # and so cannot properly 'online' the releated entity. Use with care!
 UNAVAILABLE_ENTITIES = {}
 
-for entity_domain in (
-    "binary_sensor",
-    "button",
-    "calendar",
-    "climate",
-    "cover",
-    "fan",
-    "light",
-    "media_player",
-    "number",
-    "select",
-    "sensor",
-    "siren",
-    "switch",
-):
-    module = import_module(f".{entity_domain}", "tests.entities")
-    entity_test: EntityComponentTest = module.EntityTest()
-    entity_test.DOMAIN = entity_domain
-    COMPONENTS_TESTS[entity_domain] = entity_test
-
-    DEVICE_ENTITIES.extend(entity_test.DEVICE_ENTITIES)
-
-    for digest_key, entity_types in entity_test.DIGEST_ENTITIES.items():
-        # digest entity type description might be hiearchical
-        # since digest iteslf might be a dict hierarchy (2 levels though)
-        try:
-            container = DIGEST_ENTITIES[digest_key]
-            if type(entity_types) is dict:
-                assert type(container) is dict
-                for sub_digest_key, sub_entity_types in entity_types.items():
-                    sub_container = container.setdefault(sub_digest_key, [])
-                    sub_container.extend(sub_entity_types)
-            else:
-                assert type(container) is list and type(entity_types) is list
-                container.extend(entity_types)
-        except KeyError:
-            DIGEST_ENTITIES[digest_key] = entity_types.copy()
-
-    for namespace, entity_types in entity_test.NAMESPACES_ENTITIES.items():
-        try:
-            NAMESPACES_ENTITIES[namespace].extend(entity_types)
-        except KeyError:
-            NAMESPACES_ENTITIES[namespace] = list(entity_types)
-
-    for subdevice_type, entity_types in entity_test.HUB_SUBDEVICES_ENTITIES.items():
-        try:
-            HUB_SUBDEVICES_ENTITIES[subdevice_type].extend(entity_types)
-        except KeyError:
-            HUB_SUBDEVICES_ENTITIES[subdevice_type] = list(entity_types)
-
 
 async def test_entities(
     request,
@@ -112,6 +57,57 @@ async def test_entities(
     # TODO!! add expectancy for enabled/disabled entities
     # TODO add expected GarageTimeoutBinarySensor for GarageDoor (and maybe some others in garageConfig)
     """
+
+    for entity_domain in (
+        "binary_sensor",
+        "button",
+        "calendar",
+        "climate",
+        "cover",
+        "fan",
+        "light",
+        "media_player",
+        "number",
+        "select",
+        "sensor",
+        "siren",
+        "switch",
+    ):
+        module = import_module(f".{entity_domain}", "tests.entities")
+        entity_test: EntityComponentTest = module.EntityTest()
+        entity_test.DOMAIN = entity_domain
+        COMPONENTS_TESTS[entity_domain] = entity_test
+
+        DEVICE_ENTITIES.extend(entity_test.DEVICE_ENTITIES)
+
+        for digest_key, entity_types in entity_test.DIGEST_ENTITIES.items():
+            # digest entity type description might be hiearchical
+            # since digest iteslf might be a dict hierarchy (2 levels though)
+            try:
+                container = DIGEST_ENTITIES[digest_key]
+                if type(entity_types) is dict:
+                    assert type(container) is dict
+                    for sub_digest_key, sub_entity_types in entity_types.items():
+                        sub_container = container.setdefault(sub_digest_key, [])
+                        sub_container.extend(sub_entity_types)
+                else:
+                    assert type(container) is list and type(entity_types) is list
+                    container.extend(entity_types)
+            except KeyError:
+                DIGEST_ENTITIES[digest_key] = entity_types.copy()
+
+        for namespace, entity_types in entity_test.NAMESPACES_ENTITIES.items():
+            try:
+                NAMESPACES_ENTITIES[namespace].extend(entity_types)
+            except KeyError:
+                NAMESPACES_ENTITIES[namespace] = list(entity_types)
+
+        for subdevice_type, entity_types in entity_test.HUB_SUBDEVICES_ENTITIES.items():
+            try:
+                HUB_SUBDEVICES_ENTITIES[subdevice_type].extend(entity_types)
+            except KeyError:
+                HUB_SUBDEVICES_ENTITIES[subdevice_type] = list(entity_types)
+
     EntityComponentTest.hass = hass
     EntityComponentTest.get_hass_state = hass.states.get
     EntityComponentTest.async_hass_service_call = hass.services.async_call

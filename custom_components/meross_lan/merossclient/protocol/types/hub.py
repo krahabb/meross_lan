@@ -8,7 +8,10 @@ from .. import types as mt
 
 class SubIdPayload(TypedDict):
     subId: str
-    channel: int
+    channel: int  # typically 0
+    channels: NotRequired[list[int]]
+    # It looks like mst200 is introducing a different layout for this payload
+    # with channels=[1, 2] instead of channel in order to manage the 2 sprinkler valves.
 
 
 class Battery(mt.IdPayload):
@@ -164,6 +167,14 @@ class SubDevice_Version(mt.IdPayload):
     firmware: str
 
 
+class Water(SubIdPayload):
+    """Appliance.Control.Water"""
+
+    dura: NotRequired[int]  # duration in seconds
+    lmTime: int
+    onoff: int  # 1: on, 2: off
+
+
 class Digest_SubDevice(_Online, ToggleX, mt.IdPayload):
     """Common fields for subdevices in hub digest."""
 
@@ -224,16 +235,24 @@ class Digest_gs559(Digest_SubDevice):
     smokeAlarm: _smokeAlarm
 
 
-class _mst(TypedDict):
+class _mst100(TypedDict):
     ts: int
     dura: int
     wflow: int
 
 
-class Digest_mst100(Digest_SubDevice):
-    """Digest payload for mst subdevice."""
+class _mst200_C(_mst100):
+    channel: int
 
-    mst: _mst
+
+class _mst200(TypedDict):
+    waDet: list[_mst200_C]
+
+
+class Digest_mst(Digest_SubDevice):
+    """Digest payload for mst subdevices."""
+
+    mst: _mst100 | _mst200
 
 
 class Digest(TypedDict):

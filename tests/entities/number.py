@@ -3,11 +3,11 @@ from homeassistant.components import number as haec
 from custom_components.meross_lan import number, siren, switch
 from custom_components.meross_lan.devices import (
     garagedoor as gd,
-    hub,
     ms600,
     rollershutter as rs,
 )
-from custom_components.meross_lan.devices.hub.mts100 import Mts100Climate
+from custom_components.meross_lan.devices.hub import ms, mst
+from custom_components.meross_lan.devices.hub.mts import mts100v3
 from custom_components.meross_lan.devices.thermostat import (
     MtsClimate,
     MtsCommonTemperatureExtNumber,
@@ -35,7 +35,7 @@ def _climate_number_entities(climate_class: type[MtsClimate]) -> list[type[Entit
     return [climate_class.AdjustNumber] + [climate_class.SetPointNumber] * 3  # type: ignore
 
 
-_MTS100_ENTITES = _climate_number_entities(Mts100Climate)
+_MTS100_ENTITES = _climate_number_entities(mts100v3)
 
 
 class EntityTest(EntityComponentTest):
@@ -69,7 +69,7 @@ class EntityTest(EntityComponentTest):
             ms600.PresenceConfigNumber,
             ms600.PresenceConfigNumber,
         ]
-        + [ms600.PresenceConfigMthX] * 3,
+        + [ms600.PresenceConfigMthX] * 3,  # type: ignore
         mn.Appliance_Control_Screen_Brightness: [ScreenBrightnessNumber] * 2,
         mn_t.Appliance_Control_Thermostat_DeadZone: [MtsDeadZoneNumber],
         mn_t.Appliance_Control_Thermostat_Frost: [MtsFrostNumber],
@@ -83,13 +83,13 @@ class EntityTest(EntityComponentTest):
     }
     HUB_SUBDEVICES_ENTITIES = {
         mc.TYPE_MS100: [
-            hub.MS100Sensor.AdjustTemperatureNumber,
-            hub.MS100Sensor.AdjustHumidityNumber,
+            ms.ms100.AdjustTemperatureNumber,
+            ms.ms100.AdjustHumidityNumber,
         ],
         mc.TYPE_MTS100: _MTS100_ENTITES,
         mc.TYPE_MTS100V3: _MTS100_ENTITES,
         mc.TYPE_MTS150: _MTS100_ENTITES,
-        mc.KEY_MST: [hub.MstSwitch.WateringDurationNumber],
+        mc.KEY_MST: [mst.mst100.WateringDurationNumber],
     }
 
     async def async_test_each_callback(self, entity: number.NumberEntity):
