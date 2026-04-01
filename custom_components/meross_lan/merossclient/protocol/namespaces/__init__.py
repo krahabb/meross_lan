@@ -768,7 +768,7 @@ Appliance_Control_Toggle = ns(
     "Appliance.Control.Toggle", mc.KEY_TOGGLE, 40, G_D, S_D, PSH, DIG
 )  # digest key points to 'control' key in Appliance.System.All payload
 Appliance_Control_ToggleX = ns(
-    "Appliance.Control.ToggleX", mc.KEY_TOGGLEX, 55, G_DI, S_DI, PSH, IDX_C, DIG
+    "Appliance.Control.ToggleX", mc.KEY_TOGGLEX, 50, G_DI, S_DI, PSH, IDX_C, DIG
 )
 Appliance_Control_Trigger = ns(
     "Appliance.Control.Trigger", mc.KEY_TRIGGER, -1, G_E, S_DI, D_DI, PSH, IDX_ID, DIG

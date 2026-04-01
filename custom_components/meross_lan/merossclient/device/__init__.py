@@ -1,9 +1,10 @@
 from abc import abstractmethod
-import aiohttp
 import asyncio
 from datetime import UTC, tzinfo
 from functools import cached_property
 from typing import TYPE_CHECKING, override
+
+import aiohttp
 
 from .. import (
     DeviceDescriptor,
@@ -16,7 +17,7 @@ from ..client import AbstractClient
 from ..exceptions import MerossTransportError
 from ..protocol import const as mc, namespaces as mn
 from ..protocol.message import MerossMessage
-from .handler import NamespaceHandler
+from .handler import NamespaceHandler, NamespaceParser
 
 if TYPE_CHECKING:
     from asyncio import Task
@@ -51,7 +52,6 @@ if TYPE_CHECKING:
         MerossPayloadType,
         MerossRequestType,
     )
-    from .handler import NamespaceParser
 
 Transport = AbstractClient.Transport
 
@@ -82,6 +82,11 @@ class PhysicalDevice(AbstractClient):
         raise NotImplementedError(
             "async_request_raw is not implemented by design. Please use async_request instead"
         )
+
+    # interface: self
+    @property
+    def display_name(self) -> str:
+        return self.logtag
 
     @property
     @abstractmethod
@@ -183,6 +188,7 @@ class Device(PhysicalDevice):
 
         ns_handlers: Final[dict[mn.Namespace, NamespaceHandler]]
         handler_all: Final[NamespaceHandler]
+        subdevices: dict[str, "SubDevice"]
 
         tz: tzinfo
 
@@ -224,6 +230,7 @@ class Device(PhysicalDevice):
         "_clients_connected",
         "ns_handlers",
         "handler_all",
+        "subdevices",  # used in Hub devices
         "tz",
         "device_response_size_min",
         "device_response_size_max",
@@ -469,6 +476,11 @@ class Device(PhysicalDevice):
         raise last_exception  # type: ignore[unbound-variable]
 
     # interface: PhysicalDevice
+    @property
+    @override
+    def display_name(self) -> str:
+        return self.descriptor.productname
+
     @property
     @override
     def firmware_version(self, /) -> str:
@@ -1014,7 +1026,7 @@ class Device(PhysicalDevice):
                 await handler.polling_strategy(handler)
 
 
-class SubDevice(PhysicalDevice):
+class SubDevice(PhysicalDevice, NamespaceParser):
     """Common base for hub-paired subdevices."""
 
     if TYPE_CHECKING:
@@ -1092,4 +1104,23 @@ class SubDevice(PhysicalDevice):
             self.firmware_version,
             self.latest_version.get(mc.KEY_VERSION),
             self.latest_version.get(mc.KEY_DESCRIPTION),
+        )
+
+    # interface: self
+    def log_duplicated(self, /):
+        self.log(
+            self.CRITICAL,
+            "Subdevice: %s (id:%s) appears twice in device data. Shouldn't happen",
+            self.display_name,
+            self.id,
+            timeout=604800,  # 1 week
+        )
+
+    def _parse_unknown_(self, nh: NamespaceHandler, payload: dict, /):
+        self.log(
+            self.DEBUG,
+            "Handler undefined for namespace:%s payload:%s",
+            nh.id,
+            _payload=payload,
+            timeout=14400,
         )

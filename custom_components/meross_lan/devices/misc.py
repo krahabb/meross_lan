@@ -133,7 +133,7 @@ class SensorLatestXNamespaceHandler(EntityDefNamespaceHandler):
         else:
             self.polling_request_add_channel(0).update({mc.KEY_DATA: []})
 
-    def _handle(self, message: "MerossMessage", /):
+    def _handle_list(self, message: "MerossMessage", /):
         ns = self.id
         key_idx = ns.key_idx
         entities = self.parent.entities

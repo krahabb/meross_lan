@@ -66,13 +66,15 @@ class BaseDevice(device.PhysicalDevice):
     """
     Abstract base class for Device and SubDevice (from hub)
     giving common behaviors like device_registry interface.
+    # TODO: this is a slight overhead in mros and we should try
+    # remove the need for this tryiong to leverage the PhysicalDevice as much as possible,
+    # but for now it gives us a clean way to share the device registry management
     """
 
     if TYPE_CHECKING:
 
         # to be implemented in derived classes
         entities: Mapping[object, Entity]
-        display_name: str
 
         class Args(device.PhysicalDevice.Args):
             device_entry: dr.DeviceEntry
@@ -83,7 +85,6 @@ class BaseDevice(device.PhysicalDevice):
 
     # interface: self
     entities = NotImplemented
-    display_name = NotImplemented
 
     @property
     def update_firmware(self) -> UpdateEntity | None:
@@ -386,7 +387,6 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         "_profile",
         "_async_create_diagnostic_entities_task",
         "sensor_protocol",
-        "subdevices",  # used in Hub subclass
     )
 
     def __init__(

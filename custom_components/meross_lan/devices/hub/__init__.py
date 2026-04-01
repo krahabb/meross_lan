@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     from homeassistant.helpers import device_registry as dr
 
-    from ...helpers.device import Device, MerossMessage
+    from ...helpers.device import MerossMessage
     from ...helpers.meross_profile import DeviceInfoExtType
     from ...helpers.mqtt_profile import MQTTProfile
     from ...merossclient.cloudapi import SubDeviceInfoType
@@ -70,75 +70,6 @@ class HubSubIdDeviceCfgMixin(mle.ParserEntity.NamespaceGroupValue):
             {mc.KEY_CHANNEL: 0, self.key_group: {self.key_value: device_value}}
         )
         self.update_device_value(device_value)
-
-
-class HubNamespaceHandler(NamespaceHandler):
-    """
-    This namespace handler must be used to handle all of the Appliance.Hub.xxx namespaces
-    since the payload parsing would just be the same where the data are just forwarded to the
-    relevant subdevice instance.
-    """
-
-    if TYPE_CHECKING:
-        parent: "Hub"  # type: ignore[override]
-
-    # Do not poll unless explitly configured
-    POLLING_CONFIG_DEFAULT = (0, 0, None)
-
-    def __init__(
-        self,
-        ns: "Namespace",
-        device: "Hub",
-        /,
-        **kwargs: "Unpack[NamespaceHandler.Args]",
-    ):
-        kwargs["handler"] = self._handle_list
-        NamespaceHandler.__init__(self, ns, device, **kwargs)
-
-    def _handle_list(self, message: "MerossMessage"):
-        """Generalized Hub namespace dispatcher to subdevices.
-        This code is being step-by-step migrated to be complient with
-        the base NamespaceHandler implementation where possible.
-        Migration will be done ns by ns so we'll have some ns with 'parsers'
-        while some other will still work through this generalized handler."""
-        hub = self.parent
-        subdevices_parsed = set()
-        key_idx = self.id.key_idx
-        for payload in message.payload[self.id.key]:
-            try:
-                subdevice_id = payload[key_idx]
-                if subdevice_id in subdevices_parsed:
-                    hub.log_duplicated_subdevice(subdevice_id)
-                    continue
-                subdevices_parsed.add(subdevice_id)
-                # try default parsing mechanics
-                self.parsers[subdevice_id](payload)
-            except KeyError as ke:
-                if subdevice_id in self.parsers:
-                    self.log_parser_exception(ke, payload)
-                elif subdevice_id in hub.subdevices:
-                    subdevice = hub.subdevices[subdevice_id]
-
-                    # dynamically register a generic parser for this namespace
-                    # so that next time we'll use the default mechanics
-                    def _unknown_ns_parse(_payload):
-                        subdevice._unknown_ns_parse(self, _payload)
-
-                    setattr(subdevice, f"_parse_{self.id.slug_end}", _unknown_ns_parse)
-                    self.register_parser(subdevice)
-                    subdevice._unknown_ns_parse(self, payload)
-                else:
-                    # force a rescan since we discovered a new subdevice
-                    hub.handler_all.next_poll_epoch = 0.0
-            except Exception as e:
-                if type(payload) is str:  # enumerating dict keys
-                    # This could happen when the main payload is not a list of subdevices
-                    # and might indicate this namespace is likely devoted to general hub
-                    # commands/info (something like Appliance.Hub.*)
-                    self.handler = self._handle
-                    self.handler(message)
-                    return
-                self.log_parser_exception(e, payload)
 
 
 class ApplianceDigestHubHandler(NamespaceHandler):
@@ -253,7 +184,7 @@ class Hub(mld.Device):
             try:
                 subdevice_id = p_subdevice_digest[mc.KEY_ID]
                 if subdevice_id in self.subdevices:
-                    self.log_duplicated_subdevice(subdevice_id)
+                    self.subdevices[subdevice_id].log_duplicated()
                     continue
 
                 await SubDevice.async_build(self, p_subdevice_digest)
@@ -288,19 +219,6 @@ class Hub(mld.Device):
         return self.subdevices[channel].device_entry
 
     @override
-    def _create_handler(
-        self, ns: mn.Namespace, /, **kwargs: "Unpack[NamespaceHandler.Args]"
-    ):
-        if ns.key_idx in (mc.KEY_ID, mc.KEY_SUBID):
-            # This rule states that the payload is a list of subdevices indexed by 'id'.
-            # Newer devices (2024) started using namespaces/payload indexed by 'subid'
-            # and 'channel'. These will be handled by the base class NamespaceHandler
-            # using SubDevice/Entity as NamespaceParser.
-            return HubNamespaceHandler(ns, self, **kwargs)
-        else:
-            return NamespaceHandler(ns, self, **kwargs)
-
-    @override
     def update_device_info(
         self, device_info: "DeviceInfoExtType", profile: "MQTTProfile", /
     ):
@@ -321,15 +239,6 @@ class Hub(mld.Device):
                     )
 
     # interface: self
-    def log_duplicated_subdevice(self, subdevice_id: str, /):
-        self.log(
-            self.CRITICAL,
-            "Subdevice %s (id:%s) appears twice in device data. Shouldn't happen",
-            self.subdevices[subdevice_id].display_name,
-            subdevice_id,
-            timeout=604800,  # 1 week
-        )
-
     async def async_pairsubdev(self, /):
         await self.async_request(*mn_h.Appliance_Hub_PairSubDev.request_set())
 
@@ -346,7 +255,7 @@ class Hub(mld.Device):
                 except KeyError:
                     if subdevice_id in self.subdevices:
                         # this shouldnt but happened in a trace (#331)
-                        self.log_duplicated_subdevice(subdevice_id)
+                        self.subdevices[subdevice_id].log_duplicated()
                     else:  # full reload to cleanly add a new subdevice
                         # TODO: we could likely add on the fly (just register newly added entities)
                         # without reloading but we still should save the new digest in config entry.
@@ -572,11 +481,32 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
             or get_productname(self.model)
         )
 
-    # interface: PhysicalDevice
     @property
-    @override
+    @override  # interface: PhysicalDevice
     def firmware_version(self, /) -> str:
         return self.device_entry.sw_version or self.latest_version[mc.KEY_VERSION]
+
+    @override  # interface: SubDevice
+    def _parse_unknown_(self, nh: NamespaceHandler, payload: dict, /):
+        if self.parent.create_diagnostic_entities:
+            # since we're parsing an unknown namespace, our euristic about
+            # the key_namespace might be wrong so we use another euristic
+            if not nh.polling_strategy:
+                nh.polling_strategy = NamespaceHandler.async_poll_diagnostic
+            # Here we should decide between ns.key and ns.slug_end as the parent_key
+            # for structured parsing. For reference, consider the standard NamespaceHandler
+            # implementation in helpers/namespaces.py where both values are concatenated.
+            # Using ns.key should be more consistent with how the Hub subdevices
+            # usually report their payloads in *.All and *.Digest.
+            self.parent.parse_undefined_dict(nh.id.key, payload, self.channel)
+        else:
+            self.log(
+                self.DEBUG,
+                "Handler undefined for namespace:%s payload:%s",
+                nh.id,
+                _payload=payload,
+                timeout=14400,
+            )
 
     # interface: ParserEntity
     @override
@@ -739,27 +669,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
                 device_entry.id, **kwargs
             )
 
-    def _unknown_ns_parse(self, nh: NamespaceHandler, payload: dict, /):
-        if self.parent.create_diagnostic_entities:
-            # since we're parsing an unknown namespace, our euristic about
-            # the key_namespace might be wrong so we use another euristic
-            if not nh.polling_strategy:
-                nh.polling_strategy = NamespaceHandler.async_poll_diagnostic
-            # Here we should decide between ns.key and ns.slug_end as the parent_key
-            # for structured parsing. For reference, consider the standard NamespaceHandler
-            # implementation in helpers/namespaces.py where both values are concatenated.
-            # Using ns.key should be more consistent with how the Hub subdevices
-            # usually report their payloads in *.All and *.Digest.
-            self.parent.parse_undefined_dict(nh.id.key, payload, self.channel)
-        else:
-            self.log(
-                self.DEBUG,
-                "Handler undefined for namespace:%s payload:%s",
-                nh.id,
-                _payload=payload,
-                timeout=14400,
-            )
-
     def _hub_parse(self, key: str, payload: dict, /):
         """Heuristic subdevice parsing system. This will be eventually removed
         in favor of NamespaceHandler/NamespaceParser system.
@@ -790,6 +699,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
             )
 
 
+# Here we need to disable polling for ns which are already carried in hub 'digest' or 'sensor_all'
 NamespaceHandler.POLLING_CONFIG_MAP.update(
     {
         mn_h.Appliance_Config_DeviceCfg: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
@@ -800,24 +710,33 @@ NamespaceHandler.POLLING_CONFIG_MAP.update(
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
             NamespaceHandler.async_poll_smart,
         ),
+        mn_h.Appliance_Hub_Exception: NamespaceHandler.POLLING_CONFIG_NONE,
+        mn_h.Appliance_Hub_Online: NamespaceHandler.POLLING_CONFIG_NONE,
+        mn_h.Appliance_Hub_ToggleX: NamespaceHandler.POLLING_CONFIG_NONE,
+        mn_h.Appliance_Hub_SubDevice_Beep: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+        mn_h.Appliance_Hub_SubDevice_Version: NamespaceHandler.POLLING_CONFIG_ONCE,
         mn_h.Appliance_Hub_Mts100_Adjust: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
         mn_h.Appliance_Hub_Mts100_All: (
             0,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
             NamespaceHandler.async_poll_chunked,
         ),
+        mn_h.Appliance_Hub_Mts100_Mode: NamespaceHandler.POLLING_CONFIG_NONE,
         mn_h.Appliance_Hub_Mts100_ScheduleB: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
             NamespaceHandler.async_poll_chunked,
         ),
+        mn_h.Appliance_Hub_Mts100_Temperature: NamespaceHandler.POLLING_CONFIG_NONE,
         mn_h.Appliance_Hub_Sensor_Adjust: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
         mn_h.Appliance_Hub_Sensor_All: (
             0,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
             NamespaceHandler.async_poll_chunked,
         ),
-        mn_h.Appliance_Hub_SubDevice_Beep: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
-        mn_h.Appliance_Hub_SubDevice_Version: NamespaceHandler.POLLING_CONFIG_ONCE,
+        mn_h.Appliance_Hub_Sensor_DoorWindow: NamespaceHandler.POLLING_CONFIG_NONE,
+        mn_h.Appliance_Hub_Sensor_Smoke: NamespaceHandler.POLLING_CONFIG_NONE,
+        mn_h.Appliance_Hub_Sensor_TempHum: NamespaceHandler.POLLING_CONFIG_NONE,
+        mn_h.Appliance_Hub_Sensor_WaterLeak: NamespaceHandler.POLLING_CONFIG_NONE,
     }
 )

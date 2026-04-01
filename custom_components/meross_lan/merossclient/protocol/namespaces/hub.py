@@ -138,5 +138,5 @@ Appliance_Hub_SubDevice_Version = mn.ns(
     "Appliance.Hub.SubDevice.Version", mc.KEY_VERSION, 55, GETPSH_ID
 )
 Appliance_Hub_ToggleX = mn.ns(
-    "Appliance.Hub.ToggleX", mc.KEY_TOGGLEX, -1, GETSET_ID, mn.PSH
+    "Appliance.Hub.ToggleX", mc.KEY_TOGGLEX, 35, GETSET_ID, mn.PSH
 )

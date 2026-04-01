@@ -25,8 +25,6 @@ class NamespaceHandler(_NH):
         POLLING_CONFIG_CONFIGURATION: Final[PollingConfigType]
         """Common polling configuration for namespaces carrying configuration parameters.
         These are polled on a longer period since we don't expect them to change very often."""
-        POLLING_CONFIG_ONCE: Final[PollingConfigType]
-        """Common polling configuration for namespaces carrying fixed info."""
         POLLING_CONFIG_DIAGNOSTIC: Final[PollingConfigType]
         """Configuration to be used for unknown/unmanaged namespaces."""
         parent: Final[Device]  # type: ignore[override]
@@ -39,7 +37,7 @@ class NamespaceHandler(_NH):
         mlc.PARAM_CLOUD_UPDATE_PERIOD,
         _NH.async_poll_smart,
     )
-    POLLING_CONFIG_ONCE = (0, 0, _NH.async_poll_once)
+
     POLLING_CONFIG_DIAGNOSTIC = (300, mlc.PARAM_CLOUD_UPDATE_PERIOD, None)
     _NH.POLLING_CONFIG_MAP.update(
         {
@@ -52,8 +50,8 @@ class NamespaceHandler(_NH):
             mn.Appliance_Control_Presence_Config: POLLING_CONFIG_CONFIGURATION,
             mn.Appliance_Control_Sensor_Latest: POLLING_CONFIG_FASTSENSOR,
             mn.Appliance_Control_Sensor_LatestX: POLLING_CONFIG_FASTSENSOR,
-            mn.Appliance_Mcu_Firmware: POLLING_CONFIG_ONCE,
-            mn.Appliance_Mcu_Hp110_Firmware: POLLING_CONFIG_ONCE,
+            mn.Appliance_Mcu_Firmware: _NH.POLLING_CONFIG_ONCE,
+            mn.Appliance_Mcu_Hp110_Firmware: _NH.POLLING_CONFIG_ONCE,
         }
     )
 
