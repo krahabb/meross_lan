@@ -11,13 +11,8 @@ extend-exclude = "/generated/"
 profile = "black"
 # will group `import x` and `from x import` of the same module.
 force_sort_within_sections = true
-known_first_party = [
-    "custom_components.meross_lan",
-    "tests",
-]
-forced_separate = [
-    "tests",
-]
+known_first_party = ["custom_components.meross_lan", "tests"]
+forced_separate = ["tests"]
 combine_as_imports = true
 
 ################################################################################
@@ -37,16 +32,8 @@ disable = [
 ################################################################################
 [tool.pyright]
 ################################################################################
-include = [
-    "custom_components",
-    "emulator",
-    "tests",
-]
-exclude = [
-    "emulator_traces",
-    "scripts",
-    "temp",
-]
+include = ["custom_components", "emulator", "tests"]
+exclude = ["emulator_traces", "scripts", "temp"]
 typeCheckingMode = "basic"
 reportPrivateImportUsage = "none"
 reportShadowedImports = "none"
@@ -55,13 +42,9 @@ reportShadowedImports = "none"
 ################################################################################
 [tool.pytest.ini_options]
 ################################################################################
-testpaths = [
-    "tests",
-]
-norecursedirs = [
-    ".git",
-    "testing_config",
-]
+addopts = "--no-cov --show-capture=no"
+testpaths = ["tests"]
+norecursedirs = [".git", "testing_config"]
 log_format = "%(asctime)s.%(msecs)03d %(levelname)-8s %(threadName)s %(name)s:%(filename)s:%(lineno)s %(message)s"
 log_date_format = "%Y-%m-%d %H:%M:%S"
 asyncio_mode = "auto"
