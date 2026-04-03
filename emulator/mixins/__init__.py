@@ -558,63 +558,65 @@ class Emulator:
         """
 
         ns = self.NAMESPACES[namespace]
-
+        ns_key = ns.key
+        ns_key_idx = ns.key_idx
         match method:
             case mc.METHOD_GET:
-                channels: list | None
+                indexes: "mt.JsonArray | None"
                 try:
                     match ns.payload_get:
                         case mn.PayloadType.EMPTY | mn.PayloadType.UNKNOWN:
-                            channels = None
+                            indexes = None
                         case mn.PayloadType.DICT | mn.PayloadType.DICT_IDX:
-                            key_payload = payload[ns.key]
+                            key_payload = payload[ns_key]
                             assert type(key_payload) is dict
-                            channels = [key_payload] if key_payload else None
+                            indexes = [key_payload] if key_payload else None
                         case (
                             mn.PayloadType.LIST_IDX_STRICT
                             | mn.PayloadType.LIST_IDX_DATA_STRICT
                         ):
-                            key_payload = payload[ns.key]
+                            key_payload = payload[ns_key]
                             assert type(key_payload) is list
-                            channels = key_payload
+                            indexes = key_payload
                         case mn.PayloadType.LIST_IDX:
-                            key_payload = payload[ns.key]
+                            key_payload = payload[ns_key]
                             assert type(key_payload) is list
-                            channels = key_payload or None
+                            indexes = key_payload or None
                         case mn.PayloadType.DICT_IDX_STRICT:
-                            key_payload = payload[ns.key]
+                            key_payload = payload[ns_key]
                             assert type(key_payload) is dict
-                            channels = [key_payload]
+                            indexes = [key_payload]
                         case mn.PayloadType.DICT_IDX_65535:
-                            key_payload = payload[ns.key]
+                            key_payload = payload[ns_key]
                             assert type(key_payload) is dict
-                            channels = (
+                            indexes = (
                                 None
-                                if key_payload[ns.key_idx] == 65535
+                                if key_payload[ns_key_idx] == 65535
                                 else [key_payload]
                             )
                         case mn.PayloadType.UNSUPPORTED:
                             raise Exception(f"{method} not supported for {namespace}")
                         case _:
-                            channels = None
+                            indexes = None
 
-                    if channels is None:
+                    if indexes is None:
                         return mc.METHOD_GETACK, self.namespaces[ns]
                     else:
-                        p_state = self.namespaces[ns][ns.key]
+                        p_state = self.namespaces[ns][ns_key]
                         assert type(p_state) is list
+
                         return mc.METHOD_GETACK, {
-                            ns.key: [
-                                p_channelstate
-                                for p_channelstate in (
+                            ns_key: [
+                                index_state
+                                for index_state in (
                                     get_element_by_key_safe(
                                         p_state,
-                                        ns.key_idx,
-                                        p_channel[ns.key_idx],
+                                        p_index,
+                                        ns_key_idx,
                                     )
-                                    for p_channel in channels
+                                    for p_index in indexes
                                 )
-                                if p_channelstate is not None
+                                if index_state is not None
                             ]
                         }
 
@@ -631,27 +633,22 @@ class Emulator:
                         assert not payload
                         return mc.METHOD_SETACK, {}
 
-                key_payload = payload[ns.key]
-                p_state = self.namespaces[ns][ns.key]
+                key_payload = payload[ns_key]
+                p_state = self.namespaces[ns][ns_key]
 
                 match ns.payload_set:
                     case mn.PayloadType.LIST_IDX:
                         assert type(key_payload) is list
                         for p_payload_channel in key_payload:
                             update_dict_strict_by_key(
-                                p_state, p_payload_channel, key=ns.key_idx
+                                p_state, p_payload_channel, ns_key_idx
                             )
                     case mn.PayloadType.DICT_IDX:
-                        assert ns.key_idx in key_payload
                         if type(p_state) is list:
-                            update_dict_strict_by_key(
-                                p_state, key_payload, key=ns.key_idx
-                            )
-                        elif p_state[ns.key_idx] == key_payload[ns.key_idx]:
-                            update_dict_strict(p_state, key_payload)
+                            update_dict_strict_by_key(p_state, key_payload, ns_key_idx)
                         else:
-                            raise Exception(
-                                f"'{key_payload[ns.key_idx]}' not present in digest.{ns.key}"
+                            update_dict_strict_by_key(
+                                [p_state], key_payload, ns_key_idx
                             )
                     case mn.PayloadType.DICT:
                         assert type(key_payload) is dict
@@ -665,7 +662,7 @@ class Emulator:
                     # TODO: generalize to every namespace update (also in mixins)
                     # by implementing some interception of update_dict_strict and
                     # update_dict_strict_by_key. Then, only push if the state changed
-                    self.mqtt_publish_push(namespace, {ns.key: p_state})
+                    self.mqtt_publish_push(namespace, {ns_key: p_state})
 
                 return mc.METHOD_SETACK, {}
 
@@ -824,7 +821,7 @@ class Emulator:
         self.update_epoch()
 
     def get_namespace_state(self, ns: mn.Namespace, channel, /):
-        return get_element_by_key(self.namespaces[ns][ns.key], ns.key_idx, channel)
+        return get_element_by_key(self.namespaces[ns][ns.key], channel, ns.key_idx)
 
     def update_namespace_state(
         self,
@@ -841,22 +838,23 @@ class Emulator:
         except KeyError:
             self.namespaces[ns] = p_namespace = {}
 
-        if key_idx := ns.key_idx:
+        if ns_key_idx := ns.key_idx:
             try:
                 p_state: list = p_namespace[ns.key]
             except KeyError:
                 p_namespace[ns.key] = p_state = []
 
-            for p_payload_channel in extract_dict_payloads(payload):
-                channel = p_payload_channel[key_idx]
+            for index_payload in extract_dict_payloads(payload):
                 try:
-                    p_channel_state = get_element_by_key(p_state, key_idx, channel)
+                    p_index_state = get_element_by_key(
+                        p_state, index_payload, ns_key_idx
+                    )
                     if nsdefaultmode is Emulator.NSDefaultMode.MixIn:
-                        p_channel_state |= p_payload_channel
+                        p_index_state |= index_payload
                     else:
-                        p_channel_state |= p_payload_channel | p_channel_state
+                        p_index_state |= index_payload | p_index_state
                 except KeyError:
-                    p_state.append(p_payload_channel)
+                    p_state.append(index_payload)
         else:
             assert type(payload) is dict
             try:

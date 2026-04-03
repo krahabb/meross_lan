@@ -17,6 +17,8 @@ from custom_components.meross_lan.merossclient.protocol import (
 if TYPE_CHECKING:
     from . import Emulator
 
+    from custom_components.meross_lan.merossclient.protocol import types as mt
+
 
 class GarageDoorMixin(Emulator if TYPE_CHECKING else object):
 
@@ -48,17 +50,15 @@ class GarageDoorMixin(Emulator if TYPE_CHECKING else object):
             mc.KEY_CONFIG
         ]
         p_state = self.descriptor.digest[mc.KEY_GARAGEDOOR]
-        for p_payload_channel in payload[mc.KEY_CONFIG]:
+        for p_channel_payload in payload[mc.KEY_CONFIG]:
             """{"channel":3,"doorEnable":0,"timestamp":1699130748,"timestampMs":663,"signalClose":10000,"signalOpen":10000,"buzzerEnable":1}"""
-            p_config_channel = update_dict_strict_by_key(p_config, p_payload_channel)
-            p_config_channel[mc.KEY_TIMESTAMP] = self.epoch
-            p_state_channel = get_element_by_key(
-                p_state, mc.KEY_CHANNEL, p_payload_channel[mc.KEY_CHANNEL]
-            )
-            if (mc.KEY_DOORENABLE in p_state_channel) and (
-                mc.KEY_DOORENABLE in p_payload_channel
+            p_channel_config = update_dict_strict_by_key(p_config, p_channel_payload)
+            p_channel_config[mc.KEY_TIMESTAMP] = self.epoch
+            p_channel_state = get_element_by_key(p_state, p_channel_payload)
+            if (mc.KEY_DOORENABLE in p_channel_state) and (
+                mc.KEY_DOORENABLE in p_channel_payload
             ):
-                p_state_channel[mc.KEY_DOORENABLE] = p_payload_channel[
+                p_channel_state[mc.KEY_DOORENABLE] = p_channel_payload[
                     mc.KEY_DOORENABLE
                 ]
 
@@ -80,24 +80,20 @@ class GarageDoorMixin(Emulator if TYPE_CHECKING else object):
             return mc.METHOD_GETACK, {mc.KEY_STATE: p_garageDoor}
 
     def _SET_Appliance_GarageDoor_State(self, header, payload):
-        p_request = payload[mc.KEY_STATE]
-        request_channel = p_request[mc.KEY_CHANNEL]
-        request_open = p_request[mc.KEY_OPEN]
-
-        p_state_channel = get_element_by_key(
-            self.descriptor.digest[mc.KEY_GARAGEDOOR], mc.KEY_CHANNEL, request_channel
+        p_channel_payload: "mt.garagedoor.State" = payload[mc.KEY_STATE]
+        p_channel_state = get_element_by_key(
+            self.descriptor.digest[mc.KEY_GARAGEDOOR], p_channel_payload
         )
-
-        p_response = dict(p_state_channel)
-        if request_open != p_state_channel[mc.KEY_OPEN]:
+        p_response = dict(p_channel_state)
+        request_open = p_channel_payload[mc.KEY_OPEN]
+        if request_open != p_channel_state[mc.KEY_OPEN]:
 
             def _state_update_callback():
-                p_state_channel[mc.KEY_OPEN] = request_open
+                p_channel_state[mc.KEY_OPEN] = request_open
 
             asyncio.get_event_loop().call_later(
                 self.OPENDURATION if request_open else self.CLOSEDURATION,
                 _state_update_callback,
             )
-
         p_response[mc.KEY_EXECUTE] = 1
         return mc.METHOD_SETACK, {mc.KEY_STATE: p_response}

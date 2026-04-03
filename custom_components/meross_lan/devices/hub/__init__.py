@@ -39,39 +39,6 @@ if TYPE_CHECKING:
     from ...merossclient.protocol.namespaces import Namespace
 
 
-class HubSubIdChannelMixin(mle.ValueParser if TYPE_CHECKING else object):
-    """
-    Mixin implementation for protocol method 'SET' on hub entities/namespaces backed by a
-    subId/channel indexing key pair.
-    TODO: migrate subdevice entities channel indexing (needs registry migration).
-    Right now we're fixing channel to 0 since hub subdevices seems to not discriminate channels.
-    Implementing full support for varying channels per subdevice would need some rework on subdevice
-    entities indexing (id and unique_id)and management.
-    """
-
-    @override
-    async def async_request_value(self, device_value, /):
-        await self.async_request_payload(
-            {mc.KEY_CHANNEL: 0, self.key_value: device_value}
-        )
-        self.update_device_value(device_value)
-
-
-class HubSubIdDeviceCfgMixin(mle.ParserEntity.NamespaceGroupValue):
-    """
-    Mixin implementation for protocol method 'SET' on 'Appliance.Config.DeviceCfg'.
-    """
-
-    init_ns = mn_h.Appliance_Config_DeviceCfg
-
-    @override
-    async def async_request_value(self, device_value, /):
-        await self.async_request_payload(
-            {mc.KEY_CHANNEL: 0, self.key_group: {self.key_value: device_value}}
-        )
-        self.update_device_value(device_value)
-
-
 class ApplianceDigestHubHandler(NamespaceHandler):
     """
     Specialized handler for the 'Appliance.Digest.Hub' namespace which is the 'official' way to report
@@ -155,6 +122,8 @@ class Hub(mld.Device):
         # so we have to dynamically create a new class on the fly. and ensure Hub is not
         # overriding any mocked attribute (see test.helpers.ConfigEntryMocker.ManagerMock)
         self.subdevices = {}
+        await super().async_init()
+
         # Check for unbinded subdevices which are 'still' in the device_registry
         registry_subdevices: dict[str, "mld.dr.DeviceEntry"] = {}
         for (
@@ -209,8 +178,6 @@ class Hub(mld.Device):
                     "device_name": device_entry.name or "unknown device"
                 },
             )
-
-        await super().async_init()
 
     @override
     def get_device_entry(self, channel, /):
@@ -702,9 +669,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
 # Here we need to disable polling for ns which are already carried in hub 'digest' or 'sensor_all'
 NamespaceHandler.POLLING_CONFIG_MAP.update(
     {
-        mn_h.Appliance_Config_DeviceCfg: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
         mn_h.Appliance_Control_Water: NamespaceHandler.POLLING_CONFIG_DEFAULT,
-        mn_h.Appliance_Control_Sensor_LatestX: NamespaceHandler.POLLING_CONFIG_FASTSENSOR,
         mn_h.Appliance_Hub_Battery: (
             3600,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,

@@ -164,7 +164,10 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                     case _:
                         if not namespace.key_idx:
                             raise
-                        list_break_matcher = f'}},{{"{namespace.key_idx}":'
+                        # using handler because of 'subId' ns different behaviors
+                        list_break_matcher = (
+                            f'}},{{"{device.get_handler(namespace).key_idx}":'
+                        )
 
                 trunc_pos = response_text.rfind(list_break_matcher)
                 if trunc_pos == -1:
@@ -275,11 +278,10 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         ),
         mn.Appliance_Control_Sensor_LatestX: (
             ".devices.misc",
-            "namespace_init_sensor_latestx",
+            "SensorLatestXNamespaceHandler",
         ),
         mn.Appliance_Control_Spray: (".devices.spray", "Spray"),
         mn.Appliance_Control_TempUnit: (".devices.thermostat", "MtsTempUnit"),
-        # TODO: find a better way to register thermostat handlers
         "Appliance.Control.Thermostat.Mode": (
             ".devices.thermostat.mts200",
             "Mts200Climate",

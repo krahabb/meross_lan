@@ -1,7 +1,7 @@
 from importlib import import_module
 from typing import TYPE_CHECKING
 
-from homeassistant.helpers.entity import STATE_UNAVAILABLE
+from homeassistant import const as hac
 
 from custom_components.meross_lan.merossclient.protocol import const as mc
 
@@ -263,7 +263,7 @@ async def _async_test_entities(
         state = EntityComponentTest.get_hass_state(entity_id)
         if state:
             assert entity.hass_connected
-            if state.state == STATE_UNAVAILABLE:
+            if state.state == hac.STATE_UNAVAILABLE:
                 # state availability should be asserted in the future
                 # since it's an indication of failure in polling
                 # device state. Right now we have issues in parsing ms600

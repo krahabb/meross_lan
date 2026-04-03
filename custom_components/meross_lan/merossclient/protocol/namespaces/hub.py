@@ -27,21 +27,9 @@ GETSETPSH_SUBID = GETSET_SUBID | mn.PSH
 GETSETPSQ_SUBID = GETSET_SUBID | mn.PSQ
 
 
-Appliance_Config_DeviceCfg = mn.ns(
-    "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, 100, GETSETPSH_SUBID
-)  # ms130-mst100
-Appliance_Config_Sensor_Association = mn.ns(
-    "Appliance.Config.Sensor.Association", mc.KEY_CONFIG, 30, GETSETPSH_SUBID
-)  # Not seen really..just an extrapolation for Hub(s)
 Appliance_Config_WaterPlan = mn.ns(
     "Appliance.Config.WaterPlan", mc.KEY_CONFIG, -1, GETSET_SUBID, mn.EXP
 )  # mst100 (used to read/write watering schedules)
-Appliance_Control_Sensor_HistoryX = mn.ns(
-    "Appliance.Control.Sensor.HistoryX", mc.KEY_HISTORY, -1, SUBID, mn.G_LIDS
-)
-Appliance_Control_Sensor_LatestX = mn.ns(
-    "Appliance.Control.Sensor.LatestX", mc.KEY_LATEST, 220, SUBID, mn.G_LIDS, mn.PSH
-)
 Appliance_Control_Water = mn.ns(
     "Appliance.Control.Water", mc.KEY_CONTROL, 50, GETSETPSH_SUBID
 )  # mst100

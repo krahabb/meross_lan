@@ -130,21 +130,28 @@ class NamespaceParser(logging.Loggable):
 
     # TODO: maybe rename to async_request
     async def async_request_payload(self, payload: "JsonDict", /):
-        return await self.parent.async_request(
-            *self.ns.request_set(payload, self.channel)
-        )
+        # FIXME: TODO restructure key_idx definition and support subid/channel key pairs
+        # Here a brutal patch in the meantime to make Siren entity work...
+        key_idx = self.handler_ns.key_idx
+        if key_idx == mc.KEY_SUBID:
+            if type(self.channel) is int:
+                payload[mc.KEY_CHANNEL] = self.channel
+            else:
+                payload[mc.KEY_SUBID] = (
+                    self.channel
+                )  # because id/subid is actually stored in channel
+                payload[mc.KEY_CHANNEL] = 0
+        else:
+            payload[key_idx] = self.channel
+        return await self.parent.async_request(*self.ns.request_set(payload))
 
     async def async_request_parse(self, payload: "JsonDict", /):
-        response = await self.parent.async_request(
-            *self.ns.request_set(payload, self.channel)
-        )
+        response = await self.async_request_payload(payload)
         self._parse(payload)
         return response
 
     async def async_request_parse_ex(self, payload: "JsonDict", /):
-        response = await self.parent.async_request(
-            *self.ns.request_set(payload, self.channel)
-        )
+        response = await self.async_request_payload(payload)
         self._parse(merge_dicts(dict(self.ns_payload), payload))
         return response
 

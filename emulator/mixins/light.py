@@ -23,8 +23,7 @@ class LightMixin(Emulator if TYPE_CHECKING else object):
         try:
             get_element_by_key(
                 descriptor.digest[mc.KEY_TOGGLEX],
-                mc.KEY_CHANNEL,
-                descriptor.digest[mc.KEY_LIGHT][mc.KEY_CHANNEL],
+                descriptor.digest[mc.KEY_LIGHT],
             )
             self._togglex_switch = True  # use TOGGLEX to (auto) switch
             self._togglex_mode = (
@@ -88,7 +87,7 @@ class LightMixin(Emulator if TYPE_CHECKING else object):
                 effect_id_enabled = effect_id
             try:
                 p_state_effect = get_element_by_key(
-                    p_state_effect_list, mc.KEY_ID_, effect_id
+                    p_state_effect_list, effect_id, mc.KEY_ID_
                 )
                 p_state_effect.update(p_effect)
             except KeyError:

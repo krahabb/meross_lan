@@ -42,6 +42,7 @@ class NamespaceHandler(_NH):
     _NH.POLLING_CONFIG_MAP.update(
         {
             mn.Appliance_Config_Alarm: POLLING_CONFIG_CONFIGURATION,
+            mn.Appliance_Config_DeviceCfg: POLLING_CONFIG_CONFIGURATION,
             mn.Appliance_Config_Sensor_Association: POLLING_CONFIG_CONFIGURATION,
             mn.Appliance_Control_Alarm: POLLING_CONFIG_CONFIGURATION,
             mn.Appliance_Control_FilterMaintenance: POLLING_CONFIG_SLOWSENSOR,
@@ -77,14 +78,14 @@ class NamespaceHandler(_NH):
                 # we add the last split of the namespace to the extracted payload key
                 if type(_payload) is dict:
                     device.parse_undefined_dict(
-                        f"{ns.slug_end}_{_key}", _payload, _payload.get(ns.key_idx)
+                        f"{ns.slug_end}_{_key}", _payload, _payload.get(self.key_idx)
                     )
                 elif type(_payload) is list:
                     _key = f"{ns.slug_end}_{_key}"
                     for __payload in _payload:
                         # not having a "channel" in the list payloads is unexpected so far
                         device.parse_undefined_dict(
-                            _key, __payload, __payload.get(ns.key_idx)
+                            _key, __payload, __payload.get(self.key_idx)
                         )
                 else:
                     # should we diagnostic scalar values in root payload ?
@@ -95,7 +96,7 @@ class NamespaceHandler(_NH):
 
     @override
     def _handle_missing_parser(self, p_channel: dict, ke: KeyError, /):
-        channel = p_channel[self.id.key_idx]
+        channel = p_channel[mc.KEY_CHANNEL]
         if channel in self.parsers:
             # KeyError raised inside parser function, not on missing parser
             self.log_parser_exception(ke, p_channel)

@@ -59,6 +59,7 @@ class NamespaceHandler(logging.Loggable):
 
         id: Final[mn.Namespace]  # type: ignore[override]
         parent: Final[Device]  # type: ignore[override]
+        key_idx: Final[str]
 
         handler: HandlerFunc
         parsers: Final[dict[Any, ParserFunc]]
@@ -79,6 +80,7 @@ class NamespaceHandler(logging.Loggable):
             channels: NotRequired[Iterable[int]]
 
     __SLOTS__ = (
+        "key_idx",
         "handler",
         "parsers",
         "parser_class",
@@ -104,6 +106,14 @@ class NamespaceHandler(logging.Loggable):
     ):
         assert id not in parent.ns_handlers, ("Namespace already registered", id)
         self.parsers = {}
+        if id.key_idx == mc.KEY_SUBID and not parent.descriptor.is_hub:
+            # These namespaces, might be index by both 'subId' and/or 'channel'
+            # but when used on non hub devices they're definitely using 'channel' index.
+            # Our grammar doesn't cover this semantic but we can easily adapt to it
+            # here by switching the key_idx to channel for this case.
+            self.key_idx = mc.KEY_CHANNEL
+        else:
+            self.key_idx = id.key_idx
 
         try:
             self.polling_period, self.polling_period_cloud, self.polling_strategy = (
@@ -137,26 +147,32 @@ class NamespaceHandler(logging.Loggable):
             try:
                 self.handler = kwargs.pop("handler")
             except KeyError:
-                if id.key_idx in (mc.KEY_ID, mc.KEY_SUBID):
-                    self.handler = self._handle_subdevice
-                elif id.key_idx == mc.KEY_CHANNEL:
-                    self.handler = self._handle_list
-                else:
-                    self.handler = getattr(
-                        parent, f"_handle_{id.replace('.', '_')}", self._handle
-                    )
+                match self.key_idx:
+                    case mc.KEY_ID:
+                        self.handler = self._handle_subdevice_id
+                    case mc.KEY_SUBID:
+                        self.handler = self._handle_subid
+                    case mc.KEY_CHANNEL:
+                        self.handler = self._handle_channel_list
+                    case _:
+                        self.handler = getattr(
+                            parent, f"_handle_{id.replace('.', '_')}", self._handle
+                        )
         else:
             assert (
                 "handler" not in kwargs
             ), "Cannot specify both handler and parser_class"
             # optimized register_parser_class and register_parser
             self.id = id  # preset self.id for parser._namespace_registered
-            assert id.indexed, "parser_class can be used only for indexed namespaces"
-            self.handler = (
-                self._handle_list
-                if id.key_idx == mc.KEY_CHANNEL
-                else self._handle_subdevice
-            )
+            match self.key_idx:
+                case mc.KEY_CHANNEL:
+                    self.handler = self._handle_channel_list
+                case mc.KEY_SUBID:
+                    self.handler = self._handle_subid
+                case _:
+                    assert (
+                        False
+                    ), "parser_class only supported for 'channel' indexed namespaces"
             for channel in kwargs.pop("channels", parent.descriptor.channels):
                 parser = parser_class(channel, parent, ns=id)
                 self.parsers[channel] = getattr(
@@ -203,7 +219,6 @@ class NamespaceHandler(logging.Loggable):
             parser, f"_parse_{self.id.slug_end}", parser._parse
         )
         parser._namespace_registered(self)
-        # REMOVE self.handler = self._handle_list
         return self.polling_request_add_channel(channel)
 
     def register_parsers(self, *parsers: NamespaceParser):
@@ -221,7 +236,6 @@ class NamespaceHandler(logging.Loggable):
                 getattr(parser, _parser_method_name, parser._parse)
             )
             parser._namespace_registered(self)
-        # self.handler = self._handle_list
         return self.polling_request_add_channel(channel)
 
     def swap_parsers(
@@ -289,27 +303,26 @@ class NamespaceHandler(logging.Loggable):
             self.WARNING,
             exception,
             "parser function '%s': payload=%s",
-            self.parsers[payload[self.id.key_idx]].__name__,
+            self.parsers[payload[self.key_idx]].__name__,
             _any=payload,
             timeout=14400,
         )
 
-    def _handle_list(self, message: MerossMessage, /):
+    def _handle_channel_list(self, message: MerossMessage, /):
         """
         splits and forwards the received NS payload to
         the registered entity(es).
         This handler si optimized for list payloads:
-        "payload": { "{self.id.key}": [{"{self.id.key_idx}":...., ...}] }
+        "payload": { "{self.id.key}": [{"{self.key_idx}":...., ...}] }
         Under normal conditions the loop is optimized with direct parser lookup
         and invocation without caching any intermediate variable since this is the 99%
         expected pattern. The most-likely exceptions are when no parser is registered
         for the channel (KeyError) or when the payload is not a list (TypeError).
         These will be managed so that they'll don't recur anymore.
         """
-        key_idx = self.id.key_idx
         for p_channel in message.payload[self.id.key]:
             try:
-                self.parsers[p_channel[key_idx]](p_channel)
+                self.parsers[p_channel[self.key_idx]](p_channel)
             except KeyError as ke:
                 self._handle_missing_parser(ke, p_channel)
             except Exception as e:
@@ -330,9 +343,9 @@ class NamespaceHandler(logging.Loggable):
         """
         payload = message.payload[self.id.key]
         try:
-            self.parsers[payload[self.id.key_idx]](payload)
+            self.parsers[payload[self.key_idx]](payload)
         except KeyError as ke:
-            if ke.args[0] == self.id.key_idx:
+            if ke.args[0] == self.key_idx:
                 # might be expected for ns with no channels
                 # for example EntityNamespaceMixin
                 self.parsers[None](payload)
@@ -347,14 +360,13 @@ class NamespaceHandler(logging.Loggable):
             else:
                 self.log_parser_exception(e, payload)
 
-    def _handle_subdevice(self, message: "MerossMessage"):
+    def _handle_subdevice_id(self, message: "MerossMessage"):
         """Generalized Hub namespace dispatcher to subdevices."""
         device = self.parent
-        key_idx = self.id.key_idx
         parsers = dict(self.parsers)
         for payload in message.payload[self.id.key]:
 
-            subdevice_id = payload[key_idx]
+            subdevice_id = payload[self.key_idx]
             try:
                 parser = parsers.pop(subdevice_id)
             except KeyError:
@@ -387,6 +399,64 @@ class NamespaceHandler(logging.Loggable):
             except Exception as e:
                 self.log_parser_exception(e, payload)
 
+    def _handle_subid(self, message: "MerossMessage"):
+        """Handler for those ns which might either refer to a subdevice channel or
+        to a device channel depending on the payload. These are typically based on the 'subId' key
+        establishing a relationship with an hub subdevice or might skip the subid altogether and
+        just refer to the device channel.
+        Examples are Appliance.Config.DeviceCfg or Appliance.Control.Sensor.LatestX but there are many more.
+        Here, self.parsers keys could be either subdevice ids or channels.
+        """
+        device = self.parent
+        parsers = self.parsers
+        for payload in message.payload[self.id.key]:
+            try:
+                subdevice_id = payload[self.key_idx]
+            except KeyError:
+                # message not related to a subdevice. Parse with plain 'channel' mechanics
+                try:
+                    parsers[payload[mc.KEY_CHANNEL]](payload)
+                except KeyError as ke:
+                    if ke.args[0] == mc.KEY_CHANNEL:
+                        # might be expected for ns with no channels
+                        # for example EntityNamespaceMixin
+                        self.parsers[None](payload)
+                    else:
+                        # not supported: self._handle_missing_parser(ke, payload)
+                        self.log_parser_exception(ke, payload)
+                except Exception as e:
+                    self.log_parser_exception(e, payload)
+                continue
+
+            try:
+                parsers[subdevice_id](payload)
+            except KeyError as ke:
+                if ke.args[0] == subdevice_id:
+                    # parser is missing: either it is a new subdevice or we need to
+                    # register an actual one.
+                    try:
+                        subdevice = device.subdevices[subdevice_id]
+
+                        # dynamically register a generic parser for this namespace
+                        # so that next time we'll use the default mechanics
+                        def _parse_unknown_(_payload):
+                            subdevice._parse_unknown_(self, _payload)
+
+                        setattr(
+                            subdevice, f"_parse_{self.id.slug_end}", _parse_unknown_
+                        )
+                        self.register_parser(subdevice)
+                        _parse_unknown_(payload)
+                    except KeyError:
+                        # this is a new subdevice for which we dont have a parser yet and we
+                        # didnt know it existed so we need to do a digest rescan to discover it
+                        device.handler_all.next_poll_epoch = 0.0
+                        continue
+                else:
+                    self.log_parser_exception(ke, payload)
+            except Exception as e:
+                self.log_parser_exception(e, payload)
+
     def _handle_generic(self, message: MerossMessage, /):
         """
         splits and forwards the received NS payload to
@@ -398,19 +468,18 @@ class NamespaceHandler(logging.Loggable):
         payload = message.payload[self.id.key]
         if type(payload) is dict:
             try:
-                self.parsers[payload[self.id.key_idx]](payload)
+                self.parsers[payload[self.key_idx]](payload)
             except KeyError as ke:
-                if ke.args[0] == self.id.key_idx:
+                if ke.args[0] == self.key_idx:
                     # might be expected for ns with no channels
                     # for example EntityNamespaceMixin
                     self.parsers[None](payload)
                 else:
                     self._handle_missing_parser(ke, payload)
         else:
-            key_idx = self.id.key_idx
             for p_channel in payload:
                 try:
-                    self.parsers[p_channel[key_idx]](p_channel)
+                    self.parsers[p_channel[self.key_idx]](p_channel)
                 except KeyError as ke:
                     self._handle_missing_parser(ke, p_channel)
                 except Exception as e:
@@ -428,7 +497,7 @@ class NamespaceHandler(logging.Loggable):
         """Used when parsing digest(s) in Appliance.System.All."""
         for p_channel in extract_dict_payloads(digest):
             try:
-                self.parsers[p_channel[self.id.key_idx]](p_channel)
+                self.parsers[p_channel[self.key_idx]](p_channel)
             except KeyError as ke:
                 self._handle_missing_parser(ke, p_channel)
             except Exception as e:
@@ -451,7 +520,7 @@ class NamespaceHandler(logging.Loggable):
         # - no parser registered for this channel -> create parser if possible
         # - KeyError in parser function
         """
-        channel = p_channel[self.id.key_idx]
+        channel = p_channel[self.key_idx]
         if channel in self.parsers:
             self.log_parser_exception(ke, p_channel)
             return
@@ -519,9 +588,8 @@ class NamespaceHandler(logging.Loggable):
         If parser is provided, it will be called back on its _parse method and
         the SET command payload will be automatically set to the parser's channel.
         """
-        response = await self.parent.async_request(
-            *self.id.request_set(payload, parser.channel)
-        )
+        payload[self.key_idx] = parser.channel
+        response = await self.parent.async_request(*self.id.request_set(payload))
         # TODO: consider maybe a dedicated _parse_set_xxxx method?
         # also, most namespaces SETACK replies are empty dicts
         # so we just dispatch the request payload (which might be a
@@ -552,9 +620,8 @@ class NamespaceHandler(logging.Loggable):
         """
         ns = self.id
         assert ns.payload_set is mn.PayloadType.LIST_IDX, "Only LIST_C supported here"
-        response = await self.parent.async_request(
-            *ns.request_set(payload, parser.channel)
-        )
+        payload[self.key_idx] = parser.channel
+        response = await self.parent.async_request(*ns.request_set(payload))
         try:
             payload = response.payload[ns.key][0]
         except (KeyError, IndexError):
@@ -579,7 +646,7 @@ class NamespaceHandler(logging.Loggable):
             _payload_type is mn.PayloadType.LIST_IDX_DATA_STRICT
         ):
             self.polling_request_channels = [
-                {ns.key_idx: channel} for channel in self.parsers
+                {self.key_idx: channel} for channel in self.parsers
             ]
             self.polling_request = (
                 ns,
@@ -613,7 +680,7 @@ class NamespaceHandler(logging.Loggable):
         """
         try:
             polling_request_channels = self.polling_request_channels
-            key_idx = self.id.key_idx
+            key_idx = self.key_idx
             for channel_payload in polling_request_channels:
                 if channel_payload[key_idx] == channel:
                     break
@@ -760,7 +827,7 @@ class NamespaceHandler(logging.Loggable):
         while True:
             if size_available > payload_item_size:
                 try:
-                    channels_payload.append({self.id.key_idx: next(channels)})
+                    channels_payload.append({self.key_idx: next(channels)})
                     size_available -= payload_item_size
                     self.polling_response_size += payload_item_size
                     continue
@@ -875,7 +942,7 @@ class NamespaceHandler(logging.Loggable):
             return
 
         ns_key = ns.key
-        ns_key_index = ns.key_idx
+        ns_key_index = self.key_idx
         match ns.grammar:
             case mn.Grammar.EXPERIMENTAL:
                 # These are typically known in their structure and likely to be channelized

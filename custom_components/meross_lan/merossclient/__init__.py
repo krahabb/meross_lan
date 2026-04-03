@@ -96,49 +96,6 @@ except Exception:
 #
 # General purpose utilities for payload handling
 #
-def get_element_by_key[_T: "Mapping"](payload: list[_T], key: str, value) -> _T:
-    """
-    scans the payload(list) looking for the first item matching
-    the key value. Usually looking for the matching channel payload
-    inside list payloads
-    """
-    for p in payload:
-        if p.get(key) == value:
-            return p
-    raise KeyError(
-        f"No match for key '{key}' on value:'{str(value)}' in {str(payload)}"
-    )
-
-
-def get_element_by_key_safe[_T: "Mapping"](
-    payload: list[_T], key: str, value
-) -> _T | None:
-    """
-    scans the payload (expecting a list) looking for the first item matching
-    the key value. Usually looking for the matching channel payload
-    inside list payloads
-    """
-    for p in payload:
-        try:
-            if p[key] == value:
-                return p
-        except KeyError:
-            continue
-    return None
-
-
-def delete_element_by_key(payload: list, key: str, value):
-    """
-    Scans the payload(list) removing (dict) elements whose 'key' matches value.
-    """
-    for p in tuple(payload):
-        try:
-            if p[key] == value:
-                payload.remove(p)
-        except KeyError:
-            pass
-
-
 def _meross_payload_merge_hasher(item):
     """
     This is a default hasher function used to identify items in lists
@@ -163,13 +120,13 @@ def _meross_payload_merge_hasher(item):
         except KeyError:
             pass
         try:
-            # hub subdevices payloads
+            # hub subdevices payloads (or triggers/timers which also include channel though)
             return item[mc.KEY_ID]
         except KeyError:
             pass
 
         try:
-            # other indexed payloads like effects, triggers and the likes
+            # other indexed payloads like effects
             return item[mc.KEY_ID_]
         except KeyError:
             pass
@@ -255,6 +212,80 @@ def merge_lists(
         return list(update)
 
 
+def get_element_by_key[_T: "Mapping"](
+    src: list[_T], key_value: "str | Mapping", key=mc.KEY_CHANNEL
+) -> _T:
+    """
+    scans the payload(list) looking for the first item matching
+    the key value. Usually looking for the matching channel payload
+    inside list payloads
+    """
+    if key == mc.KEY_SUBID:
+        assert type(key_value) is dict
+        key = (mc.KEY_SUBID, mc.KEY_CHANNEL)
+        for p in src:
+            if all(p.get(k) == key_value.get(k) for k in key):
+                return p
+    else:
+        try:
+            # extract in case key_value is a dict with the key
+            # inside instead of being the value itself
+            key_value = key_value[key]  # type: ignore
+        except Exception:
+            pass
+        for p in src:
+            if p.get(key) == key_value:
+                return p
+    raise KeyError(f"No match for key '{key}' on value:'{key_value}' in {src}")
+
+
+def get_element_by_key_safe[_T: "Mapping"](
+    src: list[_T], key_value: "str | Mapping", key=mc.KEY_CHANNEL
+) -> _T | None:
+    """
+    scans the payload (expecting a list) looking for the first item matching
+    the key value. Usually looking for the matching channel payload
+    inside list payloads
+    # TODO migrate to use the non-safe version so we can get rid of the safe one
+    """
+    try:
+        return get_element_by_key(src, key_value, key)
+    except KeyError:
+        return None
+
+
+def get_element_by_keys_safe[_T: "Mapping"](
+    payload: list[_T], keys: Sequence[str], match_payload: _T
+) -> _T | None:
+    """
+    scans the payload (expecting a list) looking for the first item matching
+    the key values. This is a more generic version of get_element_by_key_safe
+    that allows to match multiple keys in the payload item with the
+    corresponding values in the match_payload dict. This is useful when
+    you need to match complex criteria across multiple keys
+    (e.g. channel and subId) to identify the correct item in the payload list.
+    """
+    for p in payload:
+        try:
+            if all(p.get(key) == match_payload.get(key) for key in keys):
+                return p
+        except KeyError:
+            continue
+    return None
+
+
+def delete_element_by_key(payload: list, key: str, value):
+    """
+    Scans the payload(list) removing (dict) elements whose 'key' matches value.
+    """
+    for p in tuple(payload):
+        try:
+            if p[key] == value:
+                payload.remove(p)
+        except KeyError:
+            pass
+
+
 def update_dict_strict(dst_dict: "mt.JsonDict | Any", src_dict: "mt.JsonMapping"):
     """Updates (merge) the dst_dict with values from src_dict checking
     their existence in dst_dict before applying. Used in emulators to update
@@ -274,7 +305,7 @@ def update_dict_strict(dst_dict: "mt.JsonDict | Any", src_dict: "mt.JsonMapping"
 
 
 def update_dict_strict_by_key[_T: "mt.JsonMapping"](
-    dst_lst: "Iterable[_T]", src_dict: _T, key: str = mc.KEY_CHANNEL
+    dst_lst: "Iterable[_T]", src_dict: _T, key=mc.KEY_CHANNEL
 ) -> _T:
     """
     Much like get_element_by_key scans the dst list looking for the first item matching
@@ -282,12 +313,21 @@ def update_dict_strict_by_key[_T: "mt.JsonMapping"](
     channel payload inside list payloads. Before returning, merges the src_dict into
     the matched dst_dict
     """
-    key_value = src_dict[key]
-    for dst_dict in dst_lst:
-        if dst_dict.get(key) == key_value:
-            update_dict_strict(dst_dict, src_dict)
-            return dst_dict
-    raise KeyError(f"No match for key '{key}' on value:'{str(key_value)}' in {dst_lst}")
+    if key == mc.KEY_SUBID:
+        # TODO: maybe update the ns.key_idx definition to allow
+        # tuples so to avoid this special case for subid+channel namespaces
+        key = (mc.KEY_SUBID, mc.KEY_CHANNEL)
+        for dst_dict in dst_lst:
+            if all(dst_dict.get(k) == src_dict.get(k) for k in key):
+                update_dict_strict(dst_dict, src_dict)
+                return dst_dict
+    else:
+        key_value = src_dict[key]
+        for dst_dict in dst_lst:
+            if dst_dict.get(key) == key_value:
+                update_dict_strict(dst_dict, src_dict)
+                return dst_dict
+    raise KeyError(f"No match for key '{key}' on '{src_dict}' in {dst_lst}")
 
 
 def extract_dict_payloads[_T](payload: "_T | Sequence[_T]") -> "Iterable[_T]":

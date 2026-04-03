@@ -48,6 +48,18 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
     MAXIMUM_RESPONSE_SIZE = 4000
 
     NAMESPACES_DEFAULT = {
+        mn.Appliance_Config_DeviceCfg: (
+            Emulator.NSDefaultMode.MixOut,
+            {  # mst100 mocked cfg
+                mc.KEY_SUBID: "1B00839E9A6D",
+                mc.KEY_CHANNEL: 0,
+                "mstCfg": {
+                    "dura": 60,
+                    "wfm": 1,
+                    "calibration": {"waCon": 0, "onoff": 0, "lmTime": 0},
+                },
+            },
+        ),
         mn.Appliance_Config_Alarm: (
             Emulator.NSDefaultMode.MixOut,
             {mc.KEY_CHANNEL: 0, mc.KEY_ENABLE: 1, mc.KEY_VOLUME: 100, mc.KEY_SONG: 1},
@@ -115,8 +127,8 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
                 mn_h.Appliance_Hub_Battery,
                 mn_h.Appliance_Hub_Online,
                 mn_h.Appliance_Hub_ToggleX,
-                mn_h.Appliance_Control_Sensor_HistoryX,
-                mn_h.Appliance_Control_Sensor_LatestX,
+                mn.Appliance_Control_Sensor_HistoryX,
+                mn.Appliance_Control_Sensor_LatestX,
             )
             if ns in ability
         }
@@ -164,46 +176,47 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
                         [{mc.KEY_ID: subdevice_id, mc.KEY_ONOFF: 0}],
                     )
             # detect first if it's an mts like or a sensor like
-            if p_subdevice_digest[mc.KEY_STATUS] == mc.STATUS_ONLINE:
-                p_mts_digest = get_mts_digest(p_subdevice_digest)
-                subdevice_ns = (
-                    mn_h.Appliance_Hub_Mts100_All
-                    if p_mts_digest is not None
-                    else mn_h.Appliance_Hub_Sensor_All
-                )
-                assert (
-                    subdevice_ns in ns_state
-                ), f"Hub emulator init: missing {subdevice_ns}"
-                p_subdevice_all = get_element_by_key_safe(
-                    ns_state[subdevice_ns],
-                    mc.KEY_ID,
-                    subdevice_id,
-                )
-            else:
-                # the p_mts_digest could be missing from digest
-                # when the valve is offline so we'll fallback to inspecting either
-                # MTS100_ALL or SENSOR_ALL for clues..
-                for subdevice_ns in (
-                    mn_h.Appliance_Hub_Mts100_All,
-                    mn_h.Appliance_Hub_Sensor_All,
-                ):
-                    if subdevice_ns in ns_state:
-                        p_subdevice_all = get_element_by_key_safe(
-                            ns_state[subdevice_ns],
-                            mc.KEY_ID,
-                            subdevice_id,
-                        )
-                        if p_subdevice_all:
-                            break
-                else:
-                    raise Exception(f"Cannot detect type for subdevice {subdevice_id}")
+            try:
+                if p_subdevice_digest[mc.KEY_STATUS] == mc.STATUS_ONLINE:
+                    p_mts_digest = get_mts_digest(p_subdevice_digest)
+                    subdevice_ns = (
+                        mn_h.Appliance_Hub_Mts100_All
+                        if p_mts_digest is not None
+                        else mn_h.Appliance_Hub_Sensor_All
+                    )
+                    assert (
+                        subdevice_ns in ns_state
+                    ), f"Hub emulator init: missing {subdevice_ns}"
 
-            # subdevice_ns now tells us if its an mts like or a sensor
-            # p_subdevice_all already carries the ns_all state (if present in trace)
-            if not p_subdevice_all:
+                    p_subdevice_all = get_element_by_key(
+                        ns_state[subdevice_ns], subdevice_id, mc.KEY_ID
+                    )
+                else:
+                    # the p_mts_digest could be missing from digest
+                    # when the valve is offline so we'll fallback to inspecting either
+                    # MTS100_ALL or SENSOR_ALL for clues..
+                    for subdevice_ns in (
+                        mn_h.Appliance_Hub_Mts100_All,
+                        mn_h.Appliance_Hub_Sensor_All,
+                    ):
+                        if subdevice_ns in ns_state:
+                            try:
+                                p_subdevice_all = get_element_by_key(
+                                    ns_state[subdevice_ns], subdevice_id, mc.KEY_ID
+                                )
+                                break
+                            except KeyError:
+                                continue
+                    else:
+                        raise Exception(
+                            f"Cannot detect type for subdevice {subdevice_id}"
+                        )
+            except KeyError:
                 p_subdevice_all = {mc.KEY_ID: subdevice_id}
                 ns_state[subdevice_ns].append(p_subdevice_all)
 
+            # subdevice_ns now tells us if its an mts like or a sensor
+            # p_subdevice_all already carries the ns_all state (if present in trace)
             if subdevice_ns is mn_h.Appliance_Hub_Mts100_All:
                 # this subdevice is an mts like so we'll ensure its
                 # 'all' payload (at least) is set. we'll also bind
@@ -223,12 +236,13 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
                 # create a default corresponding subdevice ns_state should it be missing
                 if subnamespace in ns_state:
                     # (sub)namespace is supported in abilities so we'll fix/setup it
-                    p_subdevice_substate = get_element_by_key_safe(
-                        ns_state[subnamespace],
-                        mc.KEY_ID,
-                        subdevice_id,
-                    )
-                    if not p_subdevice_substate:
+                    try:
+                        p_subdevice_substate = get_element_by_key(
+                            ns_state[subnamespace],
+                            subdevice_id,
+                            mc.KEY_ID,
+                        )
+                    except KeyError:
                         # we don't have the state in the specific ns
                         # so we default it eventually initializing with the digest data
                         p_subdevice_substate = {mc.KEY_ID: subdevice_id}
@@ -259,11 +273,7 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
 
     def _get_subdevice_digest(self, subdevice_id: str):
         """returns the subdevice dict from the hub digest key"""
-        return get_element_by_key(
-            self.subdevices,
-            mc.KEY_ID,
-            subdevice_id,
-        )
+        return get_element_by_key(self.subdevices, subdevice_id, mc.KEY_ID)
 
     def _get_subdevice_namespace(
         self, subdevice_id: str, ns: mn.Namespace, *, force_create: bool = True
@@ -274,9 +284,7 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
             subdevices_namespace: list = self.namespaces[ns][ns.key]
             try:
                 return get_element_by_key(
-                    subdevices_namespace,
-                    ns.key_idx,
-                    subdevice_id,
+                    subdevices_namespace, subdevice_id, ns.key_idx
                 )
             except KeyError:
                 if not force_create:

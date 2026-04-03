@@ -228,13 +228,13 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
 
         ns = self.NAMESPACES[namespace]
         ns_key = ns.key
+        ns_key_idx = ns.key_idx
         p_state: list[dict[str, Any]] = self.namespaces[ns][ns_key]
         match method:
             case mc.METHOD_GET:
                 response_list = []
                 for p_channel_request in payload[ns_key]:
-                    channel = p_channel_request[mc.KEY_CHANNEL]
-                    p_channel_state = get_element_by_key(p_state, ns.key_idx, channel)
+                    p_channel_state = get_element_by_key(p_state, p_channel_request, ns_key_idx)
                     response_list.append(p_channel_state)
                     # randomize some input in case
                     """
@@ -257,8 +257,7 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
 
             case mc.METHOD_SET:
                 for p_channel_request in payload[ns_key]:
-                    channel = p_channel_request[mc.KEY_CHANNEL]
-                    p_channel_state = get_element_by_key(p_state, ns.key_idx, channel)
+                    p_channel_state = get_element_by_key(p_state, p_channel_request, ns_key_idx)
                     _changed = False
                     if mc.KEY_VALUE in p_channel_state:
                         try:

@@ -4,7 +4,7 @@ This unit is a collection of rarely used small components where having
 a dedicated unit for each of them would increase the number of small modules.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from ..climate import MtsClimate
 from ..helpers.namespaces import EntityDefNamespaceHandler, NamespaceHandler, mn
@@ -37,15 +37,11 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
     }
 
     def __init__(self, ns: mn.Namespace, device: "Device", /):
-        NamespaceHandler.__init__(
-            self,
-            ns,
-            device,
-            handler=self._handle_Appliance_Control_Sensor_Latest,
-        )
+        NamespaceHandler.__init__(self, ns, device)
         self.polling_request_add_channel(0)
 
-    def _handle_Appliance_Control_Sensor_Latest(self, message: "MerossMessage", /):
+    @override
+    def _handle_channel_list(self, message: "MerossMessage", /):
         """
         {
             "latest": [
@@ -133,13 +129,12 @@ class SensorLatestXNamespaceHandler(EntityDefNamespaceHandler):
         else:
             self.polling_request_add_channel(0).update({mc.KEY_DATA: []})
 
-    def _handle_list(self, message: "MerossMessage", /):
-        ns = self.id
-        key_idx = ns.key_idx
+    @override
+    def _handle_channel_list(self, message: "MerossMessage", /):
         entities = self.parent.entities
         p_channel: "mt.sensor.LatestX_C"
-        for p_channel in message.payload[ns.key]:
-            channel: int = p_channel[key_idx]
+        for p_channel in message.payload[self.id.key]:
+            channel: int = p_channel[self.key_idx]
             for data_key, data_value in p_channel[mc.KEY_DATA].items():
                 try:
                     entities[f"{channel}_sensor_{data_key}"].update_device_value(
@@ -157,21 +152,14 @@ class SensorLatestXNamespaceHandler(EntityDefNamespaceHandler):
                     )
                     polling_request_channels = self.polling_request_channels
                     for channel_payload in polling_request_channels:
-                        if channel_payload[key_idx] == channel:
+                        if channel_payload[self.key_idx] == channel:
                             channel_payload[mc.KEY_DATA].append(data_key)
                             break
                     else:
                         polling_request_channels.append(
-                            {key_idx: channel, mc.KEY_DATA: [data_key]}
+                            {self.key_idx: channel, mc.KEY_DATA: [data_key]}
                         )
                         self.polling_response_size = (
                             NamespaceHandler.HEADER_AVG_SIZE
-                            + len(polling_request_channels) * ns.payload_item_size
+                            + len(polling_request_channels) * self.id.payload_item_size
                         )
-
-
-def namespace_init_sensor_latestx(ns: mn.Namespace, device: "Device", /):
-    # Hub(s) have a different ns handler so far
-    # TODO: try to reconcile in a single handler
-    if not device.descriptor.is_hub:
-        SensorLatestXNamespaceHandler(ns, device)

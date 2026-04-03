@@ -101,14 +101,14 @@ class Siren(BinaryParser, siren.SirenEntity):
     @override
     async def async_turn_on(self, **kwargs):
         if kwargs:
-            payload = {}
+            payload = {mc.KEY_CHANNEL: self.channel}
             for kwarg_key, payload_key in self.ATTR_KEY_MAP.items():
                 try:
                     payload[payload_key] = kwargs[kwarg_key]
                 except KeyError:
                     pass
             await self.parent.async_request(
-                *mn.Appliance_Config_Alarm.request_set(payload, self.channel)
+                *mn.Appliance_Config_Alarm.request_set(payload)
             )
 
         await self.async_request_value(self.value_on)

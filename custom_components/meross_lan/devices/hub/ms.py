@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, override
 
-from . import SubDevice, mc, mn_h
+from . import SubDevice, mc, mn, mn_h
 from ...binary_sensor import BinarySensorEntity, BinarySensorParser
 from ...button import Button
 from ...number import NumberParser
@@ -240,7 +240,7 @@ class ms100(SensorSubDevice, SensorParser):
 
 class ms130(ms100):
 
-    NS_HUB = (mn_h.Appliance_Config_DeviceCfg, *ms100.NS_HUB)
+    NS_HUB = (mn.Appliance_Config_DeviceCfg, *ms100.NS_HUB)
     init_device_scale = 100
 
     __slots__ = ("sensor_light",)
@@ -248,7 +248,7 @@ class ms130(ms100):
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         ms100.__init__(self, subid, hub, key_digest, model)
         self.sensor_light = SensorParser.Light(subid, hub)
-        hub.get_handler(mn_h.Appliance_Control_Sensor_LatestX).register_parser(
+        hub.get_handler(mn.Appliance_Control_Sensor_LatestX).register_parser(
             self
         ).update(
             {"channel": 0, "data": ["light", "temp", "humi"]},

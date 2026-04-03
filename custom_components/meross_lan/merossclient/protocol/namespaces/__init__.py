@@ -76,10 +76,7 @@ def _heuristic_args(name: str, kwargs: "Namespace.Args") -> "Namespace.Args":
             kwargs["key_idx"] = mc.KEY_CHANNEL
             kwargs["payload_get"] = PayloadType.LIST_IDX_STRICT
         case (_, "Control", "Sensor", *_):
-            if kwargs.get("map") is HUB_NAMESPACES:
-                kwargs["key_idx"] = mc.KEY_SUBID
-            else:
-                kwargs["key_idx"] = mc.KEY_CHANNEL
+            kwargs["key_idx"] = mc.KEY_SUBID
             kwargs["payload_get"] = PayloadType.LIST_IDX_STRICT
         case (_, "Control", "Thermostat", *_):
             kwargs["key_idx"] = mc.KEY_CHANNEL
@@ -333,7 +330,12 @@ class Namespace(str):
         payload_psh: Final[PayloadType]
         """If not None Namespace supports PUSH verb with this payload type."""
         key_idx: Final[str]
-        """The key used to index items in list payloads. If None/empty no indexing is used."""
+        """The key used to index items in list payloads. If None/empty no indexing is used.
+        Special care need to be used when a namespace is declared to be indexed by 'subId'
+        since these namespaces might also carry only 'channel' payloads (for non hub devices or
+        for features related to the hub itself and not to a subdevice).
+        Typical example is Appliance.Control.Alarm where we might configure the hub alarm (only 'channel' == 0)
+        and/or a subdevice alarm feature (both 'subId/channel' are present even though 'channel' is almost always == 0)."""
         indexed: Final[bool]
         """Indicates if the namespace uses indexed payloads for any verb. This is typically true for 'index based' namespaces."""
         key_digest: Final[str | None]
@@ -555,6 +557,12 @@ class Namespace(str):
         for idx in idxs:
             # 'idxs' is expected to be the eventual channel (or any index key) value
             # if empty we assume the payload is already properly structured.
+            # WARNING: this might not work for some namespaces where the key_idx might
+            # change depending on being an hub device or not (see Appliance.Config.DeviceCfg).
+            # This happens actually on the 'subId' based namespaces where the key_idx
+            # is 'subId/channel' for hub devices and 'channel' for standard devices
+            # so we might need to articulate a bit more this logic in the future.
+            # This is actually better managed in NamespaceHandler/NamespaceParser.
             payload[self.key_idx] = idx
         return (self, mc.METHOD_SET, {self.key: payload})
 
@@ -584,8 +592,9 @@ ns = Namespace  # shortcut for declarations
 EXP: "ns.Args" = {"grammar": Grammar.EXPERIMENTAL}
 
 IDX_C: "ns.Args" = {"key_idx": mc.KEY_CHANNEL}
-IDX_ID: "ns.Args" = {"key_idx": mc.KEY_ID}
-IDX_SUB: "ns.Args" = {"key_idx": mc.KEY_SUBID}
+IDX_ID_: "ns.Args" = {"key_idx": mc.KEY_ID_}  # Item (effect) Id
+IDX_ID: "ns.Args" = {"key_idx": mc.KEY_ID}  # Hub subdevice id (but also trigger,timer)
+IDX_SUB: "ns.Args" = {"key_idx": mc.KEY_SUBID}  # Hub subdevice id
 
 G_E: "ns.Args" = {"payload_get": PayloadType.EMPTY}
 G_D: "ns.Args" = {"payload_get": PayloadType.DICT}
@@ -614,10 +623,10 @@ DIG: "ns.Args" = {"key_digest": True}  # type: ignore[sentinel]
 # Moreover, for some namespaces, the euristics about 'namespace key' and payload structure are not
 # good so we must fix those beforehand.
 Appliance_Config_Alarm = ns(
-    "Appliance.Config.Alarm", mc.KEY_CONFIG, 44, G_LI, S_LI, PSQ, IDX_C, EXP
+    "Appliance.Config.Alarm", mc.KEY_CONFIG, 44, G_LI, S_LI, PSQ, IDX_SUB
 )
 Appliance_Config_DeviceCfg = ns(
-    "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, -1, G_LIS, S_LI, IDX_C, PSH
+    "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, 100, G_LIS, S_LI, PSH, IDX_SUB
 )
 Appliance_Config_Info = ns("Appliance.Config.Info", mc.KEY_INFO, -1, G_E, S_D, PSQ)
 Appliance_Config_Key = ns("Appliance.Config.Key", mc.KEY_KEY, -1, S_D)
@@ -635,24 +644,18 @@ Appliance_Config_WifiList = ns("Appliance.Config.WifiList", "wifiList", -1, G_E)
 Appliance_Config_WifiX = ns("Appliance.Config.WifiX", mc.KEY_WIFI, -1, S_D)
 
 Appliance_Config_Sensor_Association = ns(
-    "Appliance.Config.Sensor.Association",
-    mc.KEY_CONFIG,
-    30,
-    G_LIS,
-    S_LI,
-    PSQ,
-    IDX_C,
+    "Appliance.Config.Sensor.Association", mc.KEY_CONFIG, 30, G_LIS, S_LI, PSQ, IDX_SUB
 )
 
 Appliance_Control_Alarm = ns(
-    "Appliance.Control.Alarm", mc.KEY_ALARM, 40, G_LI, S_LI, IDX_C
+    "Appliance.Control.Alarm", mc.KEY_ALARM, 40, G_LI, S_LI, IDX_SUB
 )  # mst100/ms130 actually only seen in hub
 Appliance_Control_AlertConfig = ns(
-    "Appliance.Control.AlertConfig", mc.KEY_CONFIG, -1, G_LIS, S_LI, PSQ, IDX_C
+    "Appliance.Control.AlertConfig", mc.KEY_CONFIG, 70, G_LIS, S_LI, PSH, IDX_SUB
 )  # mts300 support the full set of verbs - em06 also exposes it but that's likely different
 Appliance_Control_AlertReport = ns(
-    "Appliance.Control.AlertReport", mc.KEY_ALERT, -1, G_LIS, S_LI, IDX_C, EXP
-)
+    "Appliance.Control.AlertReport", mc.KEY_ALERT, -1, G_LIS, S_LI, IDX_SUB
+)  # no trace of handlingthis ns in Meross App
 Appliance_Control_Beep = ns(
     "Appliance.Control.Beep", mc.KEY_ALARM, -1, G_LIS, S_LI, IDX_C
 )
@@ -708,7 +711,7 @@ Appliance_Control_Light = ns(
     "Appliance.Control.Light", mc.KEY_LIGHT, -1, G_E, S_DI, IDX_C, DIG
 )
 Appliance_Control_Light_Effect = ns(
-    "Appliance.Control.Light.Effect", mc.KEY_EFFECT, 1550, G_E, S_LI, D_LI, IDX_ID
+    "Appliance.Control.Light.Effect", mc.KEY_EFFECT, 1550, G_E, S_LI, D_LI, IDX_ID_
 )
 Appliance_Control_Mp3 = ns("Appliance.Control.Mp3", mc.KEY_MP3, 80, G_DI, S_DI, IDX_C)
 Appliance_Control_McuUpgrade = ns("Appliance.Control.McuUpgrade", mc.KEY_, -1)
@@ -736,7 +739,7 @@ Appliance_Control_Screen_Brightness = ns(
 # To distinguish the grammar between regular devices and hubs we save different definitions
 # in NAMESPACES (for regular devices) and in HUB_NAMESPACES (for hubs).
 Appliance_Control_Sensor_Association = ns(
-    "Appliance.Control.Sensor.Association", mc.KEY_CONTROL, -1, G_LI, IDX_C
+    "Appliance.Control.Sensor.Association", mc.KEY_CONTROL, -1, G_LI, IDX_SUB
 )  # mts300 works: though it seems this ns just returns (in a GET) the list of keys it supports (a kind of grammar).
 # We could setup an heuristic handler alone which queries this ns once and then setups some 'config entities'
 # working on Appliance.Config.Sensor.Association (which looks like the effective configuration).
@@ -747,10 +750,10 @@ Appliance_Control_Sensor_Latest = ns(
     "Appliance.Control.Sensor.Latest", mc.KEY_LATEST, 80, G_LIS, PSH, IDX_C
 )  # carrying miscellaneous sensor values (temp/humi)
 Appliance_Control_Sensor_HistoryX = ns(
-    "Appliance.Control.Sensor.HistoryX", mc.KEY_HISTORY, -1, G_LIDS, D_LI, IDX_C
+    "Appliance.Control.Sensor.HistoryX", mc.KEY_HISTORY, 1000, G_LIDS, D_LI, IDX_SUB
 )  # cannot get query to work...it might look like LatestX
 Appliance_Control_Sensor_LatestX = ns(
-    "Appliance.Control.Sensor.LatestX", mc.KEY_LATEST, 220, G_LIDS, PSH, IDX_C
+    "Appliance.Control.Sensor.LatestX", mc.KEY_LATEST, 220, G_LIDS, PSH, IDX_SUB
 )
 Appliance_Control_Spray = ns(
     "Appliance.Control.Spray", mc.KEY_SPRAY, 90, G_D, S_DI, PSH, IDX_C, DIG

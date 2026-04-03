@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, override
 
-from . import HubSubIdDeviceCfgMixin, SubDevice, mc, mlc, mn_h
+from . import SubDevice, mc, mlc, mn, mn_h
 from ...number import NumberParser
 from ...switch import SwitchParser
 
@@ -29,9 +29,10 @@ class mst100(SubDevice, SwitchParser):
         class DeviceCfg(mt.hub.SubIdPayload):
             mstCfg: "mst100.DeviceCfg_mstCfg"
 
-    class WateringDurationNumber(HubSubIdDeviceCfgMixin, NumberParser):
+    class WateringDurationNumber(NumberParser.NamespaceGroupValue, NumberParser):
         """Number to set watering duration."""
 
+        init_ns = mn.Appliance_Config_DeviceCfg
         init_entity_key = mc.KEY_DURATION
         init_key_group = "mstCfg"
         init_key_value = "dura"
@@ -44,7 +45,7 @@ class mst100(SubDevice, SwitchParser):
         )
         _attr_native_min_value = 1
 
-    NS_HUB = (mn_h.Appliance_Config_DeviceCfg, *SubDevice.NS_HUB)
+    NS_HUB = (mn.Appliance_Config_DeviceCfg, *SubDevice.NS_HUB)
     init_entity_key = mc.KEY_ONOFF
     init_ns = mn_h.Appliance_Control_Water
     init_value_on = 1
@@ -63,13 +64,6 @@ class mst100(SubDevice, SwitchParser):
         del self.number_duration
 
     @override
-    async def async_request_value(self, device_value, /):
-        await self.async_request_payload(
-            {mc.KEY_CHANNEL: 0, self.key_value: device_value}
-        )
-        self.update_device_value(device_value)
-
-    @override
     def _parse_digest_(self, payload: "mt.hub._mst100", /):
         # unknown payload semantic
         pass
@@ -85,7 +79,7 @@ class mst200(SubDevice):
         class DeviceCfg(mt.hub.SubIdPayload):
             mstCfg: mt.JsonMapping
 
-    NS_HUB = (mn_h.Appliance_Config_DeviceCfg, *SubDevice.NS_HUB)
+    NS_HUB = (mn.Appliance_Config_DeviceCfg, *SubDevice.NS_HUB)
     init_entity_key = mc.KEY_ONOFF
     init_ns = mn_h.Appliance_Control_Water
     init_value_on = 1
