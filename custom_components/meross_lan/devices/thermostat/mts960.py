@@ -48,11 +48,6 @@ class Mts960Climate(MtsThermostatClimate):
         _attr_native_min_value = 1
         _attr_native_step = 1
 
-        def __init__(self, climate: "Mts960Climate", entity_key: str, /):
-            EmulatedNumber.__init__(
-                self, climate.channel, climate.parent, entity_key=entity_key
-            )
-
     if TYPE_CHECKING:
         ns_payload: mt.thermostat.ModeB_C
         binary_sensor_plug_state: PlugState
@@ -97,25 +92,25 @@ class Mts960Climate(MtsThermostatClimate):
         "_mts_timer_mode",
     )
 
-    def __init__(self, channel: int, device: "Device", /, **kwargs):
+    def __init__(self, id, device: "Device", /, **kwargs):
         self._mts_working = None
         self._mts_timer_payload = None
         self._mts_timer_mode = None
-        MtsThermostatClimate.__init__(self, channel, device, **kwargs)
+        MtsThermostatClimate.__init__(self, id, device, **kwargs)
         device.register_parser_ex(
             self,
             mn_t.Appliance_Control_Thermostat_CtlRange,
             mn_t.Appliance_Control_Thermostat_Timer,
         )
-        self.binary_sensor_plug_state = Mts960Climate.PlugState(channel, device)
+        self.binary_sensor_plug_state = Mts960Climate.PlugState(id, device)
         self.number_timer_down_duration = Mts960Climate.TimerConfigNumber(
-            self, "timer_down_duration"
+            id, device, entity_key="timer_down_duration"
         )
         self.number_timer_cycle_off_duration = Mts960Climate.TimerConfigNumber(
-            self, "timer_cycle_off_duration"
+            id, device, entity_key="timer_cycle_off_duration"
         )
         self.number_timer_cycle_on_duration = Mts960Climate.TimerConfigNumber(
-            self, "timer_cycle_on_duration"
+            id, device, entity_key="timer_cycle_on_duration"
         )
 
     def shutdown(self):
@@ -389,15 +384,15 @@ class Mts960Climate(MtsThermostatClimate):
         device = self.parent
         if device.create_diagnostic_entities:
             entities: dict[str, DiagnosticSensor] = device.entities  # type: ignore
-            channel = self.channel
+            id = self.id
             for key in self.DIAGNOSTIC_SENSOR_KEYS:
                 try:
                     native_value = payload[key]
-                    entities[f"{channel}_{key}"].update_device_value(native_value)
+                    entities[f"{id}_{key}"].update_device_value(native_value)
                 except KeyError as key_error:
                     if key_error.args[0] != key:
                         DiagnosticSensor(
-                            channel, device, entity_key=key, native_value=native_value
+                            id, device, entity_key=key, native_value=native_value
                         )
 
         self.flush_state()

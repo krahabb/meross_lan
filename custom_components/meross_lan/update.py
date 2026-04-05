@@ -39,7 +39,7 @@ class UpdateEntity(Entity, update.UpdateEntity):
         "title",
     )
 
-    def __init__(self, channel: "ChannelType | None", device: "Device", /):
+    def __init__(self, subid: str | None, device: "Device", /):
         self.device_class = update.UpdateDeviceClass.FIRMWARE
         self.supported_features = update.UpdateEntityFeature.INSTALL
         self.title = device.display_name
@@ -47,7 +47,7 @@ class UpdateEntity(Entity, update.UpdateEntity):
         self.installed_version, self.latest_version, self.release_summary = (
             device.get_upgrade_info()
         )
-        Entity.__init__(self, channel, device)
+        Entity.__init__(self, subid, device)
         device.add_entity(self)
 
     def flush_state(self):

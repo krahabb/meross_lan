@@ -57,9 +57,7 @@ class RollerShutter(Cover):
         "_position_starttime",
     )
 
-    def __init__(
-        self, channel: int, device: "Device", /, **kwargs: "Unpack[Cover.Args]"
-    ):
+    def __init__(self, id, device: "Device", /, **kwargs: "Unpack[Cover.Args]"):
         self.current_cover_position = None
         self.extra_state_attributes = {}
         self.supported_features = self._attr_supported_features
@@ -84,7 +82,7 @@ class RollerShutter(Cover):
 
         except Exception:
             self._position_native_isgood = False
-        Cover.__init__(self, channel, device, **kwargs)
+        Cover.__init__(self, id, device, **kwargs)
         device.register_parser_ex(self, mn.Appliance_RollerShutter_State)
 
         ns_config = mn.Appliance_RollerShutter_Config
@@ -93,10 +91,11 @@ class RollerShutter(Cover):
                 self,
                 f"number_{_key_value}",
                 self.__class__.NUMBER_CONFIG_DEF(
-                    channel,
+                    id,
                     device,
                     entity_key=f"config_{_key_value}",
                     ns=ns_config,
+                    index=self.index,
                     key_value=_key_value,
                     name=_key_value,
                 ),
@@ -200,12 +199,10 @@ class RollerShutter(Cover):
                 )
             )
         else:
-            await self.handlers[mn.Appliance_RollerShutter_State].async_get(
-                self.channel
-            )
+            await self.handlers[mn.Appliance_RollerShutter_State].async_get(self.index)
             if self._position_native_isgood:
                 await self.handlers[mn.Appliance_RollerShutter_Position].async_get(
-                    self.channel
+                    self.index
                 )
 
     @override

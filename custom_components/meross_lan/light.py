@@ -1,4 +1,5 @@
 import asyncio
+from operator import index
 from time import monotonic
 from typing import TYPE_CHECKING, override
 
@@ -234,7 +235,7 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
         "supported_features",
     )
 
-    def __init__(self, channel: int, device: "Device", /, **kwargs: "Unpack[Args]"):
+    def __init__(self, id, device: "Device", /, **kwargs: "Unpack[Args]"):
         self._rgb_to_native = rgb_to_native
         self._native_to_rgb = native_to_rgb
         self.brightness = None
@@ -248,7 +249,7 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
             if self.effect_list
             else LightEntityFeature.TRANSITION
         )
-        mle.ToggleXParser.__init__(self, channel, device, **kwargs)
+        mle.ToggleXParser.__init__(self, id, device, **kwargs)
 
     @override
     def set_unavailable(self):
@@ -409,7 +410,7 @@ class Light(LightBase):
         "supported_color_modes",
     )
 
-    def __init__(self, channel: int, device: "Device", /, **kwargs: "Unpack[Args]"):
+    def __init__(self, id, device: "Device", /, **kwargs: "Unpack[Args]"):
         # we'll use the (eventual) togglex payload to
         # see if we have to toggle the light by togglex or so
         # with msl120j (fw 3.1.4) I've discovered that any 'light' payload sent will turn on the light
@@ -434,7 +435,7 @@ class Light(LightBase):
                 supported_color_modes.add(ColorMode.BRIGHTNESS)
             else:
                 supported_color_modes.add(ColorMode.ONOFF)
-        LightBase.__init__(self, channel, device, **kwargs)
+        LightBase.__init__(self, id, device, **kwargs)
         self._togglex_auto = None if self.handler_togglex else False
 
     @override
@@ -554,7 +555,7 @@ class Light(LightBase):
                 return
 
             try:
-                await self.handler_togglex.async_get(self.channel)
+                await self.handler_togglex.async_get(self.index)
                 # various kind of lights here might respond with either an array or a
                 # simple dict since the "togglex" namespace used to be hybrid and still is.
                 # This led to #357 but the resolution is to just bypass parsing since
@@ -577,21 +578,19 @@ class Light(LightBase):
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
         handler = device._create_handler(ns)
         descriptor = device.descriptor
-        ns_digest = ns.get_digest(descriptor.digest)
-        handler.register_parser(
-            EffectLight(ns_digest[mc.KEY_CHANNEL], device, ns=ns)
-            if mn.Appliance_Control_Light_Effect in descriptor.ability
-            else (
-                Light(
-                    ns_digest[mc.KEY_CHANNEL],
-                    device,
-                    ns=ns,
-                    effect_list=mc.HP110A_LIGHT_EFFECT_LIST,
-                )
-                if mn.Appliance_Control_Mp3 in descriptor.ability
-                else Light(ns_digest[mc.KEY_CHANNEL], device, ns=ns)
-            )
-        )
+        channel = ns.get_digest(descriptor.digest)[mc.KEY_CHANNEL]
+        kwargs = {
+            "ns": ns,
+            "index": mn.IndexType.channel(channel),
+        }
+        if mn.Appliance_Control_Light_Effect in descriptor.ability:
+            light_class = EffectLight
+        elif mn.Appliance_Control_Mp3 in descriptor.ability:
+            light_class = Light
+            kwargs["effect_list"] = mc.HP110A_LIGHT_EFFECT_LIST
+        else:
+            light_class = Light
+        handler.register_parser(light_class(channel, device, **kwargs))
 
 
 class EffectLight(Light):
@@ -613,9 +612,7 @@ class EffectLight(Light):
         "handler_light_effect",
     )
 
-    def __init__(
-        self, channel: int, device: "Device", /, **kwargs: "Unpack[Light.Args]"
-    ):
+    def __init__(self, id, device: "Device", /, **kwargs: "Unpack[Light.Args]"):
         try:
             # This is a 'new' (2025-06-17) key appearing in msl320cpr digest.
             # The key itself is 'light.entity' and carries the effect list
@@ -627,7 +624,7 @@ class EffectLight(Light):
             ] + EffectLight.init_effect_list
         except KeyError:
             self._light_effects = []
-        Light.__init__(self, channel, device, **kwargs)
+        Light.__init__(self, id, device, **kwargs)
 
         self.handler_light_effect = device._create_handler(
             mn.Appliance_Control_Light_Effect,

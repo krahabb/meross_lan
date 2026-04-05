@@ -140,15 +140,14 @@ ENTITY_DEFS = (
 
 
 def namespace_init_presence_config(ns: mn.Namespace, device: "Device", /):
-    """Helper to register a specialized entity class to the proper namespace.
-    This is going to be used on Device initialization for various entities sharing
-    common semantics in namespace parsing/handling."""
+    index = mn.IndexType.channel(0)
     device._create_handler(ns).register_parsers(
         *(
             entity_def(
                 0,
                 device,
                 ns=ns,
+                index=index,
             )
             for entity_def in ENTITY_DEFS
         )
@@ -157,8 +156,6 @@ def namespace_init_presence_config(ns: mn.Namespace, device: "Device", /):
 
 class PresenceSensor(SensorParser):
     """ms600 presence sensor."""
-
-    init_entity_key = "sensor_presence"
 
     _attr_name = "Presence"
 
@@ -170,14 +167,14 @@ class PresenceSensor(SensorParser):
 
     def __init__(
         self,
-        channel: "ChannelType | None",
+        id,
         device: "Device",
         /,
         **kwargs: "Unpack[SensorParser.Args]",
     ):
-        SensorParser.__init__(self, channel, device, **kwargs)
+        SensorParser.__init__(self, id, device, **kwargs)
         self.sensor_distance = SensorParser(
-            channel,
+            id,
             device,
             entity_key=f"{self.entity_key}_distance",
             device_scale=1000,
@@ -187,13 +184,13 @@ class PresenceSensor(SensorParser):
             name="Presence distance",
         )
         self.binary_sensor_motion = BinarySensorEntity(
-            channel,
+            id,
             device,
             entity_key=f"{self.entity_key}_motion",
             device_class=BinarySensorEntity.DeviceClass.MOTION,
         )
         self.sensor_times = SensorParser(
-            channel,
+            id,
             device,
             entity_key=f"{self.entity_key}_times",
             name="Presence times",

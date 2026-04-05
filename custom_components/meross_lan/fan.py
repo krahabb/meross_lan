@@ -54,9 +54,7 @@ class Fan(ToggleXParser, fan.FanEntity):
     ):
         if self.handler_togglex and not self.is_on:
             # don't propagate callback confirmation
-            await self.handler_togglex.async_set(
-                {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: 1}
-            )
+            await self.handler_togglex.async_set(self.index | {mc.KEY_ONOFF: 1})
             self.is_on = True
             self.ns_payload[mc.KEY_SPEED] = 0  # force _parse flushing
         await self.async_request_parse_ex(

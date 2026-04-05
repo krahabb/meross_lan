@@ -6,6 +6,11 @@ from ..protocol import const as mc, namespaces as mn
 from ..protocol.message import MerossMessage
 from .parser import NamespaceParser
 
+KEY_CHANNEL = mc.KEY_CHANNEL
+KEY_ID = mc.KEY_ID
+KEY_SUBID = mc.KEY_SUBID
+
+
 if TYPE_CHECKING:
     from typing import (
         Any,
@@ -59,16 +64,17 @@ class NamespaceHandler(logging.Loggable):
 
         id: Final[mn.Namespace]  # type: ignore[override]
         parent: Final[Device]  # type: ignore[override]
-        key_idx: Final[str]
+        key_idx: Final[str]  # REMOVE
+        index: Final[mn.IndexType]  # shortcut to id.index
 
         handler: HandlerFunc
-        parsers: Final[dict[Any, ParserFunc]]
+        parsers: Final[dict[mn.IndexValue, ParserFunc]]
         parser_class: type[NamespaceParser] | None
         digest: mt.JsonMapping | mt.JsonArray | None
 
         polling_strategy: PollingStrategyFunc | None
         polling_request: mt.MerossRequestType
-        polling_request_channels: mt.JsonList  # on demand instance
+        polling_request_payload: mt.JsonList  # on demand instance
 
         last_rx_push: mt.JsonMapping | None
         # TODO: implement caching of all methods responses
@@ -81,6 +87,7 @@ class NamespaceHandler(logging.Loggable):
 
     __SLOTS__ = (
         "key_idx",
+        "index",
         "handler",
         "parsers",
         "parser_class",
@@ -93,7 +100,7 @@ class NamespaceHandler(logging.Loggable):
         "polling_period_cloud",
         "polling_response_size",
         "polling_request",
-        "polling_request_channels",
+        "polling_request_payload",
         "last_rx_push",
     )
 
@@ -106,14 +113,16 @@ class NamespaceHandler(logging.Loggable):
     ):
         assert id not in parent.ns_handlers, ("Namespace already registered", id)
         self.parsers = {}
-        if id.key_idx == mc.KEY_SUBID and not parent.descriptor.is_hub:
-            # These namespaces, might be index by both 'subId' and/or 'channel'
+        if id.index is mn.IndexType.subId and not parent.descriptor.is_hub:
+            # These namespaces, might be indexed by both 'subId' and/or 'channel'
             # but when used on non hub devices they're definitely using 'channel' index.
             # Our grammar doesn't cover this semantic but we can easily adapt to it
             # here by switching the key_idx to channel for this case.
-            self.key_idx = mc.KEY_CHANNEL
+            self.key_idx = KEY_CHANNEL
+            self.index = mn.IndexType.channel
         else:
-            self.key_idx = id.key_idx
+            self.key_idx = (id.index and id.index[0]) or mc.KEY_
+            self.index = id.index
 
         try:
             self.polling_period, self.polling_period_cloud, self.polling_strategy = (
@@ -147,12 +156,12 @@ class NamespaceHandler(logging.Loggable):
             try:
                 self.handler = kwargs.pop("handler")
             except KeyError:
-                match self.key_idx:
-                    case mc.KEY_ID:
+                match self.index:
+                    case mn.IndexType.id:
                         self.handler = self._handle_subdevice_id
-                    case mc.KEY_SUBID:
+                    case mn.IndexType.subId:
                         self.handler = self._handle_subid
-                    case mc.KEY_CHANNEL:
+                    case mn.IndexType.channel:
                         self.handler = self._handle_channel_list
                     case _:
                         self.handler = getattr(
@@ -164,22 +173,25 @@ class NamespaceHandler(logging.Loggable):
             ), "Cannot specify both handler and parser_class"
             # optimized register_parser_class and register_parser
             self.id = id  # preset self.id for parser._namespace_registered
-            match self.key_idx:
-                case mc.KEY_CHANNEL:
+            match self.index:
+                case mn.IndexType.channel:
                     self.handler = self._handle_channel_list
-                case mc.KEY_SUBID:
+                case mn.IndexType.subId:
                     self.handler = self._handle_subid
                 case _:
                     assert (
                         False
                     ), "parser_class only supported for 'channel' indexed namespaces"
             for channel in kwargs.pop("channels", parent.descriptor.channels):
-                parser = parser_class(channel, parent, ns=id)
-                self.parsers[channel] = getattr(
-                    parser, f"_parse_{id.slug_end}", parser._parse
+                parser = parser_class(
+                    channel,
+                    parent,
+                    ns=id,
+                    index=mn.IndexType.channel(channel),
                 )
+                self.parsers[parser.index] = parser._parse
                 parser._namespace_registered(self)
-                # polling_request_channels will be eventually setup
+                # polling_request_payload will be eventually setup
                 # by polling_request_configure later on
             self.polling_response_size = (
                 NamespaceHandler.HEADER_AVG_SIZE
@@ -213,53 +225,50 @@ class NamespaceHandler(logging.Loggable):
         Calling this multiple times for the same channel is prohibited
         by design even though the dispatching model allows (_DispatcherParser)
         multiple recipients. Use register_parsers instead."""
-        channel = parser.channel
-        assert channel not in self.parsers, "Parser already registered for channel"
-        self.parsers[channel] = getattr(
+        assert parser.index not in self.parsers, "Parser already registered for index"
+        self.parsers[parser.index] = getattr(
             parser, f"_parse_{self.id.slug_end}", parser._parse
         )
         parser._namespace_registered(self)
-        return self.polling_request_add_channel(channel)
+        self.polling_request_add_index(parser.index)
 
     def register_parsers(self, *parsers: NamespaceParser):
         """Registers a whole set of parsers at once for the same channel payload.
         This will automatically install a dispatcher. This feature is useful to avoid having
         to define a dedicated parser class just to dispatch data to multiple entities.
         This will in turn remove the need for references that need to be maintained."""
-        channel = parsers[0].channel
-        assert channel not in self.parsers, "Parser already registered for channel"
-        self.parsers[channel] = _dispatcher = NamespaceParser.Dispatcher()
+        index = parsers[0].index
+        assert index not in self.parsers, "Parser already registered for index"
+        self.parsers[index] = _dispatcher = NamespaceParser.Dispatcher()
         _parser_method_name = f"_parse_{self.id.slug_end}"
         for parser in parsers:
-            assert parser.channel == channel, "All parsers must have the same channel"
+            assert parser.index is index, "All parsers must have the same index"
             _dispatcher.parsers.append(
                 getattr(parser, _parser_method_name, parser._parse)
             )
             parser._namespace_registered(self)
-        return self.polling_request_add_channel(channel)
+        self.polling_request_add_index(parsers[0].index)
 
     def swap_parsers(
         self, old: NamespaceParser, new: NamespaceParser, *extra: NamespaceParser
     ):
-        assert old.channel == new.channel, "channel mismatch"
+        assert old.index is new.index, "index mismatch"
         del old.handlers[self.id]
         if extra:
             # install a dispatcher
             _parse_method_name = f"_parse_{self.id.slug_end}"
-            self.parsers[new.channel] = _dispatcher = NamespaceParser.Dispatcher(
+            self.parsers[new.index] = _dispatcher = NamespaceParser.Dispatcher(
                 getattr(new, _parse_method_name, new._parse)
             )
             new._namespace_registered(self)
             for parser in extra:
-                assert (
-                    parser.channel == new.channel
-                ), "All parsers must have the same channel"
+                assert parser.index is new.index, "All parsers must have the same index"
                 _dispatcher.parsers.append(
                     getattr(parser, _parse_method_name, parser._parse)
                 )
                 parser._namespace_registered(self)
         else:
-            self.parsers[new.channel] = getattr(
+            self.parsers[new.index] = getattr(
                 new, f"_parse_{self.id.slug_end}", new._parse
             )
             new._namespace_registered(self)
@@ -303,7 +312,7 @@ class NamespaceHandler(logging.Loggable):
             self.WARNING,
             exception,
             "parser function '%s': payload=%s",
-            self.parsers[payload[self.key_idx]].__name__,
+            self.parsers[self.index.value_of(payload)].__name__,
             _any=payload,
             timeout=14400,
         )
@@ -322,7 +331,7 @@ class NamespaceHandler(logging.Loggable):
         """
         for p_channel in message.payload[self.id.key]:
             try:
-                self.parsers[p_channel[self.key_idx]](p_channel)
+                self.parsers[p_channel[KEY_CHANNEL]](p_channel)
             except KeyError as ke:
                 self._handle_missing_parser(ke, p_channel)
             except Exception as e:
@@ -343,14 +352,9 @@ class NamespaceHandler(logging.Loggable):
         """
         payload = message.payload[self.id.key]
         try:
-            self.parsers[payload[self.key_idx]](payload)
+            self.parsers[payload[KEY_CHANNEL]](payload)
         except KeyError as ke:
-            if ke.args[0] == self.key_idx:
-                # might be expected for ns with no channels
-                # for example EntityNamespaceMixin
-                self.parsers[None](payload)
-            else:
-                self._handle_missing_parser(ke, payload)
+            self._handle_missing_parser(ke, payload)
         except Exception as e:
             # this might be expected: the payload is not a dict
             # final fallback to the safe _handle_generic
@@ -366,7 +370,7 @@ class NamespaceHandler(logging.Loggable):
         parsers = dict(self.parsers)
         for payload in message.payload[self.id.key]:
 
-            subdevice_id = payload[self.key_idx]
+            subdevice_id = payload[KEY_ID]
             try:
                 parser = parsers.pop(subdevice_id)
             except KeyError:
@@ -411,19 +415,11 @@ class NamespaceHandler(logging.Loggable):
         parsers = self.parsers
         for payload in message.payload[self.id.key]:
             try:
-                subdevice_id = payload[self.key_idx]
+                subdevice_id = payload[KEY_SUBID]
             except KeyError:
                 # message not related to a subdevice. Parse with plain 'channel' mechanics
                 try:
-                    parsers[payload[mc.KEY_CHANNEL]](payload)
-                except KeyError as ke:
-                    if ke.args[0] == mc.KEY_CHANNEL:
-                        # might be expected for ns with no channels
-                        # for example EntityNamespaceMixin
-                        self.parsers[None](payload)
-                    else:
-                        # not supported: self._handle_missing_parser(ke, payload)
-                        self.log_parser_exception(ke, payload)
+                    parsers[payload[KEY_CHANNEL]](payload)
                 except Exception as e:
                     self.log_parser_exception(e, payload)
                 continue
@@ -468,18 +464,13 @@ class NamespaceHandler(logging.Loggable):
         payload = message.payload[self.id.key]
         if type(payload) is dict:
             try:
-                self.parsers[payload[self.key_idx]](payload)
+                self.parsers[payload[KEY_CHANNEL]](payload)
             except KeyError as ke:
-                if ke.args[0] == self.key_idx:
-                    # might be expected for ns with no channels
-                    # for example EntityNamespaceMixin
-                    self.parsers[None](payload)
-                else:
-                    self._handle_missing_parser(ke, payload)
+                self._handle_missing_parser(ke, payload)
         else:
             for p_channel in payload:
                 try:
-                    self.parsers[p_channel[self.key_idx]](p_channel)
+                    self.parsers[p_channel[KEY_CHANNEL]](p_channel)
                 except KeyError as ke:
                     self._handle_missing_parser(ke, p_channel)
                 except Exception as e:
@@ -497,7 +488,7 @@ class NamespaceHandler(logging.Loggable):
         """Used when parsing digest(s) in Appliance.System.All."""
         for p_channel in extract_dict_payloads(digest):
             try:
-                self.parsers[p_channel[self.key_idx]](p_channel)
+                self.parsers[p_channel[KEY_CHANNEL]](p_channel)
             except KeyError as ke:
                 self._handle_missing_parser(ke, p_channel)
             except Exception as e:
@@ -511,24 +502,24 @@ class NamespaceHandler(logging.Loggable):
             timeout=14400,
         )
 
-    def _handle_missing_parser(self, ke: KeyError, p_channel: "mt.JsonMapping", /):
+    def _handle_missing_parser(self, ke: KeyError, payload: "mt.JsonMapping", /):
         """
         Smart handler for KeyError raised when dispatching
         a channel payload to a parser.
         # KeyError here might have been raised because:
-        # - key_idx not in p_channel -> critical
+        # - key_idx not in payload -> critical
         # - no parser registered for this channel -> create parser if possible
         # - KeyError in parser function
         """
-        channel = p_channel[self.key_idx]
+        channel = payload[KEY_CHANNEL]
         if channel in self.parsers:
-            self.log_parser_exception(ke, p_channel)
+            self.log_parser_exception(ke, payload)
             return
+        index = mn.IndexType.channel(channel)
+        self.parsers[index] = self._parse_stub
+        self.parsers[index](payload)
 
-        self.parsers[channel] = self._parse_stub
-        self.parsers[channel](p_channel)
-
-    async def async_get(self, *channels):
+    async def async_get(self, *indexes: mn.IndexValue):
         """
         Helper to execute a straigth query to get the whole namespace payload
         or a single item/channel and dispatch the response to the internal
@@ -537,15 +528,15 @@ class NamespaceHandler(logging.Loggable):
         """
         response = await self.parent.async_request(
             *(
-                self.id.payload_get.build_get(self.id, *channels)
-                if channels
+                self.id.payload_get.build_get(self.id, *indexes)
+                if indexes
                 else self.polling_request
             )
         )
         self.handle_response(response)
         return response
 
-    async def async_get_safe(self, *channels):
+    async def async_get_safe(self, *indexes: mn.IndexValue):
         """
         Helper to execute a straigth query to get the whole namespace payload
         or a single item/channel and dispatch the response to the internal
@@ -553,13 +544,13 @@ class NamespaceHandler(logging.Loggable):
         if channel is None the whole namespace is requested.
         """
         try:
-            return await self.async_get(*channels)
+            return await self.async_get(*indexes)
         except Exception as e:
             self.log_exception(self.WARNING, e, "async_get_safe")
 
     def schedule_get(
         self,
-        *channels,
+        *indexes: mn.IndexValue,
         task_name: str = "",
     ):
         """
@@ -567,7 +558,7 @@ class NamespaceHandler(logging.Loggable):
         This shouldnt be used for namespaces that don't support GET.
         """
         self.create_task(
-            self.async_get(*channels), task_name or self.id, eager_start=True
+            self.async_get(*indexes), task_name or self.id, eager_start=True
         )
 
     async def async_set(self, payload: "mt.JsonMapping", /):
@@ -588,14 +579,9 @@ class NamespaceHandler(logging.Loggable):
         If parser is provided, it will be called back on its _parse method and
         the SET command payload will be automatically set to the parser's channel.
         """
-        payload[self.key_idx] = parser.channel
-        response = await self.parent.async_request(*self.id.request_set(payload))
-        # TODO: consider maybe a dedicated _parse_set_xxxx method?
-        # also, most namespaces SETACK replies are empty dicts
-        # so we just dispatch the request payload (which might be a
-        # subset of the whole GET payload).
-        # Some namespaces though might return different payloads on SETACK
-        # GarageDoor.State or mts100.Temperature
+        response = await self.parent.async_request(
+            *self.id.request_set(parser.index | payload)
+        )
         getattr(parser, f"_parse_{self.id.slug_end}", parser._parse)(
             merge_dicts(dict(state), payload) if state else payload
         )
@@ -619,9 +605,9 @@ class NamespaceHandler(logging.Loggable):
         cache of the device state received through queries. This cache should be the ns_payload attribute.
         """
         ns = self.id
-        assert ns.payload_set is mn.PayloadType.LIST_IDX, "Only LIST_C supported here"
-        payload[self.key_idx] = parser.channel
-        response = await self.parent.async_request(*ns.request_set(payload))
+        response = await self.parent.async_request(
+            *ns.request_set(parser.index | payload)
+        )
         try:
             payload = response.payload[ns.key][0]
         except (KeyError, IndexError):
@@ -645,13 +631,11 @@ class NamespaceHandler(logging.Loggable):
         if (_payload_type is mn.PayloadType.LIST_IDX_STRICT) or (
             _payload_type is mn.PayloadType.LIST_IDX_DATA_STRICT
         ):
-            self.polling_request_channels = [
-                {self.key_idx: channel} for channel in self.parsers
-            ]
+            self.polling_request_payload = [*self.parsers]
             self.polling_request = (
                 ns,
                 mc.METHOD_GET,
-                {ns.key: self.polling_request_channels},
+                {ns.key: self.polling_request_payload},
             )
             return
         if _payload_type is ns.payload_get:
@@ -671,7 +655,7 @@ class NamespaceHandler(logging.Loggable):
             case _:
                 self.polling_request = _payload_type.build_get(ns)
 
-    def polling_request_add_channel(self, channel, /):
+    def polling_request_add_index(self, index: mn.IndexValue, /):
         """Ensures the channel is set in polling request payload should the ns need it.
         Also adjusts the estimated polling_response_size.
         Returns the channel payload dict to be used for further updates if needed.
@@ -679,42 +663,30 @@ class NamespaceHandler(logging.Loggable):
         the return value has no meaning and is an immutable empty dict.
         """
         try:
-            polling_request_channels = self.polling_request_channels
-            key_idx = self.key_idx
-            for channel_payload in polling_request_channels:
-                if channel_payload[key_idx] == channel:
+            polling_request_payload = self.polling_request_payload
+            for payload in polling_request_payload:
+                if index.matches(payload):
                     break
             else:
                 # this is just a shurtcut since 'subId' namespaces do not
                 # still expose a channel different than 0. When that changes
                 # it'll be a mess.
-                channel_payload = (
-                    {key_idx: channel, mc.KEY_CHANNEL: 0}
-                    if key_idx == mc.KEY_SUBID
-                    else {key_idx: channel}
-                )
-                polling_request_channels.append(channel_payload)
+                polling_request_payload.append(index)
             self.polling_response_size = (
                 NamespaceHandler.HEADER_AVG_SIZE
-                + len(polling_request_channels) * self.id.payload_item_size
+                + len(polling_request_payload) * self.id.payload_item_size
             )
-            return channel_payload
         except AttributeError:
-            # polling_request_channels not used for this ns
+            # polling_request_payload not used for this ns
             self.polling_response_size = (
                 NamespaceHandler.HEADER_AVG_SIZE
                 + len(self.parsers) * self.id.payload_item_size
             )
-            return mn.EMPTY_DICT
 
     def polling_response_size_adj(self, item_count: int, /):
         self.polling_response_size = (
             NamespaceHandler.HEADER_AVG_SIZE + item_count * self.id.payload_item_size
         )
-
-    def channels_to_poll(self):
-        # snapshot sequence of channels to query (likely needed with all these asyncs)
-        return tuple(self.parsers.keys())
 
     # Polling Strategies:
     # These are configured at initialization time by setting the 'polling_strategy' attribute
@@ -820,32 +792,32 @@ class NamespaceHandler(logging.Loggable):
         # determined at design time.
         # New implementation tries to leverage the knowledge of allowed response buffers
         # in the device to fill up the most subdevices requests per message.
-        channels = iter(self.channels_to_poll())
-        channels_payload = self.polling_request_channels
-        channels_payload.clear()
+        indexes = iter(self.parsers.keys())
+        polling_request_payload = self.polling_request_payload
+        polling_request_payload.clear()
         self.polling_response_size = NamespaceHandler.HEADER_AVG_SIZE
         while True:
             if size_available > payload_item_size:
                 try:
-                    channels_payload.append({self.key_idx: next(channels)})
+                    polling_request_payload.append(next(indexes))
                     size_available -= payload_item_size
                     self.polling_response_size += payload_item_size
                     continue
                 except StopIteration:
-                    if channels_payload:
+                    if polling_request_payload:
                         await device.async_poll_request(self)
                     # no need to flush multiple since the polling loop
                     # will continue with standard handling
                     break
 
-            if channels_payload:
+            if polling_request_payload:
                 await device.async_poll_request(self)
             if device._multiple_requests:
                 # ensure we (eventually) flush multiple requests
                 await device.async_poll_flush()
 
             # reset for next chunk
-            channels_payload.clear()
+            polling_request_payload.clear()
             self.polling_response_size = NamespaceHandler.HEADER_AVG_SIZE
             size_available = (
                 device.polling_response_size_available
@@ -918,14 +890,14 @@ class NamespaceHandler(logging.Loggable):
                         | mn.PayloadType.LIST_IDX_DATA_STRICT
                     ):
                         try:
-                            if self.polling_request_channels:
+                            if self.polling_request_payload:
                                 await async_request_func(*self.polling_request)
                             else:
                                 # when a 'LIST_C_STRICT' namespace has no registered parsers, self.polling_request will fail
                                 # so we use the mocked default request
                                 await async_request_func(*ns.request_default)
                         except AttributeError as ae:
-                            if ae.name == "polling_request_channels":
+                            if ae.name == "polling_request_payload":
                                 # might be if payload_type is LIST_C though...
                                 # so we use the mocked default request
                                 await async_request_func(*ns.request_default)
@@ -954,10 +926,33 @@ class NamespaceHandler(logging.Loggable):
                 await _async_wrapped_push()
                 await _async_wrapped_get({})
 
-                channels = self.parsers.keys() or self.parent.descriptor.channels
+                # FIXME
+                channels_payload = [*self.parsers]
+                if not channels_payload:
+                    channels = self.parent.descriptor.channels or (0,)
+                    match self.index:
+                        case mn.IndexType.channel:
+                            channels_payload = [
+                                {KEY_CHANNEL: channel} for channel in channels
+                            ]
+                        case mn.IndexType.id:
+                            channels_payload = [
+                                {KEY_ID: subdevice_id}
+                                for subdevice_id in self.parent.subdevices
+                            ]
+                        case mn.IndexType.subId:
+                            channels_payload = [
+                                {KEY_SUBID: subdevice_id, KEY_CHANNEL: 0}
+                                for subdevice_id in self.parent.subdevices
+                            ]
+                            channels_payload.append({KEY_CHANNEL: 0})
+                        case _:
+                            channels_payload = [
+                                {ns_key_index: channel} for channel in channels
+                            ]
 
-                channels_count = len(channels)
-                channels_payload = [{ns_key_index: channel} for channel in channels]
+                channels_count = len(channels_payload)
+
                 # We'll try then querying with those different payload structures as they're well known
                 # for channelized devices, starting from the most complex (verbose) to the least one.
                 # If any of these works it will candidate for this NamespaceHandler polling_request format.
@@ -996,19 +991,9 @@ class NamespaceHandler(logging.Loggable):
                     return
 
                 # If our 'well-known' heuristics don't work, try these exotic queries:
-                # looking for DICT_C_STRICT request type
-                for channel_payload in channels_payload:
-                    await _async_wrapped_get({ns_key: channel_payload})
-                # Also check if hub namespaces indexed by "subId" maybe also need a "channel"
-                if ns_key_index == mc.KEY_SUBID:
-                    await _async_wrapped_get(
-                        {
-                            ns_key: [
-                                {ns_key_index: channel, mc.KEY_CHANNEL: 0}
-                                for channel in channels
-                            ]
-                        }
-                    )
+                # looking for DICT_IDX_STRICT request type
+                for payload in channels_payload:
+                    await _async_wrapped_get({ns_key: payload})
 
             case mn.Grammar.UNKNOWN:
                 # We don't know yet how to query this ns so we'll brute-force it
@@ -1037,42 +1022,29 @@ class NamespaceHandler(logging.Loggable):
                     response_payload = response.payload.get(ns_key)  # type: ignore
                     if response_payload or (type(response_payload) is not list):
                         return
-                    # the namespace might need a channel index in the request
+                    # the namespace might need an index in the request
+                    # 'channel' index might be used in any kind of device (also hubs)
+                    await _async_wrapped_get({ns_key: [{KEY_CHANNEL: 0}]})
                     subdevices = self.parent.descriptor.subdevices
-                    if subdevices is None:  # it is not a hub
-                        await _async_wrapped_get({ns_key: [{mc.KEY_CHANNEL: 0}]})
-                    else:  # it is an hub
-                        subdevices = [subdevice[mc.KEY_ID] for subdevice in subdevices]
+                    if subdevices:
                         # typical 'legacy' devices are queried by "id"
                         if response := await _async_wrapped_get(
                             {
                                 ns_key: [
-                                    {mc.KEY_ID: subdevice_id}
-                                    for subdevice_id in subdevices
+                                    {KEY_ID: subdevice[KEY_ID]}
+                                    for subdevice in subdevices
                                 ]
                             },
                         ):
                             response_payload = response.payload.get(ns_key)
                             if response_payload:
                                 return
-                        # many other new ones (ms130 for example) need a "subId"
-                        if response := await _async_wrapped_get(
-                            {
-                                ns_key: [
-                                    {mc.KEY_SUBID: subdevice_id}
-                                    for subdevice_id in subdevices
-                                ]
-                            },
-                        ):
-                            response_payload = response.payload.get(ns_key)
-                            if response_payload:
-                                return
-                        # finally: try also setting a "channel" (it is carried in messages from the subdevice)
+                        # many other new ones (ms130 for example) need a "subId/channel" pair
                         await _async_wrapped_get(
                             {
                                 ns_key: [
-                                    {mc.KEY_SUBID: subdevice_id, mc.KEY_CHANNEL: 0}
-                                    for subdevice_id in subdevices
+                                    {KEY_SUBID: subdevice[KEY_ID], KEY_CHANNEL: 0}
+                                    for subdevice in subdevices
                                 ]
                             },
                         )

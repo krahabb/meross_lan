@@ -45,14 +45,15 @@ class Mts300Climate(MtsThermostatClimate):
             except AttributeError:
                 self.number_calibration_humi = self.parent.add_entity(
                     NumberParser(
-                        self.channel,
+                        self.index.value,
                         self.parent,
                         entity_key="humidity_calibration",
+                        ns=self.ns,
+                        index=self.index,
+                        key_value="humiValue",
                         device_class=NumberParser.DeviceClass.HUMIDITY,
                         device_scale=10,
                         device_value=humidity,
-                        ns=self.ns,
-                        key_value="humiValue",
                         native_max_value=5,
                         native_min_value=-5,
                         native_step=0.1,
@@ -189,8 +190,8 @@ class Mts300Climate(MtsThermostatClimate):
         "select_temp_association",
     ) + tuple(f"sensor_{_key}" for _key in ENTITY_ARGS)
 
-    def __init__(self, channel: int, device: "Device", /, **kwargs):
-        MtsThermostatClimate.__init__(self, channel, device, **kwargs)
+    def __init__(self, id, device: "Device", /, **kwargs):
+        MtsThermostatClimate.__init__(self, id, device, **kwargs)
         device.register_parser_ex(
             self,
             mn.Appliance_Config_Sensor_Association,
@@ -202,12 +203,12 @@ class Mts300Climate(MtsThermostatClimate):
         self.target_temperature_low = None
         self._mts_work = None
         for _key, _args in Mts300Climate.ENTITY_ARGS.items():
-            setattr(self, f"sensor_{_key}", EnumParser(channel, device, **_args))
+            setattr(self, f"sensor_{_key}", EnumParser(id, device, **_args))
         self.sensor_current_humidity = SensorParser.Humidity(
-            channel, device, entity_registry_enabled_default=False
+            id, device, entity_registry_enabled_default=False
         )
         self.number_fan_hold = NumberParser(
-            channel,
+            id,
             device,
             entity_key="fan_hold_time",
             device_class=NumberParser.DEVICE_CLASS_DURATION,
@@ -218,7 +219,7 @@ class Mts300Climate(MtsThermostatClimate):
             self._async_request_value_number_fan_hold
         )
         self.switch_fan_hold = EmulatedSwitch(
-            channel,
+            id,
             device,
             entity_key="fan_hold_enable",
         )
@@ -417,7 +418,9 @@ class Mts300Climate(MtsThermostatClimate):
             self.select_temp_association._parse(payload)
         except AttributeError:
             self.select_temp_association = self.parent.add_entity(
-                Mts300Climate.SensorAssociationSelect(self.channel, self.parent)
+                Mts300Climate.SensorAssociationSelect(
+                    self.id, self.parent, index=self.index
+                )
             )
             self.select_temp_association._parse(payload)
 

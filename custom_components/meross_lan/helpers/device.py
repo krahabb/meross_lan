@@ -162,7 +162,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                     case mn.Appliance_Control_Multiple:
                         list_break_matcher = '},{"header":'
                     case _:
-                        if not namespace.key_idx:
+                        if not namespace.index:
                             raise
                         # using handler because of 'subId' ns different behaviors
                         list_break_matcher = (
@@ -1074,7 +1074,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         """
         try:
             for togglex_digest in self.descriptor.digest[mc.KEY_TOGGLEX]:
-                if togglex_digest[mc.KEY_CHANNEL] == entity.channel:
+                if togglex_digest[mc.KEY_CHANNEL] == entity.index.value:
                     if active:
                         # by design this should be an ToggleXParser
                         # but we have enough of _parse_togglex
@@ -1452,6 +1452,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
     def parse_undefined_dict(
         self, key_parent: str, payload: dict, channel: "ChannelType | None", /
     ):
+        # FIXME: update this code to the new 'index' implementation (instead of channel)
         device_entities = self.entities
         excluded = (
             mc.KEY_ID,

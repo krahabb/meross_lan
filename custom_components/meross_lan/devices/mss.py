@@ -94,7 +94,7 @@ class _ElectricitySensor(SensorParser):
         kwargs["device_value"] = 0
         super().__init__(ns_or_channel, device, **kwargs)
         self._schedule_reset()
-        channel = self.channel
+        channel = self.index.value
         for _entity_def in self.__class__.ENTITY_DEFS.values():
             _entity_def(channel, device)
         self.sensor_power = device.entities[
@@ -140,7 +140,7 @@ class _ElectricitySensor(SensorParser):
         """{"channel": 0, "power": 11000, ...}"""
         device = self.parent
         entities = device.entities
-        channel = self.channel
+        channel = self.index.value
         last_power = self.sensor_power.native_value
 
         for key in self.__class__.ENTITY_DEFS:
@@ -225,7 +225,7 @@ class ElectricityXSensor(_ElectricitySensor):
                 handler_ch: "ConsumptionHNamespaceHandler" = device.ns_handlers[
                     mn.Appliance_Control_ConsumptionH
                 ]  # type: ignore
-                handler_ch.need_polling(channel)
+                handler_ch.need_polling(self.index)
             except KeyError:
                 pass
 
@@ -242,7 +242,7 @@ class ElectricityXSensor(_ElectricitySensor):
                     ) = self.parent.ns_handlers[
                         mn.Appliance_Control_ConsumptionH
                     ]  # type: ignore
-                    handler_ch.need_polling(self.channel)
+                    handler_ch.need_polling(self.index)
                 except KeyError:
                     # we expect ConsumptionH ns handler to be registered when ElextricityX
                     # is used since they go hand in hand. However, better be safe than sorry
@@ -291,11 +291,11 @@ class ConsumptionHSensor(SensorParser):
     _attr_suggested_display_precision = 0
 
     async def async_added_to_hass(self):
-        self.handler_ns.channel_polling_add(self.channel)
+        self.handler_ns.channel_polling_add(self.index)
         await SensorParser.async_added_to_hass(self)
 
     async def async_will_remove_from_hass(self):
-        self.handler_ns.channel_polling_remove(self.channel)
+        self.handler_ns.channel_polling_remove(self.index)
         await SensorParser.async_will_remove_from_hass(self)
 
     def _parse(self, payload: dict):
@@ -309,8 +309,8 @@ class ConsumptionHSensor(SensorParser):
         else:
             # value is steady..postpone next polling
             polling_delay = handler.polling_period * 6
-        if handler.channel_polling_remove(self.channel):
-            handler.channel_polling_add(self.channel, polling_delay)
+        if handler.channel_polling_remove(self.index):
+            handler.channel_polling_add(self.index, polling_delay)
 
 
 class ConsumptionHNamespaceHandler(NamespaceHandler):
@@ -330,46 +330,46 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
     """
 
     if TYPE_CHECKING:
-        ChannelToPollType = tuple[float, object]
-        """(last_request_epoch, channel)"""
-        _channels_to_poll: list[ChannelToPollType]
-        # TODO: reconcile this member with polling_request_channels in base cls
+        indexToPollType = tuple[float, mn.IndexValue]
+        """(last_request_epoch, NamespaceParser.index)"""
+        _indexes_to_poll: list[indexToPollType]
+        # TODO: reconcile this member with polling_request_payload in base cls
 
-    __SLOTS__ = ("_channels_to_poll",)
+    __SLOTS__ = ("_indexes_to_poll",)
 
     def __init__(self, ns: "mn.Namespace", device: "Device", /):
-        self._channels_to_poll = []
+        self._indexes_to_poll = []
         NamespaceHandler.__init__(self, ns, device, parser_class=ConsumptionHSensor)
         if len(device.descriptor.channels) > 1:
             self.polling_strategy = ConsumptionHNamespaceHandler.async_poll_probe
         device.enable_check_device_time()
 
-    def channel_polling_add(self, channel, delay: float = 0, /):
+    def channel_polling_add(self, index: mn.IndexValue, delay: float = 0, /):
         # assert not already present ?
         insort_right(
-            self._channels_to_poll,
-            (self.parent.polling_epoch + delay, channel),
+            self._indexes_to_poll,
+            (self.parent.polling_epoch + delay, index),
             key=lambda ctp: ctp[0],
         )
 
-    def channel_polling_remove(self, channel, /):
-        channels_to_poll = self._channels_to_poll
-        for i in range(len(channels_to_poll)):
-            if channels_to_poll[i][1] == channel:
-                del channels_to_poll[i]
+    def channel_polling_remove(self, index: mn.IndexValue, /):
+        indexes_to_poll = self._indexes_to_poll
+        for i in range(len(indexes_to_poll)):
+            if indexes_to_poll[i][1] is index:
+                del indexes_to_poll[i]
                 return True
         return False
 
-    def need_polling(self, channel, /):
+    def need_polling(self, index: mn.IndexValue, /):
         """Raise the channel polling priority in the queue."""
-        channels_to_poll = self._channels_to_poll
-        for i in range(len(channels_to_poll)):
-            if channels_to_poll[i][1] == channel:
-                if channels_to_poll[i][0] > self.parent.polling_epoch:
-                    del channels_to_poll[i]
+        indexes_to_poll = self._indexes_to_poll
+        for i in range(len(indexes_to_poll)):
+            if indexes_to_poll[i][1] is index:
+                if indexes_to_poll[i][0] > self.parent.polling_epoch:
+                    del indexes_to_poll[i]
                     insort_right(
-                        channels_to_poll,
-                        (self.parent.polling_epoch, channel),
+                        indexes_to_poll,
+                        (self.parent.polling_epoch, index),
                         key=lambda ctp: ctp[0],
                     )
                 return
@@ -379,14 +379,14 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         # since em06 looks like having a way more than our default estimated 2400 (3 * 800) bytes
         # We're then going to try a full poll and see what happens. Also, we're expecting the device
         # to reply with just 3 channels when queried with an empty list (em06).
-        if not self._channels_to_poll:
+        if not self._indexes_to_poll:
             return
         self.polling_response_size = (
             NamespaceHandler.HEADER_AVG_SIZE + 3 * self.id.payload_item_size
         )
-        self.polling_request_channels.clear()
+        self.polling_request_payload.clear()
         await self.parent.async_poll_request(self)
-        self.polling_request_channels.append({})
+        self.polling_request_payload.append({})
         self.polling_response_size = (
             NamespaceHandler.HEADER_AVG_SIZE + self.id.payload_item_size
         )
@@ -395,10 +395,9 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
     async def async_poll_smartchunk(self):
         """This has a huge ns response payload so we need to optimize polling.
         We're going to just query a single channel per polling cycle."""
-        if not self._channels_to_poll:
+        if not self._indexes_to_poll:
             return
-        _poll_epoch, channel = self._channels_to_poll[0]
-        self.polling_request_channels[0][self.key_idx] = channel
+        _poll_epoch, self.polling_request_payload[0] = self._indexes_to_poll[0]
         device = self.parent
         epoch = device.polling_epoch
         if _poll_epoch > epoch:
@@ -667,7 +666,7 @@ class OverTempEnableSwitch(EntityNamespaceMixin, SwitchParser):
         except AttributeError:
             self.sensor_overtemp_type = self.parent.add_entity(
                 EnumParser(
-                    self.channel,
+                    None,
                     self.parent,
                     entity_key="config_overtemp_type",
                     native_value=type,

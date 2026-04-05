@@ -138,7 +138,7 @@ class mts100v3(SubDevice, MtsClimate):
             # Turning on/off the device must be an explicit action on HVACMode.
             await self.parent.async_request(
                 *mn_h.Appliance_Hub_Mts100_Mode.request_set(
-                    {mc.KEY_STATE: mc.MTS100_MODE_CUSTOM}, self.id
+                    self.index | {mc.KEY_STATE: mc.MTS100_MODE_CUSTOM}
                 )
             )
             self._mts_mode = mc.MTS100_MODE_CUSTOM
@@ -152,12 +152,14 @@ class mts100v3(SubDevice, MtsClimate):
     async def async_request_preset(self, mode: int, /):
         """Requests an mts mode and (ensure) turn-on"""
         await self.parent.async_request(
-            *mn_h.Appliance_Hub_Mts100_Mode.request_set({mc.KEY_STATE: mode}, self.id)
+            *mn_h.Appliance_Hub_Mts100_Mode.request_set(
+                self.index | {mc.KEY_STATE: mode}
+            )
         )
         self._mts_mode = mode
         if not self._mts_onoff:
             await self.parent.async_request(
-                *mn_h.Appliance_Hub_ToggleX.request_set({mc.KEY_ONOFF: 1}, self.id)
+                *mn_h.Appliance_Hub_ToggleX.request_set(self.index | {mc.KEY_ONOFF: 1})
             )
             self._mts_onoff = 1
         try:
@@ -171,7 +173,7 @@ class mts100v3(SubDevice, MtsClimate):
     @override
     async def async_request_onoff(self, onoff: int, /):
         await self.parent.async_request(
-            *mn_h.Appliance_Hub_ToggleX.request_set({mc.KEY_ONOFF: onoff}, self.id)
+            *mn_h.Appliance_Hub_ToggleX.request_set(self.index | {mc.KEY_ONOFF: onoff})
         )
         self._mts_onoff = onoff
         self.flush_state()
@@ -197,7 +199,7 @@ class mts100v3(SubDevice, MtsClimate):
                 # only room temperature/setpoint updated -> this is 99.9% a PUSH
                 # whenever the target temp or mode changes
                 self.flush_state()
-                self.handlers[mn_h.Appliance_Hub_Mts100_Mode].schedule_get(self.id)
+                self.handlers[mn_h.Appliance_Hub_Mts100_Mode].schedule_get(self.index)
                 return
         if mc.KEY_MIN in payload:
             self.min_temp = payload[mc.KEY_MIN] / self.temperature_scale
@@ -255,7 +257,6 @@ class mts100v3(SubDevice, MtsClimate):
 
 class mts150(mts100v3):
     """Climate entity for hub paired devices MTS150, MTS150P"""
-
 
     def _parse_digest_(self, payload: "mt.hub._mts100v3", /):
         """parse digest key for mts150/mts150p subdevice"""

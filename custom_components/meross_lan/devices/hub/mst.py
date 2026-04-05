@@ -1,3 +1,4 @@
+from functools import cached_property
 from typing import TYPE_CHECKING, override
 
 from . import SubDevice, mc, mlc, mn, mn_h
@@ -46,7 +47,6 @@ class mst100(SubDevice, SwitchParser):
         _attr_native_min_value = 1
 
     NS_HUB = (mn.Appliance_Config_DeviceCfg, *SubDevice.NS_HUB)
-    init_entity_key = mc.KEY_ONOFF
     init_ns = mn_h.Appliance_Control_Water
     init_value_on = 1
     init_value_off = 2
@@ -57,7 +57,15 @@ class mst100(SubDevice, SwitchParser):
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         SubDevice.__init__(self, subid, hub, key_digest, model)
-        self.number_duration = mst100.WateringDurationNumber(subid, hub)
+        self.number_duration = mst100.WateringDurationNumber(
+            subid, hub, index=mn.IndexType.subId(subid, 0)
+        )
+
+    @cached_property
+    def unique_id(self) -> str | None:
+        # patch unique_id to mantain compatibility
+        # with previous versions until we refactor the whole unique_id system
+        return f"{self.parent.id}_{self.id}_onoff"
 
     def shutdown(self):
         SubDevice.shutdown(self)
@@ -80,7 +88,6 @@ class mst200(SubDevice):
             mstCfg: mt.JsonMapping
 
     NS_HUB = (mn.Appliance_Config_DeviceCfg, *SubDevice.NS_HUB)
-    init_entity_key = mc.KEY_ONOFF
     init_ns = mn_h.Appliance_Control_Water
     init_value_on = 1
     init_value_off = 2

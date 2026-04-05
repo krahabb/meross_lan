@@ -48,14 +48,14 @@ class TimeEntity(Entity, time.TimeEntity):
 
     def __init__(
         self,
-        channel: "Any | None",
+        id,
         manager: "ConfigEntryManager",
         **kwargs: "Unpack[Args]",
     ):
         self.native_value = kwargs.pop("native_value", None)
         self.device_scale = kwargs.pop("device_scale", 1)
         self.device_value_disabled = kwargs.pop("device_value_disabled", 0)
-        super().__init__(channel, manager, **kwargs)
+        super().__init__(id, manager, **kwargs)
 
     def set_unavailable(self):
         self.native_value = None

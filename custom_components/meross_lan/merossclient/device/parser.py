@@ -60,10 +60,9 @@ class NamespaceParser(logging.Loggable):
         """Class default used to initialize the 'ns' instance attribute."""
         ns: mn.Namespace
         """The (primary) namespace this parser is associated with. This is used to issue requests."""
-        channel: PayloadIndexType | None  # type: ignore[assignment]
+        index: Final[mn.IndexValue]  # type: ignore
         """The channel/id/subId key value according to the namespace (indexed or not).
-        This is used by the NamespaceHandler to route messages to the correct parser.
-        This is expected to be initialized by derived classes according to the namespace syntax."""
+        This is used by the NamespaceHandler to route messages to the correct parser."""
         ns_payload: JsonMapping  # type: ignore[assignment]
         """The last parsed payload."""
         handlers: Final[dict[mn.Namespace, NamespaceHandler]]
@@ -72,20 +71,22 @@ class NamespaceParser(logging.Loggable):
 
         class Args(logging.Loggable.Args):
             ns: NotRequired[mn.Namespace]
-            # channel: NotRequired[PayloadIndexType | None]
+            index: NotRequired[mn.IndexValue]
 
         def __init__(
             self,
-            channel: PayloadIndexType | None,
+            id,
             parent: PhysicalDevice,
             /,
             **kwargs: Unpack[Args],
         ): ...
 
     init_ns_payload = mn.EMPTY_DICT
+    init_index = mn.IndexType.none()
     SLOTS_AUTO_INIT = (
         "ns",
         "ns_payload",
+        "index",
     )
     __SLOTS__ = ("channel", "handlers")
 
@@ -94,16 +95,16 @@ class NamespaceParser(logging.Loggable):
         try:
             _dispatcher: "NamespaceParser.Dispatcher"
             for handler in self.handlers.values():
-                _dispatcher = handler.parsers[self.channel]  # type: ignore[assignment]
+                _dispatcher = handler.parsers[self.index]  # type: ignore[assignment]
                 if type(_dispatcher) is NamespaceParser.Dispatcher:
                     # remove from dispatcher
                     _dispatcher.parsers.remove(
                         getattr(self, f"_parse_{handler.id.slug_end}", self._parse)
                     )
                     if not _dispatcher.parsers:
-                        del handler.parsers[self.channel]
+                        del handler.parsers[self.index]
                 else:
-                    del handler.parsers[self.channel]
+                    del handler.parsers[self.index]
             del self.handlers  # type: ignore
         except AttributeError:  # never registered
             pass
@@ -130,20 +131,9 @@ class NamespaceParser(logging.Loggable):
 
     # TODO: maybe rename to async_request
     async def async_request_payload(self, payload: "JsonDict", /):
-        # FIXME: TODO restructure key_idx definition and support subid/channel key pairs
-        # Here a brutal patch in the meantime to make Siren entity work...
-        key_idx = self.handler_ns.key_idx
-        if key_idx == mc.KEY_SUBID:
-            if type(self.channel) is int:
-                payload[mc.KEY_CHANNEL] = self.channel
-            else:
-                payload[mc.KEY_SUBID] = (
-                    self.channel
-                )  # because id/subid is actually stored in channel
-                payload[mc.KEY_CHANNEL] = 0
-        else:
-            payload[key_idx] = self.channel
-        return await self.parent.async_request(*self.ns.request_set(payload))
+        return await self.parent.async_request(
+            *self.ns.request_set(self.index | payload)
+        )
 
     async def async_request_parse(self, payload: "JsonDict", /):
         response = await self.async_request_payload(payload)

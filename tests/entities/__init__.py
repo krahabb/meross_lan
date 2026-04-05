@@ -142,13 +142,13 @@ class EntityComponentTest:
     async def async_test_disabled_callback(self, entity: "mle.Entity"):
         pass
 
-    def _check_remove_togglex(self, entity: "mle.Entity"):
+    def _check_remove_togglex(self, entity: "mle.ParserEntity"):
         """
         Use to remove expected (but not instantiated) ToggleXSwitch entities
         for those hybrid entities which overtake ToggleX behavior
         """
         for togglex_digest in self.digest.get(mc.KEY_TOGGLEX, []):
-            if togglex_digest[mc.KEY_CHANNEL] == entity.channel:
+            if togglex_digest[mc.KEY_CHANNEL] == entity.index.value:
                 EntityComponentTest.expected_entity_types.remove(ToggleX)
 
 

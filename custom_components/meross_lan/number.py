@@ -40,11 +40,7 @@ class NumberEntity(mle.NumericEntity, number.NumberEntity):
             native_step: NotRequired[float]
 
         def __init__(
-            self,
-            channel: ChannelType | None,
-            parent: ConfigEntryManager,
-            /,
-            **kwargs: Unpack[Args],
+            self, id, parent: ConfigEntryManager, /, **kwargs: Unpack[Args]
         ): ...
 
     PLATFORM = number.DOMAIN
@@ -80,13 +76,7 @@ class NumberParser(mle.NumericParser, NumberEntity):
         class Args(NumberEntity.Args, mle.NumericParser.Args):
             pass
 
-        def __init__(
-            self,
-            channel: ChannelType | None,
-            parent: Device,
-            /,
-            **kwargs: Unpack[Args],
-        ): ...
+        def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
 
         @classmethod
         def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...

@@ -213,34 +213,34 @@ def merge_lists(
 
 
 def get_element_by_key[_T: "Mapping"](
-    src: list[_T], key_value: "str | Mapping", key=mc.KEY_CHANNEL
+    src: list[_T], key_value: "str | Mapping", key: tuple[str, ...] = (mc.KEY_CHANNEL,)
 ) -> _T:
     """
     scans the payload(list) looking for the first item matching
     the key value. Usually looking for the matching channel payload
     inside list payloads
     """
-    if key == mc.KEY_SUBID:
-        assert type(key_value) is dict
-        key = (mc.KEY_SUBID, mc.KEY_CHANNEL)
-        for p in src:
-            if all(p.get(k) == key_value.get(k) for k in key):
-                return p
-    else:
+    if len(key) == 1:
         try:
             # extract in case key_value is a dict with the key
             # inside instead of being the value itself
-            key_value = key_value[key]  # type: ignore
+            key_value = key_value[key[0]]  # type: ignore
         except Exception:
             pass
         for p in src:
-            if p.get(key) == key_value:
+            if p.get(key[0]) == key_value:
                 return p
+    else:
+        assert type(key_value) is dict
+        for p in src:
+            if all(p.get(k) == key_value.get(k) for k in key):
+                return p
+
     raise KeyError(f"No match for key '{key}' on value:'{key_value}' in {src}")
 
 
 def get_element_by_key_safe[_T: "Mapping"](
-    src: list[_T], key_value: "str | Mapping", key=mc.KEY_CHANNEL
+    src: list[_T], key_value: "str | Mapping", key: tuple[str, ...] = (mc.KEY_CHANNEL,)
 ) -> _T | None:
     """
     scans the payload (expecting a list) looking for the first item matching
@@ -305,7 +305,7 @@ def update_dict_strict(dst_dict: "mt.JsonDict | Any", src_dict: "mt.JsonMapping"
 
 
 def update_dict_strict_by_key[_T: "mt.JsonMapping"](
-    dst_lst: "Iterable[_T]", src_dict: _T, key=mc.KEY_CHANNEL
+    dst_lst: "Iterable[_T]", src_dict: _T, key: tuple[str, ...] = (mc.KEY_CHANNEL,)
 ) -> _T:
     """
     Much like get_element_by_key scans the dst list looking for the first item matching
@@ -313,20 +313,10 @@ def update_dict_strict_by_key[_T: "mt.JsonMapping"](
     channel payload inside list payloads. Before returning, merges the src_dict into
     the matched dst_dict
     """
-    if key == mc.KEY_SUBID:
-        # TODO: maybe update the ns.key_idx definition to allow
-        # tuples so to avoid this special case for subid+channel namespaces
-        key = (mc.KEY_SUBID, mc.KEY_CHANNEL)
-        for dst_dict in dst_lst:
-            if all(dst_dict.get(k) == src_dict.get(k) for k in key):
-                update_dict_strict(dst_dict, src_dict)
-                return dst_dict
-    else:
-        key_value = src_dict[key]
-        for dst_dict in dst_lst:
-            if dst_dict.get(key) == key_value:
-                update_dict_strict(dst_dict, src_dict)
-                return dst_dict
+    for dst_dict in dst_lst:
+        if all(dst_dict.get(k) == src_dict.get(k) for k in key):
+            update_dict_strict(dst_dict, src_dict)
+            return dst_dict
     raise KeyError(f"No match for key '{key}' on '{src_dict}' in {dst_lst}")
 
 

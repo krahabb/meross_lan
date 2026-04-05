@@ -66,20 +66,20 @@ def _heuristic_args(name: str, kwargs: "Namespace.Args") -> "Namespace.Args":
             # by explicitly passing the map=HUB_NAMESPACES so that they're mapped into the right storage
             # but the rules for parsing are very custom and likely need to be managed on a case by case
             # at the HubMixin level.
-            kwargs["key_idx"] = mc.KEY_ID
+            kwargs["index"] = IndexType.id
         case (_, "RollerShutter", *_):
-            kwargs["key_idx"] = mc.KEY_CHANNEL
+            kwargs["index"] = IndexType.channel
             kwargs["payload_get"] = PayloadType.LIST_IDX
         case (_, "GarageDoor", *_):
-            kwargs["key_idx"] = mc.KEY_CHANNEL
+            kwargs["index"] = IndexType.channel
         case (_, "Control", "Screen", *_):
-            kwargs["key_idx"] = mc.KEY_CHANNEL
+            kwargs["index"] = IndexType.channel
             kwargs["payload_get"] = PayloadType.LIST_IDX_STRICT
         case (_, "Control", "Sensor", *_):
-            kwargs["key_idx"] = mc.KEY_SUBID
+            kwargs["index"] = IndexType.subId
             kwargs["payload_get"] = PayloadType.LIST_IDX_STRICT
         case (_, "Control", "Thermostat", *_):
-            kwargs["key_idx"] = mc.KEY_CHANNEL
+            kwargs["index"] = IndexType.channel
             kwargs["payload_get"] = PayloadType.LIST_IDX_STRICT
         case _:
             kwargs["payload_get"] = PayloadType.UNKNOWN
@@ -190,6 +190,86 @@ EMPTY_DICT = _immutabledict()
 EMPTY_LIST = _immutablelist()  # type: ignore
 
 
+class _IndexType(tuple):
+
+    if TYPE_CHECKING:
+        cache: Final[dict[tuple, "IndexValue"]]
+
+    # __slots__ = ("cache",)
+    cache = {}  # type: ignore
+
+    def __new__(cls, *args):
+        return tuple.__new__(cls, args)
+
+    def __init__(self, *args):
+        self.cache = {}
+
+
+class IndexType(_IndexType, enum.Enum):
+    none = ()
+    channel = (mc.KEY_CHANNEL,)
+    id = (mc.KEY_ID,)
+    subId = (mc.KEY_SUBID, mc.KEY_CHANNEL)
+    Id = (mc.KEY_ID_,)
+
+    # Factory method to get the right IndexValue for a given index type and value(s)
+    def __call__(self, *values):
+        return IndexValue.get(self, *values)
+
+    def value_of(self, payload: dict):
+        """Extracts the key values of this index type from the payload dict."""
+        return IndexValue(self, *(payload.get(_key) for _key in self))
+
+
+class IndexValue(_immutabledict):
+
+    __slots__ = ("type", "key", "value")
+
+    def __init__(self, index_type: IndexType, *values):
+        self.type = index_type
+        if index_type:
+            num_keys = len(index_type)
+            if num_keys > 1:
+                self.key = index_type
+                self.value = values
+                super().__init__({index_type[i]: values[i] for i in range(num_keys)})
+            else:
+                self.key = index_type[0]
+                self.value = values[0]
+                self.matches = self._matches_single
+                super().__init__({self.key: self.value})
+        else:
+            self.key = None
+            self.value = None
+            self.matches = self._matches_single  # fragile...not really meaningful
+            super().__init__()
+
+    def matches(self, payload: dict):
+        return all(payload.get(k) == v for k, v in self.items())
+
+    def _matches_single(self, payload: dict):
+        return payload.get(self.key) == self.value
+
+    # IndexValue is immutable and hashable based on its content (type and value)
+    # so that it can be used as dict key in the parsers attribute of NamespaceHandler.
+    def __eq__(self, other):
+        if type(other) is IndexValue:  # assuming no subclassing
+            return (self.value == other.value) and (self.type == other.type)
+        return self.value == other
+
+    def __hash__(self):
+        return self.value.__hash__()
+
+    @staticmethod
+    def get(index_type: IndexType, *values):
+        try:
+            return index_type.cache[values]
+        except KeyError:
+            instance = IndexValue(index_type, *values)
+            index_type.cache[values] = instance
+            return instance
+
+
 class _PayloadType:
 
     if TYPE_CHECKING:
@@ -215,12 +295,12 @@ class _PayloadType:
         self.build = build
         self.indexed = indexed
 
-    def build_get(self, ns: "Namespace", /, *idxs) -> "MerossRequestType":
+    def build_get(self, ns: "Namespace", /, *idxs: IndexValue) -> "MerossRequestType":
         return ns, mc.METHOD_GET, self.build(ns, *idxs)
 
 
 class PayloadType(_PayloadType, enum.Enum):
-    """Depicts the payload structure in method queries."""
+    """Depicts the payload structure in namespace queries."""
 
     @staticmethod
     def _build_unsupported(ns: "Namespace", /, *idxs) -> "MerossPayloadType":
@@ -235,46 +315,35 @@ class PayloadType(_PayloadType, enum.Enum):
     DICT = lambda ns, *idxs: {ns.key: EMPTY_DICT}, False
     """Command GET with {ns_key: {}} returns the state requested."""
     DICT_IDX = (
-        lambda ns, *idxs: {
-            ns.key: ({ns.key_idx: idx for idx in idxs} if idxs else EMPTY_DICT)
-        },
+        lambda ns, *idxs: {ns.key: (idxs[0] if idxs else EMPTY_DICT)},
         True,
     )
-    """Command GET with {ns_key: {}} returns all the (channels) state (key_idx must be defined)."""
+    """Command GET with {ns_key: {}} returns all the (channels) state (index must be defined)."""
     DICT_IDX_65535 = (
-        lambda ns, *idxs: {
-            ns.key: ({ns.key_idx: idx for idx in idxs} if idxs else {ns.key_idx: 65535})
-        },
+        lambda ns, *idxs: {ns.key: idxs[0] if idxs else {mc.KEY_CHANNEL: 65535}},
         True,
     )
     """Command GET with channel 65535 in dict returns all the channels (only refoss devices ?). Else DICT_C_STRICT."""
     DICT_IDX_STRICT = (
-        lambda ns, *idxs: {
-            ns.key: ({ns.key_idx: idx for idx in idxs} if idxs else {ns.key_idx: 0})
-        },
+        lambda ns, *idxs: {ns.key: idxs[0] if idxs else {mc.KEY_CHANNEL: 0}},
         True,
     )
     """Command GET with index in dict returns the channel state requested."""
     LIST_IDX = (
-        lambda ns, *idxs: {
-            ns.key: ([{ns.key_idx: idx} for idx in idxs] if idxs else EMPTY_LIST)
-        },
+        lambda ns, *idxs: {ns.key: [*idxs]},
         True,
     )
-    """Command GET with an empty list returns all the (channels) state (key_idx must be defined)."""
+    """Command GET with an empty list returns all the (channels) state (index must be defined)."""
     LIST_IDX_STRICT = (
-        lambda ns, *idxs: {
-            ns.key: (
-                [{ns.key_idx: idx} for idx in idxs] if idxs else [{mc.KEY_CHANNEL: 0}]
-            )
-        },
+        lambda ns, *idxs: {ns.key: ([*idxs] if idxs else [{mc.KEY_CHANNEL: 0}])},
         True,
     )
     """Command GET with indexed dicts in a list returns the states requested."""
     LIST_IDX_DATA_STRICT = (
+        # FIXME
         lambda ns, *idxs: {
             ns.key: (
-                [{ns.key_idx: idx, mc.KEY_DATA: []} for idx in idxs]
+                [{mc.KEY_CHANNEL: idx, mc.KEY_DATA: []} for idx in idxs]
                 if idxs
                 else [_immutabledict({mc.KEY_CHANNEL: 0, mc.KEY_DATA: []})]
             )
@@ -329,15 +398,13 @@ class Namespace(str):
         """If not None Namespace supports DELETE verb with this payload type."""
         payload_psh: Final[PayloadType]
         """If not None Namespace supports PUSH verb with this payload type."""
-        key_idx: Final[str]
+        index: Final[IndexType]
         """The key used to index items in list payloads. If None/empty no indexing is used.
         Special care need to be used when a namespace is declared to be indexed by 'subId'
         since these namespaces might also carry only 'channel' payloads (for non hub devices or
         for features related to the hub itself and not to a subdevice).
         Typical example is Appliance.Control.Alarm where we might configure the hub alarm (only 'channel' == 0)
         and/or a subdevice alarm feature (both 'subId/channel' are present even though 'channel' is almost always == 0)."""
-        indexed: Final[bool]
-        """Indicates if the namespace uses indexed payloads for any verb. This is typically true for 'index based' namespaces."""
         key_digest: Final[str | None]
         """Indicates the root key in Appliance.System.All payload 'digest' if any."""
         grammar: Final[Grammar]
@@ -352,7 +419,7 @@ class Namespace(str):
             payload_set: NotRequired[PayloadType | None]
             payload_del: NotRequired[PayloadType | None]
             payload_psh: NotRequired[PayloadType | None]
-            key_idx: NotRequired[str]
+            index: NotRequired[IndexType]
             key_digest: NotRequired[str | None]  # True allowed (triggers euristics)
             grammar: NotRequired[Grammar]
             map: NotRequired[NamespacesMapType]
@@ -364,8 +431,7 @@ class Namespace(str):
         "payload_set",
         "payload_del",
         "payload_psh",
-        "key_idx",
-        "indexed",
+        "index",
         "key_digest",
         "grammar",
         "__dict__",
@@ -434,7 +500,7 @@ class Namespace(str):
         # by composing small 'chunks' like ARGS_GET, ARGS_NO_GET, etc.
         # This also allows us to centralize here the defaults for parameters
         kwargs: "Namespace.Args" = {
-            "key_idx": mc.KEY_,
+            "index": IndexType.none,
             "key_digest": None,
             "grammar": Grammar.STABLE,
             "map": NAMESPACES,
@@ -451,15 +517,13 @@ class Namespace(str):
         assert (
             self.payload_psh in PUSH_PAYLOADS
         ), f"Namespace {self} has invalid payload_psh {self.payload_psh}"
-        self.key_idx = kwargs["key_idx"]
+        self.index = kwargs["index"]
         if self.payload_get.indexed or self.payload_set.indexed:
-            if not self.key_idx:
+            if not self.index:
                 raise ValueError(
-                    f"Namespace {self} uses indexed payloads but has no key_idx defined."
+                    f"Namespace {self} uses indexed payloads but has no index defined."
                 )
-            self.indexed = True
-        else:
-            self.indexed = False
+
         self.key_digest = kwargs["key_digest"]
         if self.key_digest is True:
             # We have a digest but we don't know the root key. We'll try to guess it with some euristics.
@@ -530,7 +594,6 @@ class Namespace(str):
 
     @cached_property
     def request_set(self) -> "Callable[..., MerossRequestType]":
-        # TODO: articulate request building to cover defaults and unsupported types
         """
         Returns a callable generating a proper SET request for this namespace.
         The callable accepts the payload dict as argument.
@@ -547,28 +610,16 @@ class Namespace(str):
             case _:
                 raise Exception(f"{self} namespace does not support SET method")
 
-    def request_set_empty(self, *args) -> "MerossRequestType":
+    def request_set_empty(self, /) -> "MerossRequestType":
         return self, mc.METHOD_SET, EMPTY_DICT
 
-    def request_set_dict(self, payload, *args) -> "MerossRequestType":
+    def request_set_dict(self, payload, /) -> "MerossRequestType":
         return self, mc.METHOD_SET, {self.key: payload}
 
-    def request_set_dict_c(self, payload, *idxs) -> "MerossRequestType":
-        for idx in idxs:
-            # 'idxs' is expected to be the eventual channel (or any index key) value
-            # if empty we assume the payload is already properly structured.
-            # WARNING: this might not work for some namespaces where the key_idx might
-            # change depending on being an hub device or not (see Appliance.Config.DeviceCfg).
-            # This happens actually on the 'subId' based namespaces where the key_idx
-            # is 'subId/channel' for hub devices and 'channel' for standard devices
-            # so we might need to articulate a bit more this logic in the future.
-            # This is actually better managed in NamespaceHandler/NamespaceParser.
-            payload[self.key_idx] = idx
+    def request_set_dict_c(self, payload, /) -> "MerossRequestType":
         return (self, mc.METHOD_SET, {self.key: payload})
 
-    def request_set_list_c(self, payload, *idxs) -> "MerossRequestType":
-        for idx in idxs:
-            payload[self.key_idx] = idx
+    def request_set_list_c(self, payload, /) -> "MerossRequestType":
         return (self, mc.METHOD_SET, {self.key: [payload]})
 
     def get_digest[_T: "JsonMapping | JsonList"](self, digest: "mt.system.All_Digest") -> _T:  # type: ignore
@@ -583,6 +634,9 @@ class Namespace(str):
         """Specialized get_digest for namespaces with 2 levels of digest."""
         return digest[self.key_digest][self.key]
 
+    def __repr__(self):
+        return f"Namespace({self}, key={self.key}, index={self.index})"
+
 
 ns = Namespace  # shortcut for declarations
 
@@ -591,10 +645,10 @@ ns = Namespace  # shortcut for declarations
 
 EXP: "ns.Args" = {"grammar": Grammar.EXPERIMENTAL}
 
-IDX_C: "ns.Args" = {"key_idx": mc.KEY_CHANNEL}
-IDX_ID_: "ns.Args" = {"key_idx": mc.KEY_ID_}  # Item (effect) Id
-IDX_ID: "ns.Args" = {"key_idx": mc.KEY_ID}  # Hub subdevice id (but also trigger,timer)
-IDX_SUB: "ns.Args" = {"key_idx": mc.KEY_SUBID}  # Hub subdevice id
+IDX_C: "ns.Args" = {"index": IndexType.channel}  # Channel index
+IDX_ID_: "ns.Args" = {"index": IndexType.Id}  # Item (effect) Id
+IDX_ID: "ns.Args" = {"index": IndexType.id}  # Hub subdevice id (but also trigger,timer)
+IDX_SUB: "ns.Args" = {"index": IndexType.subId}  # Hub subdevice id
 
 G_E: "ns.Args" = {"payload_get": PayloadType.EMPTY}
 G_D: "ns.Args" = {"payload_get": PayloadType.DICT}

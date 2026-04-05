@@ -73,23 +73,25 @@ class Siren(BinaryParser, siren.SirenEntity):
 
     __slots__ = BinaryParser._calc_slots()
 
-    def __init__(self, channel: int, device: "Device", /, **kwargs: "Unpack[Args]"):
+    def __init__(self, id, device: "Device", /, **kwargs: "Unpack[Args]"):
+        BinaryParser.__init__(self, id, device, **kwargs)
         ns_config_alarm = mn.Appliance_Config_Alarm
         if ns_config_alarm in device.descriptor.ability:
-            song_select = Siren.SongSelect(channel, device, ns=ns_config_alarm)
+            song_select = Siren.SongSelect(
+                id, device, ns=ns_config_alarm, index=self.index
+            )
             self.available_tones = song_select.options_map
             self.supported_features = self._attr_supported_features
             device.get_handler(ns_config_alarm).register_parsers(
-                Siren.EnableSwitch(channel, device, ns=ns_config_alarm),
+                Siren.EnableSwitch(id, device, ns=ns_config_alarm, index=self.index),
                 song_select,
-                Siren.VolumeNumber(channel, device, ns=ns_config_alarm),
+                Siren.VolumeNumber(id, device, ns=ns_config_alarm, index=self.index),
             )
         else:
             self.available_tones = {}
             self.supported_features = (
                 siren.SirenEntityFeature.TURN_ON | siren.SirenEntityFeature.TURN_OFF
             )
-        BinaryParser.__init__(self, channel, device, **kwargs)
 
     @override
     async def async_request_value(self, device_value, /) -> None:
@@ -101,7 +103,7 @@ class Siren(BinaryParser, siren.SirenEntity):
     @override
     async def async_turn_on(self, **kwargs):
         if kwargs:
-            payload = {mc.KEY_CHANNEL: self.channel}
+            payload = self.index.copy()
             for kwarg_key, payload_key in self.ATTR_KEY_MAP.items():
                 try:
                     payload[payload_key] = kwargs[kwarg_key]

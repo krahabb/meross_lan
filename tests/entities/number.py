@@ -110,7 +110,9 @@ class EntityTest(EntityComponentTest):
             # the device is configured to disable 'fan hold'.
             # Again we can control this function through a dedicated switch.
             device = self.device_context.device
-            _switch = device.entities[f"{entity.channel}_fan_hold_enable"]
+            _switch = device.entities[
+                entity.id.replace("fan_hold_time", "fan_hold_enable")
+            ]
             assert type(_switch) is switch.EmulatedSwitch
             # Here we cannot check for availability consistence
             # since at start it is a bit messed up.

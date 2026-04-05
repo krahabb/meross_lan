@@ -30,11 +30,7 @@ class SelectEntity(mle.Entity, select.SelectEntity):
             options: NotRequired[list[str]]
 
         def __init__(
-            self,
-            channel: ChannelType | None,
-            device: ConfigEntryManager,
-            /,
-            **kwargs: Unpack[Args],
+            self, id, device: ConfigEntryManager, /, **kwargs: Unpack[Args]
         ): ...
 
     _attr_entity_category = mle.Entity.EntityCategory.CONFIG
@@ -74,16 +70,10 @@ class SelectParser(mle.ValueParser, SelectEntity):
     init_options_map = {}
     __slots__ = ("options_map",)
 
-    def __init__(
-        self,
-        channel: "ChannelType | None",
-        device: "Device",
-        /,
-        **kwargs: "Unpack[Args]",
-    ):
+    def __init__(self, id, device: "Device", /, **kwargs: "Unpack[Args]"):
         self.options_map = kwargs.pop("options_map", self.init_options_map)
         kwargs["options"] = list(self.options_map.values())
-        super().__init__(channel, device, **kwargs)
+        super().__init__(id, device, **kwargs)
 
     @override
     def update_device_value(self, device_value, /):

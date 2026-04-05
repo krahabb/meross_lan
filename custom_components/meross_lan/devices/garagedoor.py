@@ -42,7 +42,7 @@ class GarageTimeoutBinarySensor(BinarySensorEntity):
 
     def __init__(self, garage: "GarageDoor", /):
         self.extra_state_attributes = {}
-        BinarySensorEntity.__init__(self, garage.channel, garage.parent)
+        BinarySensorEntity.__init__(self, garage.id, garage.parent)
 
     def update_ok(self, was_closing, /):
         extra_state_attributes = self.extra_state_attributes
@@ -75,16 +75,19 @@ class GarageConfigMixin(ValueParser if TYPE_CHECKING else object):
 
     def __init__(
         self,
-        channel: int | None,
+        id,
         device: "Device",
         /,
         **kwargs: "Unpack[Args]",
     ):
         key_value = kwargs["key_value"]
+        kwargs["index"] = (
+            mn.IndexType.channel(id) if id is not None else mn.IndexType.none()
+        )
         kwargs["entity_key"] = f"config_{key_value}"
         kwargs["name"] = key_value
         super().__init__(
-            channel,
+            id,
             device,
             **kwargs,
         )
@@ -107,13 +110,9 @@ class GarageEnableSwitch(GarageConfigSwitch):
     """
 
     def __init__(
-        self,
-        channel: int | None,
-        parent: "Device",
-        /,
-        **kwargs: "Unpack[GarageEnableSwitch.Args]",
+        self, id, parent: "Device", /, **kwargs: "Unpack[GarageEnableSwitch.Args]"
     ):
-        GarageConfigSwitch.__init__(self, channel, parent, **kwargs)
+        GarageConfigSwitch.__init__(self, id, parent, **kwargs)
         self._channel_enable(self.is_on)
 
     @override
@@ -131,7 +130,7 @@ class GarageEnableSwitch(GarageConfigSwitch):
         disabler = RegistryEntryDisabler.INTEGRATION
         for entity in self.parent.entities.values():
             if (
-                (entity.channel == self.channel)
+                (entity.device_entry == self.device_entry)
                 and (entity is not self)
                 and (entry := entity.registry_entry)
             ):
@@ -154,13 +153,7 @@ class GarageConfigNumber(GarageConfigMixin, NumberParser):
         class Args(GarageConfigMixin.Args, NumberParser.Args):
             pass
 
-        def __init__(
-            self,
-            channel: int | None,
-            parent: Device,
-            /,
-            **kwargs: Unpack[Args],
-        ): ...
+        def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
 
     # these are ok for almost all config entities (they're mostly durations with
     # milliseconds device_value)
@@ -200,7 +193,7 @@ class _DurationHelper:
             number: "NumberEntity" = gd.parent.entities[f"config_{self.key}"]  # type: ignore
         except KeyError:
             number = EmulatedNumber(
-                gd.channel,
+                gd.id,
                 gd.parent,
                 entity_key=f"config_{self.key}",
                 native_value=gd._transition_duration,
@@ -253,9 +246,7 @@ class GarageDoor(Cover):
         "number_doorOpenDuration",
     )
 
-    def __init__(
-        self, channel: int, device: "Device", /, **kwargs: "Unpack[Cover.Args]"
-    ):
+    def __init__(self, id, device: "Device", /, **kwargs: "Unpack[Cover.Args]"):
         self._config = {}
         self._transition_duration = (
             self.PARAM_TRANSITION_MAXDURATION + self.PARAM_TRANSITION_MINDURATION
@@ -264,7 +255,7 @@ class GarageDoor(Cover):
         self.extra_state_attributes = {
             self.ATTR_TRANSITION_DURATION: self._transition_duration
         }
-        Cover.__init__(self, channel, device, **kwargs)
+        Cover.__init__(self, id, device, **kwargs)
         self.binary_sensor_timeout = GarageTimeoutBinarySensor(self)
         if mn.Appliance_GarageDoor_MultipleConfig in device.descriptor.ability:
             # historically, when MultipleConfig appeared, these used to be
@@ -275,12 +266,12 @@ class GarageDoor(Cover):
             self.number_doorCloseDuration = self.__class__.ENTITY_DEFS[
                 mc.KEY_SIGNALCLOSE
             ](
-                channel, device, key_value=mc.KEY_SIGNALCLOSE
+                id, device, index=self.index, key_value=mc.KEY_SIGNALCLOSE
             )  # type: ignore
             self.number_doorOpenDuration = self.__class__.ENTITY_DEFS[
                 mc.KEY_SIGNALOPEN
             ](
-                channel, device, key_value=mc.KEY_SIGNALOPEN
+                id, device, index=self.index, key_value=mc.KEY_SIGNALOPEN
             )  # type: ignore
             device.get_handler(mn.Appliance_GarageDoor_MultipleConfig).register_parser(
                 self
@@ -434,7 +425,7 @@ class GarageDoor(Cover):
         },
         """
         entities = self.parent.entities
-        entity_id_prefix = f"{self.channel}_config_"
+        entity_id_prefix = f"{self.index.value}_config_"
         for key, value in payload.items():
             if key in GarageDoor.CONFIG_KEY_EXCLUDED or (
                 self._config.get(key) == value
@@ -447,7 +438,11 @@ class GarageDoor(Cover):
                 except KeyError:
                     entity = self.parent.add_entity(
                         self.__class__.ENTITY_DEFS[key](
-                            self.channel, self.parent, key_value=key, device_value=value
+                            self.id,
+                            self.parent,
+                            index=self.index,
+                            key_value=key,
+                            device_value=value,
                         )
                     )
                     if key in (mc.KEY_DOORCLOSEDURATION, mc.KEY_DOOROPENDURATION):
@@ -469,7 +464,7 @@ class GarageDoor(Cover):
     @override
     def _transition_callback(self, /):
         if self.parent.transport is Transport.HTTP and not self.parent.mqtt_active:
-            self.handler_ns.schedule_get(self.channel)
+            self.handler_ns.schedule_get(self.index)
 
     @override
     async def _async_transition_end_callback(self, /):
@@ -494,7 +489,7 @@ class GarageDoor(Cover):
         if was_closing != self.is_closed:
             # looks like on MQTT we don't receive a PUSHed state update? (#415)
             try:
-                await self.handler_ns.async_get(self.channel)
+                await self.handler_ns.async_get(self.index)
                 # the request/response parse already flushed the state
                 if was_closing == self.is_closed:
                     self.binary_sensor_timeout.update_ok(was_closing)
@@ -541,8 +536,9 @@ class GarageDoor(Cover):
         # do not register_parser_class since we don't want to create spurious
         # GarageDoor at channel 0 (msg200)
         for channel_digest in ns.get_digest(descriptor.digest):
+            channel = channel_digest[mc.KEY_CHANNEL]
             handler.register_parser(
-                GarageDoor(channel_digest[mc.KEY_CHANNEL], device, ns=ns)
+                GarageDoor(channel, device, ns=ns, index=mn.IndexType.channel(channel))
             )
 
 

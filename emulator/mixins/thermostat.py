@@ -228,13 +228,15 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
 
         ns = self.NAMESPACES[namespace]
         ns_key = ns.key
-        ns_key_idx = ns.key_idx
+        assert (
+            ns.index is mn.IndexType.channel
+        ), f"Only channel indexed namespaces are supported by this handler, got {ns}"
         p_state: list[dict[str, Any]] = self.namespaces[ns][ns_key]
         match method:
             case mc.METHOD_GET:
                 response_list = []
                 for p_channel_request in payload[ns_key]:
-                    p_channel_state = get_element_by_key(p_state, p_channel_request, ns_key_idx)
+                    p_channel_state = get_element_by_key(p_state, p_channel_request)
                     response_list.append(p_channel_state)
                     # randomize some input in case
                     """
@@ -257,7 +259,7 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
 
             case mc.METHOD_SET:
                 for p_channel_request in payload[ns_key]:
-                    p_channel_state = get_element_by_key(p_state, p_channel_request, ns_key_idx)
+                    p_channel_state = get_element_by_key(p_state, p_channel_request)
                     _changed = False
                     if mc.KEY_VALUE in p_channel_state:
                         try:

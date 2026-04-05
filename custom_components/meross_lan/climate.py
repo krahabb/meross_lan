@@ -53,13 +53,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
                 ns: mn.Namespace
                 key_value: str
 
-            def __init__(
-                self,
-                channel: ChannelType,
-                parent: Device,
-                /,
-                **kwargs: Unpack[Args],
-            ): ...
+            def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
 
         _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
 
@@ -94,13 +88,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             """minimum delay (dead-time) between trying to adjust the climate entity."""
             climate: "MtsClimate"
 
-            def __init__(
-                self,
-                channel: ChannelType | None,
-                parent: Device,
-                /,
-                climate: "MtsClimate",
-            ): ...
+            def __init__(self, id, parent: Device, /, climate: "MtsClimate"): ...
 
         init_entity_key = "tracked_sensor"
         TRACKING_DELAY = 5
@@ -369,7 +357,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         SET_TEMP_FORCE_MANUAL_MODE: Final[bool]
         """Determines the behavior of async_set_temperature."""
 
-        channel: Final[ChannelType]  # type: ignore[override]
+        index: Final[mn.IndexValue]  # type: ignore[override]
         number_adjust_temperature: Final[NumberParser]
         number_preset_temperature: Final[set[SetPointNumber]]
         schedule: Final[MtsSchedule]
@@ -455,7 +443,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         "sensor_current_temperature",
     )
 
-    def __init__(self, channel: "ChannelType", parent: "Device", /, **kwargs):
+    def __init__(self, id, parent: "Device", /, **kwargs):
         self.current_humidity = None
         self.current_temperature = None
         self.hvac_action = None
@@ -472,21 +460,22 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         self._mts_active = False
         self._mts_mode = 0
         self._mts_onoff = 0
-        super().__init__(channel, parent, **kwargs)
+        super().__init__(id, parent, **kwargs)
 
         cls = self.__class__
         self.number_adjust_temperature = cls.AdjustNumber(
-            channel, parent, ns=cls.AdjustNumber.init_ns
+            id, parent, ns=cls.AdjustNumber.init_ns, index=self.index
         )
 
         if cls.MTS_MODE_TO_TEMPERATUREKEY_MAP:
             self.number_preset_temperature = set(
                 cls.SetPointNumber(
-                    channel,
+                    id,
                     parent,
                     climate=self,
                     entity_key=f"config_temperature_{key_value}",
                     ns=self.ns,
+                    index=self.index,
                     key_value=key_value,
                     device_scale=self.temperature_scale,
                     native_max_value=self.max_temp,
@@ -505,13 +494,18 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
         schedule_ns = cls.SCHEDULE_NS
         self.schedule = cls.Schedule(
-            channel, parent, climate=self, ns=schedule_ns, entity_key=schedule_ns.key
+            id,
+            parent,
+            climate=self,
+            entity_key=schedule_ns.key,
+            ns=schedule_ns,
+            index=self.index,
         )
         parent.enable_check_device_time()  # useful for schedule entity times
 
-        self.select_track_sensor = cls.TrackSensorSelect(channel, parent, climate=self)
+        self.select_track_sensor = cls.TrackSensorSelect(id, parent, climate=self)
         self.sensor_current_temperature = SensorParser.Temperature(
-            channel, parent, entity_registry_enabled_default=False
+            id, parent, entity_registry_enabled_default=False
         )
         for _entity in (self.number_adjust_temperature, self.schedule):
             parent.get_handler(_entity.ns).register_parser(_entity)

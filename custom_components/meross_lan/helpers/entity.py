@@ -82,9 +82,6 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
 
         parent: Final[ConfigEntryManager]  # type: ignore[override]
-        channel: (
-            ChannelType | None
-        )  # TODO: maybe remove since it might only be relevant in ParserEntity
         init_entity_key: ClassVar[str | None]
         entity_key: Final[str | None]
         # used to speed-up checks if entity is enabled and loaded
@@ -131,17 +128,9 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         "hass_connected",
     )
 
-    # TODO: re-organize channel initialization by moving to a kwarg so that we can use base Parser semantics
-    # in related hierarchy tree.
-    def __init__(
-        self,
-        channel: "ChannelType | None",
-        manager: "ConfigEntryManager",
-        /,
-        **kwargs: "Unpack[Args]",
-    ):
+    def __init__(self, id, manager: "ConfigEntryManager", /, **kwargs: "Unpack[Args]"):
         """
-        - channel: historically used to create an unique id for this entity inside the device
+        - id (formerly 'channel'): historically used to create an unique id for this entity inside the device
         and also related to the physical channel used in various api for some kind of entities.
         For entities in subdevices (hub paired devices) the channel is usually the Id of the
         subdevice itself since 'HA wise' and 'meross_lan wise' we still group the entities under
@@ -151,28 +140,26 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         - device_class: used by HA to set some soft 'class properties' for the entity
         """
         entity_key = kwargs.pop("entity_key", self.__class__.init_entity_key)
-        if type(channel) is mn.Namespace:
+        if type(id) is mn.Namespace:
             # TODO: ugly trick...let's see if this can be 'linearized' through some future refactoring.
             # this is a special case for 'EntityNamespaceMixin' entities which are also NamespaceHandlers
             # and so they get initialized with the namespace as channel because of constructor layout
             # and general coding in our inheritance scheme.
             # In this case we set the channel to None and store the namespace in a dedicated
             # variable for later use in parsing and so on.
-            id = channel  # ns
             channel = None
         else:
-            id = (
-                channel
-                if entity_key is None
-                else entity_key if channel is None else f"{channel}_{entity_key}"
-            )
-            assert (
-                id is not None
-            ), "provide at least channel or entity_key (cannot be 'None' together)"
+            channel = id
+            if id is None:
+                assert (
+                    entity_key is not None
+                ), "provide at least channel or entity_key (cannot be 'None' together)"
+                id = entity_key
+            elif entity_key is not None:
+                id = f"{id}_{entity_key}"
         assert (
             id not in manager.entities
         ), f"id:{id} is not unique inside parent.entities"
-        self.channel = channel
         self.entity_key = entity_key
         self.hass_connected = False
         # HA core: rather constant
@@ -369,13 +356,7 @@ class ParserEntity(parser.NamespaceParser, Entity):
         class Args(Entity.Args, parser.NamespaceParser.Args):
             pass
 
-        def __init__(
-            self,
-            channel: PayloadIndexType | None,
-            parent: Device,
-            /,
-            **kwargs: Unpack[Args],
-        ): ...
+        def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
 
         @classmethod
         def ENTITY_DEF(cls, **kwargs: "Unpack[Args]") -> type["Self"]: ...
@@ -409,13 +390,7 @@ class ValueParser(parser.NamespaceValue, ParserEntity):
         class Args(ParserEntity.Args, parser.NamespaceValue.Args):
             pass
 
-        def __init__(
-            self,
-            channel: ChannelType | None,
-            parent: Device,
-            /,
-            **kwargs: Unpack[Args],
-        ): ...
+        def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
 
     def set_unavailable(self):
         self.device_value = None
@@ -445,11 +420,7 @@ class NumericEntity(Entity):
             native_unit_of_measurement: NotRequired[str | None]
 
         def __init__(
-            self,
-            channel: ChannelType | None,
-            parent: ConfigEntryManager,
-            /,
-            **kwargs: Unpack[Args],
+            self, id, parent: ConfigEntryManager, /, **kwargs: Unpack[Args]
         ): ...
 
     # We rely on our sensor entity to be initialized for sure since it's going to provide the symbols for
@@ -494,18 +465,12 @@ class NumericParser(ValueParser, NumericEntity):
     init_device_scale = 1
     SLOTS_AUTO_INIT = ("device_scale",)
 
-    def __init__(
-        self,
-        channel: "ChannelType | None",
-        parent: "Device",
-        /,
-        **kwargs: "Unpack[Args]",
-    ):
+    def __init__(self, id, parent: "Device", /, **kwargs: "Unpack[Args]"):
         try:
             kwargs["native_value"] = kwargs["device_value"] / kwargs.get("device_scale", self.init_device_scale)  # type: ignore
         except KeyError:
             pass
-        super().__init__(channel, parent, **kwargs)
+        super().__init__(id, parent, **kwargs)
 
     @override
     def update_device_value(self, device_value: int | float, /):
@@ -527,11 +492,7 @@ class BinaryEntity(Entity):
             is_on: NotRequired[Any]
 
         def __init__(
-            self,
-            channel: "ChannelType | None",
-            manager: "ConfigEntryManager",
-            /,
-            **kwargs: "Unpack[Args]",
+            self, id, manager: "ConfigEntryManager", /, **kwargs: "Unpack[Args]"
         ): ...
 
     SLOTS_AUTO_INIT = ("is_on",)
@@ -555,13 +516,7 @@ class BinaryParser(parser.NamespaceBoolean, ValueParser, BinaryEntity):
         @classmethod
         def ENTITY_DEF(cls, **kwargs: "Unpack[Args]") -> type["Self"]: ...
 
-    def __init__(
-        self,
-        channel: "ChannelType | None",
-        parent: "Device",
-        /,
-        **kwargs: "Unpack[Args]",
-    ):
+    def __init__(self, id, parent: "Device", /, **kwargs: "Unpack[Args]"):
         # This is due for entities which are created after entry setup when device is already loaded
         # and we want to flush the initial state during HA entry adding (which happens in Entity constructor)
         # without having to flush twice (UNKNOWN -> device state).
@@ -578,7 +533,7 @@ class BinaryParser(parser.NamespaceBoolean, ValueParser, BinaryEntity):
                     kwargs["is_on"] = False
         except KeyError:
             pass
-        super().__init__(channel, parent, **kwargs)
+        super().__init__(id, parent, **kwargs)
 
     def set_unavailable(self):
         self.is_on = None
@@ -610,8 +565,8 @@ class ToggleXParser(BinaryEntity, ParserEntity):
 
     __slots__ = ("handler_togglex",)
 
-    def __init__(self, channel: int, parent: "Device", /, **kwargs: "Unpack[Args]"):
-        super().__init__(channel, parent, **kwargs)
+    def __init__(self, id, parent: "Device", /, **kwargs: "Unpack[Args]"):
+        super().__init__(id, parent, **kwargs)
         self.handler_togglex = parent.register_togglex_channel(self, True)  # type: ignore
 
     def _parse_togglex(self, payload: dict, /):

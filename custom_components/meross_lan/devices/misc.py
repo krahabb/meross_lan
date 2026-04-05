@@ -28,6 +28,8 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
     if TYPE_CHECKING:
         ENTITY_ARGS: Final[dict[str, SensorParser.Args]]
 
+    POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_FASTSENSOR
+
     VALUE_KEY_EXCLUDED = (mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
 
     ENTITY_ARGS = {
@@ -38,7 +40,7 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
 
     def __init__(self, ns: mn.Namespace, device: "Device", /):
         NamespaceHandler.__init__(self, ns, device)
-        self.polling_request_add_channel(0)
+        self.polling_request_add_index(mn.IndexType.channel(0))
 
     @override
     def _handle_channel_list(self, message: "MerossMessage", /):
@@ -80,7 +82,7 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                                 ),
                             )
                         )
-                        self.polling_request_add_channel(channel)
+                        self.polling_request_add_index(mn.IndexType.channel(channel))
 
                     if key == mc.KEY_HUMI:
                         # look for a thermostat and sync the reported humidity
@@ -106,6 +108,8 @@ class SensorLatestXNamespaceHandler(EntityDefNamespaceHandler):
     if TYPE_CHECKING:
         init_entity_defs: Final[dict[str, SensorParser.Initializer]]
 
+    POLLING_CONFIG_DEFAULT = EntityDefNamespaceHandler.POLLING_CONFIG_FASTSENSOR
+
     # many of these defs are guesses
     init_entity_defs = {
         mc.KEY_HUMI: SensorParser.Humidity,
@@ -118,24 +122,28 @@ class SensorLatestXNamespaceHandler(EntityDefNamespaceHandler):
 
     def __init__(self, ns: mn.Namespace, device: "Device", /):
         NamespaceHandler.__init__(self, ns, device)
-        if device.descriptor.type.startswith(mc.TYPE_MS600):
-            PresenceSensor(0, device)
-            SensorParser(
-                0, device, **(SensorParser.LIGHT_ARGS | {"entity_key": "sensor_light"})
+        if not device.descriptor.is_hub:
+            if device.descriptor.type.startswith(mc.TYPE_MS600):
+                data_keys = [mc.KEY_PRESENCE, mc.KEY_LIGHT]
+            else:
+                data_keys = []  # no idea of other devices supported
+            for data_key in data_keys:
+                self.entity_defs[data_key](
+                    0,
+                    device,
+                    entity_key=f"sensor_{data_key}",
+                )
+            self.polling_request_payload.append(
+                {mc.KEY_CHANNEL: 0, mc.KEY_DATA: data_keys}
             )
-            self.polling_request_add_channel(0).update(
-                {mc.KEY_DATA: [mc.KEY_PRESENCE, mc.KEY_LIGHT]}
-            )
-        else:
-            self.polling_request_add_channel(0).update({mc.KEY_DATA: []})
 
     @override
     def _handle_channel_list(self, message: "MerossMessage", /):
         entities = self.parent.entities
-        p_channel: "mt.sensor.LatestX_C"
-        for p_channel in message.payload[self.id.key]:
-            channel: int = p_channel[self.key_idx]
-            for data_key, data_value in p_channel[mc.KEY_DATA].items():
+        payload: "mt.sensor.LatestX_C"
+        for payload in message.payload[self.id.key]:
+            channel: int = payload[mc.KEY_CHANNEL]
+            for data_key, data_value in payload[mc.KEY_DATA].items():
                 try:
                     entities[f"{channel}_sensor_{data_key}"].update_device_value(
                         data_value[0]["value"]
@@ -150,16 +158,12 @@ class SensorLatestXNamespaceHandler(EntityDefNamespaceHandler):
                         entity_key=f"sensor_{data_key}",
                         device_value=data_value[0]["value"],
                     )
-                    polling_request_channels = self.polling_request_channels
-                    for channel_payload in polling_request_channels:
-                        if channel_payload[self.key_idx] == channel:
+                    for channel_payload in self.polling_request_payload:
+                        if channel_payload[mc.KEY_CHANNEL] == channel:
                             channel_payload[mc.KEY_DATA].append(data_key)
                             break
                     else:
-                        polling_request_channels.append(
-                            {self.key_idx: channel, mc.KEY_DATA: [data_key]}
+                        self.polling_request_payload.append(
+                            {mc.KEY_CHANNEL: channel, mc.KEY_DATA: [data_key]}
                         )
-                        self.polling_response_size = (
-                            NamespaceHandler.HEADER_AVG_SIZE
-                            + len(polling_request_channels) * self.id.payload_item_size
-                        )
+                        self.polling_response_size += self.id.payload_item_size

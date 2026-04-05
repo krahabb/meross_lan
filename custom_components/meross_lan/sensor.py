@@ -44,11 +44,7 @@ class SensorEntity(mle.NumericEntity, sensor.SensorEntity):
             suggested_display_precision: NotRequired[int]
 
         def __init__(
-            self,
-            channel: ChannelType | None,
-            parent: ConfigEntryManager,
-            /,
-            **kwargs: Unpack[Args],
+            self, id, parent: ConfigEntryManager, /, **kwargs: Unpack[Args]
         ): ...
 
     PLATFORM = sensor.DOMAIN
@@ -119,11 +115,7 @@ class EnumSensorEntity(SensorEntity):
             suggested_display_precision: NotRequired[Never]  # Override
 
         def __init__(
-            self,
-            channel: ChannelType | None,
-            parent: ConfigEntryManager,
-            /,
-            **kwargs: Unpack[Args],
+            self, id, parent: ConfigEntryManager, /, **kwargs: Unpack[Args]
         ): ...
 
         @classmethod
@@ -147,13 +139,7 @@ class EnumParser(mle.ValueParser, EnumSensorEntity):
         class Args(EnumSensorEntity.Args, mle.ValueParser.Args):
             pass
 
-        def __init__(
-            self,
-            channel: ChannelType | None,
-            parent: Device,
-            /,
-            **kwargs: Unpack[Args],
-        ): ...
+        def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
 
         @classmethod
         def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
@@ -179,20 +165,10 @@ class SensorParser(mle.NumericParser, SensorEntity):
 
         class Initializer(Protocol):
             def __call__(
-                self,
-                channel: ChannelType | None,
-                parent: Device,
-                /,
-                **kwargs: Unpack["SensorParser.Args"],
+                self, id, parent: Device, /, **kwargs: Unpack["SensorParser.Args"]
             ) -> "SensorParser": ...
 
-        def __init__(
-            self,
-            channel: ChannelType | None,
-            parent: Device,
-            /,
-            **kwargs: Unpack[Args],
-        ): ...
+        def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
 
         @classmethod
         def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
@@ -205,14 +181,8 @@ class SensorParser(mle.NumericParser, SensorEntity):
     }
 
     @classmethod
-    def Humidity(
-        cls,
-        channel: "ChannelType | None",
-        manager: "Device",
-        /,
-        **kwargs: "Unpack[Args]",
-    ) -> "Self":
-        return cls(channel, manager, **(cls.HUMIDITY_ARGS | kwargs))
+    def Humidity(cls, id, manager: "Device", /, **kwargs: "Unpack[Args]") -> "Self":
+        return cls(id, manager, **(cls.HUMIDITY_ARGS | kwargs))
 
     LIGHT_ARGS: "Args" = {
         "entity_key": mc.KEY_LIGHT,
@@ -221,14 +191,8 @@ class SensorParser(mle.NumericParser, SensorEntity):
     }
 
     @classmethod
-    def Light(
-        cls,
-        channel: "ChannelType | None",
-        manager: "Device",
-        /,
-        **kwargs: "Unpack[Args]",
-    ) -> "Self":
-        return cls(channel, manager, **(cls.LIGHT_ARGS | kwargs))
+    def Light(cls, id, manager: "Device", /, **kwargs: "Unpack[Args]") -> "Self":
+        return cls(id, manager, **(cls.LIGHT_ARGS | kwargs))
 
     TEMPERATURE_ARGS: "Args" = {
         "entity_key": mc.KEY_TEMPERATURE,
@@ -238,14 +202,8 @@ class SensorParser(mle.NumericParser, SensorEntity):
     }
 
     @classmethod
-    def Temperature(
-        cls,
-        channel: "ChannelType | None",
-        manager: "Device",
-        /,
-        **kwargs: "Unpack[Args]",
-    ) -> "Self":
-        return cls(channel, manager, **(cls.TEMPERATURE_ARGS | kwargs))
+    def Temperature(cls, id, manager: "Device", /, **kwargs: "Unpack[Args]") -> "Self":
+        return cls(id, manager, **(cls.TEMPERATURE_ARGS | kwargs))
 
 
 class DiagnosticSensor(SensorEntity):
@@ -271,14 +229,8 @@ class DiagnosticSensor(SensorEntity):
 
     is_diagnostic = True
 
-    def __init__(
-        self,
-        channel: "ChannelType | None",
-        parent: "ConfigEntryManager",
-        /,
-        **kwargs: Unpack[Args],
-    ):
-        super().__init__(channel, parent, **kwargs)  # type: ignore
+    def __init__(self, id, parent: "ConfigEntryManager", /, **kwargs: Unpack[Args]):
+        super().__init__(id, parent, **kwargs)  # type: ignore
         parent.add_entity(self)
 
     # HA core entity attributes:

@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 from custom_components.meross_lan.merossclient import (
     delete_element_by_key,
     get_element_by_key,
-    get_element_by_key_safe,
     get_subdevice_key_digest,
     update_dict_strict,
 )
@@ -189,7 +188,7 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
                     ), f"Hub emulator init: missing {subdevice_ns}"
 
                     p_subdevice_all = get_element_by_key(
-                        ns_state[subdevice_ns], subdevice_id, mc.KEY_ID
+                        ns_state[subdevice_ns], subdevice_id, subdevice_ns.index
                     )
                 else:
                     # the p_mts_digest could be missing from digest
@@ -202,7 +201,9 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
                         if subdevice_ns in ns_state:
                             try:
                                 p_subdevice_all = get_element_by_key(
-                                    ns_state[subdevice_ns], subdevice_id, mc.KEY_ID
+                                    ns_state[subdevice_ns],
+                                    subdevice_id,
+                                    subdevice_ns.index,
                                 )
                                 break
                             except KeyError:
@@ -240,7 +241,7 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
                         p_subdevice_substate = get_element_by_key(
                             ns_state[subnamespace],
                             subdevice_id,
-                            mc.KEY_ID,
+                            subnamespace.index,
                         )
                     except KeyError:
                         # we don't have the state in the specific ns
@@ -273,29 +274,28 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
 
     def _get_subdevice_digest(self, subdevice_id: str):
         """returns the subdevice dict from the hub digest key"""
-        return get_element_by_key(self.subdevices, subdevice_id, mc.KEY_ID)
+        return get_element_by_key(self.subdevices, subdevice_id, mn.IndexType.id)
 
     def _get_subdevice_namespace(
         self, subdevice_id: str, ns: mn.Namespace, *, force_create: bool = True
     ) -> "dict[str, Any]":
         """returns the subdevice namespace dict. It will create a default entry if not present
         and the device abilities supports the namespace."""
+        assert ns.index is mn.IndexType.id, f"Namespace {ns} is not indexed by 'id'"
         try:
             subdevices_namespace: list = self.namespaces[ns][ns.key]
             try:
-                return get_element_by_key(
-                    subdevices_namespace, subdevice_id, ns.key_idx
-                )
+                return get_element_by_key(subdevices_namespace, subdevice_id, ns.index)
             except KeyError:
                 if not force_create:
                     raise
-                p_subdevice = {ns.key_idx: subdevice_id}
+                p_subdevice = {mc.KEY_ID: subdevice_id}
                 subdevices_namespace.append(p_subdevice)
         except KeyError:
             if not force_create:
                 raise
             assert ns in self.descriptor.ability, f"{ns} not available in Hub abilities"
-            p_subdevice = {ns.key_idx: subdevice_id}
+            p_subdevice = {mc.KEY_ID: subdevice_id}
             self.namespaces[ns] = {ns.key: [p_subdevice]}
         return p_subdevice
 

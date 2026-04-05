@@ -41,6 +41,7 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
 
     def __init__(self, ns: "mn.Namespace", device: "Device", /):
         NamespaceHandler.__init__(self, ns, device)
+        index = mn.IndexType.channel(0)
         self.register_parsers(
             *(
                 ScreenBrightnessNumber(
@@ -49,6 +50,7 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
                     entity_key=f"screenbrightness_{key}",
                     name=f"Screen brightness ({key})",
                     ns=ns,
+                    index=index,
                     key_value=key,
                 )
                 for key in (mc.KEY_OPERATION, mc.KEY_STANDBY)
@@ -65,14 +67,14 @@ class MtsCommonTemperatureNumber(NumberParser):
 
     _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
 
-    def __init__(self, channel: int, device: "Device", /, **kwargs):
+    def __init__(self, id, device: "Device", /, **kwargs):
         NumberParser.__init__(
             self,
-            channel,
+            id,
             device,
             **kwargs,
             entity_key=kwargs["ns"].slug_end,  # TODO: generalize entity_key defaulting?
-            device_scale=device.entities[channel].temperature_scale,  # type: ignore (access MtsThermostatClimate.temperature_scale)
+            device_scale=device.entities[id].temperature_scale,  # type: ignore (access MtsThermostatClimate.temperature_scale)
         )
 
     @override
@@ -105,7 +107,7 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
             entity_key = f"{self.entity_key}_warning"
             self.sensor_warning = self.parent.add_entity(
                 EnumParser(
-                    self.channel,
+                    payload[mc.KEY_CHANNEL],
                     self.parent,
                     entity_key=entity_key,
                     key_value=mc.KEY_WARNING,
@@ -123,12 +125,13 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
         except AttributeError:
             self.switch = self.parent.add_entity(
                 SwitchParser(
-                    self.channel,
+                    payload[mc.KEY_CHANNEL],
                     self.parent,
                     entity_key=f"{self.entity_key}_switch",
+                    ns=self.ns,
+                    index=self.index,
                     is_on=self.available,
                     name=(f"{self.entity_key} Alarm").capitalize(),
-                    ns=self.ns,
                 )
             )
             self.switch.register_state_callback(self._switch_state_callback)
@@ -185,7 +188,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
         except AttributeError:
             self.sensor_external_temperature = self.parent.add_entity(
                 SensorParser.Temperature(
-                    self.channel,
+                    payload[mc.KEY_CHANNEL],
                     self.parent,
                     entity_key="external sensor",
                     device_value=current_temp,
@@ -216,7 +219,7 @@ class MtsSummerMode(SwitchParser):
     @override
     def flush_state(self):
         SwitchParser.flush_state(self)
-        climate: "MtsThermostatClimate" = self.parent.entities[self.channel]  # type: ignore
+        climate: "MtsThermostatClimate" = self.parent.entities[self.index.value]  # type: ignore
         if self.is_on:
             climate.hvac_modes = [
                 MtsThermostatClimate.HVACMode.OFF,
@@ -270,7 +273,7 @@ class MtsHoldAction(SelectParser):
         except AttributeError:
             self.number_time = self.parent.add_entity(
                 NumberParser(
-                    self.channel,
+                    payload[mc.KEY_CHANNEL],
                     self.parent,
                     entity_key="hold_action_time",
                     device_scale=1,
@@ -308,12 +311,6 @@ class MtsThermostatClimate(MtsClimate):
     These could share a common layer based on behaviors from Appliance.Control.Thermostat.*
     namespaces.
     """
-
-    if TYPE_CHECKING:
-
-        # Overrides
-        parent: Final[Device]  # type: ignore
-        channel: Final[int]  # type: ignore
 
     class AdjustNumber(MtsCommonTemperatureNumber):
         """

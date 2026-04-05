@@ -7,7 +7,7 @@ from .helpers.entity import ParserEntity
 if TYPE_CHECKING:
     from typing import ClassVar, Final
 
-    from .helpers.device import Device
+    from .helpers.device import Device, mn
 
 
 class Cover(ParserEntity, cover.CoverEntity):
@@ -15,7 +15,6 @@ class Cover(ParserEntity, cover.CoverEntity):
     if TYPE_CHECKING:
 
         parent: Final[Device]  # type: ignore[override]
-        channel: Final[int]  # type: ignore[override]
         # HA core entity attributes:
         _attr_device_class: ClassVar[cover.CoverDeviceClass | None]
         is_closed: bool | None

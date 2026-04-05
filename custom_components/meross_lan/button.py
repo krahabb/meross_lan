@@ -34,13 +34,13 @@ class Button(Entity, button.ButtonEntity):
 
     def __init__(
         self,
-        channel: "ChannelType | None",
+        id,
         parent: "ConfigEntryManager",
         press_func: "Callable[[], CoroutineType[Any, Any, None]]",
         **kwargs: "Unpack[Button.Args]",
     ):
         kwargs.setdefault("entity_key", f"button_{slugify(kwargs['name'])}")
-        Entity.__init__(self, channel, parent, **kwargs)
+        Entity.__init__(self, id, parent, **kwargs)
         self.async_press = press_func
 
     def shutdown(self):

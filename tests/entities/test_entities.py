@@ -3,7 +3,10 @@ from typing import TYPE_CHECKING
 
 from homeassistant import const as hac
 
-from custom_components.meross_lan.merossclient.protocol import const as mc
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 
 from tests import const as tc, helpers
 from tests.entities import EntityComponentTest
@@ -157,7 +160,7 @@ async def test_entities(
             for ns in (_ns for _ns in NAMESPACES_ENTITIES if _ns in ability):
                 _add_func(
                     NAMESPACES_ENTITIES[ns] * _ns_channels
-                    if ns.indexed and ns.key_idx == mc.KEY_CHANNEL
+                    if ns.index is mn.IndexType.channel
                     else NAMESPACES_ENTITIES[ns]
                 )
 

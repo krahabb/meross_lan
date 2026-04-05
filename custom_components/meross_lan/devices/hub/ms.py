@@ -1,10 +1,11 @@
+from functools import cached_property
 from typing import TYPE_CHECKING, override
 
 from . import SubDevice, mc, mn, mn_h
 from ...binary_sensor import BinarySensorEntity, BinarySensorParser
 from ...button import Button
 from ...number import NumberParser
-from ...sensor import EnumParser, SensorParser
+from ...sensor import EnumParser, EnumSensorEntity, SensorEntity, SensorParser
 
 if TYPE_CHECKING:
     from typing import Final, TypedDict, Unpack
@@ -33,7 +34,6 @@ class gs559(SensorSubDevice, EnumParser):
         STATUS_MUTED: Final[set[int]]
 
     init_ns = mn_h.Appliance_Hub_Sensor_Smoke
-    init_entity_key = mc.KEY_STATUS
     init_key_value = mc.KEY_STATUS
     _attr_translation_key = "smoke_alarm_status"
 
@@ -81,6 +81,12 @@ class gs559(SensorSubDevice, EnumParser):
         self.sensor_interConn = EnumParser(subid, hub, entity_key=mc.KEY_INTERCONN)
         Button(subid, hub, self.async_mute, name="Mute")
         Button(subid, hub, self.async_test, name="Test")
+
+    @cached_property
+    def unique_id(self) -> str | None:
+        # patch unique_id to mantain compatibility
+        # with previous versions until we refactor the whole unique_id system
+        return f"{self.parent.id}_{self.id}_status"
 
     def _parse(self, payload: "mt.hub._smokeAlarm", /):
         self.device_value = value = payload[mc.KEY_STATUS]
@@ -163,14 +169,21 @@ class ms100(SensorSubDevice, SensorParser):
     )
 
     init_ns = mn_h.Appliance_Hub_Sensor_TempHum
+    init_device_scale = 10
+    _attr_device_class = SensorEntity.DeviceClass.TEMPERATURE
+    _attr_suggested_display_precision = 1
 
     __slots__ = ("sensor_humidity",)
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
-        SensorSubDevice.__init__(
-            self, subid, hub, key_digest, model, **SensorParser.TEMPERATURE_ARGS
-        )
+        SensorSubDevice.__init__(self, subid, hub, key_digest, model)
         self.sensor_humidity = SensorParser(subid, hub, **SensorParser.HUMIDITY_ARGS)
+
+    @cached_property
+    def unique_id(self) -> str | None:
+        # patch unique_id to mantain compatibility
+        # with previous versions until we refactor the whole unique_id system
+        return f"{self.parent.id}_{self.id}_temperature"
 
     def shutdown(self):
         SensorSubDevice.shutdown(self)
@@ -198,13 +211,15 @@ class ms100(SensorSubDevice, SensorParser):
             *device.add_entities(
                 [
                     ms100.AdjustTemperatureNumber(
-                        self.channel,
+                        self.id,
                         device,
+                        index=self.index,
                         device_value=payload[mc.KEY_TEMPERATURE],
                     ),
                     ms100.AdjustHumidityNumber(
-                        self.channel,
+                        self.id,
                         device,
+                        index=self.index,
                         device_value=payload[mc.KEY_HUMIDITY],
                     ),
                 ]
@@ -248,10 +263,14 @@ class ms130(ms100):
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         ms100.__init__(self, subid, hub, key_digest, model)
         self.sensor_light = SensorParser.Light(subid, hub)
-        hub.get_handler(mn.Appliance_Control_Sensor_LatestX).register_parser(
-            self
-        ).update(
-            {"channel": 0, "data": ["light", "temp", "humi"]},
+        # This is a 'manual' handler_latestx.register_parser
+        # because this ns is rather non-standard
+        handler_latestx = hub.ns_handlers[mn.Appliance_Control_Sensor_LatestX]
+        index = mn.IndexType.subId(subid, 0)
+        handler_latestx.parsers[index] = self._parse_latestx  # type: ignore
+        self._namespace_registered(handler_latestx)
+        handler_latestx.polling_request_payload.append(
+            index | {mc.KEY_DATA: [mc.KEY_TEMP, mc.KEY_HUMI, mc.KEY_LIGHT]}
         )
 
     def shutdown(self):
@@ -318,14 +337,20 @@ class ms130(ms100):
 
 
 class ms200(SensorSubDevice, BinarySensorParser):
-    init_entity_key = BinarySensorParser.DeviceClass.WINDOW
     init_ns = mn_h.Appliance_Hub_Sensor_DoorWindow
     init_key_value = mc.KEY_STATUS
     _attr_device_class = BinarySensorParser.DeviceClass.WINDOW
 
+    @cached_property
+    def unique_id(self) -> str | None:
+        return f"{self.parent.id}_{self.id}_window"
+
 
 class ms400(SensorSubDevice, BinarySensorParser):
-    init_entity_key = mc.KEY_WATERLEAK
     init_ns = mn_h.Appliance_Hub_Sensor_WaterLeak
     init_key_value = mc.KEY_LATESTWATERLEAK
     _attr_device_class = BinarySensorParser.DeviceClass.SAFETY
+
+    @cached_property
+    def unique_id(self) -> str | None:
+        return f"{self.parent.id}_{self.id}_waterleak"

@@ -116,13 +116,7 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
             climate: MtsClimate
             ns: mn.Namespace
 
-        def __init__(
-            self,
-            channel: ChannelType,
-            parent: Device,
-            /,
-            **kwargs: Unpack[Args],
-        ): ...
+        def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
 
     PLATFORM = calendar.DOMAIN
 

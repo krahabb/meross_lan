@@ -102,7 +102,7 @@ class EntityTest(EntityComponentTest):
     async def async_test_enabled_callback(self, entity: MtsClimate):
         if mn_t.Appliance_Control_Thermostat_SummerMode in self.ability:
             switch_summermode: mts.MtsSummerMode = self.device_context.device.entities[
-                f"{entity.channel}_{mn_t.Appliance_Control_Thermostat_SummerMode.slug}__{mc.KEY_MODE}"
+                f"{entity.id}_{mn_t.Appliance_Control_Thermostat_SummerMode.slug}__{mc.KEY_MODE}"
             ]  # type: ignore[assignment]
             await switch_summermode.async_turn_on()
             assert entity.hvac_modes == [haec.HVACMode.OFF, haec.HVACMode.COOL]

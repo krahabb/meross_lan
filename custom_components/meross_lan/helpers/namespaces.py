@@ -8,6 +8,7 @@ from ..merossclient.protocol import const as mc, namespaces as mn
 if TYPE_CHECKING:
     from typing import ClassVar, Final, Mapping, NotRequired
 
+    from ..merossclient.protocol import types as mt
     from ..merossclient.protocol.message import MerossMessage
     from .device import Device
     from .entity import ParserEntity, ValueParser
@@ -49,8 +50,6 @@ class NamespaceHandler(_NH):
             mn.Appliance_Control_Light_Effect: POLLING_CONFIG_CONFIGURATION,
             mn.Appliance_Control_PhysicalLock: POLLING_CONFIG_CONFIGURATION,
             mn.Appliance_Control_Presence_Config: POLLING_CONFIG_CONFIGURATION,
-            mn.Appliance_Control_Sensor_Latest: POLLING_CONFIG_FASTSENSOR,
-            mn.Appliance_Control_Sensor_LatestX: POLLING_CONFIG_FASTSENSOR,
             mn.Appliance_Mcu_Firmware: _NH.POLLING_CONFIG_ONCE,
             mn.Appliance_Mcu_Hp110_Firmware: _NH.POLLING_CONFIG_ONCE,
         }
@@ -95,30 +94,41 @@ class NamespaceHandler(_NH):
             _NH._handle(self, message)
 
     @override
-    def _handle_missing_parser(self, p_channel: dict, ke: KeyError, /):
-        channel = p_channel[mc.KEY_CHANNEL]
+    def _handle_missing_parser(self, ke: KeyError, payload: "mt.JsonMapping", /):
+        channel = payload[mc.KEY_CHANNEL]
         if channel in self.parsers:
             # KeyError raised inside parser function, not on missing parser
-            self.log_parser_exception(ke, p_channel)
+            self.log_parser_exception(ke, payload)
             return
 
         # TODO: move to base. We must decide on diagnostic parser installations
+        index = mn.IndexType.channel(channel)
         if self.parser_class:
             self.register_parser(
                 self.parent.add_entity(
-                    self.parser_class(channel, self.parent, ns=self.id)
+                    self.parser_class(
+                        channel,
+                        self.parent,
+                        ns=self.id,
+                        index=index,
+                    )
                 )
             )
         elif self.parent.create_diagnostic_entities:
             from ..sensor import DiagnosticParser
 
             self.register_parser(
-                DiagnosticParser(channel, self.parent, entity_key=self.id.key)
+                DiagnosticParser(
+                    channel,
+                    self.parent,
+                    entity_key=self.id.key,
+                    index=index,
+                )
             )
         else:
-            self.parsers[channel] = self._parse_stub
+            self.parsers[index] = self._parse_stub
 
-        self.parsers[channel](p_channel)
+        self.parsers[index](payload)
 
 
 class EntityDefNamespaceHandler(NamespaceHandler):

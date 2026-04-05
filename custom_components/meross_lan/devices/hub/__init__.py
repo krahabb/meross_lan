@@ -272,7 +272,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
         NS_HUB: ClassVar[Iterable[Namespace]]
         """Namespaces to be registered for this subdevice."""
         parent: Final[Hub]  # type: ignore[override]
-        channel: Final[str]  # type: ignore[override]
         """SubDevice Identifier."""
         device_entry: Final[dr.DeviceEntry]  # type: ignore[override]
         model: Final[str]
@@ -396,6 +395,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
         hub.subdevices[subid] = self
         self.key_digest = key_digest
         self.model = model
+        kwargs["index"] = mn.IndexType.id(subid)
         super().__init__(
             subid,
             hub,
@@ -409,14 +409,15 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
             ),
             **kwargs,
         )
-        hub.register_parser_ex(self, self.init_ns, *self.NS_HUB)
+        hub.register_parser_ex(self, self.ns, *self.NS_HUB)
         hub.get_handler(mn_h.Appliance_Hub_Battery).register_parser(
             SensorParser(
                 subid,
                 hub,
-                ns=mn_h.Appliance_Hub_Battery,
-                device_class=SensorParser.DeviceClass.BATTERY,
                 entity_key=mc.KEY_BATTERY,
+                ns=mn_h.Appliance_Hub_Battery,
+                index=mn.IndexType.id(subid),
+                device_class=SensorParser.DeviceClass.BATTERY,
             )
         )
         # TODO: add the update entity
@@ -427,7 +428,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
             _p for _p in self.__dict__ if _p.startswith("_parse_")
         ):
             delattr(self, _parse_method)
-        del self.parent.subdevices[self.channel]
+        del self.parent.subdevices[self.id]
 
     # interface: BaseDevice
     @property
@@ -436,7 +437,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
         return {
             id: entity
             for id, entity in self.parent.entities.items()
-            if entity.channel == self.channel
+            if entity.device_entry is self.device_entry
         }
 
     @property
@@ -465,7 +466,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
             # implementation in helpers/namespaces.py where both values are concatenated.
             # Using ns.key should be more consistent with how the Hub subdevices
             # usually report their payloads in *.All and *.Digest.
-            self.parent.parse_undefined_dict(nh.id.key, payload, self.channel)
+            self.parent.parse_undefined_dict(nh.id.key, payload, self.id)
         else:
             self.log(
                 self.DEBUG,
@@ -488,11 +489,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
         and its related entities without affecting the whole hub device. This is useful when
         we discover a subdevice has been removed from the hub and we need to cleanup accordingly.
         """
-        for entity in tuple(
-            _entity
-            for _entity in self.parent.entities.values()
-            if _entity.channel == self.channel
-        ):
+        for entity in [*self.entities.values()]:
             await entity.async_shutdown()
 
     def update_sub_device_info(self, sub_device_info: "SubDeviceInfoType", /):
@@ -610,12 +607,13 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
             self,
             self.parent.add_entity(
                 SwitchParser(
-                    self.channel,
+                    self.id,
                     self.parent,
-                    ns=mn_h.Appliance_Hub_SubDevice_Beep,
                     entity_key=(
                         f"{mn_h.Appliance_Hub_SubDevice_Beep.slug}__{SwitchParser.init_key_value}"
                     ),
+                    ns=mn_h.Appliance_Hub_SubDevice_Beep,
+                    index=self.index,
                     name="Beep alarm",
                     device_value=payload[mc.KEY_ONOFF],
                 )
@@ -654,7 +652,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
             # by not 'exploiting' lists in payloads since they usually carry
             # historic data or so
             if self.parent.create_diagnostic_entities:
-                self.parent.parse_undefined_dict(key, payload, self.channel)
+                self.parent.parse_undefined_dict(key, payload, self.id)
         except Exception as exception:
             self.log_exception(
                 self.WARNING,
