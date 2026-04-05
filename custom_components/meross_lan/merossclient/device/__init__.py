@@ -118,6 +118,21 @@ class PhysicalDevice(AbstractClient):
         self, ns: "mn.Namespace", /, **kwargs: "Unpack[NamespaceHandler.Args]"
     ) -> "NamespaceHandler": ...
 
+    def _handle_missing_parser(
+        self, nh: NamespaceHandler, index: mn.IndexValue, payload: "mt.JsonMapping", /
+    ):
+        """This is called by a NamespaceHandler when it receives a message
+        addressed to this device but no parser has been registered.
+        The default here is to install a placeholder parser so that the next time the routing
+        pipe will not except but we can refine this in more funny ways depending on context.
+        """
+        nh.parsers[index] = nh._parse
+        nh.polling_request_add_index(index)
+        try:
+            nh.parsers[index](payload)
+        except Exception as e:
+            nh.log_parser_exception(e, payload)
+
     def get_handler(self, ns: "mn.Namespace", /):
         try:
             return self.ns_handlers[ns]
@@ -1114,13 +1129,4 @@ class SubDevice(PhysicalDevice, NamespaceParser):
             self.display_name,
             self.id,
             timeout=604800,  # 1 week
-        )
-
-    def _parse_unknown_(self, nh: NamespaceHandler, payload: dict, /):
-        self.log(
-            self.DEBUG,
-            "Handler undefined for namespace:%s payload:%s",
-            nh.id,
-            _payload=payload,
-            timeout=14400,
         )

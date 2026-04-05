@@ -48,11 +48,8 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from ..merossclient.protocol import types as mt
     from ..merossclient.protocol.types import (
-        JsonDict,
-        JsonList,
-        MerossHeaderType,
-        MerossMessageType,
         MerossPayloadType,
         MerossRequestType,
     )
@@ -164,10 +161,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                     case _:
                         if not namespace.index:
                             raise
-                        # using handler because of 'subId' ns different behaviors
-                        list_break_matcher = (
-                            f'}},{{"{device.get_handler(namespace).key_idx}":'
-                        )
+                        list_break_matcher = f'}},{{"{namespace.index[0]}":'
 
                 trunc_pos = response_text.rfind(list_break_matcher)
                 if trunc_pos == -1:
@@ -1049,6 +1043,53 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         self.schedule_entry_update(False)
         self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
 
+    # interface: device.PhysicalDevice
+    @override
+    def _create_handler(
+        self, ns: "mn.Namespace", /, **kwargs: "Unpack[NamespaceHandler.Args]"
+    ):
+        """Called by the base device message parsing chain when a new
+        NamespaceHandler need to be defined (This happens the first time
+        the namespace enters the message handling flow)"""
+        return NamespaceHandler(ns, self, **kwargs)
+
+    @override
+    def _handle_missing_parser(
+        self, nh: NamespaceHandler, index: mn.IndexValue, payload: "mt.JsonMapping", /
+    ):
+        # Actually only designed to work when index is 'channel'
+        assert type(index.type) is mn.IndexType.channel
+        if nh.parser_class:
+            nh.register_parser(
+                self.add_entity(
+                    nh.parser_class(
+                        index.value,
+                        self,
+                        ns=nh.id,
+                        index=index,
+                    )
+                )
+            )
+        elif self.create_diagnostic_entities:
+            from ..sensor import DiagnosticParser
+
+            nh.register_parser(
+                DiagnosticParser(
+                    index.value,
+                    self,
+                    entity_key=nh.id.key,
+                    index=index,
+                )
+            )
+        else:
+            nh.parsers[index] = nh._parse
+
+        nh.polling_request_add_index(index)
+        try:
+            nh.parsers[index](payload)
+        except Exception as e:
+            nh.log_parser_exception(e, payload)
+
     # interface: device.Device
     @override
     def add_client(self, client: "AbstractClient", /):
@@ -1230,15 +1271,6 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             handler.last_rx_push = message.payload
 
         handler.handle_response(message)
-
-    @override
-    def _create_handler(
-        self, ns: "mn.Namespace", /, **kwargs: "Unpack[NamespaceHandler.Args]"
-    ):
-        """Called by the base device message parsing chain when a new
-        NamespaceHandler need to be defined (This happens the first time
-        the namespace enters the message handling flow)"""
-        return NamespaceHandler(ns, self, **kwargs)
 
     def _handle_Appliance_Mcu_Firmware(self, message: MerossMessage, /):
         self.descriptor.mcu = message.payload[mc.KEY_FIRMWARE]
@@ -1450,9 +1482,8 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             )
 
     def parse_undefined_dict(
-        self, key_parent: str, payload: dict, channel: "ChannelType | None", /
+        self, key_parent: str, payload: dict, index: mn.IndexValue, /
     ):
-        # FIXME: update this code to the new 'index' implementation (instead of channel)
         device_entities = self.entities
         excluded = (
             mc.KEY_ID,
@@ -1468,24 +1499,20 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             if key in excluded:
                 continue
             if type(value) is dict:
-                self.parse_undefined_dict(f"{key_parent}_{key}", value, channel)
+                self.parse_undefined_dict(f"{key_parent}_{key}", value, index)
                 continue
             if type(value) is list:
-                self.parse_undefined_list(f"{key_parent}_{key}", value, channel)
+                self.parse_undefined_list(f"{key_parent}_{key}", value, index)
                 continue
+
+            id = "_".join(*index.values())
             try:
-                device_entities[
-                    (
-                        f"{channel}_{key_parent}_{key}"
-                        if channel is not None
-                        else f"{key_parent}_{key}"
-                    )
-                ].update_device_value(value)
+                device_entities[(f"{id}_{key_parent}_{key}")].update_device_value(value)
             except KeyError:
                 from ..sensor import DiagnosticParser
 
                 DiagnosticParser(
-                    channel,
+                    id,
                     self,
                     entity_key=f"{key_parent}_{key}",
                     device_value=value,
@@ -1500,7 +1527,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                 )
 
     def parse_undefined_list(
-        self, key_parent: str, payload: list, channel: "ChannelType | None", /
+        self, key_parent: str, payload: list, index: mn.IndexValue, /
     ):
         pass
 

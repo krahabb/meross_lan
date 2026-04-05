@@ -199,7 +199,9 @@ class mts100v3(SubDevice, MtsClimate):
                 # only room temperature/setpoint updated -> this is 99.9% a PUSH
                 # whenever the target temp or mode changes
                 self.flush_state()
-                self.handlers[mn_h.Appliance_Hub_Mts100_Mode].schedule_get(self.index)
+                self.parent.ns_handlers[mn_h.Appliance_Hub_Mts100_Mode].schedule_get(
+                    self.index
+                )
                 return
         if mc.KEY_MIN in payload:
             self.min_temp = payload[mc.KEY_MIN] / self.temperature_scale

@@ -65,6 +65,8 @@ class NamespaceHandler(_NH):
 
     @override
     def _handle(self, message: "MerossMessage", /):
+        # TODO: migrate to something conforming to _handle_missing_parser
+        # so that we can maybe get rid of this override.
         device = self.parent
         if device.create_diagnostic_entities:
             # since we're parsing an unknown namespace, our euristic about
@@ -77,14 +79,14 @@ class NamespaceHandler(_NH):
                 # we add the last split of the namespace to the extracted payload key
                 if type(_payload) is dict:
                     device.parse_undefined_dict(
-                        f"{ns.slug_end}_{_key}", _payload, _payload.get(self.key_idx)
+                        f"{ns.slug_end}_{_key}", _payload, self.index.value_of(_payload)
                     )
                 elif type(_payload) is list:
                     _key = f"{ns.slug_end}_{_key}"
                     for __payload in _payload:
                         # not having a "channel" in the list payloads is unexpected so far
                         device.parse_undefined_dict(
-                            _key, __payload, __payload.get(self.key_idx)
+                            _key, __payload, self.index.value_of(__payload)
                         )
                 else:
                     # should we diagnostic scalar values in root payload ?
@@ -94,49 +96,31 @@ class NamespaceHandler(_NH):
             _NH._handle(self, message)
 
     @override
-    def _handle_missing_parser(self, ke: KeyError, payload: "mt.JsonMapping", /):
-        channel = payload[mc.KEY_CHANNEL]
-        if channel in self.parsers:
-            # KeyError raised inside parser function, not on missing parser
-            self.log_parser_exception(ke, payload)
-            return
-
-        # TODO: move to base. We must decide on diagnostic parser installations
-        index = mn.IndexType.channel(channel)
-        if self.parser_class:
-            self.register_parser(
-                self.parent.add_entity(
-                    self.parser_class(
-                        channel,
-                        self.parent,
-                        ns=self.id,
-                        index=index,
-                    )
-                )
-            )
-        elif self.parent.create_diagnostic_entities:
-            from ..sensor import DiagnosticParser
-
-            self.register_parser(
-                DiagnosticParser(
-                    channel,
-                    self.parent,
-                    entity_key=self.id.key,
-                    index=index,
-                )
+    def _parse(self, payload, /):
+        """Default ParserFunc automatically installed when parsing a message for which no indexed parser is registered.
+        The payload is typically an 'indexed' item payload scanned by handlers like _handle_channel_list or _handle_subid.
+        This is a fallback for unexpected channels/subdevices and is useful for logging purposes.
+        """
+        if self.parent.create_diagnostic_entities:
+            # since we're parsing an unknown namespace, our euristic about
+            # the key_namespace might be wrong so we use another euristic
+            if not self.polling_strategy:
+                self.polling_strategy = NamespaceHandler.async_poll_diagnostic
+            self.parent.parse_undefined_dict(
+                f"{self.id.slug_end}_{self.id.key}",
+                payload,
+                self.index.value_of(payload),
             )
         else:
-            self.parsers[index] = self._parse_stub
-
-        self.parsers[index](payload)
+            _NH._parse(self, payload)
 
 
 class EntityDefNamespaceHandler(NamespaceHandler):
     """
-    Special 'entity definer' namespace handler used to define entities based on the presence of keys in the payload.
+    Special namespace handler used to define entities based on the presence of keys in the payload.
     This is intended to be used with namespaces which have a 'flat' payload structure with multiple keys representing
     different entities (like Appliance.Control.Diffuser.Sensor).
-    The parsers member is hacked a bit so this could be dangerous with lifecycle management.
+    The 'parsers' member is hacked a bit so this could be dangerous with lifecycle management.
     Entities are typically created on the fly and stored in parsers (instead of registering the ParserFunc).
     The entities cleanup/shutdown will be managed by the device as usual but we have to cleanup the parsers map.
     """

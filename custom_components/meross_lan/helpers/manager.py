@@ -293,11 +293,15 @@ class ConfigEntryManager(logging.Loggable):
             config_entry, self.platforms
         ):
             return False
-        self._entry_update_listener_unsub()
-        del self._entry_update_listener_unsub
-        self.platforms.clear()
-        await self.async_shutdown()
-        return True
+        try:
+            self._entry_update_listener_unsub()
+            del self._entry_update_listener_unsub
+            self.platforms.clear()
+            await self.async_shutdown()
+            return True
+        except Exception as exception:
+            self.log_exception(self.WARNING, exception, "async_unload_entry")
+            return False
 
     def schedule_reload(self, delay: float = 0, /):
         """

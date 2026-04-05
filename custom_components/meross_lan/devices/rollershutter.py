@@ -199,11 +199,13 @@ class RollerShutter(Cover):
                 )
             )
         else:
-            await self.handlers[mn.Appliance_RollerShutter_State].async_get(self.index)
+            await self.parent.ns_handlers[mn.Appliance_RollerShutter_State].async_get(
+                self.index
+            )
             if self._position_native_isgood:
-                await self.handlers[mn.Appliance_RollerShutter_Position].async_get(
-                    self.index
-                )
+                await self.parent.ns_handlers[
+                    mn.Appliance_RollerShutter_Position
+                ].async_get(self.index)
 
     @override
     def _parse(self, payload: "mt.rollershutter.Position_C"):

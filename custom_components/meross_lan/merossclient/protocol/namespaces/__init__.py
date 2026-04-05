@@ -214,54 +214,66 @@ class IndexType(_IndexType, enum.Enum):
 
     # Factory method to get the right IndexValue for a given index type and value(s)
     def __call__(self, *values):
-        return IndexValue.get(self, *values)
+        return IndexValue.build(self, *values)
 
-    def value_of(self, payload: dict):
+    def value_of(self, payload: "JsonMapping"):
         """Extracts the key values of this index type from the payload dict."""
-        return IndexValue(self, *(payload.get(_key) for _key in self))
+        return IndexValue.build(self, *(payload.get(_key) for _key in self))
 
 
 class IndexValue(_immutabledict):
 
-    __slots__ = ("type", "key", "value")
+    __slots__ = ("type", "value")
 
     def __init__(self, index_type: IndexType, *values):
         self.type = index_type
         if index_type:
             num_keys = len(index_type)
+            assert num_keys == len(
+                values
+            ), f"{index_type} requires {num_keys} values, got {values}"
             if num_keys > 1:
-                self.key = index_type
-                self.value = values
-                super().__init__({index_type[i]: values[i] for i in range(num_keys)})
+                super().__init__(
+                    {
+                        index_type[i]: values[i]
+                        for i in range(num_keys)
+                        if values[i] is not None
+                    }
+                )
+                if len(self) > 1:
+                    self.value = (*self.values(),)
+                else:
+                    self.value = next(iter(self.values()))
             else:
-                self.key = index_type[0]
                 self.value = values[0]
-                self.matches = self._matches_single
-                super().__init__({self.key: self.value})
+                super().__init__({index_type[0]: self.value})
         else:
-            self.key = None
-            self.value = None
-            self.matches = self._matches_single  # fragile...not really meaningful
+            assert (
+                not values
+            ), f"IndexType {index_type} does not accept any value, got {values}"
+            self.value = ()
             super().__init__()
 
     def matches(self, payload: dict):
         return all(payload.get(k) == v for k, v in self.items())
 
-    def _matches_single(self, payload: dict):
-        return payload.get(self.key) == self.value
-
     # IndexValue is immutable and hashable based on its content (type and value)
     # so that it can be used as dict key in the parsers attribute of NamespaceHandler.
+    # This check should be as fast as possible since it'll be accessed
+    # when looking up parsers
     def __eq__(self, other):
-        if type(other) is IndexValue:  # assuming no subclassing
-            return (self.value == other.value) and (self.type == other.type)
-        return self.value == other
+        return self.value == other or (
+            # assuming no subclassing and the fact that our indexes have different
+            # value types ('id' vs 'channel' vs 'subId/channel')
+            type(other) is IndexValue
+            and self.value == other.value
+        )
 
     def __hash__(self):
         return self.value.__hash__()
 
     @staticmethod
-    def get(index_type: IndexType, *values):
+    def build(index_type: IndexType, *values):
         try:
             return index_type.cache[values]
         except KeyError:

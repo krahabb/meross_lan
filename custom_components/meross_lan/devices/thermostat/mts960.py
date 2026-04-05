@@ -344,7 +344,9 @@ class Mts960Climate(MtsThermostatClimate):
 
     # interface: self
     async def _async_request_timer(self, timer_type: int, payload: dict, /):
-        await self.handlers[mn_t.Appliance_Control_Thermostat_Timer].async_set_parse_ex(
+        await self.parent.ns_handlers[
+            mn_t.Appliance_Control_Thermostat_Timer
+        ].async_set_parse_ex(
             {
                 mc.KEY_TYPE: timer_type,
                 Mts960Climate.TIMER_TYPE_KEY[timer_type]: payload,

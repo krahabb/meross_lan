@@ -65,7 +65,7 @@ class NamespaceParser(logging.Loggable):
         This is used by the NamespaceHandler to route messages to the correct parser."""
         ns_payload: JsonMapping  # type: ignore[assignment]
         """The last parsed payload."""
-        handlers: Final[dict[mn.Namespace, NamespaceHandler]]
+        _handler_registrations: Final[list[tuple[NamespaceHandler, mn.IndexValue]]]
         """Set of NamespaceHandlers this parser is registered to. This is used to manage the link back
         to the handler for issuing requests and for cleanup on shutdown."""
 
@@ -73,13 +73,7 @@ class NamespaceParser(logging.Loggable):
             ns: NotRequired[mn.Namespace]
             index: NotRequired[mn.IndexValue]
 
-        def __init__(
-            self,
-            id,
-            parent: PhysicalDevice,
-            /,
-            **kwargs: Unpack[Args],
-        ): ...
+        def __init__(self, id, parent: PhysicalDevice, /, **kwargs: Unpack[Args]): ...
 
     init_ns_payload = mn.EMPTY_DICT
     init_index = mn.IndexType.none()
@@ -88,24 +82,24 @@ class NamespaceParser(logging.Loggable):
         "ns_payload",
         "index",
     )
-    __SLOTS__ = ("channel", "handlers")
+    __SLOTS__ = ("channel", "_handler_registrations")
 
     def shutdown(self):
         super().shutdown()
         try:
             _dispatcher: "NamespaceParser.Dispatcher"
-            for handler in self.handlers.values():
-                _dispatcher = handler.parsers[self.index]  # type: ignore[assignment]
+            for handler, index in self._handler_registrations:
+                _dispatcher = handler.parsers[index]  # type: ignore[assignment]
                 if type(_dispatcher) is NamespaceParser.Dispatcher:
                     # remove from dispatcher
                     _dispatcher.parsers.remove(
                         getattr(self, f"_parse_{handler.id.slug_end}", self._parse)
                     )
                     if not _dispatcher.parsers:
-                        del handler.parsers[self.index]
+                        del handler.parsers[index]
                 else:
-                    del handler.parsers[self.index]
-            del self.handlers  # type: ignore
+                    del handler.parsers[index]
+            self._handler_registrations.clear()
         except AttributeError:  # never registered
             pass
         try:
@@ -113,17 +107,16 @@ class NamespaceParser(logging.Loggable):
         except KeyError:
             pass
 
-    def _namespace_registered(self, handler: "NamespaceHandler", /):
+    def _namespace_registered(
+        self, handler_registration: tuple["NamespaceHandler", mn.IndexValue], /
+    ):
         """This is called by the NamespaceHandler when registering this parser to the handler.
         This is useful to setup the link back to the NamespaceHandler for issuing requests.
         """
         try:
-            assert (
-                handler.id not in self.handlers
-            ), "NamespaceParser already registered to this NamespaceHandler"
-            self.handlers[handler.id] = handler
+            self._handler_registrations.append(handler_registration)
         except AttributeError:
-            self.handlers = {handler.id: handler}  # type: ignore[assignment]
+            self._handler_registrations = [handler_registration]  # type: ignore[assignment]
 
     @cached_property
     def handler_ns(self):
@@ -266,6 +259,9 @@ class NamespaceGroupValue(NamespaceValue):
     Parser for payload values embedded in a(sub)dictionary in the namespace payload. The key of the
     dictionary is defined by the 'key_group' attribute and the value is defined by 'key_value'.
     This class could also be used as a mixin with other NamespaceParser specializations.
+    TODO: generalize this to multiple levels of nesting with a list of keys instead
+    of a single 'key_group' and a single 'key_value'. Or maybe, dynamically install
+    a custom parse/request in default parser class methods.
     """
 
     if TYPE_CHECKING:

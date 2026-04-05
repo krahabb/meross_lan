@@ -454,28 +454,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
     def firmware_version(self, /) -> str:
         return self.device_entry.sw_version or self.latest_version[mc.KEY_VERSION]
 
-    @override  # interface: SubDevice
-    def _parse_unknown_(self, nh: NamespaceHandler, payload: dict, /):
-        if self.parent.create_diagnostic_entities:
-            # since we're parsing an unknown namespace, our euristic about
-            # the key_namespace might be wrong so we use another euristic
-            if not nh.polling_strategy:
-                nh.polling_strategy = NamespaceHandler.async_poll_diagnostic
-            # Here we should decide between ns.key and ns.slug_end as the parent_key
-            # for structured parsing. For reference, consider the standard NamespaceHandler
-            # implementation in helpers/namespaces.py where both values are concatenated.
-            # Using ns.key should be more consistent with how the Hub subdevices
-            # usually report their payloads in *.All and *.Digest.
-            self.parent.parse_undefined_dict(nh.id.key, payload, self.id)
-        else:
-            self.log(
-                self.DEBUG,
-                "Handler undefined for namespace:%s payload:%s",
-                nh.id,
-                _payload=payload,
-                timeout=14400,
-            )
-
     # interface: ParserEntity
     @override
     def set_unavailable(self):
@@ -603,7 +581,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
                     entity.set_unavailable()
 
     def _parse_beep(self, payload: "mt.hub.SubDevice_Beep", /):
-        self.handlers[mn_h.Appliance_Hub_SubDevice_Beep].swap_parsers(
+        self.parent.ns_handlers[mn_h.Appliance_Hub_SubDevice_Beep].swap_parsers(
             self,
             self.parent.add_entity(
                 SwitchParser(

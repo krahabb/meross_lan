@@ -1,6 +1,8 @@
 from bisect import insort_right
 from typing import TYPE_CHECKING, override
 
+from aiohttp import payload
+
 from .. import extract_dict_payloads, logging, merge_dicts
 from ..protocol import const as mc, namespaces as mn
 from ..protocol.message import MerossMessage
@@ -64,7 +66,6 @@ class NamespaceHandler(logging.Loggable):
 
         id: Final[mn.Namespace]  # type: ignore[override]
         parent: Final[Device]  # type: ignore[override]
-        key_idx: Final[str]  # REMOVE
         index: Final[mn.IndexType]  # shortcut to id.index
 
         handler: HandlerFunc
@@ -86,7 +87,6 @@ class NamespaceHandler(logging.Loggable):
             channels: NotRequired[Iterable[int]]
 
     __SLOTS__ = (
-        "key_idx",
         "index",
         "handler",
         "parsers",
@@ -117,11 +117,9 @@ class NamespaceHandler(logging.Loggable):
             # These namespaces, might be indexed by both 'subId' and/or 'channel'
             # but when used on non hub devices they're definitely using 'channel' index.
             # Our grammar doesn't cover this semantic but we can easily adapt to it
-            # here by switching the key_idx to channel for this case.
-            self.key_idx = KEY_CHANNEL
+            # here by switching the index to channel for this case.
             self.index = mn.IndexType.channel
         else:
-            self.key_idx = (id.index and id.index[0]) or mc.KEY_
             self.index = id.index
 
         try:
@@ -190,7 +188,7 @@ class NamespaceHandler(logging.Loggable):
                     index=mn.IndexType.channel(channel),
                 )
                 self.parsers[parser.index] = parser._parse
-                parser._namespace_registered(self)
+                parser._namespace_registered((self, parser.index))
                 # polling_request_payload will be eventually setup
                 # by polling_request_configure later on
             self.polling_response_size = (
@@ -214,23 +212,34 @@ class NamespaceHandler(logging.Loggable):
         self.parent.shutdown_broadcast.remove(self.shutdown)
         del self.parent.ns_handlers[self.id]
         del self.handler  # especially this one
-        assert not self.parsers, "parsers should have been cleared before shutdown"
+        for index in tuple(self.parsers):
+            self.log(self.DEBUG, "Cleaning up dangling parser for index %s", index)
+            del self.parsers[index]
 
     def register_parser(
         self,
         parser: NamespaceParser,
         /,
     ):
+        # FIXME/TODO: add an index to the call to make it more flexible
         """Installs a dedicated parser for the given channel payload.
         Calling this multiple times for the same channel is prohibited
         by design even though the dispatching model allows (_DispatcherParser)
         multiple recipients. Use register_parsers instead."""
-        assert parser.index not in self.parsers, "Parser already registered for index"
-        self.parsers[parser.index] = getattr(
+        index = parser.index
+        if self.index is mn.IndexType.subId and index.type is mn.IndexType.id:
+            # Temporary fix until better normalization:
+            # This is the case of a subdevice registering to a 'subId' indexed namespace
+            # We provide here a 'quick' workaround to automatically bind to channel == 0
+            # since this seems pretty common.
+            index = mn.IndexType.subId(index.value, 0)
+        assert index.type is self.index, "index type mismatch"
+        assert index not in self.parsers, "Parser already registered for index"
+        self.parsers[index] = getattr(
             parser, f"_parse_{self.id.slug_end}", parser._parse
         )
-        parser._namespace_registered(self)
-        self.polling_request_add_index(parser.index)
+        parser._namespace_registered((self, index))
+        self.polling_request_add_index(index)
 
     def register_parsers(self, *parsers: NamespaceParser):
         """Registers a whole set of parsers at once for the same channel payload.
@@ -239,6 +248,7 @@ class NamespaceHandler(logging.Loggable):
         This will in turn remove the need for references that need to be maintained."""
         index = parsers[0].index
         assert index not in self.parsers, "Parser already registered for index"
+        handler_registration = (self, index)
         self.parsers[index] = _dispatcher = NamespaceParser.Dispatcher()
         _parser_method_name = f"_parse_{self.id.slug_end}"
         for parser in parsers:
@@ -246,32 +256,32 @@ class NamespaceHandler(logging.Loggable):
             _dispatcher.parsers.append(
                 getattr(parser, _parser_method_name, parser._parse)
             )
-            parser._namespace_registered(self)
-        self.polling_request_add_index(parsers[0].index)
+            parser._namespace_registered(handler_registration)
+        self.polling_request_add_index(index)
 
     def swap_parsers(
         self, old: NamespaceParser, new: NamespaceParser, *extra: NamespaceParser
     ):
-        assert old.index is new.index, "index mismatch"
-        del old.handlers[self.id]
+        index = old.index
+        assert index is new.index, "index mismatch"
+        handler_registration = (self, index)
+        old._handler_registrations.remove(handler_registration)
         if extra:
             # install a dispatcher
             _parse_method_name = f"_parse_{self.id.slug_end}"
-            self.parsers[new.index] = _dispatcher = NamespaceParser.Dispatcher(
+            self.parsers[index] = _dispatcher = NamespaceParser.Dispatcher(
                 getattr(new, _parse_method_name, new._parse)
             )
-            new._namespace_registered(self)
+            new._namespace_registered(handler_registration)
             for parser in extra:
-                assert parser.index is new.index, "All parsers must have the same index"
+                assert parser.index is index, "All parsers must have the same index"
                 _dispatcher.parsers.append(
                     getattr(parser, _parse_method_name, parser._parse)
                 )
-                parser._namespace_registered(self)
+                parser._namespace_registered(handler_registration)
         else:
-            self.parsers[new.index] = getattr(
-                new, f"_parse_{self.id.slug_end}", new._parse
-            )
-            new._namespace_registered(self)
+            self.parsers[index] = getattr(new, f"_parse_{self.id.slug_end}", new._parse)
+            new._namespace_registered(handler_registration)
 
     def handle_response(self, response: MerossMessage, /):
         """Entry point for handling a received message for this namespace.
@@ -292,6 +302,16 @@ class NamespaceHandler(logging.Loggable):
                 "handle_response (payload: %s)",
                 _payload=response.payload,
             )
+
+    def parse_digest(self, digest: "mt.JsonMapping | mt.JsonArray", /):
+        """Used when parsing digest(s) in Appliance.System.All."""
+        for payload in extract_dict_payloads(digest):
+            try:
+                self.parsers[payload[KEY_CHANNEL]](payload)
+            except KeyError as ke:
+                self._handle_missing_channel(ke, payload)
+            except Exception as e:
+                self.log_parser_exception(e, payload)
 
     def log_handler_exception(self, exception: Exception, payload, /):
         """Logs an error raised inside a handler function. This is typically due
@@ -317,89 +337,17 @@ class NamespaceHandler(logging.Loggable):
             timeout=14400,
         )
 
-    def _handle_channel_list(self, message: MerossMessage, /):
-        """
-        splits and forwards the received NS payload to
-        the registered entity(es).
-        This handler si optimized for list payloads:
-        "payload": { "{self.id.key}": [{"{self.key_idx}":...., ...}] }
-        Under normal conditions the loop is optimized with direct parser lookup
-        and invocation without caching any intermediate variable since this is the 99%
-        expected pattern. The most-likely exceptions are when no parser is registered
-        for the channel (KeyError) or when the payload is not a list (TypeError).
-        These will be managed so that they'll don't recur anymore.
-        """
-        for p_channel in message.payload[self.id.key]:
-            try:
-                self.parsers[p_channel[KEY_CHANNEL]](p_channel)
-            except KeyError as ke:
-                self._handle_missing_parser(ke, p_channel)
-            except Exception as e:
-                # this might be expected: the key payload is not a list
-                if type(p_channel) is str:  # enumerating dict keys
-                    self.handler = self._handle_dict
-                    self._handle_dict(message)
-                    return
-                else:
-                    self.log_parser_exception(e, p_channel)
-
-    def _handle_dict(self, message: MerossMessage, /):
-        """
-        splits and forwards the received NS payload to
-        the registered entity(es).
-        This handler si optimized for dict payloads:
-        "payload": { "key_namespace": {"channel":...., ...} }
-        """
-        payload = message.payload[self.id.key]
-        try:
-            self.parsers[payload[KEY_CHANNEL]](payload)
-        except KeyError as ke:
-            self._handle_missing_parser(ke, payload)
-        except Exception as e:
-            # this might be expected: the payload is not a dict
-            # final fallback to the safe _handle_generic
-            if type(payload) is not dict:
-                self.handler = self._handle_generic
-                self._handle_generic(message)
-            else:
-                self.log_parser_exception(e, payload)
-
     def _handle_subdevice_id(self, message: "MerossMessage"):
         """Generalized Hub namespace dispatcher to subdevices."""
-        device = self.parent
         parsers = dict(self.parsers)
         for payload in message.payload[self.id.key]:
-
-            subdevice_id = payload[KEY_ID]
             try:
-                parser = parsers.pop(subdevice_id)
-            except KeyError:
-                if subdevice_id in self.parsers:
-                    # duplicated payload for the same parser (channel/subdevice)
-                    # this shouldnt but happened in a trace (#331)
-                    device.subdevices[subdevice_id].log_duplicated()
+                parsers.pop(payload[KEY_ID])(payload)
+            except KeyError as ke:
+                if KEY_ID not in payload:
+                    self.log_handler_exception(ke, payload)
                     continue
-                # parser is missing: either it is a new subdevice or we need to
-                # register an actual one.
-                try:
-                    subdevice = device.subdevices[subdevice_id]
-
-                    # dynamically register a generic parser for this namespace
-                    # so that next time we'll use the default mechanics
-                    def _parse_unknown_(_payload):
-                        subdevice._parse_unknown_(self, _payload)
-
-                    setattr(subdevice, f"_parse_{self.id.slug_end}", _parse_unknown_)
-                    self.register_parser(subdevice)
-                    parser = _parse_unknown_
-                except KeyError:
-                    # this is a new subdevice for which we dont have a parser yet and we
-                    # didnt know it existed so we need to do a digest rescan to discover it
-                    device.handler_all.next_poll_epoch = 0.0
-                    continue
-
-            try:
-                parser(payload)
+                self._handle_missing_subdevice(ke, payload, payload[KEY_ID])
             except Exception as e:
                 self.log_parser_exception(e, payload)
 
@@ -411,98 +359,103 @@ class NamespaceHandler(logging.Loggable):
         Examples are Appliance.Config.DeviceCfg or Appliance.Control.Sensor.LatestX but there are many more.
         Here, self.parsers keys could be either subdevice ids or channels.
         """
-        device = self.parent
         parsers = self.parsers
         for payload in message.payload[self.id.key]:
             try:
-                subdevice_id = payload[KEY_SUBID]
-            except KeyError:
-                # message not related to a subdevice. Parse with plain 'channel' mechanics
-                try:
-                    parsers[payload[KEY_CHANNEL]](payload)
-                except Exception as e:
-                    self.log_parser_exception(e, payload)
-                continue
-
-            try:
-                parsers[subdevice_id](payload)
+                parsers[(payload[KEY_SUBID], payload[KEY_CHANNEL])](payload)  # type: ignore
             except KeyError as ke:
-                if ke.args[0] == subdevice_id:
-                    # parser is missing: either it is a new subdevice or we need to
-                    # register an actual one.
+                if KEY_SUBID not in payload:
+                    # message not related to a subdevice. Parse with plain 'channel' mechanics
                     try:
-                        subdevice = device.subdevices[subdevice_id]
-
-                        # dynamically register a generic parser for this namespace
-                        # so that next time we'll use the default mechanics
-                        def _parse_unknown_(_payload):
-                            subdevice._parse_unknown_(self, _payload)
-
-                        setattr(
-                            subdevice, f"_parse_{self.id.slug_end}", _parse_unknown_
-                        )
-                        self.register_parser(subdevice)
-                        _parse_unknown_(payload)
-                    except KeyError:
-                        # this is a new subdevice for which we dont have a parser yet and we
-                        # didnt know it existed so we need to do a digest rescan to discover it
-                        device.handler_all.next_poll_epoch = 0.0
-                        continue
-                else:
-                    self.log_parser_exception(ke, payload)
+                        parsers[payload[KEY_CHANNEL]](payload)
+                    except KeyError as ke:
+                        self._handle_missing_channel(ke, payload)
+                    except Exception as e:
+                        self.log_parser_exception(e, payload)
+                    continue
+                if KEY_CHANNEL not in payload:
+                    self.log_handler_exception(ke, payload)
+                    continue
+                self._handle_missing_subdevice(ke, payload, payload[KEY_SUBID])
             except Exception as e:
                 self.log_parser_exception(e, payload)
 
-    def _handle_generic(self, message: MerossMessage, /):
+    def _handle_channel_list(self, message: MerossMessage, /):
         """
-        splits and forwards the received NS payload to
-        the registered entity(es)
-        This handler can manage both lists or dicts or even
-        payloads without the "channel" key (see namespace Toggle)
-        which will default forwarding to channel == None
+        This handler si optimized for list payloads:
+        "payload": { "{self.id.key}": [{"channel":...., ...}] }
+        Under normal conditions the loop is optimized with direct parser lookup
+        and invocation without caching any intermediate variable since this is the 99%
+        expected pattern. The most-likely exceptions are when no parser is registered
+        for the channel (KeyError) or when the payload is not a list (TypeError).
+        These will be managed so that they'll don't recur anymore.
         """
-        payload = message.payload[self.id.key]
-        if type(payload) is dict:
+        for payload in message.payload[self.id.key]:
             try:
                 self.parsers[payload[KEY_CHANNEL]](payload)
             except KeyError as ke:
-                self._handle_missing_parser(ke, payload)
-        else:
-            for p_channel in payload:
-                try:
-                    self.parsers[p_channel[KEY_CHANNEL]](p_channel)
-                except KeyError as ke:
-                    self._handle_missing_parser(ke, p_channel)
-                except Exception as e:
-                    self.log_parser_exception(e, p_channel)
+                self._handle_missing_channel(ke, payload)
+            except Exception as e:
+                # this might be expected: the key payload is not a list
+                if type(payload) is str:  # enumerating dict keys
+                    self.handler = self._handle_channel_dict
+                    self._handle_channel_dict(message)
+                    return
+                else:
+                    self.log_parser_exception(e, payload)
+
+    def _handle_channel_dict(self, message: MerossMessage, /):
+        """
+        This handler si optimized for dict payloads:
+        "payload": { "key_namespace": {"channel":...., ...} }
+        """
+        payload = message.payload[self.id.key]
+        try:
+            self.parsers[payload[KEY_CHANNEL]](payload)
+        except KeyError as ke:
+            self._handle_missing_channel(ke, payload)
+        except Exception as e:
+            # this might be expected: the payload is not a dict
+            # final fallback to the safe _handle_generic
+            if type(payload) is not dict:
+                self.handler = self._handle_channel
+                self._handle_channel(message)
+            else:
+                self.log_parser_exception(e, payload)
+
+    def _handle_channel(self, message: MerossMessage, /):
+        """
+        This handler can manage both lists or dicts of 'channel' payloads.
+        """
+        for payload in extract_dict_payloads(message.payload[self.id.key]):
+            try:
+                self.parsers[payload[KEY_CHANNEL]](payload)
+            except KeyError as ke:
+                self._handle_missing_channel(ke, payload)
+            except Exception as e:
+                self.log_parser_exception(e, payload)
 
     def _handle(self, msg: MerossMessage, /):
         """Default handler for a namespace message. This implementation works as a stub and is being invoked if no
-        better handler is found. Handler functions can be installed per instance at construction or
+        better handler has been installed. Handler functions can be installed per instance at construction or
         by overriding this method definition in custom NamespaceHandlers."""
         self.log(
             self.DEBUG, "Handler undefined (message:%s)", _message=msg, timeout=14400
         )
 
-    def parse_digest(self, digest: "mt.JsonMapping | mt.JsonArray", /):
-        """Used when parsing digest(s) in Appliance.System.All."""
-        for p_channel in extract_dict_payloads(digest):
-            try:
-                self.parsers[p_channel[KEY_CHANNEL]](p_channel)
-            except KeyError as ke:
-                self._handle_missing_parser(ke, p_channel)
-            except Exception as e:
-                self.log_parser_exception(e, p_channel)
-
-    def _parse_stub(self, payload, /):
+    def _parse(self, payload, /):
+        """Default ParserFunc automatically installed when parsing a message for which no indexed parser is registered.
+        The payload is typically an 'indexed' item payload scanned by handlers like _handle_channel_list or _handle_subid.
+        This is a fallback for unexpected channels/subdevices and is useful for logging purposes.
+        """
         self.log(
             self.DEBUG,
-            "Called parser stub (payload: %s)",
+            "Parser undefined (payload: %s)",
             _payload=payload,
             timeout=14400,
         )
 
-    def _handle_missing_parser(self, ke: KeyError, payload: "mt.JsonMapping", /):
+    def _handle_missing_channel(self, ke: KeyError, payload: "mt.JsonMapping", /):
         """
         Smart handler for KeyError raised when dispatching
         a channel payload to a parser.
@@ -511,13 +464,49 @@ class NamespaceHandler(logging.Loggable):
         # - no parser registered for this channel -> create parser if possible
         # - KeyError in parser function
         """
-        channel = payload[KEY_CHANNEL]
-        if channel in self.parsers:
+        try:
+            index = mn.IndexType.channel(payload[KEY_CHANNEL])
+        except KeyError as ke:
+            self.log_handler_exception(ke, payload)
+            return
+
+        if index in self.parsers:
             self.log_parser_exception(ke, payload)
             return
-        index = mn.IndexType.channel(channel)
-        self.parsers[index] = self._parse_stub
-        self.parsers[index](payload)
+
+        self.parent._handle_missing_parser(self, index, payload)
+
+    def _handle_missing_subdevice(
+        self, ke: KeyError, payload: "mt.JsonMapping", subdevice_id: str, /
+    ):
+        """Handler for KeyError raised when dispatching a payload to an hub subdevice parser."""
+        index = self.index.value_of(payload)
+        if index in self.parsers:
+            # index for the received payload is present so this is likely an error
+            # in the parser method.
+            if ke.args[0] == subdevice_id:
+                # This could only come when this method is being called by _handle_subdevice_id
+                # since that handler is checking for duplicates by eating up indexes from parsers copy.
+                self.parent.subdevices[subdevice_id].log_duplicated()
+            else:
+                self.log_parser_exception(ke, payload)
+            return
+        try:
+            self.parent.subdevices[subdevice_id]._handle_missing_parser(
+                self, index, payload
+            )
+        except KeyError as ke:
+            if ke.args[0] == subdevice_id:
+                # this is a new subdevice for which we dont have a parser yet and we
+                # didnt know it existed so we need to do a digest rescan to discover it
+                # WARNING/TODO: this might cause a storm of rescans if the device is sending
+                # a lot of messages for the same unknown subdevice before we discover it.
+                # We should implement a temporary blocklist of unknown subdevices to avoid this.
+                # or maybe setup a stub parser for this subdevice that will log and ignore
+                # messages until we discover it.
+                self.parent.handler_all.next_poll_epoch = 0.0
+                return
+            raise
 
     async def async_get(self, *indexes: mn.IndexValue):
         """
@@ -914,7 +903,6 @@ class NamespaceHandler(logging.Loggable):
             return
 
         ns_key = ns.key
-        ns_key_index = self.key_idx
         match ns.grammar:
             case mn.Grammar.EXPERIMENTAL:
                 # These are typically known in their structure and likely to be channelized
@@ -948,7 +936,7 @@ class NamespaceHandler(logging.Loggable):
                             channels_payload.append({KEY_CHANNEL: 0})
                         case _:
                             channels_payload = [
-                                {ns_key_index: channel} for channel in channels
+                                {KEY_CHANNEL: channel} for channel in channels
                             ]
 
                 channels_count = len(channels_payload)

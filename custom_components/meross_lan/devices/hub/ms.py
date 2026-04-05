@@ -206,7 +206,7 @@ class ms100(SensorSubDevice, SensorParser):
 
     def _parse_adjust(self, payload: "mt.hub.Sensor_Adjust"):
         device = self.parent
-        self.handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
+        device.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
             self,
             *device.add_entities(
                 [
@@ -255,7 +255,11 @@ class ms100(SensorSubDevice, SensorParser):
 
 class ms130(ms100):
 
-    NS_HUB = (mn.Appliance_Config_DeviceCfg, *ms100.NS_HUB)
+    NS_HUB = (
+        mn.Appliance_Control_Sensor_LatestX,
+        mn.Appliance_Config_DeviceCfg,
+        *ms100.NS_HUB,
+    )
     init_device_scale = 100
 
     __slots__ = ("sensor_light",)
@@ -263,14 +267,11 @@ class ms130(ms100):
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         ms100.__init__(self, subid, hub, key_digest, model)
         self.sensor_light = SensorParser.Light(subid, hub)
-        # This is a 'manual' handler_latestx.register_parser
-        # because this ns is rather non-standard
+        # This is a slight patch because this ns is rather non-standard
         handler_latestx = hub.ns_handlers[mn.Appliance_Control_Sensor_LatestX]
-        index = mn.IndexType.subId(subid, 0)
-        handler_latestx.parsers[index] = self._parse_latestx  # type: ignore
-        self._namespace_registered(handler_latestx)
         handler_latestx.polling_request_payload.append(
-            index | {mc.KEY_DATA: [mc.KEY_TEMP, mc.KEY_HUMI, mc.KEY_LIGHT]}
+            handler_latestx.polling_request_payload.pop()
+            | {mc.KEY_DATA: [mc.KEY_TEMP, mc.KEY_HUMI, mc.KEY_LIGHT]}
         )
 
     def shutdown(self):

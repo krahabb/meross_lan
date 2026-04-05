@@ -57,8 +57,9 @@ class mst100(SubDevice, SwitchParser):
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         SubDevice.__init__(self, subid, hub, key_digest, model)
+        self.index = mn.IndexType.subId(subid, 0)
         self.number_duration = mst100.WateringDurationNumber(
-            subid, hub, index=mn.IndexType.subId(subid, 0)
+            subid, hub, index=self.index
         )
 
     @cached_property
