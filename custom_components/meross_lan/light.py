@@ -1,5 +1,4 @@
 import asyncio
-from operator import index
 from time import monotonic
 from typing import TYPE_CHECKING, override
 
@@ -613,42 +612,26 @@ class EffectLight(Light):
     )
 
     def __init__(self, id, device: "Device", /, **kwargs: "Unpack[Light.Args]"):
-        try:
-            # This is a 'new' (2025-06-17) key appearing in msl320cpr digest.
-            # The key itself is 'light.entity' and carries the effect list
-            # (same as Appliance.Control.Light.Effect)
-            self._light_effects = device.descriptor.digest[mc.KEY_LIGHT_EFFECT]
+        self.handler_light_effect = device._create_handler(
+            mn.Appliance_Control_Light_Effect,
+            handler=self._handle_Appliance_Control_Light_Effect,
+            config=mle.NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+        )
+        # This is a 'new' (2025-06-17) key appearing in msl320cpr digest.
+        # The key itself is 'light.entity' and carries the effect list
+        # (same as Appliance.Control.Light.Effect)
+        self._light_effects = self.handler_light_effect.digest  # type: ignore
+        if self._light_effects:
             kwargs["effect_list"] = [
                 _light_effect[mc.KEY_EFFECTNAME]
                 for _light_effect in self._light_effects
             ] + EffectLight.init_effect_list
-        except KeyError:
+            self.handler_light_effect.parse_digest = self._update_effects  # type: ignore
+            # BEWARE: curcular ref on the way here
+        else:
             self._light_effects = []
         Light.__init__(self, id, device, **kwargs)
 
-        self.handler_light_effect = device._create_handler(
-            mn.Appliance_Control_Light_Effect,
-            handler=self._handle_Appliance_Control_Light_Effect,
-        )
-        """TODO/FIXME: restore digset parsing
-        stub_message = MerossMessage(
-            {
-                mc.KEY_HEADER: {
-                    mc.KEY_NAMESPACE: mn.Appliance_Control_Light_Effect,
-                    mc.KEY_METHOD: mc.METHOD_GETACK,
-                },
-                mc.KEY_PAYLOAD: {mc.KEY_EFFECT: ns_digest},
-            }
-        )
-
-        # custom parser for the case
-        def _parse(digest: list):
-            # This is called inside ns_all parsing at the device handler
-            stub_message.payload[mc.KEY_EFFECT] = digest
-            handler.handle_response(stub_message)
-
-        # FIXME: setup digest parsing return _parse, ()
-        """
         if device.descriptor.type.startswith(mc.TYPE_MSL320_PRO):
             # special rgb channels mgmt here
             self._rgb_to_native = rgbw_patch_to_native
@@ -656,17 +639,16 @@ class EffectLight(Light):
 
     @override
     def flush_state(self):
-        self.handler_light_effect.polling_period = (
-            0
-            if self.is_on and (mc.KEY_EFFECT in self.ns_payload)
-            else mlc.PARAM_INFINITE_TIMEOUT
+        self.handler_light_effect.polling_strategy = (
+            self.handler_light_effect.__class__.async_poll_smart
+            if self.is_on and self.effect
+            else None
         )
         return Light.flush_state(self)
 
     # interface: Light
     @override
     def _flush_light_effect(self, effect: int, /):
-        self.handler_light_effect.polling_period = 0
         try:
             _light_effect = self._light_effects[effect]
         except IndexError:
@@ -759,15 +741,16 @@ class EffectLight(Light):
             ]
         }
         """
-        _light_effects = message.payload[mc.KEY_EFFECT]
-        if self._light_effects != _light_effects:
-            self._light_effects = _light_effects
-            self.effect_list = [
-                _light_effect[mc.KEY_EFFECTNAME] for _light_effect in _light_effects
-            ] + EffectLight.init_effect_list
-            # add a 'fake' key so the next update will force-flush
-            self.ns_payload["_"] = None  # type: ignore
-            self.handler_ns.schedule_get()
+        # We use an optimistic approach on updating since the effect list is not expected
+        # to change a lot. Moreover, any meaningful change to the light will
+        # already flush the updated 'effect_list' anyway.
+        self._update_effects(message.payload[mc.KEY_EFFECT])
+
+    def _update_effects(self, light_effects: list[mt.control.Light_Effect], /):
+        self._light_effects = light_effects
+        self.effect_list = [
+            _light_effect[mc.KEY_EFFECTNAME] for _light_effect in light_effects
+        ] + EffectLight.init_effect_list
 
 
 class DNDLight(mle.BinaryParser, mle.EntityNamespaceMixin, light.LightEntity):

@@ -47,7 +47,6 @@ class NamespaceHandler(_NH):
             mn.Appliance_Config_Sensor_Association: POLLING_CONFIG_CONFIGURATION,
             mn.Appliance_Control_Alarm: POLLING_CONFIG_CONFIGURATION,
             mn.Appliance_Control_FilterMaintenance: POLLING_CONFIG_SLOWSENSOR,
-            mn.Appliance_Control_Light_Effect: POLLING_CONFIG_CONFIGURATION,
             mn.Appliance_Control_PhysicalLock: POLLING_CONFIG_CONFIGURATION,
             mn.Appliance_Control_Presence_Config: POLLING_CONFIG_CONFIGURATION,
             mn.Appliance_Mcu_Firmware: _NH.POLLING_CONFIG_ONCE,

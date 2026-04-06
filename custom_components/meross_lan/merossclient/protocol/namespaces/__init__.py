@@ -542,22 +542,27 @@ class Namespace(str):
         self.key_digest = kwargs["key_digest"]
         if self.key_digest is True:
             # We have a digest but we don't know the root key. We'll try to guess it with some euristics.
-            # This is typically true for 'Control' namespaces where the digest structure is not consistent.
-            # A little heuristic
+            # This is typically true for 'Appliance.Control.*' namespaces where the digest structure is consistent.
             ns_split = name.split(".")
-
             if len(ns_split) == 4:
+                # Typically Appliance.Control.Thermostat.*
                 self.key_digest = ns_split[2].lower()
+                # ns digest is in ["all"]["digest"][{self.key_digest}][{self.key}]
                 self.get_digest = self._get_digest_2
             else:
                 assert len(ns_split) == 3
-                # Appliance.GarageDoor.State is a weird case where the digest key is 'garageDoor'
+                # Appliance.Control.* ns digest is typically in ["all"]["digest"][{self.key}]
+                # but we have to be sure about the key to look up
+                # Appliance.GarageDoor.State is a weird case ["all"]["digest"]["garageDoor"]
                 self.key_digest = (
                     self.key
                     if ns_split[1] in ("Control", "Digest")
                     else _slug_split(ns_split[1])
                 )
                 self.get_digest = self._get_digest_1
+        elif self.key_digest:
+            # key_digest explicitly set in constructor args
+            self.get_digest = self._get_digest_1
 
         self.grammar = kwargs["grammar"]
 
@@ -780,7 +785,14 @@ Appliance_Control_Light = ns(
     "Appliance.Control.Light", mc.KEY_LIGHT, -1, G_E, S_DI, IDX_C, DIG
 )
 Appliance_Control_Light_Effect = ns(
-    "Appliance.Control.Light.Effect", mc.KEY_EFFECT, 1550, G_E, S_LI, D_LI, IDX_ID_
+    "Appliance.Control.Light.Effect",
+    mc.KEY_EFFECT,
+    1550,
+    G_E,
+    S_LI,
+    D_LI,
+    IDX_ID_,
+    {"key_digest": mc.KEY_LIGHT_EFFECT},
 )
 Appliance_Control_Mp3 = ns("Appliance.Control.Mp3", mc.KEY_MP3, 80, G_DI, S_DI, IDX_C)
 Appliance_Control_McuUpgrade = ns("Appliance.Control.McuUpgrade", mc.KEY_, -1)
