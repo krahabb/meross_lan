@@ -220,6 +220,9 @@ class IndexType(_IndexType, enum.Enum):
         """Extracts the key values of this index type from the payload dict."""
         return IndexValue.build(self, *(payload.get(_key) for _key in self))
 
+    def slug(self, payload: "JsonMapping"):
+        return "_".join(v for v in (payload.get(k) for k in self) if v is not None)
+
 
 class IndexValue(_immutabledict):
 

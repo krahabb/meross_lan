@@ -1481,9 +1481,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                 self.PARAM_CHECK_DEVICE_TIME_START_DELAY, self._check_device_time
             )
 
-    def parse_undefined_dict(
-        self, key_parent: str, payload: dict, index: mn.IndexValue, /
-    ):
+    def parse_undefined_dict(self, key_parent: str, payload: dict, root_id: str, /):
         device_entities = self.entities
         excluded = (
             mc.KEY_ID,
@@ -1499,20 +1497,21 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             if key in excluded:
                 continue
             if type(value) is dict:
-                self.parse_undefined_dict(f"{key_parent}_{key}", value, index)
+                self.parse_undefined_dict(f"{key_parent}_{key}", value, root_id)
                 continue
             if type(value) is list:
-                self.parse_undefined_list(f"{key_parent}_{key}", value, index)
+                self.parse_undefined_list(f"{key_parent}_{key}", value, root_id)
                 continue
 
-            id = "_".join(*index.values())
             try:
-                device_entities[(f"{id}_{key_parent}_{key}")].update_device_value(value)
+                device_entities[(f"{root_id}_{key_parent}_{key}")].update_device_value(
+                    value
+                )
             except KeyError:
                 from ..sensor import DiagnosticParser
 
                 DiagnosticParser(
-                    id,
+                    root_id,
                     self,
                     entity_key=f"{key_parent}_{key}",
                     device_value=value,
@@ -1526,9 +1525,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                     value,
                 )
 
-    def parse_undefined_list(
-        self, key_parent: str, payload: list, index: mn.IndexValue, /
-    ):
+    def parse_undefined_list(self, key_parent: str, payload: list, root_id: str, /):
         pass
 
     def _process_uuid_mismatch(
