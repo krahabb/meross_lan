@@ -576,7 +576,7 @@ class ToggleXParser(BinaryEntity, ParserEntity):
             self.flush_state()
 
 
-class EntityNamespaceMixin(NamespaceHandler, ParserEntity):
+class EntityNamespaceMixin(ParserEntity, NamespaceHandler):
     """
     Special 'polling enabler/disabler' mixin used with entities which are
     'single instance' for a namespace handler and so they'll disable polling
@@ -591,11 +591,7 @@ class EntityNamespaceMixin(NamespaceHandler, ParserEntity):
             pass
 
         def __init__(
-            self,
-            id: mn.Namespace,
-            parent: "Device",
-            /,
-            **kwargs: "Unpack[Args]",
+            self, id: mn.Namespace, parent: "Device", /, **kwargs: "Unpack[Args]"
         ): ...
 
     def __init_subclass__(cls):
@@ -622,11 +618,11 @@ class EntityNamespaceMixin(NamespaceHandler, ParserEntity):
 
     async def async_added_to_hass(self):
         self.polling_strategy = self.POLLING_CONFIG_DEFAULT[-1]
-        await super().async_added_to_hass()
+        await ParserEntity.async_added_to_hass(self)
 
     async def async_will_remove_from_hass(self):
         self.polling_strategy = None
-        await super().async_will_remove_from_hass()
+        await ParserEntity.async_will_remove_from_hass(self)
 
     @override
     def _handle(self, message: "MerossMessage", /):

@@ -770,7 +770,7 @@ class EffectLight(Light):
             self.handler_ns.schedule_get()
 
 
-class DNDLight(mle.EntityNamespaceMixin, mle.BinaryParser, light.LightEntity):
+class DNDLight(mle.BinaryParser, mle.EntityNamespaceMixin, light.LightEntity):
     """
     light entity representing the device DND feature usually implemented
     through a light feature (presence light or so)

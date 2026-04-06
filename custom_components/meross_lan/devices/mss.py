@@ -128,7 +128,9 @@ class _ElectricitySensor(SensorParser):
                     # and more consistent
                     self._estimate = float(state.state)
                     self.native_value = int(self._estimate)
-        await super().async_added_to_hass()
+        await SensorParser.async_added_to_hass(self)
+
+    async_will_remove_from_hass = SensorParser.async_will_remove_from_hass  # type: ignore[assignment]
 
     @override
     def set_available(self):
@@ -190,7 +192,7 @@ class _ElectricitySensor(SensorParser):
         self.update_native_value(0)
 
 
-class ElectricitySensor(EntityNamespaceMixin, _ElectricitySensor):
+class ElectricitySensor(_ElectricitySensor, EntityNamespaceMixin):
 
     POLLING_CONFIG_DEFAULT = EntityNamespaceMixin.POLLING_CONFIG_FASTSENSOR
 
@@ -202,9 +204,6 @@ class ElectricitySensor(EntityNamespaceMixin, _ElectricitySensor):
         ns_entity = cls(ns, device, ns=ns)
         ns_entity.handler_ns = ns_entity
         return ns_entity
-
-    async_added_to_hass = _ElectricitySensor.async_added_to_hass  # type: ignore[assignment]
-    async_will_remove_from_hass = _ElectricitySensor.async_will_remove_from_hass  # type: ignore[assignment]
 
 
 class ElectricityXSensor(_ElectricitySensor):
@@ -415,7 +414,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
     )
 
 
-class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
+class ConsumptionXSensor(SensorParser, EntityNamespaceMixin):
 
     if TYPE_CHECKING:
         ATTR_OFFSET: Final
@@ -463,7 +462,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
         self._today_midnight_epoch = 0  # 12:00 am today
         self._tomorrow_midnight_epoch = 0  # 12:00 am tomorrow
         self.extra_state_attributes = {}
-        EntityNamespaceMixin.__init__(self, id, device, **kwargs)
+        SensorParser.__init__(self, id, device, **kwargs)
         self.polling_response_size_adj(30)  # maximum item count for payload
         device.enable_check_device_time()
 
@@ -471,7 +470,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
         self._yesterday_midnight_epoch = 0
         self._today_midnight_epoch = 0
         self._tomorrow_midnight_epoch = 0
-        return EntityNamespaceMixin.set_unavailable(self)
+        return SensorParser.set_unavailable(self)
 
     async def async_added_to_hass(self):
         try:
@@ -511,7 +510,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
                         # consumption value from the device. The attributes restoration will
                         # instead keep patching the 'consumption reset bug'
 
-        await EntityNamespaceMixin.async_added_to_hass(self)
+        await super().async_added_to_hass()
 
     @override
     def _handle(self, message: "MerossMessage", /):
@@ -647,7 +646,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, SensorParser):
             self.log(self.DEBUG, "no readings available for new day - resetting")
 
 
-class OverTempEnableSwitch(EntityNamespaceMixin, SwitchParser):
+class OverTempEnableSwitch(SwitchParser, EntityNamespaceMixin):
 
     POLLING_CONFIG_DEFAULT = EntityNamespaceMixin.POLLING_CONFIG_CONFIGURATION
     init_entity_key = "config_overtemp_enable"

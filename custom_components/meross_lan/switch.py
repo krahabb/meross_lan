@@ -67,7 +67,7 @@ class PhysicalLockSwitch(SwitchParser):
     init_entity_key = mc.KEY_LOCK
 
 
-class Toggle(mle.EntityNamespaceMixin, SwitchParser):
+class Toggle(SwitchParser, mle.EntityNamespaceMixin):
 
     init_entity_key = "0"  # used to keep unique_id compatibility with legacy versions
     # HA core entity attributes:

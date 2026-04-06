@@ -345,7 +345,7 @@ class ProtocolSensor(EnumSensorEntity):
         self.schedule_flush_state()
 
 
-class SignalStrengthSensor(mle.EntityNamespaceMixin, SensorParser):
+class SignalStrengthSensor(SensorParser, mle.EntityNamespaceMixin):
 
     POLLING_CONFIG_DEFAULT = mle.EntityNamespaceMixin.POLLING_CONFIG_SLOWSENSOR
 
