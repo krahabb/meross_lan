@@ -251,7 +251,7 @@ class IndexValue(_immutabledict):
             assert (
                 not values
             ), f"IndexType {index_type} does not accept any value, got {values}"
-            self.value = ()
+            self.value = None
             super().__init__()
 
     def matches(self, payload: dict):
