@@ -1206,7 +1206,7 @@ class MerossMQTTMocker(MQTTConnectionMocker):
 
         def _safe_start(_self: mlp.MerossMQTTConnection):
             """this runs in an executor"""
-            _self._stateext = _self.STATE_CONNECTED
+            _self.client_state = mlp.MerossMQTTConnection.ClientState.CONNECTED
             hass.add_job(_self.on_connect)
 
         self.safe_start_patcher = patch.object(
@@ -1218,7 +1218,7 @@ class MerossMQTTMocker(MQTTConnectionMocker):
 
         def _safe_stop(_self: mlp.MerossMQTTConnection):
             """this runs in an executor"""
-            _self._stateext = _self.STATE_DISCONNECTED
+            _self.client_state = mlp.MerossMQTTConnection.ClientState.DISCONNECTED
             hass.add_job(_self.on_disconnect)
 
         self.safe_stop_patcher = patch.object(

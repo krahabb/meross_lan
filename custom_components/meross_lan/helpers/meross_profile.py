@@ -13,12 +13,12 @@ from homeassistant.util import dt as dt_util
 from . import (
     get_default_ssl_context,
 )
-from .mqtt_profile import MQTTConnection, MQTTProfile
 from .. import const as mlc
 from ..merossclient import HostAddress, cloudapi, datetime_from_epoch
 from ..merossclient.client.mqtt import MQTTAppClient
 from ..merossclient.obfuscate import OBFUSCATE_DICT, OBFUSCATE_UUID_MAP
 from ..merossclient.protocol import const as mc
+from .mqtt_profile import MQTTConnection, MQTTProfile
 
 if TYPE_CHECKING:
     from typing import Final, Literal, NotRequired, TypedDict, Unpack
@@ -229,7 +229,7 @@ class MerossProfile(MQTTProfile):
         )
 
     async def async_shutdown(self):
-        await MQTTProfile.async_shutdown(self)
+        await super().async_shutdown()
         await self.apiclient.async_shutdown()
         del self.apiclient
         self.parent.profiles[self.id] = None
@@ -343,7 +343,7 @@ class MerossProfile(MQTTProfile):
                 return
 
         mqttconnection = self._get_mqttconnection(broker)
-        if mqttconnection.state_inactive:
+        if mqttconnection.client_inactive:
             mqttconnection.create_task(
                 mqttconnection.async_connect(),
                 "attach_mqtt.schedule_connect",
@@ -415,16 +415,21 @@ class MerossProfile(MQTTProfile):
         and we so need it soon).
         """
         mqttconnection = self._get_mqttconnection(broker)
-        if mqttconnection.state_active:
-            if mqttconnection.stateext is mqttconnection.STATE_CONNECTED:
+
+        match mqttconnection.client_state:
+            case MerossMQTTConnection.ClientState.CONNECTED:
                 return mqttconnection
-            else:
+            case (
+                MerossMQTTConnection.ClientState.DISCONNECTING
+                | MerossMQTTConnection.ClientState.DISCONNECTED
+            ):
+                try:
+                    await mqttconnection.async_connect()
+                    return mqttconnection
+                except:
+                    return None
+            case _:
                 return None
-        try:
-            await mqttconnection.async_connect()
-            return mqttconnection
-        except:
-            return None
 
     async def _async_token_refresh(self):
         """

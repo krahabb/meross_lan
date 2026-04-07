@@ -237,8 +237,7 @@ class MQTTConnection(AbstractMQTTConnection):
         kwargs["key"] = profile.key
         kwargs["is_cloud"] = profile.is_cloud_profile
         kwargs["allow_publish"] = profile.allow_mqtt_publish
-        AbstractMQTTConnection.__init__(
-            self,
+        super().__init__(
             broker,
             profile,
             **kwargs,
@@ -246,7 +245,7 @@ class MQTTConnection(AbstractMQTTConnection):
         profile.mqttconnections[str(broker)] = self
 
     def shutdown(self):
-        AbstractMQTTConnection.shutdown(self)
+        super().shutdown()
         self.sensor_connection = None
 
     @override  # Loggable
@@ -258,14 +257,14 @@ class MQTTConnection(AbstractMQTTConnection):
     @callback
     @override
     def on_connect(self, /):
-        AbstractMQTTConnection.on_connect(self)
+        super().on_connect()
         if self.sensor_connection:
             self.sensor_connection.update_native_value(ConnectionSensor.STATE_CONNECTED)
 
     @callback
     @override
     def on_disconnect(self, /):
-        AbstractMQTTConnection.on_disconnect(self)
+        super().on_disconnect()
         if self.sensor_connection:
             self.sensor_connection.update_native_value(
                 ConnectionSensor.STATE_DISCONNECTED
@@ -273,7 +272,7 @@ class MQTTConnection(AbstractMQTTConnection):
 
     @override
     def log_message(self, message: "MerossMessage", direction: "Direction", /):
-        AbstractMQTTConnection.log_message(self, message, direction)
+        super().log_message(message, direction)
         if self.parent.is_tracing:
             self.parent.trace_msg(self.time(), message, self.TRANSPORT, direction)
 
@@ -298,15 +297,10 @@ class MQTTConnection(AbstractMQTTConnection):
                 else mqtt_payload.decode("utf-8")  # type: ignore
             )
             self.log_message(message, self.Direction.RX)
-            uuid = message.uuid
             # first check among pending transactions (i.e. replies to our requests)
             try:
-                _mqtt_transaction = self._transactions.pop(message.messageid)
-                if _mqtt_transaction.uuid == uuid:
-                    _mqtt_transaction.response_future.set_result(message)
-                    return
-                else:  # this is unlikely to happen
-                    self._transactions[message.messageid] = _mqtt_transaction
+                self._transactions[message.messageid].set_result(message)
+                return
             except KeyError:
                 pass
 
@@ -325,19 +319,20 @@ class MQTTConnection(AbstractMQTTConnection):
                         e,
                         "async_mqtt_message session handler for namespace %s (uuid:%s)",
                         message.namespace,
-                        uuid=uuid,
+                        uuid=message.uuid,
                         timeout=14400,
                     )
 
             # then route to the device if already binded (should be the common case
             # when PUSH messages are broadcasted by the device)
             try:
-                self._client_devices[uuid].mqtt.on_async_mqtt_message(message)  # type: ignore[union-attr]
+                self._client_devices[message.uuid].mqtt.on_async_mqtt_message(message)  # type: ignore[union-attr]
                 return
             except KeyError as key_error:
-                if key_error.args[0] != uuid:
+                if key_error.args[0] != message.uuid:
                     raise
 
+            uuid = message.uuid
             profile = self.parent
             api = profile.parent
             # device_id is not binded to this MQTTConnection
@@ -363,8 +358,8 @@ class MQTTConnection(AbstractMQTTConnection):
                         # until reboot
                         self.log(
                             self.WARNING,
-                            "Received MQTT message for device uuid:%s which cannot be registered for MQTT handling on this profile",
-                            uuid=uuid,
+                            "Received MQTT message for device '%s' which cannot be registered for MQTT handling on this profile",
+                            device.display_name,
                             timeout=14400,
                         )
                         return

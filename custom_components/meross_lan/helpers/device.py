@@ -485,7 +485,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             # bluetooth client is managed by ComponentApi so we dont shutdown it
             # (super().async_shutdown will also shutdown clients) but just unlink it from the device
             self.remove_client(self.bluetooth)
-        await ConfigEntryManager.async_shutdown(self)
+        await super().async_shutdown()
         if self.profile:
             self.profile.unlink(self)
         del self.sensor_protocol

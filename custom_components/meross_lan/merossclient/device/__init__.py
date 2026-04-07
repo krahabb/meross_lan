@@ -373,16 +373,15 @@ class Device(PhysicalDevice):
     # interface: AbstractClient
     @override
     async def async_connect(self, /, **kwargs: "Unpack[ConnectArgs]"):
-        # use pre 3.13 compatible syntax/semantics
-        for earliest_connect in asyncio.as_completed(
-            {
+        async for earliest_connect in asyncio.as_completed(
+            [
                 _client.create_task(
                     _client.async_request(*self.handler_all.polling_request),
                     f".async_connect_{_client.TRANSPORT}_task",
-                    eager_start=True,
+                    eager_start=False,
                 )
                 for _client in self._clients.values()
-            },
+            ],
             timeout=kwargs.get("timeout", self.timeout),
         ):
             try:
@@ -392,8 +391,12 @@ class Device(PhysicalDevice):
                 self.handler_all.handle_response(response)
                 self.handler_all.polling_response_size = len(response.json)
                 return response
-            except Exception:
-                pass
+            except Exception as e:
+                self.log_exception(
+                    self.DEBUG,
+                    e,
+                    "async_connect request: proceeding with next transport",
+                )
         else:
             raise asyncio.TimeoutError("No transport available")
 
