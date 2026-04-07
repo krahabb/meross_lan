@@ -82,7 +82,7 @@ class Spray(mt.ChannelPayload):
 class TempUnit(mt.ChannelPayload):
     """Appliance.Control.TempUnit channel payload."""
 
-    tempUnit: int  # 1: Celsius 2: Fahreneit TODO add a select entity for configuration
+    tempUnit: int  # 1: Celsius 2: Fahreneit
 
 
 class OverTemp(TypedDict):

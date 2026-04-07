@@ -78,7 +78,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         which are actually used in meross_lan and so can be set through kwargs in the constructor.
         this class initializer will scan the actual class definition in order to correctly extract
         the eventually provided attributes in kwargs."""
-        is_diagnostic: ClassVar[bool]  # TODO: type uppercase
+        is_diagnostic: bool
         """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
 
         parent: Final[ConfigEntryManager]  # type: ignore[override]
@@ -363,8 +363,6 @@ class ParserEntity(parser.NamespaceParser, Entity):
 
     NamespaceValue = parser.NamespaceValue
     NamespaceGroupValue = parser.NamespaceGroupValue
-
-    # TODO: add constructor with register_parser_entity ?
 
     @override
     def set_available(self):

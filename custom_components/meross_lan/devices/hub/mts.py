@@ -239,17 +239,23 @@ class mts100v3(SubDevice, MtsClimate):
 
     # interface: self
     def _parse_togglex(self, payload: "mt.hub.ToggleX", /):
-        self._mts_onoff = payload[mc.KEY_ONOFF]
-        self.flush_state()
+        onoff = payload[mc.KEY_ONOFF]
+        if self._mts_onoff != onoff:
+            self._mts_onoff = onoff
+            self.flush_state()
 
     def _parse_mode(self, payload: "mt.hub._Mts100_Mode", /):
-        self._mts_mode = payload[mc.KEY_STATE]
-        self.flush_state()
+        mode = payload[mc.KEY_STATE]
+        if self._mts_mode != mode:
+            self._mts_mode = mode
+            self.flush_state()
 
     def _parse_digest_(self, payload: "mt.hub._mts100v3", /):
         """parse digest key for mts100/mts100v3 subdevice"""
-        self._mts_mode = payload[mc.KEY_MODE]
-        self.flush_state()
+        mode = payload[mc.KEY_MODE]
+        if self._mts_mode != mode:
+            self._mts_mode = mode
+            self.flush_state()
 
     def update_scheduleb_mode(self, mode, /):
         self.extra_state_attributes[mc.KEY_SCHEDULEBMODE] = mode
@@ -262,6 +268,8 @@ class mts150(mts100v3):
 
     def _parse_digest_(self, payload: "mt.hub._mts100v3", /):
         """parse digest key for mts150/mts150p subdevice"""
-        self._mts_mode = payload[mc.KEY_MODE]
-        # TODO: parse more keys?
-        self.flush_state()
+        mode = payload[mc.KEY_MODE]
+        if self._mts_mode != mode:
+            self._mts_mode = mode
+            # TODO: parse more keys?
+            self.flush_state()

@@ -332,7 +332,6 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         indexToPollType = tuple[float, mn.IndexValue]
         """(last_request_epoch, NamespaceParser.index)"""
         _indexes_to_poll: list[indexToPollType]
-        # TODO: reconcile this member with polling_request_payload in base cls
 
     __SLOTS__ = ("_indexes_to_poll",)
 

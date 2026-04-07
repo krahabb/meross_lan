@@ -1030,9 +1030,7 @@ class Device(PhysicalDevice):
         # appearing in an mrs100 (#447)
         # TODO: consider refining this one
         # possible issues are:
-        # - polling some unneeded ns since digest association is static but we might have some
-        # outliers where data are not provided in digest like Appliance.Control.Fan for map100
-        # or Appliance.Control.ToggleX for covers (data maybe provided but useless since the
+        # Appliance.Control.ToggleX for covers (data maybe provided but useless since the
         # ToggleX doesn't look like providing any info)
         # - resulting request being bulkier than using ns_all
         for handler in [

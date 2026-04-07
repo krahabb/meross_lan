@@ -48,7 +48,7 @@ class EntityTest(EntityComponentTest):
         )
         assert service_response is not None, "no service response"
 
-        if service_response[self.entity_id]["events"]:
+        if service_response[self.entity_id]["events"]:  # type: ignore
             # since the emulator state is not yet sanitized we cannot
             # ensure the state is available and or consistent.
             # We'll then just create events for entities where a state is avaialble

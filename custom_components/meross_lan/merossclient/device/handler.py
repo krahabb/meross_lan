@@ -78,7 +78,6 @@ class NamespaceHandler(logging.Loggable):
         polling_request_payload: mt.JsonList  # on demand instance
 
         last_rx_push: mt.JsonMapping | None
-        # TODO: implement caching of all methods responses
 
         class Args(logging.Loggable.Args):
             handler: NotRequired["NamespaceHandler.HandlerFunc"]

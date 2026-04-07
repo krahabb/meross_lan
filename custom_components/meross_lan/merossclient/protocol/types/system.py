@@ -136,7 +136,6 @@ class All_System(TypedDict):
 
 # This keys are all optional depending on the device layout.
 # Here we'll set them as available to ease type-checking.
-# TODO: detail type-hints
 All_Digest = TypedDict(
     "All_Digest",
     {

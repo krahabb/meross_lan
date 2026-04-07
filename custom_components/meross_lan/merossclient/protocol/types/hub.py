@@ -89,7 +89,6 @@ class Sensor_Adjust(mt.IdPayload):
 
 
 class _Sensor_LatestSample(TypedDict):
-    # TODO: maybe generalize this for other usages
     sample: int
     time: int
 

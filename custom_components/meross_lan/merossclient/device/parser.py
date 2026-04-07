@@ -122,19 +122,22 @@ class NamespaceParser(logging.Loggable):
     def handler_ns(self):
         return self.parent.ns_handlers[self.ns]
 
-    # TODO: maybe rename to async_request
     async def async_request_payload(self, payload: "JsonDict", /):
         return await self.parent.async_request(
             *self.ns.request_set(self.index | payload)
         )
 
     async def async_request_parse(self, payload: "JsonDict", /):
-        response = await self.async_request_payload(payload)
+        response = await self.parent.async_request(
+            *self.ns.request_set(self.index | payload)
+        )
         self._parse(payload)
         return response
 
     async def async_request_parse_ex(self, payload: "JsonDict", /):
-        response = await self.async_request_payload(payload)
+        response = await self.parent.async_request(
+            *self.ns.request_set(self.index | payload)
+        )
         self._parse(merge_dicts(dict(self.ns_payload), payload))
         return response
 
@@ -175,13 +178,7 @@ class NamespaceValue(NamespaceParser):
             key_value: NotRequired[str]
             device_value: NotRequired[Any]
 
-        def __init__(
-            self,
-            channel: PayloadIndexType | None,
-            parent: PhysicalDevice,
-            /,
-            **kwargs: Unpack[Args],
-        ): ...
+        def __init__(self, id, parent: PhysicalDevice, /, **kwargs: Unpack[Args]): ...
 
     init_key_value = mc.KEY_VALUE
 
@@ -271,13 +268,7 @@ class NamespaceGroupValue(NamespaceValue):
         class Args(NamespaceValue.Args):
             key_group: NotRequired[str]
 
-        def __init__(
-            self,
-            channel: PayloadIndexType | None,
-            parent: PhysicalDevice,
-            /,
-            **kwargs: Unpack[Args],
-        ): ...
+        def __init__(self, id, parent: PhysicalDevice, /, **kwargs: Unpack[Args]): ...
 
     init_key_group = mc.KEY_VALUE
 

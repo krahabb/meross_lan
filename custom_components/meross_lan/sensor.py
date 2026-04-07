@@ -214,7 +214,6 @@ class DiagnosticSensor(SensorEntity):
     """
 
     if TYPE_CHECKING:
-        is_diagnostic: Final
         native_value: sensor.StateType
 
         class Args(SensorEntity.Args):

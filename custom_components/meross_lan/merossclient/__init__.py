@@ -242,36 +242,10 @@ def get_element_by_key[_T: "Mapping"](
 def get_element_by_key_safe[_T: "Mapping"](
     src: list[_T], key_value: "str | Mapping", key: tuple[str, ...] = (mc.KEY_CHANNEL,)
 ) -> _T | None:
-    """
-    scans the payload (expecting a list) looking for the first item matching
-    the key value. Usually looking for the matching channel payload
-    inside list payloads
-    # TODO migrate to use the non-safe version so we can get rid of the safe one
-    """
     try:
         return get_element_by_key(src, key_value, key)
     except KeyError:
         return None
-
-
-def get_element_by_keys_safe[_T: "Mapping"](
-    payload: list[_T], keys: Sequence[str], match_payload: _T
-) -> _T | None:
-    """
-    scans the payload (expecting a list) looking for the first item matching
-    the key values. This is a more generic version of get_element_by_key_safe
-    that allows to match multiple keys in the payload item with the
-    corresponding values in the match_payload dict. This is useful when
-    you need to match complex criteria across multiple keys
-    (e.g. channel and subId) to identify the correct item in the payload list.
-    """
-    for p in payload:
-        try:
-            if all(p.get(key) == match_payload.get(key) for key in keys):
-                return p
-        except KeyError:
-            continue
-    return None
 
 
 def delete_element_by_key(payload: list, key: str, value):
@@ -432,11 +406,8 @@ async def async_import_module(name: str, package="merossclient", /):
 
 
 class HostAddress:
-    """
-    Helper class to build an host:port representation for broker addresses
-    carried in Meross payloads. TODO: add helper to build from firmware dicts
-    in device descriptors.
-    """
+    """Helper class to build an host:port representation for broker addresses
+    carried in Meross payloads."""
 
     host: str
     port: int

@@ -30,8 +30,6 @@ class DiffuserLight(LightBase):
     light entity for Meross diffuser (MOD100)
     """
 
-    # TODO: migrate to HA core entity init mechanics so to skip constructor implementation
-    # This needs a bit of refactor in LightBase
     if TYPE_CHECKING:
         ns_payload: mt.diffuser.Light
         effect_list: list[str]

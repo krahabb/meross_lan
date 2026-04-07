@@ -146,8 +146,6 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
             self.flush_state()
 
 
-# TODO: add 'ns' kwarg management to base parser so we can drop all these static class definitions
-# in favor of simple kwargs sets to be used for initialization.
 class MtsDeadZoneNumber(MtsCommonTemperatureNumber):
     """
     adjust "dead zone" i.e. the threshold for the temperature control

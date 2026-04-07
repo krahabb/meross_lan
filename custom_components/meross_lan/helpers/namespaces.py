@@ -64,8 +64,6 @@ class NamespaceHandler(_NH):
 
     @override
     def _handle(self, message: "MerossMessage", /):
-        # TODO: migrate to something conforming to _handle_missing_parser
-        # so that we can maybe get rid of this override.
         device = self.parent
         if device.create_diagnostic_entities:
             # since we're parsing an unknown namespace, our euristic about
