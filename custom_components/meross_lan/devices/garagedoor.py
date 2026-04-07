@@ -12,7 +12,7 @@ from ..number import EmulatedNumber, NumberParser
 from ..switch import SwitchParser
 
 if TYPE_CHECKING:
-    from typing import Final, NotRequired, Unpack
+    from typing import Any, Final, NotRequired, Unpack
 
     from ..helpers.device import Device, MerossMessage
     from ..helpers.entity import ValueParser
@@ -66,24 +66,14 @@ class GarageConfigMixin(ValueParser if TYPE_CHECKING else object):
     if TYPE_CHECKING:
 
         class Args(ValueParser.Args):
-            key_value: str
             device_value: NotRequired[int]
 
     # Assuming by default we're parsing MultipleConfig
     # This will be overriden in kwargs when creating entities for Appliance.GarageDoor.Config
     init_ns = mn.Appliance_GarageDoor_MultipleConfig
 
-    def __init__(
-        self,
-        id,
-        device: "Device",
-        /,
-        **kwargs: "Unpack[Args]",
-    ):
-        key_value = kwargs["key_value"]
-        kwargs["index"] = (
-            mn.IndexType.channel(id) if id is not None else mn.IndexType.none()
-        )
+    def __init__(self, id, device: "Device", /, **kwargs: "Unpack[Args]"):
+        key_value = kwargs["key_value"]  # type: ignore
         kwargs["entity_key"] = f"config_{key_value}"
         kwargs["name"] = key_value
         super().__init__(
@@ -224,13 +214,29 @@ class GarageDoor(Cover):
     # these keys in Appliance.GarageDoor.MultipleConfig are to be ignored
     CONFIG_KEY_EXCLUDED = (mc.KEY_CHANNEL, mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
     ENTITY_DEFS = {
-        mc.KEY_BUZZERENABLE: GarageConfigSwitch,
-        mc.KEY_DOORENABLE: GarageEnableSwitch,
-        mc.KEY_SIGNALDURATION: GarageConfigNumber,
-        mc.KEY_SIGNALCLOSE: GarageConfigNumber,
-        mc.KEY_SIGNALOPEN: GarageConfigNumber,
-        mc.KEY_DOORCLOSEDURATION: GarageConfigNumber,
-        mc.KEY_DOOROPENDURATION: GarageConfigNumber,
+        mc.KEY_BUZZERENABLE: GarageConfigSwitch.ENTITY_DEF(
+            key_value=GarageConfigSwitch.SimpleKeyValue(mc.KEY_BUZZERENABLE)
+        ),
+        mc.KEY_DOORENABLE: GarageEnableSwitch.ENTITY_DEF(
+            key_value=GarageEnableSwitch.SimpleKeyValue(mc.KEY_DOORENABLE)
+        ),
+        mc.KEY_SIGNALDURATION: GarageConfigNumber.ENTITY_DEF(
+            key_value=GarageConfigNumber.SimpleKeyValue(mc.KEY_SIGNALDURATION),
+            native_step=0.1,
+            native_min_value=0.1,
+        ),
+        mc.KEY_SIGNALCLOSE: GarageConfigNumber.ENTITY_DEF(
+            key_value=GarageConfigNumber.SimpleKeyValue(mc.KEY_SIGNALCLOSE)
+        ),
+        mc.KEY_SIGNALOPEN: GarageConfigNumber.ENTITY_DEF(
+            key_value=GarageConfigNumber.SimpleKeyValue(mc.KEY_SIGNALOPEN)
+        ),
+        mc.KEY_DOORCLOSEDURATION: GarageConfigNumber.ENTITY_DEF(
+            key_value=GarageConfigNumber.SimpleKeyValue(mc.KEY_DOORCLOSEDURATION)
+        ),
+        mc.KEY_DOOROPENDURATION: GarageConfigNumber.ENTITY_DEF(
+            key_value=GarageConfigNumber.SimpleKeyValue(mc.KEY_DOOROPENDURATION)
+        ),
     }
 
     # HA core entity attributes:
@@ -266,12 +272,12 @@ class GarageDoor(Cover):
             self.number_doorCloseDuration = self.__class__.ENTITY_DEFS[
                 mc.KEY_SIGNALCLOSE
             ](
-                id, device, index=self.index, key_value=mc.KEY_SIGNALCLOSE
+                id, device, index=self.index
             )  # type: ignore
             self.number_doorOpenDuration = self.__class__.ENTITY_DEFS[
                 mc.KEY_SIGNALOPEN
             ](
-                id, device, index=self.index, key_value=mc.KEY_SIGNALOPEN
+                id, device, index=self.index
             )  # type: ignore
             device.get_handler(mn.Appliance_GarageDoor_MultipleConfig).register_parser(
                 self
@@ -410,7 +416,7 @@ class GarageDoor(Cover):
         self.is_closed = is_closed
         self.flush_state()
 
-    def _parse_multipleConfig(self, payload: dict, /):
+    def _parse_multipleConfig(self, payload: "mt.JsonMapping", /):
         """
         {
           "channel": 1,
@@ -441,7 +447,6 @@ class GarageDoor(Cover):
                             self.id,
                             self.parent,
                             index=self.index,
-                            key_value=key,
                             device_value=value,
                         )
                     )
@@ -547,13 +552,13 @@ class GarageDoorConfigNamespaceHandler(EntityDefNamespaceHandler):
     POLLING_CONFIG_DEFAULT = EntityDefNamespaceHandler.POLLING_CONFIG_CONFIGURATION
 
     init_entity_defs = {
-        mc.KEY_BUZZERENABLE: GarageConfigSwitch.ENTITY_DEF(),
-        mc.KEY_SIGNALDURATION: GarageConfigNumber.ENTITY_DEF(
-            native_step=0.1,
-            native_min_value=0.1,
-        ),
-        mc.KEY_DOORCLOSEDURATION: GarageConfigNumber.ENTITY_DEF(),
-        mc.KEY_DOOROPENDURATION: GarageConfigNumber.ENTITY_DEF(),
+        key: GarageDoor.ENTITY_DEFS[key]
+        for key in (
+            mc.KEY_BUZZERENABLE,
+            mc.KEY_SIGNALDURATION,
+            mc.KEY_DOORCLOSEDURATION,
+            mc.KEY_DOOROPENDURATION,
+        )
     }
 
     def _handle(self, message: "MerossMessage", /):

@@ -349,7 +349,7 @@ class SignalStrengthSensor(SensorParser, mle.EntityNamespaceMixin):
     POLLING_CONFIG_DEFAULT = mle.EntityNamespaceMixin.POLLING_CONFIG_SLOWSENSOR
 
     init_entity_key = "signal_strength"
-    init_key_value = mc.KEY_SIGNAL
+    init_key_value = SensorParser.SimpleKeyValue(mc.KEY_SIGNAL)
     # HA core entity attributes:
     _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC
     _attr_native_unit_of_measurement = hac.PERCENTAGE
@@ -359,7 +359,7 @@ class SignalStrengthSensor(SensorParser, mle.EntityNamespaceMixin):
 class FilterMaintenanceSensor(SensorParser):
 
     init_entity_key = mc.KEY_FILTER
-    init_key_value = mc.KEY_LIFE
+    init_key_value = SensorParser.SimpleKeyValue(mc.KEY_LIFE)
 
     # HA core entity attributes:
     _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC

@@ -762,7 +762,7 @@ class DNDLight(mle.BinaryParser, mle.EntityNamespaceMixin, light.LightEntity):
     POLLING_CONFIG_DEFAULT = mle.EntityNamespaceMixin.POLLING_CONFIG_CONFIGURATION
     PLATFORM = light.DOMAIN
     init_entity_key = "dnd"
-    init_key_value = mc.KEY_MODE
+    init_key_value = mle.BinaryParser.SimpleKeyValue(mc.KEY_MODE)
     init_value_on = 0
     init_value_off = 1
     # HA core entity attributes:

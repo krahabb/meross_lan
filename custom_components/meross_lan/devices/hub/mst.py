@@ -30,13 +30,12 @@ class mst100(SubDevice, SwitchParser):
         class DeviceCfg(mt.hub.SubIdPayload):
             mstCfg: "mst100.DeviceCfg_mstCfg"
 
-    class WateringDurationNumber(NumberParser.NamespaceGroupValue, NumberParser):
+    class WateringDurationNumber(NumberParser):
         """Number to set watering duration."""
 
         init_ns = mn.Appliance_Config_DeviceCfg
         init_entity_key = mc.KEY_DURATION
-        init_key_group = "mstCfg"
-        init_key_value = "dura"
+        init_key_value = NumberParser.NestedKeyValue("mstCfg", "dura")
         # HA core entity attributes:
         _attr_name = "Watering duration"
         _attr_device_class = NumberParser.DEVICE_CLASS_DURATION

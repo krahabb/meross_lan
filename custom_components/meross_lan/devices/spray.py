@@ -10,7 +10,7 @@ class Spray(SelectParser):
     """
 
     init_entity_key = mc.KEY_SPRAY
-    init_key_value = mc.KEY_MODE
+    init_key_value = SelectParser.SimpleKeyValue(mc.KEY_MODE)
     init_options_map = {
         mc.SPRAY_MODE_OFF: "off",
         mc.SPRAY_MODE_CONTINUOUS: "on",

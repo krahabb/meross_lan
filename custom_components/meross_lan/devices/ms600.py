@@ -15,12 +15,12 @@ if TYPE_CHECKING:
     from ..helpers.entity import ChannelType
 
 
-class PresenceConfigBase(ValueParser.NamespaceGroupValue, ValueParser):
+class PresenceConfigBase(ValueParser):
     """Mixin style base class for all of the entities managed in Appliance.Control.Presence.Config"""
 
     if TYPE_CHECKING:
 
-        class Args(ValueParser.NamespaceGroupValue.Args, ValueParser.Args):
+        class Args(ValueParser.Args):
             pass
 
     # HA core entity attributes:
@@ -73,7 +73,6 @@ class PresenceConfigSensitivity(PresenceConfigSelect):
 
 
 class PresenceConfigMthX(PresenceConfigNumber):
-    init_key_group = mc.KEY_MTHX
     # HA core entity attributes:
     _attr_native_max_value = 1000
     _attr_native_min_value = 1
@@ -83,20 +82,17 @@ class PresenceConfigMthX(PresenceConfigNumber):
 ENTITY_DEFS = (
     PresenceConfigMode.ENTITY_DEF(
         entity_key=f"presence_config_{mc.KEY_MODE}_{mc.KEY_WORKMODE}",
-        key_group=mc.KEY_MODE,
-        key_value=mc.KEY_WORKMODE,
+        key_value=PresenceConfigMode.NestedKeyValue(mc.KEY_MODE, mc.KEY_WORKMODE),
         name=mc.KEY_WORKMODE,
     ),
     PresenceConfigMode.ENTITY_DEF(
         entity_key=f"presence_config_{mc.KEY_MODE}_{mc.KEY_TESTMODE}",
-        key_group=mc.KEY_MODE,
-        key_value=mc.KEY_TESTMODE,
+        key_value=PresenceConfigMode.NestedKeyValue(mc.KEY_MODE, mc.KEY_TESTMODE),
         name=mc.KEY_TESTMODE,
     ),
     PresenceConfigNumber.ENTITY_DEF(
         entity_key=f"presence_config_{mc.KEY_NOBODYTIME}_{mc.KEY_TIME}",
-        key_group=mc.KEY_NOBODYTIME,
-        key_value=mc.KEY_TIME,
+        key_value=PresenceConfigNumber.NestedKeyValue(mc.KEY_NOBODYTIME, mc.KEY_TIME),
         name=mc.KEY_NOBODYTIME,
         device_class=NumberParser.DEVICE_CLASS_DURATION,
         native_max_value=3600,  # 1 hour ?
@@ -105,8 +101,7 @@ ENTITY_DEFS = (
     ),
     PresenceConfigNumber.ENTITY_DEF(
         entity_key=f"presence_config_{mc.KEY_DISTANCE}_{mc.KEY_VALUE}",
-        key_group=mc.KEY_DISTANCE,
-        key_value=mc.KEY_VALUE,
+        key_value=PresenceConfigNumber.NestedKeyValue(mc.KEY_DISTANCE, mc.KEY_VALUE),
         device_scale=1000,
         name=mc.KEY_DISTANCE,
         device_class=NumberParser.DeviceClass.DISTANCE,
@@ -117,23 +112,24 @@ ENTITY_DEFS = (
     ),
     PresenceConfigSensitivity.ENTITY_DEF(
         entity_key=f"presence_config_{mc.KEY_SENSITIVITY}_{mc.KEY_LEVEL}",
-        key_group=mc.KEY_SENSITIVITY,
-        key_value=mc.KEY_LEVEL,
+        key_value=PresenceConfigSensitivity.NestedKeyValue(
+            mc.KEY_SENSITIVITY, mc.KEY_LEVEL
+        ),
         name=mc.KEY_SENSITIVITY,
     ),
     PresenceConfigMthX.ENTITY_DEF(
         entity_key=f"presence_config_{mc.KEY_MTHX}_{mc.KEY_MTH1}",
-        key_value=mc.KEY_MTH1,
+        key_value=PresenceConfigMthX.NestedKeyValue(mc.KEY_MTHX, mc.KEY_MTH1),
         name=mc.KEY_MTH1,
     ),
     PresenceConfigMthX.ENTITY_DEF(
         entity_key=f"presence_config_{mc.KEY_MTHX}_{mc.KEY_MTH2}",
-        key_value=mc.KEY_MTH2,
+        key_value=PresenceConfigMthX.NestedKeyValue(mc.KEY_MTHX, mc.KEY_MTH2),
         name=mc.KEY_MTH2,
     ),
     PresenceConfigMthX.ENTITY_DEF(
         entity_key=f"presence_config_{mc.KEY_MTHX}_{mc.KEY_MTH3}",
-        key_value=mc.KEY_MTH3,
+        key_value=PresenceConfigMthX.NestedKeyValue(mc.KEY_MTHX, mc.KEY_MTH3),
         name=mc.KEY_MTH3,
     ),
 )

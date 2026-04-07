@@ -39,22 +39,23 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
 
     POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_CONFIGURATION
 
+    ENTITY_DEFS = {
+        key: ScreenBrightnessNumber.ENTITY_DEF(
+            entity_key=f"screenbrightness_{key}",
+            key_value=ScreenBrightnessNumber.SimpleKeyValue(key),
+            name=f"Screen brightness ({key})",
+        )
+        for key in (mc.KEY_OPERATION, mc.KEY_STANDBY)
+    }
+
     def __init__(self, ns: "mn.Namespace", device: "Device", /):
         NamespaceHandler.__init__(self, ns, device)
         index = mn.IndexType.channel(0)
         self.register_parsers(
             *(
-                ScreenBrightnessNumber(
-                    0,
-                    device,
-                    entity_key=f"screenbrightness_{key}",
-                    name=f"Screen brightness ({key})",
-                    ns=ns,
-                    index=index,
-                    key_value=key,
-                )
-                for key in (mc.KEY_OPERATION, mc.KEY_STANDBY)
-            ),
+                entity_def(0, device, ns=ns, index=index)
+                for entity_def in self.ENTITY_DEFS.values()
+            )
         )
 
 
@@ -63,7 +64,7 @@ class MtsCommonTemperatureNumber(NumberParser):
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
 
-    init_key_value = mc.KEY_VALUE
+    # REMOVE init_key_value = NumberParser.SimpleKeyValue(mc.KEY_VALUE)
 
     _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
 
@@ -84,7 +85,7 @@ class MtsCommonTemperatureNumber(NumberParser):
             self.native_min_value = payload[mc.KEY_MIN] / self.device_scale
         except KeyError as e:
             self.log_exception(self.DEBUG, e, "_parse", timeout=14400)
-        self.update_device_value(payload[self.key_value])
+        self.update_device_value(payload[mc.KEY_VALUE])
 
 
 class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
@@ -110,7 +111,6 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
                     payload[mc.KEY_CHANNEL],
                     self.parent,
                     entity_key=entity_key,
-                    key_value=mc.KEY_WARNING,
                     device_value=warning,
                     translation_key=f"mts_{entity_key}",
                 )
@@ -205,7 +205,7 @@ class MtsSummerMode(SwitchParser):
     so we need a custom parser to manage it.
     """
 
-    init_key_value = mc.KEY_MODE
+    init_key_value = SwitchParser.SimpleKeyValue(mc.KEY_MODE)
     init_value_on = mc.MTS200_SUMMERMODE_COOL
     init_value_off = mc.MTS200_SUMMERMODE_HEAT
     init_entity_key = (
@@ -235,7 +235,7 @@ class MtsWindowOpened(BinarySensorParser):
     # Specialized binary sensor for Thermostat.WindowOpened entity used in Mts200-Mts960(maybe).
 
     init_entity_key = mc.KEY_WINDOWOPENED
-    init_key_value = mc.KEY_STATUS
+    init_key_value = BinarySensorParser.SimpleKeyValue(mc.KEY_STATUS)
 
     _attr_device_class = BinarySensorParser.DeviceClass.WINDOW
 
@@ -244,7 +244,7 @@ class MtsExternalSensorSwitch(SwitchParser):
     # External sensor mode: use internal(0) vs external(1) sensor as temperature loopback.
 
     init_entity_key = "external sensor mode"
-    init_key_value = mc.KEY_MODE
+    init_key_value = SwitchParser.SimpleKeyValue(mc.KEY_MODE)
 
 
 class MtsHoldAction(SelectParser):
@@ -253,7 +253,7 @@ class MtsHoldAction(SelectParser):
         number_time: NumberParser
 
     init_entity_key = "hold action"
-    init_key_value = mc.KEY_MODE
+    init_key_value = SelectParser.SimpleKeyValue(mc.KEY_MODE)
     init_options_map = {
         mc.MTS_HOLDACTION_PERMANENT: "permanent",
         mc.MTS_HOLDACTION_NEXT_SCHEDULE: "next_schedule",
@@ -264,7 +264,7 @@ class MtsHoldAction(SelectParser):
 
     # interface: self
     def _parse(self, payload: "mt.thermostat.HoldAction_C", /):
-        self.update_device_value(payload[self.key_value])
+        self.update_device_value(payload[mc.KEY_MODE])
         try:
             time = payload[mc.KEY_TIME]  # type: ignore
             self.number_time.update_device_value(time)
@@ -287,7 +287,7 @@ class MtsHoldAction(SelectParser):
     async def _async_request_value_number_time(self, device_value, /):
         await self.async_request_parse(
             {
-                self.key_value: mc.MTS_HOLDACTION_TIMER,
+                mc.KEY_MODE: mc.MTS_HOLDACTION_TIMER,
                 mc.KEY_TIME: device_value,
             }
         )
@@ -296,7 +296,7 @@ class MtsHoldAction(SelectParser):
 class MtsTempUnit(SelectParser):
 
     init_entity_key = "display_temperature_unit"
-    init_key_value = mc.KEY_TEMPUNIT
+    init_key_value = SelectParser.SimpleKeyValue(mc.KEY_TEMPUNIT)
     init_options_map = {
         mc.TEMPUNIT_CELSIUS: mlc.hac.UnitOfTemperature.CELSIUS,
         mc.TEMPUNIT_FAHRENHEIT: mlc.hac.UnitOfTemperature.FAHRENHEIT,

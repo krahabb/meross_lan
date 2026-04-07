@@ -362,7 +362,6 @@ class ParserEntity(parser.NamespaceParser, Entity):
         def ENTITY_DEF(cls, **kwargs: "Unpack[Args]") -> type["Self"]: ...
 
     NamespaceValue = parser.NamespaceValue
-    NamespaceGroupValue = parser.NamespaceGroupValue
 
     @override
     def set_available(self):

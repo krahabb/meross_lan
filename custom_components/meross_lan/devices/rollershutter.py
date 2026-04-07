@@ -96,7 +96,7 @@ class RollerShutter(Cover):
                     entity_key=f"config_{_key_value}",
                     ns=ns_config,
                     index=self.index,
-                    key_value=_key_value,
+                    key_value=NumberParser.SimpleKeyValue(_key_value),
                     name=_key_value,
                 ),
             )
@@ -342,7 +342,7 @@ class RollerShutterAdjustSwitch(SwitchParser):
     which seems to start some kind of adjustment operation.
     """
 
-    init_key_value = mc.KEY_VALUE
+    init_key_value = SwitchParser.SimpleKeyValue(mc.KEY_VALUE)
     init_value_on = 1
     init_value_off = 2
 
@@ -359,7 +359,7 @@ class RollerShutterAdjustSwitch(SwitchParser):
             # and when parsing a response to our SET command.
             # The 2 payloads are thus different so we're just handling
             # these scenarios with a try/except conditional
-            self.update_device_value(payload[self.key_value])
+            self.update_device_value(payload[mc.KEY_VALUE])  # type: ignore
         except KeyError:
             self.update_boolean_value(payload[mc.KEY_STATUS] != 0)
 

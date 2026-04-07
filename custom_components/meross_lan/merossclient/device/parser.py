@@ -122,11 +122,13 @@ class NamespaceParser(logging.Loggable):
     def handler_ns(self):
         return self.parent.ns_handlers[self.ns]
 
+    @final
     async def async_request_payload(self, payload: "JsonDict", /):
         return await self.parent.async_request(
             *self.ns.request_set(self.index | payload)
         )
 
+    @final
     async def async_request_parse(self, payload: "JsonDict", /):
         response = await self.parent.async_request(
             *self.ns.request_set(self.index | payload)
@@ -134,6 +136,7 @@ class NamespaceParser(logging.Loggable):
         self._parse(payload)
         return response
 
+    @final
     async def async_request_parse_ex(self, payload: "JsonDict", /):
         response = await self.parent.async_request(
             *self.ns.request_set(self.index | payload)
@@ -168,19 +171,70 @@ class NamespaceValue(NamespaceParser):
     """A specialization of NamespaceParser providing a simple interface to manage
     a single item value in the namespace payload."""
 
+    class _KeyValueDescriptor(str):
+        """Descriptor class to define how to extract the value from the payload and how to format it for requests.
+        In general, most of the device_value data are stored in the first level key of a dictionary payload, but in
+        some cases they are stored in nested dictionaries. This descriptor allows to abstract this logic and provide
+        a consistent interface for both cases."""
+
+        if TYPE_CHECKING:
+            # Using language specials to implement our custom methods
+            # in order to make the code less readable ;)
+            def __call__(self, value) -> "JsonDict": ...
+
+            """Returns a dict with the key(s) defined in this descriptor and the value provided as argument."""
+
+            def __getitem__(self, payload: "JsonMapping"): ...
+
+            """Extracts the value from the payload using the key(s) defined in this descriptor."""
+
+    class SimpleKeyValue(_KeyValueDescriptor):
+        """Descriptor for the simple case where the value is stored in the first level key of the payload."""
+
+        def __call__(self, value):
+            return {self: value}
+
+        def __getitem__(self, payload: "JsonMapping"):
+            return payload[self]
+
+    class NestedKeyValue(_KeyValueDescriptor):
+
+        if TYPE_CHECKING:
+            keys: tuple[str, ...]
+
+        __slots__ = ("keys",)
+
+        def __new__(cls, *keys: str):
+            return super().__new__(cls, "_".join(keys))
+
+        def __init__(self, *keys: str):
+            self.keys = keys
+
+        def __call__(self, value):
+            for key in reversed(self.keys):
+                value = {key: value}
+            return value
+
+        def __getitem__(self, payload: "JsonMapping"):
+            for key in self.keys:
+                payload = payload[key]
+            # TODO: test this generator expression for performance and readability against the more straightforward loop --- IGNORE ---
+            # (payload := payload[key] for key in self.keys)
+            return payload
+
     if TYPE_CHECKING:
 
-        init_key_value: ClassVar[str]
-        key_value: str
+        init_key_value: ClassVar[_KeyValueDescriptor]
+        key_value: _KeyValueDescriptor
         device_value: Any
 
         class Args(NamespaceParser.Args):
-            key_value: NotRequired[str]
+            key_value: NotRequired[NamespaceValue._KeyValueDescriptor]
             device_value: NotRequired[Any]
 
         def __init__(self, id, parent: PhysicalDevice, /, **kwargs: Unpack[Args]): ...
 
-    init_key_value = mc.KEY_VALUE
+    init_key_value = SimpleKeyValue(mc.KEY_VALUE)
 
     SLOTS_AUTO_INIT = ("key_value", "device_value")
 
@@ -197,13 +251,16 @@ class NamespaceValue(NamespaceParser):
         """Issues a command SET to update the device and also updates
         the entity state if the command was acknowledged by the device.
         Raises exception on connection/protocol errors."""
-        await self.async_request_payload({self.key_value: device_value})
+        # await self.async_request_payload({self.key_value: device_value})
+        await self.parent.async_request(
+            *self.ns.request_set(self.index | self.key_value(device_value))
+        )
         self.update_device_value(device_value)
 
     @override  # NamespaceParser
     def _parse(self, payload: "JsonMapping", /):
         self.ns_payload = payload
-        self.update_device_value(payload[self.key_value])
+        self.update_device_value(self.key_value[payload])
 
 
 class NamespaceBoolean(NamespaceValue):
@@ -223,7 +280,7 @@ class NamespaceBoolean(NamespaceValue):
             value_off: NotRequired[int]
             is_on: NotRequired[bool]
 
-    init_key_value = mc.KEY_ONOFF
+    init_key_value = NamespaceValue.SimpleKeyValue(mc.KEY_ONOFF)
     init_value_on = 1
     init_value_off = 0
 
@@ -251,15 +308,16 @@ class NamespaceBoolean(NamespaceValue):
         await self.async_request_value(self.value_off)
 
 
+"""REMOVE
 class NamespaceGroupValue(NamespaceValue):
-    """
+    ""
     Parser for payload values embedded in a(sub)dictionary in the namespace payload. The key of the
     dictionary is defined by the 'key_group' attribute and the value is defined by 'key_value'.
     This class could also be used as a mixin with other NamespaceParser specializations.
     TODO: generalize this to multiple levels of nesting with a list of keys instead
     of a single 'key_group' and a single 'key_value'. Or maybe, dynamically install
     a custom parse/request in default parser class methods.
-    """
+    ""
 
     if TYPE_CHECKING:
         init_key_group: ClassVar[str]
@@ -285,3 +343,4 @@ class NamespaceGroupValue(NamespaceValue):
     def _parse(self, payload, /):
         self.ns_payload = payload
         self.update_device_value(payload[self.key_group][self.key_value])
+"""

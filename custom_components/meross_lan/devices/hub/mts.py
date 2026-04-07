@@ -18,7 +18,7 @@ class mts100v3(SubDevice, MtsClimate):
     class AdjustNumber(MtsClimate.AdjustNumber):
 
         init_ns = mn_h.Appliance_Hub_Mts100_Adjust
-        init_key_value = mc.KEY_TEMPERATURE
+        init_key_value = MtsClimate.AdjustNumber.SimpleKeyValue(mc.KEY_TEMPERATURE)
         init_entity_key = f"config_{init_ns.key}_{init_key_value}"
         init_device_scale = 100
         _attr_native_max_value = 5
@@ -53,7 +53,10 @@ class mts100v3(SubDevice, MtsClimate):
     # if mts100 is in any of 'off', 'auto' we just set the 'custom'
     # target temp but of course the valve will not follow
     # this temp since it's mode is not set to follow a manual set
-    MTS_MODE_TO_TEMPERATUREKEY_MAP = mc.MTS100_MODE_TO_CURRENTSET_MAP
+    MTS_MODE_TO_TEMPERATUREKEY_MAP = {
+        k: SubDevice.NamespaceValue.SimpleKeyValue(v)
+        for k, v in mc.MTS100_MODE_TO_CURRENTSET_MAP.items()
+    }
 
     # HA core entity attributes:
     _unrecorded_attributes = frozenset(

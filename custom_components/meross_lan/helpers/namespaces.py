@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, override
 
 from .. import const as mlc
 from ..merossclient.device.handler import NamespaceHandler as _NH
-from ..merossclient.device.parser import NamespaceParser
+from ..merossclient.device.parser import NamespaceParser, NamespaceValue
 from ..merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
@@ -139,7 +139,6 @@ class EntityDefNamespaceHandler(NamespaceHandler):
         super().shutdown()
 
     def _handle(self, message: "MerossMessage", /):
-
         parsers = self.parsers
         for key, value in message.payload[self.id.key].items():
             try:
@@ -152,8 +151,10 @@ class EntityDefNamespaceHandler(NamespaceHandler):
                             None,
                             self.parent,
                             ns=self.id,
-                            key_value=key,
                             device_value=value,
+                            # key_value is likely not needed since these entities are mostly just sensors
+                            # and the parsing is done here in the handler instead of the parser, but it
+                            # could be added to the entity def if needed (for active entities like switches or numbers)
                         )
                     )
                 except Exception as e:

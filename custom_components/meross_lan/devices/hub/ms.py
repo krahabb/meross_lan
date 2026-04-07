@@ -34,7 +34,7 @@ class gs559(SensorSubDevice, EnumParser):
         STATUS_MUTED: Final[set[int]]
 
     init_ns = mn_h.Appliance_Hub_Sensor_Smoke
-    init_key_value = mc.KEY_STATUS
+    init_key_value = EnumParser.SimpleKeyValue(mc.KEY_STATUS)
     _attr_translation_key = "smoke_alarm_status"
 
     STATUS_MAP = {
@@ -138,14 +138,14 @@ class ms100(SensorSubDevice, SensorParser):
             # the 'new adjust value' we have to issue the difference against the
             # currently configured one
             await self.async_request_payload(
-                {self.key_value: device_value - self.device_value}
+                self.key_value(device_value - self.device_value)
             )
             self.update_device_value(device_value)
 
     class AdjustTemperatureNumber(SensorAdjustNumber):
 
         init_entity_key = "config_adjust_temperature"
-        init_key_value = mc.KEY_TEMPERATURE
+        init_key_value = NumberParser.SimpleKeyValue(mc.KEY_TEMPERATURE)
         _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
         _attr_name = "Adjust temperature"
         _attr_native_min_value = -5
@@ -155,7 +155,7 @@ class ms100(SensorSubDevice, SensorParser):
     class AdjustHumidityNumber(SensorAdjustNumber):
 
         init_entity_key = "config_adjust_humidity"
-        init_key_value = mc.KEY_HUMIDITY
+        init_key_value = NumberParser.SimpleKeyValue(mc.KEY_HUMIDITY)
         _attr_device_class = NumberParser.DeviceClass.HUMIDITY
         _attr_name = "Adjust humidity"
         _attr_native_min_value = -20
@@ -339,7 +339,7 @@ class ms130(ms100):
 
 class ms200(SensorSubDevice, BinarySensorParser):
     init_ns = mn_h.Appliance_Hub_Sensor_DoorWindow
-    init_key_value = mc.KEY_STATUS
+    init_key_value = BinarySensorParser.SimpleKeyValue(mc.KEY_STATUS)
     _attr_device_class = BinarySensorParser.DeviceClass.WINDOW
 
     @cached_property
@@ -349,7 +349,7 @@ class ms200(SensorSubDevice, BinarySensorParser):
 
 class ms400(SensorSubDevice, BinarySensorParser):
     init_ns = mn_h.Appliance_Hub_Sensor_WaterLeak
-    init_key_value = mc.KEY_LATESTWATERLEAK
+    init_key_value = BinarySensorParser.SimpleKeyValue(mc.KEY_LATESTWATERLEAK)
     _attr_device_class = BinarySensorParser.DeviceClass.SAFETY
 
     @cached_property

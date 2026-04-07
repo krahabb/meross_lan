@@ -76,7 +76,7 @@ class EntityTest(EntityComponentTest):
         mn_t.Appliance_Control_Thermostat_HoldAction: [number.NumberParser],
         mn_t.Appliance_Control_Thermostat_ModeC: [
             Mts300Climate.AdjustNumber,
-            number.NumberParser,  # humidity_calibration
+            Mts300Climate.AdjustNumber.AdjustHumidityNumber,  # humidity_calibration
             number.NumberParser,  # fan_hold_time
         ],
         mn_t.Appliance_Control_Thermostat_Overheat: [MtsOverheatNumber],

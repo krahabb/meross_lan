@@ -283,7 +283,7 @@ class ConsumptionHSensor(SensorParser):
         handler_ns: "ConsumptionHNamespaceHandler"
 
     init_entity_key = mc.KEY_CONSUMPTIONH
-    init_key_value = mc.KEY_TOTAL
+    init_key_value = SensorParser.SimpleKeyValue(mc.KEY_TOTAL)
 
     _attr_device_class = SensorParser.DeviceClass.ENERGY
     _attr_name = "Consumption"
@@ -649,7 +649,7 @@ class OverTempEnableSwitch(SwitchParser, EntityNamespaceMixin):
 
     POLLING_CONFIG_DEFAULT = EntityNamespaceMixin.POLLING_CONFIG_CONFIGURATION
     init_entity_key = "config_overtemp_enable"
-    init_key_value = mc.KEY_ENABLE
+    init_key_value = SwitchParser.SimpleKeyValue(mc.KEY_ENABLE)
 
     __SLOTS__ = ("sensor_overtemp_type",)
 

@@ -22,7 +22,10 @@ class Mts200Climate(MtsThermostatClimate):
         mc.MTS200_MODE_ECO: MtsThermostatClimate.Preset.AWAY,
         mc.MTS200_MODE_AUTO: MtsThermostatClimate.Preset.AUTO,
     }
-    MTS_MODE_TO_TEMPERATUREKEY_MAP = mc.MTS200_MODE_TO_TARGETTEMP_MAP
+    MTS_MODE_TO_TEMPERATUREKEY_MAP = {
+        k: MtsThermostatClimate.NamespaceValue.SimpleKeyValue(v)
+        for k, v in mc.MTS200_MODE_TO_TARGETTEMP_MAP.items()
+    }
 
     # interface: MtsClimate
     def flush_state(self, /):

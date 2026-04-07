@@ -21,11 +21,11 @@ class Siren(BinaryParser, siren.SirenEntity):
     """
 
     class EnableSwitch(SwitchParser):
-        init_key_value = mc.KEY_ENABLE
+        init_key_value = SwitchParser.SimpleKeyValue(mc.KEY_ENABLE)
         init_entity_key = f"{mn.Appliance_Config_Alarm.slug}__{init_key_value}"
 
     class SongSelect(SelectParser):
-        init_key_value = mc.KEY_SONG
+        init_key_value = SelectParser.SimpleKeyValue(mc.KEY_SONG)
         init_entity_key = f"{mn.Appliance_Config_Alarm.slug}__{init_key_value}"
 
         init_options_map = {
@@ -39,7 +39,7 @@ class Siren(BinaryParser, siren.SirenEntity):
         }
 
     class VolumeNumber(NumberParser):
-        init_key_value = mc.KEY_VOLUME
+        init_key_value = NumberParser.SimpleKeyValue(mc.KEY_VOLUME)
         init_entity_key = f"{mn.Appliance_Config_Alarm.slug}__{init_key_value}"
         _attr_native_max_value = 100
         _attr_native_min_value = 0
@@ -54,7 +54,7 @@ class Siren(BinaryParser, siren.SirenEntity):
             pass
 
     PLATFORM = siren.DOMAIN
-    init_key_value = "event_security_value"
+    init_key_value = BinaryParser.NestedKeyValue("event", "security", "value")
     init_entity_key = f"{mn.Appliance_Control_Alarm.slug}__{init_key_value}"
     init_value_on = 1
     init_value_off = 2
@@ -94,13 +94,6 @@ class Siren(BinaryParser, siren.SirenEntity):
             )
 
     @override
-    async def async_request_value(self, device_value, /) -> None:
-        await self.async_request_payload(
-            {"event": {"security": {"value": device_value}}}
-        )
-        self.update_device_value(device_value)
-
-    @override
     async def async_turn_on(self, **kwargs):
         if kwargs:
             payload = self.index.copy()
@@ -112,16 +105,7 @@ class Siren(BinaryParser, siren.SirenEntity):
             await self.parent.async_request(
                 *mn.Appliance_Config_Alarm.request_set(payload)
             )
-
         await self.async_request_value(self.value_on)
-
-    @override
-    def _parse(self, payload: "JsonDict") -> None:
-        """Parse Appliance.Control.Alarm message."""
-        try:
-            self.update_device_value(payload["event"]["security"]["value"])
-        except KeyError:
-            pass
 
     @classmethod
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
