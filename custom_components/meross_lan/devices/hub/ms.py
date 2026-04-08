@@ -129,6 +129,10 @@ class ms100(SensorSubDevice, SensorParser):
 
         init_device_scale = 10
 
+        def __init__(self, id, parent: "Hub", /, **kwargs: "Unpack[NumberParser.Args]"):
+            NumberParser.__init__(self, id, parent, **kwargs)
+            parent.add_entity(self)
+
         @override
         async def async_request_value(self, device_value, /):
             # the SET command on NS_APPLIANCE_HUB_SENSOR_ADJUST works by applying
@@ -208,21 +212,17 @@ class ms100(SensorSubDevice, SensorParser):
         device = self.parent
         device.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
             self,
-            *device.add_entities(
-                [
-                    ms100.AdjustTemperatureNumber(
-                        self.id,
-                        device,
-                        index=self.index,
-                        device_value=payload[mc.KEY_TEMPERATURE],
-                    ),
-                    ms100.AdjustHumidityNumber(
-                        self.id,
-                        device,
-                        index=self.index,
-                        device_value=payload[mc.KEY_HUMIDITY],
-                    ),
-                ]
+            ms100.AdjustTemperatureNumber(
+                self.id,
+                device,
+                index=self.index,
+                device_value=payload[mc.KEY_TEMPERATURE],
+            ),
+            ms100.AdjustHumidityNumber(
+                self.id,
+                device,
+                index=self.index,
+                device_value=payload[mc.KEY_HUMIDITY],
             ),
         )
         # swap also the update_sensors method to a smarter one
@@ -247,7 +247,6 @@ class ms100(SensorSubDevice, SensorParser):
         _poll_adjust = bool(self.update_device_value(temperature))
         _poll_adjust |= bool(self.sensor_humidity.update_device_value(humidity))
         if _poll_adjust:
-
             handler = self.parent.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust]
             if handler.last_poll_epoch < (self.parent.last_rx_epoch - 30):
                 handler.next_poll_epoch = 0.0

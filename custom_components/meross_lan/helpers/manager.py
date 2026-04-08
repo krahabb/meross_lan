@@ -93,6 +93,11 @@ class ConfigEntryManager(logging.Loggable):
         """Link to optional DeviceRegistry entry info."""
         platforms: dict[str, EntityPlatform]
         entities: Final[dict[object, Entity]]
+        _added_platform_entities: dict[str, list[Entity]]
+        """Entities added lately when ConfigEntry has already been loaded.
+        This will be used to lazily forward them to the right platform.
+        This is needed because 'dynamic' entities are mostly created in sync code
+        while platform setup need to be correctly serialized."""
         logger: logging._Logger
         is_connected: Final[
             bool
@@ -122,6 +127,7 @@ class ConfigEntryManager(logging.Loggable):
         "device_entry",
         "platforms",
         "entities",
+        "_added_platform_entities",
         "logger",
         "is_connected",
         "_issues",
@@ -354,38 +360,28 @@ class ConfigEntryManager(logging.Loggable):
             await entity.async_shutdown()
             ent_reg.async_remove(entity.entity_id)
 
-    def add_entity[_T: "Entity"](self, entity: _T, /):  # type: ignore
+    def add_entity[_T: "Entity"](self, entity: _T):  # type: ignore
         try:
-            self.create_task(
-                self.platforms[entity.PLATFORM].async_add_entities([entity]),
-                ".add_entity",
-            )
+            self._added_platform_entities[entity.PLATFORM].append(entity)
+        except AttributeError:
+            self._added_platform_entities = {entity.PLATFORM: [entity]}
+            self.schedule_async_callback(0, self.async_check_add_entities)
         except KeyError:
-            self.create_task(
-                self.parent.config_entries.async_forward_entry_setups(
-                    self.config_entry, (entity.PLATFORM,)
-                ),
-                ".add_entity",
-            )
+            self._added_platform_entities[entity.PLATFORM] = [entity]
         return entity
 
-    def add_entities[_T: "Entity"](self, entities: list[_T], /):
-        """Add multiple entities at once. This is more efficient since it allows to forward
-        setup only once per platform. Entities have to be all of the same platform (no check).
-        """
+    async def async_check_add_entities(self, /):
         try:
-            self.create_task(
-                self.platforms[entities[0].PLATFORM].async_add_entities(entities),
-                ".add_entities",
-            )
-        except KeyError:
-            self.create_task(
-                self.parent.config_entries.async_forward_entry_setups(
-                    self.config_entry, (entities[0].PLATFORM,)
-                ),
-                ".add_entities",
-            )
-        return entities
+            for platform, entities in self._added_platform_entities.items():
+                try:
+                    await self.platforms[platform].async_add_entities(entities)
+                except KeyError:
+                    await self.parent.config_entries.async_forward_entry_setups(
+                        self.config_entry, (platform,)
+                    )
+            del self._added_platform_entities
+        except AttributeError:
+            return
 
     def create_issue(
         self,
