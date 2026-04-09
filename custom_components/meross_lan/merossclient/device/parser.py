@@ -292,11 +292,15 @@ class NamespaceBoolean(NamespaceValue):
             self.device_value = device_value
             match device_value:
                 case self.value_on:
-                    self.is_on = True
+                    return self.update_boolean_value(True)
                 case self.value_off:
-                    self.is_on = False
+                    return self.update_boolean_value(False)
                 case _:
-                    self.is_on = None
+                    return self.update_boolean_value(None)
+
+    def update_boolean_value(self, is_on: bool | None, /) -> bool | None:
+        if self.is_on != is_on:
+            self.is_on = is_on
             return True
 
     # interface compatibility with HA toggle entities, allowing to use this class as a

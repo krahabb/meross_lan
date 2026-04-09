@@ -61,6 +61,6 @@ class EntityTest(ToggleEntityComponentTest):
             switch.SwitchParser,  # beep
         ],
         mc.KEY_DOORWINDOW: [switch.SwitchParser],  # beep
-        mc.KEY_MST: [mst.mst100],
+        mc.KEY_MST: [mst.mst100.Switch],
         mc.KEY_WATERLEAK: [switch.SwitchParser],  # beep
     }

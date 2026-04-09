@@ -34,7 +34,6 @@ class mts100v3(SubDevice, MtsClimate):
         mn_h.Appliance_Hub_Mts100_All,
         mn_h.Appliance_Hub_Mts100_Mode,
         mn_h.Appliance_Hub_ToggleX,
-        *SubDevice.NS_HUB,
     )
     init_ns = mn_h.Appliance_Hub_Mts100_Temperature
 
@@ -54,7 +53,7 @@ class mts100v3(SubDevice, MtsClimate):
     # target temp but of course the valve will not follow
     # this temp since it's mode is not set to follow a manual set
     MTS_MODE_TO_TEMPERATUREKEY_MAP = {
-        k: SubDevice.NamespaceValue.SimpleKeyValue(v)
+        k: MtsClimate.NamespaceValue.SimpleKeyValue(v)
         for k, v in mc.MTS100_MODE_TO_CURRENTSET_MAP.items()
     }
 
@@ -224,10 +223,11 @@ class mts100v3(SubDevice, MtsClimate):
                 pass
         self.flush_state()
 
-    # interface: SubDeviceEntity
+    # interface: SubDevice
+    @override
     def _parse_all(self, payload: "mt.hub.Mts100_All", /):
         self._parse_online(payload[mc.KEY_ONLINE])
-        if not self.available:
+        if not self.is_connected:
             return
         if mc.KEY_SCHEDULEBMODE in payload:
             self.update_scheduleb_mode(payload[mc.KEY_SCHEDULEBMODE])

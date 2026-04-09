@@ -106,7 +106,6 @@ class Hub(mld.Device):
     # We cannot define slots in this subclass because of how we install
     # this at runtime over a standard Device class instance (already created)
     # Any slot should then be declared in Device.
-    # __slots__ = ("subdevices",)
 
     @override
     async def async_init(self, /):
@@ -180,10 +179,16 @@ class Hub(mld.Device):
             )
 
     @override
-    def get_device_entry(self, channel, /):
-        if not channel:
+    def get_device_entry(self, index_value, /):
+        if not index_value:
+            # Either a non parser entity or a parser entity with no indexing (i.e. unique for the device)
             return self.device_entry
-        return self.subdevices[channel].device_entry
+        try:
+            return self.subdevices[index_value].device_entry  # type: ignore
+        except KeyError:
+            # assuming index.type is mn.IndexType.subId
+            assert type(index_value) is tuple
+            return self.subdevices[index_value[0]].device_entry  # type: ignore
 
     @override
     def update_device_info(
@@ -261,7 +266,7 @@ class Hub(mld.Device):
         self.parse_digest(self.descriptor.digest[mc.KEY_HUB])
 
 
-class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
+class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
     """
     Class for a physical subdevice registered with a Hub device.
     This class acts as the 'main entity' behavior (thermostat for mts valves or a in
@@ -270,7 +275,10 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
 
     if TYPE_CHECKING:
         NS_HUB: ClassVar[Iterable[Namespace]]
-        """Namespaces to be registered for this subdevice."""
+        """Namespaces to be registered for this subdevice. Every (sub)class can declare
+        its own needs and SubDevice.__init__ will automatically add (self) parser registration
+        for the ns. If this subdevice/entity also defines self.ns (through init_ns) it will also
+        be automatically added to the list of registrations."""
         parent: Final[Hub]  # type: ignore[override]
         """SubDevice Identifier."""
         device_entry: Final[dr.DeviceEntry]  # type: ignore[override]
@@ -303,11 +311,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
         mn_h.Appliance_Hub_SubDevice_Beep,
         mn_h.Appliance_Hub_SubDevice_Version,
     )
-
-    # This is used by SubDevice init together with NS_HUB for automatic ns registrations.
-    # It is likely to be overriden in actual implementations but the default
-    # is set just for the case where we instantiate a SubDevice without specialization.
-    init_ns = mn_h.Appliance_Hub_ToggleX
 
     __SLOTS__ = (
         "key_digest",
@@ -392,24 +395,29 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
         assert (
             subid not in hub.subdevices
         ), f"Subdevice with id {subid} already exists in hub {hub.display_name}"
+        # Preset here so that device_entry lookup in case this is an Entity class will work
         hub.subdevices[subid] = self
+        self.device_entry = hub.parent.device_registry.async_get_or_create(
+            config_entry_id=hub.config_entry.entry_id,
+            manufacturer=mc.MANUFACTURER,
+            name=get_productname(model),
+            model=model,
+            via_device=next(iter(hub.device_entry.identifiers)),
+            identifiers={(mlc.DOMAIN, subid)},
+        )
         self.key_digest = key_digest
         self.model = model
         kwargs["index"] = mn.IndexType.id(subid)
-        super().__init__(
-            subid,
-            hub,
-            device_entry=hub.parent.device_registry.async_get_or_create(
-                config_entry_id=hub.config_entry.entry_id,
-                manufacturer=mc.MANUFACTURER,
-                name=get_productname(model),
-                model=model,
-                via_device=next(iter(hub.device_entry.identifiers)),
-                identifiers={(mlc.DOMAIN, subid)},
-            ),
-            **kwargs,
-        )
-        hub.register_parser_ex(self, self.ns, *self.NS_HUB)
+        super().__init__(subid, hub, **kwargs)
+        _ns_hub = [self.ns] if self.ns else []
+        for _cls in self.__class__.__mro__:
+            try:
+                _ns_hub.extend(_cls.__dict__["NS_HUB"])
+            except KeyError:
+                pass
+            if _cls is SubDevice:
+                break
+        hub.register_parser_ex(self, *_ns_hub)
         hub.get_handler(mn_h.Appliance_Hub_Battery).register_parser(
             SensorParser(
                 subid,
@@ -453,13 +461,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
     @override  # interface: PhysicalDevice
     def firmware_version(self, /) -> str:
         return self.device_entry.sw_version or self.latest_version[mc.KEY_VERSION]
-
-    # interface: ParserEntity
-    @override
-    def set_unavailable(self):
-        if self.is_connected:
-            self.on_disconnect()
-        super().set_unavailable()
 
     # interface: self
     async def async_subdevice_shutdown(self):
@@ -521,7 +522,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
     def _parse_all(self, payload: dict, /):
         """
         Heuristic parser for Appliance.Hub.Mts100.All or Appliance.Hub.Sensor.All
-        when the SubDevice doesn't have a SubDeviceEntity specialization. This is
+        when the SubDevice doesn't have a specialization. This is
         automatically invoked by _hub_parse.
         # {
         #     keys appearing in any subdevice type
@@ -572,13 +573,9 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
         if payload[mc.KEY_STATUS] == mc.STATUS_ONLINE:
             if not self.is_connected:
                 self.on_connect()
-                if not self.available:
-                    for entity in self.entities.values():
-                        entity.set_available()
         else:
-            if self.available:
-                for entity in self.entities.values():
-                    entity.set_unavailable()
+            if self.is_connected:
+                self.on_disconnect()
 
     def _parse_beep(self, payload: "mt.hub.SubDevice_Beep", /):
         self.parent.ns_handlers[mn_h.Appliance_Hub_SubDevice_Beep].swap_parsers(
@@ -591,7 +588,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, mle.ParserEntity):
                         f"{mn_h.Appliance_Hub_SubDevice_Beep.slug}__{SwitchParser.init_key_value}"
                     ),
                     ns=mn_h.Appliance_Hub_SubDevice_Beep,
-                    index=self.index,
+                    index=mn.IndexType.id(self.id),
                     name="Beep alarm",
                     device_value=payload[mc.KEY_ONOFF],
                 )

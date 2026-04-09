@@ -45,7 +45,6 @@ if TYPE_CHECKING:
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import CALLBACK_TYPE, HomeAssistant
-    from homeassistant.helpers.device_registry import DeviceEntry
     from homeassistant.helpers.entity_platform import EntityPlatform
 
     from ..merossclient import HostAddress
@@ -89,8 +88,6 @@ class ConfigEntryManager(logging.Loggable):
         config: Mapping[str, Any]
         key: str
         obfuscate: bool
-        device_entry: Final[DeviceEntry | None]
-        """Link to optional DeviceRegistry entry info."""
         platforms: dict[str, EntityPlatform]
         entities: Final[dict[object, Entity]]
         _added_platform_entities: dict[str, list[Entity]]
@@ -110,7 +107,7 @@ class ConfigEntryManager(logging.Loggable):
         _entry_update_listener_unsub: CALLBACK_TYPE
 
         class Args(logging.Loggable.Args):
-            device_entry: NotRequired[DeviceEntry | None]
+            pass
 
     ROOT_LOGGER = logging.getLogger(__name__[:-16])
     """Root meross_lan logger"""
@@ -124,7 +121,6 @@ class ConfigEntryManager(logging.Loggable):
         "config",
         "key",
         "obfuscate",
-        "device_entry",
         "platforms",
         "entities",
         "_added_platform_entities",
@@ -156,7 +152,6 @@ class ConfigEntryManager(logging.Loggable):
             self.config = {}
             self.key = mlc.PARAM_DEFAULT_KEY
             self.obfuscate = True
-        self.device_entry = kwargs.pop("device_entry", None)
         self.platforms = {}
         self.entities = {}
         self.is_connected = self.init_is_connected
@@ -241,10 +236,7 @@ class ConfigEntryManager(logging.Loggable):
 
     @property
     def display_name(self) -> str:
-        de = self.device_entry
-        return (de and (de.name_by_user or de.name)) or (
-            self.config_entry.title if self.config_entry else self.logtag
-        )
+        return self.config_entry.title if self.config_entry else self.logtag
 
     def generate_unique_id(self, entity: "Entity", /):
         """
@@ -256,14 +248,14 @@ class ConfigEntryManager(logging.Loggable):
         """
         return f"{self.id}_{entity.id}"
 
-    def get_device_entry(self, channel, /):
+    def get_device_entry(self, index_value, /):
         """
         Return the DeviceRegistry entry for a given channel (if any).
         By default this returns self.device_entry but derived classes
         (like Hub) could override this to return different entries
         for different channels.
         """
-        return self.device_entry
+        return None
 
     async def async_setup_entry(
         self, hass: "HomeAssistant", config_entry: "ConfigEntry", /

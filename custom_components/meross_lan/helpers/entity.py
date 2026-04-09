@@ -63,7 +63,6 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             entity_key: NotRequired[str | None]
             # HA core entity attributes:
             device_class: NotRequired[str | None]
-            device_entry: NotRequired[DeviceEntry]
             entity_category: NotRequired[entity.EntityCategory | None]
             entity_registry_enabled_default: NotRequired[bool]
             name: NotRequired[str | None]
@@ -117,6 +116,10 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         "translation_key",
         "icon",
     )
+
+    # This works as a default for all the entities which are not NamespaceParsers.
+    index = mn.IndexType.none()
+
     is_diagnostic = False
 
     # HA core entity attributes:
@@ -147,9 +150,11 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             # and general coding in our inheritance scheme.
             # In this case we set the channel to None and store the namespace in a dedicated
             # variable for later use in parsing and so on.
-            channel = None
+            self.device_entry = manager.get_device_entry(None)
         else:
-            channel = id
+            # We're receiving either the channel or the subdevice id in this 'id' variable and
+            # we use it to get the correct device entry for this entity.
+            self.device_entry = manager.get_device_entry(id)
             if id is None:
                 assert (
                     entity_key is not None
@@ -168,10 +173,6 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         self.has_entity_name = True
         self.should_poll = False
         # HA core special handling
-        try:
-            self.device_entry = kwargs.pop("device_entry")
-        except KeyError:
-            self.device_entry = manager.get_device_entry(channel)
         try:
             self.name = kwargs.pop("name")
         except KeyError:
@@ -272,16 +273,15 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         return None
 
     def set_available(self):
-        if self._attr_available:
-            return  # this entity is always available, no need to flush
+        """Expected to be called by device/subdevice on_connect."""
         self.available = True
         self.flush_state()
 
     def set_unavailable(self):
-        if self._attr_available:
-            return  # this entity is always available, no need to flush
-        self.available = False
-        self.flush_state()
+        """Expected to be called by device/subdevice on_disconnect."""
+        if not self._attr_available:
+            self.available = False
+            self.flush_state()
 
     def update_device_value(self, device_value, /) -> bool | None:
         raise NotImplementedError(
@@ -494,6 +494,7 @@ class BinaryEntity(Entity):
 
     SLOTS_AUTO_INIT = ("is_on",)
     __slots__ = ("is_on",)
+    # TODO: fix _calc_slots in descendants by maybe adding an init_subclass in BinaryParser.
 
     def update_boolean_value(self, is_on: "Any", /) -> bool | None:
         if self.is_on != is_on:
@@ -536,12 +537,7 @@ class BinaryParser(parser.NamespaceBoolean, ValueParser, BinaryEntity):
         self.is_on = None
         super().set_unavailable()
 
-    @override
-    def update_device_value(self, device_value, /) -> bool | None:
-        """Default parsing for toggles and binary sensors. Set the proper
-        key_value in class/instance definition to make it work."""
-        if super().update_device_value(device_value):
-            self.flush_state()
+    update_boolean_value = BinaryEntity.update_boolean_value  # type: ignore[assignment]
 
 
 class ToggleXParser(BinaryEntity, ParserEntity):

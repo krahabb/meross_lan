@@ -74,11 +74,25 @@ class BaseDevice(device.PhysicalDevice):
         entities: Mapping[object, Entity]
 
         class Args(device.PhysicalDevice.Args):
-            device_entry: dr.DeviceEntry
+            pass
 
         def __init__(
             self, id, parent: ConfigEntryManager, /, **kwargs: Unpack[Args]
         ): ...
+
+    @override
+    def on_connect(self):
+        super().on_connect()
+        for entity in self.entities.values():
+            if not entity.available:
+                entity.set_available()
+
+    @override
+    def on_disconnect(self):
+        super().on_disconnect()
+        for entity in self.entities.values():
+            if entity.available:
+                entity.set_unavailable()
 
     # interface: self
     entities = NotImplemented
@@ -176,7 +190,6 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         # Overrides
         config_entry: Final[ConfigEntry]  # type: ignore[override]
         config: mlc.DeviceConfigType
-        device_entry: Final[dr.DeviceEntry]  # type: ignore[override]
 
         descriptor: Final[DeviceDescriptor]  # type: ignore[override]
         bluetooth: Final[ComponentApi.BTClient | None]  # type: ignore[override]
@@ -196,6 +209,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         this list will be excluded from enumeration since it's redundant/exposing sensitive info
         or simply crashes/hangs the device."""
 
+        device_entry: Final[dr.DeviceEntry]
         # these are set from ConfigEntry
         configured_transport: Transport
         host: str | None
@@ -416,19 +430,19 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             device_id,
             api,
             config_entry,
-            device_entry=api.device_registry.async_get_or_create(
-                config_entry_id=config_entry.entry_id,
-                connections={(dr.CONNECTION_NETWORK_MAC, descriptor.macAddress)},
-                manufacturer=mc.MANUFACTURER,
-                name=descriptor.productname,
-                model=descriptor.productmodel,
-                hw_version=descriptor.hardwareVersion,
-                sw_version=descriptor.firmwareVersion,
-                identifiers={(mlc.DOMAIN, device_id)},
-            ),
             # configure AbstractClient
             key=config_entry.data.get(mlc.CONF_KEY) or "",  # type: ignore[argument]
             descriptor=descriptor,  # type: ignore[argument],
+        )
+        self.device_entry = api.device_registry.async_get_or_create(
+            config_entry_id=config_entry.entry_id,
+            connections={(dr.CONNECTION_NETWORK_MAC, descriptor.macAddress)},
+            manufacturer=mc.MANUFACTURER,
+            name=descriptor.productname,
+            model=descriptor.productmodel,
+            hw_version=descriptor.hardwareVersion,
+            sw_version=descriptor.firmwareVersion,
+            identifiers={(mlc.DOMAIN, device_id)},
         )
         self.device_timestamp = 0
         self.device_timedelta = 0
@@ -632,25 +646,34 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         await ConfigEntryManager.async_setup_entry(self, hass, config_entry)
 
     @override
-    def get_device_entry(self, channel, /):
-        if (not channel) or (len(self.descriptor.channels) <= 1):
+    def get_device_entry(self, index_value, /):
+        if not index_value:
+            # Either a non parser entity or a parser entity with no indexing (i.e. unique for the device)
+            # or an entity for channel == 0
             return self.device_entry
 
         try:
-            return self._device_entries[channel]
+            return self._device_entries[index_value]
         except AttributeError:
+            # _device_entries only built if needed
             self._device_entries = {}
         except KeyError:
             pass
 
-        self._device_entries[channel] = device_entry = (
+        # We expect index_value to be a channel number...
+        assert (
+            type(index_value) is int
+        ), "index_value is expected to be an int representing the channel number (got {})".format(
+            type(index_value)
+        )
+        self._device_entries[index_value] = device_entry = (
             self.parent.device_registry.async_get_or_create(
                 config_entry_id=self.config_entry.entry_id,
                 manufacturer=mc.MANUFACTURER,
-                name=f"{self.device_entry.name} Channel {channel}",
+                name=f"{self.device_entry.name} Channel {index_value}",
                 model=self.device_entry.model,
                 via_device=next(iter(self.device_entry.identifiers)),
-                identifiers={(mlc.DOMAIN, f"{self.id}_{channel}")},
+                identifiers={(mlc.DOMAIN, f"{self.id}_{index_value}")},
             )
         )
         return device_entry
@@ -921,8 +944,6 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
     @override
     def on_connect(self, /):
         super().on_connect()
-        for entity in self.entities.values():
-            entity.set_available()
         if self._check_device_time_enabled:
             self.schedule_callback(
                 self.PARAM_CHECK_DEVICE_TIME_START_DELAY, self._check_device_time
@@ -948,8 +969,6 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
     def on_disconnect(self, /):
         super().on_disconnect()
         self.cancel_callback(self._check_device_time)
-        for entity in self.entities.values():
-            entity.set_unavailable()
 
     @override
     async def async_request(

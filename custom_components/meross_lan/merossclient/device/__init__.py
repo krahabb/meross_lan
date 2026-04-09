@@ -200,10 +200,11 @@ class Device(PhysicalDevice):
         need to be kept in sync (This is mostly accomplished in AbstractMQTTConnection.Client)."""
         _clients: Final[dict[Transport, AbstractClient]]
         _clients_connected: Final[dict[Transport, AbstractClient]]
-
+        subdevices: dict[str, "SubDevice"]
+        """This is by default an immutable empty dict in order to set an efficient placeholder. For real Hubs
+        it must be reinitialized with an effective dict to allow storing the map of subdevices."""
         ns_handlers: Final[dict[mn.Namespace, NamespaceHandler]]
         handler_all: Final[NamespaceHandler]
-        subdevices: dict[str, "SubDevice"]
 
         tz: tzinfo
 
@@ -243,9 +244,9 @@ class Device(PhysicalDevice):
         "mqtt_active",
         "_clients",
         "_clients_connected",
+        "subdevices",
         "ns_handlers",
         "handler_all",
-        "subdevices",  # used in Hub devices
         "tz",
         "device_response_size_min",
         "device_response_size_max",
@@ -271,6 +272,7 @@ class Device(PhysicalDevice):
         self.mqtt_active = False
         self._clients = {}
         self._clients_connected = {}
+        self.subdevices = mn.EMPTY_DICT
         self.ns_handlers = {}
         self.handler_all = NamespaceHandler(
             mn.Appliance_System_All,
@@ -421,6 +423,9 @@ class Device(PhysicalDevice):
     @override
     def on_disconnect(self, /):
         super().on_disconnect()
+        for subdevice in self.subdevices.values():
+            if subdevice.is_connected:
+                subdevice.on_disconnect()
         self.client = None  # type: ignore[assignment]
         self.transport = self.TRANSPORT  # type: ignore[assignment]
         self.mqtt_active = False  # type: ignore[assignment]

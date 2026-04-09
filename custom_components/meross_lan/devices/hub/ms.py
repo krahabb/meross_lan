@@ -16,11 +16,11 @@ if TYPE_CHECKING:
 
 class SensorSubDevice(SubDevice):
 
-    NS_HUB = (mn_h.Appliance_Hub_Sensor_All, *SubDevice.NS_HUB)
+    NS_HUB = (mn_h.Appliance_Hub_Sensor_All,)
 
     def _parse_all(self, payload: dict, /):
         self._parse_online(payload[mc.KEY_ONLINE])
-        if not self.available:
+        if not self.is_connected:
             return
         self._parse_digest_(payload[self.key_digest])
 
@@ -88,7 +88,9 @@ class gs559(SensorSubDevice, EnumParser):
         # with previous versions until we refactor the whole unique_id system
         return f"{self.parent.id}_{self.id}_status"
 
-    def _parse(self, payload: "mt.hub._smokeAlarm", /):
+    def _parse(self, payload: "mt.hub._gs559 | mt.hub.Sensor_Smoke", /):
+        # This (being the default fall-back parser) will parse  *.Sensor.All, *Sensor.Smoke
+        # and the 'digest' payload since they have the same structure.
         self.device_value = value = payload[mc.KEY_STATUS]
         self.update_native_value(self.STATUS_MAP.get(value, value))
         self.binary_sensor_alarm.update_boolean_value(value in self.STATUS_ALARM)
@@ -107,18 +109,10 @@ class gs559(SensorSubDevice, EnumParser):
         del self.sensor_interConn
 
     async def async_mute(self, /):
-        try:
-            await self.async_request_payload(
-                {
-                    mc.KEY_STATUS: self.MUTE_MAP.get(self.device_value, 170),
-                }
-            )
-        except KeyError as e:
-            # in case the state is not present in the MUTE_MAP (i.e. not mutable)
-            self.log_exception(self.DEBUG, e, "trying to send mute command")
+        await self.async_request_value(self.MUTE_MAP.get(self.device_value, 170))
 
     async def async_test(self, /):
-        await self.async_request_payload({mc.KEY_STATUS: 23})
+        await self.async_request_value(23)
 
 
 class ms100(SensorSubDevice, SensorParser):
@@ -167,12 +161,11 @@ class ms100(SensorSubDevice, SensorParser):
         _attr_native_step = 1
 
     NS_HUB = (
+        mn_h.Appliance_Hub_Sensor_TempHum,
         mn_h.Appliance_Hub_Sensor_Adjust,
         mn_h.Appliance_Hub_Sensor_Latest,
-        *SensorSubDevice.NS_HUB,
     )
 
-    init_ns = mn_h.Appliance_Hub_Sensor_TempHum
     init_device_scale = 10
     _attr_device_class = SensorEntity.DeviceClass.TEMPERATURE
     _attr_suggested_display_precision = 1
@@ -194,7 +187,9 @@ class ms100(SensorSubDevice, SensorParser):
         del self.sensor_humidity
 
     @override
-    def _parse(self, payload: "mt.hub.Sensor_TempHum | mt.hub._ms100", /):
+    def _parse(self, payload: "mt.hub._ms100 | mt.hub.Sensor_TempHum", /):
+        # Parses both the 'digest' payload and the Sensor_TempHum since
+        # they share the same relevant keys.
         self._update_sensors(
             payload[mc.KEY_LATESTTEMPERATURE], payload[mc.KEY_LATESTHUMIDITY]
         )
@@ -202,7 +197,7 @@ class ms100(SensorSubDevice, SensorParser):
     @override
     def _parse_all(self, payload: "mt.hub.Sensor_All_ms100", /):
         self._parse_online(payload[mc.KEY_ONLINE])
-        if self.available:
+        if self.is_connected:
             self._update_sensors(
                 payload[mc.KEY_TEMPERATURE][mc.KEY_LATEST],
                 payload[mc.KEY_HUMIDITY][mc.KEY_LATEST],
@@ -257,7 +252,6 @@ class ms130(ms100):
     NS_HUB = (
         mn.Appliance_Control_Sensor_LatestX,
         mn.Appliance_Config_DeviceCfg,
-        *ms100.NS_HUB,
     )
     init_device_scale = 100
 
@@ -278,7 +272,8 @@ class ms130(ms100):
         del self.sensor_light
 
     @override
-    def _parse(self, payload: "mt.hub._tempHumi", /):
+    def _parse(self, payload: "mt.hub._ms130", /):
+        # Parses the 'digest' payload.
         self._update_sensors(payload[mc.KEY_TEMP], payload[mc.KEY_HUMI])
 
     def _parse_deviceCfg(self, payload: "mt.hub.SubIdPayload", /):
@@ -337,7 +332,7 @@ class ms130(ms100):
 
 
 class ms200(SensorSubDevice, BinarySensorParser):
-    init_ns = mn_h.Appliance_Hub_Sensor_DoorWindow
+    NS_HUB = (mn_h.Appliance_Hub_Sensor_DoorWindow,)
     init_key_value = BinarySensorParser.SimpleKeyValue(mc.KEY_STATUS)
     _attr_device_class = BinarySensorParser.DeviceClass.WINDOW
 
@@ -347,7 +342,7 @@ class ms200(SensorSubDevice, BinarySensorParser):
 
 
 class ms400(SensorSubDevice, BinarySensorParser):
-    init_ns = mn_h.Appliance_Hub_Sensor_WaterLeak
+    NS_HUB = (mn_h.Appliance_Hub_Sensor_WaterLeak,)
     init_key_value = BinarySensorParser.SimpleKeyValue(mc.KEY_LATESTWATERLEAK)
     _attr_device_class = BinarySensorParser.DeviceClass.SAFETY
 

@@ -81,6 +81,16 @@ class IdPayload(TypedDict):
     id: str
 
 
+class SubIdPayload(TypedDict):
+    """Common payload including a 'subId' field.
+    This payload structure is becoming common in new devices and subdevices.
+    When used in a device payload it misses teh subId field and becomes a standard 'ChannelPayload'.
+    """
+
+    subId: NotRequired[str]
+    channel: int  # typically 0 when used in subdevice payloads
+
+
 class SensorDataL(TypedDict):
     """
     A common struct for sensor values reporting.

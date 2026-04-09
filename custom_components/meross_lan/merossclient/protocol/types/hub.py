@@ -6,12 +6,15 @@ from . import NotRequired, TypedDict
 from .. import types as mt
 
 
-class SubIdPayload(TypedDict):
+class SubIdPayload(mt.SubIdPayload):
+    """Common payload including a 'subId' field.
+    This payload structure is becoming common in new devices and subdevices.
+    When used in a device payload it misses teh subId field and becomes a standard 'ChannelPayload'.
+    """
+
     subId: str
-    channel: int  # typically 0
+    channel: int  # typically 0 when used in subdevice payloads
     channels: NotRequired[list[int]]
-    # It looks like mst200 is introducing a different layout for this payload
-    # with channels=[1, 2] instead of channel in order to manage the 2 sprinkler valves.
 
 
 class Battery(mt.IdPayload):
@@ -100,22 +103,27 @@ class Sensor_Latest(mt.IdPayload):
     humidity: _Sensor_LatestSample
 
 
-class Sensor_TempHum(mt.IdPayload):
-    """Appliance.Hub.Sensor.TempHum"""
-
+class _ms100(TypedDict):
+    latestTime: int
     latestTemperature: int
     latestHumidity: int
-    latestTime: int
+    voltage: int
+
+
+class Sensor_TempHum(_ms100, mt.IdPayload):
+    """Appliance.Hub.Sensor.TempHum"""
+
+    voltage: NotRequired[int]  # not sure
     sample: list[list[int]]  # [temperature, humidity, startTime, endTime]
 
 
-class _smokeAlarm(TypedDict):
+class _gs559(TypedDict):
     status: int
     lmTime: int
     interConn: int
 
 
-class Sensor_Smoke(_smokeAlarm, mt.IdPayload):
+class Sensor_Smoke(_gs559, mt.IdPayload):
     """Appliance.Hub.Sensor.Smoke"""
 
     pass
@@ -125,6 +133,12 @@ class Sensor_All(mt.IdPayload):
     """Appliance.Hub.Sensor.All"""
 
     online: _Online
+
+
+class Sensor_All_gs559(Sensor_All):
+    """Appliance.Hub.Sensor.All for gs559(smokeAlarm) subdevice."""
+
+    smokeAlarm: _gs559
 
 
 class _Sensor_AllSample(TypedDict):
@@ -145,12 +159,6 @@ class Sensor_All_ms130(Sensor_All_ms100):
     """Appliance.Hub.Sensor.All for ms130 subdevice."""
 
     pass
-
-
-class Sensor_All_gs559(Sensor_All):
-    """Appliance.Hub.Sensor.All for ms100 subdevice."""
-
-    smokeAlarm: _smokeAlarm
 
 
 class SubDevice_Beep(mt.IdPayload):
@@ -180,11 +188,10 @@ class Digest_SubDevice(_Online, ToggleX, mt.IdPayload):
     pass
 
 
-class _ms100(TypedDict):
-    latestTime: int
-    latestTemperature: int
-    latestHumidity: int
-    voltage: int
+class Digest_gs559(Digest_SubDevice):
+    """Digest payload for smoke subdevice."""
+
+    smokeAlarm: _gs559
 
 
 class Digest_ms100(Digest_SubDevice):
@@ -193,7 +200,7 @@ class Digest_ms100(Digest_SubDevice):
     ms100: _ms100
 
 
-class _tempHumi(TypedDict):
+class _ms130(TypedDict):
     latestTime: int
     temp: int
     humi: int
@@ -202,7 +209,7 @@ class _tempHumi(TypedDict):
 class Digest_ms130(Digest_SubDevice):
     """Digest payload for ms130 subdevice."""
 
-    tempHumi: _tempHumi
+    tempHumi: _ms130
 
 
 class _mts100v3(TypedDict):
@@ -226,12 +233,6 @@ class Digest_mts150(Digest_SubDevice):
 
     scheduleBMode: int
     mts150: _mts150
-
-
-class Digest_gs559(Digest_SubDevice):
-    """Digest payload for smoke subdevice."""
-
-    smokeAlarm: _smokeAlarm
 
 
 class _mst100(TypedDict):
