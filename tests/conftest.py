@@ -101,16 +101,13 @@ def disable_entity_registry_update():
     the entity registry."""
 
     from custom_components.meross_lan.devices.garagedoor import (
-        GarageConfigSwitch,
         GarageEnableSwitch,
     )
 
-    saved = GarageEnableSwitch.update_boolean_value
-    GarageEnableSwitch.update_boolean_value = (
-        GarageConfigSwitch.update_boolean_value  # type: ignore
-    )
+    saved = GarageEnableSwitch._check_channel_enable
+    GarageEnableSwitch._check_channel_enable = lambda self: None
     yield
-    GarageEnableSwitch.update_boolean_value = saved
+    GarageEnableSwitch._check_channel_enable = saved
 
 
 @pytest.fixture(autouse=True, scope="function")

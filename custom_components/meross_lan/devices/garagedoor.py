@@ -103,33 +103,32 @@ class GarageEnableSwitch(GarageConfigSwitch):
         self, id, parent: "Device", /, **kwargs: "Unpack[GarageEnableSwitch.Args]"
     ):
         GarageConfigSwitch.__init__(self, id, parent, **kwargs)
-        self._channel_enable(self.is_on)
+        self.schedule_callback(1, self._check_channel_enable)
 
     @override
-    def update_boolean_value(self, is_on, /):
-        if self.is_on != is_on:
-            self.is_on = is_on
-            self.flush_state()
-            self._channel_enable(is_on)
-            return True
+    def flush_state(self):
+        super().flush_state()
+        self.schedule_callback(1, self._check_channel_enable)
 
-    def _channel_enable(self, enabled, /):
+    def _check_channel_enable(self, /):
         """enables/disables all the entities of this channel garageDoor in the
         entity registry"""
+        enabled = self.is_on
         registry_update_entity = self.parent.parent.entity_registry.async_update_entity
         disabler = RegistryEntryDisabler.INTEGRATION
-        for entity in self.parent.entities.values():
-            if (
-                (entity.device_entry == self.device_entry)
-                and (entity is not self)
-                and (entry := entity.registry_entry)
-            ):
-                if enabled:
-                    if entry.disabled_by == disabler:
-                        registry_update_entity(entry.entity_id, disabled_by=None)
-                else:
-                    if not entry.disabled_by:
-                        registry_update_entity(entry.entity_id, disabled_by=disabler)
+        for entry in (
+            _entry
+            for entity in self.parent.entities.values()
+            if (entity.device_entry == self.device_entry)
+            and (entity is not self)
+            and (_entry := entity.registry_entry)
+        ):
+            if enabled:
+                if entry.disabled_by == disabler:
+                    registry_update_entity(entry.entity_id, disabled_by=None)
+            else:
+                if not entry.disabled_by:
+                    registry_update_entity(entry.entity_id, disabled_by=disabler)
 
 
 class GarageConfigNumber(GarageConfigMixin, NumberParser):
