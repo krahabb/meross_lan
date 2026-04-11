@@ -96,7 +96,7 @@ class _ElectricitySensor(SensorParser):
         self._schedule_reset()
         channel = self.index.value
         for _entity_def in self.__class__.ENTITY_DEFS.values():
-            _entity_def(channel, device)
+            _entity_def.build_sibling(self)
         self.sensor_power = device.entities[
             mc.KEY_POWER if channel is None else f"{channel}_{mc.KEY_POWER}"
         ]  # type: ignore
@@ -200,8 +200,9 @@ class ElectricitySensor(_ElectricitySensor, EntityNamespaceMixin):
     # we want to keep polling this ns even when _ElectricitySensor is disabled
     # (we have to since it carries critical data for the energy estimate and ConsumptionXSensor)
     @classmethod
+    @override
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        ns_entity = cls(ns, device, ns=ns)
+        ns_entity = cls(ns, device, ns=ns, device_info=device.device_info)
         ns_entity.handler_ns = ns_entity
         return ns_entity
 
@@ -663,11 +664,8 @@ class OverTempEnableSwitch(SwitchParser, EntityNamespaceMixin):
             self.sensor_overtemp_type.update_device_value(type)
         except AttributeError:
             self.sensor_overtemp_type = self.parent.add_entity(
-                EnumParser(
-                    None,
-                    self.parent,
-                    entity_key="config_overtemp_type",
-                    native_value=type,
+                EnumParser.build_sibling(
+                    self, entity_key="config_overtemp_type", native_value=type
                 )
             )
         except KeyError:

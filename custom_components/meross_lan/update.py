@@ -47,7 +47,9 @@ class UpdateEntity(Entity, update.UpdateEntity):
         self.installed_version, self.latest_version, self.release_summary = (
             device.get_upgrade_info()
         )
-        Entity.__init__(self, subid, device)
+        # TODO: we still miss subdevice implementation for this...
+        # maybe we can get something by using index
+        Entity.__init__(self, subid, device, device_info=device.device_info)
         device.add_entity(self)
 
     def flush_state(self):

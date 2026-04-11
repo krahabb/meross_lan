@@ -40,9 +40,11 @@ class GarageTimeoutBinarySensor(BinarySensorEntity):
         }
     )
 
-    def __init__(self, garage: "GarageDoor", /):
+    @classmethod
+    def build_sibling(cls, sibling: GarageDoor, /, **kwargs):
+        self = super().build_sibling(sibling, **kwargs)
         self.extra_state_attributes = {}
-        BinarySensorEntity.__init__(self, garage.id, garage.parent)
+        return self
 
     def update_ok(self, was_closing, /):
         extra_state_attributes = self.extra_state_attributes
@@ -67,6 +69,11 @@ class GarageConfigMixin(ValueParser if TYPE_CHECKING else object):
 
         class Args(ValueParser.Args):
             device_value: NotRequired[int]
+
+        @classmethod
+        def build_sibling(
+            cls, sibling: GarageDoor, /, **kwargs: Unpack[Args]
+        ) -> "GarageConfigMixin": ...
 
     # Assuming by default we're parsing MultipleConfig
     # This will be overriden in kwargs when creating entities for Appliance.GarageDoor.Config
@@ -119,7 +126,7 @@ class GarageEnableSwitch(GarageConfigSwitch):
         for entry in (
             _entry
             for entity in self.parent.entities.values()
-            if (entity.device_entry == self.device_entry)
+            if (entity.device_entry is self.device_entry)
             and (entity is not self)
             and (_entry := entity.registry_entry)
         ):
@@ -179,11 +186,15 @@ class _DurationHelper:
         # number entity
         gd = self.garage_door
         try:
+            # When GarageDoor.MultipleConfig is not supported we try to use the 'eventually' installed
+            # config entities from GarageDoor.Config (legacy fw). This is to avoid installing emulated
+            # entities when the device natively supports this configuration.
+            # We check if ns GarageConfig already installed a common number entity for this config key
+            # (it should do if MultipleConfig is supported and the key is present in the payload)
             number: "NumberEntity" = gd.parent.entities[f"config_{self.key}"]  # type: ignore
         except KeyError:
-            number = EmulatedNumber(
-                gd.id,
-                gd.parent,
+            number = EmulatedNumber.build_sibling(
+                gd,
                 entity_key=f"config_{self.key}",
                 native_value=gd._transition_duration,
                 name=self.key,
@@ -261,23 +272,19 @@ class GarageDoor(Cover):
             self.ATTR_TRANSITION_DURATION: self._transition_duration
         }
         Cover.__init__(self, id, device, **kwargs)
-        self.binary_sensor_timeout = GarageTimeoutBinarySensor(self)
+        self.binary_sensor_timeout = GarageTimeoutBinarySensor.build_sibling(self)
         if mn.Appliance_GarageDoor_MultipleConfig in device.descriptor.ability:
             # historically, when MultipleConfig appeared, these used to be
             # the available timeouts while recent fw (4.2.8) shows presence
             # of more 'natural' doorOpenDuration/doorCloseDuration keys.
             # We'll then override this initial guessing when we _parse_config
             # should those new keys appear
-            self.number_doorCloseDuration = self.__class__.ENTITY_DEFS[
+            self.number_doorCloseDuration = self.__class__.ENTITY_DEFS[  # type: ignore
                 mc.KEY_SIGNALCLOSE
-            ](
-                id, device, index=self.index
-            )  # type: ignore
-            self.number_doorOpenDuration = self.__class__.ENTITY_DEFS[
+            ].build_sibling(self)
+            self.number_doorOpenDuration = self.__class__.ENTITY_DEFS[  # type: ignore
                 mc.KEY_SIGNALOPEN
-            ](
-                id, device, index=self.index
-            )  # type: ignore
+            ].build_sibling(self)
             device.get_handler(mn.Appliance_GarageDoor_MultipleConfig).register_parser(
                 self
             )
@@ -442,11 +449,8 @@ class GarageDoor(Cover):
                     entities[f"{entity_id_prefix}{key}"].update_device_value(value)
                 except KeyError:
                     entity = self.parent.add_entity(
-                        self.__class__.ENTITY_DEFS[key](
-                            self.id,
-                            self.parent,
-                            index=self.index,
-                            device_value=value,
+                        self.__class__.ENTITY_DEFS[key].build_sibling(
+                            self, device_value=value
                         )
                     )
                     if key in (mc.KEY_DOORCLOSEDURATION, mc.KEY_DOOROPENDURATION):
@@ -540,9 +544,15 @@ class GarageDoor(Cover):
         # do not register_parser_class since we don't want to create spurious
         # GarageDoor at channel 0 (msg200)
         for channel_digest in ns.get_digest(descriptor.digest):
-            channel = channel_digest[mc.KEY_CHANNEL]
+            index = mn.IndexType.channel.value_of(channel_digest)
             handler.register_parser(
-                GarageDoor(channel, device, ns=ns, index=mn.IndexType.channel(channel))
+                GarageDoor(
+                    index.value,
+                    device,
+                    ns=ns,
+                    index=index,
+                    device_info=device.get_device_entry_info(index.value),
+                )
             )
 
 

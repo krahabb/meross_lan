@@ -47,6 +47,11 @@ class SensorEntity(mle.NumericEntity, sensor.SensorEntity):
             self, id, parent: ConfigEntryManager, /, **kwargs: Unpack[Args]
         ): ...
 
+        @classmethod
+        def build_sibling(
+            cls, sibling: mle.Entity, /, **kwargs: Unpack[Args]
+        ) -> Self: ...
+
     PLATFORM = sensor.DOMAIN
     HA_ENTITY_ATTRIBUTES = mle.NumericEntity.HA_ENTITY_ATTRIBUTES + (
         "state_class",
@@ -119,6 +124,11 @@ class EnumSensorEntity(SensorEntity):
         ): ...
 
         @classmethod
+        def build_sibling(
+            cls, sibling: mle.Entity, /, **kwargs: Unpack[Args]
+        ) -> Self: ...
+
+        @classmethod
         def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
         def update_native_value(
@@ -140,6 +150,11 @@ class EnumParser(mle.ValueParser, EnumSensorEntity):
             pass
 
         def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
+
+        @classmethod
+        def build_sibling(
+            cls, sibling: mle.Entity, /, **kwargs: Unpack[Args]
+        ) -> Self: ...
 
         @classmethod
         def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
@@ -171,6 +186,11 @@ class SensorParser(mle.NumericParser, SensorEntity):
         def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
 
         @classmethod
+        def build_sibling(
+            cls, sibling: mle.Entity, /, **kwargs: Unpack[Args]
+        ) -> Self: ...
+
+        @classmethod
         def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
     HUMIDITY_ARGS: "Args" = {
@@ -180,19 +200,11 @@ class SensorParser(mle.NumericParser, SensorEntity):
         "suggested_display_precision": 1,
     }
 
-    @classmethod
-    def Humidity(cls, id, manager: "Device", /, **kwargs: "Unpack[Args]") -> "Self":
-        return cls(id, manager, **(cls.HUMIDITY_ARGS | kwargs))
-
     LIGHT_ARGS: "Args" = {
         "entity_key": mc.KEY_LIGHT,
         "device_class": SensorEntity.DeviceClass.ILLUMINANCE,
         "suggested_display_precision": 0,
     }
-
-    @classmethod
-    def Light(cls, id, manager: "Device", /, **kwargs: "Unpack[Args]") -> "Self":
-        return cls(id, manager, **(cls.LIGHT_ARGS | kwargs))
 
     TEMPERATURE_ARGS: "Args" = {
         "entity_key": mc.KEY_TEMPERATURE,
@@ -200,10 +212,6 @@ class SensorParser(mle.NumericParser, SensorEntity):
         "device_class": SensorEntity.DeviceClass.TEMPERATURE,
         "suggested_display_precision": 1,
     }
-
-    @classmethod
-    def Temperature(cls, id, manager: "Device", /, **kwargs: "Unpack[Args]") -> "Self":
-        return cls(id, manager, **(cls.TEMPERATURE_ARGS | kwargs))
 
 
 class DiagnosticSensor(SensorEntity):
@@ -218,6 +226,11 @@ class DiagnosticSensor(SensorEntity):
 
         class Args(SensorEntity.Args):
             native_value: NotRequired[sensor.StateType]
+
+        @classmethod
+        def build_sibling(
+            cls, sibling: mle.Entity, /, **kwargs: Unpack[Args]
+        ) -> Self: ...
 
         @classmethod
         def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...

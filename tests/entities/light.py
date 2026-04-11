@@ -89,8 +89,7 @@ class EntityTest(ToggleEntityComponentTest):
         # Invoking super() to do the toggling here hangs the test on msl320...
         await self.async_service_call_check(haec.SERVICE_TURN_OFF, hac.STATE_OFF)
         await self.async_service_call_check(haec.SERVICE_TURN_ON, hac.STATE_ON)
-
-        if entity.entity_key == DNDLight.init_entity_key:
+        if type(entity) is DNDLight:
             return
         assert isinstance(entity, LightBase)
         supported_color_modes = entity.supported_color_modes

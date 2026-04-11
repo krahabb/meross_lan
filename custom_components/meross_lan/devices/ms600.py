@@ -137,6 +137,7 @@ ENTITY_DEFS = (
 
 def namespace_init_presence_config(ns: mn.Namespace, device: "Device", /):
     index = mn.IndexType.channel(0)
+    device_info = device.get_device_entry_info(0)
     device._create_handler(ns).register_parsers(
         *(
             entity_def(
@@ -144,6 +145,7 @@ def namespace_init_presence_config(ns: mn.Namespace, device: "Device", /):
                 device,
                 ns=ns,
                 index=index,
+                device_info=device_info,
             )
             for entity_def in ENTITY_DEFS
         )
@@ -169,9 +171,8 @@ class PresenceSensor(SensorParser):
         **kwargs: "Unpack[SensorParser.Args]",
     ):
         SensorParser.__init__(self, id, device, **kwargs)
-        self.sensor_distance = SensorParser(
-            id,
-            device,
+        self.sensor_distance = SensorParser.build_sibling(
+            self,
             entity_key=f"{self.entity_key}_distance",
             device_scale=1000,
             device_class=SensorParser.DeviceClass.DISTANCE,
@@ -179,15 +180,13 @@ class PresenceSensor(SensorParser):
             suggested_display_precision=2,
             name="Presence distance",
         )
-        self.binary_sensor_motion = BinarySensorEntity(
-            id,
-            device,
+        self.binary_sensor_motion = BinarySensorEntity.build_sibling(
+            self,
             entity_key=f"{self.entity_key}_motion",
             device_class=BinarySensorEntity.DeviceClass.MOTION,
         )
-        self.sensor_times = SensorParser(
-            id,
-            device,
+        self.sensor_times = SensorParser.build_sibling(
+            self,
             entity_key=f"{self.entity_key}_times",
             name="Presence times",
         )

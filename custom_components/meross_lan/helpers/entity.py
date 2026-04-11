@@ -31,13 +31,14 @@ if TYPE_CHECKING:
         Literal,
         Mapping,
         NotRequired,
+        Protocol,
         Self,
         TypedDict,
         Unpack,
     )
 
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.helpers.device_registry import DeviceEntry
+    from homeassistant.helpers.device_registry import DeviceEntry, DeviceInfo
     from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
     from ..merossclient.protocol.message import MerossMessage
@@ -61,13 +62,28 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
 
         class Args(Loggable.Args):
             entity_key: NotRequired[str | None]
+            index: NotRequired[mn.IndexValue]
             # HA core entity attributes:
             device_class: NotRequired[str | None]
+            device_info: NotRequired[DeviceInfo | None]
             entity_category: NotRequired[entity.EntityCategory | None]
             entity_registry_enabled_default: NotRequired[bool]
             name: NotRequired[str | None]
             translation_key: NotRequired[str]
             icon: NotRequired[str]
+
+        class Sibling(Protocol):
+            """Protocol for building sibling entities. This is used when we want to create multiple entities
+            for the same channel/subid (i.e. entities with a common device_info/entry) so that they share the
+            same HA device_entry. The 'sibling' is used as a source reference for index/device_info/parent(device)
+            settings in the created entity. The sibling itself is likely another entity acting as a kind of 'root'
+            entity for the same channel. This leads to similarities with SubDevice classes which also acts as reference
+            for the same kind of settings but in that case we have a real 'device' instead ofan entity.
+            """
+
+            index: Final[mn.IndexValue]
+            device_info: Final[DeviceInfo]
+            parent: Final[Device]
 
         EntityCategory: Final
 
@@ -80,6 +96,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         is_diagnostic: bool
         """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
 
+        id: Final[str | int | mn.Namespace]  # type: ignore[override]
         parent: Final[ConfigEntryManager]  # type: ignore[override]
         init_entity_key: ClassVar[str | None]
         entity_key: Final[str | None]
@@ -95,11 +112,12 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         _attr_assumed_state: ClassVar[bool]
         _attr_available: ClassVar[bool]
         _attr_device_class: ClassVar[str | None]
+        _attr_device_info: ClassVar[Mapping[str, Any] | None]
+        _attr_entity_category: ClassVar[entity.EntityCategory | None]
+        _attr_entity_registry_enabled_default: ClassVar[bool]
         force_update: Final[Literal[False]]
         has_entity_name: Final[Literal[True]]
         _attr_name: ClassVar[str | None]
-        _attr_entity_category: ClassVar[entity.EntityCategory | None]
-        _attr_entity_registry_enabled_default: ClassVar[bool]
         _attr_icon: ClassVar[str]
         should_poll: Final[Literal[False]]
         _attr_supported_features: ClassVar[int | None]
@@ -143,6 +161,19 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         - device_class: used by HA to set some soft 'class properties' for the entity
         """
         entity_key = kwargs.pop("entity_key", self.__class__.init_entity_key)
+        try:
+            # REMOVE
+            # intercept 'index' arg targeting NamespaceParser mixin
+            # BEWARE: we're relying on the fact that NamespaceParser is effectively initialized only
+            # in Loggable.__init__ since it has no constructor defined.
+            index = kwargs["index"]  # type: ignore
+            if index:
+                _debug_id = f"{index.slug}_{entity_key}" if entity_key else index.slug
+            else:
+                _debug_id = entity_key
+        except KeyError:
+            _debug_id = id if type(id) is mn.Namespace else entity_key
+
         if type(id) is mn.Namespace:
             # TODO: ugly trick...let's see if this can be 'linearized' through some future refactoring.
             # this is a special case for 'EntityNamespaceMixin' entities which are also NamespaceHandlers
@@ -150,11 +181,18 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             # and general coding in our inheritance scheme.
             # In this case we set the channel to None and store the namespace in a dedicated
             # variable for later use in parsing and so on.
-            self.device_entry = manager.get_device_entry(None)
+            self.device_info = kwargs.pop("device_info")  # type: ignore
+            self._legacy_unique_id = f"{manager.id}_{entity_key}"
         else:
             # We're receiving either the channel or the subdevice id in this 'id' variable and
             # we use it to get the correct device entry for this entity.
-            self.device_entry = manager.get_device_entry(id)
+            try:
+                self.device_info = kwargs.pop("device_info")  # type: ignore
+                assert self.device_info == manager.get_device_entry_info(
+                    id
+                ), f"{self.device_info} doesn't match the one from id:{id}"
+            except KeyError:
+                self.device_info = manager.get_device_entry_info(id)
             if id is None:
                 assert (
                     entity_key is not None
@@ -162,6 +200,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
                 id = entity_key
             elif entity_key is not None:
                 id = f"{id}_{entity_key}"
+            self._legacy_unique_id = f"{manager.id}_{id}"
         assert (
             id not in manager.entities
         ), f"id:{id} is not unique inside parent.entities"
@@ -189,10 +228,11 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             if _attr_name in self.__class__.HA_ENTITY_ATTRIBUTES
         ):
             setattr(self, _attr_name, kwargs.pop(_attr_name))
-
         super().__init__(id, manager, **kwargs)
         manager.entities[id] = self
         manager.async_shutdown_broadcast.add(self.async_shutdown)
+        if _debug_id != self.id:
+            self.log(self.DEBUG, "Boh")
 
     def shutdown(self):
         super().shutdown()
@@ -206,7 +246,10 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
     # interface: entity.Entity
     @cached_property
     def unique_id(self) -> str | None:
-        return self.parent.generate_unique_id(self)
+        unique_id = f"{self.parent.id}_{self.id}"
+        assert (
+            unique_id == self._legacy_unique_id
+        ), f"Generated unique_id:{unique_id} doesn't match legacy unique_id:{self._legacy_unique_id}"
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -289,6 +332,14 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         )
 
     @classmethod
+    def build_sibling(cls, sibling: Sibling, /, **kwargs: "Unpack[Args]") -> "Self":
+        if "index" not in kwargs:
+            kwargs["index"] = sibling.index
+        kwargs["device_info"] = sibling.device_info
+        assert len(sibling.index.type) < 2
+        return cls(sibling.index.value, sibling.parent, **kwargs)
+
+    @classmethod
     async def platform_setup_entry(
         cls,
         hass,
@@ -321,7 +372,20 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             self.type = type
 
         def __call__(self, *args, **kwargs: "Unpack[Entity.Args]") -> _T:
+            """This allows to use EntityDef instances as if they were the actual class constructor."""
             return self.type(*args, **(self | kwargs))
+
+        def build_sibling(
+            self, sibling: Entity.Sibling, /, **kwargs: "Unpack[Entity.Args]"
+        ) -> _T:
+            """This allows to use EntityDef instances as if they were the actual class constructor
+            for building siblings."""
+            if "index" not in kwargs:
+                kwargs["index"] = sibling.index
+            kwargs["device_info"] = sibling.device_info
+            # not sure about desired beahvior for subId indexed so we hardly check here
+            assert len(sibling.index.type) < 2
+            return self.type(sibling.index.value, sibling.parent, **(self | kwargs))  # type: ignore
 
     @classmethod
     def ENTITY_DEF(cls, **kwargs: "Unpack[Args]") -> type["Self"]:
@@ -349,6 +413,7 @@ class ParserEntity(parser.NamespaceParser, Entity):
 
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
+        device_info: Final[DeviceInfo]  # type: ignore[override]
         handler_ns: NamespaceHandler  # override
 
         _parse_togglex: Callable[[JsonDict], Any]
@@ -420,6 +485,11 @@ class NumericEntity(Entity):
             self, id, parent: ConfigEntryManager, /, **kwargs: Unpack[Args]
         ): ...
 
+        @classmethod
+        def build_sibling(
+            cls, sibling: Entity.Sibling, /, **kwargs: Unpack[Args]
+        ) -> Self: ...
+
     # We rely on our sensor entity to be initialized for sure since it's going to provide the symbols for
     # device classes which are nevertheless shared between sensor and number entities. Tha mapping should
     # be done by str value despite the fact numbers and sensors each defines their own enums.
@@ -459,6 +529,11 @@ class NumericParser(ValueParser, NumericEntity):
         class Args(ValueParser.Args, NumericEntity.Args):
             device_scale: NotRequired[int | float]
 
+        @classmethod
+        def build_sibling(
+            cls, sibling: Entity.Sibling, /, **kwargs: Unpack[Args]
+        ) -> Self: ...
+
     init_device_scale = 1
     SLOTS_AUTO_INIT = ("device_scale",)
 
@@ -492,6 +567,11 @@ class BinaryEntity(Entity):
             self, id, manager: "ConfigEntryManager", /, **kwargs: "Unpack[Args]"
         ): ...
 
+        @classmethod
+        def build_sibling(
+            cls, sibling: Entity.Sibling, /, **kwargs: Unpack[Args]
+        ) -> Self: ...
+
     SLOTS_AUTO_INIT = ("is_on",)
     __slots__ = ("is_on",)
     # TODO: fix _calc_slots in descendants by maybe adding an init_subclass in BinaryParser.
@@ -510,6 +590,11 @@ class BinaryParser(parser.NamespaceBoolean, ValueParser, BinaryEntity):
 
         class Args(parser.NamespaceBoolean.Args, ValueParser.Args, BinaryEntity.Args):
             pass
+
+        @classmethod
+        def build_sibling(
+            cls, sibling: Entity.Sibling, /, **kwargs: Unpack[Args]
+        ) -> Self: ...
 
         @classmethod
         def ENTITY_DEF(cls, **kwargs: "Unpack[Args]") -> type["Self"]: ...
@@ -537,7 +622,11 @@ class BinaryParser(parser.NamespaceBoolean, ValueParser, BinaryEntity):
         self.is_on = None
         super().set_unavailable()
 
-    update_boolean_value = BinaryEntity.update_boolean_value  # type: ignore[assignment]
+    @override
+    def update_device_value(self, device_value, /) -> bool | None:
+        if super().update_device_value(device_value):
+            self.flush_state()
+            return True
 
 
 class ToggleXParser(BinaryEntity, ParserEntity):
@@ -578,6 +667,7 @@ class EntityNamespaceMixin(ParserEntity, NamespaceHandler):
 
     if TYPE_CHECKING:
 
+        id: Final[mn.Namespace]  # type: ignore[override]
         parent: Final[Device]  # type: ignore[override]
 
         class Args(ParserEntity.Args):
@@ -595,8 +685,9 @@ class EntityNamespaceMixin(ParserEntity, NamespaceHandler):
         cls.__slots__ = cls._calc_slots()
 
     @classmethod
+    @override
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        ns_entity = cls(ns, device, ns=ns)
+        ns_entity = cls(ns, device, ns=ns, device_info=device.device_info)
         ns_entity.handler_ns = ns_entity
         ns_entity.polling_strategy = None
         return ns_entity
@@ -607,7 +698,11 @@ class EntityNamespaceMixin(ParserEntity, NamespaceHandler):
         # since in v6.x.x entity.id initialization is different (at least for EntityNamespaceMixin entities)
         # and is not based on channel/entity_key but just on NamespaceHandler.id (mn.Namespace).
         # keep in mind these entities were already init'ed with channel = None
-        return f"{self.parent.id}_{self.entity_key}"
+        unique_id = f"{self.parent.id}_{self.entity_key}"
+        assert (
+            unique_id == self._legacy_unique_id
+        ), f"Generated unique_id:{unique_id} doesn't match legacy unique_id:{self._legacy_unique_id}"
+        return unique_id
 
     async def async_added_to_hass(self):
         self.polling_strategy = self.POLLING_CONFIG_DEFAULT[-1]

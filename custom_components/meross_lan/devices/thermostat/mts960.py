@@ -64,6 +64,18 @@ class Mts960Climate(MtsThermostatClimate):
         mc.MTS960_TIMER_TYPE_CYCLE: mc.KEY_CYCLE,
     }
 
+    ENTITY_DEFS: dict[str, type[PlugState | TimerConfigNumber]] = {
+        "binary_sensor_plug_state": PlugState,
+        "number_timer_down_duration": TimerConfigNumber.ENTITY_DEF(
+            entity_key="timer_down_duration"
+        ),
+        "number_timer_cycle_off_duration": TimerConfigNumber.ENTITY_DEF(
+            entity_key="timer_cycle_off_duration"
+        ),
+        "number_timer_cycle_on_duration": TimerConfigNumber.ENTITY_DEF(
+            entity_key="timer_cycle_on_duration"
+        ),
+    }
     DIAGNOSTIC_SENSOR_KEYS = (
         mc.KEY_MODE,
         mc.KEY_ONOFF,
@@ -83,13 +95,10 @@ class Mts960Climate(MtsThermostatClimate):
     _attr_preset_modes = list(Preset)
 
     __slots__ = (
-        "binary_sensor_plug_state",
-        "number_timer_down_duration",
-        "number_timer_cycle_off_duration",
-        "number_timer_cycle_on_duration",
         "_mts_working",
         "_mts_timer_payload",
         "_mts_timer_mode",
+        *ENTITY_DEFS.keys(),
     )
 
     def __init__(self, id, device: "Device", /, **kwargs):
@@ -102,23 +111,13 @@ class Mts960Climate(MtsThermostatClimate):
             mn_t.Appliance_Control_Thermostat_CtlRange,
             mn_t.Appliance_Control_Thermostat_Timer,
         )
-        self.binary_sensor_plug_state = Mts960Climate.PlugState(id, device)
-        self.number_timer_down_duration = Mts960Climate.TimerConfigNumber(
-            id, device, entity_key="timer_down_duration"
-        )
-        self.number_timer_cycle_off_duration = Mts960Climate.TimerConfigNumber(
-            id, device, entity_key="timer_cycle_off_duration"
-        )
-        self.number_timer_cycle_on_duration = Mts960Climate.TimerConfigNumber(
-            id, device, entity_key="timer_cycle_on_duration"
-        )
+        for key, entity_def in self.__class__.ENTITY_DEFS.items():
+            setattr(self, key, entity_def.build_sibling(self))
 
     def shutdown(self):
         MtsThermostatClimate.shutdown(self)
-        del self.binary_sensor_plug_state
-        del self.number_timer_down_duration
-        del self.number_timer_cycle_off_duration
-        del self.number_timer_cycle_on_duration
+        for key in self.__class__.ENTITY_DEFS:
+            delattr(self, key)
 
     def set_unavailable(self):
         self._mts_working = None
@@ -393,8 +392,8 @@ class Mts960Climate(MtsThermostatClimate):
                     entities[f"{id}_{key}"].update_device_value(native_value)
                 except KeyError as key_error:
                     if key_error.args[0] != key:
-                        DiagnosticSensor(
-                            id, device, entity_key=key, native_value=native_value
+                        DiagnosticSensor.build_sibling(
+                            self, entity_key=key, native_value=native_value
                         )
 
         self.flush_state()

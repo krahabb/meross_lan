@@ -581,6 +581,7 @@ class Light(LightBase):
         kwargs = {
             "ns": ns,
             "index": mn.IndexType.channel(channel),
+            "device_info": device.get_device_entry_info(channel),
         }
         if mn.Appliance_Control_Light_Effect in descriptor.ability:
             light_class = EffectLight

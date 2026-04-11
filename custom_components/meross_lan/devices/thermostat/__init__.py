@@ -51,9 +51,10 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
     def __init__(self, ns: "mn.Namespace", device: "Device", /):
         NamespaceHandler.__init__(self, ns, device)
         index = mn.IndexType.channel(0)
+        device_info = device.get_device_entry_info(0)
         self.register_parsers(
             *(
-                entity_def(0, device, ns=ns, index=index)
+                entity_def(0, device, ns=ns, index=index, device_info=device_info)
                 for entity_def in self.ENTITY_DEFS.values()
             )
         )
@@ -107,9 +108,8 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
         except AttributeError:
             entity_key = f"{self.entity_key}_warning"
             self.sensor_warning = self.parent.add_entity(
-                EnumParser(
-                    payload[mc.KEY_CHANNEL],
-                    self.parent,
+                EnumParser.build_sibling(
+                    self,
                     entity_key=entity_key,
                     device_value=warning,
                     translation_key=f"mts_{entity_key}",
@@ -124,12 +124,10 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
             self.switch.update_boolean_value(self.available)
         except AttributeError:
             self.switch = self.parent.add_entity(
-                SwitchParser(
-                    payload[mc.KEY_CHANNEL],
-                    self.parent,
+                SwitchParser.build_sibling(
+                    self,
                     entity_key=f"{self.entity_key}_switch",
                     ns=self.ns,
-                    index=self.index,
                     is_on=self.available,
                     name=(f"{self.entity_key} Alarm").capitalize(),
                 )
@@ -185,12 +183,16 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
             self.sensor_external_temperature.update_device_value(current_temp)
         except AttributeError:
             self.sensor_external_temperature = self.parent.add_entity(
-                SensorParser.Temperature(
-                    payload[mc.KEY_CHANNEL],
-                    self.parent,
-                    entity_key="external sensor",
-                    device_value=current_temp,
-                    device_scale=self.device_scale,
+                SensorParser.build_sibling(
+                    self,
+                    **(
+                        SensorParser.TEMPERATURE_ARGS
+                        | {
+                            "entity_key": "external sensor",
+                            "device_value": current_temp,
+                            "device_scale": self.device_scale,
+                        }
+                    ),
                 )
             )
         except KeyError:
@@ -270,9 +272,8 @@ class MtsHoldAction(SelectParser):
             self.number_time.update_device_value(time)
         except AttributeError:
             self.number_time = self.parent.add_entity(
-                NumberParser(
-                    payload[mc.KEY_CHANNEL],
-                    self.parent,
+                NumberParser.build_sibling(
+                    self,
                     entity_key="hold_action_time",
                     device_scale=1,
                     device_value=time,

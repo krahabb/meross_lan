@@ -128,9 +128,7 @@ class ConnectionSensor(DiagnosticSensor):
 
     # interface: Loggable
     def configure_logger(self):
-        self.logtag = (
-            f"{self.__class__.__name__}({self.parent.loggable_broker(self.id)})"
-        )
+        self.logtag = f"{self.__class__.__name__}({self.parent.loggable_broker(self.connection.id)})"
 
     # interface: self
     def update_devices(self):

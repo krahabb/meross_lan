@@ -8,7 +8,6 @@ if TYPE_CHECKING:
     from typing import ClassVar, Final, NotRequired, Self, Unpack
 
     from .helpers.device import Device
-    from .helpers.entity import ChannelType
     from .helpers.manager import ConfigEntryManager
 
 
@@ -42,6 +41,11 @@ class NumberEntity(mle.NumericEntity, number.NumberEntity):
         def __init__(
             self, id, parent: ConfigEntryManager, /, **kwargs: Unpack[Args]
         ): ...
+
+        @classmethod
+        def build_sibling(
+            cls, sibling: mle.Entity, /, **kwargs: Unpack[Args]
+        ) -> Self: ...
 
     PLATFORM = number.DOMAIN
     HA_ENTITY_ATTRIBUTES = mle.NumericEntity.HA_ENTITY_ATTRIBUTES + (

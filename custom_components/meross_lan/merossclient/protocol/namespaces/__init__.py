@@ -6,7 +6,7 @@ This file contains the knowledge about how namespaces work (their syntax and beh
 from copy import deepcopy
 import enum
 from functools import cached_property
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from .. import const as mc
 
@@ -194,70 +194,32 @@ class _IndexType(tuple):
 
     if TYPE_CHECKING:
         cache: Final[dict[tuple, "IndexValue"]]
+        class_value: Final[type["IndexValue"]]
 
     # __slots__ = ("cache",)
     cache = {}  # type: ignore
 
-    def __new__(cls, *args):
-        return tuple.__new__(cls, args)
+    def __new__(cls, class_value, keys):
+        return tuple.__new__(cls, keys)
 
-    def __init__(self, *args):
+    def __init__(self, class_value: type["IndexValue"], keys: tuple[str, ...]):
         self.cache = {}
-
-
-class IndexType(_IndexType, enum.Enum):
-    none = ()
-    channel = (mc.KEY_CHANNEL,)
-    id = (mc.KEY_ID,)
-    subId = (mc.KEY_SUBID, mc.KEY_CHANNEL)
-    Id = (mc.KEY_ID_,)
-
-    # Factory method to get the right IndexValue for a given index type and value(s)
-    def __call__(self, *values):
-        return IndexValue.build(self, *values)
-
-    def value_of(self, payload: "JsonMapping"):
-        """Extracts the key values of this index type from the payload dict."""
-        return IndexValue.build(self, *(payload.get(_key) for _key in self))
-
-    def slug(self, payload: "JsonMapping"):
-        return "_".join(v for v in (payload.get(k) for k in self) if v is not None)
+        self.class_value = class_value
 
 
 class IndexValue(_immutabledict):
 
-    __slots__ = ("type", "value")
+    __slots__ = ("type", "value", "slug", "_hash")
 
-    def __init__(self, index_type: IndexType, *values):
+    def __init__(self, index_type: "IndexType", _dict: "JsonDict", *values):
+        super().__init__(_dict)
         self.type = index_type
-        if index_type:
-            num_keys = len(index_type)
-            assert num_keys == len(
-                values
-            ), f"{index_type} requires {num_keys} values, got {values}"
-            if num_keys > 1:
-                super().__init__(
-                    {
-                        index_type[i]: values[i]
-                        for i in range(num_keys)
-                        if values[i] is not None
-                    }
-                )
-                if len(self) > 1:
-                    self.value = (*self.values(),)
-                else:
-                    self.value = next(iter(self.values()))
-            else:
-                self.value = values[0]
-                super().__init__({index_type[0]: self.value})
-        else:
-            assert (
-                not values
-            ), f"IndexType {index_type} does not accept any value, got {values}"
-            self.value = None
-            super().__init__()
+        self._hash = hash(self.value)
+        index_type.cache[values] = self
 
     def matches(self, payload: dict):
+        # Just a conceptual definition..sort of
+        # This should actually not be called anyway
         return all(payload.get(k) == v for k, v in self.items())
 
     # IndexValue is immutable and hashable based on its content (type and value)
@@ -273,16 +235,120 @@ class IndexValue(_immutabledict):
         )
 
     def __hash__(self):
-        return self.value.__hash__()
+        return self._hash
 
-    @staticmethod
-    def build(index_type: IndexType, *values):
+    def __repr__(self):
+        return f"IndexValue(type={self.type}, value={self.value}, slug='{self.slug}')"
+
+
+class NoneIndexValue(IndexValue):
+
+    def __init__(self, index_type: IndexType):
+        self.value = None
+        self.slug = ""
+        self.matches = lambda payload: True
+        IndexValue.__init__(self, index_type, EMPTY_DICT)
+
+
+class SimpleIndexValue(IndexValue):
+
+    def __init__(self, index_type: IndexType, value):
+        self.value = value
+        self.slug = value
+        self.matches = lambda payload: payload.get(index_type[0]) == value
+        IndexValue.__init__(self, index_type, {index_type[0]: self.value}, value)
+
+
+class SubIdIndexValue(IndexValue):
+    """This kind of payload indexing is very articulated since it may have the following patterns:
+    - no 'subId' but only 'channel' (typically for hub namespaces related to the hub itself and not to
+    subdevices, e.g. Appliance.Control.Alarm or for 'hybrid' namespaces which appear on non hub devices
+    and thus only support 'channel' indexing but then appear on the hub with 'subId/channel'
+    indexing like Appliance.Config.DeviceCfg).
+    For this case the index value will be the channel alone.
+    - for mst200 subdevices Appliance.Control.Water introduces what seems a 'custom' indexing
+    where the channel is not carried in a simple 'channel' key but in a list of channels under 'channels' key.
+    For this case we assume that the list will always contain only one channel. Nevertheless, our
+    IndexValue must refer to a single parser channel so we'll always reduce the representation
+    to a (subId, channel) tuple.
+    """
+
+    def __init__(
+        self, index_type, subid: str | None, channel: int | None, channels: int | None
+    ):
+        if subid:
+            # "channel" and "channels" should be mutually exclusive.
+            if channels is None:
+                assert channel is not None
+                _dict = {index_type[0]: subid, index_type[1]: channel}
+                self.value = (subid, channel)
+                self.slug = f"{subid}_{channel}"
+            else:
+                assert channel is None
+                _dict = {index_type[0]: subid, index_type[2]: [channels]}
+                self.value = (subid, channels)
+                self.slug = f"{subid}_{channels}"
+        else:
+            assert channels is None
+            _dict = {index_type[1]: channel}
+            self.value = channel
+            self.slug = str(channel)
+            self.matches = lambda payload: payload.get(index_type[1]) == channel
+        IndexValue.__init__(self, index_type, _dict, subid, channel, channels)
+
+    @override
+    def matches(self, payload: dict):
+        assert (
+            type(self.value) is tuple
+        ), "matches should be overridden for non subId indexes"
         try:
-            return index_type.cache[values]
+            return (
+                payload[mc.KEY_SUBID] == self.value[0]
+                and payload[mc.KEY_CHANNEL] == self.value[1]
+            )
+        except KeyError as ke:
+            if ke.args[0] != mc.KEY_CHANNEL:
+                return False
+            # This is the case of a payload with 'channels' instead of 'channel' key (mst200 subdevice)
+            try:
+                return payload[mc.KEY_SUBID] == self.value[0] and payload[
+                    mc.KEY_CHANNELS
+                ] == [self.value[1]]
+            except KeyError:
+                return False
+
+
+class IndexType(_IndexType, enum.Enum):
+    none = NoneIndexValue, ()
+    channel = SimpleIndexValue, (mc.KEY_CHANNEL,)
+    id = SimpleIndexValue, (mc.KEY_ID,)
+    subId = SubIdIndexValue, (mc.KEY_SUBID, mc.KEY_CHANNEL, mc.KEY_CHANNELS)
+    Id = SimpleIndexValue, (mc.KEY_ID_,)
+
+    def __call__(self, *values):
+        """
+        This is used as a factory method to retrieve an IndexValue instance for this IndexType with the given value(s).
+        The values tuple is used to lookup a matching definition in a static cache for this IndexType. If no match is found,
+        a new IndexValue instance is created with the given value(s) and stored in the cache for future retrieval.
+        The values tuple must be a fully qualified set of values that matches the IndexType definition.
+        The items in the tuple will be used to populate a prototype dict for the IndexValue instance.
+        The tuple cardinality must match the number of keys that define the IndexType.
+        For IndexType.subId the tuple must be (subId, channel, channels) where channel and channels are mutually exclusive
+        and only one of them can be not None.
+        """
+        try:
+            return self.cache[values]
         except KeyError:
-            instance = IndexValue(index_type, *values)
-            index_type.cache[values] = instance
-            return instance
+            return self.class_value(self, *values)
+        except Exception as e:
+            raise
+
+    def value_of(self, payload: "JsonMapping"):
+        """Extracts the key values of this index type from the payload dict."""
+        return self(*(payload.get(k) for k in self))
+
+    def slug(self, payload: "JsonMapping"):
+        return self.value_of(payload).slug
 
 
 class _PayloadType:

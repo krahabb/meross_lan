@@ -205,13 +205,16 @@ class Mts300Climate(MtsThermostatClimate):
         self.target_temperature_low = None
         self._mts_work = None
         for _key, _args in Mts300Climate.ENTITY_ARGS.items():
-            setattr(self, f"sensor_{_key}", EnumParser(id, device, **_args))
-        self.sensor_current_humidity = SensorParser.Humidity(
-            id, device, entity_registry_enabled_default=False
+            setattr(self, f"sensor_{_key}", EnumParser.build_sibling(self, **_args))
+        self.sensor_current_humidity = SensorParser.build_sibling(
+            self,
+            **(SensorParser.HUMIDITY_ARGS | {"entity_registry_enabled_default": False}),
         )
-        self.number_fan_hold = NumberParser(
-            id,
-            device,
+
+        # TODO/FIXME looks like new key_value semantics could be useful
+        # to avoid installing a custom async_request
+        self.number_fan_hold = NumberParser.build_sibling(
+            self,
             entity_key="fan_hold_time",
             device_class=NumberParser.DEVICE_CLASS_DURATION,
             native_unit_of_measurement=mlc.hac.UnitOfTime.MINUTES,
@@ -220,9 +223,8 @@ class Mts300Climate(MtsThermostatClimate):
         self.number_fan_hold.async_request_value = (
             self._async_request_value_number_fan_hold
         )
-        self.switch_fan_hold = EmulatedSwitch(
-            id,
-            device,
+        self.switch_fan_hold = EmulatedSwitch.build_sibling(
+            self,
             entity_key="fan_hold_enable",
         )
         self.switch_fan_hold.async_turn_on = self._async_turn_on_switch_fan_hold
@@ -420,9 +422,7 @@ class Mts300Climate(MtsThermostatClimate):
             self.select_temp_association._parse(payload)
         except AttributeError:
             self.select_temp_association = self.parent.add_entity(
-                Mts300Climate.SensorAssociationSelect(
-                    self.id, self.parent, index=self.index
-                )
+                Mts300Climate.SensorAssociationSelect.build_sibling(self)
             )
             self.select_temp_association._parse(payload)
 

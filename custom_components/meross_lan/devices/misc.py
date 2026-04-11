@@ -67,6 +67,7 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                     try:
                         entities[f"{channel}_sensor_{key}"].update_device_value(value)
                     except KeyError:
+                        index = mn.IndexType.channel(channel)
                         self.parent.add_entity(
                             SensorParser(
                                 channel,
@@ -76,13 +77,17 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                                         key, {}
                                     )
                                     | {
+                                        "index": index,
                                         "entity_key": f"sensor_{key}",
                                         "device_value": value,
+                                        "device_info": self.parent.get_device_entry_info(
+                                            channel
+                                        ),
                                     }
                                 ),
                             )
                         )
-                        self.polling_request_add_index(mn.IndexType.channel(channel))
+                        self.polling_request_add_index(index)
 
                     if key == mc.KEY_HUMI:
                         # look for a thermostat and sync the reported humidity
@@ -106,14 +111,14 @@ class SensorLatestXNamespaceHandler(EntityDefNamespaceHandler):
     """
 
     if TYPE_CHECKING:
-        init_entity_defs: Final[dict[str, SensorParser.Initializer]]
+        init_entity_defs: Final[dict[str, type[SensorParser]]]
 
     POLLING_CONFIG_DEFAULT = EntityDefNamespaceHandler.POLLING_CONFIG_FASTSENSOR
 
     # many of these defs are guesses
     init_entity_defs = {
-        mc.KEY_HUMI: SensorParser.Humidity,
-        mc.KEY_LIGHT: SensorParser.Light,
+        mc.KEY_HUMI: SensorParser.ENTITY_DEF(**SensorParser.HUMIDITY_ARGS),
+        mc.KEY_LIGHT: SensorParser.ENTITY_DEF(**SensorParser.LIGHT_ARGS),
         mc.KEY_PRESENCE: PresenceSensor.ENTITY_DEF(),
         mc.KEY_TEMP: SensorParser.ENTITY_DEF(
             **(SensorParser.TEMPERATURE_ARGS | {"device_scale": 100})
@@ -127,11 +132,14 @@ class SensorLatestXNamespaceHandler(EntityDefNamespaceHandler):
                 data_keys = [mc.KEY_PRESENCE, mc.KEY_LIGHT]
             else:
                 data_keys = []  # no idea of other devices supported
+            index = mn.IndexType.channel(0)
             for data_key in data_keys:
                 self.entity_defs[data_key](
                     0,
                     device,
                     entity_key=f"sensor_{data_key}",
+                    index=index,
+                    device_info=device.get_device_entry_info(0),
                 )
             self.polling_request_payload.append(
                 {mc.KEY_CHANNEL: 0, mc.KEY_DATA: data_keys}
@@ -152,10 +160,13 @@ class SensorLatestXNamespaceHandler(EntityDefNamespaceHandler):
                     # Likely missing the entity for this channel/data_key. It might also be
                     # a KeyError raised by accessing data_value[0]["value"] (or IndexError)
                     # but it will be raised again when constructing the entity.
+                    index = mn.IndexType.channel(channel)
                     self.entity_defs.get(data_key, SensorParser)(
                         channel,
                         self.parent,
                         entity_key=f"sensor_{data_key}",
+                        index=index,
+                        device_info=self.parent.get_device_entry_info(channel),
                         device_value=data_value[0]["value"],
                     )
                     for channel_payload in self.polling_request_payload:

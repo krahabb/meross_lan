@@ -5,7 +5,7 @@ from homeassistant.components import select
 from .helpers import entity as mle, reverse_lookup
 
 if TYPE_CHECKING:
-    from typing import Any, ClassVar, Final, Never, NotRequired, Unpack
+    from typing import Any, ClassVar, Final, Never, NotRequired, Self, Unpack
 
     from .helpers.device import Device
     from .helpers.entity import ChannelType
@@ -65,6 +65,11 @@ class SelectParser(mle.ValueParser, SelectEntity):
         class Args(mle.ValueParser.Args, SelectEntity.Args):
             options_map: NotRequired[dict[Any, str]]
             # options: NotRequired[Never]
+
+        @classmethod
+        def build_sibling(
+            cls, sibling: mle.Entity, /, **kwargs: Unpack[Args]
+        ) -> Self: ...
 
     # configure initial options(map) through a class default
     init_options_map = {}

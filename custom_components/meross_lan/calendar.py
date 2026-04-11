@@ -116,7 +116,10 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
             climate: MtsClimate
             ns: mn.Namespace
 
-        def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
+        @classmethod
+        def build_sibling(
+            cls, sibling: MtsClimate, /, **kwargs: Unpack[Args]
+        ) -> "MtsSchedule": ...
 
     PLATFORM = calendar.DOMAIN
 

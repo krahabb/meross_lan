@@ -231,7 +231,7 @@ class NamespaceHandler(logging.Loggable):
             # This is the case of a subdevice registering to a 'subId' indexed namespace
             # We provide here a 'quick' workaround to automatically bind to channel == 0
             # since this seems pretty common.
-            index = mn.IndexType.subId(index.value, 0)
+            index = mn.IndexType.subId(index.value, 0, None)
         assert index.type is self.index, "index type mismatch"
         assert index not in self.parsers, "Parser already registered for index"
         self.parsers[index] = getattr(
@@ -356,28 +356,31 @@ class NamespaceHandler(logging.Loggable):
         establishing a relationship with an hub subdevice or might skip the subid altogether and
         just refer to the device channel.
         Examples are Appliance.Config.DeviceCfg or Appliance.Control.Sensor.LatestX but there are many more.
-        Here, self.parsers keys could be either subdevice ids or channels.
+        Here, self.parsers keys could be either (subdevice ids, channel) tuples or simple channels.
         """
         parsers = self.parsers
         for payload in message.payload[self.id.key]:
             try:
-                parsers[(payload[KEY_SUBID], payload[KEY_CHANNEL])](payload)  # type: ignore
-            except KeyError as ke:
-                if KEY_SUBID not in payload:
-                    # message not related to a subdevice. Parse with plain 'channel' mechanics
-                    try:
-                        parsers[payload[KEY_CHANNEL]](payload)
-                    except KeyError as ke:
-                        self._handle_missing_channel(ke, payload)
-                    except Exception as e:
-                        self.log_parser_exception(e, payload)
-                    continue
-                if KEY_CHANNEL not in payload:
-                    self.log_handler_exception(ke, payload)
-                    continue
-                self._handle_missing_subdevice(ke, payload, payload[KEY_SUBID])
-            except Exception as e:
-                self.log_parser_exception(e, payload)
+                subid = payload[KEY_SUBID]
+                try:
+                    channel = payload[KEY_CHANNEL]
+                except KeyError:
+                    channel = payload[mc.KEY_CHANNELS][0]
+                    # WARNING receiving multiple channels in payload is not managed
+                try:
+                    parsers[(subid, channel)](payload)  # type: ignore
+                except KeyError as ke:
+                    self._handle_missing_subdevice(ke, payload, subid)
+                except Exception as e:
+                    self.log_parser_exception(e, payload)
+            except KeyError:
+                # message not related to a subdevice. Parse with plain 'channel' mechanics
+                try:
+                    parsers[payload[KEY_CHANNEL]](payload)
+                except KeyError as ke:
+                    self._handle_missing_channel(ke, payload)
+                except Exception as e:
+                    self.log_parser_exception(e, payload)
 
     def _handle_channel_list(self, message: MerossMessage, /):
         """

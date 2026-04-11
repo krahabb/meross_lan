@@ -67,6 +67,8 @@ class PhysicalDevice(AbstractClient):
     """
 
     if TYPE_CHECKING:
+        id: Final[str]  # type: ignore[override]
+        """uuid for standard devices (including hub), subdevice id for hub-paired subdevices."""
         descriptor: Final[DeviceDescriptor]  # type:ignore[override]
         latest_version: LatestVersionType  # lazy init
 

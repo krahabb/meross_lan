@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from typing import Final, TypedDict, Unpack
 
     from . import Hub
+    from ...helpers.entity import Entity
     from ...merossclient.protocol import types as mt
 
 
@@ -32,6 +33,11 @@ class gs559(SensorSubDevice, EnumParser):
         STATUS_ALARM: Final[set[int]]
         STATUS_ERROR: Final[set[int]]
         STATUS_MUTED: Final[set[int]]
+
+        binary_sensor_alarm: BinarySensorEntity
+        binary_sensor_error: BinarySensorEntity
+        binary_sensor_muted: BinarySensorEntity
+        sensor_interConn: EnumSensorEntity
 
     init_ns = mn_h.Appliance_Hub_Sensor_Smoke
     init_key_value = EnumParser.SimpleKeyValue(mc.KEY_STATUS)
@@ -56,31 +62,24 @@ class gs559(SensorSubDevice, EnumParser):
     STATUS_ERROR = {17, 18, 19, 20, 21, 22}
     STATUS_MUTED = {20, 21, 22, 26, 27}
 
-    __slots__ = (
-        "binary_sensor_alarm",
-        "binary_sensor_error",
-        "binary_sensor_muted",
-        "sensor_interConn",
-    )
+    ENTITY_DEFS: "dict[str, type[Entity]]" = {
+        "binary_sensor_alarm": BinarySensorEntity.ENTITY_DEF(
+            entity_key=mc.KEY_ALARM, device_class=BinarySensorEntity.DeviceClass.SAFETY
+        ),
+        "binary_sensor_error": BinarySensorEntity.ENTITY_DEF(
+            entity_key=mc.KEY_ERROR, device_class=BinarySensorEntity.DeviceClass.PROBLEM
+        ),
+        "binary_sensor_muted": BinarySensorEntity.ENTITY_DEF(entity_key="muted"),
+        "sensor_interConn": EnumParser.ENTITY_DEF(entity_key=mc.KEY_INTERCONN),
+    }
+    __slots__ = ENTITY_DEFS.keys()
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         SensorSubDevice.__init__(self, subid, hub, key_digest, model)
-        self.binary_sensor_alarm = BinarySensorEntity(
-            subid,
-            hub,
-            entity_key=mc.KEY_ALARM,
-            device_class=BinarySensorEntity.DeviceClass.SAFETY,
-        )
-        self.binary_sensor_error = BinarySensorEntity(
-            subid,
-            hub,
-            entity_key=mc.KEY_ERROR,
-            device_class=BinarySensorEntity.DeviceClass.PROBLEM,
-        )
-        self.binary_sensor_muted = BinarySensorEntity(subid, hub, entity_key="muted")
-        self.sensor_interConn = EnumParser(subid, hub, entity_key=mc.KEY_INTERCONN)
-        Button(subid, hub, self.async_mute, name="Mute")
-        Button(subid, hub, self.async_test, name="Test")
+        for key, entity_def in self.__class__.ENTITY_DEFS.items():
+            setattr(self, key, entity_def.build_sibling(self))
+        Button.build_sibling(self, async_press=self.async_mute, name="Mute")
+        Button.build_sibling(self, async_press=self.async_test, name="Test")
 
     @cached_property
     def unique_id(self) -> str | None:
@@ -103,10 +102,8 @@ class gs559(SensorSubDevice, EnumParser):
 
     def shutdown(self):
         SensorSubDevice.shutdown(self)
-        del self.binary_sensor_muted
-        del self.binary_sensor_error
-        del self.binary_sensor_alarm
-        del self.sensor_interConn
+        for key in self.__class__.ENTITY_DEFS.keys():
+            delattr(self, key)
 
     async def async_mute(self, /):
         await self.async_request_value(self.MUTE_MAP.get(self.device_value, 170))
@@ -123,9 +120,11 @@ class ms100(SensorSubDevice, SensorParser):
 
         init_device_scale = 10
 
-        def __init__(self, id, parent: "Hub", /, **kwargs: "Unpack[NumberParser.Args]"):
-            NumberParser.__init__(self, id, parent, **kwargs)
-            parent.add_entity(self)
+        @classmethod
+        def build_sibling(cls, sibling: ms100, /, **kwargs: Unpack[NumberParser.Args]):
+            self = super().build_sibling(sibling, **kwargs)
+            self.parent.add_entity(self)
+            return self
 
         @override
         async def async_request_value(self, device_value, /):
@@ -174,7 +173,9 @@ class ms100(SensorSubDevice, SensorParser):
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         SensorSubDevice.__init__(self, subid, hub, key_digest, model)
-        self.sensor_humidity = SensorParser(subid, hub, **SensorParser.HUMIDITY_ARGS)
+        self.sensor_humidity = SensorParser.build_sibling(
+            self, **SensorParser.HUMIDITY_ARGS
+        )
 
     @cached_property
     def unique_id(self) -> str | None:
@@ -207,17 +208,11 @@ class ms100(SensorSubDevice, SensorParser):
         device = self.parent
         device.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
             self,
-            ms100.AdjustTemperatureNumber(
-                self.id,
-                device,
-                index=self.index,
-                device_value=payload[mc.KEY_TEMPERATURE],
+            ms100.AdjustTemperatureNumber.build_sibling(
+                self, device_value=payload[mc.KEY_TEMPERATURE]
             ),
-            ms100.AdjustHumidityNumber(
-                self.id,
-                device,
-                index=self.index,
-                device_value=payload[mc.KEY_HUMIDITY],
+            ms100.AdjustHumidityNumber.build_sibling(
+                self, device_value=payload[mc.KEY_HUMIDITY]
             ),
         )
         # swap also the update_sensors method to a smarter one
@@ -259,9 +254,16 @@ class ms130(ms100):
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         ms100.__init__(self, subid, hub, key_digest, model)
-        self.sensor_light = SensorParser.Light(subid, hub)
+        # The light sensor could be better indexed by subid instead, but it is a sibling of a
+        # simple 'id' entity (the ms130 itself) and it is more natural to mantain the sibling
+        # relationship by using the same index. The sensor will anyway not use the index attribute
+        # for anything else, since the ns parsing is done here in the SubDevice instance.
+        self.sensor_light = SensorParser.build_sibling(
+            self, **(SensorParser.LIGHT_ARGS)
+        )
         # This is a slight patch because this ns is rather non-standard
         handler_latestx = hub.ns_handlers[mn.Appliance_Control_Sensor_LatestX]
+        # the latest payload was added in SubDevice init because of NS_HUB registration
         handler_latestx.polling_request_payload.append(
             handler_latestx.polling_request_payload.pop()
             | {mc.KEY_DATA: [mc.KEY_TEMP, mc.KEY_HUMI, mc.KEY_LIGHT]}

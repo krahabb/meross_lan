@@ -15,7 +15,7 @@ from .select import SelectEntity
 from .sensor import SensorParser
 
 if TYPE_CHECKING:
-    from typing import ClassVar, Final, Unpack
+    from typing import ClassVar, Final, Self, Unpack
 
     from homeassistant.core import Event, State
     from homeassistant.helpers.event import EventStateChangedData
@@ -46,14 +46,17 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         """
 
         if TYPE_CHECKING:
-            climate: "MtsClimate"
+            climate: MtsClimate
 
             class Args(NumberParser.Args):
-                climate: "MtsClimate"
+                climate: MtsClimate
                 ns: mn.Namespace
                 key_value: NumberParser.SimpleKeyValue
 
-            def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
+            @classmethod
+            def build_sibling(
+                cls, sibling: MtsClimate, /, **kwargs: Unpack[Args]
+            ) -> Self: ...
 
         _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
 
@@ -88,7 +91,10 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             """minimum delay (dead-time) between trying to adjust the climate entity."""
             climate: "MtsClimate"
 
-            def __init__(self, id, parent: Device, /, climate: "MtsClimate"): ...
+            @classmethod
+            def build_sibling(
+                cls, sibling: "MtsClimate", /, climate: "MtsClimate"
+            ) -> Self: ...
 
         init_entity_key = "tracked_sensor"
         TRACKING_DELAY = 5
@@ -465,19 +471,19 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         super().__init__(id, parent, **kwargs)
 
         cls = self.__class__
-        self.number_adjust_temperature = cls.AdjustNumber(
-            id, parent, ns=cls.AdjustNumber.init_ns, index=self.index
+        self.number_adjust_temperature = cls.AdjustNumber.build_sibling(
+            self, ns=cls.AdjustNumber.init_ns
         )
 
+        # TODO/FIXME: all these climate=self used might be better generalized in
+        # build_sibling i.e. we might also add a typed 'sibling' property to the entity itself
         if cls.MTS_MODE_TO_TEMPERATUREKEY_MAP:
             self.number_preset_temperature = set(
-                cls.SetPointNumber(
-                    id,
-                    parent,
+                cls.SetPointNumber.build_sibling(
+                    self,
                     climate=self,
                     entity_key=f"config_temperature_{key_value}",
                     ns=self.ns,
-                    index=self.index,
                     key_value=key_value,
                     device_scale=self.temperature_scale,
                     native_max_value=self.max_temp,
@@ -495,19 +501,23 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             )
 
         schedule_ns = cls.SCHEDULE_NS
-        self.schedule = cls.Schedule(
-            id,
-            parent,
+        self.schedule = cls.Schedule.build_sibling(
+            self,
             climate=self,
             entity_key=schedule_ns.key,
             ns=schedule_ns,
-            index=self.index,
         )
         parent.enable_check_device_time()  # useful for schedule entity times
 
-        self.select_track_sensor = cls.TrackSensorSelect(id, parent, climate=self)
-        self.sensor_current_temperature = SensorParser.Temperature(
-            id, parent, entity_registry_enabled_default=False
+        self.select_track_sensor = cls.TrackSensorSelect.build_sibling(
+            self, climate=self
+        )
+        self.sensor_current_temperature = SensorParser.build_sibling(
+            self,
+            **(
+                SensorParser.TEMPERATURE_ARGS
+                | {"entity_registry_enabled_default": False}
+            ),
         )
         for _entity in (self.number_adjust_temperature, self.schedule):
             parent.get_handler(_entity.ns).register_parser(_entity)

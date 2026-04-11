@@ -82,7 +82,7 @@ class NamespaceParser(logging.Loggable):
         "ns_payload",
         "index",
     )
-    __SLOTS__ = ("channel", "_handler_registrations")
+    __SLOTS__ = ("_handler_registrations",)
 
     def shutdown(self):
         super().shutdown()
@@ -292,15 +292,11 @@ class NamespaceBoolean(NamespaceValue):
             self.device_value = device_value
             match device_value:
                 case self.value_on:
-                    return self.update_boolean_value(True)
+                    self.is_on = True
                 case self.value_off:
-                    return self.update_boolean_value(False)
+                    self.is_on = False
                 case _:
-                    return self.update_boolean_value(None)
-
-    def update_boolean_value(self, is_on: bool | None, /) -> bool | None:
-        if self.is_on != is_on:
-            self.is_on = is_on
+                    self.is_on = None
             return True
 
     # interface compatibility with HA toggle entities, allowing to use this class as a
@@ -310,41 +306,3 @@ class NamespaceBoolean(NamespaceValue):
 
     async def async_turn_off(self, **kwargs):
         await self.async_request_value(self.value_off)
-
-
-"""REMOVE
-class NamespaceGroupValue(NamespaceValue):
-    ""
-    Parser for payload values embedded in a(sub)dictionary in the namespace payload. The key of the
-    dictionary is defined by the 'key_group' attribute and the value is defined by 'key_value'.
-    This class could also be used as a mixin with other NamespaceParser specializations.
-    TODO: generalize this to multiple levels of nesting with a list of keys instead
-    of a single 'key_group' and a single 'key_value'. Or maybe, dynamically install
-    a custom parse/request in default parser class methods.
-    ""
-
-    if TYPE_CHECKING:
-        init_key_group: ClassVar[str]
-        key_group: str
-
-        class Args(NamespaceValue.Args):
-            key_group: NotRequired[str]
-
-        def __init__(self, id, parent: PhysicalDevice, /, **kwargs: Unpack[Args]): ...
-
-    init_key_group = mc.KEY_VALUE
-
-    SLOTS_AUTO_INIT = ("key_group",)
-
-    @override
-    async def async_request_value(self, device_value, /):
-        await self.async_request_payload(
-            {self.key_group: {self.key_value: device_value}}
-        )
-        self.update_device_value(device_value)
-
-    @override
-    def _parse(self, payload, /):
-        self.ns_payload = payload
-        self.update_device_value(payload[self.key_group][self.key_value])
-"""

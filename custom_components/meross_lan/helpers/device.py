@@ -71,6 +71,8 @@ class BaseDevice(device.PhysicalDevice):
     if TYPE_CHECKING:
 
         # to be implemented in derived classes
+        device_entry: dr.DeviceEntry
+        device_info: dr.DeviceInfo
         entities: Mapping[object, Entity]
 
         class Args(device.PhysicalDevice.Args):
@@ -79,6 +81,11 @@ class BaseDevice(device.PhysicalDevice):
         def __init__(
             self, id, parent: ConfigEntryManager, /, **kwargs: Unpack[Args]
         ): ...
+
+    __SLOTS__ = (
+        "device_entry",
+        "device_info",
+    )
 
     @override
     def on_connect(self):
@@ -95,6 +102,8 @@ class BaseDevice(device.PhysicalDevice):
                 entity.set_unavailable()
 
     # interface: self
+    device_entry = NotImplemented
+    device_info = NotImplemented
     entities = NotImplemented
 
     @property
@@ -209,7 +218,6 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         this list will be excluded from enumeration since it's redundant/exposing sensitive info
         or simply crashes/hangs the device."""
 
-        device_entry: Final[dr.DeviceEntry]
         # these are set from ConfigEntry
         configured_transport: Transport
         host: str | None
@@ -224,7 +232,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         _check_device_time_enabled: bool
         """Scheduled 'on-demand' device time check. This is only created when enable_device_time_check is called."""
 
-        _device_entries: dict[Any, dr.DeviceEntry]
+        device_entries: dict[Any, dr.DeviceEntry]
         profile: Final[MQTTProfile | None]
 
         _async_create_diagnostic_entities_task: Task  # dynamic
@@ -388,7 +396,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
     __slots__ = device.Device._calc_slots(
         "conf_transport",
         "host",
-        "_device_entries",
+        "device_entries",
         "device_timestamp",
         "device_timedelta",
         "_check_device_time_enabled",
@@ -434,6 +442,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             key=config_entry.data.get(mlc.CONF_KEY) or "",  # type: ignore[argument]
             descriptor=descriptor,  # type: ignore[argument],
         )
+        self.device_info = {"identifiers": {(mlc.DOMAIN, device_id)}}
         self.device_entry = api.device_registry.async_get_or_create(
             config_entry_id=config_entry.entry_id,
             connections={(dr.CONNECTION_NETWORK_MAC, descriptor.macAddress)},
@@ -442,7 +451,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             model=descriptor.productmodel,
             hw_version=descriptor.hardwareVersion,
             sw_version=descriptor.firmwareVersion,
-            identifiers={(mlc.DOMAIN, device_id)},
+            **self.device_info,  # type: ignore
         )
         self.device_timestamp = 0
         self.device_timedelta = 0
@@ -454,7 +463,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         PersistentButton(
             None,
             self,
-            self.async_poll_full,
+            async_press=self.async_poll_full,
             name="Refresh",
             device_class=PersistentButton.DeviceClass.RESTART,
             entity_category=PersistentButton.EntityCategory.DIAGNOSTIC,
@@ -462,7 +471,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         PersistentButton(
             None,
             self,
-            self._async_button_reload_press,
+            async_press=self._async_button_reload_press,  # TODO: use press
             name="Reload",
             device_class=PersistentButton.DeviceClass.RESTART,
             entity_category=PersistentButton.EntityCategory.DIAGNOSTIC,
@@ -646,17 +655,17 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         await ConfigEntryManager.async_setup_entry(self, hass, config_entry)
 
     @override
-    def get_device_entry(self, index_value, /):
+    def get_device_entry_info(self, index_value, /) -> dr.DeviceInfo:
         if not index_value:
             # Either a non parser entity or a parser entity with no indexing (i.e. unique for the device)
             # or an entity for channel == 0
-            return self.device_entry
+            return self.device_info
 
         try:
-            return self._device_entries[index_value]
+            return {"identifiers": self.device_entries[index_value].identifiers}
         except AttributeError:
-            # _device_entries only built if needed
-            self._device_entries = {}
+            # device_entries only built if needed
+            self.device_entries = {}
         except KeyError:
             pass
 
@@ -666,7 +675,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         ), "index_value is expected to be an int representing the channel number (got {})".format(
             type(index_value)
         )
-        self._device_entries[index_value] = device_entry = (
+        self.device_entries[index_value] = device_entry = (
             self.parent.device_registry.async_get_or_create(
                 config_entry_id=self.config_entry.entry_id,
                 manufacturer=mc.MANUFACTURER,
@@ -676,7 +685,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                 identifiers={(mlc.DOMAIN, f"{self.id}_{index_value}")},
             )
         )
-        return device_entry
+        return {"identifiers": device_entry.identifiers}
 
     @property
     @override

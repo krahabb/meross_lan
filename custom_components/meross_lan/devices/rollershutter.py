@@ -90,12 +90,10 @@ class RollerShutter(Cover):
             setattr(
                 self,
                 f"number_{_key_value}",
-                self.__class__.NUMBER_CONFIG_DEF(
-                    id,
-                    device,
+                self.__class__.NUMBER_CONFIG_DEF.build_sibling(
+                    self,
                     entity_key=f"config_{_key_value}",
                     ns=ns_config,
-                    index=self.index,
                     key_value=NumberParser.SimpleKeyValue(_key_value),
                     name=_key_value,
                 ),

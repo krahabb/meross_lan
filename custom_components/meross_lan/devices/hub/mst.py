@@ -47,12 +47,12 @@ class mst100(mst):
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         SubDevice.__init__(self, subid, hub, key_digest, model)
-        index = mn.IndexType.subId(subid, 0)
+        index = mn.IndexType.subId(subid, 0, None)
         hub.get_handler(mn_h.Appliance_Control_Water).register_parser(
-            mst.Switch(subid, hub, index=index)
+            mst.Switch.build_sibling(self, index=index)
         )
         hub.get_handler(mn.Appliance_Config_DeviceCfg).register_parser(
-            mst.WateringDurationNumber(subid, hub, index=index)
+            mst.WateringDurationNumber.build_sibling(self, index=index)
         )
 
     @override
@@ -67,11 +67,13 @@ class mst200(mst):
         SubDevice.__init__(self, subid, hub, key_digest, model)
         for channel in range(1, 3):
             hub.get_handler(mn_h.Appliance_Control_Water).register_parser(
-                mst.Switch(subid, hub, index=mn.IndexType.subId(subid, channel))
+                mst.Switch.build_sibling(
+                    self, index=mn.IndexType.subId(subid, None, channel)
+                )
             )
             hub.get_handler(mn.Appliance_Config_DeviceCfg).register_parser(
-                mst.WateringDurationNumber(
-                    subid, hub, index=mn.IndexType.subId(subid, channel)
+                mst.WateringDurationNumber.build_sibling(
+                    self, index=mn.IndexType.subId(subid, channel, None)
                 )
             )
 

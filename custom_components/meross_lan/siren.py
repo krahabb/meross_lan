@@ -77,15 +77,13 @@ class Siren(BinaryParser, siren.SirenEntity):
         BinaryParser.__init__(self, id, device, **kwargs)
         ns_config_alarm = mn.Appliance_Config_Alarm
         if ns_config_alarm in device.descriptor.ability:
-            song_select = Siren.SongSelect(
-                id, device, ns=ns_config_alarm, index=self.index
-            )
+            song_select = Siren.SongSelect.build_sibling(self, ns=ns_config_alarm)
             self.available_tones = song_select.options_map
             self.supported_features = self._attr_supported_features
             device.get_handler(ns_config_alarm).register_parsers(
-                Siren.EnableSwitch(id, device, ns=ns_config_alarm, index=self.index),
+                Siren.EnableSwitch.build_sibling(self, ns=ns_config_alarm),
                 song_select,
-                Siren.VolumeNumber(id, device, ns=ns_config_alarm, index=self.index),
+                Siren.VolumeNumber.build_sibling(self, ns=ns_config_alarm),
             )
         else:
             self.available_tones = {}

@@ -45,6 +45,7 @@ if TYPE_CHECKING:
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import CALLBACK_TYPE, HomeAssistant
+    from homeassistant.helpers.device_registry import DeviceEntry, DeviceInfo
     from homeassistant.helpers.entity_platform import EntityPlatform
 
     from ..merossclient import HostAddress
@@ -238,17 +239,7 @@ class ConfigEntryManager(logging.Loggable):
     def display_name(self) -> str:
         return self.config_entry.title if self.config_entry else self.logtag
 
-    def generate_unique_id(self, entity: "Entity", /):
-        """
-        flexible policy in order to generate unique_ids for entities:
-        This is an helper needed to better control migrations in code
-        which could/would lead to a unique_id change.
-        We could put here code checks in order to avoid entity_registry
-        migrations
-        """
-        return f"{self.id}_{entity.id}"
-
-    def get_device_entry(self, index_value, /):
+    def get_device_entry_info(self, index_value, /) -> "DeviceInfo | None":
         """
         Return the DeviceRegistry entry for a given channel (if any).
         By default this returns self.device_entry but derived classes
