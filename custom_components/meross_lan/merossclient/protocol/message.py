@@ -186,6 +186,9 @@ class MerossMessage(dict):
             self.header[mc.KEY_TIMESTAMP],
         )
 
+    def __str__(self):
+        return self.json
+
 
 class MerossResponse(MerossMessage):
     """Helper for messages received from a device"""
