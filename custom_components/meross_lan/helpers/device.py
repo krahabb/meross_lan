@@ -231,7 +231,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         _check_device_time_enabled: bool
         """Scheduled 'on-demand' device time check. This is only created when enable_device_time_check is called."""
 
-        device_entries: dict[Any, dr.DeviceEntry]
+        device_entries: dict[Any, dr.DeviceInfo]
         profile: Final[MQTTProfile | None]
 
         _async_create_diagnostic_entities_task: Task  # dynamic
@@ -452,6 +452,13 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             sw_version=descriptor.firmwareVersion,
             **self.device_info,  # type: ignore
         )
+        if descriptor.type.startswith(mc.TYPE_MFC100):
+            # This device presents various features on different channels
+            # but we prefer to show them as a single device and
+            # counter our general logic where each channel is a 'logical' device
+            self.device_entries = {
+                channel: self.device_info for channel in range(3)
+            }
         self.device_timestamp = 0
         self.device_timedelta = 0
         self._check_device_time_enabled = False
@@ -659,32 +666,32 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             # Either a non parser entity or a parser entity with no indexing (i.e. unique for the device)
             # or an entity for channel == 0
             return self.device_info
-
         try:
-            return {"identifiers": self.device_entries[index_value].identifiers}
+            return self.device_entries[index_value]
         except AttributeError:
             # device_entries only built if needed
             self.device_entries = {}
         except KeyError:
             pass
-
         # We expect index_value to be a channel number...
         assert (
             type(index_value) is int
         ), "index_value is expected to be an int representing the channel number (got {})".format(
             type(index_value)
         )
-        self.device_entries[index_value] = device_entry = (
-            self.parent.device_registry.async_get_or_create(
-                config_entry_id=self.config_entry.entry_id,
-                manufacturer=mc.MANUFACTURER,
-                name=f"{self.device_entry.name} Channel {index_value}",
-                model=self.device_entry.model,
-                via_device=next(iter(self.device_entry.identifiers)),
-                identifiers={(mlc.DOMAIN, f"{self.id}_{index_value}")},
-            )
+        device_info: dr.DeviceInfo = {
+            "identifiers": {(mlc.DOMAIN, f"{self.id}_{index_value}")}
+        }
+        self.parent.device_registry.async_get_or_create(
+            config_entry_id=self.config_entry.entry_id,
+            manufacturer=mc.MANUFACTURER,
+            name=f"{self.device_entry.name} Channel {index_value}",
+            model=self.device_entry.model,
+            via_device=next(iter(self.device_entry.identifiers)),
+            **device_info,  # type: ignore
         )
-        return {"identifiers": device_entry.identifiers}
+        self.device_entries[index_value] = device_info
+        return device_info
 
     @property
     @override

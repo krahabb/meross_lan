@@ -80,9 +80,6 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                                         "index": index,
                                         "entity_key": f"sensor_{key}",
                                         "device_value": value,
-                                        "device_info": self.parent.get_device_entry_info(
-                                            channel
-                                        ),
                                     }
                                 ),
                             )
@@ -139,7 +136,6 @@ class SensorLatestXNamespaceHandler(EntityDefNamespaceHandler):
                     device,
                     entity_key=f"sensor_{data_key}",
                     index=index,
-                    device_info=device.get_device_entry_info(0),
                 )
             self.polling_request_payload.append(
                 {mc.KEY_CHANNEL: 0, mc.KEY_DATA: data_keys}
@@ -166,7 +162,6 @@ class SensorLatestXNamespaceHandler(EntityDefNamespaceHandler):
                         self.parent,
                         entity_key=f"sensor_{data_key}",
                         index=index,
-                        device_info=self.parent.get_device_entry_info(channel),
                         device_value=data_value[0]["value"],
                     )
                     for channel_payload in self.polling_request_payload:

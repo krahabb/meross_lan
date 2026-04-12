@@ -189,8 +189,6 @@ class Hub(mld.Device):
             # assuming index.type is mn.IndexType.subId
             # assert type(index_value) is tuple
             return self.subdevices[index_value[0]].device_info
-        except Exception as exception:
-            raise
 
     @override
     def update_device_info(

@@ -533,15 +533,7 @@ class GarageDoor(Cover):
         # GarageDoor at channel 0 (msg200)
         for channel_digest in ns.get_digest(descriptor.digest):
             index = mn.IndexType.channel.value_of(channel_digest)
-            handler.register_parser(
-                GarageDoor(
-                    index.value,
-                    device,
-                    ns=ns,
-                    index=index,
-                    device_info=device.get_device_entry_info(index.value),
-                )
-            )
+            handler.register_parser(GarageDoor(index.value, device, ns=ns, index=index))
 
 
 class GarageDoorConfigNamespaceHandler(EntityDefNamespaceHandler):

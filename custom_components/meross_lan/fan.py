@@ -15,8 +15,6 @@ class Fan(ToggleXParser, fan.FanEntity):
     Currently:
     - map100
     - mfc100
-    TODO: Fix mfc100 installing multiple devices (it exposes channels 0-1-2)
-    It looks very unnatural.
     """
 
     if TYPE_CHECKING:
