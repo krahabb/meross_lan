@@ -44,10 +44,8 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         """
 
         if TYPE_CHECKING:
-            climate: MtsClimate
 
             class Args(NumberParser.Args):
-                climate: MtsClimate
                 ns: mn.Namespace
                 key_value: NumberParser.SimpleKeyValue
 
@@ -57,7 +55,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
         _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
 
-        SLOTS_AUTO_INIT = ("climate", "icon")
+        SLOTS_AUTO_INIT = ("icon",)
         __slots__ = ()
 
         async def async_request_value(self, device_value, /):
@@ -66,9 +64,8 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             # We'll then forward the callback to the climate entity in order to
             # ensure the climate state is consistent after a setpoint change.
             # Consider both ns reply with the full state in the SETACK response.
-            return await self.climate.async_request_parse_ex(
-                self.key_value(device_value)
-            )
+            climate: "MtsClimate" = self.parent.entities[self.index.value]  # type: ignore
+            return await climate.async_request_parse_ex(self.key_value(device_value))
 
     Schedule = MtsSchedule
     """Overriden in derived to provide specific behavior."""
@@ -86,11 +83,8 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             """Delay before tracking updates are applied after a triggering event."""
             TRACKING_DEADTIME: Final[int]
             """minimum delay (dead-time) between trying to adjust the climate entity."""
-            climate: "MtsClimate"
 
-            def __init__(
-                self, *args: *SelectEntity.InitArgs, climate: "MtsClimate"
-            ): ...
+            def __init__(self, *args: *SelectEntity.InitArgs): ...
 
         init_entity_key = "tracked_sensor"
         TRACKING_DELAY = 5
@@ -102,7 +96,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
         init__track_last_epoch = 0
         SLOTS_AUTO_INIT = (
-            "climate",
             "_tracking_state",
             "_tracking_state_change_unsub",
             "_track_last_epoch",
@@ -113,7 +106,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         async def async_shutdown(self):
             self._tracking_stop()
             await super().async_shutdown()
-            del self.climate
 
         @override
         def set_unavailable(self):
@@ -253,7 +245,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         def _track(self, tracked_state: "State"):
             """This is only called internally after a timeout when tracking needs to be updated
             due to state changes in either tracked entity or climate."""
-            climate = self.climate
+            climate: "MtsClimate" = self.parent.entities[self.index.value]  # type: ignore
             current_temperature = climate.current_temperature
             if not current_temperature:
                 # should be transitory - just a safety check
@@ -478,7 +470,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             self.number_preset_temperature = set(
                 cls.SetPointNumber(
                     self,
-                    climate=self,
                     entity_key=f"config_temperature_{key_value}",
                     ns=self.ns,
                     key_value=key_value,
@@ -506,7 +497,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         )
         self.parent.enable_check_device_time()  # useful for schedule entity times
 
-        self.select_track_sensor = cls.TrackSensorSelect(self, climate=self)
+        self.select_track_sensor = cls.TrackSensorSelect(self)
         self.sensor_current_temperature = SensorParser(
             self,
             **(

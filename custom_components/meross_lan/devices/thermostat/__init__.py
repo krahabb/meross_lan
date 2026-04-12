@@ -71,11 +71,7 @@ class MtsCommonTemperatureNumber(NumberParser):
         # We could maybe create a thermostats dict in Device so that we can always
         # access those entities wherever since MtsClimate entities are needed here and there
         # in the thermostat entity system.
-        climate: "MtsClimate"
-        if len(args) == 2:
-            climate = args[1].entities[args[0]]  # type: ignore
-        else:
-            climate = args[0]  # type: ignore
+        climate: "MtsClimate" = args[0] if len(args) == 1 else args[1].entities[args[0]]  # type: ignore
         kwargs["entity_key"] = kwargs["ns"].slug_end
         kwargs["device_scale"] = climate.temperature_scale
         NumberParser.__init__(self, *args, **kwargs)  # type: ignore
