@@ -209,6 +209,11 @@ class _IndexType(tuple):
 
 class IndexValue(_immutabledict):
 
+    if TYPE_CHECKING:
+        type: Final["IndexType"]
+        value: Final[str | int | tuple | None]  # type: ignore[polymorphic]
+        slug: Final[str | int | None]  # type: ignore[polymorphic]
+
     __slots__ = ("type", "value", "slug", "_hash")
 
     def __init__(self, index_type: "IndexType", _dict: "JsonDict", *values):
@@ -243,16 +248,24 @@ class IndexValue(_immutabledict):
 
 class NoneIndexValue(IndexValue):
 
+    if TYPE_CHECKING:
+        value: Final[None]  # type: ignore[override]
+        slug: Final[None]  # type: ignore[override]
+
     def __init__(self, index_type: IndexType):
         self.value = None
-        self.slug = ""
+        self.slug = None
         self.matches = lambda payload: True
         IndexValue.__init__(self, index_type, EMPTY_DICT)
 
 
 class SimpleIndexValue(IndexValue):
 
-    def __init__(self, index_type: IndexType, value):
+    if TYPE_CHECKING:
+        value: Final[int | str]  # type: ignore[override]
+        slug: Final[int | str]  # type: ignore[override]
+
+    def __init__(self, index_type: IndexType, value: int | str):
         self.value = value
         self.slug = value
         self.matches = lambda payload: payload.get(index_type[0]) == value
@@ -273,6 +286,10 @@ class SubIdIndexValue(IndexValue):
     to a (subId, channel) tuple.
     """
 
+    if TYPE_CHECKING:
+        value: Final[int | tuple[str, int]]  # type: ignore[override]
+        slug: Final[int | str]  # type: ignore[override]
+
     def __init__(
         self, index_type, subid: str | None, channel: int | None, channels: int | None
     ):
@@ -289,10 +306,10 @@ class SubIdIndexValue(IndexValue):
                 self.value = (subid, channels)
                 self.slug = f"{subid}_{channels}"
         else:
-            assert channels is None
+            assert channels is None and channel is not None
             _dict = {index_type[1]: channel}
             self.value = channel
-            self.slug = str(channel)
+            self.slug = channel
             self.matches = lambda payload: payload.get(index_type[1]) == channel
         IndexValue.__init__(self, index_type, _dict, subid, channel, channels)
 

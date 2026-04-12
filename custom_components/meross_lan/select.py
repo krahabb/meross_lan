@@ -7,10 +7,6 @@ from .helpers import entity as mle, reverse_lookup
 if TYPE_CHECKING:
     from typing import Any, ClassVar, Final, Never, NotRequired, Self, Unpack
 
-    from .helpers.device import Device
-    from .helpers.entity import ChannelType
-    from .helpers.manager import ConfigEntryManager
-
 
 class SelectEntity(mle.Entity, select.SelectEntity):
     """Base 'abstract' class for both select entities representing a
@@ -25,13 +21,13 @@ class SelectEntity(mle.Entity, select.SelectEntity):
         current_option: str | None
         options: list[str]
 
+        type InitArgs = mle.Entity.InitArgs
+
         class Args(mle.Entity.Args):
             current_option: NotRequired[str | None]
             options: NotRequired[list[str]]
 
-        def __init__(
-            self, id, device: ConfigEntryManager, /, **kwargs: Unpack[Args]
-        ): ...
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
     _attr_entity_category = mle.Entity.EntityCategory.CONFIG
 
@@ -62,23 +58,20 @@ class SelectParser(mle.ValueParser, SelectEntity):
         init_options_map: ClassVar[dict[Any, str]]
         options_map: dict[Any, str]
 
+        type InitArgs = mle.ValueParser.InitArgs
+
         class Args(mle.ValueParser.Args, SelectEntity.Args):
             options_map: NotRequired[dict[Any, str]]
             # options: NotRequired[Never]
-
-        @classmethod
-        def build_sibling(
-            cls, sibling: mle.Entity, /, **kwargs: Unpack[Args]
-        ) -> Self: ...
 
     # configure initial options(map) through a class default
     init_options_map = {}
     __slots__ = ("options_map",)
 
-    def __init__(self, id, device: "Device", /, **kwargs: "Unpack[Args]"):
+    def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         self.options_map = kwargs.pop("options_map", self.init_options_map)
         kwargs["options"] = list(self.options_map.values())
-        super().__init__(id, device, **kwargs)
+        super().__init__(*args, **kwargs)
 
     @override
     def update_device_value(self, device_value, /):

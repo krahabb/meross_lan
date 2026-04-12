@@ -9,9 +9,6 @@ if TYPE_CHECKING:
     from types import CoroutineType
     from typing import Any, Callable, ClassVar, NotRequired, Unpack
 
-    from .helpers.entity import ChannelType
-    from .helpers.manager import ConfigEntryManager
-
 
 class Button(Entity, button.ButtonEntity):
     # MEPartialAvailableMixin is needed here since this entity state is not being updated
@@ -21,14 +18,13 @@ class Button(Entity, button.ButtonEntity):
         # HA core entity attributes:
         _attr_device_class: ClassVar[button.ButtonDeviceClass | None]
 
+        type InitArgs = Entity.InitArgs
+
         class Args(Entity.Args):
             press: NotRequired[Callable[[], None]]
             async_press: NotRequired[Callable[[], CoroutineType[Any, Any, None]]]
             name: str  # Override
             device_class: NotRequired[button.ButtonDeviceClass | None]
-
-        @classmethod
-        def build_sibling(cls, sibling: Entity.Sibling, /, **kwargs: Unpack[Args]): ...
 
     PLATFORM = button.DOMAIN
     DeviceClass = button.ButtonDeviceClass
@@ -36,7 +32,7 @@ class Button(Entity, button.ButtonEntity):
     # HA core entity attributes:
     _attr_available = False
 
-    def __init__(self, id, parent: "ConfigEntryManager", **kwargs: "Unpack[Args]"):
+    def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         """Provide either 'async_press' or 'press' callback to install an action on this button."""
         kwargs.setdefault("entity_key", f"button_{slugify(kwargs['name'])}")
         try:
@@ -49,7 +45,7 @@ class Button(Entity, button.ButtonEntity):
 
             self.async_press = _async_press
 
-        Entity.__init__(self, id, parent, **kwargs)
+        Entity.__init__(self, *args, **kwargs)
 
     def shutdown(self):
         Entity.shutdown(self)

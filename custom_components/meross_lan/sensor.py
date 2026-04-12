@@ -21,8 +21,6 @@ if TYPE_CHECKING:
     )
 
     from .helpers.device import Device
-    from .helpers.entity import ChannelType
-    from .helpers.manager import ConfigEntryManager
     from .helpers.mqtt_profile import MQTTConnection
     from .merossclient.client import AbstractClient
 
@@ -38,19 +36,14 @@ class SensorEntity(mle.NumericEntity, sensor.SensorEntity):
         _attr_suggested_display_precision: ClassVar[int | None]
         device_class: sensor.SensorDeviceClass | None
 
+        type InitArgs = mle.NumericEntity.InitArgs
+
         class Args(mle.NumericEntity.Args):
             device_class: NotRequired[sensor.SensorDeviceClass | None]  # Override
             state_class: NotRequired[sensor.SensorStateClass | None]
             suggested_display_precision: NotRequired[int]
 
-        def __init__(
-            self, id, parent: ConfigEntryManager, /, **kwargs: Unpack[Args]
-        ): ...
-
-        @classmethod
-        def build_sibling(
-            cls, sibling: mle.Entity, /, **kwargs: Unpack[Args]
-        ) -> Self: ...
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
     PLATFORM = sensor.DOMAIN
     HA_ENTITY_ATTRIBUTES = mle.NumericEntity.HA_ENTITY_ATTRIBUTES + (
@@ -113,20 +106,15 @@ class EnumSensorEntity(SensorEntity):
         _attr_suggested_display_precision: Final
         native_value: sensor.StateType
 
+        type InitArgs = SensorEntity.InitArgs
+
         class Args(SensorEntity.Args):
             native_value: NotRequired[sensor.StateType]  # Override
             device_class: NotRequired[Never]  # Override
             state_class: NotRequired[Never]  # Override
             suggested_display_precision: NotRequired[Never]  # Override
 
-        def __init__(
-            self, id, parent: ConfigEntryManager, /, **kwargs: Unpack[Args]
-        ): ...
-
-        @classmethod
-        def build_sibling(
-            cls, sibling: mle.Entity, /, **kwargs: Unpack[Args]
-        ) -> Self: ...
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
         @classmethod
         def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
@@ -146,15 +134,12 @@ class EnumParser(mle.ValueParser, EnumSensorEntity):
 
     if TYPE_CHECKING:
 
+        type InitArgs = mle.ValueParser.InitArgs
+
         class Args(EnumSensorEntity.Args, mle.ValueParser.Args):
             pass
 
-        def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
-
-        @classmethod
-        def build_sibling(
-            cls, sibling: mle.Entity, /, **kwargs: Unpack[Args]
-        ) -> Self: ...
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
         @classmethod
         def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
@@ -175,20 +160,12 @@ class SensorParser(mle.NumericParser, SensorEntity):
 
     if TYPE_CHECKING:
 
+        type InitArgs = mle.NumericParser.InitArgs
+
         class Args(SensorEntity.Args, mle.NumericParser.Args):
             pass
 
-        class Initializer(Protocol):
-            def __call__(
-                self, id, parent: Device, /, **kwargs: Unpack["SensorParser.Args"]
-            ) -> "SensorParser": ...
-
-        def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
-
-        @classmethod
-        def build_sibling(
-            cls, sibling: mle.Entity, /, **kwargs: Unpack[Args]
-        ) -> Self: ...
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
         @classmethod
         def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
@@ -224,13 +201,10 @@ class DiagnosticSensor(SensorEntity):
     if TYPE_CHECKING:
         native_value: sensor.StateType
 
+        type InitArgs = SensorEntity.InitArgs
+
         class Args(SensorEntity.Args):
             native_value: NotRequired[sensor.StateType]
-
-        @classmethod
-        def build_sibling(
-            cls, sibling: mle.Entity, /, **kwargs: Unpack[Args]
-        ) -> Self: ...
 
         @classmethod
         def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
@@ -241,9 +215,9 @@ class DiagnosticSensor(SensorEntity):
 
     is_diagnostic = True
 
-    def __init__(self, id, parent: "ConfigEntryManager", /, **kwargs: Unpack[Args]):
-        super().__init__(id, parent, **kwargs)  # type: ignore
-        parent.add_entity(self)
+    def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
+        super().__init__(*args, **kwargs)  # type: ignore
+        self.parent.add_entity(self)
 
     # HA core entity attributes:
     _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC
@@ -294,7 +268,9 @@ class ProtocolSensor(EnumSensorEntity):
 
     def __init__(self, parent: "Device"):
         self.extra_state_attributes = {}
-        super().__init__(None, parent, native_value=ProtocolSensor.STATE_DISCONNECTED)  # type: ignore
+        EnumSensorEntity.__init__(
+            self, None, parent, native_value=ProtocolSensor.STATE_DISCONNECTED
+        )
 
     def set_available(self):
         self.native_value = self.parent.transport

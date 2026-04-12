@@ -112,7 +112,7 @@ class Mts960Climate(MtsThermostatClimate):
             mn_t.Appliance_Control_Thermostat_Timer,
         )
         for key, entity_def in self.__class__.ENTITY_DEFS.items():
-            setattr(self, key, entity_def.build_sibling(self))
+            setattr(self, key, entity_def(self))
 
     def shutdown(self):
         MtsThermostatClimate.shutdown(self)
@@ -392,7 +392,7 @@ class Mts960Climate(MtsThermostatClimate):
                     entities[f"{id}_{key}"].update_device_value(native_value)
                 except KeyError as key_error:
                     if key_error.args[0] != key:
-                        DiagnosticSensor.build_sibling(
+                        DiagnosticSensor(
                             self, entity_key=key, native_value=native_value
                         )
 

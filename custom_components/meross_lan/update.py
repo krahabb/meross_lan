@@ -9,7 +9,7 @@ from .merossclient.protocol import namespaces as mn
 if TYPE_CHECKING:
     from typing import ClassVar, Final, NotRequired
 
-    from .helpers.device import ChannelType, Device
+    from .helpers.device import Device
 
 
 class UpdateEntity(Entity, update.UpdateEntity):

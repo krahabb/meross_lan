@@ -77,9 +77,9 @@ class gs559(SensorSubDevice, EnumParser):
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         SensorSubDevice.__init__(self, subid, hub, key_digest, model)
         for key, entity_def in self.__class__.ENTITY_DEFS.items():
-            setattr(self, key, entity_def.build_sibling(self))
-        Button.build_sibling(self, async_press=self.async_mute, name="Mute")
-        Button.build_sibling(self, async_press=self.async_test, name="Test")
+            setattr(self, key, entity_def(self))
+        Button(self, async_press=self.async_mute, name="Mute")
+        Button(self, async_press=self.async_test, name="Test")
 
     @cached_property
     def unique_id(self) -> str | None:
@@ -119,12 +119,6 @@ class ms100(SensorSubDevice, SensorParser):
         init_ns = mn_h.Appliance_Hub_Sensor_Adjust
 
         init_device_scale = 10
-
-        @classmethod
-        def build_sibling(cls, sibling: ms100, /, **kwargs: Unpack[NumberParser.Args]):
-            self = super().build_sibling(sibling, **kwargs)
-            self.parent.add_entity(self)
-            return self
 
         @override
         async def async_request_value(self, device_value, /):
@@ -173,9 +167,7 @@ class ms100(SensorSubDevice, SensorParser):
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         SensorSubDevice.__init__(self, subid, hub, key_digest, model)
-        self.sensor_humidity = SensorParser.build_sibling(
-            self, **SensorParser.HUMIDITY_ARGS
-        )
+        self.sensor_humidity = SensorParser(self, **SensorParser.HUMIDITY_ARGS)
 
     @cached_property
     def unique_id(self) -> str | None:
@@ -208,11 +200,16 @@ class ms100(SensorSubDevice, SensorParser):
         device = self.parent
         device.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
             self,
-            ms100.AdjustTemperatureNumber.build_sibling(
-                self, device_value=payload[mc.KEY_TEMPERATURE]
-            ),
-            ms100.AdjustHumidityNumber.build_sibling(
-                self, device_value=payload[mc.KEY_HUMIDITY]
+            *(
+                device.add_entity(
+                    entity_class(
+                        self, device_value=entity_class.init_key_value[payload]
+                    )
+                )
+                for entity_class in (
+                    ms100.AdjustTemperatureNumber,
+                    ms100.AdjustHumidityNumber,
+                )
             ),
         )
         # swap also the update_sensors method to a smarter one
@@ -258,9 +255,7 @@ class ms130(ms100):
         # simple 'id' entity (the ms130 itself) and it is more natural to mantain the sibling
         # relationship by using the same index. The sensor will anyway not use the index attribute
         # for anything else, since the ns parsing is done here in the SubDevice instance.
-        self.sensor_light = SensorParser.build_sibling(
-            self, **(SensorParser.LIGHT_ARGS)
-        )
+        self.sensor_light = SensorParser(self, **(SensorParser.LIGHT_ARGS))
         # This is a slight patch because this ns is rather non-standard
         handler_latestx = hub.ns_handlers[mn.Appliance_Control_Sensor_LatestX]
         # the latest payload was added in SubDevice init because of NS_HUB registration

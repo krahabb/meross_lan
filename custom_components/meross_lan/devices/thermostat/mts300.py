@@ -205,25 +205,22 @@ class Mts300Climate(MtsThermostatClimate):
         self.target_temperature_low = None
         self._mts_work = None
         for _key, _args in Mts300Climate.ENTITY_ARGS.items():
-            setattr(self, f"sensor_{_key}", EnumParser.build_sibling(self, **_args))
-        self.sensor_current_humidity = SensorParser.build_sibling(
+            setattr(self, f"sensor_{_key}", EnumParser(self, **_args))
+        self.sensor_current_humidity = SensorParser(
             self,
             **(SensorParser.HUMIDITY_ARGS | {"entity_registry_enabled_default": False}),
         )
 
-        # TODO/FIXME looks like new key_value semantics could be useful
-        # to avoid installing a custom async_request
-        self.number_fan_hold = NumberParser.build_sibling(
+        self.number_fan_hold = NumberParser(
             self,
             entity_key="fan_hold_time",
+            ns=self.ns,
+            key_value=NumberParser.NestedKeyValue(mc.KEY_FAN, "hTime"),
             device_class=NumberParser.DEVICE_CLASS_DURATION,
             native_unit_of_measurement=mlc.hac.UnitOfTime.MINUTES,
             device_scale=1,
         )
-        self.number_fan_hold.async_request_value = (
-            self._async_request_value_number_fan_hold
-        )
-        self.switch_fan_hold = EmulatedSwitch.build_sibling(
+        self.switch_fan_hold = EmulatedSwitch(
             self,
             entity_key="fan_hold_enable",
         )
@@ -422,15 +419,12 @@ class Mts300Climate(MtsThermostatClimate):
             self.select_temp_association._parse(payload)
         except AttributeError:
             self.select_temp_association = self.parent.add_entity(
-                Mts300Climate.SensorAssociationSelect.build_sibling(self)
+                Mts300Climate.SensorAssociationSelect(self)
             )
             self.select_temp_association._parse(payload)
 
     def _parse_system(self, payload: dict, /):
         pass
-
-    async def _async_request_value_number_fan_hold(self, device_value, /):
-        await self.async_request_parse_ex({mc.KEY_FAN: {"hTime": device_value}})
 
     async def _async_turn_on_switch_fan_hold(self, **kwargs):
         h_time = self.number_fan_hold.device_value

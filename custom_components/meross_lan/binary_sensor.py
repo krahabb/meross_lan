@@ -31,8 +31,6 @@ class BinarySensorParser(mle.BinaryParser, BinarySensorEntity):
         class Args(BinarySensorEntity.Args, mle.BinaryParser.Args):
             pass
 
-        def __init__(self, id, parent: mle.Device, /, **kwargs: Unpack[Args]): ...
-
     __slots__ = mle.BinaryParser._calc_slots()
 
 

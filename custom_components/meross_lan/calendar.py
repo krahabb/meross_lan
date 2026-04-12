@@ -21,8 +21,6 @@ if TYPE_CHECKING:
     from typing import Any, Final, Unpack
 
     from .climate import MtsClimate
-    from .helpers.device import Device
-    from .helpers.entity import ChannelType
     from .merossclient.protocol import namespaces as mn
 
     # TODO: model the payload structure definition to merossclient.types
@@ -116,10 +114,9 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
             climate: MtsClimate
             ns: mn.Namespace
 
-        @classmethod
-        def build_sibling(
-            cls, sibling: MtsClimate, /, **kwargs: Unpack[Args]
-        ) -> "MtsSchedule": ...
+        def __init__(
+            self, *args: Unpack[ParserEntity.InitArgs], **kwargs: Unpack[Args]
+        ): ...
 
     PLATFORM = calendar.DOMAIN
 

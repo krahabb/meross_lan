@@ -12,7 +12,6 @@ if TYPE_CHECKING:
     from typing import Final, Self, Unpack
 
     from ..helpers.device import Device
-    from ..helpers.entity import ChannelType
 
 
 class PresenceConfigBase(ValueParser):
@@ -171,7 +170,7 @@ class PresenceSensor(SensorParser):
         **kwargs: "Unpack[SensorParser.Args]",
     ):
         SensorParser.__init__(self, id, device, **kwargs)
-        self.sensor_distance = SensorParser.build_sibling(
+        self.sensor_distance = SensorParser(
             self,
             entity_key=f"{self.entity_key}_distance",
             device_scale=1000,
@@ -180,12 +179,12 @@ class PresenceSensor(SensorParser):
             suggested_display_precision=2,
             name="Presence distance",
         )
-        self.binary_sensor_motion = BinarySensorEntity.build_sibling(
+        self.binary_sensor_motion = BinarySensorEntity(
             self,
             entity_key=f"{self.entity_key}_motion",
             device_class=BinarySensorEntity.DeviceClass.MOTION,
         )
-        self.sensor_times = SensorParser.build_sibling(
+        self.sensor_times = SensorParser(
             self,
             entity_key=f"{self.entity_key}_times",
             name="Presence times",

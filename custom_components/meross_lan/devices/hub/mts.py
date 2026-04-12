@@ -76,12 +76,12 @@ class mts100v3(SubDevice, MtsClimate):
         self.schedule._schedule_unit_time = hub.descriptor.ability.get(
             mn_h.Appliance_Hub_Mts100_ScheduleB, {}
         ).get(mc.KEY_SCHEDULEUNITTIME, 15)
-        self.binary_sensor_window = BinarySensorEntity.build_sibling(
+        self.binary_sensor_window = BinarySensorEntity(
             self,
             entity_key=str(BinarySensorEntity.DeviceClass.WINDOW),
             device_class=BinarySensorEntity.DeviceClass.WINDOW,
         )
-        self.switch_patch_hvacaction = EmulatedSwitch.build_sibling(
+        self.switch_patch_hvacaction = EmulatedSwitch(
             self, entity_key="patch_hvacaction", is_on=False
         )
         self.switch_patch_hvacaction.register_state_callback(self.flush_state)

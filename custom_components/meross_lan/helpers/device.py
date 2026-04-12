@@ -1,7 +1,6 @@
 import asyncio
 from bisect import bisect_right
 from json import JSONDecodeError
-from time import time
 from typing import TYPE_CHECKING, override
 
 from homeassistant.exceptions import HomeAssistantError
@@ -54,7 +53,7 @@ if TYPE_CHECKING:
         MerossRequestType,
     )
     from .component_api import ComponentApi
-    from .entity import ChannelType, Entity, ParserEntity
+    from .entity import Entity, ParserEntity
     from .meross_profile import DeviceInfoType, LatestVersionType
     from .mqtt_profile import MQTTConnection, MQTTProfile
 
@@ -1182,7 +1181,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         """
         with self.exception_warning("_async_entry_update"):
             data = dict(self.config_entry.data)
-            data[mlc.CONF_TIMESTAMP] = time()  # force ConfigEntry update..
+            data[mlc.CONF_TIMESTAMP] = self.time()  # force ConfigEntry update..
             data[mlc.CONF_PAYLOAD][mc.KEY_ALL] = self.descriptor.all
             if query_abilities:
                 # fw update or whatever might have modified the device abilities.
@@ -1509,7 +1508,9 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                 self.PARAM_CHECK_DEVICE_TIME_START_DELAY, self._check_device_time
             )
 
-    def parse_undefined_dict(self, key_parent: str, payload: dict, root_id: str, /):
+    def parse_undefined_dict(
+        self, key_parent: str, payload: dict, index: mn.IndexValue, /
+    ):
         device_entities = self.entities
         excluded = (
             mc.KEY_ID,
@@ -1525,23 +1526,28 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             if key in excluded:
                 continue
             if type(value) is dict:
-                self.parse_undefined_dict(f"{key_parent}_{key}", value, root_id)
+                self.parse_undefined_dict(f"{key_parent}_{key}", value, index)
                 continue
             if type(value) is list:
-                self.parse_undefined_list(f"{key_parent}_{key}", value, root_id)
+                self.parse_undefined_list(f"{key_parent}_{key}", value, index)
                 continue
 
             try:
-                device_entities[(f"{root_id}_{key_parent}_{key}")].update_device_value(
-                    value
-                )
+                device_entities[
+                    (
+                        f"{index.slug}_{key_parent}_{key}"
+                        if index
+                        else f"{key_parent}_{key}"
+                    )
+                ].update_device_value(value)
             except KeyError:
                 from ..sensor import DiagnosticParser
 
                 DiagnosticParser(
-                    root_id,
+                    index.value,
                     self,
                     entity_key=f"{key_parent}_{key}",
+                    index=index,
                     device_value=value,
                 )
             except Exception as e:
@@ -1553,7 +1559,9 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                     value,
                 )
 
-    def parse_undefined_list(self, key_parent: str, payload: list, root_id: str, /):
+    def parse_undefined_list(
+        self, key_parent: str, payload: list, index: mn.IndexValue, /
+    ):
         pass
 
     def _process_uuid_mismatch(

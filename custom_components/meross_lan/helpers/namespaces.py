@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, override
 
 from .. import const as mlc
 from ..merossclient.device.handler import NamespaceHandler as _NH
-from ..merossclient.device.parser import NamespaceParser, NamespaceValue
+from ..merossclient.device.parser import NamespaceParser
 from ..merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
@@ -76,14 +76,14 @@ class NamespaceHandler(_NH):
                 # we add the last split of the namespace to the extracted payload key
                 if type(_payload) is dict:
                     device.parse_undefined_dict(
-                        f"{ns.slug_end}_{_key}", _payload, self.index.slug(_payload)
+                        f"{ns.slug_end}_{_key}", _payload, self.index.value_of(_payload)
                     )
                 elif type(_payload) is list:
                     _key = f"{ns.slug_end}_{_key}"
                     for __payload in _payload:
                         # not having a "channel" in the list payloads is unexpected so far
                         device.parse_undefined_dict(
-                            _key, __payload, self.index.slug(__payload)
+                            _key, __payload, self.index.value_of(__payload)
                         )
                 else:
                     # should we diagnostic scalar values in root payload ?
@@ -106,7 +106,7 @@ class NamespaceHandler(_NH):
             self.parent.parse_undefined_dict(
                 f"{self.id.slug_end}_{self.id.key}",
                 payload,
-                self.index.slug(payload),
+                self.index.value_of(payload),
             )
         else:
             _NH._parse(self, payload)
@@ -123,9 +123,7 @@ class EntityDefNamespaceHandler(NamespaceHandler):
     """
 
     if TYPE_CHECKING:
-
         parsers: Final[dict[str, ValueParser]]  # type: ignore[override]
-
         init_entity_defs: ClassVar[Mapping[str, type[ValueParser]]]
         entity_defs: Mapping[str, type[ValueParser]]
 

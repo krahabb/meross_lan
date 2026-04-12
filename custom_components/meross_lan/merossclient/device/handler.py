@@ -1,8 +1,6 @@
 from bisect import insort_right
 from typing import TYPE_CHECKING, override
 
-from aiohttp import payload
-
 from .. import extract_dict_payloads, logging, merge_dicts
 from ..protocol import const as mc, namespaces as mn
 from ..protocol.message import MerossMessage
@@ -69,7 +67,7 @@ class NamespaceHandler(logging.Loggable):
         index: Final[mn.IndexType]  # shortcut to id.index
 
         handler: HandlerFunc
-        parsers: Final[dict[mn.IndexValue, ParserFunc]]
+        parsers: Final[dict[mn.IndexValue, ParserFunc | NamespaceParser]]
         parser_class: type[NamespaceParser] | None
         digest: mt.JsonMapping | mt.JsonArray | None
 
@@ -180,14 +178,12 @@ class NamespaceHandler(logging.Loggable):
                         False
                     ), "parser_class only supported for 'channel' indexed namespaces"
             for channel in kwargs.pop("channels", parent.descriptor.channels):
-                parser = parser_class(
-                    channel,
-                    parent,
-                    ns=id,
-                    index=mn.IndexType.channel(channel),
+                # TODO: place mn.IndexType.channel in the channels kwarg and in descriptor.channels
+                index = mn.IndexType.channel(channel)
+                self.parsers[index] = parser = parser_class(
+                    channel, parent, ns=id, index=index
                 )
-                self.parsers[parser.index] = parser._parse
-                parser._namespace_registered((self, parser.index))
+                parser._namespace_registered((self, index))
                 # polling_request_payload will be eventually setup
                 # by polling_request_configure later on
             self.polling_response_size = (
@@ -234,9 +230,7 @@ class NamespaceHandler(logging.Loggable):
             index = mn.IndexType.subId(index.value, 0, None)
         assert index.type is self.index, "index type mismatch"
         assert index not in self.parsers, "Parser already registered for index"
-        self.parsers[index] = getattr(
-            parser, f"_parse_{self.id.slug_end}", parser._parse
-        )
+        self.parsers[index] = getattr(parser, f"_parse_{self.id.slug_end}", parser)
         parser._namespace_registered((self, index))
         self.polling_request_add_index(index)
 
@@ -252,9 +246,7 @@ class NamespaceHandler(logging.Loggable):
         _parser_method_name = f"_parse_{self.id.slug_end}"
         for parser in parsers:
             assert parser.index is index, "All parsers must have the same index"
-            _dispatcher.parsers.append(
-                getattr(parser, _parser_method_name, parser._parse)
-            )
+            _dispatcher.parsers.append(getattr(parser, _parser_method_name, parser))
             parser._namespace_registered(handler_registration)
         self.polling_request_add_index(index)
 
@@ -269,17 +261,15 @@ class NamespaceHandler(logging.Loggable):
             # install a dispatcher
             _parse_method_name = f"_parse_{self.id.slug_end}"
             self.parsers[index] = _dispatcher = NamespaceParser.Dispatcher(
-                getattr(new, _parse_method_name, new._parse)
+                getattr(new, _parse_method_name, new)
             )
             new._namespace_registered(handler_registration)
             for parser in extra:
                 assert parser.index is index, "All parsers must have the same index"
-                _dispatcher.parsers.append(
-                    getattr(parser, _parse_method_name, parser._parse)
-                )
+                _dispatcher.parsers.append(getattr(parser, _parse_method_name, parser))
                 parser._namespace_registered(handler_registration)
         else:
-            self.parsers[index] = getattr(new, f"_parse_{self.id.slug_end}", new._parse)
+            self.parsers[index] = getattr(new, f"_parse_{self.id.slug_end}", new)
             new._namespace_registered(handler_registration)
 
     def handle_response(self, response: MerossMessage, /):
@@ -573,7 +563,7 @@ class NamespaceHandler(logging.Loggable):
         response = await self.parent.async_request(
             *self.id.request_set(parser.index | payload)
         )
-        getattr(parser, f"_parse_{self.id.slug_end}", parser._parse)(
+        getattr(parser, f"_parse_{self.id.slug_end}", parser)(
             merge_dicts(dict(state), payload) if state else payload
         )
         return response
@@ -605,7 +595,7 @@ class NamespaceHandler(logging.Loggable):
             # optimistic update
             if state:
                 payload = merge_dicts(dict(state), payload)
-        getattr(parser, f"_parse_{ns.slug_end}", parser._parse)(payload)
+        getattr(parser, f"_parse_{ns.slug_end}", parser)(payload)
         return response
 
     def polling_request_configure(self, payload_type: mn.PayloadType | None, /):

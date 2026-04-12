@@ -13,11 +13,7 @@ if TYPE_CHECKING:
     from typing import Any, Callable, ClassVar, Final, Unpack
 
     from ...helpers.device import Device
-    from ...helpers.entity import ParserEntity
-    from ...merossclient.device.handler import NamespaceHandler as _NamespaceHandler
     from ...merossclient.protocol import types as mt
-    from ...merossclient.protocol.namespaces import Namespace
-    from ...merossclient.protocol.types import JsonDict
 
 
 class ScreenBrightnessNumber(NumberParser):
@@ -63,21 +59,26 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
 class MtsCommonTemperatureNumber(NumberParser):
 
     if TYPE_CHECKING:
-        parent: Final[Device]  # type: ignore[override]
+        type InitArgs = NumberParser.InitArgs
 
-    # REMOVE init_key_value = NumberParser.SimpleKeyValue(mc.KEY_VALUE)
+        class Args(NumberParser.Args):
+            ns: mn.Namespace
 
     _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
 
-    def __init__(self, id, device: "Device", /, **kwargs):
-        NumberParser.__init__(
-            self,
-            id,
-            device,
-            **kwargs,
-            entity_key=kwargs["ns"].slug_end,  # TODO: generalize entity_key defaulting?
-            device_scale=device.entities[id].temperature_scale,  # type: ignore (access MtsThermostatClimate.temperature_scale)
-        )
+    def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]):
+        # TODO: this mess should be reorganized.
+        # We could maybe create a thermostats dict in Device so that we can always
+        # access those entities wherever since MtsClimate entities are needed here and there
+        # in the thermostat entity system.
+        climate: "MtsClimate"
+        if len(args) == 2:
+            climate = args[1].entities[args[0]]  # type: ignore
+        else:
+            climate = args[0]  # type: ignore
+        kwargs["entity_key"] = kwargs["ns"].slug_end
+        kwargs["device_scale"] = climate.temperature_scale
+        NumberParser.__init__(self, *args, **kwargs)  # type: ignore
 
     @override
     def _parse(self, payload: "mt.thermostat.CommonTemperature_C", /):
@@ -108,7 +109,7 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
         except AttributeError:
             entity_key = f"{self.entity_key}_warning"
             self.sensor_warning = self.parent.add_entity(
-                EnumParser.build_sibling(
+                EnumParser(
                     self,
                     entity_key=entity_key,
                     device_value=warning,
@@ -124,7 +125,7 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
             self.switch.update_boolean_value(self.available)
         except AttributeError:
             self.switch = self.parent.add_entity(
-                SwitchParser.build_sibling(
+                SwitchParser(
                     self,
                     entity_key=f"{self.entity_key}_switch",
                     ns=self.ns,
@@ -183,7 +184,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
             self.sensor_external_temperature.update_device_value(current_temp)
         except AttributeError:
             self.sensor_external_temperature = self.parent.add_entity(
-                SensorParser.build_sibling(
+                SensorParser(
                     self,
                     **(
                         SensorParser.TEMPERATURE_ARGS
@@ -272,7 +273,7 @@ class MtsHoldAction(SelectParser):
             self.number_time.update_device_value(time)
         except AttributeError:
             self.number_time = self.parent.add_entity(
-                NumberParser.build_sibling(
+                NumberParser(
                     self,
                     entity_key="hold_action_time",
                     device_scale=1,

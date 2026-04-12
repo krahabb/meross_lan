@@ -446,7 +446,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         return {
             id: entity
             for id, entity in self.parent.entities.items()
-            if entity.device_entry is self.device_entry
+            if entity.device_info is self.device_info
         }
 
     @property
@@ -629,7 +629,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
             # by not 'exploiting' lists in payloads since they usually carry
             # historic data or so
             if self.parent.create_diagnostic_entities:
-                self.parent.parse_undefined_dict(key, payload, self.id)
+                self.parent.parse_undefined_dict(key, payload, self.index)
         except Exception as exception:
             self.log_exception(
                 self.WARNING,

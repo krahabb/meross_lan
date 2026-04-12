@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload, override
 
 from homeassistant.components import number
 
@@ -31,6 +31,8 @@ class NumberEntity(mle.NumericEntity, number.NumberEntity):
         _attr_native_step: ClassVar[float]
         native_step: float
 
+        type InitArgs = mle.NumericEntity.InitArgs
+
         class Args(mle.NumericEntity.Args):
             device_class: NotRequired[number.NumberDeviceClass | None]  # Override
             mode: NotRequired[number.NumberMode]
@@ -38,14 +40,7 @@ class NumberEntity(mle.NumericEntity, number.NumberEntity):
             native_min_value: NotRequired[float]
             native_step: NotRequired[float]
 
-        def __init__(
-            self, id, parent: ConfigEntryManager, /, **kwargs: Unpack[Args]
-        ): ...
-
-        @classmethod
-        def build_sibling(
-            cls, sibling: mle.Entity, /, **kwargs: Unpack[Args]
-        ) -> Self: ...
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
     PLATFORM = number.DOMAIN
     HA_ENTITY_ATTRIBUTES = mle.NumericEntity.HA_ENTITY_ATTRIBUTES + (
@@ -77,10 +72,12 @@ class NumberParser(mle.NumericParser, NumberEntity):
 
     if TYPE_CHECKING:
 
+        type InitArgs = mle.NumericParser.InitArgs
+
         class Args(NumberEntity.Args, mle.NumericParser.Args):
             pass
 
-        def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
         @classmethod
         def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...

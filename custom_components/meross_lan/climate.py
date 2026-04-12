@@ -20,8 +20,6 @@ if TYPE_CHECKING:
     from homeassistant.core import Event, State
     from homeassistant.helpers.event import EventStateChangedData
 
-    from .helpers.device import Device
-    from .helpers.entity import ChannelType
     from .helpers.namespaces import mn
 
 
@@ -53,10 +51,9 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
                 ns: mn.Namespace
                 key_value: NumberParser.SimpleKeyValue
 
-            @classmethod
-            def build_sibling(
-                cls, sibling: MtsClimate, /, **kwargs: Unpack[Args]
-            ) -> Self: ...
+            def __init__(
+                self, *args: Unpack[NumberParser.InitArgs], **kwargs: Unpack[Args]
+            ): ...
 
         _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
 
@@ -91,10 +88,9 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             """minimum delay (dead-time) between trying to adjust the climate entity."""
             climate: "MtsClimate"
 
-            @classmethod
-            def build_sibling(
-                cls, sibling: "MtsClimate", /, climate: "MtsClimate"
-            ) -> Self: ...
+            def __init__(
+                self, *args: *SelectEntity.InitArgs, climate: "MtsClimate"
+            ): ...
 
         init_entity_key = "tracked_sensor"
         TRACKING_DELAY = 5
@@ -392,6 +388,9 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         target_temperature_step: float
         temperature_unit: Final[str]
 
+        type InitArgs = ParserEntity.InitArgs
+        type Args = ParserEntity.Args
+
     PLATFORM = climate.DOMAIN
 
     ATTR_HVAC_MODE = climate.ATTR_HVAC_MODE
@@ -451,7 +450,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         "sensor_current_temperature",
     )
 
-    def __init__(self, id, parent: "Device", /, **kwargs):
+    def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         self.current_humidity = None
         self.current_temperature = None
         self.hvac_action = None
@@ -468,18 +467,16 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         self._mts_active = False
         self._mts_mode = 0
         self._mts_onoff = 0
-        super().__init__(id, parent, **kwargs)
+        super().__init__(*args, **kwargs)
 
         cls = self.__class__
-        self.number_adjust_temperature = cls.AdjustNumber.build_sibling(
+        self.number_adjust_temperature = cls.AdjustNumber(
             self, ns=cls.AdjustNumber.init_ns
         )
 
-        # TODO/FIXME: all these climate=self used might be better generalized in
-        # build_sibling i.e. we might also add a typed 'sibling' property to the entity itself
         if cls.MTS_MODE_TO_TEMPERATUREKEY_MAP:
             self.number_preset_temperature = set(
-                cls.SetPointNumber.build_sibling(
+                cls.SetPointNumber(
                     self,
                     climate=self,
                     entity_key=f"config_temperature_{key_value}",
@@ -501,18 +498,16 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             )
 
         schedule_ns = cls.SCHEDULE_NS
-        self.schedule = cls.Schedule.build_sibling(
+        self.schedule = cls.Schedule(
             self,
             climate=self,
             entity_key=schedule_ns.key,
             ns=schedule_ns,
         )
-        parent.enable_check_device_time()  # useful for schedule entity times
+        self.parent.enable_check_device_time()  # useful for schedule entity times
 
-        self.select_track_sensor = cls.TrackSensorSelect.build_sibling(
-            self, climate=self
-        )
-        self.sensor_current_temperature = SensorParser.build_sibling(
+        self.select_track_sensor = cls.TrackSensorSelect(self, climate=self)
+        self.sensor_current_temperature = SensorParser(
             self,
             **(
                 SensorParser.TEMPERATURE_ARGS
@@ -520,7 +515,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             ),
         )
         for _entity in (self.number_adjust_temperature, self.schedule):
-            parent.get_handler(_entity.ns).register_parser(_entity)
+            self.parent.get_handler(_entity.ns).register_parser(_entity)
 
     def shutdown(self):
         super().shutdown()

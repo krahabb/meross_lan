@@ -5,15 +5,10 @@ from .. import logging, merge_dicts
 from ..protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
-    from typing import Any, ClassVar, Final, NotRequired, Unpack
+    from typing import Any, ClassVar, Final, NotRequired, Protocol, Unpack
 
     from . import Device, PhysicalDevice
-    from ..protocol.types import (
-        JsonDict,
-        JsonList,
-        JsonMapping,
-        PayloadIndexType,
-    )
+    from ..protocol.types import JsonDict, JsonList, JsonMapping
     from .handler import NamespaceHandler
 
 
@@ -42,12 +37,14 @@ class NamespaceParser(logging.Loggable):
         responsible to deliver data to multiple entities."""
 
         if TYPE_CHECKING:
-            type ParsersContainer = list["NamespaceHandler.ParserFunc"]
+            type ParsersContainer = list[
+                "NamespaceHandler.ParserFunc | NamespaceParser"
+            ]
             parsers: Final[ParsersContainer]
 
         __slots__ = ("parsers",)
 
-        def __init__(self, *parsers: "NamespaceHandler.ParserFunc"):
+        def __init__(self, *parsers: "NamespaceHandler.ParserFunc | NamespaceParser"):
             self.parsers = list(parsers)
 
         def __call__(self, payload: "JsonMapping", /):
@@ -93,7 +90,7 @@ class NamespaceParser(logging.Loggable):
                 if type(_dispatcher) is NamespaceParser.Dispatcher:
                     # remove from dispatcher
                     _dispatcher.parsers.remove(
-                        getattr(self, f"_parse_{handler.id.slug_end}", self._parse)
+                        getattr(self, f"_parse_{handler.id.slug_end}", self)
                     )
                     if not _dispatcher.parsers:
                         del handler.parsers[index]
@@ -133,7 +130,7 @@ class NamespaceParser(logging.Loggable):
         response = await self.parent.async_request(
             *self.ns.request_set(self.index | payload)
         )
-        self._parse(payload)
+        self(payload)
         return response
 
     @final
@@ -141,7 +138,7 @@ class NamespaceParser(logging.Loggable):
         response = await self.parent.async_request(
             *self.ns.request_set(self.index | payload)
         )
-        self._parse(merge_dicts(dict(self.ns_payload), payload))
+        self(merge_dicts(dict(self.ns_payload), payload))
         return response
 
     def _parse(self, payload: "JsonMapping", /):
@@ -158,6 +155,10 @@ class NamespaceParser(logging.Loggable):
             _payload=payload,
             timeout=14400,
         )
+
+    def __call__(self, payload: "JsonMapping", /):
+        """This allows to use the NamespaceParser instance itself as a parser callback for the NamespaceHandler."""
+        self._parse(payload)
 
     @classmethod
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):

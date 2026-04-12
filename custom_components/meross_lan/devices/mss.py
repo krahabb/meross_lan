@@ -33,36 +33,39 @@ class _ElectricitySensor(SensorParser):
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
 
+        type InitArgs = SensorParser.InitArgs
+
         class Args(SensorParser.Args):
             pass
 
-        # not setting 'entity_key' in EntityDef will mark the entity as 'not required'
-        # (see __init__)
         ENTITY_DEFS: ClassVar[dict[str, type[SensorParser]]]
+        sensors: Final[list[SensorParser]]
+        sensor_consumptionx: "ConsumptionXSensor | None"
+        sensor_power: SensorParser
         # HA core entity attributes:
         native_value: int
 
-        sensor_consumptionx: "ConsumptionXSensor | None"
-        sensor_power: SensorParser
-
     init_entity_key = "energy_estimate"
     ENTITY_DEFS = {
-        mc.KEY_CURRENT: SensorParser.ENTITY_DEF(
-            entity_key=mc.KEY_CURRENT,
-            device_class=SensorParser.DeviceClass.CURRENT,
+        mc.KEY_POWER: SensorParser.ENTITY_DEF(
+            entity_key=mc.KEY_POWER,
+            key_value=SensorParser.SimpleKeyValue(mc.KEY_POWER),
+            device_class=SensorParser.DeviceClass.POWER,
             state_class=SensorParser.StateClass.MEASUREMENT,
             suggested_display_precision=1,
             device_scale=1000,
         ),
-        mc.KEY_POWER: SensorParser.ENTITY_DEF(
-            entity_key=mc.KEY_POWER,
-            device_class=SensorParser.DeviceClass.POWER,
+        mc.KEY_CURRENT: SensorParser.ENTITY_DEF(
+            entity_key=mc.KEY_CURRENT,
+            key_value=SensorParser.SimpleKeyValue(mc.KEY_CURRENT),
+            device_class=SensorParser.DeviceClass.CURRENT,
             state_class=SensorParser.StateClass.MEASUREMENT,
             suggested_display_precision=1,
             device_scale=1000,
         ),
         mc.KEY_VOLTAGE: SensorParser.ENTITY_DEF(
             entity_key=mc.KEY_VOLTAGE,
+            key_value=SensorParser.SimpleKeyValue(mc.KEY_VOLTAGE),
             device_class=SensorParser.DeviceClass.VOLTAGE,
             state_class=SensorParser.StateClass.MEASUREMENT,
             suggested_display_precision=1,
@@ -77,37 +80,32 @@ class _ElectricitySensor(SensorParser):
     __slots__ = (
         "_estimate",
         "_electricity_lastepoch",
+        "sensors",
         "sensor_consumptionx",
         "sensor_power",
     )
 
-    def __init__(
-        self,
-        ns_or_channel: mn.Namespace | int,
-        device: "Device",
-        /,
-        **kwargs: "Unpack[Args]",
-    ):
+    def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         self._estimate = 0.0
         self._electricity_lastepoch = 0.0
         self.sensor_consumptionx = None
         kwargs["device_value"] = 0
-        super().__init__(ns_or_channel, device, **kwargs)
+        super().__init__(*args, **kwargs)
         self._schedule_reset()
-        channel = self.index.value
-        for _entity_def in self.__class__.ENTITY_DEFS.values():
-            _entity_def.build_sibling(self)
-        self.sensor_power = device.entities[
-            mc.KEY_POWER if channel is None else f"{channel}_{mc.KEY_POWER}"
-        ]  # type: ignore
+        self.sensors = [
+            _entity_def(self, ns=self.ns)
+            for _entity_def in self.__class__.ENTITY_DEFS.values()
+        ]
+        self.sensor_power = self.sensors[0]
         # We enable the internal device time checks since the device could report
         # 0 power readings when not able to sync time and/or correctly configured
-        device.enable_check_device_time()
+        self.parent.enable_check_device_time()
 
     def shutdown(self):
         super().shutdown()
         del self.sensor_consumptionx
         del self.sensor_power
+        self.sensors.clear()
 
     async def async_added_to_hass(self):
         # state restoration is only needed on cold-start and we have to discriminate
@@ -141,18 +139,12 @@ class _ElectricitySensor(SensorParser):
     def _parse(self, payload: dict, /):
         """{"channel": 0, "power": 11000, ...}"""
         device = self.parent
-        entities = device.entities
-        channel = self.index.value
         last_power = self.sensor_power.native_value
-
-        for key in self.__class__.ENTITY_DEFS:
+        for sensor in self.sensors:
             try:
-                entities[
-                    key if channel is None else f"{channel}_{key}"
-                ].update_device_value(payload[key])
+                sensor(payload)
             except KeyError:
                 pass
-
         power = self.sensor_power.native_value
         # device.device_timestamp 'should be' current epoch of the message
         try:
@@ -202,7 +194,7 @@ class ElectricitySensor(_ElectricitySensor, EntityNamespaceMixin):
     @classmethod
     @override
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        ns_entity = cls(ns, device, ns=ns, device_info=device.device_info)
+        ns_entity = cls(ns, device, ns=ns)
         ns_entity.handler_ns = ns_entity
         return ns_entity
 
@@ -218,11 +210,11 @@ class ElectricityXSensor(_ElectricitySensor):
         if TYPE_CHECKING:
             parent: Final[Device]  # type: ignore[override]
 
-        def __init__(self, channel, device: "Device", /, **kwargs):
-            SensorParser.__init__(self, channel, device, **kwargs)
+        def __init__(self, *args, **kwargs):
+            SensorParser.__init__(self, *args, **kwargs)
             # TODO: in 6.x.x we should generalize this mechanism to any ns/device
             try:
-                handler_ch: "ConsumptionHNamespaceHandler" = device.ns_handlers[
+                handler_ch: "ConsumptionHNamespaceHandler" = self.parent.ns_handlers[
                     mn.Appliance_Control_ConsumptionH
                 ]  # type: ignore
                 handler_ch.need_polling(self.index)
@@ -252,6 +244,7 @@ class ElectricityXSensor(_ElectricitySensor):
     ENTITY_DEFS = _ElectricitySensor.ENTITY_DEFS | {
         mc.KEY_VOLTAGE: SensorParser.ENTITY_DEF(
             entity_key=mc.KEY_VOLTAGE,
+            key_value=SensorParser.SimpleKeyValue(mc.KEY_VOLTAGE),
             device_class=SensorParser.DeviceClass.VOLTAGE,
             state_class=SensorParser.StateClass.MEASUREMENT,
             suggested_display_precision=1,
@@ -259,6 +252,7 @@ class ElectricityXSensor(_ElectricitySensor):
         ),
         mc.KEY_FACTOR: SensorParser.ENTITY_DEF(
             entity_key=mc.KEY_FACTOR,
+            key_value=SensorParser.SimpleKeyValue(mc.KEY_FACTOR),
             device_class=SensorParser.DeviceClass.POWER_FACTOR,
             state_class=SensorParser.StateClass.MEASUREMENT,
             suggested_display_precision=2,
@@ -266,6 +260,7 @@ class ElectricityXSensor(_ElectricitySensor):
         ),
         mc.KEY_MCONSUME: MConsumeSensor.ENTITY_DEF(
             entity_key=mc.KEY_MCONSUME,
+            key_value=SensorParser.SimpleKeyValue(mc.KEY_MCONSUME),
             device_class=SensorParser.DeviceClass.ENERGY,
             state_class=SensorParser.StateClass.TOTAL_INCREASING,  # quick patch for #621 (will be fixed in v6.x.x)
             suggested_display_precision=0,
@@ -336,7 +331,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
 
     __SLOTS__ = ("_indexes_to_poll",)
 
-    def __init__(self, ns: "mn.Namespace", device: "Device", /):
+    def __init__(self, ns: mn.Namespace, device: "Device", /):
         self._indexes_to_poll = []
         NamespaceHandler.__init__(self, ns, device, parser_class=ConsumptionHSensor)
         if len(device.descriptor.channels) > 1:
@@ -448,7 +443,7 @@ class ConsumptionXSensor(SensorParser, EntityNamespaceMixin):
         "_tomorrow_midnight_epoch",
     )
 
-    def __init__(self, id, device: "Device", /, **kwargs):
+    def __init__(self, *args, **kwargs):
         self.offset = 0
         self.reset_ts = 0
         self.energy_estimate = 0.0
@@ -462,9 +457,9 @@ class ConsumptionXSensor(SensorParser, EntityNamespaceMixin):
         self._today_midnight_epoch = 0  # 12:00 am today
         self._tomorrow_midnight_epoch = 0  # 12:00 am tomorrow
         self.extra_state_attributes = {}
-        SensorParser.__init__(self, id, device, **kwargs)
+        SensorParser.__init__(self, *args, **kwargs)
         self.polling_response_size_adj(30)  # maximum item count for payload
-        device.enable_check_device_time()
+        self.parent.enable_check_device_time()
 
     def set_unavailable(self):
         self._yesterday_midnight_epoch = 0
@@ -474,7 +469,7 @@ class ConsumptionXSensor(SensorParser, EntityNamespaceMixin):
 
     async def async_added_to_hass(self):
         try:
-            self.parent.entities[mn.Appliance_Control_Electricity].sensor_consumptionx = self  # type: ignore
+            self.parent.ns_handlers[mn.Appliance_Control_Electricity].sensor_consumptionx = self  # type: ignore
         except KeyError:
             pass
         # state restoration is only needed on cold-start and we have to discriminate
@@ -664,9 +659,7 @@ class OverTempEnableSwitch(SwitchParser, EntityNamespaceMixin):
             self.sensor_overtemp_type.update_device_value(type)
         except AttributeError:
             self.sensor_overtemp_type = self.parent.add_entity(
-                EnumParser.build_sibling(
-                    self, entity_key="config_overtemp_type", native_value=type
-                )
+                EnumParser(self, entity_key="config_overtemp_type", native_value=type)
             )
         except KeyError:
             pass
