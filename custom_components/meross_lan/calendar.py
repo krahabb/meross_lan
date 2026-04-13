@@ -15,13 +15,13 @@ from homeassistant.util import dt
 
 from .helpers import clamp
 from .helpers.entity import ParserEntity
-from .merossclient.protocol import const as mc
+from .merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
     from typing import Any, Final, Mapping, Sequence, Unpack
 
     from .climate import MtsClimate
-    from .merossclient.protocol import namespaces as mn, types as mt
+    from .merossclient.protocol import types as mt
 
     # TODO: model the payload structure definition to merossclient.types
     MtsScheduleNativeEntry = list[int]
@@ -96,7 +96,7 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
         # ns_payload carries the original unpacked schedule payload from the device representing
         # its effective state
         ns_payload: MtsScheduleNativeMappingType
-        _schedule: MtsScheduleNativeType | None
+        _schedule: MtsScheduleNativeType
         # set the 'granularity' of the schedule entries i.e. the schedule duration
         # must be a multiple of this time (in minutes). It is set lately by customized
         # implementations
@@ -131,6 +131,7 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
     )
 
     init_flatten = True
+    init__schedule = mn.EMPTY_DICT
     init__schedule_unit_time = 15
     init__schedule_entry_count_max = 0
     init__schedule_entry_count_min = 0
@@ -149,7 +150,7 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
         del self.climate  # type: ignore
 
     def set_unavailable(self):
-        self._schedule = None
+        self._schedule = mn.EMPTY_DICT
         super().set_unavailable()
 
     # interface: Calendar
@@ -233,7 +234,6 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
     async def _async_request_schedule(self):
         if not self._schedule:
             return
-
         payload = {}
         # unpack our schedule struct to be compliant with the device payload:
         # the weekday_schedule must contain between _schedule_entry_count_min and
@@ -263,32 +263,31 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
         the internal representation to the HA CaleandarEvent used to pass the state to HA.
         event_time is expressed in local time of the device (if it has any configured)
         """
-        schedule = self._schedule
-        if not schedule:
+        try:
+            weekday_index = event_time.weekday()
+            weekday_schedule = self._schedule[MTS_SCHEDULE_WEEKDAY[weekday_index]]
+        except KeyError:
             return None
-        weekday_index = event_time.weekday()
-        weekday_schedule = schedule.get(MTS_SCHEDULE_WEEKDAY[weekday_index])
-        if not weekday_schedule:
+        else:
+            event_day = event_time.replace(hour=0, minute=0, second=0, microsecond=0)
+            event_minutes = (event_time - event_day).total_seconds() / 60
+            schedule_minutes_begin = 0
+            schedule_index = 0
+            for schedule in weekday_schedule:
+                # here schedule is a list like [390, 75]
+                schedule_minutes_end = schedule_minutes_begin + schedule[0]
+                if schedule_minutes_begin <= event_minutes < schedule_minutes_end:
+                    return MtsScheduleEntry(
+                        weekday_index=weekday_index,
+                        index=schedule_index,
+                        minutes_begin=schedule_minutes_begin,
+                        minutes_end=schedule_minutes_end,
+                        day=event_day,
+                        data=schedule,
+                    )
+                schedule_minutes_begin = schedule_minutes_end
+                schedule_index += 1
             return None
-        event_day = event_time.replace(hour=0, minute=0, second=0, microsecond=0)
-        event_minutes = (event_time - event_day).total_seconds() / 60
-        schedule_minutes_begin = 0
-        schedule_index = 0
-        for schedule in weekday_schedule:
-            # here schedule is a list like [390, 75]
-            schedule_minutes_end = schedule_minutes_begin + schedule[0]
-            if schedule_minutes_begin <= event_minutes < schedule_minutes_end:
-                return MtsScheduleEntry(
-                    weekday_index=weekday_index,
-                    index=schedule_index,
-                    minutes_begin=schedule_minutes_begin,
-                    minutes_end=schedule_minutes_end,
-                    day=event_day,
-                    data=schedule,
-                )
-            schedule_minutes_begin = schedule_minutes_end
-            schedule_index += 1
-        return None
 
     def _get_next_event_entry(
         self, event_entry: MtsScheduleEntry
@@ -296,12 +295,9 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
         """Extracts the next event entry description from the internal schedule representation
         Useful to iterate over when HA asks for data
         """
-        schedule = self._schedule
-        if not schedule:
-            return None
-        with self.exception_warning("parsing internal schedule", timeout=14400):
+        try:
             weekday_index = event_entry.weekday_index
-            weekday_schedule: list = schedule[MTS_SCHEDULE_WEEKDAY[weekday_index]]
+            weekday_schedule = self._schedule[MTS_SCHEDULE_WEEKDAY[weekday_index]]
             schedule_index = event_entry.index + 1
             if schedule_index < len(weekday_schedule):
                 event_day = event_entry.day
@@ -309,7 +305,7 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
             else:
                 event_day = event_entry.day + timedelta(days=1)
                 weekday_index = event_day.weekday()
-                weekday_schedule = schedule[MTS_SCHEDULE_WEEKDAY[weekday_index]]
+                weekday_schedule = self._schedule[MTS_SCHEDULE_WEEKDAY[weekday_index]]
                 schedule_index = 0
                 schedule_minutes_begin = 0
             schedule_native_entry = weekday_schedule[schedule_index]
@@ -321,6 +317,11 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
                 day=event_day,
                 data=schedule_native_entry,
             )
+        except KeyError:
+            return None
+        except Exception as e:
+            self.log_exception(self.WARNING, e, "_get_next_event_entry", timeout=14400)
+            return None
 
     def _extract_rfc5545_info(
         self, event: "dict[str, Any]"
@@ -554,43 +555,40 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
             # end for weekday
 
     def _build_internal_schedule(self):
-        self._schedule = None
-        if payload := self.ns_payload:
-            # payload = {
-            #   ...
-            #   "mon": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
-            #   "tue": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
-            #   "wed": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
-            #   "thu": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
-            #   "fri": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
-            #   "sat": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
-            #   "sun": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]]
-            #   }
-            with self.exception_warning("_build_internal_schedule", timeout=14400):
-                schedule: "MtsScheduleNativeType" = {
-                    w: [] for w in MTS_SCHEDULE_WEEKDAY
-                }
-                for weekday, weekday_schedule in schedule.items():
-                    try:
-                        weekday_state = payload[weekday]
-                        # weekday_state = [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]]
-                        if self.flatten:
-                            current_entry = None
-                            for entry in weekday_state:
-                                if current_entry and (entry[1] == current_entry[1]):
-                                    # same T: flatten out
-                                    current_entry[0] = current_entry[0] + entry[0]
-                                else:
-                                    current_entry = list(entry)
-                                    weekday_schedule.append(current_entry)
-                        else:
-                            # don't flatten..but (deep)copy over
-                            for entry in weekday_state:
-                                weekday_schedule.append(list(entry))
-                    except KeyError as ke:
-                        # missing day: leave empty
-                        continue
-                self._schedule = schedule
+        self._schedule = mn.EMPTY_DICT
+        # payload = {
+        #   ...
+        #   "mon": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
+        #   "tue": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
+        #   "wed": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
+        #   "thu": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
+        #   "fri": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
+        #   "sat": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
+        #   "sun": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]]
+        #   }
+        with self.exception_warning("_build_internal_schedule", timeout=14400):
+            schedule: "MtsScheduleNativeType" = {w: [] for w in MTS_SCHEDULE_WEEKDAY}
+            for weekday, weekday_schedule in schedule.items():
+                try:
+                    weekday_state = self.ns_payload[weekday]
+                    # weekday_state = [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]]
+                    if self.flatten:
+                        current_entry = None
+                        for entry in weekday_state:
+                            if current_entry and (entry[1] == current_entry[1]):
+                                # same T: flatten out
+                                current_entry[0] = current_entry[0] + entry[0]
+                            else:
+                                current_entry = list(entry)
+                                weekday_schedule.append(current_entry)
+                    else:
+                        # don't flatten..but (deep)copy over
+                        for entry in weekday_state:
+                            weekday_schedule.append(list(entry))
+                except KeyError as ke:
+                    # missing day: leave empty
+                    continue
+            self._schedule = schedule
 
     # message handlers
     @override
