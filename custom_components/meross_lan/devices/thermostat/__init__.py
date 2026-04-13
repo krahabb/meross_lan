@@ -77,12 +77,12 @@ class MtsCommonTemperatureNumber(NumberParser):
         NumberParser.__init__(self, *args, **kwargs)  # type: ignore
 
     @override
-    def _parse(self, payload: "mt.thermostat.CommonTemperature_C", /):
+    def __call__(self, payload: "mt.thermostat.CommonTemperature_C", /):
         try:
             self.native_max_value = payload[mc.KEY_MAX] / self.device_scale
             self.native_min_value = payload[mc.KEY_MIN] / self.device_scale
         except KeyError as e:
-            self.log_exception(self.DEBUG, e, "_parse", timeout=14400)
+            self.log_exception(self.DEBUG, e, "__call__", timeout=14400)
         self.update_device_value(payload[mc.KEY_VALUE])
 
 
@@ -98,7 +98,7 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
     )
 
     @override
-    def _parse(self, payload: "mt.thermostat.CommonTemperatureExt_C", /):
+    def __call__(self, payload: "mt.thermostat.CommonTemperatureExt_C", /):
         try:
             warning = payload[mc.KEY_WARNING]
             self.sensor_warning.update_device_value(warning)
@@ -132,7 +132,7 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
             self.switch.register_state_callback(self._switch_state_callback)
         except KeyError:
             pass
-        MtsCommonTemperatureNumber._parse(self, payload)
+        MtsCommonTemperatureNumber.__call__(self, payload)
 
     def _switch_state_callback(self):
         available = bool(self.switch.is_on)
@@ -174,7 +174,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
     _attr_native_step = MtsClimate.TARGET_TEMPERATURE_STEP
 
     @override
-    def _parse(self, payload: "mt.thermostat.Overheat_C", /):
+    def __call__(self, payload: "mt.thermostat.Overheat_C", /):
         try:
             current_temp = payload[mc.KEY_CURRENTTEMP]
             self.sensor_external_temperature.update_device_value(current_temp)
@@ -194,7 +194,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
             )
         except KeyError:
             pass
-        MtsCommonTemperatureExtNumber._parse(self, payload)
+        MtsCommonTemperatureExtNumber.__call__(self, payload)
 
 
 class MtsSummerMode(SwitchParser):
@@ -261,8 +261,8 @@ class MtsHoldAction(SelectParser):
 
     __slots__ = ("number_time",)
 
-    # interface: self
-    def _parse(self, payload: "mt.thermostat.HoldAction_C", /):
+    @override
+    def __call__(self, payload: "mt.thermostat.HoldAction_C", /):
         self.update_device_value(payload[mc.KEY_MODE])
         try:
             time = payload[mc.KEY_TIME]  # type: ignore

@@ -1,7 +1,7 @@
 import dataclasses
 from datetime import datetime, timedelta
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from homeassistant.components import calendar
 from homeassistant.components.calendar.const import (
@@ -18,15 +18,16 @@ from .helpers.entity import ParserEntity
 from .merossclient.protocol import const as mc
 
 if TYPE_CHECKING:
-    from typing import Any, Final, Unpack
+    from typing import Any, Final, Mapping, Sequence, Unpack
 
     from .climate import MtsClimate
-    from .merossclient.protocol import namespaces as mn
+    from .merossclient.protocol import namespaces as mn, types as mt
 
     # TODO: model the payload structure definition to merossclient.types
     MtsScheduleNativeEntry = list[int]
     MtsScheduleNativeDayEntry = list[MtsScheduleNativeEntry]
     MtsScheduleNativeType = dict[str, MtsScheduleNativeDayEntry]
+    MtsScheduleNativeMappingType = Mapping[str, Sequence[Sequence[int]]]
 
 
 MTS_SCHEDULE_WEEKDAY = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
@@ -94,7 +95,7 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
         # we might 'compress' these when 2 or more consecutive entries don't change the temperature
         # ns_payload carries the original unpacked schedule payload from the device representing
         # its effective state
-        ns_payload: MtsScheduleNativeType | None
+        ns_payload: MtsScheduleNativeMappingType
         _schedule: MtsScheduleNativeType | None
         # set the 'granularity' of the schedule entries i.e. the schedule duration
         # must be a multiple of this time (in minutes). It is set lately by customized
@@ -592,14 +593,23 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
                 self._schedule = schedule
 
     # message handlers
-    def _parse(self, payload: dict):
+    @override
+    def __call__(self, payload: "mt.JsonMapping", /):
         # the payload we receive from the device might be partial
         # if we're getting the PUSH in realtime since it only carries
         # the updated entries for the updated day.
+        """
         native_schedule = self.ns_payload
         if native_schedule:
             payload = native_schedule | payload
             if payload == native_schedule:
+                return
+        """
+        if len(payload) < len(self.ns_payload):
+            # This is a partial update. It happens when the device
+            # pushes a single day array instead of the full week payload.
+            payload = self.ns_payload | payload  # type: ignore
+            if payload == self.ns_payload:
                 return
 
         self.ns_payload = payload

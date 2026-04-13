@@ -141,7 +141,7 @@ class NamespaceParser(logging.Loggable):
         self(merge_dicts(dict(self.ns_payload), payload))
         return response
 
-    def _parse(self, payload: "JsonMapping", /):
+    def __call__(self, payload: "JsonMapping", /):
         """Default payload message parser. This is invoked by the NamespaceHandler
         routing mechanics when the parser is registered as a sink and no specific
         _parse_{NamespaceHandler.id.slug_end} is available.
@@ -155,10 +155,6 @@ class NamespaceParser(logging.Loggable):
             _payload=payload,
             timeout=14400,
         )
-
-    def __call__(self, payload: "JsonMapping", /):
-        """This allows to use the NamespaceParser instance itself as a parser callback for the NamespaceHandler."""
-        self._parse(payload)
 
     @classmethod
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
@@ -259,7 +255,7 @@ class NamespaceValue(NamespaceParser):
         self.update_device_value(device_value)
 
     @override  # NamespaceParser
-    def _parse(self, payload: "JsonMapping", /):
+    def __call__(self, payload: "JsonMapping", /):
         self.ns_payload = payload
         self.update_device_value(self.key_value[payload])
 

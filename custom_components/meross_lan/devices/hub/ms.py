@@ -81,7 +81,13 @@ class gs559(SensorSubDevice, EnumParser):
         Button(self, async_press=self.async_mute, name="Mute")
         Button(self, async_press=self.async_test, name="Test")
 
-    def _parse(self, payload: "mt.hub._gs559 | mt.hub.Sensor_Smoke", /):
+    def shutdown(self):
+        SensorSubDevice.shutdown(self)
+        for key in self.__class__.ENTITY_DEFS.keys():
+            delattr(self, key)
+
+    @override
+    def __call__(self, payload: "mt.hub._gs559 | mt.hub.Sensor_Smoke", /):
         # This (being the default fall-back parser) will parse  *.Sensor.All, *Sensor.Smoke
         # and the 'digest' payload since they have the same structure.
         self.device_value = value = payload[mc.KEY_STATUS]
@@ -93,11 +99,6 @@ class gs559(SensorSubDevice, EnumParser):
             self.sensor_interConn.update_device_value(payload[mc.KEY_INTERCONN])
         except KeyError:
             pass
-
-    def shutdown(self):
-        SensorSubDevice.shutdown(self)
-        for key in self.__class__.ENTITY_DEFS.keys():
-            delattr(self, key)
 
     async def async_mute(self, /):
         await self.async_request_value(self.MUTE_MAP.get(self.device_value, 170))
@@ -169,7 +170,7 @@ class ms100(SensorSubDevice, SensorParser):
         del self.sensor_humidity
 
     @override
-    def _parse(self, payload: "mt.hub._ms100 | mt.hub.Sensor_TempHum", /):
+    def __call__(self, payload: "mt.hub._ms100 | mt.hub.Sensor_TempHum", /):
         # Parses both the 'digest' payload and the Sensor_TempHum since
         # they share the same relevant keys.
         self._update_sensors(
@@ -258,7 +259,7 @@ class ms130(ms100):
         del self.sensor_light
 
     @override
-    def _parse(self, payload: "mt.hub._ms130", /):
+    def __call__(self, payload: "mt.hub._ms130", /):
         # Parses the 'digest' payload.
         self._update_sensors(payload[mc.KEY_TEMP], payload[mc.KEY_HUMI])
 

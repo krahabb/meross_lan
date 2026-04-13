@@ -557,7 +557,7 @@ class NamespaceHandler(logging.Loggable):
         Helper to request method SET and eventually dispatch the response to the parser
         bypassing the Device and the NamespaceHandler message routing.
         the payload will be wrapped according to the namespace grammar.
-        If parser is provided, it will be called back on its _parse method and
+        The parser will be called back on its _parse_xxx method (or __call__ as fallback) and
         the SET command payload will be automatically set to the parser's channel.
         """
         response = await self.parent.async_request(

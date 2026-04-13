@@ -70,7 +70,7 @@ class Mts200Climate(MtsThermostatClimate):
     def is_mts_scheduled(self, /):
         return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
 
-    def _parse(self, payload: "mt.thermostat.Mode_C", /):
+    def __call__(self, payload: "mt.thermostat.Mode_C", /):
         if self.ns_payload == payload:
             return
         self.ns_payload = payload
@@ -95,7 +95,7 @@ class Mts200Climate(MtsThermostatClimate):
             try:
                 _number.native_max_value = self.max_temp
                 _number.native_min_value = self.min_temp
-                _number._parse(payload)
+                _number(payload)
             except KeyError:
                 pass
         self.flush_state()

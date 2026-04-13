@@ -135,8 +135,8 @@ class _ElectricitySensor(SensorParser):
         self.available = True
         self.flush_state()
 
-    # interface: self
-    def _parse(self, payload: dict, /):
+    @override
+    def __call__(self, payload: dict, /):
         """{"channel": 0, "power": 11000, ...}"""
         device = self.parent
         last_power = self.sensor_power.native_value
@@ -171,6 +171,7 @@ class _ElectricitySensor(SensorParser):
 
         self._electricity_lastepoch = device.device_timestamp
 
+    # interface: self
     def _schedule_reset(self, /):
         _now = dt_util.now()
         t = _now + timedelta(days=1)
@@ -294,7 +295,8 @@ class ConsumptionHSensor(SensorParser):
         self.handler_ns.channel_polling_remove(self.index)
         await SensorParser.async_will_remove_from_hass(self)
 
-    def _parse(self, payload: dict):
+    @override
+    def __call__(self, payload: dict, /):
         """
         {"channel": 1, "total": 958, "data": [{"timestamp": 1721548740, "value": 0}]}
         """

@@ -232,7 +232,7 @@ class DiagnosticParser(mle.ValueParser, DiagnosticSensor):
     """
 
     @override
-    def _parse(self, payload: dict):
+    def __call__(self, payload: dict, /):
         """
         This implementation aims at diagnostic sensors installed in 'well-known'
         namespace handlers to manage 'unexpected' channels when they eventually

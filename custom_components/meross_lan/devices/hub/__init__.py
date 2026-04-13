@@ -377,9 +377,9 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         if slots := cls._calc_slots():
             cls.__slots__ = slots
         # By default, the digest key (key_digest) has the same payload as the default
-        # parser (i.e. _parse) so we can just point the digest parsing to the default one.
+        # parser (i.e. __call__) so we can just point the digest parsing to the default one.
         if "_parse_digest_" not in cls.__dict__:
-            cls._parse_digest_ = cls._parse
+            cls._parse_digest_ = cls.__call__
 
     def __init__(
         self,

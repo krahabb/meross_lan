@@ -59,7 +59,7 @@ class Fan(ToggleXParser, fan.FanEntity):
             # don't propagate callback confirmation
             await self.handler_togglex.async_set(self.index | {mc.KEY_ONOFF: 1})
             self.is_on = True
-            self.ns_payload[mc.KEY_SPEED] = 0  # force _parse flushing
+            self.ns_payload[mc.KEY_SPEED] = 0  # force flushing
         await self.async_request_parse_ex(
             {
                 mc.KEY_SPEED: (
@@ -77,8 +77,8 @@ class Fan(ToggleXParser, fan.FanEntity):
         else:
             await self.async_request_parse_ex({mc.KEY_SPEED: 0})
 
-    # interface: self
-    def _parse(self, payload: "mt.control.Fan", /):
+    @override
+    def __call__(self, payload: "mt.control.Fan", /):
         """payload = {"channel": 0, "speed": 3, "maxSpeed": 4}"""
         if self.ns_payload != payload:
             self.ns_payload = payload

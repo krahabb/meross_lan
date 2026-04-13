@@ -181,7 +181,7 @@ class mts100v3(SubDevice, MtsClimate):
         return self._mts_onoff and self._mts_mode == mc.MTS100_MODE_AUTO
 
     @override
-    def _parse(self, payload: "mt.hub._Mts100_Temperature", /):
+    def __call__(self, payload: "mt.hub._Mts100_Temperature", /):
         if self.ns_payload == payload:
             return
         self.ns_payload = payload
@@ -214,7 +214,7 @@ class mts100v3(SubDevice, MtsClimate):
             try:
                 _number.native_max_value = self.max_temp
                 _number.native_min_value = self.min_temp
-                _number._parse(payload)
+                _number(payload)
             except KeyError:
                 pass
         self.flush_state()
@@ -232,7 +232,7 @@ class mts100v3(SubDevice, MtsClimate):
         if p_togglex := payload.get(mc.KEY_TOGGLEX):
             self._mts_onoff = p_togglex[mc.KEY_ONOFF]
         if p_temperature := payload.get(mc.KEY_TEMPERATURE):
-            self._parse(p_temperature)
+            self(p_temperature)
         else:
             self.flush_state()
 

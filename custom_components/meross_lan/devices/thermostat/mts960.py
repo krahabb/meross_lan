@@ -360,7 +360,8 @@ class Mts960Climate(MtsThermostatClimate):
         )
 
     # message handlers
-    def _parse(self, payload: "mt.thermostat.ModeB_C", /):
+    @override
+    def __call__(self, payload: "mt.thermostat.ModeB_C", /):
         if self.ns_payload == payload:
             return
         self.ns_payload = payload

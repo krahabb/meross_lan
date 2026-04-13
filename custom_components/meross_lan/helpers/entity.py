@@ -726,8 +726,8 @@ class EntityNamespaceMixin(ParserEntity, NamespaceHandler):
 
     @override
     def _handle(self, message: "MerossMessage", /):
-        self._parse(message.payload[self.id.key])
+        self(message.payload[self.id.key])
 
     @override
     def parse_digest(self, digest: "JsonDict", /):
-        self._parse(digest)
+        self(digest)

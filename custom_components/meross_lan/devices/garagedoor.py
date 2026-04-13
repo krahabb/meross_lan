@@ -367,7 +367,7 @@ class GarageDoor(Cover):
         self.flush_state()
 
     @override
-    def _parse(self, payload: "mt.garagedoor.State", /):
+    def __call__(self, payload: "mt.garagedoor.State", /):
         """
         {
             "channel": 0,
@@ -469,9 +469,9 @@ class GarageDoor(Cover):
         """
         was_closing = self.is_closing
         if was_closing:
-            # when closing we expect this callback not to be called since
-            # the transition should be terminated by '_parse' provided it gets
-            # called on time (on polling this is not guaranteed).
+            # When closing we expect this callback not to be called since
+            # the transition should be terminated by our parser callback,
+            # provided it gets called on time (on polling this is not guaranteed).
             # If we're here, we still havent received a proper 'physical close'
             # because our configured closeduration is too short
             # or the garage didnt close at all

@@ -108,7 +108,7 @@ class Mp3Player(ParserEntity, media_player.MediaPlayerEntity):
             }
         )
 
-    def _parse(self, payload: dict, /):
+    def __call__(self, payload: dict, /):
         """
         {"channel": 0, "lmTime": 1630691532, "song": 9, "mute": 1, "volume": 11}
         """

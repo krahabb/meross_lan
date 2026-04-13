@@ -48,7 +48,7 @@ class Mts300Climate(MtsThermostatClimate):
 
         __slots__ = ("number_calibration_humi",)
 
-        def _parse(self, payload: "mt.thermostat.Calibration_C", /):
+        def __call__(self, payload: "mt.thermostat.Calibration_C", /):
             try:
                 humidity = payload[mc.KEY_HUMIVALUE]  # type: ignore
                 self.number_calibration_humi.update_device_value(humidity)
@@ -65,7 +65,7 @@ class Mts300Climate(MtsThermostatClimate):
             except KeyError:  # missing humiValue
                 pass
 
-            MtsThermostatClimate.AdjustNumber._parse(self, payload)
+            MtsThermostatClimate.AdjustNumber.__call__(self, payload)
 
     class SensorAssociationSelect(SelectParser):
         """
@@ -320,7 +320,7 @@ class Mts300Climate(MtsThermostatClimate):
         return self._mts_onoff and self._mts_work == mc.MTS300_WORK_SCHEDULE
 
     @override
-    def _parse(self, payload: "mt.thermostat.ModeC_C", /):
+    def __call__(self, payload: "mt.thermostat.ModeC_C", /):
         if self.ns_payload == payload:
             return
         self.ns_payload = payload
@@ -416,12 +416,12 @@ class Mts300Climate(MtsThermostatClimate):
     # interface: self
     def _parse_association(self, payload: dict, /):
         try:
-            self.select_temp_association._parse(payload)
+            self.select_temp_association(payload)
         except AttributeError:
             self.select_temp_association = self.parent.add_entity(
                 Mts300Climate.SensorAssociationSelect(self)
             )
-            self.select_temp_association._parse(payload)
+            self.select_temp_association(payload)
 
     def _parse_system(self, payload: dict, /):
         pass

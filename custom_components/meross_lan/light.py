@@ -438,7 +438,7 @@ class Light(LightBase):
         self._togglex_auto = None if self.handler_togglex else False
 
     @override
-    def _parse(self, payload: "mt.control.Light", /):
+    def __call__(self, payload: "mt.control.Light", /):
         if self.ns_payload != payload:
             self.ns_payload = payload
             if mc.KEY_ONOFF in payload:
@@ -687,7 +687,7 @@ class EffectLight(Light):
                 _light[mc.KEY_CAPACITY] = (
                     _light[mc.KEY_CAPACITY] | mc.LIGHT_CAPACITY_EFFECT
                 )
-                self._parse(_light)
+                self(_light)
                 if not self.is_on:
                     await self.async_request_onoff(1)
             return

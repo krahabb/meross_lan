@@ -206,7 +206,7 @@ class RollerShutter(Cover):
                 ].async_get(self.index)
 
     @override
-    def _parse(self, payload: "mt.rollershutter.Position_C"):
+    def __call__(self, payload: "mt.rollershutter.Position_C"):
         """
         legacy devices only reported 0 or 100 as position
         so we used to store this as an extra attribute and perform
@@ -282,7 +282,7 @@ class RollerShutter(Cover):
                 if not self.is_opening:
                     if self.current_cover_position is None:
                         # this should never really happen since we've
-                        # already set current_cover_position in _parse
+                        # already set current_cover_position in our parsing callback
                         self.current_cover_position = mc.ROLLERSHUTTER_POSITION_CLOSED
                         self.supported_features |= Cover.EntityFeature.SET_POSITION
                     self._position_start = self.current_cover_position
@@ -349,7 +349,7 @@ class RollerShutterAdjustSwitch(SwitchParser):
     _attr_name = "Auto Calibration"
 
     @override
-    def _parse(self, payload: "mt.rollershutter.AdjustResponse_C"):
+    def __call__(self, payload: "mt.rollershutter.AdjustResponse_C", /):
         # payload = {"channel": 0, "status": 0}
         try:
             # As noted in the docstring, meaning of status is unknown

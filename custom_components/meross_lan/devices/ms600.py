@@ -191,7 +191,7 @@ class PresenceSensor(SensorParser):
         )
 
     @override
-    def _parse(self, payload: dict, /):
+    def __call__(self, payload: dict, /):
         """
         {"times": 0, "distance": 760, "value": 2, "timestamp": 1725907895}
         """
