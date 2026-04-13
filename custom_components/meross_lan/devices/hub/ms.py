@@ -1,4 +1,3 @@
-from functools import cached_property
 from typing import TYPE_CHECKING, override
 
 from . import SubDevice, mc, mn, mn_h
@@ -76,16 +75,11 @@ class gs559(SensorSubDevice, EnumParser):
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         SensorSubDevice.__init__(self, subid, hub, key_digest, model)
+        self.unique_id = f"{hub.id}_{subid}_status"  # LEGACY unique_id scheme
         for key, entity_def in self.__class__.ENTITY_DEFS.items():
             setattr(self, key, entity_def(self))
         Button(self, async_press=self.async_mute, name="Mute")
         Button(self, async_press=self.async_test, name="Test")
-
-    @cached_property
-    def unique_id(self) -> str | None:
-        # patch unique_id to mantain compatibility
-        # with previous versions until we refactor the whole unique_id system
-        return f"{self.parent.id}_{self.id}_status"
 
     def _parse(self, payload: "mt.hub._gs559 | mt.hub.Sensor_Smoke", /):
         # This (being the default fall-back parser) will parse  *.Sensor.All, *Sensor.Smoke
@@ -167,13 +161,8 @@ class ms100(SensorSubDevice, SensorParser):
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         SensorSubDevice.__init__(self, subid, hub, key_digest, model)
+        self.unique_id = f"{hub.id}_{subid}_temperature"  # LEGACY unique_id scheme
         self.sensor_humidity = SensorParser(self, **SensorParser.HUMIDITY_ARGS)
-
-    @cached_property
-    def unique_id(self) -> str | None:
-        # patch unique_id to mantain compatibility
-        # with previous versions until we refactor the whole unique_id system
-        return f"{self.parent.id}_{self.id}_temperature"
 
     def shutdown(self):
         SensorSubDevice.shutdown(self)
@@ -333,9 +322,13 @@ class ms200(SensorSubDevice, BinarySensorParser):
     init_key_value = BinarySensorParser.SimpleKeyValue(mc.KEY_STATUS)
     _attr_device_class = BinarySensorParser.DeviceClass.WINDOW
 
-    @cached_property
+    @property
     def unique_id(self) -> str | None:
         return f"{self.parent.id}_{self.id}_window"
+
+    @unique_id.setter
+    def unique_id(self, value):
+        pass
 
 
 class ms400(SensorSubDevice, BinarySensorParser):
@@ -343,6 +336,10 @@ class ms400(SensorSubDevice, BinarySensorParser):
     init_key_value = BinarySensorParser.SimpleKeyValue(mc.KEY_LATESTWATERLEAK)
     _attr_device_class = BinarySensorParser.DeviceClass.SAFETY
 
-    @cached_property
+    @property
     def unique_id(self) -> str | None:
         return f"{self.parent.id}_{self.id}_waterleak"
+
+    @unique_id.setter
+    def unique_id(self, value):
+        pass

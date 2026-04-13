@@ -343,8 +343,8 @@ class IndexType(_IndexType, enum.Enum):
     Id = SimpleIndexValue, (mc.KEY_ID_,)
 
     def __call__(self, *values):
-        """
-        This is used as a factory method to retrieve an IndexValue instance for this IndexType with the given value(s).
+        """IndexValue Factory method:
+        builds or retrieve an IndexValue instance for this IndexType with the given key value(s).
         The values tuple is used to lookup a matching definition in a static cache for this IndexType. If no match is found,
         a new IndexValue instance is created with the given value(s) and stored in the cache for future retrieval.
         The values tuple must be a fully qualified set of values that matches the IndexType definition.
@@ -360,12 +360,19 @@ class IndexType(_IndexType, enum.Enum):
         except Exception as e:
             raise
 
-    def value_of(self, payload: "JsonMapping"):
-        """Extracts the key values of this index type from the payload dict."""
+    def index(self, payload: "JsonMapping"):
+        """IndexValue Factory method:
+        extracts the key values of this index type from the payload dict and
+        returns the corresponding IndexValue instance from the cache, creating it if necessary.
+        Uses __call__ to actually build the IndexValue instance if not found in cache.
+        """
         return self(*(payload.get(k) for k in self))
 
+    def value(self, payload: "JsonMapping"):
+        return self.index(payload).value
+
     def slug(self, payload: "JsonMapping"):
-        return self.value_of(payload).slug
+        return self.index(payload).slug
 
 
 class _PayloadType:

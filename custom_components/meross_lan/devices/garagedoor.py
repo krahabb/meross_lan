@@ -532,7 +532,7 @@ class GarageDoor(Cover):
         # do not register_parser_class since we don't want to create spurious
         # GarageDoor at channel 0 (msg200)
         for channel_digest in ns.get_digest(descriptor.digest):
-            index = mn.IndexType.channel.value_of(channel_digest)
+            index = mn.IndexType.channel.index(channel_digest)
             handler.register_parser(GarageDoor(index.value, device, ns=ns, index=index))
 
 

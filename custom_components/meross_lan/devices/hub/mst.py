@@ -19,8 +19,7 @@ class mst(SubDevice):
         """Switch to turn on/off the MST valve."""
 
         init_ns = mn_h.Appliance_Control_Water
-        # init_entity_key = f"{init_ns.slug}__{SwitchParser.init_key_value}"
-        init_entity_key = mc.KEY_ONOFF  # to mantain unique_id compatibility
+        init_entity_key = f"{init_ns.slug}__{SwitchParser.init_key_value}"
         init_value_on = 1
         init_value_off = 2
 
@@ -31,8 +30,7 @@ class mst(SubDevice):
 
         init_ns = mn.Appliance_Config_DeviceCfg
         init_key_value = NumberParser.NestedKeyValue("mstCfg", "dura")
-        # init_entity_key = f"{init_ns.slug}__{init_key_value}"
-        init_entity_key = mc.KEY_DURATION  # to mantain unique_id compatibility
+        init_entity_key = f"{init_ns.slug}__{init_key_value}"
         # HA core entity attributes:
         _attr_name = "Watering duration"
         _attr_device_class = NumberParser.DEVICE_CLASS_DURATION
@@ -47,13 +45,14 @@ class mst100(mst):
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         SubDevice.__init__(self, subid, hub, key_digest, model)
+        # These entities all have different index scheme than SubDevice (which is always IndexType.id)
         index = mn.IndexType.subId(subid, 0, None)
-        hub.get_handler(mn_h.Appliance_Control_Water).register_parser(
-            mst.Switch(self, index=index)
-        )
-        hub.get_handler(mn.Appliance_Config_DeviceCfg).register_parser(
-            mst.WateringDurationNumber(self, index=index)
-        )
+        switch = mst.Switch(self, index=index)
+        switch.unique_id = f"{hub.id}_{subid}_onoff" # LEGACY
+        hub.get_handler(mn_h.Appliance_Control_Water).register_parser(switch)
+        number = mst.WateringDurationNumber(self, index=index)
+        number.unique_id = f"{hub.id}_{subid}_duration" # LEGACY
+        hub.get_handler(mn.Appliance_Config_DeviceCfg).register_parser(number)
 
     @override
     def _parse_digest_(self, payload: "mt.hub._mst100", /):
@@ -65,12 +64,13 @@ class mst200(mst):
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         SubDevice.__init__(self, subid, hub, key_digest, model)
+        # These entities all have different index scheme than SubDevice (which is always IndexType.id)
         for channel in range(1, 3):
+            # indexed by subId, channels
             hub.get_handler(mn_h.Appliance_Control_Water).register_parser(
-                mst.Switch(
-                    self, index=mn.IndexType.subId(subid, None, channel)
-                )
+                mst.Switch(self, index=mn.IndexType.subId(subid, None, channel))
             )
+            # indexed by subId, channel
             hub.get_handler(mn.Appliance_Config_DeviceCfg).register_parser(
                 mst.WateringDurationNumber(
                     self, index=mn.IndexType.subId(subid, channel, None)

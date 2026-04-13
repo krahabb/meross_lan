@@ -76,14 +76,14 @@ class NamespaceHandler(_NH):
                 # we add the last split of the namespace to the extracted payload key
                 if type(_payload) is dict:
                     device.parse_undefined_dict(
-                        f"{ns.slug_end}_{_key}", _payload, self.index.value_of(_payload)
+                        f"{ns.slug_end}_{_key}", _payload, self.index.index(_payload)
                     )
                 elif type(_payload) is list:
                     _key = f"{ns.slug_end}_{_key}"
                     for __payload in _payload:
                         # not having a "channel" in the list payloads is unexpected so far
                         device.parse_undefined_dict(
-                            _key, __payload, self.index.value_of(__payload)
+                            _key, __payload, self.index.index(__payload)
                         )
                 else:
                     # should we diagnostic scalar values in root payload ?
@@ -106,7 +106,7 @@ class NamespaceHandler(_NH):
             self.parent.parse_undefined_dict(
                 f"{self.id.slug_end}_{self.id.key}",
                 payload,
-                self.index.value_of(payload),
+                self.index.index(payload),
             )
         else:
             _NH._parse(self, payload)

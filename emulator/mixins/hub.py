@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from custom_components.meross_lan.merossclient import (
     delete_element_by_key,
+    extract_dict_payloads,
     get_element_by_key,
     get_subdevice_key_digest,
     update_dict_strict,
@@ -47,18 +48,6 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
     MAXIMUM_RESPONSE_SIZE = 4000
 
     NAMESPACES_DEFAULT = {
-        mn.Appliance_Config_DeviceCfg: (
-            Emulator.NSDefaultMode.MixOut,
-            {  # mst100 mocked cfg
-                mc.KEY_SUBID: "1B00839E9A6D",
-                mc.KEY_CHANNEL: 0,
-                "mstCfg": {
-                    "dura": 60,
-                    "wfm": 1,
-                    "calibration": {"waCon": 0, "onoff": 0, "lmTime": 0},
-                },
-            },
-        ),
         mn.Appliance_Config_Alarm: (
             Emulator.NSDefaultMode.MixOut,
             {mc.KEY_CHANNEL: 0, mc.KEY_ENABLE: 1, mc.KEY_VOLUME: 100, mc.KEY_SONG: 1},
@@ -67,6 +56,87 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
             Emulator.NSDefaultMode.MixOut,
             {mc.KEY_CHANNEL: 0, "event": {"security": {"value": 1}}},
         ),
+    }
+
+    # This is an initialization map for those namespaces actually implemented only by specific subdevices types
+    # This will be used at runtime together with DIGEST_SUBID_NAMESPACES_MAP to setup only those defaults related
+    # to subdevices type actually appearing in the Hub digest.
+    # If the default definition carries a subid, then it will be applied only to the matching subdevice id,
+    # otherwise (no subid in default) it will be applied to all subdevices of the matching type.
+    SUBID_NAMESPACES_DEFAULT: "Emulator.NSDefault" = {
+        mn.Appliance_Config_DeviceCfg: (
+            Emulator.NSDefaultMode.MixOut,
+            [
+                {  # mst100 mocked cfg
+                    mc.KEY_SUBID: "1B00839E9A6D",
+                    mc.KEY_CHANNEL: 0,
+                    "mstCfg": {
+                        "dura": 60,
+                        "wfm": 1,
+                        "calibration": {"waCon": 0, "onoff": 0, "lmTime": 0},
+                    },
+                },
+                {  # mst200 mocked cfg
+                    mc.KEY_SUBID: "1B1091AFCF10",
+                    mc.KEY_CHANNEL: 1,
+                    "mstCfg": {
+                        "dura": 60,
+                        "wfm": 1,
+                        "calibration": {"waCon": 0, "onoff": 0, "lmTime": 0},
+                    },
+                },
+                {  # mst200 mocked cfg
+                    mc.KEY_SUBID: "1B1091AFCF10",
+                    mc.KEY_CHANNEL: 2,
+                    "mstCfg": {
+                        "dura": 60,
+                        "wfm": 1,
+                        "calibration": {"waCon": 0, "onoff": 0, "lmTime": 0},
+                    },
+                },
+            ],
+        ),
+        mn_h.Appliance_Control_Water: (
+            Emulator.NSDefaultMode.MixOut,
+            [
+                {  # mst100 mocked cfg
+                    mc.KEY_SUBID: "1B00839E9A6D",
+                    mc.KEY_CHANNEL: 0,
+                    mc.KEY_ONOFF: 2,
+                    "dura": 7200,
+                    "lmTime": 0,
+                },
+                {  # mst200 mocked cfg
+                    mc.KEY_SUBID: "1B1091AFCF10",
+                    mc.KEY_CHANNELS: [1],
+                    mc.KEY_ONOFF: 2,
+                    "dura": 7200,
+                    "lmTime": 0,
+                },
+                {  # mst200 mocked cfg
+                    mc.KEY_SUBID: "1B1091AFCF10",
+                    mc.KEY_CHANNELS: [2],
+                    mc.KEY_ONOFF: 2,
+                    "dura": 7200,
+                    "lmTime": 0,
+                },
+            ],
+        ),
+        mn_h.Appliance_Hub_SubDevice_Beep: (
+            Emulator.NSDefaultMode.MixOut,
+            {mc.KEY_ONOFF: 0},
+        ),
+    }
+
+    DIGEST_SUBID_NAMESPACES_MAP: dict[str, tuple[mn.Namespace, ...]] = {
+        # this is a map subdevice type (as per digest) to the namespaces it supports
+        mc.KEY_DOORWINDOW: (mn_h.Appliance_Hub_SubDevice_Beep,),
+        mc.KEY_MST: (
+            mn.Appliance_Config_DeviceCfg,
+            mn_h.Appliance_Control_Water,
+        ),
+        mc.TYPE_MTS150: (mn_h.Appliance_Hub_SubDevice_Beep,),
+        mc.KEY_WATERLEAK: (mn_h.Appliance_Hub_SubDevice_Beep,),
     }
 
     def __init__(self, descriptor: "EmulatorDescriptor", key):
@@ -126,6 +196,8 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
                 mn_h.Appliance_Hub_Battery,
                 mn_h.Appliance_Hub_Online,
                 mn_h.Appliance_Hub_ToggleX,
+                # TODO: move the 2 next to SUBID_NAMESPACES_DEFAULT
+                # since they are only relevant for specific subdevices types
                 mn.Appliance_Control_Sensor_HistoryX,
                 mn.Appliance_Control_Sensor_LatestX,
             )
@@ -160,20 +232,35 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
         for p_subdevice_digest in self.subdevices:
             subdevice_id = p_subdevice_digest[mc.KEY_ID]
             key_digest = get_subdevice_key_digest(p_subdevice_digest)
-            # TODO: setup a 'map' to generalize to all those ns behaving like this
-            # (i.e. no data in digest but still needing setup)
-            match key_digest:
-                case (
-                    mc.TYPE_MTS150
-                    | mc.TYPE_MTS150P
-                    | mc.KEY_WATERLEAK
-                    | mc.KEY_DOORWINDOW
-                ):
-                    self.update_namespace_state(
-                        mn_h.Appliance_Hub_SubDevice_Beep,
-                        self.NSDefaultMode.MixOut,
-                        [{mc.KEY_ID: subdevice_id, mc.KEY_ONOFF: 0}],
-                    )
+
+            try:
+                for subid_ns in self.DIGEST_SUBID_NAMESPACES_MAP[key_digest]:
+                    if subid_ns not in ability:
+                        continue
+                    mixmode, payload = self.SUBID_NAMESPACES_DEFAULT[subid_ns]
+                    # get the key name used to map the id/subid in the namespace index.
+                    subid_ns_key = subid_ns.index[0]
+                    assert subid_ns_key in (
+                        mc.KEY_ID,
+                        mc.KEY_SUBID,
+                    ), f"Namespace {subid_ns} index type not supported for subid mapping"
+                    for payload in extract_dict_payloads(payload):
+                        try:
+                            if payload[subid_ns_key] != subdevice_id:
+                                continue
+                            # Our payload default has a specific subdev binding and this is matching
+                            self.update_namespace_state(subid_ns, mixmode, payload)
+                        except KeyError:
+                            # Our payload default doesn't have a specific subid instance binding
+                            # so we use it whatever subid instance we're processing.
+                            self.update_namespace_state(
+                                subid_ns,
+                                mixmode,
+                                {subid_ns_key: subdevice_id} | payload,
+                            )
+
+            except KeyError:
+                pass
             # detect first if it's an mts like or a sensor like
             try:
                 if p_subdevice_digest[mc.KEY_STATUS] == mc.STATUS_ONLINE:

@@ -321,7 +321,7 @@ class NamespaceHandler(logging.Loggable):
             self.WARNING,
             exception,
             "parser function '%s': payload=%s",
-            self.parsers[self.index.value_of(payload)].__name__,
+            self.parsers[self.index.index(payload)].__name__,
             _any=payload,
             timeout=14400,
         )
@@ -472,7 +472,7 @@ class NamespaceHandler(logging.Loggable):
         self, ke: KeyError, payload: "mt.JsonMapping", subdevice_id: str, /
     ):
         """Handler for KeyError raised when dispatching a payload to an hub subdevice parser."""
-        index = self.index.value_of(payload)
+        index = self.index.index(payload)
         if index in self.parsers:
             # index for the received payload is present so this is likely an error
             # in the parser method.

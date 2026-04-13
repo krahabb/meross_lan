@@ -456,9 +456,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             # This device presents various features on different channels
             # but we prefer to show them as a single device and
             # counter our general logic where each channel is a 'logical' device
-            self.device_entries = {
-                channel: self.device_info for channel in range(3)
-            }
+            self.device_entries = {channel: self.device_info for channel in range(3)}
         self.device_timestamp = 0
         self.device_timedelta = 0
         self._check_device_time_enabled = False

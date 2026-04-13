@@ -170,13 +170,14 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             sibling: "Entity.Sibling" = args[0]
             parent = sibling.parent
             self.device_info = sibling.device_info
+            """
+            legacy unique_id key scheme
             id = sibling.index.value
             if id is None:
                 id = entity_key
             elif entity_key is not None:
                 id = f"{id}_{entity_key}"
-            _legacy_id = id
-            self._legacy_unique_id = _legacy_id
+            """
             try:
                 # REMOVE
                 # intercept 'index' kwarg used by NamespaceParser mixin
@@ -187,9 +188,9 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             except KeyError:
                 kwargs["index"] = index = sibling.index
             if index:
-                _new_id = f"{index.slug}_{entity_key}" if entity_key else index.slug
+                id = f"{index.slug}_{entity_key}" if entity_key else index.slug
             else:
-                _new_id = entity_key
+                id = entity_key
         else:
             parent: "ConfigEntryManager"
             id, parent = args
@@ -207,9 +208,6 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
                 if TYPE_CHECKING:
                     assert isinstance(parent, Device)
                 self.device_info = parent.device_info
-                self._legacy_unique_id = entity_key
-                _legacy_id = id
-                _new_id = id
                 assert (
                     "index" not in kwargs and "device_info" not in kwargs
                 ), "index should not be provided for NamespaceHandler entities since it is fixed to None"
@@ -226,7 +224,6 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
                 elif entity_key:
                     id = f"{id}_{entity_key}"
                 _legacy_id = id
-                self._legacy_unique_id = _legacy_id
                 try:
                     # REMOVE
                     # intercept 'index' arg targeting NamespaceParser mixin
@@ -234,16 +231,25 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
                     # in Loggable.__init__ since it has no constructor defined.
                     index = kwargs["index"]  # type: ignore
                     if index:
-                        _new_id = (
-                            f"{index.slug}_{entity_key}" if entity_key else index.slug
-                        )
+                        id = f"{index.slug}_{entity_key}" if entity_key else index.slug
                     else:
-                        _new_id = entity_key
+                        id = entity_key
                 except KeyError:
-                    _new_id = entity_key
+                    id = entity_key
+
+                if id != _legacy_id:
+                    parent.log(
+                        self.WARNING,
+                        "Legacy id '%s' adjusted to '%s' for entity with entity_key '%s'",
+                        _legacy_id,
+                        id,
+                        entity_key,
+                    )
+
         assert (
             id not in parent.entities
         ), f"id:{id} is not unique inside parent.entities"
+
         self.entity_key = entity_key
         self.hass_connected = False
         # HA core: rather constant
@@ -251,6 +257,20 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         self.force_update = False
         self.has_entity_name = True
         self.should_poll = False
+        # unique_id is by default computed internally so to have a consistent layout.
+        # Not all entities should or will adhere to this but since
+        # they should be rare we're using local overrides here and there in descendants.
+        # The unique_id can be either overwritten after this constructor or (maybe better
+        # in terms of design) implemented through a property.
+        # Considerations about unique_id migration:
+        # The unique_id should follow this format (at least for parsers):
+        # "{uuid}_{ns.slug}_{key_value}_{channel}" where channel is optional ofc
+        # but is always related to the KEY_CHANNEL in the payload and not to the subdevice id
+        # For subdevices we should move to a format where we get rid of the parent hub.id
+        # and use instead the subdev id in the unique_id since it is already unique.
+        # "{subdev_id}_{ns.slug}_{key_value}_{channel}" where channel is optional ofc
+        # This way we could maybe get rid of entity_key
+        self.unique_id = f"{parent.id}_{id}"
         # HA core special handling
         try:
             # TODO: For multi-functional devices, find a way to correctly name
@@ -274,8 +294,6 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         super().__init__(id, parent, **kwargs)
         parent.entities[id] = self
         parent.async_shutdown_broadcast.add(self.async_shutdown)
-        if _new_id != self.id:
-            self.log(self.DEBUG, "Boh")
 
     def shutdown(self):
         super().shutdown()
@@ -287,10 +305,6 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         del self.parent.entities[self.id]
 
     # interface: entity.Entity
-    @cached_property
-    def unique_id(self) -> str | None:
-        return f"{self.parent.id}_{self._legacy_unique_id}"
-
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
         self.log(self.VERBOSE, "Added to HomeAssistant")
@@ -697,6 +711,7 @@ class EntityNamespaceMixin(ParserEntity, NamespaceHandler):
     @override
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
         ns_entity = cls(ns, device, ns=ns)
+        ns_entity.unique_id = f"{device.id}_{ns_entity.entity_key}"
         ns_entity.handler_ns = ns_entity
         ns_entity.polling_strategy = None
         return ns_entity

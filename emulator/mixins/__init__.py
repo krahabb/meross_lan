@@ -255,7 +255,7 @@ class Emulator:
         NAMESPACES: ClassVar
         MAXIMUM_RESPONSE_SIZE: ClassVar
 
-        type NSDefaultArgs = tuple[NSDefaultMode, dict]
+        type NSDefaultArgs = tuple[NSDefaultMode, dict | list]
         type NSDefault = dict[mn.Namespace, NSDefaultArgs]
         NAMESPACES_DEFAULT: ClassVar[NSDefault]
         """Contains default data for namespaces initialization.
@@ -590,7 +590,7 @@ class Emulator:
                             assert type(key_payload) is dict
                             indexes = (
                                 None
-                                if ns.index.value_of(key_payload) == 65535
+                                if ns.index.value(key_payload) == 65535
                                 else [key_payload]
                             )
                         case mn.PayloadType.UNSUPPORTED:

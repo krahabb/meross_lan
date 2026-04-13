@@ -580,7 +580,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         self.parent.ns_handlers[mn_h.Appliance_Hub_SubDevice_Beep].swap_parsers(
             self,
             self.parent.add_entity(
-                SwitchParser(
+                SwitchParser(  # FIXME: use sibling semantics
                     self.id,
                     self.parent,
                     entity_key=(

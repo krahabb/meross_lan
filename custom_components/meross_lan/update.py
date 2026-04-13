@@ -43,13 +43,13 @@ class UpdateEntity(Entity, update.UpdateEntity):
         self.device_class = update.UpdateDeviceClass.FIRMWARE
         self.supported_features = update.UpdateEntityFeature.INSTALL
         self.title = device.display_name
-        self.unique_id = None
         self.installed_version, self.latest_version, self.release_summary = (
             device.get_upgrade_info()
         )
         # TODO: we still miss subdevice implementation for this...
         # maybe we can get something by using index
         Entity.__init__(self, subid, device, device_info=device.device_info)
+        self.unique_id = None  # override
         device.add_entity(self)
 
     def flush_state(self):
