@@ -29,9 +29,6 @@ class Button(Entity, button.ButtonEntity):
     PLATFORM = button.DOMAIN
     DeviceClass = button.ButtonDeviceClass
 
-    # HA core entity attributes:
-    _attr_available = False
-
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         """Provide either 'async_press' or 'press' callback to install an action on this button."""
         kwargs.setdefault("entity_key", f"button_{slugify(kwargs['name'])}")

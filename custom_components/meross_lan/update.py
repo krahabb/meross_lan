@@ -29,9 +29,6 @@ class UpdateEntity(Entity, update.UpdateEntity):
 
     init_entity_key = "firmware_update"
 
-    # HA core entity attributes:
-    _attr_available = False
-
     __slots__ = (
         "installed_version",
         "latest_version",
