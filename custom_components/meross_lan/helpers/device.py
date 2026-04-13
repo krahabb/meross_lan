@@ -957,6 +957,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
     @override
     def on_connect(self, /):
         super().on_connect()
+        self.sensor_protocol.set_available()
         if self._check_device_time_enabled:
             self.schedule_callback(
                 self.PARAM_CHECK_DEVICE_TIME_START_DELAY, self._check_device_time

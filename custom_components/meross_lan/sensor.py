@@ -272,13 +272,18 @@ class ProtocolSensor(EnumSensorEntity):
             self, None, parent, native_value=ProtocolSensor.STATE_DISCONNECTED
         )
 
+    @override
     def set_available(self):
+        # This will not be called automatically on device connection (because of
+        # _attr_available == True) so we have to manually invoke this
+        # when we want to update connection status.
         self.native_value = self.parent.transport
-        self.flush_state()
+        self.schedule_flush_state()
 
+    @override
     def set_unavailable(self):
         self.native_value = self.STATE_DISCONNECTED
-        self.flush_state()
+        self.schedule_flush_state()
 
     # callbacks from Device._clients connect/disconnect events
     def on_client_add(self, client: "AbstractClient", /):
