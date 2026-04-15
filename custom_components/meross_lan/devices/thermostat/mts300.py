@@ -53,12 +53,10 @@ class Mts300Climate(MtsThermostatClimate):
                 humidity = payload[mc.KEY_HUMIVALUE]  # type: ignore
                 self.number_calibration_humi.update_device_value(humidity)
             except AttributeError:
-                self.number_calibration_humi = self.parent.add_entity(
+                self.number_calibration_humi = self.parent.on_parser_added(
                     self.__class__.AdjustHumidityNumber(
-                        payload[mc.KEY_CHANNEL],
-                        self.parent,
+                        self,
                         ns=self.ns,
-                        index=self.index,
                         device_value=humidity,
                     )
                 )

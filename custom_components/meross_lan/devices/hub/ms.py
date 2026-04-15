@@ -5,6 +5,7 @@ from ...binary_sensor import BinarySensorEntity, BinarySensorParser
 from ...button import Button
 from ...number import NumberParser
 from ...sensor import EnumParser, EnumSensorEntity, SensorEntity, SensorParser
+from ..misc import SensorLatestXParser
 
 if TYPE_CHECKING:
     from typing import Final, TypedDict, Unpack
@@ -107,7 +108,7 @@ class gs559(SensorSubDevice, EnumParser):
         await self.async_request_value(23)
 
 
-class ms100(SensorSubDevice, SensorParser):
+class ms100(SensorSubDevice):
 
     class SensorAdjustNumber(NumberParser):
 
@@ -154,19 +155,19 @@ class ms100(SensorSubDevice, SensorParser):
         mn_h.Appliance_Hub_Sensor_Latest,
     )
 
-    init_device_scale = 10
-    _attr_device_class = SensorEntity.DeviceClass.TEMPERATURE
-    _attr_suggested_display_precision = 1
-
-    __slots__ = ("sensor_humidity",)
+    __slots__ = (
+        "sensor_temperature",
+        "sensor_humidity",
+    )
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         SensorSubDevice.__init__(self, subid, hub, key_digest, model)
-        self.unique_id = f"{hub.id}_{subid}_temperature"  # LEGACY unique_id scheme
+        self.sensor_temperature = SensorParser(self, **SensorParser.TEMPERATURE_ARGS)
         self.sensor_humidity = SensorParser(self, **SensorParser.HUMIDITY_ARGS)
 
     def shutdown(self):
         SensorSubDevice.shutdown(self)
+        del self.sensor_temperature
         del self.sensor_humidity
 
     @override
@@ -187,11 +188,10 @@ class ms100(SensorSubDevice, SensorParser):
             )
 
     def _parse_adjust(self, payload: "mt.hub.Sensor_Adjust"):
-        device = self.parent
-        device.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
+        self.parent.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
             self,
             *(
-                device.add_entity(
+                self.on_parser_added(
                     entity_class(
                         self, device_value=entity_class.init_key_value[payload]
                     )
@@ -212,16 +212,16 @@ class ms100(SensorSubDevice, SensorParser):
         )
 
     def _update_sensors(self, temperature: int, humidity: int):
-        self.update_device_value(temperature)
+        self.sensor_temperature.update_device_value(temperature)
         self.sensor_humidity.update_device_value(humidity)
 
     def _update_sensors_adjust(self, temperature: int, humidity: int):
         # when a temp/hum reading changes we're smartly requesting
         # the adjust sooner than scheduled in case the change
         # was due to an adjustment. This method is dynamically installed
-        # by _parse_adjust when we have confirtmation that ns_adjust is
+        # by _parse_adjust when we have confirmation that ns_adjust is
         # delivering for this device.
-        _poll_adjust = bool(self.update_device_value(temperature))
+        _poll_adjust = bool(self.sensor_temperature.update_device_value(temperature))
         _poll_adjust |= bool(self.sensor_humidity.update_device_value(humidity))
         if _poll_adjust:
             handler = self.parent.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust]
@@ -231,32 +231,46 @@ class ms100(SensorSubDevice, SensorParser):
 
 class ms130(ms100):
 
-    NS_HUB = (
-        mn.Appliance_Control_Sensor_LatestX,
-        mn.Appliance_Config_DeviceCfg,
-    )
-    init_device_scale = 100
-
-    __slots__ = ("sensor_light",)
+    NS_HUB = (mn.Appliance_Config_DeviceCfg,)
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         ms100.__init__(self, subid, hub, key_digest, model)
+        self.sensor_temperature.device_scale = 100
         # The light sensor could be better indexed by subid instead, but it is a sibling of a
         # simple 'id' entity (the ms130 itself) and it is more natural to mantain the sibling
         # relationship by using the same index. The sensor will anyway not use the index attribute
         # for anything else, since the ns parsing is done here in the SubDevice instance.
-        self.sensor_light = SensorParser(self, **(SensorParser.LIGHT_ARGS))
-        # This is a slight patch because this ns is rather non-standard
-        handler_latestx = hub.ns_handlers[mn.Appliance_Control_Sensor_LatestX]
-        # the latest payload was added in SubDevice init because of NS_HUB registration
-        handler_latestx.polling_request_payload.append(
-            handler_latestx.polling_request_payload.pop()
-            | {mc.KEY_DATA: [mc.KEY_TEMP, mc.KEY_HUMI, mc.KEY_LIGHT]}
-        )
-
-    def shutdown(self):
-        ms100.shutdown(self)
-        del self.sensor_light
+        index = mn.IndexType.subId(subid, 0, None)
+        try:
+            # Configure parser for Appliance.Control.Sensor.LatestX:
+            # {
+            #    "latest": [
+            #        {
+            #            "data": {
+            #                "light": [{"value": 220, "timestamp": 1722349685}],
+            #                "temp": [{"value": 2134, "timestamp": 1722349685}],
+            #                "humi": [{"value": 670, "timestamp": 1722349685}],
+            #            },
+            #            "channel": 0,
+            #            "subId": "1A00694ACBC7",
+            #        }
+            #    ]
+            # }
+            hub.ns_handlers[mn.Appliance_Control_Sensor_LatestX].register_parser(
+                SensorLatestXParser(
+                    subid,
+                    hub,
+                    index=index,
+                    parsers={
+                        mc.KEY_LIGHT: SensorParser(self, **SensorParser.LIGHT_ARGS),
+                        mc.KEY_TEMP: self.sensor_temperature,
+                        mc.KEY_HUMI: self.sensor_humidity,
+                    },
+                )
+            )
+        except KeyError as ke:
+            # expected (?) if LatestX not supported by the device firmware
+            assert ke.args[0] == mn.Appliance_Control_Sensor_LatestX
 
     @override
     def __call__(self, payload: "mt.hub._ms130", /):
@@ -288,34 +302,6 @@ class ms130(ms100):
         }
         """
         pass
-
-    def _parse_latestx(self, payload: "mt.sensor.LatestX_C", /):
-        """parser for Appliance.Control.Sensor.LatestX:
-        {
-            "latest": [
-                {
-                    "data": {
-                        "light": [{"value": 220, "timestamp": 1722349685}],
-                        "temp": [{"value": 2134, "timestamp": 1722349685}],
-                        "humi": [{"value": 670, "timestamp": 1722349685}],
-                    },
-                    "channel": 0,
-                    "subId": "1A00694ACBC7",
-                }
-            ]
-        }
-        """
-        p_data = payload[mc.KEY_DATA]
-        entity: SensorParser
-        for key, entity in {
-            mc.KEY_TEMP: self,
-            mc.KEY_HUMI: self.sensor_humidity,
-            mc.KEY_LIGHT: self.sensor_light,
-        }.items():
-            try:
-                entity.update_device_value(p_data[key][0][mc.KEY_VALUE])
-            except:
-                pass
 
 
 class ms200(SensorSubDevice, BinarySensorParser):

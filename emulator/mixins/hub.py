@@ -239,7 +239,7 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
                         continue
                     mixmode, payload = self.SUBID_NAMESPACES_DEFAULT[subid_ns]
                     # get the key name used to map the id/subid in the namespace index.
-                    subid_ns_key = subid_ns.index[0]
+                    subid_ns_key = subid_ns.index_type[0]
                     assert subid_ns_key in (
                         mc.KEY_ID,
                         mc.KEY_SUBID,
@@ -275,7 +275,7 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
                     ), f"Hub emulator init: missing {subdevice_ns}"
 
                     p_subdevice_all = get_element_by_key(
-                        ns_state[subdevice_ns], subdevice_id, subdevice_ns.index
+                        ns_state[subdevice_ns], subdevice_id, subdevice_ns.index_type
                     )
                 else:
                     # the p_mts_digest could be missing from digest
@@ -290,7 +290,7 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
                                 p_subdevice_all = get_element_by_key(
                                     ns_state[subdevice_ns],
                                     subdevice_id,
-                                    subdevice_ns.index,
+                                    subdevice_ns.index_type,
                                 )
                                 break
                             except KeyError:
@@ -328,7 +328,7 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
                         p_subdevice_substate = get_element_by_key(
                             ns_state[subnamespace],
                             subdevice_id,
-                            subnamespace.index,
+                            subnamespace.index_type,
                         )
                     except KeyError:
                         # we don't have the state in the specific ns
@@ -368,11 +368,15 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
     ) -> "dict[str, Any]":
         """returns the subdevice namespace dict. It will create a default entry if not present
         and the device abilities supports the namespace."""
-        assert ns.index is mn.IndexType.id, f"Namespace {ns} is not indexed by 'id'"
+        assert (
+            ns.index_type is mn.IndexType.id
+        ), f"Namespace {ns} is not indexed by 'id'"
         try:
             subdevices_namespace: list = self.namespaces[ns][ns.key]
             try:
-                return get_element_by_key(subdevices_namespace, subdevice_id, ns.index)
+                return get_element_by_key(
+                    subdevices_namespace, subdevice_id, ns.index_type
+                )
             except KeyError:
                 if not force_create:
                     raise

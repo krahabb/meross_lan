@@ -5,7 +5,7 @@ from .. import logging, merge_dicts
 from ..protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
-    from typing import Any, ClassVar, Final, NotRequired, Protocol, Unpack
+    from typing import Any, ClassVar, Final, Mapping, NotRequired, Protocol, Unpack
 
     from . import Device, PhysicalDevice
     from ..protocol.types import JsonDict, JsonList, JsonMapping
@@ -18,8 +18,9 @@ class NamespaceParser(logging.Loggable):
     In this model, NamespaceHandler is responsible for unpacking those messages
     who are intended to be delivered to different entities based off some indexing
     keys. These are typically: "channel", "Id", "subId" depending on the namespace itself.
-    The protocol implementation needs to also expose a proper _parse_{key_namespace}
-    (see NamespaceHandler.register_parser).
+    The correct subclass implementation needs to also expose a proper _parse_{key_namespace}
+    or override the __call__ method to be used as a callback for the NamespaceHandler when delivering
+    the payload (see NamespaceHandler.register_parser).
     """
 
     @final
@@ -164,7 +165,7 @@ class NamespaceParser(logging.Loggable):
         device._create_handler(ns, parser_class=cls)
 
 
-class NamespaceValue(NamespaceParser):
+class ValueParser(NamespaceParser):
     """A specialization of NamespaceParser providing a simple interface to manage
     a single item value in the namespace payload."""
 
@@ -226,7 +227,7 @@ class NamespaceValue(NamespaceParser):
         device_value: Any
 
         class Args(NamespaceParser.Args):
-            key_value: NotRequired[NamespaceValue._KeyValueDescriptor]
+            key_value: NotRequired[ValueParser._KeyValueDescriptor]
             device_value: NotRequired[Any]
 
         def __init__(self, id, parent: PhysicalDevice, /, **kwargs: Unpack[Args]): ...
@@ -260,8 +261,8 @@ class NamespaceValue(NamespaceParser):
         self.update_device_value(self.key_value[payload])
 
 
-class NamespaceBoolean(NamespaceValue):
-    """A specialization of NamespaceValue to manage boolean values with custom on/off values in the device.
+class BooleanParser(ValueParser):
+    """A specialization of ValueParser to manage boolean values with custom on/off values in the device.
     By default it assumes that the device uses 1 for 'on' and 0 for 'off', but this can be customized by setting the
     'value_on' and 'value_off' attributes."""
 
@@ -272,12 +273,12 @@ class NamespaceBoolean(NamespaceValue):
         """The actual device value representing the 'off' state."""
         is_on: bool | None
 
-        class Args(NamespaceValue.Args):
+        class Args(ValueParser.Args):
             value_on: NotRequired[int]
             value_off: NotRequired[int]
             is_on: NotRequired[bool]
 
-    init_key_value = NamespaceValue.SimpleKeyValue(mc.KEY_ONOFF)
+    init_key_value = ValueParser.SimpleKeyValue(mc.KEY_ONOFF)
     init_value_on = 1
     init_value_off = 0
 
@@ -303,3 +304,76 @@ class NamespaceBoolean(NamespaceValue):
 
     async def async_turn_off(self, **kwargs):
         await self.async_request_value(self.value_off)
+
+
+class MappingParser(NamespaceParser):
+    """An hybrid parser specialization acting as a 'dispatcher parser' for multiple
+    sub-parsers based on the presence of keys in the payload. Every key is mapped to a target parser
+    and the payload is dispatched to the first parser whose key is present in the payload.
+    This is a more sophisticated implementation of the Dispatcher pattern implemented in NamespaceParser.Dispatcher.
+    """
+
+    if TYPE_CHECKING:
+        parsers: Final[dict[str, ValueParser]]
+        init_excluded_keys: ClassVar[tuple[str, ...]]
+        excluded_keys: tuple[str, ...]
+        init_parser_defs: ClassVar[Mapping[str, type[ValueParser]]]
+        parser_defs: Mapping[str, type[ValueParser]]
+
+        class Args(NamespaceParser.Args):
+            excluded_keys: NotRequired[tuple[str, ...]]
+            parsers: NotRequired[dict[str, ValueParser]]
+            """Pre-initialized parsers to be used by this handler.
+            This is useful when we want to pre-create the parsers for this handler
+            and not rely on the 'lazy' initialization done in payload parsing."""
+            parser_defs: NotRequired[Mapping[str, type[ValueParser]]]
+
+    init_excluded_keys = (mc.KEY_CHANNEL, mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
+
+    SLOTS_AUTO_INIT = (
+        "excluded_keys",
+        "parser_defs",
+    )
+    __SLOTS__ = ("parsers",)
+
+    def __init__(self, *args, **kwargs: Unpack[Args]):
+        # TODO: define a mechanism for 'auto-initializing' (empty) dicts
+        # so we can skip this constructor. This would be beneficial to extra_state_attributes
+        self.parsers = kwargs.pop("parsers", {})
+        super().__init__(*args, **kwargs)
+
+    def shutdown(self):
+        self.parsers.clear()
+        super().shutdown()
+
+    @override
+    def __call__(self, payload: "JsonMapping", /):
+        self.ns_payload = payload
+        for key, value in {
+            k: v for k, v in payload.items() if k not in self.excluded_keys
+        }.items():
+            try:
+                self.parsers[key].update_device_value(value)
+            except KeyError:
+                if key not in self.parsers:
+                    try:
+                        self.parsers[key] = self.parent.on_parser_added(
+                            self.parser_defs[key](
+                                self.index.value,  # FIXME: use a 'sibling' construction semantic
+                                self.parent,
+                                ns=self.ns,
+                                device_value=value,
+                                index=self.index,
+                                # WARNING: key_value might or might not be needed here...
+                            )
+                        )
+                        # TODO: add management of unexpected keys where we don't have a parser_def
+                        # and we might want to setup a somewhat 'smart' default (diagnostic) parser
+                    except Exception as e:
+                        self.log_exception(
+                            self.DEBUG,
+                            e,
+                            "creating parser for '%s' key in '%s' namespace",
+                            key,
+                            self.ns,
+                        )

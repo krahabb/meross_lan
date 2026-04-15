@@ -104,7 +104,7 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
             self.sensor_warning.update_device_value(warning)
         except AttributeError:
             entity_key = f"{self.entity_key}_warning"
-            self.sensor_warning = self.parent.add_entity(
+            self.sensor_warning = self.parent.on_parser_added(
                 EnumParser(
                     self,
                     entity_key=entity_key,
@@ -120,7 +120,7 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
             self.available = bool(payload[mc.KEY_ONOFF])
             self.switch.update_boolean_value(self.available)
         except AttributeError:
-            self.switch = self.parent.add_entity(
+            self.switch = self.parent.on_parser_added(
                 SwitchParser(
                     self,
                     entity_key=f"{self.entity_key}_switch",
@@ -179,7 +179,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
             current_temp = payload[mc.KEY_CURRENTTEMP]
             self.sensor_external_temperature.update_device_value(current_temp)
         except AttributeError:
-            self.sensor_external_temperature = self.parent.add_entity(
+            self.sensor_external_temperature = self.parent.on_parser_added(
                 SensorParser(
                     self,
                     **(
@@ -268,7 +268,7 @@ class MtsHoldAction(SelectParser):
             time = payload[mc.KEY_TIME]  # type: ignore
             self.number_time.update_device_value(time)
         except AttributeError:
-            self.number_time = self.parent.add_entity(
+            self.number_time = self.parent.on_parser_added(
                 NumberParser(
                     self,
                     entity_key="hold_action_time",

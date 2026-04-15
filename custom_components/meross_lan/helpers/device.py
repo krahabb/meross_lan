@@ -17,7 +17,7 @@ from ..merossclient import (
 )
 from ..merossclient.client import AbstractClient, Direction, Transport
 from ..merossclient.client.http import HttpClient
-from ..merossclient.device.handler import VoidNamespaceHandler
+from ..merossclient.device.handler import VoidHandler
 from ..merossclient.exceptions import MerossError
 from ..merossclient.obfuscate import OBFUSCATE_DICT
 from ..merossclient.protocol import const as mc, namespaces as mn
@@ -181,9 +181,9 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                     case mn.Appliance_Control_Multiple:
                         list_break_matcher = '},{"header":'
                     case _:
-                        if not namespace.index:
+                        if not namespace.index_type:
                             raise
-                        list_break_matcher = f'}},{{"{namespace.index[0]}":'
+                        list_break_matcher = f'}},{{"{namespace.index_type[0]}":'
 
                 trunc_pos = response_text.rfind(list_break_matcher)
                 if trunc_pos == -1:
@@ -251,7 +251,13 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
     """Used to delay the iteration of abilities scan while tracing."""
 
     NAMESPACE_INIT_PACKAGE = "custom_components.meross_lan"
+    # Order of initialization matters since some features might be conditionally
+    # configured here and there depending on ns combinations.
+    # For example ms600/ms130 need to post-configure Sensor.LatestX handler
+    # that need to be in place in order to be correctly configured.
     NAMESPACE_INIT = {
+        mn.Appliance_Control_Sensor_Latest: (".devices.misc", "SensorLatestParser"),
+        mn.Appliance_Control_Sensor_LatestX: (".devices.misc", "SensorLatestXParser"),
         mn.Appliance_Control_Toggle: (".switch", "Toggle"),
         # ToggleX need to be created before any other possible 'conflicting' ns
         # like .Light or .Fan
@@ -286,14 +292,6 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         mn.Appliance_Control_Screen_Brightness: (
             ".devices.thermostat",
             "ScreenBrightnessNamespaceHandler",
-        ),
-        mn.Appliance_Control_Sensor_Latest: (
-            ".devices.misc",
-            "SensorLatestNamespaceHandler",
-        ),
-        mn.Appliance_Control_Sensor_LatestX: (
-            ".devices.misc",
-            "SensorLatestXNamespaceHandler",
         ),
         mn.Appliance_Control_Spray: (".devices.spray", "Spray"),
         mn.Appliance_Control_TempUnit: (".devices.thermostat", "MtsTempUnit"),
@@ -1078,6 +1076,14 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
 
     # interface: device.PhysicalDevice
     @override
+    def on_parser_added[_T: "ParserEntity"](self, parser: _T, /):  # type: ignore
+        """Called by NamespaceHandler/MappingParser when a parser is dynamically added following
+        the reception of a message for which no parser was registered.
+        Returns the parser to ease chainability since the parser argument is often created inline in the call.
+        """
+        return self.add_entity(parser)
+
+    @override
     def _create_handler(
         self, ns: "mn.Namespace", /, **kwargs: "Unpack[NamespaceHandler.Args]"
     ):
@@ -1090,11 +1096,19 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
     def _handle_missing_parser(
         self, nh: NamespaceHandler, index: mn.IndexValue, payload: "mt.JsonMapping", /
     ):
+        # TODO: move back this method to NamespaceHandler by introducing the concept of
+        # diagnostic_parser_class so that the handler itself knows how to manage this
+        # without the indirection to the device.
+        # TODO: also, the add_entity/add_parser could be moved to NamespaceHandler
+        # by introducing maybe a dedicated register_parser that detects when the
+        # parser is dynamically created and so needs a a special notification (in meross_lan
+        # this is needed to forward entity registration).
+        #
         # Actually only designed to work when index is 'channel'
         assert type(index.type) is mn.IndexType.channel
         if nh.parser_class:
             nh.register_parser(
-                self.add_entity(
+                self.on_parser_added(
                     nh.parser_class(
                         index.value,
                         self,
@@ -1116,8 +1130,8 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             )
         else:
             nh.parsers[index] = nh._parse
+            nh.polling_request_add_index(index)
 
-        nh.polling_request_add_index(index)
         try:
             nh.parsers[index](payload)
         except Exception as e:
@@ -1284,7 +1298,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             # here the namespace might be unknown to our definitions (mn.Namespace)
             # so we try, in case, to build a new one with good presets
             if namespace in self.NAMESPACE_IGNORE:
-                handler = VoidNamespaceHandler(
+                handler = VoidHandler(
                     self.NAMESPACES[namespace],
                     self,
                     config=NamespaceHandler.POLLING_CONFIG_DIAGNOSTIC,

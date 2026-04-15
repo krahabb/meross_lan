@@ -6,8 +6,9 @@ from homeassistant.util.dt import now
 from ..binary_sensor import BinarySensorEntity
 from ..cover import Cover
 from ..helpers import clamp
-from ..helpers.namespaces import EntityDefNamespaceHandler, NamespaceHandler, mc, mn
+from ..helpers.namespaces import NamespaceHandler, mc, mn
 from ..merossclient.client import Transport
+from ..merossclient.device.handler import MappingParserHandler
 from ..number import EmulatedNumber, NumberParser
 from ..switch import SwitchParser
 
@@ -438,7 +439,7 @@ class GarageDoor(Cover):
                 try:
                     entities[f"{entity_id_prefix}{key}"].update_device_value(value)
                 except KeyError:
-                    entity = self.parent.add_entity(
+                    entity = self.parent.on_parser_added(
                         self.__class__.ENTITY_DEFS[key](self, device_value=value)
                     )
                     if key in (mc.KEY_DOORCLOSEDURATION, mc.KEY_DOOROPENDURATION):
@@ -536,17 +537,11 @@ class GarageDoor(Cover):
             handler.register_parser(GarageDoor(index.value, device, ns=ns, index=index))
 
 
-class GarageDoorConfigNamespaceHandler(EntityDefNamespaceHandler):
+class GarageDoorConfigNamespaceHandler(MappingParserHandler):
 
-    if TYPE_CHECKING:
+    POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_CONFIGURATION
 
-        parsers: Final[dict[str, ValueParser]]  # type: ignore[override]
-        init_entity_defs: Final[dict[str, type[GarageConfigMixin]]]
-        entity_defs: Final[dict[str, type[GarageConfigMixin]]]  # type: ignore[override]
-
-    POLLING_CONFIG_DEFAULT = EntityDefNamespaceHandler.POLLING_CONFIG_CONFIGURATION
-
-    init_entity_defs = {
+    init_parser_defs = {
         key: GarageDoor.ENTITY_DEFS[key]
         for key in (
             mc.KEY_BUZZERENABLE,
@@ -557,7 +552,7 @@ class GarageDoorConfigNamespaceHandler(EntityDefNamespaceHandler):
     }
 
     def _handle(self, message: "MerossMessage", /):
-        EntityDefNamespaceHandler._handle(self, message)
+        MappingParserHandler._handle(self, message)
         # mc.KEY_DOOROPENDURATION and mc.KEY_DOORCLOSEDURATION config keys have been
         # removed in recent firmwares (migrated to MultipleConfig x channel #82).
         # We keep implementing emulated entities in case for legacy firmwares.

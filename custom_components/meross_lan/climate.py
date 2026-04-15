@@ -344,7 +344,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         MTS_MODE_TO_PRESET_MAP: ClassVar[dict[int | None, str]]
         """Maps device 'mode' value to the HA climate.preset_mode"""
         MTS_MODE_TO_TEMPERATUREKEY_MAP: ClassVar[
-            dict[int | None, ParserEntity.NamespaceValue.SimpleKeyValue]
+            dict[int | None, ParserEntity.SimpleKeyValue]
         ]
         """Maps the current mts mode to the name of a temperature setpoint key.
         Used also to setup SetPointNumber entities (when empty -> no setpoints)."""

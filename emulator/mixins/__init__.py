@@ -590,7 +590,7 @@ class Emulator:
                             assert type(key_payload) is dict
                             indexes = (
                                 None
-                                if ns.index.value(key_payload) == 65535
+                                if ns.index_type.value(key_payload) == 65535
                                 else [key_payload]
                             )
                         case mn.PayloadType.UNSUPPORTED:
@@ -611,7 +611,7 @@ class Emulator:
                                     get_element_by_key_safe(
                                         p_state,
                                         p_index,
-                                        ns.index,
+                                        ns.index_type,
                                     )
                                     for p_index in indexes
                                 )
@@ -640,13 +640,17 @@ class Emulator:
                         assert type(key_payload) is list
                         for p_payload_channel in key_payload:
                             update_dict_strict_by_key(
-                                p_state, p_payload_channel, ns.index
+                                p_state, p_payload_channel, ns.index_type
                             )
                     case mn.PayloadType.DICT_IDX:
                         if type(p_state) is list:
-                            update_dict_strict_by_key(p_state, key_payload, ns.index)
+                            update_dict_strict_by_key(
+                                p_state, key_payload, ns.index_type
+                            )
                         else:
-                            update_dict_strict_by_key([p_state], key_payload, ns.index)
+                            update_dict_strict_by_key(
+                                [p_state], key_payload, ns.index_type
+                            )
                     case mn.PayloadType.DICT:
                         assert type(key_payload) is dict
                         update_dict_strict(p_state, key_payload)
@@ -818,7 +822,7 @@ class Emulator:
         self.update_epoch()
 
     def get_namespace_state(self, ns: mn.Namespace, channel, /):
-        return get_element_by_key(self.namespaces[ns][ns.key], channel, ns.index)
+        return get_element_by_key(self.namespaces[ns][ns.key], channel, ns.index_type)
 
     def update_namespace_state(
         self,
@@ -835,7 +839,7 @@ class Emulator:
         except KeyError:
             self.namespaces[ns] = p_namespace = {}
 
-        if ns.index:
+        if ns.index_type:
             try:
                 p_state: list = p_namespace[ns.key]
             except KeyError:
@@ -843,7 +847,9 @@ class Emulator:
 
             for index_payload in extract_dict_payloads(payload):
                 try:
-                    p_index_state = get_element_by_key(p_state, index_payload, ns.index)
+                    p_index_state = get_element_by_key(
+                        p_state, index_payload, ns.index_type
+                    )
                     if nsdefaultmode is Emulator.NSDefaultMode.MixIn:
                         p_index_state |= index_payload
                     else:

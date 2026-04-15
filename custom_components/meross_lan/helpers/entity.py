@@ -463,7 +463,8 @@ class ParserEntity(parser.NamespaceParser, Entity):
         @classmethod
         def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
-    NamespaceValue = parser.NamespaceValue
+    class SimpleKeyValue(parser.ValueParser.SimpleKeyValue):
+        pass
 
     @override
     def set_available(self):
@@ -477,18 +478,18 @@ class ParserEntity(parser.NamespaceParser, Entity):
         self.flush_state()
 
 
-class ValueParser(parser.NamespaceValue, ParserEntity):
+class ValueParser(parser.ValueParser, ParserEntity):
     """Specialization for 'simple' parser entities where the HA entity state is a function
     of a single data point in the json ns payload. This provides a common implementation
-    for setting the value (using parser.NamespaceValue.async_request_value) and for parsing the
-    value from the payload (using parser.NamespaceValue.update_device_value).
+    for setting the value (using parser.ValueParser.async_request_value) and for parsing the
+    value from the payload (using parser.ValueParser.update_device_value).
     Examples of such entities are sensors/numbers, binary_sensors/switches."""
 
     if TYPE_CHECKING:
 
         type InitArgs = ParserEntity.InitArgs
 
-        class Args(ParserEntity.Args, parser.NamespaceValue.Args):
+        class Args(ParserEntity.Args, parser.ValueParser.Args):
             pass
 
         def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
@@ -609,14 +610,14 @@ class BinaryEntity(Entity):
             return True
 
 
-class BinaryParser(parser.NamespaceBoolean, ValueParser, BinaryEntity):
+class BinaryParser(parser.BooleanParser, ValueParser, BinaryEntity):
     """Base parsing class for Switches and BinarySensors linked to a namespace."""
 
     if TYPE_CHECKING:
 
         type InitArgs = ValueParser.InitArgs
 
-        class Args(parser.NamespaceBoolean.Args, ValueParser.Args, BinaryEntity.Args):
+        class Args(parser.BooleanParser.Args, ValueParser.Args, BinaryEntity.Args):
             pass
 
         @classmethod

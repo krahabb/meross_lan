@@ -461,6 +461,14 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
     def firmware_version(self, /) -> str:
         return self.device_entry.sw_version or self.latest_version[mc.KEY_VERSION]
 
+    @override
+    def on_parser_added[_T: "mle.ParserEntity"](self, parser: _T, /):  # type: ignore
+        """Called by NamespaceHandler/MappingParser when a parser is dynamically added following
+        the reception of a message for which no parser was registered.
+        Returns the parser to ease chainability since the parser argument is often created inline in the call.
+        """
+        return self.parent.add_entity(parser)
+
     # interface: self
     async def async_subdevice_shutdown(self):
         """Dedicated method for subdevice 'standalone' shutdown when we want to just remove this
@@ -579,7 +587,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
     def _parse_beep(self, payload: "mt.hub.SubDevice_Beep", /):
         self.parent.ns_handlers[mn_h.Appliance_Hub_SubDevice_Beep].swap_parsers(
             self,
-            self.parent.add_entity(
+            self.on_parser_added(
                 SwitchParser(
                     self,
                     entity_key=(

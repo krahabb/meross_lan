@@ -53,7 +53,7 @@ class mts100v3(SubDevice, MtsClimate):
     # target temp but of course the valve will not follow
     # this temp since it's mode is not set to follow a manual set
     MTS_MODE_TO_TEMPERATUREKEY_MAP = {
-        k: MtsClimate.NamespaceValue.SimpleKeyValue(v)
+        k: MtsClimate.SimpleKeyValue(v)
         for k, v in mc.MTS100_MODE_TO_CURRENTSET_MAP.items()
     }
 

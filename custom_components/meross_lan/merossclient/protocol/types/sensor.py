@@ -2,10 +2,33 @@
 A collection of typing definitions for payloads in Appliance.Control.Sensor.*
 """
 
-from . import Any, ChannelPayload, SensorData, TypedDict
+from . import Any, ChannelPayload, NotRequired, SensorData, TypedDict
 
 
-class SensorXRequest_C(ChannelPayload):
+class LatestValue(TypedDict):
+    timestamp: int
+    temp: NotRequired[int]
+    humi: NotRequired[int]
+
+
+class Latest(ChannelPayload):
+    """Appliance.Control.Sensor.Latest
+    {
+        "latest": [
+            {
+                "value": [{"humi": 596, "timestamp": 1718302844}],
+                "channel": 0,
+                "capacity": 2,
+            }
+        ]
+    }
+    """
+
+    value: list[LatestValue]
+    capacity: int  # Flags: 1 has temp - 2 has humi
+
+
+class LatestXRequest(ChannelPayload):
     """
     Request format for LatestX and likely HistoryX payloads.
     channel is not enough to query this ns but we need to also add a
@@ -15,25 +38,7 @@ class SensorXRequest_C(ChannelPayload):
     data: list[str]
 
 
-class SensorX_C(ChannelPayload):
-    """
-    Response format for LatestX and likely HistoryX payloads.
-    The 'data' dict contains sensor keys and a list of dicts.
-    list of requested sensor 'keys' ("light", "presence" for example in ms600)
-    """
-
-    data: dict[str, list[dict[str, Any]]]
-
-
-class LatestXRequest_C(SensorXRequest_C):
-    pass
-
-
-class LatestX_C(SensorX_C):
-    data: dict[str, list[SensorData]]
-
-
-class LatestX(TypedDict):
+class LatestX(ChannelPayload):
     """Appliance.Control.Sensor.LatestX
     {
         "latest": [
@@ -61,4 +66,4 @@ class LatestX(TypedDict):
     Example taken from ms600
     """
 
-    latest: list[LatestX_C]
+    data: dict[str, list[SensorData]]

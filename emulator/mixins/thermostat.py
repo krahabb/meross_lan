@@ -229,7 +229,7 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
         ns = self.NAMESPACES[namespace]
         ns_key = ns.key
         assert (
-            ns.index is mn.IndexType.channel
+            ns.index_type is mn.IndexType.channel
         ), f"Only channel indexed namespaces are supported by this handler, got {ns}"
         p_state: list[dict[str, Any]] = self.namespaces[ns][ns_key]
         match method:

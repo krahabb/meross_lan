@@ -160,7 +160,7 @@ async def test_entities(
             for ns in (_ns for _ns in NAMESPACES_ENTITIES if _ns in ability):
                 _add_func(
                     NAMESPACES_ENTITIES[ns] * _ns_channels
-                    if ns.index is mn.IndexType.channel
+                    if ns.index_type is mn.IndexType.channel
                     else NAMESPACES_ENTITIES[ns]
                 )
 

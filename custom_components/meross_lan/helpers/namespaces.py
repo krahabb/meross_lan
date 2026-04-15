@@ -14,6 +14,10 @@ if TYPE_CHECKING:
     from .entity import ParserEntity, ValueParser
 
 
+# TODO: remove this specialization and/or move it's symbol link into Device class
+# so we can easily distribute it across the code
+
+
 class NamespaceHandler(_NH):
 
     if TYPE_CHECKING:
@@ -31,6 +35,8 @@ class NamespaceHandler(_NH):
         parent: Final[Device]  # type: ignore[override]
         parser_class: type[ParserEntity] | None  # type: ignore[override]
 
+    # TODO: move these presets to library ns grammar to simplify. That way
+    # every ns definition will have it's own reuirement for polling strategy.
     POLLING_CONFIG_FASTSENSOR = (0, 180, _NH.async_poll_smart)
     POLLING_CONFIG_SLOWSENSOR = (300, 600, _NH.async_poll_smart)
     POLLING_CONFIG_CONFIGURATION = (
@@ -49,6 +55,8 @@ class NamespaceHandler(_NH):
             mn.Appliance_Control_FilterMaintenance: POLLING_CONFIG_SLOWSENSOR,
             mn.Appliance_Control_PhysicalLock: POLLING_CONFIG_CONFIGURATION,
             mn.Appliance_Control_Presence_Config: POLLING_CONFIG_CONFIGURATION,
+            mn.Appliance_Control_Sensor_Latest: POLLING_CONFIG_FASTSENSOR,
+            mn.Appliance_Control_Sensor_LatestX: POLLING_CONFIG_FASTSENSOR,
             mn.Appliance_Mcu_Firmware: _NH.POLLING_CONFIG_ONCE,
             mn.Appliance_Mcu_Hp110_Firmware: _NH.POLLING_CONFIG_ONCE,
         }
@@ -76,14 +84,16 @@ class NamespaceHandler(_NH):
                 # we add the last split of the namespace to the extracted payload key
                 if type(_payload) is dict:
                     device.parse_undefined_dict(
-                        f"{ns.slug_end}_{_key}", _payload, self.index.index(_payload)
+                        f"{ns.slug_end}_{_key}",
+                        _payload,
+                        self.index_type.index(_payload),
                     )
                 elif type(_payload) is list:
                     _key = f"{ns.slug_end}_{_key}"
                     for __payload in _payload:
                         # not having a "channel" in the list payloads is unexpected so far
                         device.parse_undefined_dict(
-                            _key, __payload, self.index.index(__payload)
+                            _key, __payload, self.index_type.index(__payload)
                         )
                 else:
                     # should we diagnostic scalar values in root payload ?
@@ -106,60 +116,7 @@ class NamespaceHandler(_NH):
             self.parent.parse_undefined_dict(
                 f"{self.id.slug_end}_{self.id.key}",
                 payload,
-                self.index.index(payload),
+                self.index_type.index(payload),
             )
         else:
             _NH._parse(self, payload)
-
-
-class EntityDefNamespaceHandler(NamespaceHandler):
-    """
-    Special namespace handler used to define entities based on the presence of keys in the payload.
-    This is intended to be used with namespaces which have a 'flat' payload structure with multiple keys representing
-    different entities (like Appliance.Control.Diffuser.Sensor).
-    The 'parsers' member is hacked a bit so this could be dangerous with lifecycle management.
-    Entities are typically created on the fly and stored in parsers (instead of registering the ParserFunc).
-    The entities cleanup/shutdown will be managed by the device as usual but we have to cleanup the parsers map.
-    """
-
-    if TYPE_CHECKING:
-        parsers: Final[dict[str, ValueParser]]  # type: ignore[override]
-        init_entity_defs: ClassVar[Mapping[str, type[ValueParser]]]
-        entity_defs: Mapping[str, type[ValueParser]]
-
-        class Args(NamespaceHandler.Args):
-            entity_defs: NotRequired[Mapping[str, type[ValueParser]]]
-
-    SLOTS_AUTO_INIT = ("entity_defs",)
-
-    def shutdown(self):
-        self.parsers.clear()
-        super().shutdown()
-
-    def _handle(self, message: "MerossMessage", /):
-        parsers = self.parsers
-        for key, value in message.payload[self.id.key].items():
-            try:
-                parsers[key].update_device_value(value)
-            except KeyError:
-                # assert KeyError is due to missing parser ?
-                try:
-                    parsers[key] = self.parent.add_entity(
-                        self.entity_defs[key](
-                            None,
-                            self.parent,
-                            ns=self.id,
-                            device_value=value,
-                            # key_value is likely not needed since these entities are mostly just sensors
-                            # and the parsing is done here in the handler instead of the parser, but it
-                            # could be added to the entity def if needed (for active entities like switches or numbers)
-                        )
-                    )
-                except Exception as e:
-                    self.log_exception(
-                        self.DEBUG,
-                        e,
-                        "creating entity for '%s' key in '%s' namespace",
-                        key,
-                        self.id,
-                    )

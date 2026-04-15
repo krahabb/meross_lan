@@ -7,6 +7,7 @@ from ..helpers.namespaces import mc, mn
 from ..number import NumberParser
 from ..select import SelectParser
 from ..sensor import SensorParser
+from .misc import SensorLatestXParser
 
 if TYPE_CHECKING:
     from typing import Final, Self, Unpack
@@ -136,17 +137,34 @@ ENTITY_DEFS = (
 
 def namespace_init_presence_config(ns: mn.Namespace, device: "Device", /):
     index = mn.IndexType.channel(0)
-    device_info = device.get_device_entry_info(0)
+    sensor_presence = PresenceSensor(
+        0,
+        device,
+        entity_key=f"sensor_{mc.KEY_PRESENCE}",
+        index=index,
+        device_info=device.get_device_entry_info(0),
+    )
+
     device._create_handler(ns).register_parsers(
-        *(
-            entity_def(
-                0,
-                device,
-                ns=ns,
-                index=index,
-                device_info=device_info,
-            )
-            for entity_def in ENTITY_DEFS
+        *(entity_def(sensor_presence, ns=ns) for entity_def in ENTITY_DEFS)
+    )
+
+    device.ns_handlers[mn.Appliance_Control_Sensor_LatestX].register_parser(
+        SensorLatestXParser(
+            0,
+            device,
+            ns=mn.Appliance_Control_Sensor_LatestX,
+            index=index,
+            parsers={
+                mc.KEY_PRESENCE: sensor_presence,
+                mc.KEY_LIGHT: SensorParser(
+                    sensor_presence,
+                    **(
+                        SensorParser.LIGHT_ARGS
+                        | {"entity_key": f"sensor_{mc.KEY_LIGHT}"}
+                    ),
+                ),
+            },
         )
     )
 
@@ -154,6 +172,7 @@ def namespace_init_presence_config(ns: mn.Namespace, device: "Device", /):
 class PresenceSensor(SensorParser):
     """ms600 presence sensor."""
 
+    init_entity_key = f"sensor_{mc.KEY_PRESENCE}"  # backward compatibility
     _attr_name = "Presence"
 
     __slots__ = (

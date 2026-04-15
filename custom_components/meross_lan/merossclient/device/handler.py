@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, override
 from .. import extract_dict_payloads, logging, merge_dicts
 from ..protocol import const as mc, namespaces as mn
 from ..protocol.message import MerossMessage
-from .parser import NamespaceParser
+from .parser import MappingParser, NamespaceParser
 
 KEY_CHANNEL = mc.KEY_CHANNEL
 KEY_ID = mc.KEY_ID
@@ -64,7 +64,7 @@ class NamespaceHandler(logging.Loggable):
 
         id: Final[mn.Namespace]  # type: ignore[override]
         parent: Final[Device]  # type: ignore[override]
-        index: Final[mn.IndexType]  # shortcut to id.index
+        index_type: Final[mn.IndexType]  # shortcut to id.index
 
         handler: HandlerFunc
         parsers: Final[dict[mn.IndexValue, ParserFunc | NamespaceParser]]
@@ -84,7 +84,7 @@ class NamespaceHandler(logging.Loggable):
             channels: NotRequired[Iterable[int]]
 
     __SLOTS__ = (
-        "index",
+        "index_type",
         "handler",
         "parsers",
         "parser_class",
@@ -108,16 +108,20 @@ class NamespaceHandler(logging.Loggable):
         /,
         **kwargs: "Unpack[NamespaceHandler.Args]",
     ):
+        assert id in parent.descriptor.ability, (
+            "Namespace not supported by device",
+            id,
+        )
         assert id not in parent.ns_handlers, ("Namespace already registered", id)
         self.parsers = {}
-        if id.index is mn.IndexType.subId and not parent.descriptor.is_hub:
+        if id.index_type is mn.IndexType.subId and not parent.descriptor.is_hub:
             # These namespaces, might be indexed by both 'subId' and/or 'channel'
             # but when used on non hub devices they're definitely using 'channel' index.
             # Our grammar doesn't cover this semantic but we can easily adapt to it
             # here by switching the index to channel for this case.
-            self.index = mn.IndexType.channel
+            self.index_type = mn.IndexType.channel
         else:
-            self.index = id.index
+            self.index_type = id.index_type
 
         try:
             self.polling_period, self.polling_period_cloud, self.polling_strategy = (
@@ -151,7 +155,7 @@ class NamespaceHandler(logging.Loggable):
             try:
                 self.handler = kwargs.pop("handler")
             except KeyError:
-                match self.index:
+                match self.index_type:
                     case mn.IndexType.id:
                         self.handler = self._handle_subdevice_id
                     case mn.IndexType.subId:
@@ -167,8 +171,7 @@ class NamespaceHandler(logging.Loggable):
                 "handler" not in kwargs
             ), "Cannot specify both handler and parser_class"
             # optimized register_parser_class and register_parser
-            self.id = id  # preset self.id for parser._namespace_registered
-            match self.index:
+            match self.index_type:
                 case mn.IndexType.channel:
                     self.handler = self._handle_channel_list
                 case mn.IndexType.subId:
@@ -178,7 +181,6 @@ class NamespaceHandler(logging.Loggable):
                         False
                     ), "parser_class only supported for 'channel' indexed namespaces"
             for channel in kwargs.pop("channels", parent.descriptor.channels):
-                # TODO: place mn.IndexType.channel in the channels kwarg and in descriptor.channels
                 index = mn.IndexType.channel(channel)
                 self.parsers[index] = parser = parser_class(
                     channel, parent, ns=id, index=index
@@ -216,23 +218,23 @@ class NamespaceHandler(logging.Loggable):
         parser: NamespaceParser,
         /,
     ):
-        # FIXME/TODO: add an index to the call to make it more flexible
+        # TODO: add an index to the call to make it more flexible
         """Installs a dedicated parser for the given channel payload.
         Calling this multiple times for the same channel is prohibited
         by design even though the dispatching model allows (_DispatcherParser)
         multiple recipients. Use register_parsers instead."""
         index = parser.index
-        if self.index is mn.IndexType.subId and index.type is mn.IndexType.id:
+        if self.index_type is mn.IndexType.subId and index.type is mn.IndexType.id:
             # Temporary fix until better normalization:
             # This is the case of a subdevice registering to a 'subId' indexed namespace
             # We provide here a 'quick' workaround to automatically bind to channel == 0
             # since this seems pretty common.
             index = mn.IndexType.subId(index.value, 0, None)
-        assert index.type is self.index, "index type mismatch"
+        assert index.type is self.index_type, "index type mismatch"
         assert index not in self.parsers, "Parser already registered for index"
         self.parsers[index] = getattr(parser, f"_parse_{self.id.slug_end}", parser)
-        parser._namespace_registered((self, index))
         self.polling_request_add_index(index)
+        parser._namespace_registered((self, index))
 
     def register_parsers(self, *parsers: NamespaceParser):
         """Registers a whole set of parsers at once for the same channel payload.
@@ -243,12 +245,12 @@ class NamespaceHandler(logging.Loggable):
         assert index not in self.parsers, "Parser already registered for index"
         handler_registration = (self, index)
         self.parsers[index] = _dispatcher = NamespaceParser.Dispatcher()
+        self.polling_request_add_index(index)
         _parser_method_name = f"_parse_{self.id.slug_end}"
         for parser in parsers:
             assert parser.index is index, "All parsers must have the same index"
             _dispatcher.parsers.append(getattr(parser, _parser_method_name, parser))
             parser._namespace_registered(handler_registration)
-        self.polling_request_add_index(index)
 
     def swap_parsers(
         self, old: NamespaceParser, new: NamespaceParser, *extra: NamespaceParser
@@ -321,7 +323,7 @@ class NamespaceHandler(logging.Loggable):
             self.WARNING,
             exception,
             "parser function '%s': payload=%s",
-            self.parsers[self.index.index(payload)].__name__,
+            self.parsers[self.index_type.index(payload)].__name__,
             _any=payload,
             timeout=14400,
         )
@@ -472,7 +474,7 @@ class NamespaceHandler(logging.Loggable):
         self, ke: KeyError, payload: "mt.JsonMapping", subdevice_id: str, /
     ):
         """Handler for KeyError raised when dispatching a payload to an hub subdevice parser."""
-        index = self.index.index(payload)
+        index = self.index_type.index(payload)
         if index in self.parsers:
             # index for the received payload is present so this is likely an error
             # in the parser method.
@@ -910,7 +912,7 @@ class NamespaceHandler(logging.Loggable):
                 channels_payload = [*self.parsers]
                 if not channels_payload:
                     channels = self.parent.descriptor.channels or (0,)
-                    match self.index:
+                    match self.index_type:
                         case mn.IndexType.channel:
                             channels_payload = [
                                 {KEY_CHANNEL: channel} for channel in channels
@@ -1036,7 +1038,7 @@ class NamespaceHandler(logging.Loggable):
     POLLING_CONFIG_MAP = {}
 
 
-class VoidNamespaceHandler(NamespaceHandler):
+class VoidHandler(NamespaceHandler):
     """Utility class to manage namespaces which should be 'ignored' i.e. we're aware
     of their existence but we don't process them at the device level. This class in turn
     just provides an empty handler and so suppresses any log too (for unknown namespaces)
@@ -1045,3 +1047,54 @@ class VoidNamespaceHandler(NamespaceHandler):
     @override
     def _handle(self, message: "MerossMessage", /):
         pass
+
+
+class ParserHandler(NamespaceParser, NamespaceHandler):
+    """
+    A specialized NamespaceHandler which is also a NamespaceParser.
+    This is intended to be used where the namespace is not indexed so that handling
+    the payload is just a matter of parsing the (root) payload keys as simple data-points.
+    As an even further simplification, there are some namespaces (Appliance.System.Runtime or DND)
+    carrying just one data-point so that the whole handling/parsing is just a matter of processing a single key value.
+    In case of multiple keys, we can mixin a MappingParser (see MappingParserHandler)
+    so that multiple keys could be automatically parsed.
+    """
+
+    if TYPE_CHECKING:
+        id: Final[mn.Namespace]  # type: ignore[override]
+
+        type InitArgs = tuple[mn.Namespace, Device]
+
+        class Args(NamespaceParser.Args, NamespaceHandler.Args):
+            pass
+
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
+
+    @classmethod
+    @override
+    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
+        """The factory method will create the Handler/Parser combo as a single mixed-in object."""
+        return cls(ns, device, ns=ns)
+
+    @override
+    def _handle(self, message: "MerossMessage", /):
+        self(message.payload[self.id.key])
+
+    @override
+    def parse_digest(self, digest: "mt.JsonMapping", /):
+        self(digest)
+
+
+class MappingParserHandler(MappingParser, ParserHandler):
+    """A more specialized ParserHandler which is also a MappingParser. This is intended to be used where
+    the namespace is not indexed but carries multiple data-points which can be easily parsed through a MappingParser.
+    """
+
+    if TYPE_CHECKING:
+
+        type InitArgs = ParserHandler.InitArgs
+
+        class Args(MappingParser.Args, ParserHandler.Args):
+            pass
+
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...

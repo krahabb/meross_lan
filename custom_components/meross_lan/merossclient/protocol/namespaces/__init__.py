@@ -66,20 +66,20 @@ def _heuristic_args(name: str, kwargs: "Namespace.Args") -> "Namespace.Args":
             # by explicitly passing the map=HUB_NAMESPACES so that they're mapped into the right storage
             # but the rules for parsing are very custom and likely need to be managed on a case by case
             # at the HubMixin level.
-            kwargs["index"] = IndexType.id
+            kwargs["index_type"] = IndexType.id
         case (_, "RollerShutter", *_):
-            kwargs["index"] = IndexType.channel
+            kwargs["index_type"] = IndexType.channel
             kwargs["payload_get"] = PayloadType.LIST_IDX
         case (_, "GarageDoor", *_):
-            kwargs["index"] = IndexType.channel
+            kwargs["index_type"] = IndexType.channel
         case (_, "Control", "Screen", *_):
-            kwargs["index"] = IndexType.channel
+            kwargs["index_type"] = IndexType.channel
             kwargs["payload_get"] = PayloadType.LIST_IDX_STRICT
         case (_, "Control", "Sensor", *_):
-            kwargs["index"] = IndexType.subId
+            kwargs["index_type"] = IndexType.subId
             kwargs["payload_get"] = PayloadType.LIST_IDX_STRICT
         case (_, "Control", "Thermostat", *_):
-            kwargs["index"] = IndexType.channel
+            kwargs["index_type"] = IndexType.channel
             kwargs["payload_get"] = PayloadType.LIST_IDX_STRICT
         case _:
             kwargs["payload_get"] = PayloadType.UNKNOWN
@@ -252,7 +252,7 @@ class NoneIndexValue(IndexValue):
         value: Final[None]  # type: ignore[override]
         slug: Final[None]  # type: ignore[override]
 
-    def __init__(self, index_type: IndexType):
+    def __init__(self, index_type: "IndexType"):
         self.value = None
         self.slug = None
         self.matches = lambda payload: True
@@ -265,7 +265,7 @@ class SimpleIndexValue(IndexValue):
         value: Final[int | str]  # type: ignore[override]
         slug: Final[int | str]  # type: ignore[override]
 
-    def __init__(self, index_type: IndexType, value: int | str):
+    def __init__(self, index_type: "IndexType", value: int | str):
         self.value = value
         self.slug = value
         self.matches = lambda payload: payload.get(index_type[0]) == value
@@ -503,7 +503,7 @@ class Namespace(str):
         """If not None Namespace supports DELETE verb with this payload type."""
         payload_psh: Final[PayloadType]
         """If not None Namespace supports PUSH verb with this payload type."""
-        index: Final[IndexType]
+        index_type: Final[IndexType]
         """The key used to index items in list payloads. If None/empty no indexing is used.
         Special care need to be used when a namespace is declared to be indexed by 'subId'
         since these namespaces might also carry only 'channel' payloads (for non hub devices or
@@ -524,7 +524,7 @@ class Namespace(str):
             payload_set: NotRequired[PayloadType | None]
             payload_del: NotRequired[PayloadType | None]
             payload_psh: NotRequired[PayloadType | None]
-            index: NotRequired[IndexType]
+            index_type: NotRequired[IndexType]
             key_digest: NotRequired[str | None]  # True allowed (triggers euristics)
             grammar: NotRequired[Grammar]
             map: NotRequired[NamespacesMapType]
@@ -536,7 +536,7 @@ class Namespace(str):
         "payload_set",
         "payload_del",
         "payload_psh",
-        "index",
+        "index_type",
         "key_digest",
         "grammar",
         "__dict__",
@@ -605,7 +605,7 @@ class Namespace(str):
         # by composing small 'chunks' like ARGS_GET, ARGS_NO_GET, etc.
         # This also allows us to centralize here the defaults for parameters
         kwargs: "Namespace.Args" = {
-            "index": IndexType.none,
+            "index_type": IndexType.none,
             "key_digest": None,
             "grammar": Grammar.STABLE,
             "map": NAMESPACES,
@@ -622,9 +622,9 @@ class Namespace(str):
         assert (
             self.payload_psh in PUSH_PAYLOADS
         ), f"Namespace {self} has invalid payload_psh {self.payload_psh}"
-        self.index = kwargs["index"]
+        self.index_type = kwargs["index_type"]
         if self.payload_get.indexed or self.payload_set.indexed:
-            if not self.index:
+            if not self.index_type:
                 raise ValueError(
                     f"Namespace {self} uses indexed payloads but has no index defined."
                 )
@@ -745,7 +745,7 @@ class Namespace(str):
         return digest[self.key_digest][self.key]
 
     def __repr__(self):
-        return f"Namespace({self}, key={self.key}, index={self.index})"
+        return f"Namespace({self}, key={self.key}, index={self.index_type})"
 
 
 ns = Namespace  # shortcut for declarations
@@ -755,10 +755,12 @@ ns = Namespace  # shortcut for declarations
 
 EXP: "ns.Args" = {"grammar": Grammar.EXPERIMENTAL}
 
-IDX_C: "ns.Args" = {"index": IndexType.channel}  # Channel index
-IDX_ID_: "ns.Args" = {"index": IndexType.Id}  # Item (effect) Id
-IDX_ID: "ns.Args" = {"index": IndexType.id}  # Hub subdevice id (but also trigger,timer)
-IDX_SUB: "ns.Args" = {"index": IndexType.subId}  # Hub subdevice id
+IDX_C: "ns.Args" = {"index_type": IndexType.channel}  # Channel index
+IDX_ID_: "ns.Args" = {"index_type": IndexType.Id}  # Item (effect) Id
+IDX_ID: "ns.Args" = {
+    "index_type": IndexType.id
+}  # Hub subdevice id (but also trigger,timer)
+IDX_SUB: "ns.Args" = {"index_type": IndexType.subId}  # Hub subdevice id
 
 G_E: "ns.Args" = {"payload_get": PayloadType.EMPTY}
 G_D: "ns.Args" = {"payload_get": PayloadType.DICT}

@@ -1,6 +1,6 @@
 from homeassistant.components import sensor as haec
 
-from custom_components.meross_lan.devices import hub, ms600, mss
+from custom_components.meross_lan.devices import misc, ms600, mss
 from custom_components.meross_lan.devices.hub import ms
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
@@ -85,14 +85,20 @@ class EntityTest(EntityComponentTest):
             EnumParser,  # warning sensor,
             SensorParser,  # external temperature sensor
         ],
-        mn.Appliance_Control_Sensor_Latest: [SensorParser],  # mts200 (some models)
+        mn.Appliance_Control_Sensor_Latest: [
+            misc.Mts200HumiSensor
+        ],  # mts200 (some models)
         mn.Appliance_System_Runtime: [SignalStrengthSensor],
     }
 
     HUB_SUBDEVICES_ENTITIES = {
         None: [SensorParser],  # actual implementation of battery sensor
-        mc.TYPE_MS100: [ms.ms100, SensorParser],
-        mc.KEY_TEMPHUMI: [ms.ms130, SensorParser, SensorParser],
+        mc.TYPE_MS100: [SensorParser, SensorParser],  # temp/humi sensors
+        mc.KEY_TEMPHUMI: [
+            SensorParser,
+            SensorParser,
+            SensorParser,
+        ],  # temp/humi/light sensors
         mc.TYPE_MTS100: [
             SensorParser
         ],  # additional (disabled) current temperature sensor

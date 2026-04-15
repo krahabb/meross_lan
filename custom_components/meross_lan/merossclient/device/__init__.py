@@ -115,10 +115,24 @@ class PhysicalDevice(AbstractClient):
     @abstractmethod
     def ns_handlers(self, /) -> "Mapping[mn.Namespace, NamespaceHandler]": ...
 
+    def on_parser_added[_T: NamespaceParser](self, parser: _T, /):  # type: ignore
+        """Called by NamespaceHandler/MappingParser when a parser is dynamically added following
+        the reception of a message for which no parser was registered.
+        Returns the parser to ease chainability since the parser argument is often created inline in the call.
+        """
+        return parser
+
     @abstractmethod
     def _create_handler(
         self, ns: "mn.Namespace", /, **kwargs: "Unpack[NamespaceHandler.Args]"
     ) -> "NamespaceHandler": ...
+
+    """Called in various situations to ask the device to instantiate a NamespaceHandler for the given namespace.
+    This typically happens with dynamic parsers/handler initialization in async_init when a instantiating a
+    custom NamespaceParser the requires this ns (see namespace_init factory method).
+    This indirection allows a custom Device implementation to intercept and install whatever NamespaceHandler
+    class it needs (e.g. a custom one with a custom parser management logic).
+    """
 
     def _handle_missing_parser(
         self, nh: NamespaceHandler, index: mn.IndexValue, payload: "mt.JsonMapping", /
@@ -621,9 +635,6 @@ class Device(PhysicalDevice):
     def _create_handler(
         self, ns: "mn.Namespace", /, **kwargs: "Unpack[NamespaceHandler.Args]"
     ):
-        """Called by the base device message parsing chain when a new
-        NamespaceHandler need to be defined (This happens the first time
-        the namespace enters the message handling flow)"""
         return NamespaceHandler(ns, self, **kwargs)
 
     def get_handler_by_name(self, namespace: str, /):

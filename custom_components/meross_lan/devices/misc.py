@@ -6,170 +6,146 @@ a dedicated unit for each of them would increase the number of small modules.
 
 from typing import TYPE_CHECKING, override
 
-from ..climate import MtsClimate
-from ..helpers.namespaces import EntityDefNamespaceHandler, NamespaceHandler, mn
-from ..merossclient.protocol import const as mc
+from ..merossclient.device.parser import MappingParser
+from ..merossclient.protocol import const as mc, namespaces as mn
+from ..merossclient.protocol.namespaces import thermostat as mn_t
 from ..sensor import SensorParser
-from .ms600 import PresenceSensor
 
 if TYPE_CHECKING:
-    from typing import Final
+    from typing import ClassVar, Final, Mapping, NotRequired, Unpack
 
     from ..helpers.device import Device, MerossMessage
+    from ..merossclient.device.handler import NamespaceHandler
     from ..merossclient.protocol import types as mt
+    from .thermostat.mts200 import Mts200Climate
 
 
-class SensorLatestNamespaceHandler(NamespaceHandler):
-    """
-    Specialized handler for Appliance.Control.Sensor.Latest actually carried in thermostats
-    (seen on an MTS200 so far:2024-06)
-    """
+class Mts200HumiSensor(SensorParser):
+
+    def __init__(self, *args, **kwargs):
+        SensorParser.__init__(self, *args, **kwargs)
+        try:
+            # This is almost 100% sure since key 'humi' in Sensor.Latest
+            # is likely just the mts200 reporting the current humidity, but we can never be sure
+            climate: "Mts200Climate" = self.parent.ns_handlers[  # type: ignore
+                mn_t.Appliance_Control_Thermostat_Mode
+            ].parsers[self.index]
+
+            def _flush_climate_state():
+                climate.current_humidity = self.native_value
+                climate.schedule_flush_state()
+
+            self.register_state_callback(_flush_climate_state)
+            # on self construction we're already parsing an update so
+            # we need to forward to climate because self.flush_state() is not being called
+            _flush_climate_state()
+        except KeyError:
+            # not an mts200?
+            pass
+
+
+class SensorLatestParser(MappingParser):
 
     if TYPE_CHECKING:
-        ENTITY_ARGS: Final[dict[str, SensorParser.Args]]
+        parent: Final[Device]  # type: ignore[override]
+        init_parser_defs: ClassVar[Mapping[str, type[SensorParser]]]
+        parser_defs: Mapping[str, type[SensorParser]]
 
-    POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_FASTSENSOR
-
-    VALUE_KEY_EXCLUDED = (mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
-
-    ENTITY_ARGS = {
-        mc.KEY_HUMI: SensorParser.HUMIDITY_ARGS,
-        mc.KEY_TEMP: SensorParser.TEMPERATURE_ARGS | {"device_scale": 100},
-        mc.KEY_LIGHT: SensorParser.LIGHT_ARGS,
+    init_parser_defs = {
+        mc.KEY_HUMI: Mts200HumiSensor.ENTITY_DEF(
+            **SensorParser.HUMIDITY_ARGS
+            | {
+                "entity_key": f"sensor_{mc.KEY_HUMI}",
+            }
+        ),
+        mc.KEY_TEMP: SensorParser.ENTITY_DEF(
+            **SensorParser.TEMPERATURE_ARGS
+            | {
+                "entity_key": f"sensor_{mc.KEY_TEMP}",
+                "device_scale": 100,
+            }
+        ),
     }
 
-    def __init__(self, ns: mn.Namespace, device: "Device", /):
-        NamespaceHandler.__init__(self, ns, device)
-        self.polling_request_add_index(mn.IndexType.channel(0))
-
     @override
-    def _handle_channel_list(self, message: "MerossMessage", /):
-        """
-        {
-            "latest": [
-                {
-                    "value": [{"humi": 596, "timestamp": 1718302844}],
-                    "channel": 0,
-                    "capacity": 2,
-                }
-            ]
-        }
-        """
-        entities = self.parent.entities
-        for p_channel in message.payload[mc.KEY_LATEST]:
-            channel = p_channel[mc.KEY_CHANNEL]
-            for p_value in p_channel[mc.KEY_VALUE]:
-                # I guess 'value' carries a list of sensors values
-                # carried in a dict like {"humi": 596, "timestamp": 1718302844}
-                for key, value in p_value.items():
-                    if key in SensorLatestNamespaceHandler.VALUE_KEY_EXCLUDED:
-                        continue
-                    try:
-                        entities[f"{channel}_sensor_{key}"].update_device_value(value)
-                    except KeyError:
-                        index = mn.IndexType.channel(channel)
-                        self.parent.add_entity(
-                            SensorParser(
-                                channel,
-                                self.parent,
-                                **(
-                                    SensorLatestNamespaceHandler.ENTITY_ARGS.get(
-                                        key, {}
-                                    )
-                                    | {
-                                        "index": index,
-                                        "entity_key": f"sensor_{key}",
-                                        "device_value": value,
-                                    }
-                                ),
-                            )
-                        )
-                        self.polling_request_add_index(index)
-
-                    if key == mc.KEY_HUMI:
-                        # look for a thermostat and sync the reported humidity
-                        try:
-                            climate: "MtsClimate" = entities[channel]  # type: ignore
-                            humidity = value / 10
-                            if climate.current_humidity != humidity:
-                                climate.current_humidity = humidity
-                                climate.flush_state()
-                        except (AttributeError, KeyError):
-                            # not a climate (missing current_humidity) or no entity for the channel
-                            pass
+    def __call__(self, payload: "mt.sensor.Latest", /):
+        MappingParser.__call__(self, payload[mc.KEY_VALUE][0])
 
 
-class SensorLatestXNamespaceHandler(EntityDefNamespaceHandler):
-    """
-    Specialized handler for Appliance.Control.Sensor.LatestX. This ns carries
-    a variadic payload of sensor values (seen on Hub/ms130 and ms600).
-    This specific implementation is for standard Device(s) while
-    Hub(s) have a somewhat different parser.
+class SensorLatestXParser(MappingParser):
+    """Generalized structured parsing for Appliance.Control.Sensor.LatestX.
+    This ns requires to be polled by the correct key list in the request payload
+    and this striclty depends on the device type.
+    The approach here is to just initialize the handler and configure it with
+    a MappingParser (SensorLatestXParser) as parser_class so that any channel
+    indexed payload is then forwarded to an isntance of this class.
+    The instance itself is able to automatically setup some common types of entities/parsers
+    but we need anyway to configure the correct request payload. The inizialization is then done in 2 steps:
+    1) the handler is initialized with SensorLatestXParser as parser_class
+    2) later specific device initialization will refine polling configuration and parsers config/layout
     """
 
     if TYPE_CHECKING:
-        init_entity_defs: Final[dict[str, type[SensorParser]]]
+        parent: Final[Device]  # type: ignore[override]
+        init_parser_defs: ClassVar[Mapping[str, type[SensorParser]]]
+        parser_defs: Mapping[str, type[SensorParser]]
+        parsers: Final[dict[str, SensorParser | NamespaceHandler.ParserFunc]]  # type: ignore[override]
 
-    POLLING_CONFIG_DEFAULT = EntityDefNamespaceHandler.POLLING_CONFIG_FASTSENSOR
+        class Args(MappingParser.Args):
+            parsers: NotRequired[dict[str, SensorParser | NamespaceHandler.ParserFunc]]
 
-    # many of these defs are guesses
-    init_entity_defs = {
+        def __init__(self, *args, **kwargs: Unpack[Args]): ...  # pragma: no cover
+
+    init_ns = mn.Appliance_Control_Sensor_LatestX
+
+    # many of these defs are guesses and the actual composition
+    # of parsers is explicitly preset when constructing a 'known' device SensorLatestXParser
+    # See ms130 and ms600.
+    init_parser_defs = {
         mc.KEY_HUMI: SensorParser.ENTITY_DEF(**SensorParser.HUMIDITY_ARGS),
         mc.KEY_LIGHT: SensorParser.ENTITY_DEF(**SensorParser.LIGHT_ARGS),
-        mc.KEY_PRESENCE: PresenceSensor.ENTITY_DEF(),
         mc.KEY_TEMP: SensorParser.ENTITY_DEF(
             **(SensorParser.TEMPERATURE_ARGS | {"device_scale": 100})
         ),
     }
 
-    def __init__(self, ns: mn.Namespace, device: "Device", /):
-        NamespaceHandler.__init__(self, ns, device)
-        if not device.descriptor.is_hub:
-            if device.descriptor.type.startswith(mc.TYPE_MS600):
-                data_keys = [mc.KEY_PRESENCE, mc.KEY_LIGHT]
-            else:
-                data_keys = []  # no idea of other devices supported
-            index = mn.IndexType.channel(0)
-            for data_key in data_keys:
-                self.entity_defs[data_key](
-                    0,
-                    device,
-                    entity_key=f"sensor_{data_key}",
-                    index=index,
-                )
-            self.polling_request_payload.append(
-                {mc.KEY_CHANNEL: 0, mc.KEY_DATA: data_keys}
-            )
+    @classmethod
+    @override
+    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
+        # TODO: move config default to either the parser class or to the ns grammar
+        # so we can remove this override
+        return device._create_handler(ns, parser_class=cls, channels=())
 
     @override
-    def _handle_channel_list(self, message: "MerossMessage", /):
-        entities = self.parent.entities
-        payload: "mt.sensor.LatestX_C"
-        for payload in message.payload[self.id.key]:
-            channel: int = payload[mc.KEY_CHANNEL]
-            for data_key, data_value in payload[mc.KEY_DATA].items():
-                try:
-                    entities[f"{channel}_sensor_{data_key}"].update_device_value(
-                        data_value[0]["value"]
-                    )
-                except KeyError:
-                    # Likely missing the entity for this channel/data_key. It might also be
-                    # a KeyError raised by accessing data_value[0]["value"] (or IndexError)
-                    # but it will be raised again when constructing the entity.
-                    index = mn.IndexType.channel(channel)
-                    self.entity_defs.get(data_key, SensorParser)(
-                        channel,
+    def _namespace_registered(self, handler_registration):
+        super()._namespace_registered(handler_registration)
+        self.handler_ns.polling_request_payload.append(
+            self.handler_ns.polling_request_payload.pop()
+            | {mc.KEY_DATA: [*self.parsers.keys()]}
+        )
+
+    @override
+    def __call__(self, payload: "mt.sensor.LatestX", /):
+        self.ns_payload = payload
+        for key, value in payload[mc.KEY_DATA].items():
+            try:
+                self.parsers[key](value[0])
+            except KeyError:
+                if key in self.parsers:
+                    raise
+                self.parsers[key] = self.parent.on_parser_added(
+                    self.parser_defs.get(key, SensorParser)(
+                        self.index.value,  # FIXME: use a 'sibling' construction semantic
                         self.parent,
-                        entity_key=f"sensor_{data_key}",
-                        index=index,
-                        device_value=data_value[0]["value"],
+                        entity_key=f"sensor_{key}",
+                        index=self.index,
+                        device_value=value[0]["value"],
                     )
-                    for channel_payload in self.polling_request_payload:
-                        if channel_payload[mc.KEY_CHANNEL] == channel:
-                            channel_payload[mc.KEY_DATA].append(data_key)
-                            break
-                    else:
-                        self.polling_request_payload.append(
-                            {mc.KEY_CHANNEL: channel, mc.KEY_DATA: [data_key]}
-                        )
-                        self.polling_response_size += self.id.payload_item_size
+                )
+                """
+                # TODO: add the data key to out polling request
+                for channel_payload in self.polling_request_payload:
+                    if channel_payload[mc.KEY_CHANNEL] == channel:
+                        channel_payload[mc.KEY_DATA].append(data_key)
+                        break
+                """

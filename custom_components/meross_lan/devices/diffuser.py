@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, override
 
-from ..helpers.namespaces import EntityDefNamespaceHandler, mc
+from ..helpers.namespaces import NamespaceHandler, mc
 from ..light import (
     ATTR_BRIGHTNESS,
     ATTR_EFFECT,
@@ -14,6 +14,7 @@ from ..light import (
     native_to_rgb,
     rgb_to_native,
 )
+from ..merossclient.device.handler import MappingParserHandler
 from ..sensor import SensorParser
 from .spray import Spray
 
@@ -99,34 +100,27 @@ class DiffuserSpray(Spray):
     }
 
 
-class DiffuserSensor(EntityDefNamespaceHandler):
+class DiffuserSensor(MappingParserHandler):
 
-    if TYPE_CHECKING:
-        # Override entity_defs since these are rather 'entity_args'
-        # in order to minimize object creation (all the parsers are just SensorParsers)
-        init_entity_defs: ClassVar[Mapping[str, SensorParser.Args]]
-        entity_defs: Mapping[str, SensorParser.Args]
+    POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_SLOWSENSOR
 
-    POLLING_CONFIG_DEFAULT = EntityDefNamespaceHandler.POLLING_CONFIG_SLOWSENSOR
-
-    init_entity_defs = {
-        mc.KEY_HUMIDITY: SensorParser.HUMIDITY_ARGS,
-        mc.KEY_TEMPERATURE: SensorParser.TEMPERATURE_ARGS,
+    init_parser_defs = {
+        mc.KEY_HUMIDITY: SensorParser.ENTITY_DEF(**SensorParser.HUMIDITY_ARGS),
+        mc.KEY_TEMPERATURE: SensorParser.ENTITY_DEF(**SensorParser.TEMPERATURE_ARGS),
     }
 
     def _handle(self, message: "MerossMessage", /):
-        for key in self.entity_defs:
+        # We need to intercept here since this ns is not conforming to grammar rules (ns.key)
+        for key in self.parser_defs:
             try:
-                value = message.payload[key][mc.KEY_VALUE]
-                try:
-                    self.parsers[key].update_device_value(value)
-                except KeyError:
-                    self.parsers[key] = self.parent.add_entity(
-                        SensorParser(
-                            None,
-                            self.parent,
-                            **(self.entity_defs[key] | {"device_value": value}),
-                        )
-                    )
-            except KeyError:
-                continue
+                self.parsers[key](message.payload[key])
+            except KeyError as ke:
+                if (ke.args[0] != key) or (key in self.parsers):
+                    raise
+                self.parsers[key] = self.parent.on_parser_added(
+                    self.parser_defs[key](
+                        None,
+                        self.parent,
+                        device_value=message.payload[key][mc.KEY_VALUE],
+                    ),
+                )
