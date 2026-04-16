@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, override
 
-from ..helpers.namespaces import NamespaceHandler, mc
+from .. import const as mlc
 from ..light import (
     ATTR_BRIGHTNESS,
     ATTR_EFFECT,
@@ -15,6 +15,7 @@ from ..light import (
     rgb_to_native,
 )
 from ..merossclient.device.handler import MappingParserHandler
+from ..merossclient.protocol import const as mc
 from ..sensor import SensorParser
 from .spray import Spray
 
@@ -102,7 +103,7 @@ class DiffuserSpray(Spray):
 
 class DiffuserSensor(MappingParserHandler):
 
-    POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_SLOWSENSOR
+    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_SLOWSENSOR
 
     init_parser_defs = {
         mc.KEY_HUMIDITY: SensorParser.ENTITY_DEF(**SensorParser.HUMIDITY_ARGS),

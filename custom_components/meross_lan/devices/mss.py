@@ -6,7 +6,7 @@ from homeassistant.util import dt as dt_util
 
 from .. import const as mlc
 from ..helpers.entity import EntityNamespaceMixin
-from ..helpers.namespaces import NamespaceHandler
+from ..merossclient.device.handler import NamespaceHandler
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..sensor import EnumParser, SensorParser
 from ..switch import SwitchParser
@@ -44,6 +44,10 @@ class _ElectricitySensor(SensorParser):
         sensor_power: SensorParser
         # HA core entity attributes:
         native_value: int
+
+    # This is good for both when used as Electiricity and ElectricityX since
+    # ns registration will in both cases reach to this ;)
+    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_FASTSENSOR
 
     init_entity_key = "energy_estimate"
     ENTITY_DEFS = {
@@ -186,8 +190,6 @@ class _ElectricitySensor(SensorParser):
 
 
 class ElectricitySensor(_ElectricitySensor, EntityNamespaceMixin):
-
-    POLLING_CONFIG_DEFAULT = EntityNamespaceMixin.POLLING_CONFIG_FASTSENSOR
 
     # skip EntityNamespaceMixin async_added_to_hass and async_will_remove_from_hass since
     # we want to keep polling this ns even when _ElectricitySensor is disabled
@@ -646,7 +648,7 @@ class ConsumptionXSensor(SensorParser, EntityNamespaceMixin):
 
 class OverTempEnableSwitch(SwitchParser, EntityNamespaceMixin):
 
-    POLLING_CONFIG_DEFAULT = EntityNamespaceMixin.POLLING_CONFIG_CONFIGURATION
+    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
     init_entity_key = "config_overtemp_enable"
     init_key_value = SwitchParser.SimpleKeyValue(mc.KEY_ENABLE)
 
@@ -666,10 +668,3 @@ class OverTempEnableSwitch(SwitchParser, EntityNamespaceMixin):
             )
         except KeyError:
             pass
-
-
-NamespaceHandler.POLLING_CONFIG_MAP.update(
-    {
-        mn.Appliance_Control_ElectricityX: NamespaceHandler.POLLING_CONFIG_FASTSENSOR,
-    }
-)

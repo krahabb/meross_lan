@@ -31,7 +31,5 @@ class BinarySensorParser(mle.BinaryParser, BinarySensorEntity):
         class Args(BinarySensorEntity.Args, mle.BinaryParser.Args):
             pass
 
-    __slots__ = mle.BinaryParser._calc_slots()
-
 
 async_setup_entry = BinarySensorEntity.platform_setup_entry

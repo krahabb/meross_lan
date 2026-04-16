@@ -17,7 +17,7 @@ from ..merossclient import (
 )
 from ..merossclient.client import AbstractClient, Direction, Transport
 from ..merossclient.client.http import HttpClient
-from ..merossclient.device.handler import VoidHandler
+from ..merossclient.device import handler, parser
 from ..merossclient.exceptions import MerossError
 from ..merossclient.obfuscate import OBFUSCATE_DICT
 from ..merossclient.protocol import const as mc, namespaces as mn
@@ -27,7 +27,6 @@ from ..update import UpdateEntity
 
 # import core modules instead of symbols to ease patching in a single place
 from .manager import ConfigEntryManager
-from .namespaces import NamespaceHandler
 
 if TYPE_CHECKING:
     from asyncio import Task
@@ -56,6 +55,73 @@ if TYPE_CHECKING:
     from .entity import Entity, ParserEntity
     from .meross_profile import DeviceInfoType, LatestVersionType
     from .mqtt_profile import MQTTConnection, MQTTProfile
+
+
+class NamespaceHandler(handler.NamespaceHandler):
+
+    if TYPE_CHECKING:
+        """Configuration to be used for unknown/unmanaged namespaces."""
+        parent: Final[Device]  # type: ignore[override]
+        parser_class: type[ParserEntity] | None  # type: ignore[override]
+
+    def __init_subclass__(cls):
+        super().__init_subclass__()
+        # Since NamespaceHandler cannot be slotted itself because of mixin-ing with ParserEntity
+        # in EntityNamespaceMixin we try this trick to provide automatic slotting for all the subclasses
+        # which are not mixed with parsers and which don't define their own __slots__.
+        if not issubclass(cls, parser.NamespaceParser):
+            cls.__slots__ = cls._calc_slots()
+
+    @override
+    def _handle(self, message: MerossMessage, /):
+        device = self.parent
+        if device.create_diagnostic_entities:
+            # since we're parsing an unknown namespace, our euristic about
+            # the key_namespace might be wrong so we use another euristic
+            ns = self.id
+            if not self.polling_strategy:
+                self.polling_strategy = NamespaceHandler.async_poll_diagnostic
+            for _key, _payload in message.payload.items():
+                # since the ns_key might be often the same across different namespaces
+                # we add the last split of the namespace to the extracted payload key
+                if type(_payload) is dict:
+                    device.parse_undefined_dict(
+                        f"{ns.slug_end}_{_key}",
+                        _payload,
+                        self.index_type.index(_payload),
+                    )
+                elif type(_payload) is list:
+                    _key = f"{ns.slug_end}_{_key}"
+                    for __payload in _payload:
+                        # not having a "channel" in the list payloads is unexpected so far
+                        device.parse_undefined_dict(
+                            _key, __payload, self.index_type.index(__payload)
+                        )
+                else:
+                    # should we diagnostic scalar values in root payload ?
+                    pass
+
+        else:
+            super()._handle(message)
+
+    @override
+    def _parse(self, payload, /):
+        """Default ParserFunc automatically installed when parsing a message for which no indexed parser is registered.
+        The payload is typically an 'indexed' item payload scanned by handlers like _handle_channel_list or _handle_subid.
+        This is a fallback for unexpected channels/subdevices and is useful for logging purposes.
+        """
+        if self.parent.create_diagnostic_entities:
+            # since we're parsing an unknown namespace, our euristic about
+            # the key_namespace might be wrong so we use another euristic
+            if not self.polling_strategy:
+                self.polling_strategy = NamespaceHandler.async_poll_diagnostic
+            self.parent.parse_undefined_dict(
+                f"{self.id.slug_end}_{self.id.key}",
+                payload,
+                self.index_type.index(payload),
+            )
+        else:
+            super()._parse(payload)
 
 
 class BaseDevice(device.PhysicalDevice):
@@ -341,11 +407,11 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         ),
         mn.Appliance_GarageDoor_State: (".devices.garagedoor", "GarageDoor"),
         mn.Appliance_Mcu_Firmware: (
-            ".helpers.namespaces",
+            ".helpers.device",
             "NamespaceHandler",  # handler in Device._handle_XXX
         ),
         mn.Appliance_Mcu_Hp110_Firmware: (
-            ".helpers.namespaces",
+            ".helpers.device",
             "NamespaceHandler",  # handler in Device._handle_XXX
         ),
         mn.Appliance_RollerShutter_Position: (
@@ -916,23 +982,23 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                 "mqtt_active": self.mqtt_active,
             },
             "namespace_handlers": {
-                handler.id: {
-                    "last_rx_epoch": handler.last_rx_epoch,
-                    "last_poll_epoch": handler.last_poll_epoch,
-                    "next_poll_epoch": handler.next_poll_epoch,
+                ns_handler.id: {
+                    "last_rx_epoch": ns_handler.last_rx_epoch,
+                    "last_poll_epoch": ns_handler.last_poll_epoch,
+                    "next_poll_epoch": ns_handler.next_poll_epoch,
                     "polling_strategy": (
-                        handler.polling_strategy.__name__
-                        if handler.polling_strategy
+                        ns_handler.polling_strategy.__name__
+                        if ns_handler.polling_strategy
                         else None
                     ),
                     "lastpush": (
-                        OBFUSCATE_DICT(handler.last_rx_push)
-                        if (handler.last_rx_push and self.obfuscate)
-                        else handler.last_rx_push
+                        OBFUSCATE_DICT(ns_handler.last_rx_push)
+                        if (ns_handler.last_rx_push and self.obfuscate)
+                        else ns_handler.last_rx_push
                     ),
-                    "digest": handler.digest,
+                    "digest": ns_handler.digest,
                 }
-                for handler in self.ns_handlers.values()
+                for ns_handler in self.ns_handlers.values()
             },
             "device_info": (
                 OBFUSCATE_DICT(device_info)
@@ -1280,7 +1346,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             # more 'smart' since we can eventually add a grammar (mn.Namespace)
             # on the fly by inspecting the received message in case the ns is
             # not yet normalized.
-            handler = self.ns_handlers[message.namespace]  # type: ignore
+            ns_handler = self.ns_handlers[message.namespace]  # type: ignore
         except KeyError:
             # we don't have an handler in place and this is typically due to
             # PUSHES of unknown/unmanaged namespaces
@@ -1298,26 +1364,26 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             # here the namespace might be unknown to our definitions (mn.Namespace)
             # so we try, in case, to build a new one with good presets
             if namespace in self.NAMESPACE_IGNORE:
-                handler = VoidHandler(
+                ns_handler = handler.VoidHandler(
                     self.NAMESPACES[namespace],
                     self,
-                    config=NamespaceHandler.POLLING_CONFIG_DIAGNOSTIC,
+                    config=mlc.POLLING_CONFIG_DIAGNOSTIC,
                 )
             else:
-                handler = self._create_handler(
+                ns_handler = self._create_handler(
                     self.NAMESPACES.get(namespace)
                     or mn.Namespace.from_message(
                         namespace, method, message.payload, self.NAMESPACES
                     ),
-                    config=NamespaceHandler.POLLING_CONFIG_DIAGNOSTIC,
+                    config=mlc.POLLING_CONFIG_DIAGNOSTIC,
                 )
 
         if method == mc.METHOD_PUSH:
             # we're saving for diagnostic purposes so we have knowledge of
             # which data the device pushes asynchronously
-            handler.last_rx_push = message.payload
+            ns_handler.last_rx_push = message.payload
 
-        handler.handle_response(message)
+        ns_handler.handle_response(message)
 
     def _handle_Appliance_Mcu_Firmware(self, message: MerossMessage, /):
         self.descriptor.mcu = message.payload[mc.KEY_FIRMWARE]

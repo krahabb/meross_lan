@@ -3,12 +3,13 @@ from typing import TYPE_CHECKING, override
 from homeassistant.helpers.entity_registry import RegistryEntryDisabler
 from homeassistant.util.dt import now
 
+from .. import const as mlc
 from ..binary_sensor import BinarySensorEntity
 from ..cover import Cover
 from ..helpers import clamp
-from ..helpers.namespaces import NamespaceHandler, mc, mn
 from ..merossclient.client import Transport
 from ..merossclient.device.handler import MappingParserHandler
+from ..merossclient.protocol import const as mc, namespaces as mn
 from ..number import EmulatedNumber, NumberParser
 from ..switch import SwitchParser
 
@@ -427,6 +428,7 @@ class GarageDoor(Cover):
         },
         """
         # TODO: swap in a Dispatcher with the collection of entities.
+        # or use a MappingParser so we get rid of 'entities' access
         entities = self.parent.entities
         entity_id_prefix = f"{self.index.value}_config_"
         for key, value in payload.items():
@@ -512,7 +514,7 @@ class GarageDoor(Cover):
     @classmethod
     @override
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        handler = NamespaceHandler(ns, device)
+        handler = device._create_handler(ns)
         descriptor = device.descriptor
         if descriptor.type.startswith(mc.TYPE_MSG200) and (
             descriptor.firmware_version <= (4, 2, 1)
@@ -539,7 +541,7 @@ class GarageDoor(Cover):
 
 class GarageDoorConfigNamespaceHandler(MappingParserHandler):
 
-    POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_CONFIGURATION
+    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
 
     init_parser_defs = {
         key: GarageDoor.ENTITY_DEFS[key]
@@ -570,8 +572,8 @@ class GarageDoorConfigNamespaceHandler(MappingParserHandler):
         self.handler = super()._handle
 
 
-NamespaceHandler.POLLING_CONFIG_MAP.update(
+MappingParserHandler.POLLING_CONFIG_MAP.update(
     {
-        mn.Appliance_GarageDoor_MultipleConfig: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+        mn.Appliance_GarageDoor_MultipleConfig: mlc.POLLING_CONFIG_CONFIGURATION,
     }
 )

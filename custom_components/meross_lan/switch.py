@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.components import switch
 
-from .const import hac
+from . import const as mlc
 from .helpers import entity as mle
 from .merossclient import extract_dict_payloads
 from .merossclient.protocol import const as mc, namespaces as mn
@@ -41,7 +41,7 @@ class EmulatedSwitch(SwitchEntity):
     async def async_added_to_hass(self):
         with self.exception_warning("restoring previous state"):
             if last_state := await self.get_last_state_available():
-                self.is_on = last_state.state == hac.STATE_ON
+                self.is_on = last_state.state == mlc.hac.STATE_ON
         await SwitchEntity.async_added_to_hass(self)
 
     @override
@@ -59,11 +59,12 @@ class SwitchParser(mle.BinaryParser, SwitchEntity):
     It just need to be configured and linked to a proper ns/channel/key_value in order to work.
     """
 
-    __slots__ = mle.BinaryParser._calc_slots()
+    pass
 
 
 class PhysicalLockSwitch(SwitchParser):
 
+    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
     init_entity_key = mc.KEY_LOCK
 
 

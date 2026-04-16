@@ -1,9 +1,9 @@
 from typing import TYPE_CHECKING, override
 
+from .. import const as mlc
 from ..binary_sensor import BinarySensorEntity
-from ..const import hac
 from ..helpers.entity import ValueParser
-from ..helpers.namespaces import mc, mn
+from ..merossclient.protocol import const as mc, namespaces as mn
 from ..number import NumberParser
 from ..select import SelectParser
 from ..sensor import SensorParser
@@ -105,7 +105,7 @@ ENTITY_DEFS = (
         device_scale=1000,
         name=mc.KEY_DISTANCE,
         device_class=NumberParser.DeviceClass.DISTANCE,
-        native_unit_of_measurement=hac.UnitOfLength.METERS,
+        native_unit_of_measurement=mlc.hac.UnitOfLength.METERS,
         native_max_value=12,
         native_min_value=0.1,
         native_step=0.1,
@@ -145,7 +145,9 @@ def namespace_init_presence_config(ns: mn.Namespace, device: "Device", /):
         device_info=device.get_device_entry_info(0),
     )
 
-    device._create_handler(ns).register_parsers(
+    device._create_handler(
+        ns, config=mlc.POLLING_CONFIG_CONFIGURATION
+    ).register_parsers(
         *(entity_def(sensor_presence, ns=ns) for entity_def in ENTITY_DEFS)
     )
 
@@ -194,7 +196,7 @@ class PresenceSensor(SensorParser):
             entity_key=f"{self.entity_key}_distance",
             device_scale=1000,
             device_class=SensorParser.DeviceClass.DISTANCE,
-            native_unit_of_measurement=hac.UnitOfLength.METERS,
+            native_unit_of_measurement=mlc.hac.UnitOfLength.METERS,
             suggested_display_precision=2,
             name="Presence distance",
         )

@@ -615,7 +615,7 @@ class EffectLight(Light):
         self.handler_light_effect = device._create_handler(
             mn.Appliance_Control_Light_Effect,
             handler=self._handle_Appliance_Control_Light_Effect,
-            config=mle.NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+            config=mlc.POLLING_CONFIG_CONFIGURATION,
         )
         # This is a 'new' (2025-06-17) key appearing in msl320cpr digest.
         # The key itself is 'light.entity' and carries the effect list
@@ -759,7 +759,7 @@ class DNDLight(mle.BinaryParser, mle.EntityNamespaceMixin, light.LightEntity):
     through a light feature (presence light or so)
     """
 
-    POLLING_CONFIG_DEFAULT = mle.EntityNamespaceMixin.POLLING_CONFIG_CONFIGURATION
+    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
     PLATFORM = light.DOMAIN
     init_entity_key = "dnd"
     init_key_value = mle.BinaryParser.SimpleKeyValue(mc.KEY_MODE)

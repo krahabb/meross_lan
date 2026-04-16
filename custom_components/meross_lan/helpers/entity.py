@@ -16,10 +16,10 @@ except ImportError:
 from homeassistant.helpers import entity
 from homeassistant.helpers.entity_platform import async_get_current_platform
 
-from ..merossclient.device import parser
+from .. import const as mlc
+from ..merossclient.device import handler, parser
 from ..merossclient.logging import Loggable
 from ..merossclient.protocol import const as mc, namespaces as mn
-from .namespaces import NamespaceHandler
 
 if TYPE_CHECKING:
     from typing import (
@@ -448,7 +448,7 @@ class ParserEntity(parser.NamespaceParser, Entity):
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
         device_info: Final[DeviceInfo]  # type: ignore[override]
-        handler_ns: NamespaceHandler  # override
+        handler_ns: handler.NamespaceHandler  # override
 
         _parse_togglex: Callable[[JsonDict], Any]
 
@@ -623,6 +623,10 @@ class BinaryParser(parser.BooleanParser, ValueParser, BinaryEntity):
         @classmethod
         def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
+    def __init_subclass__(cls):
+        super().__init_subclass__()
+        cls.__slots__ = cls._calc_slots()
+
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         # This is due for entities which are created after entry setup when device is already loaded
         # and we want to flush the initial state during HA entry adding (which happens in Entity constructor)
@@ -664,7 +668,7 @@ class ToggleXParser(BinaryEntity, ParserEntity):
     if TYPE_CHECKING:
 
         parent: Final[Device]  # type: ignore[override]
-        handler_togglex: Final[NamespaceHandler | None]
+        handler_togglex: Final[handler.NamespaceHandler | None]
 
         type InitArgs = ParserEntity.InitArgs
 
@@ -684,7 +688,7 @@ class ToggleXParser(BinaryEntity, ParserEntity):
             self.flush_state()
 
 
-class EntityNamespaceMixin(ParserEntity, NamespaceHandler):
+class EntityNamespaceMixin(ParserEntity, handler.ParserHandler):
     """
     Special 'polling enabler/disabler' mixin used with entities which are
     'single instance' for a namespace handler and so they'll disable polling
@@ -724,11 +728,3 @@ class EntityNamespaceMixin(ParserEntity, NamespaceHandler):
     async def async_will_remove_from_hass(self):
         self.polling_strategy = None
         await ParserEntity.async_will_remove_from_hass(self)
-
-    @override
-    def _handle(self, message: "MerossMessage", /):
-        self(message.payload[self.id.key])
-
-    @override
-    def parse_digest(self, digest: "JsonDict", /):
-        self(digest)

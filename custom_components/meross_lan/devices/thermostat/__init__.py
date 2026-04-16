@@ -1,8 +1,10 @@
 from typing import TYPE_CHECKING, override
 
+from ... import const as mlc
 from ...binary_sensor import BinarySensorParser
 from ...climate import MtsClimate
-from ...helpers.namespaces import NamespaceHandler, mc, mlc, mn
+from ...merossclient.device.handler import NamespaceHandler
+from ...merossclient.protocol import const as mc, namespaces as mn
 from ...merossclient.protocol.namespaces import thermostat as mn_t
 from ...number import NumberParser
 from ...select import SelectParser
@@ -33,8 +35,6 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
     nevertheless live in its own module (or in 'misc' maybe)
     """
 
-    POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_CONFIGURATION
-
     ENTITY_DEFS = {
         key: ScreenBrightnessNumber.ENTITY_DEF(
             entity_key=f"screenbrightness_{key}",
@@ -45,7 +45,9 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
     }
 
     def __init__(self, ns: "mn.Namespace", device: "Device", /):
-        NamespaceHandler.__init__(self, ns, device)
+        NamespaceHandler.__init__(
+            self, ns, device, config=mlc.POLLING_CONFIG_CONFIGURATION
+        )
         index = mn.IndexType.channel(0)
         device_info = device.get_device_entry_info(0)
         self.register_parsers(
@@ -326,15 +328,15 @@ class MtsThermostatClimate(MtsClimate):
 
 NamespaceHandler.POLLING_CONFIG_MAP.update(
     {
-        mn.Appliance_Control_TempUnit: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
-        mn_t.Appliance_Control_Thermostat_Calibration: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+        mn.Appliance_Control_TempUnit: mlc.POLLING_CONFIG_CONFIGURATION,
+        mn_t.Appliance_Control_Thermostat_Calibration: mlc.POLLING_CONFIG_CONFIGURATION,
         mn_t.Appliance_Control_Thermostat_CtlRange: NamespaceHandler.POLLING_CONFIG_ONCE,
-        mn_t.Appliance_Control_Thermostat_DeadZone: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
-        mn_t.Appliance_Control_Thermostat_Frost: NamespaceHandler.POLLING_CONFIG_SLOWSENSOR,
-        mn_t.Appliance_Control_Thermostat_HoldAction: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
-        mn_t.Appliance_Control_Thermostat_Overheat: NamespaceHandler.POLLING_CONFIG_SLOWSENSOR,
-        mn_t.Appliance_Control_Thermostat_Schedule: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
-        mn_t.Appliance_Control_Thermostat_ScheduleB: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
-        mn_t.Appliance_Control_Thermostat_Sensor: NamespaceHandler.POLLING_CONFIG_SLOWSENSOR,
+        mn_t.Appliance_Control_Thermostat_DeadZone: mlc.POLLING_CONFIG_CONFIGURATION,
+        mn_t.Appliance_Control_Thermostat_Frost: mlc.POLLING_CONFIG_SLOWSENSOR,
+        mn_t.Appliance_Control_Thermostat_HoldAction: mlc.POLLING_CONFIG_CONFIGURATION,
+        mn_t.Appliance_Control_Thermostat_Overheat: mlc.POLLING_CONFIG_SLOWSENSOR,
+        mn_t.Appliance_Control_Thermostat_Schedule: mlc.POLLING_CONFIG_CONFIGURATION,
+        mn_t.Appliance_Control_Thermostat_ScheduleB: mlc.POLLING_CONFIG_CONFIGURATION,
+        mn_t.Appliance_Control_Thermostat_Sensor: mlc.POLLING_CONFIG_SLOWSENSOR,
     }
 )

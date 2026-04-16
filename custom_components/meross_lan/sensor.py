@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, override
 from homeassistant import const as hac
 from homeassistant.components import sensor
 
+from . import const as mlc
 from .helpers import entity as mle
 from .merossclient.client import Transport
 from .merossclient.protocol import const as mc
@@ -340,7 +341,7 @@ class ProtocolSensor(EnumSensorEntity):
 
 class SignalStrengthSensor(SensorParser, mle.EntityNamespaceMixin):
 
-    POLLING_CONFIG_DEFAULT = mle.EntityNamespaceMixin.POLLING_CONFIG_SLOWSENSOR
+    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_SLOWSENSOR
 
     init_entity_key = "signal_strength"
     init_key_value = SensorParser.SimpleKeyValue(mc.KEY_SIGNAL)
@@ -351,6 +352,8 @@ class SignalStrengthSensor(SensorParser, mle.EntityNamespaceMixin):
 
 
 class FilterMaintenanceSensor(SensorParser):
+
+    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_SLOWSENSOR
 
     init_entity_key = mc.KEY_FILTER
     init_key_value = SensorParser.SimpleKeyValue(mc.KEY_LIFE)

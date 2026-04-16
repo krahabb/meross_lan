@@ -5,7 +5,8 @@ from typing import TYPE_CHECKING, Final, NotRequired, TypedDict
 from homeassistant import const as hac
 
 from .merossclient import cloudapi, logging
-from .merossclient.protocol import const as mc
+from .merossclient.device.handler import NamespaceHandler
+from .merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
     from typing import Any, Mapping
@@ -205,3 +206,24 @@ PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT = 86400  # 1 day
 """timeout for querying cloud api deviceInfo endpoint"""
 PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT = 30
 """used to delay updated profile data to storage"""
+
+POLLING_CONFIG_FASTSENSOR = (0, 180, NamespaceHandler.async_poll_smart)
+POLLING_CONFIG_SLOWSENSOR = (300, 600, NamespaceHandler.async_poll_smart)
+POLLING_CONFIG_CONFIGURATION = (
+    PARAM_CONFIG_UPDATE_PERIOD,
+    PARAM_CLOUD_UPDATE_PERIOD,
+    NamespaceHandler.async_poll_smart,
+)
+"""Common polling configuration for namespaces carrying configuration parameters.
+These are polled on a longer period since we don't expect them to change very often."""
+
+POLLING_CONFIG_DIAGNOSTIC = (300, PARAM_CLOUD_UPDATE_PERIOD, None)
+NamespaceHandler.POLLING_CONFIG_MAP.update(
+    {
+        mn.Appliance_Config_Alarm: POLLING_CONFIG_CONFIGURATION,
+        mn.Appliance_Config_DeviceCfg: POLLING_CONFIG_CONFIGURATION,
+        mn.Appliance_Config_Sensor_Association: POLLING_CONFIG_CONFIGURATION,
+        mn.Appliance_Mcu_Firmware: NamespaceHandler.POLLING_CONFIG_ONCE,
+        mn.Appliance_Mcu_Hp110_Firmware: NamespaceHandler.POLLING_CONFIG_ONCE,
+    }
+)

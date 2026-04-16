@@ -53,6 +53,10 @@ class NamespaceParser(logging.Loggable):
                 parser(payload)
 
     if TYPE_CHECKING:
+
+        POLLING_CONFIG_DEFAULT: ClassVar[NamespaceHandler.PollingConfigType]
+        """Optional class attribute used when this class is registered as 'parser_class' in a NamespaceHandler or
+        when mixed-in with NamespaceHandler like in ParserHandler specializations."""
         parent: Final[PhysicalDevice]  # type: ignore[override]
         init_ns: ClassVar[mn.Namespace]
         """Class default used to initialize the 'ns' instance attribute."""
@@ -336,7 +340,7 @@ class MappingParser(NamespaceParser):
     )
     __SLOTS__ = ("parsers",)
 
-    def __init__(self, *args, **kwargs: Unpack[Args]):
+    def __init__(self, *args, **kwargs: "Unpack[Args]"):
         # TODO: define a mechanism for 'auto-initializing' (empty) dicts
         # so we can skip this constructor. This would be beneficial to extra_state_attributes
         self.parsers = kwargs.pop("parsers", {})

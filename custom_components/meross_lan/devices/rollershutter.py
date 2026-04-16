@@ -2,9 +2,11 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.exceptions import InvalidStateError
 
+from .. import const as mlc
 from ..cover import Cover, cover
-from ..helpers.namespaces import NamespaceHandler, mc, mn
 from ..merossclient.client import Transport
+from ..merossclient.device.handler import NamespaceHandler
+from ..merossclient.protocol import const as mc, namespaces as mn
 from ..number import NumberParser
 from ..switch import SwitchParser
 
@@ -364,7 +366,7 @@ class RollerShutterAdjustSwitch(SwitchParser):
 
 NamespaceHandler.POLLING_CONFIG_MAP.update(
     {
-        mn.Appliance_RollerShutter_Adjust: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
-        mn.Appliance_RollerShutter_Config: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+        mn.Appliance_RollerShutter_Adjust: mlc.POLLING_CONFIG_CONFIGURATION,
+        mn.Appliance_RollerShutter_Config: mlc.POLLING_CONFIG_CONFIGURATION,
     }
 )

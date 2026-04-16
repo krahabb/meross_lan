@@ -6,6 +6,7 @@ a dedicated unit for each of them would increase the number of small modules.
 
 from typing import TYPE_CHECKING, override
 
+from .. import const as mlc
 from ..merossclient.device.parser import MappingParser
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..merossclient.protocol.namespaces import thermostat as mn_t
@@ -50,6 +51,8 @@ class SensorLatestParser(MappingParser):
         parent: Final[Device]  # type: ignore[override]
         init_parser_defs: ClassVar[Mapping[str, type[SensorParser]]]
         parser_defs: Mapping[str, type[SensorParser]]
+
+    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_FASTSENSOR
 
     init_parser_defs = {
         mc.KEY_HUMI: Mts200HumiSensor.ENTITY_DEF(
@@ -96,6 +99,7 @@ class SensorLatestXParser(MappingParser):
 
         def __init__(self, *args, **kwargs: Unpack[Args]): ...  # pragma: no cover
 
+    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_FASTSENSOR
     init_ns = mn.Appliance_Control_Sensor_LatestX
 
     # many of these defs are guesses and the actual composition

@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.components import siren
 
+from . import const as mlc
 from .helpers.entity import BinaryParser
 from .merossclient.protocol import const as mc, namespaces as mn
 from .number import NumberParser
@@ -54,6 +55,7 @@ class Siren(BinaryParser, siren.SirenEntity):
             pass
 
     PLATFORM = siren.DOMAIN
+    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
     init_key_value = BinaryParser.NestedKeyValue("event", "security", "value")
     init_entity_key = f"{mn.Appliance_Control_Alarm.slug}__{init_key_value}"
     init_value_on = 1
@@ -70,8 +72,6 @@ class Siren(BinaryParser, siren.SirenEntity):
         siren.ATTR_TONE: "song",
         siren.ATTR_VOLUME_LEVEL: "volume",
     }
-
-    __slots__ = BinaryParser._calc_slots()
 
     def __init__(self, id, device: "Device", /, **kwargs: "Unpack[Args]"):
         BinaryParser.__init__(self, id, device, **kwargs)

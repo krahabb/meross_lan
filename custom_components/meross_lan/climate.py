@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from homeassistant.core import Event, State
     from homeassistant.helpers.event import EventStateChangedData
 
-    from .helpers.namespaces import mn
+    from .merossclient.protocol import namespaces as mn
 
 
 class MtsClimate(ParserEntity, climate.ClimateEntity):

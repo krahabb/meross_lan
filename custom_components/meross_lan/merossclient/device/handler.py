@@ -123,15 +123,6 @@ class NamespaceHandler(logging.Loggable):
         else:
             self.index_type = id.index_type
 
-        try:
-            self.polling_period, self.polling_period_cloud, self.polling_strategy = (
-                kwargs.pop("config")
-            )
-        except KeyError:
-            self.polling_period, self.polling_period_cloud, self.polling_strategy = (
-                self.POLLING_CONFIG_MAP.get(id, self.POLLING_CONFIG_DEFAULT)
-            )
-
         if id.key_digest:
             try:
                 # probe existence of digest for this namespace to speed up later checks when parsing messages
@@ -166,6 +157,18 @@ class NamespaceHandler(logging.Loggable):
                         self.handler = getattr(
                             parent, f"_handle_{id.replace('.', '_')}", self._handle
                         )
+            try:
+                (
+                    self.polling_period,
+                    self.polling_period_cloud,
+                    self.polling_strategy,
+                ) = kwargs.pop("config")
+            except KeyError:
+                (
+                    self.polling_period,
+                    self.polling_period_cloud,
+                    self.polling_strategy,
+                ) = self.POLLING_CONFIG_MAP.get(id, self.POLLING_CONFIG_DEFAULT)
         else:
             assert (
                 "handler" not in kwargs
@@ -188,6 +191,25 @@ class NamespaceHandler(logging.Loggable):
                 parser._namespace_registered((self, index))
                 # polling_request_payload will be eventually setup
                 # by polling_request_configure later on
+            try:
+                (
+                    self.polling_period,
+                    self.polling_period_cloud,
+                    self.polling_strategy,
+                ) = kwargs.pop("config")
+            except KeyError:
+                try:
+                    (
+                        self.polling_period,
+                        self.polling_period_cloud,
+                        self.polling_strategy,
+                    ) = parser_class.POLLING_CONFIG_DEFAULT
+                except AttributeError:
+                    (
+                        self.polling_period,
+                        self.polling_period_cloud,
+                        self.polling_strategy,
+                    ) = self.POLLING_CONFIG_MAP.get(id, self.POLLING_CONFIG_DEFAULT)
             self.polling_response_size = (
                 NamespaceHandler.HEADER_AVG_SIZE
                 + len(self.parsers) * id.payload_item_size

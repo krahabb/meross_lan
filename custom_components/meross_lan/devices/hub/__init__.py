@@ -4,13 +4,13 @@ from typing import TYPE_CHECKING, override
 from ... import const as mlc
 from ...button import Button
 from ...helpers import device as mld, entity as mle
-from ...helpers.namespaces import NamespaceHandler
 from ...merossclient import (
     async_import_module,
     device,
     get_productname,
     get_subdevice_key_digest,
 )
+from ...merossclient.device.handler import NamespaceHandler
 from ...merossclient.protocol import const as mc, namespaces as mn
 from ...merossclient.protocol.namespaces import hub as mn_h
 from ...sensor import SensorParser
@@ -656,9 +656,9 @@ NamespaceHandler.POLLING_CONFIG_MAP.update(
         mn_h.Appliance_Hub_Exception: NamespaceHandler.POLLING_CONFIG_NONE,
         mn_h.Appliance_Hub_Online: NamespaceHandler.POLLING_CONFIG_NONE,
         mn_h.Appliance_Hub_ToggleX: NamespaceHandler.POLLING_CONFIG_NONE,
-        mn_h.Appliance_Hub_SubDevice_Beep: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+        mn_h.Appliance_Hub_SubDevice_Beep: mlc.POLLING_CONFIG_CONFIGURATION,
         mn_h.Appliance_Hub_SubDevice_Version: NamespaceHandler.POLLING_CONFIG_ONCE,
-        mn_h.Appliance_Hub_Mts100_Adjust: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+        mn_h.Appliance_Hub_Mts100_Adjust: mlc.POLLING_CONFIG_CONFIGURATION,
         mn_h.Appliance_Hub_Mts100_All: (
             0,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
@@ -671,7 +671,7 @@ NamespaceHandler.POLLING_CONFIG_MAP.update(
             NamespaceHandler.async_poll_chunked,
         ),
         mn_h.Appliance_Hub_Mts100_Temperature: NamespaceHandler.POLLING_CONFIG_NONE,
-        mn_h.Appliance_Hub_Sensor_Adjust: NamespaceHandler.POLLING_CONFIG_CONFIGURATION,
+        mn_h.Appliance_Hub_Sensor_Adjust: mlc.POLLING_CONFIG_CONFIGURATION,
         mn_h.Appliance_Hub_Sensor_All: (
             0,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
