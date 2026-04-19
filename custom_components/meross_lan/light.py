@@ -16,6 +16,7 @@ import homeassistant.util.color as color_util
 
 from . import const as mlc
 from .helpers import clamp, entity as mle
+from .merossclient.device.handler import NamespaceHandler
 from .merossclient.protocol import const as mc, namespaces as mn
 from .merossclient.protocol.message import MerossMessage
 
@@ -575,7 +576,7 @@ class Light(LightBase):
     @classmethod
     @override
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        handler = device._create_handler(ns)
+        handler = NamespaceHandler(ns, device)
         descriptor = device.descriptor
         channel = ns.get_digest(descriptor.digest)[mc.KEY_CHANNEL]
         kwargs = {
@@ -612,8 +613,9 @@ class EffectLight(Light):
     )
 
     def __init__(self, id, device: "Device", /, **kwargs: "Unpack[Light.Args]"):
-        self.handler_light_effect = device._create_handler(
+        self.handler_light_effect = NamespaceHandler(
             mn.Appliance_Control_Light_Effect,
+            device,
             handler=self._handle_Appliance_Control_Light_Effect,
             config=mlc.POLLING_CONFIG_CONFIGURATION,
         )

@@ -17,7 +17,7 @@ from homeassistant.helpers import entity
 from homeassistant.helpers.entity_platform import async_get_current_platform
 
 from .. import const as mlc
-from ..merossclient.device import handler, parser
+from ..merossclient.device import handler
 from ..merossclient.logging import Loggable
 from ..merossclient.protocol import const as mc, namespaces as mn
 
@@ -41,8 +41,7 @@ if TYPE_CHECKING:
     from homeassistant.helpers.device_registry import DeviceInfo
     from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-    from ..merossclient.protocol.message import MerossMessage
-    from ..merossclient.protocol.types import JsonDict, JsonList
+    from ..merossclient.protocol.types import JsonDict
     from .device import Device
     from .manager import ConfigEntryManager
 
@@ -148,7 +147,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
     )
 
     @overload
-    def __init__(self, sibling: Sibling, /, **kwargs: "Unpack[Args]"): ...
+    def __init__(self, sibling: "Sibling", /, **kwargs: "Unpack[Args]"): ...
 
     @overload
     def __init__(
@@ -440,7 +439,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         return Entity.EntityDef(cls, **kwargs)  # type: ignore[return-value]
 
 
-class ParserEntity(parser.NamespaceParser, Entity):
+class ParserEntity(handler.NamespaceParser, Entity):
     """Base class for entities directly linked to a device and not to a namespace.
     This is actually not used that much since most of the entities are linked to namespaces but it can be useful
     for some 'general' entities like 'DeviceInfo' or so."""
@@ -455,7 +454,7 @@ class ParserEntity(parser.NamespaceParser, Entity):
         type Sibling = Entity.Sibling
         type InitArgs = tuple[Sibling | Any, *tuple[Device, ...]]
 
-        class Args(Entity.Args, parser.NamespaceParser.Args):
+        class Args(Entity.Args, handler.NamespaceParser.Args):
             pass
 
         def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
@@ -463,7 +462,7 @@ class ParserEntity(parser.NamespaceParser, Entity):
         @classmethod
         def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
-    class SimpleKeyValue(parser.ValueParser.SimpleKeyValue):
+    class SimpleKeyValue(handler.ValueParser.SimpleKeyValue):
         pass
 
     @override
@@ -478,18 +477,18 @@ class ParserEntity(parser.NamespaceParser, Entity):
         self.flush_state()
 
 
-class ValueParser(parser.ValueParser, ParserEntity):
+class ValueParser(handler.ValueParser, ParserEntity):
     """Specialization for 'simple' parser entities where the HA entity state is a function
     of a single data point in the json ns payload. This provides a common implementation
-    for setting the value (using parser.ValueParser.async_request_value) and for parsing the
-    value from the payload (using parser.ValueParser.update_device_value).
+    for setting the value (using handler.ValueParser.async_request_value) and for parsing the
+    value from the payload (using handler.ValueParser.update_device_value).
     Examples of such entities are sensors/numbers, binary_sensors/switches."""
 
     if TYPE_CHECKING:
 
         type InitArgs = ParserEntity.InitArgs
 
-        class Args(ParserEntity.Args, parser.ValueParser.Args):
+        class Args(ParserEntity.Args, handler.ValueParser.Args):
             pass
 
         def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
@@ -610,14 +609,14 @@ class BinaryEntity(Entity):
             return True
 
 
-class BinaryParser(parser.BooleanParser, ValueParser, BinaryEntity):
+class BinaryParser(handler.BooleanParser, ValueParser, BinaryEntity):
     """Base parsing class for Switches and BinarySensors linked to a namespace."""
 
     if TYPE_CHECKING:
 
         type InitArgs = ValueParser.InitArgs
 
-        class Args(parser.BooleanParser.Args, ValueParser.Args, BinaryEntity.Args):
+        class Args(handler.BooleanParser.Args, ValueParser.Args, BinaryEntity.Args):
             pass
 
         @classmethod

@@ -191,7 +191,7 @@ class ms100(SensorSubDevice):
         self.parent.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
             self,
             *(
-                self.on_parser_added(
+                self.parent.on_parser_added(
                     entity_class(
                         self, device_value=entity_class.init_key_value[payload]
                     )

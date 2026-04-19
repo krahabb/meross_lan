@@ -1,15 +1,9 @@
 from bisect import insort_right
-from typing import TYPE_CHECKING, override
+from functools import cached_property
+from typing import TYPE_CHECKING, final, override
 
 from .. import extract_dict_payloads, logging, merge_dicts
 from ..protocol import const as mc, namespaces as mn
-from ..protocol.message import MerossMessage
-from .parser import MappingParser, NamespaceParser
-
-KEY_CHANNEL = mc.KEY_CHANNEL
-KEY_ID = mc.KEY_ID
-KEY_SUBID = mc.KEY_SUBID
-
 
 if TYPE_CHECKING:
     from typing import (
@@ -19,12 +13,31 @@ if TYPE_CHECKING:
         Coroutine,
         Final,
         Iterable,
+        Mapping,
         NotRequired,
         Unpack,
     )
 
     from . import Device
-    from ..protocol import types as mt
+    from ..protocol.message import MerossMessage
+    from ..protocol.types import (
+        JsonArray,
+        JsonDict,
+        JsonList,
+        JsonMapping,
+        MerossPayloadType,
+        MerossRequestType,
+    )
+
+    type HandlerFunc = Callable[[MerossMessage], None]
+    type ParserFunc = Callable[[JsonMapping], None]
+    # need to use Any because of covariance issues with NamespaceHandler
+    type PollingStrategyFunc = Callable[[Any], Coroutine]
+    type PollingConfigType = tuple[int, int, PollingStrategyFunc | None]
+
+KEY_CHANNEL = mc.KEY_CHANNEL
+KEY_ID = mc.KEY_ID
+KEY_SUBID = mc.KEY_SUBID
 
 
 class NamespaceHandler(logging.Loggable):
@@ -41,13 +54,9 @@ class NamespaceHandler(logging.Loggable):
     """
 
     if TYPE_CHECKING:
-        type HandlerFunc = Callable[[MerossMessage], None]
-        type ParserFunc = Callable[[mt.JsonMapping], None]
-        # need to use Any because of covariance issues with NamespaceHandler
-        type PollingStrategyFunc = Callable[[Any], Coroutine]
-        type PollingConfigType = tuple[int, int, PollingStrategyFunc | None]
         """PollingConfigType is a tuple of (polling_period, polling_period_cloud, polling_strategy).
-        This is used to configure the handler polling policy setting polling periods and strategy processor."""
+        This is used to configure the handler polling policy setting polling periods and strategy processor.
+        """
 
         HEADER_AVG_SIZE: Final[int]
         """(rough) estimate of the header part of any response"""
@@ -69,17 +78,17 @@ class NamespaceHandler(logging.Loggable):
         handler: HandlerFunc
         parsers: Final[dict[mn.IndexValue, ParserFunc | NamespaceParser]]
         parser_class: type[NamespaceParser] | None
-        digest: mt.JsonMapping | mt.JsonArray | None
+        digest: JsonMapping | JsonArray | None
 
         polling_strategy: PollingStrategyFunc | None
-        polling_request: mt.MerossRequestType
-        polling_request_payload: mt.JsonList  # on demand instance
+        polling_request: MerossRequestType
+        polling_request_payload: JsonList  # on demand instance
 
-        last_rx_push: mt.JsonMapping | None
+        last_rx_push: JsonMapping | None
 
         class Args(logging.Loggable.Args):
-            handler: NotRequired["NamespaceHandler.HandlerFunc"]
-            config: NotRequired["NamespaceHandler.PollingConfigType"]
+            handler: NotRequired[HandlerFunc]
+            config: NotRequired[PollingConfigType]
             parser_class: NotRequired[type[NamespaceParser]]
             channels: NotRequired[Iterable[int]]
 
@@ -235,11 +244,7 @@ class NamespaceHandler(logging.Loggable):
             self.log(self.DEBUG, "Cleaning up dangling parser for index %s", index)
             del self.parsers[index]
 
-    def register_parser(
-        self,
-        parser: NamespaceParser,
-        /,
-    ):
+    def register_parser(self, parser: "NamespaceParser", /):
         # TODO: add an index to the call to make it more flexible
         """Installs a dedicated parser for the given channel payload.
         Calling this multiple times for the same channel is prohibited
@@ -258,7 +263,7 @@ class NamespaceHandler(logging.Loggable):
         self.polling_request_add_index(index)
         parser._namespace_registered((self, index))
 
-    def register_parsers(self, *parsers: NamespaceParser):
+    def register_parsers(self, *parsers: "NamespaceParser"):
         """Registers a whole set of parsers at once for the same channel payload.
         This will automatically install a dispatcher. This feature is useful to avoid having
         to define a dedicated parser class just to dispatch data to multiple entities.
@@ -275,7 +280,7 @@ class NamespaceHandler(logging.Loggable):
             parser._namespace_registered(handler_registration)
 
     def swap_parsers(
-        self, old: NamespaceParser, new: NamespaceParser, *extra: NamespaceParser
+        self, old: "NamespaceParser", new: "NamespaceParser", *extra: "NamespaceParser"
     ):
         index = old.index
         assert index is new.index, "index mismatch"
@@ -296,7 +301,7 @@ class NamespaceHandler(logging.Loggable):
             self.parsers[index] = getattr(new, f"_parse_{self.id.slug_end}", new)
             new._namespace_registered(handler_registration)
 
-    def handle_response(self, response: MerossMessage, /):
+    def handle_response(self, response: "MerossMessage", /):
         """Entry point for handling a received message for this namespace.
         This is invoked by Device whenever a message for this ns is received.
         This method acts as a wrapper for the actual handler to catch and
@@ -316,7 +321,7 @@ class NamespaceHandler(logging.Loggable):
                 _payload=response.payload,
             )
 
-    def parse_digest(self, digest: "mt.JsonMapping | mt.JsonArray", /):
+    def parse_digest(self, digest: "JsonMapping | JsonArray", /):
         """Used when parsing digest(s) in Appliance.System.All."""
         for payload in extract_dict_payloads(digest):
             try:
@@ -396,7 +401,7 @@ class NamespaceHandler(logging.Loggable):
                 except Exception as e:
                     self.log_parser_exception(e, payload)
 
-    def _handle_channel_list(self, message: MerossMessage, /):
+    def _handle_channel_list(self, message: "MerossMessage", /):
         """
         This handler si optimized for list payloads:
         "payload": { "{self.id.key}": [{"channel":...., ...}] }
@@ -420,7 +425,7 @@ class NamespaceHandler(logging.Loggable):
                 else:
                     self.log_parser_exception(e, payload)
 
-    def _handle_channel_dict(self, message: MerossMessage, /):
+    def _handle_channel_dict(self, message: "MerossMessage", /):
         """
         This handler si optimized for dict payloads:
         "payload": { "key_namespace": {"channel":...., ...} }
@@ -439,7 +444,7 @@ class NamespaceHandler(logging.Loggable):
             else:
                 self.log_parser_exception(e, payload)
 
-    def _handle_channel(self, message: MerossMessage, /):
+    def _handle_channel(self, message: "MerossMessage", /):
         """
         This handler can manage both lists or dicts of 'channel' payloads.
         """
@@ -451,7 +456,7 @@ class NamespaceHandler(logging.Loggable):
             except Exception as e:
                 self.log_parser_exception(e, payload)
 
-    def _handle(self, msg: MerossMessage, /):
+    def _handle(self, msg: "MerossMessage", /):
         """Default handler for a namespace message. This implementation works as a stub and is being invoked if no
         better handler has been installed. Handler functions can be installed per instance at construction or
         by overriding this method definition in custom NamespaceHandlers."""
@@ -471,7 +476,25 @@ class NamespaceHandler(logging.Loggable):
             timeout=14400,
         )
 
-    def _handle_missing_channel(self, ke: KeyError, payload: "mt.JsonMapping", /):
+    def _handle_missing_parser(self, index: mn.IndexValue, payload: "JsonMapping", /):
+        if self.parser_class:
+            parser = self.parent.on_parser_added(
+                self.parser_class(
+                    index.value,
+                    self.parent,
+                    ns=self.id,
+                    index=index,
+                )
+            )
+            self.register_parser(parser)
+        else:
+            parser = self.parent._handle_missing_parser(self, index, payload)
+        try:
+            parser(payload)
+        except Exception as e:
+            self.log_parser_exception(e, payload)
+
+    def _handle_missing_channel(self, ke: KeyError, payload: "JsonMapping", /):
         """
         Smart handler for KeyError raised when dispatching
         a channel payload to a parser.
@@ -490,10 +513,10 @@ class NamespaceHandler(logging.Loggable):
             self.log_parser_exception(ke, payload)
             return
 
-        self.parent._handle_missing_parser(self, index, payload)
+        self._handle_missing_parser(index, payload)
 
     def _handle_missing_subdevice(
-        self, ke: KeyError, payload: "mt.JsonMapping", subdevice_id: str, /
+        self, ke: KeyError, payload: "JsonMapping", subdevice_id: str, /
     ):
         """Handler for KeyError raised when dispatching a payload to an hub subdevice parser."""
         index = self.index_type.index(payload)
@@ -507,22 +530,21 @@ class NamespaceHandler(logging.Loggable):
             else:
                 self.log_parser_exception(ke, payload)
             return
+
         try:
-            self.parent.subdevices[subdevice_id]._handle_missing_parser(
-                self, index, payload
-            )
+            subdevice = self.parent.subdevices[subdevice_id]
         except KeyError as ke:
-            if ke.args[0] == subdevice_id:
-                # this is a new subdevice for which we dont have a parser yet and we
-                # didnt know it existed so we need to do a digest rescan to discover it
-                # WARNING/TODO: this might cause a storm of rescans if the device is sending
-                # a lot of messages for the same unknown subdevice before we discover it.
-                # We should implement a temporary blocklist of unknown subdevices to avoid this.
-                # or maybe setup a stub parser for this subdevice that will log and ignore
-                # messages until we discover it.
-                self.parent.handler_all.next_poll_epoch = 0.0
-                return
-            raise
+            # this is a new subdevice for which we dont have a parser yet and we
+            # didnt know it existed so we need to do a digest rescan to discover it
+            # WARNING/TODO: this might cause a storm of rescans if the device is sending
+            # a lot of messages for the same unknown subdevice before we discover it.
+            # We should implement a temporary blocklist of unknown subdevices to avoid this.
+            # or maybe setup a stub parser for this subdevice that will log and ignore
+            # messages until we discover it.
+            self.parent.handler_all.next_poll_epoch = 0.0
+            return
+
+        self._handle_missing_parser(index, payload)
 
     async def async_get(self, *indexes: mn.IndexValue):
         """
@@ -566,15 +588,15 @@ class NamespaceHandler(logging.Loggable):
             self.async_get(*indexes), task_name or self.id, eager_start=True
         )
 
-    async def async_set(self, payload: "mt.JsonMapping", /):
+    async def async_set(self, payload: "JsonMapping", /):
         """Helper to request method SET."""
         return await self.parent.async_request(*self.id.request_set(payload))
 
     async def async_set_parse(
         self,
-        payload: "mt.JsonDict",
-        parser: NamespaceParser,
-        state: "mt.JsonMapping" = mn.EMPTY_DICT,
+        payload: "JsonDict",
+        parser: "NamespaceParser",
+        state: "JsonMapping" = mn.EMPTY_DICT,
         /,
     ):
         """
@@ -594,9 +616,9 @@ class NamespaceHandler(logging.Loggable):
 
     async def async_set_parse_ex(
         self,
-        payload,
-        parser: NamespaceParser,
-        state: "mt.JsonMapping" = mn.EMPTY_DICT,
+        payload: "JsonMapping",
+        parser: "NamespaceParser",
+        state: "JsonMapping" = mn.EMPTY_DICT,
         /,
     ):
         """
@@ -611,7 +633,7 @@ class NamespaceHandler(logging.Loggable):
         """
         ns = self.id
         response = await self.parent.async_request(
-            *ns.request_set(parser.index | payload)
+            *ns.request_set(parser.index | payload)  # type: ignore
         )
         try:
             payload = response.payload[ns.key][0]
@@ -868,7 +890,7 @@ class NamespaceHandler(logging.Loggable):
 
         ns = self.id
 
-        async def _async_wrapped_get(payload: "mt.JsonDict"):
+        async def _async_wrapped_get(payload: "JsonDict"):
             try:
                 return await async_request_func(ns, mc.METHOD_GET, payload)
             except Exception:
@@ -962,7 +984,7 @@ class NamespaceHandler(logging.Loggable):
                 # If any of these works it will candidate for this NamespaceHandler polling_request format.
                 detected_request_payload_type: mn.PayloadType | None = None
 
-                async def _async_check(_payload: "mt.MerossPayloadType"):
+                async def _async_check(_payload: "MerossPayloadType"):
                     try:
                         _response = await async_request_func(
                             ns, mc.METHOD_GET, _payload
@@ -1071,6 +1093,374 @@ class VoidHandler(NamespaceHandler):
         pass
 
 
+class NamespaceParser(logging.Loggable):
+    """
+    Represents the final 'parser' of a message after 'handling' in NamespaceHandler.
+    In this model, NamespaceHandler is responsible for unpacking those messages
+    who are intended to be delivered to different entities based off some indexing
+    keys. These are typically: "channel", "Id", "subId" depending on the namespace itself.
+    The correct subclass implementation needs to also expose a proper _parse_{key_namespace}
+    or override the __call__ method to be used as a callback for the NamespaceHandler when delivering
+    the payload (see NamespaceHandler.register_parser).
+    """
+
+    @final
+    class Dispatcher:
+        """Small helper class to implement dispatching the same payload to
+        multiple registered NamespaceParsers.
+        By default (and historically), only a single parser is registered to
+        receive a (channel) payload when dispatching message data for a namespace.
+        When needed though, we might want to dispatch the same payload to multiple
+        Parsers/Entities. This is typically needed when we have multiple data field in a payload
+        each one binded or needed to be forwarded to a different entity.
+        The single parser model overcomes this by installing a parser that subsequently
+        dispatches the data to the multiple entities. This helper class simplifies
+        and generalizes this pattern by automatically creating the 'dispatcher parser'
+        responsible to deliver data to multiple entities."""
+
+        if TYPE_CHECKING:
+            type ParsersContainer = list["ParserFunc | NamespaceParser"]
+            parsers: Final[ParsersContainer]
+
+        __slots__ = ("parsers",)
+
+        def __init__(self, *parsers: "ParserFunc | NamespaceParser"):
+            self.parsers = list(parsers)
+
+        def __call__(self, payload: "JsonMapping", /):
+            for parser in self.parsers:
+                parser(payload)
+
+    if TYPE_CHECKING:
+        POLLING_CONFIG_DEFAULT: ClassVar[PollingConfigType]
+        """Optional class attribute used when this class is registered as 'parser_class' in a NamespaceHandler or
+        when mixed-in with NamespaceHandler like in ParserHandler specializations."""
+        parent: Final[Device]  # type: ignore[override]
+        init_ns: ClassVar[mn.Namespace]
+        """Class default used to initialize the 'ns' instance attribute."""
+        ns: mn.Namespace
+        """The (primary) namespace this parser is associated with. This is used to issue requests."""
+        index: Final[mn.IndexValue]  # type: ignore
+        """The channel/id/subId key value according to the namespace (indexed or not).
+        This is used by the NamespaceHandler to route messages to the correct parser."""
+        ns_payload: JsonMapping  # type: ignore[assignment]
+        """The last parsed payload."""
+        _handler_registrations: Final[list[tuple[NamespaceHandler, mn.IndexValue]]]
+        """Set of NamespaceHandlers this parser is registered to. This is used to manage the link back
+        to the handler for issuing requests and for cleanup on shutdown."""
+
+        class Args(logging.Loggable.Args):
+            ns: NotRequired[mn.Namespace]
+            index: NotRequired[mn.IndexValue]
+
+        def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
+
+    init_ns_payload = mn.EMPTY_DICT
+    init_index = mn.IndexType.none()
+    SLOTS_AUTO_INIT = (
+        "ns",
+        "ns_payload",
+        "index",
+    )
+    __SLOTS__ = ("_handler_registrations",)
+
+    def shutdown(self):
+        super().shutdown()
+        try:
+            _dispatcher: "NamespaceParser.Dispatcher"
+            for handler, index in self._handler_registrations:
+                _dispatcher = handler.parsers[index]  # type: ignore[assignment]
+                if type(_dispatcher) is NamespaceParser.Dispatcher:
+                    # remove from dispatcher
+                    _dispatcher.parsers.remove(
+                        getattr(self, f"_parse_{handler.id.slug_end}", self)
+                    )
+                    if not _dispatcher.parsers:
+                        del handler.parsers[index]
+                else:
+                    del handler.parsers[index]
+            self._handler_registrations.clear()
+        except AttributeError:  # never registered
+            pass
+        try:
+            del self.__dict__["handler_ns"]  # type: ignore
+        except KeyError:
+            pass
+
+    def _namespace_registered(
+        self, handler_registration: tuple["NamespaceHandler", mn.IndexValue], /
+    ):
+        """This is called by the NamespaceHandler when registering this parser to the handler.
+        This is useful to setup the link back to the NamespaceHandler for issuing requests.
+        """
+        try:
+            self._handler_registrations.append(handler_registration)
+        except AttributeError:
+            self._handler_registrations = [handler_registration]  # type: ignore[assignment]
+
+    @cached_property
+    def handler_ns(self):
+        return self.parent.ns_handlers[self.ns]
+
+    @final
+    async def async_request_payload(self, payload: "JsonDict", /):
+        return await self.parent.async_request(
+            *self.ns.request_set(self.index | payload)
+        )
+
+    @final
+    async def async_request_parse(self, payload: "JsonDict", /):
+        response = await self.parent.async_request(
+            *self.ns.request_set(self.index | payload)
+        )
+        self(payload)
+        return response
+
+    @final
+    async def async_request_parse_ex(self, payload: "JsonDict", /):
+        response = await self.parent.async_request(
+            *self.ns.request_set(self.index | payload)
+        )
+        self(merge_dicts(dict(self.ns_payload), payload))
+        return response
+
+    def __call__(self, payload: "JsonMapping", /):
+        """Default payload message parser. This is invoked by the NamespaceHandler
+        routing mechanics when the parser is registered as a sink and no specific
+        _parse_{NamespaceHandler.id.slug_end} is available.
+        As a convention this is also the 'official' parser method for self.ns related
+        payloads and thus invoked as a callback when succesfully sending SET requests.
+        """
+        self.ns_payload = payload
+        self.log(
+            self.WARNING,
+            "Parsing undefined for payload:(%s)",
+            _payload=payload,
+            timeout=14400,
+        )
+
+    @classmethod
+    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
+        """Helper to register a specialized entity class to the proper namespace.
+        This is going to be used on Device initialization for various entities sharing
+        common semantics in namespace parsing/handling."""
+        NamespaceHandler(ns, device, parser_class=cls)
+
+
+class ValueParser(NamespaceParser):
+    """A specialization of NamespaceParser providing a simple interface to manage
+    a single item value in the namespace payload."""
+
+    class _KeyValueDescriptor(str):
+        """Descriptor class to define how to extract the value from the payload and how to format it for requests.
+        In general, most of the device_value data are stored in the first level key of a dictionary payload, but in
+        some cases they are stored in nested dictionaries. This descriptor allows to abstract this logic and provide
+        a consistent interface for both cases."""
+
+        if TYPE_CHECKING:
+            # Using language specials to implement our custom methods
+            # in order to make the code less readable ;)
+            def __call__(self, value) -> "JsonDict": ...
+
+            """Returns a dict with the key(s) defined in this descriptor and the value provided as argument."""
+
+            def __getitem__(self, payload: "JsonMapping"): ...
+
+            """Extracts the value from the payload using the key(s) defined in this descriptor."""
+
+    class SimpleKeyValue(_KeyValueDescriptor):
+        """Descriptor for the simple case where the value is stored in the first level key of the payload."""
+
+        def __call__(self, value):
+            return {self: value}
+
+        def __getitem__(self, payload: "JsonMapping"):
+            return payload[self]
+
+    class NestedKeyValue(_KeyValueDescriptor):
+
+        if TYPE_CHECKING:
+            keys: tuple[str, ...]
+
+        __slots__ = ("keys",)
+
+        def __new__(cls, *keys: str):
+            return super().__new__(cls, "_".join(keys))
+
+        def __init__(self, *keys: str):
+            self.keys = keys
+
+        def __call__(self, value):
+            for key in reversed(self.keys):
+                value = {key: value}
+            return value
+
+        def __getitem__(self, payload: "JsonMapping"):
+            for key in self.keys:
+                payload = payload[key]
+            # TODO: test this generator expression for performance and readability against the more straightforward loop --- IGNORE ---
+            # (payload := payload[key] for key in self.keys)
+            return payload
+
+    if TYPE_CHECKING:
+
+        init_key_value: ClassVar[_KeyValueDescriptor]
+        key_value: _KeyValueDescriptor
+        device_value: Any
+
+        class Args(NamespaceParser.Args):
+            key_value: NotRequired[ValueParser._KeyValueDescriptor]
+            device_value: NotRequired[Any]
+
+        def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
+
+    init_key_value = SimpleKeyValue(mc.KEY_VALUE)
+
+    SLOTS_AUTO_INIT = ("key_value", "device_value")
+
+    def update_device_value(self, device_value, /) -> bool | None:
+        # Called when the device value is being updated, either by parsing a new payload or by issuing a request.
+        # This is intended as a placeholder to be overridden by derived classes to implement custom logic on device value update,
+        # such as updating the entity state or triggering side effects. By default, it just updates the internal
+        # device_value and returns True if the value has changed, False otherwise.
+        if self.device_value != device_value:
+            self.device_value = device_value
+            return True
+
+    async def async_request_value(self, device_value, /) -> None:
+        """Issues a command SET to update the device and also updates
+        the entity state if the command was acknowledged by the device.
+        Raises exception on connection/protocol errors."""
+        # await self.async_request_payload({self.key_value: device_value})
+        await self.parent.async_request(
+            *self.ns.request_set(self.index | self.key_value(device_value))
+        )
+        self.update_device_value(device_value)
+
+    @override  # NamespaceParser
+    def __call__(self, payload: "JsonMapping", /):
+        self.ns_payload = payload
+        self.update_device_value(self.key_value[payload])
+
+
+class BooleanParser(ValueParser):
+    """A specialization of ValueParser to manage boolean values with custom on/off values in the device.
+    By default it assumes that the device uses 1 for 'on' and 0 for 'off', but this can be customized by setting the
+    'value_on' and 'value_off' attributes."""
+
+    if TYPE_CHECKING:
+        value_on: int
+        """The actual device value representing the 'on' state."""
+        value_off: int
+        """The actual device value representing the 'off' state."""
+        is_on: bool | None
+
+        class Args(ValueParser.Args):
+            value_on: NotRequired[int]
+            value_off: NotRequired[int]
+            is_on: NotRequired[bool]
+
+    init_key_value = ValueParser.SimpleKeyValue(mc.KEY_ONOFF)
+    init_value_on = 1
+    init_value_off = 0
+
+    SLOTS_AUTO_INIT = ("value_on", "value_off", "is_on")
+
+    @override
+    def update_device_value(self, device_value, /) -> bool | None:
+        if self.device_value != device_value:
+            self.device_value = device_value
+            match device_value:
+                case self.value_on:
+                    self.is_on = True
+                case self.value_off:
+                    self.is_on = False
+                case _:
+                    self.is_on = None
+            return True
+
+    # interface compatibility with HA toggle entities, allowing to use this class as a
+    # mixin with other NamespaceParser specializations
+    async def async_turn_on(self, **kwargs):
+        await self.async_request_value(self.value_on)
+
+    async def async_turn_off(self, **kwargs):
+        await self.async_request_value(self.value_off)
+
+
+class MappingParser(NamespaceParser):
+    """An hybrid parser specialization acting as a 'dispatcher parser' for multiple
+    sub-parsers based on the presence of keys in the payload. Every key is mapped to a target parser
+    and the payload is dispatched to the first parser whose key is present in the payload.
+    This is a more sophisticated implementation of the Dispatcher pattern implemented in NamespaceParser.Dispatcher.
+    """
+
+    if TYPE_CHECKING:
+        parsers: Final[dict[str, ValueParser]]
+        init_excluded_keys: ClassVar[tuple[str, ...]]
+        excluded_keys: tuple[str, ...]
+        init_parser_defs: ClassVar[Mapping[str, type[ValueParser]]]
+        parser_defs: Mapping[str, type[ValueParser]]
+
+        class Args(NamespaceParser.Args):
+            excluded_keys: NotRequired[tuple[str, ...]]
+            parsers: NotRequired[dict[str, ValueParser]]
+            """Pre-initialized parsers to be used by this handler.
+            This is useful when we want to pre-create the parsers for this handler
+            and not rely on the 'lazy' initialization done in payload parsing."""
+            parser_defs: NotRequired[Mapping[str, type[ValueParser]]]
+
+    init_excluded_keys = (mc.KEY_CHANNEL, mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
+
+    SLOTS_AUTO_INIT = (
+        "excluded_keys",
+        "parser_defs",
+    )
+    __SLOTS__ = ("parsers",)
+
+    def __init__(self, *args, **kwargs: "Unpack[Args]"):
+        # TODO: define a mechanism for 'auto-initializing' (empty) dicts
+        # so we can skip this constructor. This would be beneficial to extra_state_attributes
+        self.parsers = kwargs.pop("parsers", {})
+        super().__init__(*args, **kwargs)
+
+    def shutdown(self):
+        self.parsers.clear()
+        super().shutdown()
+
+    @override
+    def __call__(self, payload: "JsonMapping", /):
+        self.ns_payload = payload
+        for key, value in {
+            k: v for k, v in payload.items() if k not in self.excluded_keys
+        }.items():
+            try:
+                self.parsers[key].update_device_value(value)
+            except KeyError:
+                if key not in self.parsers:
+                    try:
+                        self.parsers[key] = self.parent.on_parser_added(
+                            self.parser_defs[key](
+                                self.index.value,  # FIXME: use a 'sibling' construction semantic
+                                self.parent,
+                                ns=self.ns,
+                                device_value=value,
+                                index=self.index,
+                                # WARNING: key_value might or might not be needed here...
+                            )
+                        )
+                        # TODO: add management of unexpected keys where we don't have a parser_def
+                        # and we might want to setup a somewhat 'smart' default (diagnostic) parser
+                    except Exception as e:
+                        self.log_exception(
+                            self.DEBUG,
+                            e,
+                            "creating parser for '%s' key in '%s' namespace",
+                            key,
+                            self.ns,
+                        )
+
+
 class ParserHandler(NamespaceParser, NamespaceHandler):
     """
     A specialized NamespaceHandler which is also a NamespaceParser.
@@ -1103,7 +1493,7 @@ class ParserHandler(NamespaceParser, NamespaceHandler):
         self(message.payload[self.id.key])
 
     @override
-    def parse_digest(self, digest: "mt.JsonMapping", /):
+    def parse_digest(self, digest: "JsonMapping", /):
         self(digest)
 
 

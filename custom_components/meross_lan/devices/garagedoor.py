@@ -8,7 +8,7 @@ from ..binary_sensor import BinarySensorEntity
 from ..cover import Cover
 from ..helpers import clamp
 from ..merossclient.client import Transport
-from ..merossclient.device.handler import MappingParserHandler
+from ..merossclient.device.handler import MappingParserHandler, NamespaceHandler
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..number import EmulatedNumber, NumberParser
 from ..switch import SwitchParser
@@ -514,7 +514,7 @@ class GarageDoor(Cover):
     @classmethod
     @override
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        handler = device._create_handler(ns)
+        handler = NamespaceHandler(ns, device)
         descriptor = device.descriptor
         if descriptor.type.startswith(mc.TYPE_MSG200) and (
             descriptor.firmware_version <= (4, 2, 1)

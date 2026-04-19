@@ -105,35 +105,6 @@ class PhysicalDevice(AbstractClient):
         """If an update is available returns a tuple of (installed_version, latest_version, release_summary)"""
         raise NotImplementedError("get_upgrade_info")
 
-    # These methods are actually only relevant/implemented in Device child classes branch.
-    # The Subdevice child branch will just link to the methods/attributes defined in the parent Device.
-    @cached_property
-    @abstractmethod
-    def tz(self, /) -> tzinfo: ...
-
-    @cached_property
-    @abstractmethod
-    def ns_handlers(self, /) -> "Mapping[mn.Namespace, NamespaceHandler]": ...
-
-    def on_parser_added[_T: NamespaceParser](self, parser: _T, /):  # type: ignore
-        """Called by NamespaceHandler/MappingParser when a parser is dynamically added following
-        the reception of a message for which no parser was registered.
-        Returns the parser to ease chainability since the parser argument is often created inline in the call.
-        """
-        return parser
-
-    @abstractmethod
-    def _create_handler(
-        self, ns: "mn.Namespace", /, **kwargs: "Unpack[NamespaceHandler.Args]"
-    ) -> "NamespaceHandler": ...
-
-    """Called in various situations to ask the device to instantiate a NamespaceHandler for the given namespace.
-    This typically happens with dynamic parsers/handler initialization in async_init when a instantiating a
-    custom NamespaceParser the requires this ns (see namespace_init factory method).
-    This indirection allows a custom Device implementation to intercept and install whatever NamespaceHandler
-    class it needs (e.g. a custom one with a custom parser management logic).
-    """
-
     def _handle_missing_parser(
         self, nh: NamespaceHandler, index: mn.IndexValue, payload: "mt.JsonMapping", /
     ):
@@ -144,26 +115,7 @@ class PhysicalDevice(AbstractClient):
         """
         nh.parsers[index] = nh._parse
         nh.polling_request_add_index(index)
-        try:
-            nh.parsers[index](payload)
-        except Exception as e:
-            nh.log_parser_exception(e, payload)
-
-    def get_handler(self, ns: "mn.Namespace", /):
-        try:
-            return self.ns_handlers[ns]
-        except KeyError:
-            return self._create_handler(ns)
-
-    def register_parser_ex(
-        self,
-        parser: "NamespaceParser",
-        *nss: "mn.Namespace",
-    ):
-        """Register a parser for multiple namespaces. Abilities are checked for namespaces availability."""
-        ability = self.descriptor.ability
-        for ns in (_ns for _ns in nss if _ns in ability):
-            self.get_handler(ns).register_parser(parser)
+        return nh._parse
 
 
 class Device(PhysicalDevice):
@@ -631,17 +583,30 @@ class Device(PhysicalDevice):
         self.transport = client.TRANSPORT  # type: ignore[assignment]
         self.log(self.DEBUG, "Switching transport to %s", self.transport)
 
-    @override
-    def _create_handler(
-        self, ns: "mn.Namespace", /, **kwargs: "Unpack[NamespaceHandler.Args]"
-    ):
-        return NamespaceHandler(ns, self, **kwargs)
+    def get_handler(self, ns: "mn.Namespace", /):
+        try:
+            return self.ns_handlers[ns]
+        except KeyError:
+            return NamespaceHandler(ns, self)
 
     def get_handler_by_name(self, namespace: str, /):
         try:
             return self.ns_handlers[namespace]  # type: ignore
         except KeyError:
-            return self._create_handler(self.__class__.NAMESPACES[namespace])
+            return NamespaceHandler(self.__class__.NAMESPACES[namespace], self)
+
+    def register_parser_ex(self, parser: NamespaceParser, *nss: "mn.Namespace"):
+        """Register a parser for multiple namespaces. Abilities are checked for namespaces availability."""
+        ability = self.descriptor.ability
+        for ns in (_ns for _ns in nss if _ns in ability):
+            self.get_handler(ns).register_parser(parser)
+
+    def on_parser_added[_T: NamespaceParser](self, parser: _T, /):  # type: ignore
+        """Called by NamespaceHandler/MappingParser when a parser is dynamically added following
+        the reception of a message for which no parser was registered.
+        Returns the parser to ease chainability since the parser argument is often created inline in the call.
+        """
+        return parser
 
     @property
     def polling_response_size_available(self):
@@ -1066,18 +1031,12 @@ class SubDevice(PhysicalDevice, NamespaceParser):
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
 
-    __SLOTS__ = (
-        "async_request",
-        "ns_handlers",
-        "_create_handler",
-    )
+    __SLOTS__ = ("async_request",)
 
     def __init__(
         self, id: str, parent: "Device", **kwargs: "Unpack[PhysicalDevice.Args]"
     ):
         self.async_request = parent.async_request
-        self.ns_handlers = parent.ns_handlers
-        self._create_handler = parent._create_handler
         kwargs["key"] = parent.key
         kwargs["from_"] = parent.from_
         kwargs["trigger_src"] = parent.trigger_src
@@ -1089,8 +1048,6 @@ class SubDevice(PhysicalDevice, NamespaceParser):
     async def async_shutdown(self):
         await super().async_shutdown()
         del self.async_request
-        del self.ns_handlers
-        del self._create_handler
 
     # interface: AbstractClient
     @override
@@ -1102,17 +1059,6 @@ class SubDevice(PhysicalDevice, NamespaceParser):
         pass
 
     # interface: PhysicalDevice
-    @property
-    @override
-    # Use a property since parent.tz might change so we can't cache it
-    def tz(self):
-        return self.parent.tz
-
-    @override
-    # parent._create_handler is being cached in self._create_handler
-    def _create_handler(
-        self, ns: "mn.Namespace", /, **kwargs: "Unpack[NamespaceHandler.Args]"
-    ) -> "NamespaceHandler": ...
 
     # TODO: implement maybe something for firmware_version
     @override

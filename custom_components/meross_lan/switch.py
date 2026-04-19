@@ -5,6 +5,7 @@ from homeassistant.components import switch
 from . import const as mlc
 from .helpers import entity as mle
 from .merossclient import extract_dict_payloads
+from .merossclient.device.handler import NamespaceHandler
 from .merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
@@ -111,7 +112,7 @@ class ToggleX(SwitchParser):
             except KeyError:
                 pass
 
-        handler = device._create_handler(ns, parser_class=ToggleX, channels=channels)
+        handler = NamespaceHandler(ns, device, parser_class=ToggleX, channels=channels)
         if device.descriptor.is_refoss:
             handler.polling_request = mn.PayloadType.DICT_IDX_65535.build_get(
                 handler.id

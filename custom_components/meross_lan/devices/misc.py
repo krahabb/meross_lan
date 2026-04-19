@@ -7,7 +7,7 @@ a dedicated unit for each of them would increase the number of small modules.
 from typing import TYPE_CHECKING, override
 
 from .. import const as mlc
-from ..merossclient.device.parser import MappingParser
+from ..merossclient.device.handler import MappingParser, NamespaceHandler
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..merossclient.protocol.namespaces import thermostat as mn_t
 from ..sensor import SensorParser
@@ -92,10 +92,10 @@ class SensorLatestXParser(MappingParser):
         parent: Final[Device]  # type: ignore[override]
         init_parser_defs: ClassVar[Mapping[str, type[SensorParser]]]
         parser_defs: Mapping[str, type[SensorParser]]
-        parsers: Final[dict[str, SensorParser | NamespaceHandler.ParserFunc]]  # type: ignore[override]
+        parsers: Final[dict[str, SensorParser]]  # type: ignore[override]
 
         class Args(MappingParser.Args):
-            parsers: NotRequired[dict[str, SensorParser | NamespaceHandler.ParserFunc]]
+            parsers: NotRequired[dict[str, SensorParser]]
 
         def __init__(self, *args, **kwargs: Unpack[Args]): ...  # pragma: no cover
 
@@ -118,7 +118,7 @@ class SensorLatestXParser(MappingParser):
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
         # TODO: move config default to either the parser class or to the ns grammar
         # so we can remove this override
-        return device._create_handler(ns, parser_class=cls, channels=())
+        return NamespaceHandler(ns, device, parser_class=cls, channels=())
 
     @override
     def _namespace_registered(self, handler_registration):

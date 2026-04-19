@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, override
 from .. import const as mlc
 from ..binary_sensor import BinarySensorEntity
 from ..helpers.entity import ValueParser
+from ..merossclient.device.handler import NamespaceHandler
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..number import NumberParser
 from ..select import SelectParser
@@ -145,8 +146,8 @@ def namespace_init_presence_config(ns: mn.Namespace, device: "Device", /):
         device_info=device.get_device_entry_info(0),
     )
 
-    device._create_handler(
-        ns, config=mlc.POLLING_CONFIG_CONFIGURATION
+    NamespaceHandler(
+        ns, device, config=mlc.POLLING_CONFIG_CONFIGURATION
     ).register_parsers(
         *(entity_def(sensor_presence, ns=ns) for entity_def in ENTITY_DEFS)
     )

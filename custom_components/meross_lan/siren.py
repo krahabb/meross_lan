@@ -1,9 +1,11 @@
 from typing import TYPE_CHECKING, override
 
 from homeassistant.components import siren
+from homeassistant.config_entries import ConfigEntryState
 
 from . import const as mlc
 from .helpers.entity import BinaryParser
+from .merossclient.device.handler import NamespaceHandler
 from .merossclient.protocol import const as mc, namespaces as mn
 from .number import NumberParser
 from .select import SelectParser
@@ -80,11 +82,24 @@ class Siren(BinaryParser, siren.SirenEntity):
             song_select = Siren.SongSelect(self, ns=ns_config_alarm)
             self.available_tones = song_select.options_map
             self.supported_features = self._attr_supported_features
-            device.get_handler(ns_config_alarm).register_parsers(
-                Siren.EnableSwitch(self, ns=ns_config_alarm),
-                song_select,
-                Siren.VolumeNumber(self, ns=ns_config_alarm),
-            )
+            if device.config_entry.state is ConfigEntryState.LOADED:
+                # TODO: this is a workaround until we better manage dynamic entities registration
+                # overall
+                _parsers = (
+                    Siren.EnableSwitch(self, ns=ns_config_alarm),
+                    song_select,
+                    Siren.VolumeNumber(self, ns=ns_config_alarm),
+                )
+                device.get_handler(ns_config_alarm).register_parsers(*_parsers)
+                for _parser in _parsers:
+                    device.add_entity(_parser)
+            else:
+                device.get_handler(ns_config_alarm).register_parsers(
+                    Siren.EnableSwitch(self, ns=ns_config_alarm),
+                    song_select,
+                    Siren.VolumeNumber(self, ns=ns_config_alarm),
+                )
+
         else:
             self.available_tones = {}
             self.supported_features = (
@@ -107,7 +122,7 @@ class Siren(BinaryParser, siren.SirenEntity):
 
     @classmethod
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        device._create_handler(ns, parser_class=cls, channels=(0,))
+        NamespaceHandler(ns, device, parser_class=cls, channels=(0,))
 
 
 async_setup_entry = Siren.platform_setup_entry

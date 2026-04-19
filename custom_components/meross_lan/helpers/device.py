@@ -17,7 +17,7 @@ from ..merossclient import (
 )
 from ..merossclient.client import AbstractClient, Direction, Transport
 from ..merossclient.client.http import HttpClient
-from ..merossclient.device import handler, parser
+from ..merossclient.device import handler
 from ..merossclient.exceptions import MerossError
 from ..merossclient.obfuscate import OBFUSCATE_DICT
 from ..merossclient.protocol import const as mc, namespaces as mn
@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     from .mqtt_profile import MQTTConnection, MQTTProfile
 
 
-class NamespaceHandler(handler.NamespaceHandler):
+class DiagnosticHandler(handler.NamespaceHandler):
 
     if TYPE_CHECKING:
         """Configuration to be used for unknown/unmanaged namespaces."""
@@ -69,7 +69,7 @@ class NamespaceHandler(handler.NamespaceHandler):
         # Since NamespaceHandler cannot be slotted itself because of mixin-ing with ParserEntity
         # in EntityNamespaceMixin we try this trick to provide automatic slotting for all the subclasses
         # which are not mixed with parsers and which don't define their own __slots__.
-        if not issubclass(cls, parser.NamespaceParser):
+        if not issubclass(cls, handler.NamespaceParser):
             cls.__slots__ = cls._calc_slots()
 
     @override
@@ -80,7 +80,7 @@ class NamespaceHandler(handler.NamespaceHandler):
             # the key_namespace might be wrong so we use another euristic
             ns = self.id
             if not self.polling_strategy:
-                self.polling_strategy = NamespaceHandler.async_poll_diagnostic
+                self.polling_strategy = DiagnosticHandler.async_poll_diagnostic
             for _key, _payload in message.payload.items():
                 # since the ns_key might be often the same across different namespaces
                 # we add the last split of the namespace to the extracted payload key
@@ -114,7 +114,7 @@ class NamespaceHandler(handler.NamespaceHandler):
             # since we're parsing an unknown namespace, our euristic about
             # the key_namespace might be wrong so we use another euristic
             if not self.polling_strategy:
-                self.polling_strategy = NamespaceHandler.async_poll_diagnostic
+                self.polling_strategy = DiagnosticHandler.async_poll_diagnostic
             self.parent.parse_undefined_dict(
                 f"{self.id.slug_end}_{self.id.key}",
                 payload,
@@ -269,9 +269,6 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         bluetooth: Final[ComponentApi.BTClient | None]  # type: ignore[override]
         http: Final[Http | None]  # type: ignore[override]
         mqtt: Final[MQTTConnection.Client | None]  # type: ignore[override]
-        ns_handlers: Final[dict[mn.Namespace, NamespaceHandler]]  # type: ignore[override]
-
-        def get_handler(self, ns: mn.Namespace) -> NamespaceHandler: ...
 
         NAMESPACE_IGNORE: ClassVar[tuple[str, ...]]
         """ This is a set of namespaces we don't use and for which we don't want to have any diagnostic
@@ -407,11 +404,11 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         ),
         mn.Appliance_GarageDoor_State: (".devices.garagedoor", "GarageDoor"),
         mn.Appliance_Mcu_Firmware: (
-            ".helpers.device",
+            ".merossclient.device.handler",
             "NamespaceHandler",  # handler in Device._handle_XXX
         ),
         mn.Appliance_Mcu_Hp110_Firmware: (
-            ".helpers.device",
+            ".merossclient.device.handler",
             "NamespaceHandler",  # handler in Device._handle_XXX
         ),
         mn.Appliance_RollerShutter_Position: (
@@ -804,7 +801,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         for namespace_handler in self.ns_handlers.values():
             if (
                 namespace_handler.polling_strategy
-                is NamespaceHandler.async_poll_diagnostic
+                is DiagnosticHandler.async_poll_diagnostic
             ):
                 namespace_handler.polling_strategy = None
         await ConfigEntryManager.async_destroy_diagnostic_entities(self)
@@ -1142,66 +1139,31 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
 
     # interface: device.PhysicalDevice
     @override
-    def on_parser_added[_T: "ParserEntity"](self, parser: _T, /):  # type: ignore
-        """Called by NamespaceHandler/MappingParser when a parser is dynamically added following
-        the reception of a message for which no parser was registered.
-        Returns the parser to ease chainability since the parser argument is often created inline in the call.
-        """
-        return self.add_entity(parser)
-
-    @override
-    def _create_handler(
-        self, ns: "mn.Namespace", /, **kwargs: "Unpack[NamespaceHandler.Args]"
-    ):
-        """Called by the base device message parsing chain when a new
-        NamespaceHandler need to be defined (This happens the first time
-        the namespace enters the message handling flow)"""
-        return NamespaceHandler(ns, self, **kwargs)
-
-    @override
     def _handle_missing_parser(
-        self, nh: NamespaceHandler, index: mn.IndexValue, payload: "mt.JsonMapping", /
+        self,
+        nh: handler.NamespaceHandler,
+        index: mn.IndexValue,
+        payload: "mt.JsonMapping",
+        /,
     ):
         # TODO: move back this method to NamespaceHandler by introducing the concept of
         # diagnostic_parser_class so that the handler itself knows how to manage this
         # without the indirection to the device.
-        # TODO: also, the add_entity/add_parser could be moved to NamespaceHandler
-        # by introducing maybe a dedicated register_parser that detects when the
-        # parser is dynamically created and so needs a a special notification (in meross_lan
-        # this is needed to forward entity registration).
-        #
-        # Actually only designed to work when index is 'channel'
-        assert type(index.type) is mn.IndexType.channel
-        if nh.parser_class:
-            nh.register_parser(
-                self.on_parser_added(
-                    nh.parser_class(
-                        index.value,
-                        self,
-                        ns=nh.id,
-                        index=index,
-                    )
-                )
-            )
-        elif self.create_diagnostic_entities:
+        if self.create_diagnostic_entities:
             from ..sensor import DiagnosticParser
 
-            nh.register_parser(
-                DiagnosticParser(
-                    index.value,
-                    self,
-                    entity_key=nh.id.key,
-                    index=index,
-                )
+            parser = DiagnosticParser(
+                index.value,
+                self,
+                entity_key=nh.id.key,
+                index=index,
             )
+            nh.register_parser(parser)
+            return parser
         else:
             nh.parsers[index] = nh._parse
             nh.polling_request_add_index(index)
-
-        try:
-            nh.parsers[index](payload)
-        except Exception as e:
-            nh.log_parser_exception(e, payload)
+            return nh._parse
 
     # interface: device.Device
     @override
@@ -1219,6 +1181,14 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         super()._switch_client(client)
         if self.is_connected:
             self.sensor_protocol.set_available()
+
+    @override
+    def on_parser_added[_T: "handler.NamespaceParser"](self, parser: _T, /) -> _T:  # type: ignore
+        """Called by NamespaceHandler/MappingParser when a parser is dynamically added following
+        the reception of a message for which no parser was registered.
+        Returns the parser to ease chainability since the parser argument is often created inline in the call.
+        """
+        return self.add_entity(parser)  # type: ignore
 
     # interface: self
     def register_togglex_channel(self, entity: "ParserEntity", active: bool, /):
@@ -1370,11 +1340,12 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                     config=mlc.POLLING_CONFIG_DIAGNOSTIC,
                 )
             else:
-                ns_handler = self._create_handler(
+                ns_handler = DiagnosticHandler(
                     self.NAMESPACES.get(namespace)
                     or mn.Namespace.from_message(
                         namespace, method, message.payload, self.NAMESPACES
                     ),
+                    self,
                     config=mlc.POLLING_CONFIG_DIAGNOSTIC,
                 )
 
