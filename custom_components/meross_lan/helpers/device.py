@@ -398,10 +398,14 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             ".devices.thermostat",
             "MtsWindowOpened",
         ),
+        mn.Appliance_GarageDoor_MultipleConfig: (
+            ".devices.garagedoor",
+            "GarageDoorMultipleConfig",
+        ),
         mn.Appliance_GarageDoor_Config: (
             ".devices.garagedoor",
-            "GarageDoorConfigNamespaceHandler",
-        ),
+            "GarageDoorConfig",
+        ),  # install this after MultipleConfig since it could apply some fallbacks for missing MultipleConfig entities
         mn.Appliance_GarageDoor_State: (".devices.garagedoor", "GarageDoor"),
         mn.Appliance_Mcu_Firmware: (
             ".merossclient.device.handler",
@@ -536,7 +540,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         PersistentButton(
             None,
             self,
-            async_press=self._async_button_reload_press,  # TODO: use press
+            press=self.schedule_reload,
             name="Reload",
             device_class=PersistentButton.DeviceClass.RESTART,
             entity_category=PersistentButton.EntityCategory.DIAGNOSTIC,
@@ -1680,7 +1684,3 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             self.latest_version = latest_version
             if not self.check_update_firmware():
                 UpdateEntity(None, self)
-
-    async def _async_button_reload_press(self):
-        """Reload the config_entry."""
-        self.schedule_reload()
