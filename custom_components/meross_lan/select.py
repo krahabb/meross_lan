@@ -29,6 +29,9 @@ class SelectEntity(mle.Entity, select.SelectEntity):
 
         def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
+        @classmethod
+        def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+
     _attr_entity_category = mle.Entity.EntityCategory.CONFIG
 
     init_options = []
@@ -64,12 +67,27 @@ class SelectParser(mle.ValueParser, SelectEntity):
             options_map: NotRequired[dict[Any, str]]
             # options: NotRequired[Never]
 
+        @classmethod
+        def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+
     # configure initial options(map) through a class default
     init_options_map = {}
     __slots__ = ("options_map",)
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         self.options_map = kwargs.pop("options_map", self.init_options_map)
+        try:
+            # if device_value is not provided this code is unnecessary and
+            # the eventual other arguments will be managed by bases.
+            self.device_value = kwargs.pop("device_value")
+            try:
+                kwargs["current_option"] = self.options_map[self.device_value]
+            except KeyError:
+                self.options_map = dict(self.options_map)
+                self.options_map[self.device_value] = option = str(self.device_value)
+                kwargs["current_option"] = option
+        except KeyError:
+            pass
         kwargs["options"] = list(self.options_map.values())
         super().__init__(*args, **kwargs)
 
