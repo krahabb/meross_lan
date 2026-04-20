@@ -1,6 +1,6 @@
 from homeassistant.components import switch as haec
 
-from custom_components.meross_lan import siren, switch
+from custom_components.meross_lan import switch
 from custom_components.meross_lan.devices import (
     garagedoor as gd,
     mss,
@@ -29,7 +29,7 @@ class EntityTest(ToggleEntityComponentTest):
         mc.KEY_TOGGLEX: [switch.ToggleX],
     }
     NAMESPACES_ENTITIES = {
-        mn.Appliance_Config_Alarm: [siren.Siren.EnableSwitch],
+        mn.Appliance_Config_Alarm: [switch.SwitchParser],
         mn.Appliance_GarageDoor_Config: [
             gd.GarageConfigSwitch,  # buzzerEnable
         ],

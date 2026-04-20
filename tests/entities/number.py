@@ -1,6 +1,6 @@
 from homeassistant.components import number as haec
 
-from custom_components.meross_lan import number, siren, switch
+from custom_components.meross_lan import number, switch
 from custom_components.meross_lan.devices import (
     garagedoor as gd,
     ms600,
@@ -54,7 +54,7 @@ class EntityTest(EntityComponentTest):
         },
     }
     NAMESPACES_ENTITIES = {
-        mn.Appliance_Config_Alarm: [siren.Siren.VolumeNumber],
+        mn.Appliance_Config_Alarm: [number.NumberParser],
         mn.Appliance_GarageDoor_Config: [
             gd.GarageConfigNumber,
             gd.GarageConfigNumber,  # doorOpenDuration

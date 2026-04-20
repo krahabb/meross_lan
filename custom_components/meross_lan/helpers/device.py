@@ -326,6 +326,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         # like .Light or .Fan
         mn.Appliance_Control_ToggleX: (".switch", "ToggleX"),
         mn.Appliance_Config_OverTemp: (".devices.mss", "OverTempEnableSwitch"),
+        mn.Appliance_Config_Alarm: (".siren", "ConfigAlarm"),
         mn.Appliance_Control_Alarm: (".siren", "Siren"),
         mn.Appliance_Control_Electricity: (
             ".devices.mss",

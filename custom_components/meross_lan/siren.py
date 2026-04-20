@@ -1,11 +1,10 @@
 from typing import TYPE_CHECKING, override
 
 from homeassistant.components import siren
-from homeassistant.config_entries import ConfigEntryState
 
 from . import const as mlc
 from .helpers.entity import BinaryParser
-from .merossclient.device.handler import NamespaceHandler
+from .merossclient.device.handler import MappingParser, NamespaceHandler
 from .merossclient.protocol import const as mc, namespaces as mn
 from .number import NumberParser
 from .select import SelectParser
@@ -21,37 +20,16 @@ if TYPE_CHECKING:
 class Siren(BinaryParser, siren.SirenEntity):
     """
     Supports msh450 internal alarm as proposed in #625
+    TODO: implement more generalized support for Appliance.Control.Alarm namespace
+    which seems to carry more features than just a simple on/off siren switch.
     """
-
-    class EnableSwitch(SwitchParser):
-        init_key_value = SwitchParser.SimpleKeyValue(mc.KEY_ENABLE)
-        init_entity_key = f"{mn.Appliance_Config_Alarm.slug}__{init_key_value}"
-
-    class SongSelect(SelectParser):
-        init_key_value = SelectParser.SimpleKeyValue(mc.KEY_SONG)
-        init_entity_key = f"{mn.Appliance_Config_Alarm.slug}__{init_key_value}"
-
-        init_options_map = {
-            1: "Siren",
-            2: "Beep",
-            3: "Chime",
-            4: "Alarm",
-            5: "Roar",
-            6: "Whistle",
-            7: "Buzzer",
-        }
-
-    class VolumeNumber(NumberParser):
-        init_key_value = NumberParser.SimpleKeyValue(mc.KEY_VOLUME)
-        init_entity_key = f"{mn.Appliance_Config_Alarm.slug}__{init_key_value}"
-        _attr_native_max_value = 100
-        _attr_native_min_value = 0
 
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
 
         # HA core entity attributes:
-        _attr_supported_features: Final[siren.SirenEntityFeature]
+        init_available_tones: Final[dict[int, str]]
+        init_supported_features: Final[siren.SirenEntityFeature]
 
         class Args(BinaryParser.Args):
             pass
@@ -63,62 +41,78 @@ class Siren(BinaryParser, siren.SirenEntity):
     init_value_on = 1
     init_value_off = 2
 
-    _attr_supported_features = (
+    # These 2 next configurations should conform to HA core Entity _attr_* pattern
+    # but the actual cachedproperties metaclass is fighting us by wrapping
+    # those in properties and thus preventing us from using them as class variables.
+    # This is hard to cope with in general but in this case
+    # the 'conflict' would need to declare an extra attribute (in the module or in the class)
+    # since we need to use the available tones preset also for ConfigAlarm parser declaration.
+
+    # Assuming Appliance.Config.Alarm is available with these presets
+    # This might not be always the case.
+    init_available_tones = {
+        1: "Siren",
+        2: "Beep",
+        3: "Chime",
+        4: "Alarm",
+        5: "Roar",
+        6: "Whistle",
+        7: "Buzzer",
+    }
+
+    init_supported_features = (
         siren.SirenEntityFeature.TURN_ON
         | siren.SirenEntityFeature.TURN_OFF
         | siren.SirenEntityFeature.TONES
         | siren.SirenEntityFeature.VOLUME_SET
     )
 
-    ATTR_KEY_MAP = {
-        siren.ATTR_TONE: "song",
-        siren.ATTR_VOLUME_LEVEL: "volume",
-    }
-
-    def __init__(self, id, device: "Device", /, **kwargs: "Unpack[Args]"):
-        BinaryParser.__init__(self, id, device, **kwargs)
-        ns_config_alarm = mn.Appliance_Config_Alarm
-        if ns_config_alarm in device.descriptor.ability:
-            song_select = Siren.SongSelect(self, ns=ns_config_alarm)
-            self.available_tones = song_select.options_map
-            self.supported_features = self._attr_supported_features
-            if device.config_entry.state is ConfigEntryState.LOADED:
-                # TODO: this is a workaround until we better manage dynamic entities registration
-                # overall
-                _parsers = (
-                    Siren.EnableSwitch(self, ns=ns_config_alarm),
-                    song_select,
-                    Siren.VolumeNumber(self, ns=ns_config_alarm),
-                )
-                device.get_handler(ns_config_alarm).register_parsers(*_parsers)
-                for _parser in _parsers:
-                    device.add_entity(_parser)
-            else:
-                device.get_handler(ns_config_alarm).register_parsers(
-                    Siren.EnableSwitch(self, ns=ns_config_alarm),
-                    song_select,
-                    Siren.VolumeNumber(self, ns=ns_config_alarm),
-                )
-
-        else:
-            self.available_tones = {}
-            self.supported_features = (
-                siren.SirenEntityFeature.TURN_ON | siren.SirenEntityFeature.TURN_OFF
-            )
+    SLOTS_AUTO_INIT = (
+        "available_tones",
+        "supported_features",
+    )
 
     @override
     async def async_turn_on(self, **kwargs):
         if kwargs:
             payload = self.index.copy()
-            for kwarg_key, payload_key in self.ATTR_KEY_MAP.items():
-                try:
-                    payload[payload_key] = kwargs[kwarg_key]
-                except KeyError:
-                    pass
+            try:
+                payload[mc.KEY_SONG] = kwargs[siren.ATTR_TONE]
+            except KeyError:
+                pass
+            try:
+                payload[mc.KEY_VOLUME] = round(kwargs[siren.ATTR_VOLUME_LEVEL] * 100)
+            except KeyError:
+                pass
             await self.parent.async_request(
                 *mn.Appliance_Config_Alarm.request_set(payload)
             )
         await self.async_request_value(self.value_on)
+
+    @classmethod
+    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
+        NamespaceHandler(ns, device, parser_class=cls, channels=(0,))
+
+
+class ConfigAlarm(MappingParser):
+
+    init_parser_defs = {
+        mc.KEY_ENABLE: SwitchParser.ENTITY_DEF(
+            entity_key=f"{mn.Appliance_Config_Alarm.slug}__{mc.KEY_ENABLE}",
+            key_value=SwitchParser.SimpleKeyValue(mc.KEY_ENABLE),
+        ),
+        mc.KEY_SONG: SelectParser.ENTITY_DEF(
+            entity_key=f"{mn.Appliance_Config_Alarm.slug}__{mc.KEY_SONG}",
+            key_value=SelectParser.SimpleKeyValue(mc.KEY_SONG),
+            options_map=Siren.init_available_tones,
+        ),
+        mc.KEY_VOLUME: NumberParser.ENTITY_DEF(
+            entity_key=f"{mn.Appliance_Config_Alarm.slug}__{mc.KEY_VOLUME}",
+            key_value=NumberParser.SimpleKeyValue(mc.KEY_VOLUME),
+            native_min_value=0,
+            native_max_value=100,
+        ),
+    }
 
     @classmethod
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):

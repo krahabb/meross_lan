@@ -64,6 +64,18 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
     # If the default definition carries a subid, then it will be applied only to the matching subdevice id,
     # otherwise (no subid in default) it will be applied to all subdevices of the matching type.
     SUBID_NAMESPACES_DEFAULT: "Emulator.NSDefault" = {
+        mn.Appliance_Config_Alarm: (
+            Emulator.NSDefaultMode.MixOut,
+            [
+                {  # gs559 mocked cfg
+                    mc.KEY_SUBID: "1800958E1582",
+                    mc.KEY_CHANNEL: 0,
+                    "enable": 1,
+                    "volume": 100,
+                    "song": 1,
+                },
+            ],
+        ),
         mn.Appliance_Config_DeviceCfg: (
             Emulator.NSDefaultMode.MixOut,
             [
@@ -136,6 +148,7 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
             mn_h.Appliance_Control_Water,
         ),
         mc.TYPE_MTS150: (mn_h.Appliance_Hub_SubDevice_Beep,),
+        mc.KEY_SMOKEALARM: (mn.Appliance_Config_Alarm, mn.Appliance_Control_Alarm),
         mc.KEY_WATERLEAK: (mn_h.Appliance_Hub_SubDevice_Beep,),
     }
 
