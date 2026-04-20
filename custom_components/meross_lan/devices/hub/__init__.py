@@ -17,19 +17,7 @@ from ...sensor import SensorParser
 from ...switch import SwitchParser
 
 if TYPE_CHECKING:
-    from typing import (
-        Callable,
-        ClassVar,
-        Final,
-        Iterable,
-        Mapping,
-        NotRequired,
-        Self,
-        TypedDict,
-        Unpack,
-    )
-
-    from homeassistant.helpers import device_registry as dr
+    from typing import ClassVar, Final, Iterable, Mapping
 
     from ...helpers.device import MerossMessage
     from ...helpers.meross_profile import DeviceInfoExtType
@@ -579,16 +567,14 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
     def _parse_beep(self, payload: "mt.hub.SubDevice_Beep", /):
         self.parent.ns_handlers[mn_h.Appliance_Hub_SubDevice_Beep].swap_parsers(
             self,
-            self.parent.on_parser_added(
-                SwitchParser(
-                    self,
-                    entity_key=(
-                        f"{mn_h.Appliance_Hub_SubDevice_Beep.slug}__{SwitchParser.init_key_value}"
-                    ),
-                    ns=mn_h.Appliance_Hub_SubDevice_Beep,
-                    name="Beep alarm",
-                    device_value=payload[mc.KEY_ONOFF],
-                )
+            SwitchParser(
+                self,
+                entity_key=(
+                    f"{mn_h.Appliance_Hub_SubDevice_Beep.slug}__{SwitchParser.init_key_value}"
+                ),
+                ns=mn_h.Appliance_Hub_SubDevice_Beep,
+                name="Beep alarm",
+                device_value=payload[mc.KEY_ONOFF],
             ),
         )
 

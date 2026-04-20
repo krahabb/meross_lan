@@ -663,8 +663,8 @@ class OverTempEnableSwitch(SwitchParser, EntityNamespaceMixin):
             type = overtemp[mc.KEY_TYPE]
             self.sensor_overtemp_type.update_device_value(type)
         except AttributeError:
-            self.sensor_overtemp_type = self.parent.on_parser_added(
-                EnumParser(self, entity_key="config_overtemp_type", native_value=type)
+            self.sensor_overtemp_type = EnumParser(
+                self, entity_key="config_overtemp_type", native_value=type
             )
         except KeyError:
             pass

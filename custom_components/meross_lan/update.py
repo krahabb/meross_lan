@@ -47,7 +47,6 @@ class UpdateEntity(Entity, update.UpdateEntity):
         # maybe we can get something by using index
         Entity.__init__(self, subid, device, device_info=device.device_info)
         self.unique_id = None  # override
-        device.add_entity(self)
 
     def flush_state(self):
         self.installed_version, self.latest_version, self.release_summary = (

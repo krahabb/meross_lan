@@ -118,10 +118,6 @@ class DiffuserSensor(MappingParserHandler):
             except KeyError as ke:
                 if (ke.args[0] != key) or (key in self.parsers):
                     raise
-                self.parsers[key] = self.parent.on_parser_added(
-                    self.parser_defs[key](
-                        None,
-                        self.parent,
-                        device_value=message.payload[key][mc.KEY_VALUE],
-                    ),
+                self.parsers[key] = self.parser_defs[key](
+                    None, self.parent, device_value=message.payload[key][mc.KEY_VALUE]
                 )

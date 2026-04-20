@@ -207,17 +207,15 @@ class _DurationHelper:
                 # (it should do if MultipleConfig is supported and the key is present in the payload)
                 number = gd.parent.ns_handlers[mn.Appliance_GarageDoor_Config].parsers[self.key]  # type: ignore
             except KeyError:
-                number = gd.parent.add_entity(
-                    EmulatedNumber(
-                        gd,
-                        entity_key=f"config_{self.key}",
-                        native_value=gd._transition_duration,
-                        name=self.key,
-                        device_class=EmulatedNumber.DEVICE_CLASS_DURATION,
-                        native_max_value=60,
-                        native_min_value=1,
-                        native_step=1,
-                    )
+                number = EmulatedNumber(
+                    gd,
+                    entity_key=f"config_{self.key}",
+                    native_value=gd._transition_duration,
+                    name=self.key,
+                    device_class=EmulatedNumber.DEVICE_CLASS_DURATION,
+                    native_max_value=60,
+                    native_min_value=1,
+                    native_step=1,
                 )
         setattr(gd, self.key, number)
         return number.native_value

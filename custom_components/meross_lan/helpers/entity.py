@@ -13,6 +13,7 @@ try:
 except ImportError:
     get_last_state_changes = None
 
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import entity
 from homeassistant.helpers.entity_platform import async_get_current_platform
 
@@ -293,6 +294,8 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         super().__init__(id, parent, **kwargs)
         parent.entities[id] = self
         parent.async_shutdown_broadcast.add(self.async_shutdown)
+        if parent.config_entry.state is ConfigEntryState.LOADED:
+            parent.add_entity(self)
 
     def shutdown(self):
         super().shutdown()

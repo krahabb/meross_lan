@@ -251,13 +251,20 @@ class NamespaceHandler(logging.Loggable):
         by design even though the dispatching model allows (_DispatcherParser)
         multiple recipients. Use register_parsers instead."""
         index = parser.index
-        if self.index_type is mn.IndexType.subId and index.type is mn.IndexType.id:
-            # Temporary fix until better normalization:
-            # This is the case of a subdevice registering to a 'subId' indexed namespace
-            # We provide here a 'quick' workaround to automatically bind to channel == 0
-            # since this seems pretty common.
-            index = mn.IndexType.subId(index.value, 0, None)
-        assert index.type is self.index_type, "index type mismatch"
+        if index.type is not self.index_type:
+            if self.index_type is mn.IndexType.subId:
+                # Temporary fix until better normalization:
+                # This is the case of a subdevice registering to a 'subId' indexed namespace
+                # We provide here a 'quick' workaround to automatically bind to channel == 0
+                # since this seems pretty common.
+                if index.type is mn.IndexType.id:
+                    index = mn.IndexType.subId(index.value, 0, None)
+                elif index.type is mn.IndexType.channel:
+                    pass
+                else:
+                    assert False, "Invalid index type for subId indexed namespace"
+            else:
+                assert False, "Index type mismatch"
         assert index not in self.parsers, "Parser already registered for index"
         self.parsers[index] = getattr(parser, f"_parse_{self.id.slug_end}", parser)
         self.polling_request_add_index(index)
@@ -349,8 +356,8 @@ class NamespaceHandler(logging.Loggable):
         self.log_exception(
             self.WARNING,
             exception,
-            "parser function '%s': payload=%s",
-            self.parsers[self.index_type.index(payload)].__name__,
+            "parser '%r': payload=%s",
+            self.parsers[self.index_type.index(payload)],
             _any=payload,
             timeout=14400,
         )
@@ -478,13 +485,11 @@ class NamespaceHandler(logging.Loggable):
 
     def _handle_missing_parser(self, index: mn.IndexValue, payload: "JsonMapping", /):
         if self.parser_class:
-            parser = self.parent.on_parser_added(
-                self.parser_class(
-                    index.value,
-                    self.parent,
-                    ns=self.id,
-                    index=index,
-                )
+            parser = self.parser_class(
+                index.value,
+                self.parent,
+                ns=self.id,
+                index=index,
             )
             self.register_parser(parser)
         else:
@@ -1399,8 +1404,12 @@ class MappingParser(NamespaceParser):
         parsers: Final[dict[str, ValueParser]]
         init_excluded_keys: ClassVar[tuple[str, ...]]
         excluded_keys: tuple[str, ...]
+        """Well-known list of keys which are to be excluded from mapping since they're generally
+        'structural' keys and/or not carrying meaningful data."""
         init_parser_defs: ClassVar[Mapping[str, type[ValueParser]]]
         parser_defs: Mapping[str, type[ValueParser]]
+        """Mapping between payload keys and a specialized ValueParser class to be used to parse the value associated with that key.
+        This is used to automatically create the proper ValueParser when a the key is found in the payload."""
 
         class Args(NamespaceParser.Args):
             excluded_keys: NotRequired[tuple[str, ...]]
@@ -1410,7 +1419,15 @@ class MappingParser(NamespaceParser):
             and not rely on the 'lazy' initialization done in payload parsing."""
             parser_defs: NotRequired[Mapping[str, type[ValueParser]]]
 
-    init_excluded_keys = (mc.KEY_CHANNEL, mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
+    init_excluded_keys = (
+        mc.KEY_ID,
+        mc.KEY_SUBID,
+        mc.KEY_CHANNEL,
+        mc.KEY_LMTIME,
+        mc.KEY_LMTIME_,
+        mc.KEY_TIMESTAMP,
+        mc.KEY_TIMESTAMPMS,
+    )
 
     SLOTS_AUTO_INIT = (
         "excluded_keys",
@@ -1436,29 +1453,36 @@ class MappingParser(NamespaceParser):
         }.items():
             try:
                 self.parsers[key].update_device_value(value)
-            except KeyError:
-                if key not in self.parsers:
+            except Exception as e:
+                if key not in self.parsers:  # surely a KeyError
                     try:
-                        self.parsers[key] = self.parent.on_parser_added(
-                            self.parser_defs[key](
-                                self.index.value,  # FIXME: use a 'sibling' construction semantic
-                                self.parent,
-                                ns=self.ns,
-                                device_value=value,
-                                index=self.index,
-                                # WARNING: key_value might or might not be needed here...
-                            )
+                        self.parsers[key] = self.parser_defs[key](
+                            self.index.value,  # FIXME: use a 'sibling' construction semantic
+                            self.parent,
+                            ns=self.ns,
+                            device_value=value,
+                            index=self.index,
+                            # WARNING: key_value might or might not be needed here...
                         )
                         # TODO: add management of unexpected keys where we don't have a parser_def
                         # and we might want to setup a somewhat 'smart' default (diagnostic) parser
                     except Exception as e:
                         self.log_exception(
-                            self.DEBUG,
+                            self.WARNING,
                             e,
                             "creating parser for '%s' key in '%s' namespace",
                             key,
                             self.ns,
                         )
+                else:
+                    self.log_exception(
+                        self.WARNING,
+                        e,
+                        "parsing key '%s': payload=%s",
+                        key,
+                        _any=payload,
+                        timeout=14400,
+                    )
 
 
 class ParserHandler(NamespaceParser, NamespaceHandler):

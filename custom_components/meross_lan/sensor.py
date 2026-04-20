@@ -207,6 +207,7 @@ class DiagnosticSensor(SensorEntity):
         class Args(SensorEntity.Args):
             native_value: NotRequired[sensor.StateType]
 
+        def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"): ...
         @classmethod
         def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
@@ -215,10 +216,6 @@ class DiagnosticSensor(SensorEntity):
         ) -> bool | None: ...
 
     is_diagnostic = True
-
-    def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
-        super().__init__(*args, **kwargs)  # type: ignore
-        self.parent.add_entity(self)
 
     # HA core entity attributes:
     _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC

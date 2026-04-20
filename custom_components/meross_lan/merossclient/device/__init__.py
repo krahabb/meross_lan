@@ -601,13 +601,6 @@ class Device(PhysicalDevice):
         for ns in (_ns for _ns in nss if _ns in ability):
             self.get_handler(ns).register_parser(parser)
 
-    def on_parser_added[_T: NamespaceParser](self, parser: _T, /):  # type: ignore
-        """Called by NamespaceHandler/MappingParser when a parser is dynamically added following
-        the reception of a message for which no parser was registered.
-        Returns the parser to ease chainability since the parser argument is often created inline in the call.
-        """
-        return parser
-
     @property
     def polling_response_size_available(self):
         """Returns the expected maximum allowed request response size in the current

@@ -1186,14 +1186,6 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         if self.is_connected:
             self.sensor_protocol.set_available()
 
-    @override
-    def on_parser_added[_T: "handler.NamespaceParser"](self, parser: _T, /) -> _T:  # type: ignore
-        """Called by NamespaceHandler/MappingParser when a parser is dynamically added following
-        the reception of a message for which no parser was registered.
-        Returns the parser to ease chainability since the parser argument is often created inline in the call.
-        """
-        return self.add_entity(parser)  # type: ignore
-
     # interface: self
     def register_togglex_channel(self, entity: "ParserEntity", active: bool, /):
         """

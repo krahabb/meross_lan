@@ -53,16 +53,11 @@ class Mts300Climate(MtsThermostatClimate):
                 humidity = payload[mc.KEY_HUMIVALUE]  # type: ignore
                 self.number_calibration_humi.update_device_value(humidity)
             except AttributeError:
-                self.number_calibration_humi = self.parent.on_parser_added(
-                    self.__class__.AdjustHumidityNumber(
-                        self,
-                        ns=self.ns,
-                        device_value=humidity,
-                    )
+                self.number_calibration_humi = self.__class__.AdjustHumidityNumber(
+                    self, ns=self.ns, device_value=humidity
                 )
             except KeyError:  # missing humiValue
                 pass
-
             MtsThermostatClimate.AdjustNumber.__call__(self, payload)
 
     class SensorAssociationSelect(SelectParser):
@@ -416,9 +411,8 @@ class Mts300Climate(MtsThermostatClimate):
         try:
             self.select_temp_association(payload)
         except AttributeError:
-            self.select_temp_association = self.parent.add_entity(
-                Mts300Climate.SensorAssociationSelect(self)
-            )
+            # FIXME: use swap_parser ?
+            self.select_temp_association = Mts300Climate.SensorAssociationSelect(self)
             self.select_temp_association(payload)
 
     def _parse_system(self, payload: dict, /):

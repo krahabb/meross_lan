@@ -137,15 +137,14 @@ class SensorLatestXParser(MappingParser):
             except KeyError:
                 if key in self.parsers:
                     raise
-                self.parsers[key] = self.parent.on_parser_added(
-                    self.parser_defs.get(key, SensorParser)(
-                        self.index.value,  # FIXME: use a 'sibling' construction semantic
-                        self.parent,
-                        entity_key=f"sensor_{key}",
-                        index=self.index,
-                        device_value=value[0]["value"],
-                    )
+                self.parsers[key] = self.parser_defs.get(key, SensorParser)(
+                    self.index.value,  # FIXME: use a 'sibling' construction semantic
+                    self.parent,
+                    entity_key=f"sensor_{key}",
+                    index=self.index,
+                    device_value=value[0]["value"],
                 )
+
                 """
                 # TODO: add the data key to out polling request
                 for channel_payload in self.polling_request_payload:
