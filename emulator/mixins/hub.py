@@ -67,8 +67,9 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
         mn.Appliance_Config_Alarm: (
             Emulator.NSDefaultMode.MixOut,
             [
-                {  # gs559 mocked cfg
-                    mc.KEY_SUBID: "1800958E1582",
+                {  # gs559 mocked cfg: not sure this ns supports this
+                    # the subId here is in order to not install this patch
+                    mc.KEY_SUBID: "",
                     mc.KEY_CHANNEL: 0,
                     "enable": 1,
                     "volume": 100,

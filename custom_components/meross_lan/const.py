@@ -220,7 +220,6 @@ These are polled on a longer period since we don't expect them to change very of
 POLLING_CONFIG_DIAGNOSTIC = (300, PARAM_CLOUD_UPDATE_PERIOD, None)
 NamespaceHandler.POLLING_CONFIG_MAP.update(
     {
-        mn.Appliance_Config_Alarm: POLLING_CONFIG_CONFIGURATION,
         mn.Appliance_Config_DeviceCfg: POLLING_CONFIG_CONFIGURATION,
         mn.Appliance_Config_Sensor_Association: POLLING_CONFIG_CONFIGURATION,
         mn.Appliance_Mcu_Firmware: NamespaceHandler.POLLING_CONFIG_ONCE,

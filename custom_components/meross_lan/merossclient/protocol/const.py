@@ -218,6 +218,10 @@ KEY_TEMPUNIT = "tempUnit"
 KEY_ALERT = "alert"
 KEY_ALARM = "alarm"
 KEY_ALARMCONFIG = "alarmConfig"
+KEY_EVENT = "event"
+KEY_DEMOLISH = "demolish"
+KEY_MASECURITY = "maSecurity"
+KEY_SECURITY = "security"
 KEY_CALIBRATION = "calibration"
 KEY_CTLRANGE = "ctlRange"
 KEY_CTLMAX = "ctlMax"
@@ -288,6 +292,17 @@ STATUS_NOTONLINE = 0
 STATUS_ONLINE = 1
 STATUS_OFFLINE = 2
 STATUS_UPGRADING = 3
+
+# Appliance.Config.Alarm
+CONFIG_ALARM_SONGS = {
+    1: "Siren",
+    2: "Beep",
+    3: "Chime",
+    4: "Alarm",
+    5: "Roar",
+    6: "Whistle",
+    7: "Buzzer",
+}
 
 # Appliance.Control.TempUnit
 TEMPUNIT_CELSIUS = 1

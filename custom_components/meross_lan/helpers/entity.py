@@ -13,6 +13,7 @@ try:
 except ImportError:
     get_last_state_changes = None
 
+from homeassistant.components.usb import utils as usb_utils
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import entity
 from homeassistant.helpers.entity_platform import async_get_current_platform
@@ -165,28 +166,19 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         - entity_key: is added to provide additional 'uniqueness' should the device have multiple
         entities for the same channel and usually equal to device_class (but might not be)
         """
+        # FIXME: generalize automatic entity_key generation for this pattern:
+        # entity_key=f"{ns.slug}__{key_value}",
+
         entity_key = kwargs.pop("entity_key", self.__class__.init_entity_key)
         if len(args) == 1:
             sibling: "Entity.Sibling" = args[0]
             parent = sibling.parent
             self.device_info = sibling.device_info
-            """
-            legacy unique_id key scheme
-            id = sibling.index.value
-            if id is None:
-                id = entity_key
-            elif entity_key is not None:
-                id = f"{id}_{entity_key}"
-            """
-            try:
-                # REMOVE
-                # intercept 'index' kwarg used by NamespaceParser mixin
-                # BEWARE: we're relying on the fact that NamespaceParser is effectively initialized only
-                # in Loggable.__init__ since it has no constructor defined.
-                # Also, actually, index is managed by default auto init Loggable mechanics..
-                index = kwargs["index"]  # type: ignore
-            except KeyError:
-                kwargs["index"] = index = sibling.index
+            # intercept 'index' kwarg used by NamespaceParser mixin
+            # BEWARE: we're relying on the fact that NamespaceParser is effectively initialized only
+            # in Loggable.__init__ since it has no constructor defined.
+            # Also, actually, index is managed by default auto init Loggable mechanics..
+            index = kwargs.setdefault("index", sibling.index)
             if index:
                 id = f"{index.slug}_{entity_key}" if entity_key else index.slug
             else:
@@ -218,12 +210,16 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
                     self.device_info = kwargs.pop("device_info")  # type: ignore
                 except KeyError:
                     self.device_info = parent.get_device_entry_info(id)
-                # FIXME legacy id adjustment
                 if id is None:
-                    id = entity_key
+                    _legacy_id = entity_key
                 elif entity_key:
-                    id = f"{id}_{entity_key}"
-                _legacy_id = id
+                    _legacy_id = (
+                        f"{id[0]}_{id[1]}_{entity_key}"
+                        if type(id) is tuple
+                        else f"{id}_{entity_key}"
+                    )
+                else:
+                    _legacy_id = id
                 try:
                     # REMOVE
                     # intercept 'index' arg targeting NamespaceParser mixin
@@ -588,7 +584,7 @@ class NumericParser(ValueParser, NumericEntity):
 
 
 class BinaryEntity(Entity):
-    """Base class for HA binary entities (binary_sensors/toggle_entities)."""
+    """Base class for HA ToggleEntity."""
 
     if TYPE_CHECKING:
 
@@ -613,7 +609,7 @@ class BinaryEntity(Entity):
 
 
 class BinaryParser(handler.BooleanParser, ValueParser, BinaryEntity):
-    """Base parsing class for Switches and BinarySensors linked to a namespace."""
+    """Base parsing class for HA core ToggleEntity linked to a namespace."""
 
     if TYPE_CHECKING:
 

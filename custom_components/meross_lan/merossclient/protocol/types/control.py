@@ -7,6 +7,42 @@ from . import NotRequired, TypedDict
 from .. import types as mt
 
 
+class Alarm_Source(TypedDict):
+    uuid: str
+    subId: str
+
+
+class Alarm_Event_Common(TypedDict):
+    value: int  # 1: take, 2: normal (according to App reverse engineering nomenclature)
+    timestamp: int
+    source: NotRequired[list[Alarm_Source]]
+
+
+class Alarm_Event_InterConn(Alarm_Event_Common):
+    type: NotRequired[int]  # 1: current - 2: all but source - 3: all
+
+
+class Alarm_Event(TypedDict):
+    """
+    It looks like demolish-interConn-maSecurity are available on subdevs like smokeAlarm (new models) and
+    maybe mst100/200.
+    The 'security' event is valid for hub msh450 devices and seems to control the hub siren
+    with value == 1 (take) triggering the siren and value == 2 (normal) stopping it.
+    (https://github.com/krahabb/meross_lan/issues/625)
+    """
+
+    demolish: NotRequired[Alarm_Event_Common]
+    interConn: NotRequired[Alarm_Event_InterConn]
+    maSecurity: NotRequired[Alarm_Event_Common]
+    security: NotRequired[Alarm_Event_Common]
+
+
+class Alarm(mt.SubIdPayload):
+    """Appliance.Control.Alarm"""
+
+    event: Alarm_Event
+
+
 class Beep(mt.ChannelOnOff):
     """Appliance.Control.Beep"""
 

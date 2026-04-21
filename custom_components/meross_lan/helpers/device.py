@@ -327,11 +327,8 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         mn.Appliance_Control_ToggleX: (".switch", "ToggleX"),
         mn.Appliance_Config_OverTemp: (".devices.mss", "OverTempEnableSwitch"),
         mn.Appliance_Config_Alarm: (".siren", "ConfigAlarm"),
-        mn.Appliance_Control_Alarm: (".siren", "Siren"),
-        mn.Appliance_Control_Electricity: (
-            ".devices.mss",
-            "ElectricitySensor",
-        ),
+        mn.Appliance_Control_Alarm: (".siren", "ControlAlarm"),
+        mn.Appliance_Control_Electricity: (".devices.mss", "ElectricitySensor"),
         mn.Appliance_Control_ElectricityX: (".devices.mss", "ElectricityXSensor"),
         mn.Appliance_Control_ConsumptionH: (
             ".devices.mss",
