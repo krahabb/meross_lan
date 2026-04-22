@@ -171,22 +171,26 @@ class SensorParser(mle.NumericParser, SensorEntity):
         @classmethod
         def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
-    HUMIDITY_ARGS: "Args" = {
+        HUMIDITY_ARGS: Final[Args]
+        LIGHT_ARGS: Final[Args]
+        TEMPERATURE_ARGS: Final[Args]
+
+    HUMIDITY_ARGS = {
         "entity_key": mc.KEY_HUMIDITY,
         "device_scale": 10,  # almost always valid
         "device_class": SensorEntity.DeviceClass.HUMIDITY,
         "suggested_display_precision": 1,
     }
 
-    LIGHT_ARGS: "Args" = {
+    LIGHT_ARGS = {
         "entity_key": mc.KEY_LIGHT,
         "device_class": SensorEntity.DeviceClass.ILLUMINANCE,
         "suggested_display_precision": 0,
     }
 
-    TEMPERATURE_ARGS: "Args" = {
+    TEMPERATURE_ARGS = {
         "entity_key": mc.KEY_TEMPERATURE,
-        "device_scale": 10,  # TODO: use 100 as default since more common
+        "device_scale": 100,  # almost always valid
         "device_class": SensorEntity.DeviceClass.TEMPERATURE,
         "suggested_display_precision": 1,
     }

@@ -140,7 +140,6 @@ class SensorLatestParser(MappingParser):
             | {
                 "entity_key": f"sensor_{mc.KEY_TEMP}",
                 "key_value": SensorParser.SimpleKeyValue(mc.KEY_TEMP),
-                "device_scale": 100,
             }
         ),
     }
@@ -183,9 +182,7 @@ class SensorLatestXParser(MappingParser):
     init_parser_defs = {
         mc.KEY_HUMI: SensorParser.DEF(**SensorParser.HUMIDITY_ARGS),
         mc.KEY_LIGHT: SensorParser.DEF(**SensorParser.LIGHT_ARGS),
-        mc.KEY_TEMP: SensorParser.DEF(
-            **(SensorParser.TEMPERATURE_ARGS | {"device_scale": 100})
-        ),
+        mc.KEY_TEMP: SensorParser.DEF(**SensorParser.TEMPERATURE_ARGS),
     }
 
     @classmethod

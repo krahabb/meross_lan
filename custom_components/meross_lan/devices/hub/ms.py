@@ -180,6 +180,9 @@ class ms100(SensorSubDevice):
         mn_h.Appliance_Hub_Sensor_Latest,
     )
 
+    # These class cfgs are needed to dynamically customize entities in ms130
+    TEMPERATURE_ARGS = SensorParser.TEMPERATURE_ARGS | {"device_scale": 10}
+
     __slots__ = (
         "sensor_temperature",
         "sensor_humidity",
@@ -187,7 +190,7 @@ class ms100(SensorSubDevice):
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         SensorSubDevice.__init__(self, subid, hub, key_digest, model)
-        self.sensor_temperature = SensorParser(self, **SensorParser.TEMPERATURE_ARGS)
+        self.sensor_temperature = SensorParser(self, **self.TEMPERATURE_ARGS)
         self.sensor_humidity = SensorParser(self, **SensorParser.HUMIDITY_ARGS)
 
     def shutdown(self):
@@ -252,6 +255,7 @@ class ms100(SensorSubDevice):
 
 class ms130(ms100):
 
+    TEMPERATURE_ARGS = SensorParser.TEMPERATURE_ARGS
     # Configure parser for Appliance.Config.DeviceCfg:
     # {
     #     "config": {
@@ -336,7 +340,6 @@ class ms130(ms100):
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         ms100.__init__(self, subid, hub, key_digest, model)
-        self.sensor_temperature.device_scale = 100
         index = mn.IndexType.subId(subid, 0, None)
         try:
             # Configure parser for Appliance.Control.Sensor.LatestX:
