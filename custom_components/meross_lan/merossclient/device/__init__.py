@@ -134,11 +134,6 @@ class Device(PhysicalDevice):
         class ConnectArgs(AbstractClient.ConnectArgs):
             pass
 
-        NAMESPACES: ClassVar[mn.NamespacesMapType]
-        """Accesses the namespaces definitions for this Device. This could be overriden
-        when needed to extend with other namespaces (this is actually true for Hub). This
-        way, when we're working only with standard devices we don't need to import the namespaces
-        only relevant to hubs."""
         NAMESPACE_INIT_PACKAGE: ClassVar[str]
         """Package/module path where to look for namespace initialization functions."""
         NAMESPACE_INIT: ClassVar[dict[str, Any]]
@@ -191,7 +186,6 @@ class Device(PhysicalDevice):
 
     HEARTBEAT_TIMEOUT = 300
     TRANSPORT = Transport.AUTO  # type: ignore[override]
-    NAMESPACES = mn.NAMESPACES
 
     @staticmethod
     def namespace_init_empty(ns: mn.Namespace, device: "Device", /):
@@ -274,7 +268,7 @@ class Device(PhysicalDevice):
 
         await self._async_init_zoneinfo()
 
-        namespaces = self.__class__.NAMESPACES
+        namespaces = mn.NAMESPACES
         namespace_init = self.__class__.NAMESPACE_INIT
         for ns, ns_init_func in {
             namespaces[_ability]: _ns_init_conf
@@ -593,7 +587,7 @@ class Device(PhysicalDevice):
         try:
             return self.ns_handlers[namespace]  # type: ignore
         except KeyError:
-            return NamespaceHandler(self.__class__.NAMESPACES[namespace], self)
+            return NamespaceHandler(mn.NAMESPACES[namespace], self)
 
     def register_parser_ex(self, parser: NamespaceParser, *nss: "mn.Namespace"):
         """Register a parser for multiple namespaces. Abilities are checked for namespaces availability."""

@@ -73,8 +73,6 @@ class Hub(mld.Device):
     if TYPE_CHECKING:
         subdevices: dict[str, "SubDevice"]
 
-    NAMESPACES = mn.HUB_NAMESPACES
-
     # we can safely rewrite base class __dict__ here
     # since, once configured, these are no harm when used by a generic non-hub device.
     mld.Device.NAMESPACE_INIT.update(

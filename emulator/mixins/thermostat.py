@@ -226,7 +226,7 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
         }
         """
 
-        ns = self.NAMESPACES[namespace]
+        ns = mn.NAMESPACES[namespace]
         ns_key = ns.key
         assert (
             ns.index_type is mn.IndexType.channel

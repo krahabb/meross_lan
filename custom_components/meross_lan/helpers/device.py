@@ -242,7 +242,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                 # with various heuristics
                 namespace = self.last_tx_message.namespace  # type: ignore
                 if not type(namespace) is mn.Namespace:
-                    namespace = device.NAMESPACES[namespace]
+                    namespace = mn.NAMESPACES[namespace]
                 match namespace:
                     case mn.Appliance_Control_Multiple:
                         list_break_matcher = '},{"header":'
@@ -357,43 +357,43 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         ),
         mn.Appliance_Control_Spray: (".devices.spray", "Spray"),
         mn.Appliance_Control_TempUnit: (".devices.thermostat", "MtsTempUnit"),
-        "Appliance.Control.Thermostat.Mode": (
+        mn.thermostat.Appliance_Control_Thermostat_Mode: (
             ".devices.thermostat.mts200",
             "Mts200Climate",
         ),
-        "Appliance.Control.Thermostat.ModeB": (
+        mn.thermostat.Appliance_Control_Thermostat_ModeB: (
             ".devices.thermostat.mts960",
             "Mts960Climate",
         ),
-        "Appliance.Control.Thermostat.ModeC": (
+        mn.thermostat.Appliance_Control_Thermostat_ModeC: (
             ".devices.thermostat.mts300",
             "Mts300Climate",
         ),
-        "Appliance.Control.Thermostat.DeadZone": (
+        mn.thermostat.Appliance_Control_Thermostat_DeadZone: (
             ".devices.thermostat",
             "MtsDeadZoneNumber",
         ),
-        "Appliance.Control.Thermostat.Frost": (
+        mn.thermostat.Appliance_Control_Thermostat_Frost: (
             ".devices.thermostat",
             "MtsFrostNumber",
         ),
-        "Appliance.Control.Thermostat.HoldAction": (
+        mn.thermostat.Appliance_Control_Thermostat_HoldAction: (
             ".devices.thermostat",
             "MtsHoldAction",
         ),
-        "Appliance.Control.Thermostat.Overheat": (
+        mn.thermostat.Appliance_Control_Thermostat_Overheat: (
             ".devices.thermostat",
             "MtsOverheatNumber",
         ),
-        "Appliance.Control.Thermostat.Sensor": (
+        mn.thermostat.Appliance_Control_Thermostat_Sensor: (
             ".devices.thermostat",
             "MtsExternalSensorSwitch",
         ),
-        "Appliance.Control.Thermostat.SummerMode": (
+        mn.thermostat.Appliance_Control_Thermostat_SummerMode: (
             ".devices.thermostat",
             "MtsSummerMode",
         ),
-        "Appliance.Control.Thermostat.WindowOpened": (
+        mn.thermostat.Appliance_Control_Thermostat_WindowOpened: (
             ".devices.thermostat",
             "MtsWindowOpened",
         ),
@@ -855,7 +855,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         ability = next(abilities)
         if ability in self.TRACE_ABILITY_EXCLUDE:
             return None
-        ns = self.NAMESPACES.get(ability)
+        ns = mn.NAMESPACES.get(ability)
         if not ns:  # unknown namespace..setup generic handler
             return self.get_handler_by_name(ability)
         if ns.can_query:
@@ -1330,16 +1330,14 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             # so we try, in case, to build a new one with good presets
             if namespace in self.NAMESPACE_IGNORE:
                 ns_handler = handler.VoidHandler(
-                    self.NAMESPACES[namespace],
+                    mn.NAMESPACES[namespace],
                     self,
                     config=mlc.POLLING_CONFIG_DIAGNOSTIC,
                 )
             else:
                 ns_handler = DiagnosticHandler(
-                    self.NAMESPACES.get(namespace)
-                    or mn.Namespace.from_message(
-                        namespace, method, message.payload, self.NAMESPACES
-                    ),
+                    mn.NAMESPACES.get(namespace)
+                    or mn.Namespace.from_message(namespace, method, message.payload),
                     self,
                     config=mlc.POLLING_CONFIG_DIAGNOSTIC,
                 )

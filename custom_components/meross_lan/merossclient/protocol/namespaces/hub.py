@@ -1,27 +1,15 @@
 """
 Descriptors for hub specific namespaces management.
-This file contains the knowledge about how namespaces work (their syntax and behaviors).
-Namespaces specific for Hubs are stored in a dedicated map (HUB_NAMESPACES) so that they can also override
-namespaces already defined in the default (NAMESPACES) map.
-When code lookups HUB_NAMESPACES it will fallback to NAMESPACES if no match so that
-standard namespaces are available for Hubs but preserving their default behavior can be easily accessed through
-only HUB_NAMESPACES.
-We actually define the symbol HUB_NAMESPACES in the root package since it also uses that for heuristics
-but from a design perspective it should be born here.
 """
 
 from .. import const as mc, namespaces as mn
 
-H: "mn.ns.Args" = {"map": mn.HUB_NAMESPACES}
-
-ID = H | mn.IDX_ID
-GET_ID = ID | mn.G_LI
-SET_ID = ID | mn.S_LI
-GETSET_ID = ID | mn.G_LI | mn.S_LI
+GET_ID = mn.IDX_ID | mn.G_LI
+SET_ID = mn.IDX_ID | mn.S_LI
+GETSET_ID = mn.IDX_ID | mn.G_LI | mn.S_LI
 GETPSH_ID = GET_ID | mn.PSH
 
-SUBID = H | mn.IDX_SUB
-GET_SUBID = SUBID | mn.G_LIS
+GET_SUBID = mn.IDX_SUB | mn.G_LIS
 GETSET_SUBID = GET_SUBID | mn.S_LI
 GETSETPSH_SUBID = GETSET_SUBID | mn.PSH
 GETSETPSQ_SUBID = GETSET_SUBID | mn.PSQ
@@ -34,7 +22,7 @@ Appliance_Control_Water = mn.ns(
     "Appliance.Control.Water", mc.KEY_CONTROL, 50, GETSETPSH_SUBID
 )  # mst100
 Appliance_Control_WaterEvent = mn.ns(
-    "Appliance.Control.WaterEvent", mc.KEY_CONTROL, -1, SUBID, mn.PSH, mn.EXP
+    "Appliance.Control.WaterEvent", mc.KEY_CONTROL, -1, mn.IDX_SUB, mn.PSH, mn.EXP
 )  # mst100 (used to report events after each watering cycle is completed)
 Appliance_Control_WaterEvent_Skip = mn.ns(
     "Appliance.Control.WaterEvent.Skip", mc.KEY_CONTROL, -1, GETSET_SUBID, mn.EXP
@@ -43,16 +31,16 @@ Appliance_Control_WaterPlan_Skip = mn.ns(
     "Appliance.Control.WaterPlan.Skip", mc.KEY_CONTROL, -1, GETSET_SUBID, mn.EXP
 )  # mst100 (allows the device to query cloud server about whether to skip execution on a specific day based on weather conditions)
 
-Appliance_Digest_Hub = mn.ns("Appliance.Digest.Hub", mc.KEY_HUB, -1, mn.G_D, H, mn.DIG)
+Appliance_Digest_Hub = mn.ns("Appliance.Digest.Hub", mc.KEY_HUB, -1, mn.G_D, mn.DIG)
 Appliance_Digest_WaterPlan = mn.ns(
     "Appliance.Digest.WaterPlan", mc.KEY_DIGEST, -1, GETSET_SUBID, mn.EXP
 )  # mst100 (used to read/write watering schedules)
 Appliance_Hub_Battery = mn.ns("Appliance.Hub.Battery", mc.KEY_BATTERY, 40, GETPSH_ID)
 Appliance_Hub_Exception = mn.ns(
-    "Appliance.Hub.Exception", mc.KEY_EXCEPTION, -1, mn.PSQ, ID
+    "Appliance.Hub.Exception", mc.KEY_EXCEPTION, -1, mn.PSQ, mn.IDX_ID
 )
 Appliance_Hub_ExtraInfo = mn.ns(
-    "Appliance.Hub.ExtraInfo", "extraInfo", -1, mn.G_D, H
+    "Appliance.Hub.ExtraInfo", "extraInfo", -1, mn.G_D
 )  # upgrade info for subdevices
 Appliance_Hub_Mts100_Adjust = mn.ns(
     "Appliance.Hub.Mts100.Adjust", mc.KEY_ADJUST, 40, GETSET_ID
@@ -80,7 +68,7 @@ Appliance_Hub_Mts100_SuperCtl = mn.ns(
     "Appliance.Hub.Mts100.SuperCtl", "superCtl", -1, GET_ID, mn.PSH
 )
 Appliance_Hub_Online = mn.ns("Appliance.Hub.Online", mc.KEY_ONLINE, -1, GETPSH_ID)
-Appliance_Hub_PairSubDev = mn.ns("Appliance.Hub.PairSubDev", mc.KEY_, -1, mn.S_E, H)
+Appliance_Hub_PairSubDev = mn.ns("Appliance.Hub.PairSubDev", mc.KEY_, -1, mn.S_E)
 Appliance_Hub_Report = mn.ns("Appliance.Hub.Report", "report", -1, GETPSH_ID, mn.EXP)
 Appliance_Hub_Sensitivity = mn.ns(
     "Appliance.Hub.Sensitivity", "sensitivity", -1, GETSET_ID, mn.PSH
@@ -111,7 +99,7 @@ Appliance_Hub_Sensor_WaterLeak = mn.ns(
     "Appliance.Hub.Sensor.WaterLeak", mc.KEY_WATERLEAK, -1, GETPSH_ID
 )
 Appliance_Hub_SubdeviceList = mn.ns(
-    "Appliance.Hub.SubdeviceList", "subdeviceList", -1, mn.PSH, H
+    "Appliance.Hub.SubdeviceList", "subdeviceList", -1, mn.PSH
 )
 Appliance_Hub_SubDevice_Beep = mn.ns(
     "Appliance.Hub.SubDevice.Beep", mc.KEY_ALARM, 35, GETSET_ID

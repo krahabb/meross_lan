@@ -43,8 +43,6 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
         subdevices: list[mt.hub.Digest_SubDevice]
         """list of subdevice dicts as per hub digest"""
 
-    NAMESPACES = mn.HUB_NAMESPACES
-
     MAXIMUM_RESPONSE_SIZE = 4000
 
     NAMESPACES_DEFAULT = {

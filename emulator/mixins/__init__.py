@@ -252,7 +252,6 @@ class Emulator:
         """Keys in existing state are preserved (only non-existing keys are added)."""
 
     if typing.TYPE_CHECKING:
-        NAMESPACES: ClassVar
         MAXIMUM_RESPONSE_SIZE: ClassVar
 
         type NSDefaultArgs = tuple[NSDefaultMode, dict | list]
@@ -266,8 +265,6 @@ class Emulator:
         relevant for the features they're implementing. The complete class defaults
         will be 'explored' in MerossEmulator.__init__."""
         NAMESPACES_DEFAULT_IGNORE: ClassVar[tuple[mn.Namespace, ...]]
-
-    NAMESPACES = mn.NAMESPACES
 
     MAXIMUM_RESPONSE_SIZE = 3000
 
@@ -326,7 +323,7 @@ class Emulator:
         digest = descriptor.digest or descriptor.control
 
         for ability in descriptor.ability:
-            ns = self.NAMESPACES.get(ability)
+            ns = mn.NAMESPACES.get(ability)
             if ns and (ns.grammar is not mn.Grammar.UNKNOWN):
                 # TODO: check our grammar is consistent with the trace payloads
                 # and eventually log/print warning/details
@@ -557,7 +554,7 @@ class Emulator:
         state carried through our GETACK messages in the trace
         """
 
-        ns = self.NAMESPACES[namespace]
+        ns = mn.NAMESPACES[namespace]
         ns_key = ns.key
         match method:
             case mc.METHOD_GET:

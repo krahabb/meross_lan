@@ -32,12 +32,13 @@ if TYPE_CHECKING:
         MerossRequestType,
     )
 
+    # Use Mapping so it is not mutable but still subscriptable for type checking purposes.
+    # The actual type is a custom dict to allow dynamic Namespace creation.
     type NamespacesMapType = Mapping[str, "Namespace"]
     EMPTY_DICT: Final[JsonDict]
     EMPTY_LIST: Final[list[JsonDict]]
 
     NAMESPACES: Final[NamespacesMapType]
-    HUB_NAMESPACES: Final[NamespacesMapType]
 
 
 def _slug_split(split: str) -> str:
@@ -49,23 +50,21 @@ def _slug_split(split: str) -> str:
         return f"{split[0].lower()}{split[1:]}"
 
 
-def _heuristic_args(name: str, kwargs: "Namespace.Args") -> "Namespace.Args":
+def _heuristic_args(name: str, /) -> "Namespace.Args":
     """Apply some euristics based on the namespace name to deduce
     missing arguments in the namespace definition.
     Beware kwargs is modified in place and returned."""
 
-    kwargs["grammar"] = Grammar.UNKNOWN
-    kwargs["payload_set"] = PayloadType.UNKNOWN
-    kwargs["payload_del"] = PayloadType.UNKNOWN
-    kwargs["payload_psh"] = PayloadType.UNKNOWN
+    kwargs: "Namespace.Args" = {
+        "grammar": Grammar.UNKNOWN,
+        "payload_set": PayloadType.UNKNOWN,
+        "payload_del": PayloadType.UNKNOWN,
+        "payload_psh": PayloadType.UNKNOWN,
+    }
 
     match name.split("."):
         case (_, "Hub", *_):
             # This is not always true: some 'hub' namespaces don't get indexed by 'id' (nor by 'subId')
-            # Examples are ExtraInfo or SubdeviceList. In our definitions we'll solve the problem
-            # by explicitly passing the map=HUB_NAMESPACES so that they're mapped into the right storage
-            # but the rules for parsing are very custom and likely need to be managed on a case by case
-            # at the HubMixin level.
             kwargs["index_type"] = IndexType.id
         case (_, "RollerShutter", *_):
             kwargs["index_type"] = IndexType.channel
@@ -91,8 +90,12 @@ class _NamespacesMap(dict):
     Default general map of Namespace(s).
     This map is populated with a set of static (known) definitions but could also be
     updated at runtime when a new undefined namespace enter the device message pipe.
+    BEWARE:
+    Since the ns definitions are split in multiple modules, we need to be sure those are
+    loaded so that the corresponding Namespace instances are created and registered in this map.
     """
 
+    # TODO: implement __missing__ semantics
     def __getitem__(self, name: str) -> "Namespace":
         try:
             return dict.__getitem__(self, name)
@@ -101,7 +104,7 @@ class _NamespacesMap(dict):
                 name,
                 _slug_split(name.split(".")[-1]),
                 -1,
-                _heuristic_args(name, {"map": self}),
+                _heuristic_args(name),
             )
 
     def get(self, name: str) -> "Namespace | None":
@@ -112,38 +115,6 @@ class _NamespacesMap(dict):
 
 
 NAMESPACES = _NamespacesMap()
-
-
-class _HubNamespacesMap(dict):
-    """
-    This map is specific for Hub devices so that we can 'override' some Namespace(s) when
-    their default (standard device) based behavior could differ when managed in a Hub.
-    Examples are Appliance.Control.Sensor.LatestX and HistoryX.
-    If a namespace is not found here, it will be looked-up in the default NAMESPACES map
-    and eventually created there. Beware this is not the same meaning of Namespace property 'is_hub'.
-    """
-
-    def __getitem__(self, name: str) -> "Namespace":
-        try:
-            return dict.__getitem__(self, name)
-        except KeyError:
-            if ns := NAMESPACES.get(name):
-                return ns
-            return Namespace(
-                name,
-                _slug_split(name.split(".")[-1]),
-                -1,
-                _heuristic_args(name, {"map": self}),
-            )
-
-    def get(self, name: str) -> "Namespace | None":
-        try:
-            return dict.__getitem__(self, name)
-        except KeyError:
-            return NAMESPACES.get(name)
-
-
-HUB_NAMESPACES = _HubNamespacesMap()
 
 
 class _immutable:
@@ -527,7 +498,6 @@ class Namespace(str):
             index_type: NotRequired[IndexType]
             key_digest: NotRequired[str | None]  # True allowed (triggers euristics)
             grammar: NotRequired[Grammar]
-            map: NotRequired[NamespacesMapType]
 
     __slots__ = (
         "key",
@@ -568,25 +538,19 @@ class Namespace(str):
             return mc.KEY_
 
     @staticmethod
-    def from_message(
-        name: str,
-        method: str,
-        payload: "MerossPayloadType",
-        map: "NamespacesMapType",
-        /,
-    ):
+    def from_message(name: str, method: str, payload: "MerossPayloadType", /):
         if method == mc.METHOD_ERROR:
             return Namespace(
                 name,
                 _slug_split(name.split(".")[-1]),
                 -1,
-                _heuristic_args(name, {"map": map}),
+                _heuristic_args(name),
             )
         return Namespace(
             name,
             Namespace.infer_key(name, payload),
             -1,
-            _heuristic_args(name, {"map": map}),
+            _heuristic_args(name),
         )
 
     def __new__(
@@ -608,7 +572,6 @@ class Namespace(str):
             "index_type": IndexType.none,
             "key_digest": None,
             "grammar": Grammar.STABLE,
-            "map": NAMESPACES,
         }
         for _extra in args:
             kwargs.update(_extra)
@@ -656,7 +619,7 @@ class Namespace(str):
 
         self.grammar = kwargs["grammar"]
 
-        kwargs["map"][name] = self  # type: ignore
+        NAMESPACES[name] = self  # type: ignore
 
     @cached_property
     def slug(self) -> str:
@@ -1027,3 +990,6 @@ Appliance_System_Time = ns("Appliance.System.Time", mc.KEY_TIME, -1, G_E, S_D, P
 Appliance_System_Position = ns(
     "Appliance.System.Position", mc.KEY_POSITION, -1, G_E, S_D
 )
+
+# This is to ease full loading of NAMESPACES map since definitions are split among multiple files.
+from . import hub, thermostat  # noqa: F401
