@@ -137,10 +137,6 @@ class ms100(SensorSubDevice):
 
     class SensorAdjustNumber(NumberParser):
 
-        init_ns = mn_h.Appliance_Hub_Sensor_Adjust
-
-        init_device_scale = 10
-
         @override
         async def async_request_value(self, device_value, /):
             # the SET command on NS_APPLIANCE_HUB_SENSOR_ADJUST works by applying
@@ -154,25 +150,24 @@ class ms100(SensorSubDevice):
             )
             self.update_device_value(device_value)
 
-    class AdjustTemperatureNumber(SensorAdjustNumber):
-
-        init_entity_key = "config_adjust_temperature"
-        init_key_value = NumberParser.SimpleKeyValue(mc.KEY_TEMPERATURE)
-        _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
-        _attr_name = "Adjust temperature"
-        _attr_native_min_value = -5
-        _attr_native_max_value = 5
-        _attr_native_step = 0.1
-
-    class AdjustHumidityNumber(SensorAdjustNumber):
-
-        init_entity_key = "config_adjust_humidity"
-        init_key_value = NumberParser.SimpleKeyValue(mc.KEY_HUMIDITY)
-        _attr_device_class = NumberParser.DeviceClass.HUMIDITY
-        _attr_name = "Adjust humidity"
-        _attr_native_min_value = -20
-        _attr_native_max_value = 20
-        _attr_native_step = 1
+    SENSOR_ADJUST_DEFS = {
+        NumberParser.SimpleKeyValue(mc.KEY_HUMIDITY): SensorAdjustNumber.DEF(
+            entity_key="config_adjust_humidity",
+            name="Adjust humidity",
+            device_class=NumberParser.DeviceClass.HUMIDITY,
+            native_min_value=-20,
+            native_max_value=20,
+            native_step=1,
+        ),
+        NumberParser.SimpleKeyValue(mc.KEY_TEMPERATURE): SensorAdjustNumber.DEF(
+            entity_key="config_adjust_temperature",
+            name="Adjust temperature",
+            device_class=NumberParser.DeviceClass.TEMPERATURE,
+            native_min_value=-5,
+            native_max_value=5,
+            native_step=0.1,
+        ),
+    }
 
     NS_HUB = (
         mn_h.Appliance_Hub_Sensor_TempHum,
@@ -219,11 +214,14 @@ class ms100(SensorSubDevice):
         self.parent.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
             self,
             *(
-                entity_class(self, ns_value=entity_class.init_key_value[payload])
-                for entity_class in (
-                    ms100.AdjustTemperatureNumber,
-                    ms100.AdjustHumidityNumber,
+                entity_def(
+                    self,
+                    ns=mn_h.Appliance_Hub_Sensor_Adjust,
+                    key_value=key_value,
+                    device_scale=10,
+                    ns_value=payload[str(key_value)],
                 )
+                for key_value, entity_def in ms100.SENSOR_ADJUST_DEFS.items()
             ),
         )
         # swap also the update_sensors method to a smarter one

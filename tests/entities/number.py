@@ -83,8 +83,8 @@ class EntityTest(EntityComponentTest):
     }
     HUB_SUBDEVICES_ENTITIES = {
         mc.TYPE_MS100: [
-            ms.ms100.AdjustTemperatureNumber,
-            ms.ms100.AdjustHumidityNumber,
+            ms.ms100.SensorAdjustNumber,  # config_adjust_humidity
+            ms.ms100.SensorAdjustNumber,  # config_adjust_temperature
         ],
         mc.TYPE_MTS100: _MTS100_ENTITES,
         mc.TYPE_MTS100V3: _MTS100_ENTITES,
