@@ -76,13 +76,13 @@ class Mts960Climate(MtsThermostatClimate):
             entity_key="timer_cycle_on_duration"
         ),
     }
-    DIAGNOSTIC_SENSOR_KEYS = (
-        mc.KEY_MODE,
-        mc.KEY_ONOFF,
-        mc.KEY_STATE,
-        mc.KEY_SENSORSTATUS,
-        mc.KEY_WORKING,
-    )
+    DIAGNOSTIC_SENSOR_KEYS = {
+        "diagnostic_sensor_mode": mc.KEY_MODE,
+        "diagnostic_sensor_onoff": mc.KEY_ONOFF,
+        "diagnostic_sensor_status": mc.KEY_SENSORSTATUS,
+        "diagnostic_sensor_state": mc.KEY_STATE,
+        "diagnostic_sensor_working": mc.KEY_WORKING,
+    }
 
     # HA core entity attributes:
     _attr_hvac_modes = [
@@ -98,7 +98,8 @@ class Mts960Climate(MtsThermostatClimate):
         "_mts_working",
         "_mts_timer_payload",
         "_mts_timer_mode",
-        *ENTITY_DEFS.keys(),
+        *ENTITY_DEFS,
+        *DIAGNOSTIC_SENSOR_KEYS,
     )
 
     def __init__(self, id, device: "Device", /, **kwargs):
@@ -383,19 +384,20 @@ class Mts960Climate(MtsThermostatClimate):
                 else None
             )
 
-        device = self.parent
-        if device.create_diagnostic_entities:
-            entities: dict[str, DiagnosticSensor] = device.entities  # type: ignore
-            id = self.id
-            for key in self.DIAGNOSTIC_SENSOR_KEYS:
+        if self.parent.create_diagnostic_entities:
+            for _attr, _key in Mts960Climate.DIAGNOSTIC_SENSOR_KEYS.items():
                 try:
-                    native_value = payload[key]
-                    entities[f"{id}_{key}"].update_device_value(native_value)
-                except KeyError as key_error:
-                    if key_error.args[0] != key:
-                        DiagnosticSensor(
-                            self, entity_key=key, native_value=native_value
-                        )
+                    getattr(self, _attr).update_native_value(payload[_key])
+                except AttributeError:
+                    diagnostic_sensor = DiagnosticSensor(
+                        self, entity_key=_key, native_value=payload[_key]
+                    )
+                    setattr(self, _attr, diagnostic_sensor)
+                    diagnostic_sensor.shutdown_broadcast.add(
+                        lambda _attr_ref=_attr: delattr(self, _attr_ref)
+                    )
+                except KeyError:
+                    pass
 
         self.flush_state()
 
