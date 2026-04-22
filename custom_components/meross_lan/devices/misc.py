@@ -10,15 +10,88 @@ from .. import const as mlc
 from ..merossclient.device.handler import MappingParser, NamespaceHandler
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..merossclient.protocol.namespaces import thermostat as mn_t
+from ..number import NumberParser
+from ..select import SelectParser
 from ..sensor import SensorParser
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final, Mapping, NotRequired, Unpack
 
-    from ..helpers.device import Device, MerossMessage
+    from ..helpers.device import Device
     from ..merossclient.device.handler import NamespaceHandler
     from ..merossclient.protocol import types as mt
     from .thermostat.mts200 import Mts200Climate
+
+
+class DeviceCfgParser(MappingParser):
+
+    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
+    init_ns = mn.Appliance_Config_DeviceCfg
+
+    # These are extracted from ms130 payload but they look like generic enough
+    # to be available through a wide set of devices.
+    KEY_CALIBRATECFG = "calibrateCfg"
+    KEY_TIMECFG = "timeCfg"
+    KEY_AM = "am"
+    KEY_UNITCFG = "unitCfg"
+    KEY_UNITTYPE = "unitType"  # This doesn't appear in ms130 but it seems to be available in mst devices
+
+    init_parser_defs = {
+        KEY_CALIBRATECFG: {
+            mc.KEY_HUMI: NumberParser.DEF(
+                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_CALIBRATECFG}_{mc.KEY_HUMI}",
+                key_value=NumberParser.NestedKeyValue(KEY_CALIBRATECFG, mc.KEY_HUMI),
+                device_scale=10,
+                device_class=NumberParser.DeviceClass.HUMIDITY,
+                name="Humidity Calibration",
+                native_min_value=-20,
+                native_max_value=20,
+                native_step=1,
+            ),
+            mc.KEY_TEMP: NumberParser.DEF(
+                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_CALIBRATECFG}_{mc.KEY_TEMP}",
+                key_value=NumberParser.NestedKeyValue(KEY_CALIBRATECFG, mc.KEY_TEMP),
+                device_scale=100,
+                device_class=NumberParser.DeviceClass.TEMPERATURE,
+                name="Temperature Calibration",
+                native_min_value=-5,
+                native_max_value=5,
+                native_step=0.1,
+            ),
+        },
+        KEY_TIMECFG: {
+            KEY_AM: SelectParser.DEF(
+                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_TIMECFG}_{KEY_AM}",
+                key_value=SelectParser.NestedKeyValue(KEY_TIMECFG, KEY_AM),
+                options_map={1: "12 h", 2: "24 h"},
+                name="Time Format",
+            )
+        },
+        KEY_UNITCFG: {
+            mc.KEY_TEMPUNIT: SelectParser.DEF(
+                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_UNITCFG}_{mc.KEY_TEMPUNIT}",
+                key_value=SelectParser.NestedKeyValue(KEY_UNITCFG, mc.KEY_TEMPUNIT),
+                options_map={1: "Celsius", 2: "Fahrenheit"},
+                name="Temperature Unit",
+            ),
+            KEY_UNITTYPE: SelectParser.DEF(
+                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_UNITCFG}_{KEY_UNITTYPE}",
+                key_value=SelectParser.NestedKeyValue(KEY_UNITCFG, KEY_UNITTYPE),
+                options_map={1: "US Customary", 2: "Metric"},
+                name="Unit Type",
+            ),
+        },
+    }
+
+    @classmethod
+    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
+        # This ns is actually globally configured by Device.async_init with
+        # this 'generic' parser config but specialized devices will likely
+        # install their own instances of parsers/configs. This is especially needed because
+        # this ns requires polling with actual indexes and this might vary.
+        # The default here is just a 'placeholder' (still it could provide some
+        # basic entities for some devices)
+        NamespaceHandler(ns, device, parser_class=cls, channels=())
 
 
 class Mts200HumiSensor(SensorParser):
@@ -55,16 +128,18 @@ class SensorLatestParser(MappingParser):
     POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_FASTSENSOR
 
     init_parser_defs = {
-        mc.KEY_HUMI: Mts200HumiSensor.ENTITY_DEF(
+        mc.KEY_HUMI: Mts200HumiSensor.DEF(
             **SensorParser.HUMIDITY_ARGS
             | {
                 "entity_key": f"sensor_{mc.KEY_HUMI}",
+                "key_value": SensorParser.SimpleKeyValue(mc.KEY_HUMI),
             }
         ),
-        mc.KEY_TEMP: SensorParser.ENTITY_DEF(
+        mc.KEY_TEMP: SensorParser.DEF(
             **SensorParser.TEMPERATURE_ARGS
             | {
                 "entity_key": f"sensor_{mc.KEY_TEMP}",
+                "key_value": SensorParser.SimpleKeyValue(mc.KEY_TEMP),
                 "device_scale": 100,
             }
         ),
@@ -106,9 +181,9 @@ class SensorLatestXParser(MappingParser):
     # of parsers is explicitly preset when constructing a 'known' device SensorLatestXParser
     # See ms130 and ms600.
     init_parser_defs = {
-        mc.KEY_HUMI: SensorParser.ENTITY_DEF(**SensorParser.HUMIDITY_ARGS),
-        mc.KEY_LIGHT: SensorParser.ENTITY_DEF(**SensorParser.LIGHT_ARGS),
-        mc.KEY_TEMP: SensorParser.ENTITY_DEF(
+        mc.KEY_HUMI: SensorParser.DEF(**SensorParser.HUMIDITY_ARGS),
+        mc.KEY_LIGHT: SensorParser.DEF(**SensorParser.LIGHT_ARGS),
+        mc.KEY_TEMP: SensorParser.DEF(
             **(SensorParser.TEMPERATURE_ARGS | {"device_scale": 100})
         ),
     }
@@ -130,7 +205,6 @@ class SensorLatestXParser(MappingParser):
 
     @override
     def __call__(self, payload: "mt.sensor.LatestX", /):
-        self.ns_payload = payload
         for key, value in payload[mc.KEY_DATA].items():
             try:
                 self.parsers[key](value[0])
@@ -142,7 +216,7 @@ class SensorLatestXParser(MappingParser):
                     self.parent,
                     entity_key=f"sensor_{key}",
                     index=self.index,
-                    device_value=value[0]["value"],
+                    ns_value=value[0][mc.KEY_VALUE],
                 )
 
                 """

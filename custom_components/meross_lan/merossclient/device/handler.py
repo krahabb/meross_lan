@@ -15,6 +15,7 @@ if TYPE_CHECKING:
         Iterable,
         Mapping,
         NotRequired,
+        Self,
         Unpack,
     )
 
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
         JsonDict,
         JsonList,
         JsonMapping,
+        JsonType,
         MerossPayloadType,
         MerossRequestType,
     )
@@ -634,7 +636,7 @@ class NamespaceHandler(logging.Loggable):
         TODO: this is a temporary workaround for some namespaces.
         Examples are the Thermostat namespaces (see module devices.thermostat).
         But we could reorganize all together through implementation of a NamespaceHandler
-        cache of the device state received through queries. This cache should be the ns_payload attribute.
+        cache of the device state received through queries. This cache should be the ns_value attribute.
         """
         ns = self.id
         response = await self.parent.async_request(
@@ -1148,7 +1150,7 @@ class NamespaceParser(logging.Loggable):
         index: Final[mn.IndexValue]  # type: ignore
         """The channel/id/subId key value according to the namespace (indexed or not).
         This is used by the NamespaceHandler to route messages to the correct parser."""
-        ns_payload: JsonMapping  # type: ignore[assignment]
+        ns_value: JsonType
         """The last parsed payload."""
         _handler_registrations: Final[list[tuple[NamespaceHandler, mn.IndexValue]]]
         """Set of NamespaceHandlers this parser is registered to. This is used to manage the link back
@@ -1156,15 +1158,16 @@ class NamespaceParser(logging.Loggable):
 
         class Args(logging.Loggable.Args):
             ns: NotRequired[mn.Namespace]
+            ns_value: NotRequired[JsonType]
             index: NotRequired[mn.IndexValue]
 
         def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
 
-    init_ns_payload = mn.EMPTY_DICT
+    init_ns_value = mn.EMPTY_DICT
     init_index = mn.IndexType.none()
     SLOTS_AUTO_INIT = (
         "ns",
-        "ns_payload",
+        "ns_value",
         "index",
     )
     __SLOTS__ = ("_handler_registrations",)
@@ -1226,7 +1229,7 @@ class NamespaceParser(logging.Loggable):
         response = await self.parent.async_request(
             *self.ns.request_set(self.index | payload)
         )
-        self(merge_dicts(dict(self.ns_payload), payload))
+        self(merge_dicts(dict(self.ns_value), payload))  # type: ignore (ns_value should be a dict..)
         return response
 
     def __call__(self, payload: "JsonMapping", /):
@@ -1236,7 +1239,7 @@ class NamespaceParser(logging.Loggable):
         As a convention this is also the 'official' parser method for self.ns related
         payloads and thus invoked as a callback when succesfully sending SET requests.
         """
-        self.ns_payload = payload
+        self.ns_value = payload
         self.log(
             self.WARNING,
             "Parsing undefined for payload:(%s)",
@@ -1258,7 +1261,7 @@ class ValueParser(NamespaceParser):
 
     class _KeyValueDescriptor(str):
         """Descriptor class to define how to extract the value from the payload and how to format it for requests.
-        In general, most of the device_value data are stored in the first level key of a dictionary payload, but in
+        In general, most of the data points are stored in the first level key of a dictionary payload, but in
         some cases they are stored in nested dictionaries. This descriptor allows to abstract this logic and provide
         a consistent interface for both cases."""
 
@@ -1311,25 +1314,27 @@ class ValueParser(NamespaceParser):
 
         init_key_value: ClassVar[_KeyValueDescriptor]
         key_value: _KeyValueDescriptor
-        device_value: Any
 
         class Args(NamespaceParser.Args):
             key_value: NotRequired[ValueParser._KeyValueDescriptor]
-            device_value: NotRequired[Any]
 
         def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
 
+        @classmethod
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+
+    init_ns_value = None
     init_key_value = SimpleKeyValue(mc.KEY_VALUE)
 
-    SLOTS_AUTO_INIT = ("key_value", "device_value")
+    SLOTS_AUTO_INIT = ("key_value",)
 
     def update_device_value(self, device_value, /) -> bool | None:
         # Called when the device value is being updated, either by parsing a new payload or by issuing a request.
         # This is intended as a placeholder to be overridden by derived classes to implement custom logic on device value update,
         # such as updating the entity state or triggering side effects. By default, it just updates the internal
-        # device_value and returns True if the value has changed, False otherwise.
-        if self.device_value != device_value:
-            self.device_value = device_value
+        # ns_value and returns True if the value has changed, False otherwise.
+        if self.ns_value != device_value:
+            self.ns_value = device_value
             return True
 
     async def async_request_value(self, device_value, /) -> None:
@@ -1344,7 +1349,6 @@ class ValueParser(NamespaceParser):
 
     @override  # NamespaceParser
     def __call__(self, payload: "JsonMapping", /):
-        self.ns_payload = payload
         self.update_device_value(self.key_value[payload])
 
 
@@ -1373,8 +1377,8 @@ class BooleanParser(ValueParser):
 
     @override
     def update_device_value(self, device_value, /) -> bool | None:
-        if self.device_value != device_value:
-            self.device_value = device_value
+        if self.ns_value != device_value:
+            self.ns_value = device_value
             match device_value:
                 case self.value_on:
                     self.is_on = True
@@ -1393,7 +1397,7 @@ class BooleanParser(ValueParser):
         await self.async_request_value(self.value_off)
 
 
-class MappingParser(NamespaceParser):
+class MappingParser(ValueParser):
     """An hybrid parser specialization acting as a 'dispatcher parser' for multiple
     sub-parsers based on the presence of keys in the payload. Every key is mapped to a target parser
     and the payload is dispatched to the first parser whose key is present in the payload.
@@ -1404,20 +1408,32 @@ class MappingParser(NamespaceParser):
         parsers: Final[dict[str, ValueParser]]
         init_excluded_keys: ClassVar[tuple[str, ...]]
         excluded_keys: tuple[str, ...]
-        """Well-known list of keys which are to be excluded from mapping since they're generally
+        """List of well-known keys which are to be excluded from mapping since they're generally
         'structural' keys and/or not carrying meaningful data."""
-        init_parser_defs: ClassVar[Mapping[str, type[ValueParser]]]
-        parser_defs: Mapping[str, type[ValueParser]]
-        """Mapping between payload keys and a specialized ValueParser class to be used to parse the value associated with that key.
-        This is used to automatically create the proper ValueParser when a the key is found in the payload."""
+        type ParserType = type[ValueParser]
+        type SimpleParserDefs = Mapping[str, ParserType]
+        type NestedParserDefs = Mapping[str, ParserType | SimpleParserDefs]
+        type ParserDefs = Mapping[str, ParserType | SimpleParserDefs | NestedParserDefs]
+        """This typedef supports 2 levels of nesting."""
+        init_parser_defs: ClassVar[ParserDefs]
+        parser_defs: ParserDefs
+        """Mapping between payload keys and a specialized ValueParser class to be used to parse the
+        value associated with that key. This is used to automatically create the proper ValueParser
+        when a the key is found in the payload.
+        The actual parser_defs syntax, allows to define nested levels of parsing by simply nesting
+        the parser definitions in a dict. When this happens, the MappingParser will automatically
+        create a nested MappingParser to handle the inner level(s) of the payload."""
 
-        class Args(NamespaceParser.Args):
+        class Args(ValueParser.Args):
             excluded_keys: NotRequired[tuple[str, ...]]
             parsers: NotRequired[dict[str, ValueParser]]
             """Pre-initialized parsers to be used by this handler.
             This is useful when we want to pre-create the parsers for this handler
             and not rely on the 'lazy' initialization done in payload parsing."""
-            parser_defs: NotRequired[Mapping[str, type[ValueParser]]]
+            parser_defs: NotRequired[MappingParser.ParserDefs]
+
+        @classmethod
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
     init_excluded_keys = (
         mc.KEY_ID,
@@ -1447,25 +1463,34 @@ class MappingParser(NamespaceParser):
 
     @override
     def __call__(self, payload: "JsonMapping", /):
-        self.ns_payload = payload
-        for key, value in {
-            k: v for k, v in payload.items() if k not in self.excluded_keys
-        }.items():
+        self.ns_value = payload
+        for key in (k for k in payload if k not in self.excluded_keys):
             try:
-                self.parsers[key].update_device_value(value)
+                self.parsers[key].update_device_value(payload[key])
             except Exception as e:
                 if key not in self.parsers:  # surely a KeyError
                     try:
-                        self.parsers[key] = self.parser_defs[key](
-                            self.index.value,  # FIXME: use a 'sibling' construction semantic
-                            self.parent,
-                            ns=self.ns,
-                            device_value=value,
-                            index=self.index,
-                            # WARNING: key_value might or might not be needed here...
-                        )
-                        # TODO: add management of unexpected keys where we don't have a parser_def
-                        # and we might want to setup a somewhat 'smart' default (diagnostic) parser
+                        parser_def: "MappingParser.ParserType" = self.parser_defs[key]  # type: ignore[assignment]
+                        if type(parser_def) is dict:
+                            parser = MappingParser(
+                                self.index.value,  # FIXME: use a 'sibling' construction semantic
+                                self.parent,
+                                ns=self.ns,
+                                index=self.index,
+                                parser_defs=parser_def,  # type: ignore
+                            )
+                        else:
+                            parser = parser_def(
+                                self.index.value,  # FIXME: use a 'sibling' construction semantic
+                                self.parent,
+                                ns=self.ns,
+                                index=self.index,
+                                # WARNING: key_value might or might not be needed here...
+                            )
+                            # TODO: add management of unexpected keys where we don't have a parser_def
+                            # and we might want to setup a somewhat 'smart' default (diagnostic) parser
+                        self.parsers[key] = parser
+                        parser.update_device_value(payload[key])
                     except Exception as e:
                         self.log_exception(
                             self.WARNING,
@@ -1483,6 +1508,8 @@ class MappingParser(NamespaceParser):
                         _any=payload,
                         timeout=14400,
                     )
+
+    update_device_value = __call__  # for interface compatibility with ValueParser and to be used as callback for parser_defs
 
 
 class ParserHandler(NamespaceParser, NamespaceHandler):

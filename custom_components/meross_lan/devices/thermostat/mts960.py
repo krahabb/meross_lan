@@ -49,7 +49,7 @@ class Mts960Climate(MtsThermostatClimate):
         _attr_native_step = 1
 
     if TYPE_CHECKING:
-        ns_payload: mt.thermostat.ModeB_C
+        ns_value: mt.thermostat.ModeB_C
         binary_sensor_plug_state: PlugState
         number_timer_down_duration: TimerConfigNumber
         number_timer_cycle_off_duration: TimerConfigNumber
@@ -66,13 +66,13 @@ class Mts960Climate(MtsThermostatClimate):
 
     ENTITY_DEFS: dict[str, type[PlugState | TimerConfigNumber]] = {
         "binary_sensor_plug_state": PlugState,
-        "number_timer_down_duration": TimerConfigNumber.ENTITY_DEF(
+        "number_timer_down_duration": TimerConfigNumber.DEF(
             entity_key="timer_down_duration"
         ),
-        "number_timer_cycle_off_duration": TimerConfigNumber.ENTITY_DEF(
+        "number_timer_cycle_off_duration": TimerConfigNumber.DEF(
             entity_key="timer_cycle_off_duration"
         ),
-        "number_timer_cycle_on_duration": TimerConfigNumber.ENTITY_DEF(
+        "number_timer_cycle_on_duration": TimerConfigNumber.DEF(
             entity_key="timer_cycle_on_duration"
         ),
     }
@@ -362,9 +362,9 @@ class Mts960Climate(MtsThermostatClimate):
     # message handlers
     @override
     def __call__(self, payload: "mt.thermostat.ModeB_C", /):
-        if self.ns_payload == payload:
+        if self.ns_value == payload:
             return
-        self.ns_payload = payload
+        self.ns_value = payload
         if mc.KEY_MODE in payload:
             self._mts_mode = payload[mc.KEY_MODE]
         if mc.KEY_ONOFF in payload:

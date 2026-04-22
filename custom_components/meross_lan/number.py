@@ -42,6 +42,9 @@ class NumberEntity(mle.NumericEntity, number.NumberEntity):
 
         def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
+        @classmethod
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+
     PLATFORM = number.DOMAIN
     HA_ENTITY_ATTRIBUTES = mle.NumericEntity.HA_ENTITY_ATTRIBUTES + (
         "mode",
@@ -80,7 +83,7 @@ class NumberParser(mle.NumericParser, NumberEntity):
         def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
         @classmethod
-        def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
         DEBOUNCE_DELAY: Final
 
@@ -119,9 +122,9 @@ class NumberParser(mle.NumericParser, NumberEntity):
         except Exception:
             # restore the last good known device value
             try:
-                self.update_native_value(self.device_value / self.device_scale)  # type: ignore
+                self.update_native_value(self.ns_value / self.device_scale)  # type: ignore
             except TypeError:
-                pass  # self.device_value is None
+                pass  # self.ns_value is None
 
 
 class EmulatedNumber(NumberEntity):

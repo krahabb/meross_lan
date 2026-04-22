@@ -13,7 +13,6 @@ try:
 except ImportError:
     get_last_state_changes = None
 
-from homeassistant.components.usb import utils as usb_utils
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import entity
 from homeassistant.helpers.entity_platform import async_get_current_platform
@@ -83,6 +82,9 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             name: NotRequired[str | None]
             translation_key: NotRequired[str]
             icon: NotRequired[str]
+
+        @classmethod
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
         EntityCategory: Final
 
@@ -278,7 +280,11 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
                 self.name = self._attr_name
             except AttributeError:
                 if entity_key:
-                    self.name = entity_key.replace("_", " ").capitalize()
+                    entity_key_split = entity_key.split("_")
+                    if len(entity_key_split) > 2:
+                        self.name = entity_key_split[-1].capitalize()
+                    else:
+                        self.name = entity_key.replace("_", " ").capitalize()
         # simple setting of HA core attributes if provided in kwargs
         # else fallback to HA core mechanics
         for _attr_name in tuple(
@@ -402,41 +408,6 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             ]
         )
 
-    class EntityDef[_T: Entity](dict):
-        """Descriptor class used when populating maps used to dynamically instantiate
-        entities based on their appearance in a payload key (typically in sensor payloads
-        but more use cases are implemented)."""
-
-        type: "Final[type[_T]]"
-
-        __slots__ = ("type",)
-
-        def __init__(self, type: "type[_T]", **kwargs: "Unpack[Entity.Args]"):
-            dict.__init__(self, **kwargs)
-            self.type = type
-
-        def __call__(self, *args, **kwargs: "Unpack[Entity.Args]") -> _T:
-            """This allows to use EntityDef instances as if they were the actual class constructor."""
-            return self.type(*args, **(self | kwargs))
-
-    @classmethod
-    def ENTITY_DEF(cls, **kwargs: "Unpack[Args]") -> type["Self"]:
-        # This method returns a special class 'EntityDef' but
-        # type hinting suggests it is still self.cls so that the
-        # 'hidden' EntityDef works like a wrapper for constructor
-        # keyword arguments and this semantic allows to chain different
-        # calls each one adding its own custom set of kwargs.
-        # In the end, the return type works exactly as a standard
-        # constructor in term of syntax and semantics (unless we inspect it ofc)
-        # This 'funny' semantic allows us to define ENTITY_DEFS maps wherever needed
-        # where both simple class types and EntityDef instances can work as consistent
-        # callables with the same syntax as the class constructor.
-        # TODO: This technique is very useful except we should still find a way to
-        # automatically 'infer' the kwargs unpacking for the relevant cls.
-        # This is actually overcomed with typing overwrites in child classes where the Args
-        # type differs from the base Entity.Args.
-        return Entity.EntityDef(cls, **kwargs)  # type: ignore[return-value]
-
 
 class ParserEntity(handler.NamespaceParser, Entity):
     """Base class for entities directly linked to a device and not to a namespace.
@@ -459,7 +430,7 @@ class ParserEntity(handler.NamespaceParser, Entity):
         def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
         @classmethod
-        def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
     class SimpleKeyValue(handler.ValueParser.SimpleKeyValue):
         pass
@@ -472,7 +443,7 @@ class ParserEntity(handler.NamespaceParser, Entity):
     @override
     def set_unavailable(self):
         self.available = False
-        self.ns_payload = mn.EMPTY_DICT
+        self.ns_value = self.__class__.init_ns_value
         self.flush_state()
 
 
@@ -492,14 +463,10 @@ class ValueParser(handler.ValueParser, ParserEntity):
 
         def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
-    def set_unavailable(self):
-        self.device_value = None
-        super().set_unavailable()
-
     @override
     def update_device_value(self, device_value, /) -> bool | None:
-        if self.device_value != device_value:
-            self.device_value = device_value
+        if self.ns_value != device_value:
+            self.ns_value = device_value
             self.flush_state()
             return True
 
@@ -554,10 +521,10 @@ class NumericParser(ValueParser, NumericEntity):
 
         init_device_scale: ClassVar[int | float]
         device_scale: int | float
-        """device_scale type need to follow the type supported for device_value.
+        """device_scale type need to follow the type supported for ns_value.
         This is used in Number entity to do the correct roundings when converting between
-        native_value and device_value."""
-        device_value: int | float | None
+        native_value and ns_value."""
+        ns_value: int | float | None
 
         type InitArgs = ValueParser.InitArgs
 
@@ -569,15 +536,15 @@ class NumericParser(ValueParser, NumericEntity):
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         try:
-            kwargs["native_value"] = kwargs["device_value"] / kwargs.get("device_scale", self.init_device_scale)  # type: ignore
+            kwargs["native_value"] = kwargs["ns_value"] / kwargs.get("device_scale", self.init_device_scale)  # type: ignore
         except KeyError:
             pass
         super().__init__(*args, **kwargs)
 
     @override
     def update_device_value(self, device_value: int | float, /):
-        if self.device_value != device_value:
-            self.device_value = device_value
+        if self.ns_value != device_value:
+            self.ns_value = device_value
             self.native_value = device_value / self.device_scale
             self.flush_state()
             return True
@@ -619,7 +586,7 @@ class BinaryParser(handler.BooleanParser, ValueParser, BinaryEntity):
             pass
 
         @classmethod
-        def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
     def __init_subclass__(cls):
         super().__init_subclass__()
@@ -630,12 +597,12 @@ class BinaryParser(handler.BooleanParser, ValueParser, BinaryEntity):
         # and we want to flush the initial state during HA entry adding (which happens in Entity constructor)
         # without having to flush twice (UNKNOWN -> device state).
         try:
-            # if device_value is not provided this code is unnecessary and
+            # if ns_value is not provided this code is unnecessary and
             # the eventual other arguments will be managed by bases.
-            self.device_value = kwargs.pop("device_value")
+            self.ns_value = kwargs.pop("ns_value")
             self.value_on = kwargs.pop("value_on", self.init_value_on)
             self.value_off = kwargs.pop("value_off", self.init_value_off)
-            match self.device_value:
+            match self.ns_value:
                 case self.value_on:
                     kwargs["is_on"] = True
                 case self.value_off:

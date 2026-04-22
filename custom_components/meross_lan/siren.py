@@ -67,16 +67,16 @@ class ConfigAlarm(MappingParser):
     POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
 
     init_parser_defs = {
-        mc.KEY_ENABLE: SwitchParser.ENTITY_DEF(
+        mc.KEY_ENABLE: SwitchParser.DEF(
             entity_key=f"{mn.Appliance_Config_Alarm.slug}__{mc.KEY_ENABLE}",
             key_value=SwitchParser.SimpleKeyValue(mc.KEY_ENABLE),
         ),
-        mc.KEY_SONG: SelectParser.ENTITY_DEF(
+        mc.KEY_SONG: SelectParser.DEF(
             entity_key=f"{mn.Appliance_Config_Alarm.slug}__{mc.KEY_SONG}",
             key_value=SelectParser.SimpleKeyValue(mc.KEY_SONG),
             options_map=mc.CONFIG_ALARM_SONGS,
         ),
-        mc.KEY_VOLUME: NumberParser.ENTITY_DEF(
+        mc.KEY_VOLUME: NumberParser.DEF(
             entity_key=f"{mn.Appliance_Config_Alarm.slug}__{mc.KEY_VOLUME}",
             key_value=NumberParser.SimpleKeyValue(mc.KEY_VOLUME),
             native_min_value=0,
@@ -100,20 +100,20 @@ class ControlAlarm(MappingParser):
     POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
 
     init_parser_defs = {
-        mc.KEY_DEMOLISH: Siren.ENTITY_DEF(
+        mc.KEY_DEMOLISH: Siren.DEF(
             key_value=Siren.NestedKeyValue(mc.KEY_EVENT, mc.KEY_DEMOLISH, mc.KEY_VALUE),
         ),
-        mc.KEY_INTERCONN: Siren.ENTITY_DEF(
+        mc.KEY_INTERCONN: Siren.DEF(
             key_value=Siren.NestedKeyValue(
                 mc.KEY_EVENT, mc.KEY_INTERCONN, mc.KEY_VALUE
             ),
         ),
-        mc.KEY_MASECURITY: Siren.ENTITY_DEF(
+        mc.KEY_MASECURITY: Siren.DEF(
             key_value=Siren.NestedKeyValue(
                 mc.KEY_EVENT, mc.KEY_MASECURITY, mc.KEY_VALUE
             ),
         ),
-        mc.KEY_SECURITY: Siren.ENTITY_DEF(
+        mc.KEY_SECURITY: Siren.DEF(
             key_value=Siren.NestedKeyValue(mc.KEY_EVENT, mc.KEY_SECURITY, mc.KEY_VALUE),
         ),
     }
@@ -131,7 +131,7 @@ class ControlAlarm(MappingParser):
                             entity_key=f"{self.ns.slug}__{self.parser_defs[key]["key_value"]}",  # type: ignore
                             ns=self.ns,
                             index=self.index,
-                            device_value=value,
+                            ns_value=value,
                             name=key,
                         )
                     except Exception as e:

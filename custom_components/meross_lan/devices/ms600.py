@@ -37,7 +37,7 @@ class PresenceConfigNumber(PresenceConfigBase, NumberParser):
             pass
 
         @classmethod
-        def ENTITY_DEF(cls, **kwargs: "Unpack[Args]") -> type["Self"]: ...
+        def DEF(cls, **kwargs: "Unpack[Args]") -> type["Self"]: ...
 
 
 class PresenceConfigSelect(PresenceConfigBase, SelectParser):
@@ -49,7 +49,7 @@ class PresenceConfigSelect(PresenceConfigBase, SelectParser):
             pass
 
         @classmethod
-        def ENTITY_DEF(cls, **kwargs: "Unpack[Args]") -> type["Self"]: ...
+        def DEF(cls, **kwargs: "Unpack[Args]") -> type["Self"]: ...
 
 
 class PresenceConfigMode(PresenceConfigSelect):
@@ -81,17 +81,17 @@ class PresenceConfigMthX(PresenceConfigNumber):
 
 
 ENTITY_DEFS = (
-    PresenceConfigMode.ENTITY_DEF(
+    PresenceConfigMode.DEF(
         entity_key=f"presence_config_{mc.KEY_MODE}_{mc.KEY_WORKMODE}",
         key_value=PresenceConfigMode.NestedKeyValue(mc.KEY_MODE, mc.KEY_WORKMODE),
         name=mc.KEY_WORKMODE,
     ),
-    PresenceConfigMode.ENTITY_DEF(
+    PresenceConfigMode.DEF(
         entity_key=f"presence_config_{mc.KEY_MODE}_{mc.KEY_TESTMODE}",
         key_value=PresenceConfigMode.NestedKeyValue(mc.KEY_MODE, mc.KEY_TESTMODE),
         name=mc.KEY_TESTMODE,
     ),
-    PresenceConfigNumber.ENTITY_DEF(
+    PresenceConfigNumber.DEF(
         entity_key=f"presence_config_{mc.KEY_NOBODYTIME}_{mc.KEY_TIME}",
         key_value=PresenceConfigNumber.NestedKeyValue(mc.KEY_NOBODYTIME, mc.KEY_TIME),
         name=mc.KEY_NOBODYTIME,
@@ -100,7 +100,7 @@ ENTITY_DEFS = (
         native_min_value=1,
         native_step=1,
     ),
-    PresenceConfigNumber.ENTITY_DEF(
+    PresenceConfigNumber.DEF(
         entity_key=f"presence_config_{mc.KEY_DISTANCE}_{mc.KEY_VALUE}",
         key_value=PresenceConfigNumber.NestedKeyValue(mc.KEY_DISTANCE, mc.KEY_VALUE),
         device_scale=1000,
@@ -111,24 +111,24 @@ ENTITY_DEFS = (
         native_min_value=0.1,
         native_step=0.1,
     ),
-    PresenceConfigSensitivity.ENTITY_DEF(
+    PresenceConfigSensitivity.DEF(
         entity_key=f"presence_config_{mc.KEY_SENSITIVITY}_{mc.KEY_LEVEL}",
         key_value=PresenceConfigSensitivity.NestedKeyValue(
             mc.KEY_SENSITIVITY, mc.KEY_LEVEL
         ),
         name=mc.KEY_SENSITIVITY,
     ),
-    PresenceConfigMthX.ENTITY_DEF(
+    PresenceConfigMthX.DEF(
         entity_key=f"presence_config_{mc.KEY_MTHX}_{mc.KEY_MTH1}",
         key_value=PresenceConfigMthX.NestedKeyValue(mc.KEY_MTHX, mc.KEY_MTH1),
         name=mc.KEY_MTH1,
     ),
-    PresenceConfigMthX.ENTITY_DEF(
+    PresenceConfigMthX.DEF(
         entity_key=f"presence_config_{mc.KEY_MTHX}_{mc.KEY_MTH2}",
         key_value=PresenceConfigMthX.NestedKeyValue(mc.KEY_MTHX, mc.KEY_MTH2),
         name=mc.KEY_MTH2,
     ),
-    PresenceConfigMthX.ENTITY_DEF(
+    PresenceConfigMthX.DEF(
         entity_key=f"presence_config_{mc.KEY_MTHX}_{mc.KEY_MTH3}",
         key_value=PresenceConfigMthX.NestedKeyValue(mc.KEY_MTHX, mc.KEY_MTH3),
         name=mc.KEY_MTH3,
@@ -156,7 +156,6 @@ def namespace_init_presence_config(ns: mn.Namespace, device: "Device", /):
         SensorLatestXParser(
             0,
             device,
-            ns=mn.Appliance_Control_Sensor_LatestX,
             index=index,
             parsers={
                 mc.KEY_PRESENCE: sensor_presence,
@@ -217,7 +216,6 @@ class PresenceSensor(SensorParser):
         """
         {"times": 0, "distance": 760, "value": 2, "timestamp": 1725907895}
         """
-        self.ns_payload = payload
         self.update_device_value(payload[mc.KEY_VALUE])
         self.sensor_distance.update_device_value(payload[mc.KEY_DISTANCE])
         self.binary_sensor_motion.update_boolean_value(payload[mc.KEY_VALUE] == 2)

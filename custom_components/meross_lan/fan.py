@@ -18,7 +18,7 @@ class Fan(ToggleXParser, fan.FanEntity):
     """
 
     if TYPE_CHECKING:
-        ns_payload: mt.control.Fan
+        ns_value: mt.control.Fan
         # HA core entity attributes:
         percentage: int | None
         speed_count: int
@@ -59,7 +59,7 @@ class Fan(ToggleXParser, fan.FanEntity):
             # don't propagate callback confirmation
             await self.handler_togglex.async_set(self.index | {mc.KEY_ONOFF: 1})
             self.is_on = True
-            self.ns_payload[mc.KEY_SPEED] = 0  # force flushing
+            self.ns_value[mc.KEY_SPEED] = 0  # force flushing
         await self.async_request_parse_ex(
             {
                 mc.KEY_SPEED: (
@@ -80,8 +80,8 @@ class Fan(ToggleXParser, fan.FanEntity):
     @override
     def __call__(self, payload: "mt.control.Fan", /):
         """payload = {"channel": 0, "speed": 3, "maxSpeed": 4}"""
-        if self.ns_payload != payload:
-            self.ns_payload = payload
+        if self.ns_value != payload:
+            self.ns_value = payload
             self.speed_count = payload.get(mc.KEY_MAXSPEED, self.speed_count)
             speed = payload[mc.KEY_SPEED]
             if speed:

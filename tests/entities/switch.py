@@ -61,6 +61,11 @@ class EntityTest(ToggleEntityComponentTest):
             switch.SwitchParser,  # beep
         ],
         mc.KEY_DOORWINDOW: [switch.SwitchParser],  # beep
-        mc.KEY_MST: [mst.mst100.Switch],
+        mc.KEY_MST: [
+            mst.mst100.Switch,  # main watering control
+            switch.SwitchParser,  # mstCfg_wfm
+            switch.SwitchParser,  # mstCfg_calibration_onoff
+            # TODO: for mst200 we should duplicate this but the logic is way out of our testing configuration standards
+        ],
         mc.KEY_WATERLEAK: [switch.SwitchParser],  # beep
     }

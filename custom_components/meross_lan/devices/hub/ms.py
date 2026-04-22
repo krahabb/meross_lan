@@ -1,11 +1,12 @@
 from typing import TYPE_CHECKING, override
 
-from . import SubDevice, mc, mn, mn_h
+from . import SubDevice, mc, mlc, mn, mn_h
 from ...binary_sensor import BinarySensorEntity, BinarySensorParser
 from ...button import Button
 from ...number import NumberParser
-from ...sensor import EnumParser, EnumSensorEntity, SensorEntity, SensorParser
-from ..misc import SensorLatestXParser
+from ...select import SelectParser
+from ...sensor import EnumParser, EnumSensorEntity, SensorParser
+from ..misc import DeviceCfgParser, SensorLatestXParser
 
 if TYPE_CHECKING:
     from typing import Final, TypedDict, Unpack
@@ -27,12 +28,36 @@ class SensorSubDevice(SubDevice):
 
 
 class gs559(SensorSubDevice, EnumParser):
+    """TODO: parse this PUSH: it looks like it is an sync event sent by device (see trace uuid 29)
+    when something happens.
+    "Appliance.Hub.Sensor.Smoke": {
+            "lastrequest": 0.0,
+            "lastresponse": 1771074280.071836,
+            "lastpush": {
+                "smokeAlarm": [
+                {
+                    "event": {
+                    "test": {
+                        "timestamp": 1771072443,
+                        "type": 1
+                    }
+                    },
+                    "id": "1800958E1582"
+                }
+                ]
+            },
+            "polling_epoch_next": 1771074580.071836,
+            "polling_strategy": null
+            },
+    """
+
     if TYPE_CHECKING:
         STATUS_MAP: Final
         MUTE_MAP: Final
         STATUS_ALARM: Final[set[int]]
         STATUS_ERROR: Final[set[int]]
         STATUS_MUTED: Final[set[int]]
+        ENTITY_DEFS: Final[dict[str, type[Entity]]]
 
         binary_sensor_alarm: BinarySensorEntity
         binary_sensor_error: BinarySensorEntity
@@ -62,15 +87,15 @@ class gs559(SensorSubDevice, EnumParser):
     STATUS_ERROR = {17, 18, 19, 20, 21, 22}
     STATUS_MUTED = {20, 21, 22, 26, 27}
 
-    ENTITY_DEFS: "dict[str, type[Entity]]" = {
-        "binary_sensor_alarm": BinarySensorEntity.ENTITY_DEF(
+    ENTITY_DEFS = {
+        "binary_sensor_alarm": BinarySensorEntity.DEF(
             entity_key=mc.KEY_ALARM, device_class=BinarySensorEntity.DeviceClass.SAFETY
         ),
-        "binary_sensor_error": BinarySensorEntity.ENTITY_DEF(
+        "binary_sensor_error": BinarySensorEntity.DEF(
             entity_key=mc.KEY_ERROR, device_class=BinarySensorEntity.DeviceClass.PROBLEM
         ),
-        "binary_sensor_muted": BinarySensorEntity.ENTITY_DEF(entity_key="muted"),
-        "sensor_interConn": EnumParser.ENTITY_DEF(entity_key=mc.KEY_INTERCONN),
+        "binary_sensor_muted": BinarySensorEntity.DEF(entity_key="muted"),
+        "sensor_interConn": EnumParser.DEF(entity_key=mc.KEY_INTERCONN),
     }
     __slots__ = ENTITY_DEFS.keys()
 
@@ -91,7 +116,7 @@ class gs559(SensorSubDevice, EnumParser):
     def __call__(self, payload: "mt.hub._gs559 | mt.hub.Sensor_Smoke", /):
         # This (being the default fall-back parser) will parse  *.Sensor.All, *Sensor.Smoke
         # and the 'digest' payload since they have the same structure.
-        self.device_value = value = payload[mc.KEY_STATUS]
+        self.ns_value = value = payload[mc.KEY_STATUS]
         self.update_native_value(self.STATUS_MAP.get(value, value))
         self.binary_sensor_alarm.update_boolean_value(value in self.STATUS_ALARM)
         self.binary_sensor_error.update_boolean_value(value in self.STATUS_ERROR)
@@ -102,7 +127,7 @@ class gs559(SensorSubDevice, EnumParser):
             pass
 
     async def async_mute(self, /):
-        await self.async_request_value(self.MUTE_MAP.get(self.device_value, 170))
+        await self.async_request_value(self.MUTE_MAP.get(self.ns_value, 170))
 
     async def async_test(self, /):
         await self.async_request_value(23)
@@ -125,7 +150,7 @@ class ms100(SensorSubDevice):
             # the 'new adjust value' we have to issue the difference against the
             # currently configured one
             await self.async_request_payload(
-                self.key_value(device_value - self.device_value)
+                self.key_value(device_value - self.ns_value)
             )
             self.update_device_value(device_value)
 
@@ -191,7 +216,7 @@ class ms100(SensorSubDevice):
         self.parent.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
             self,
             *(
-                entity_class(self, device_value=entity_class.init_key_value[payload])
+                entity_class(self, ns_value=entity_class.init_key_value[payload])
                 for entity_class in (
                     ms100.AdjustTemperatureNumber,
                     ms100.AdjustHumidityNumber,
@@ -227,15 +252,91 @@ class ms100(SensorSubDevice):
 
 class ms130(ms100):
 
-    NS_HUB = (mn.Appliance_Config_DeviceCfg,)
+    # Configure parser for Appliance.Config.DeviceCfg:
+    # {
+    #     "config": {
+    #         "calibrateCfg": {"temp": 0, "humi": 0},
+    #         "timeCfg": {"am": 2},
+    #         "ms130Cfg": {"bl": {"bri": 2, "lv": 4, "sleep": 10}},
+    #         "channel": 0,
+    #         "subId": "1A00694ACBC7",
+    #         "unitCfg": {"tempUnit": 1},
+    #     }
+    # }
+
+    """
+    # TODO: 'lv' value is related to Lux by a mapped function defined in App as:
+    [
+        [0, 5], # 1
+        [5, 15], # 2
+        [15, 30], # 3
+        [30, 50],
+        [50, 75],
+        [75, 100],
+        [100, 150],
+        [150, 200],
+        [200, 300],
+        [300, 400],
+        [400, 500],
+        [500, 750],
+        [750, 1000],
+        [1000, 1250],
+        [1250, 1500],
+        [1500, 2000],
+        [2000, 4000],
+        [4000, float("inf")],
+    ],
+     The mapping in App is done as:
+    {
+        1: 5 lux,
+        2: 15 lux,
+        3: 30 lux,
+        ...
+    }
+    """
+    KEY_MS130CFG = "ms130Cfg"
+    KEY_BL = "bl"  # Backlight
+    KEY_BRI = "bri"
+    KEY_LV = "lv"
+    KEY_SLEEP = "sleep"
+    DEVICE_CFG_DEFS = {
+        KEY_MS130CFG: {
+            KEY_BL: {
+                KEY_BRI: SelectParser.DEF(
+                    entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_MS130CFG}_{KEY_BL}_{KEY_BRI}",
+                    key_value=NumberParser.NestedKeyValue(
+                        KEY_MS130CFG, KEY_BL, KEY_BRI
+                    ),
+                    name="Backlight brightness",
+                    options_map={1: "Low", 2: "Medium", 3: "High"},
+                ),
+                KEY_LV: NumberParser.DEF(
+                    entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_MS130CFG}_{KEY_BL}_{KEY_LV}",
+                    key_value=NumberParser.NestedKeyValue(KEY_MS130CFG, KEY_BL, KEY_LV),
+                    name="Backlight level",
+                    native_min_value=1,
+                    native_max_value=18,
+                    native_step=1,
+                ),
+                KEY_SLEEP: NumberParser.DEF(
+                    entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_MS130CFG}_{KEY_BL}_{KEY_SLEEP}",
+                    key_value=NumberParser.NestedKeyValue(
+                        KEY_MS130CFG, KEY_BL, KEY_SLEEP
+                    ),
+                    name="Backlight sleep",
+                    device_class=NumberParser.DeviceClass.DURATION,
+                    native_unit_of_measurement=mlc.hac.UnitOfTime.SECONDS,
+                    native_min_value=3,
+                    native_max_value=30,
+                    native_step=1,
+                ),
+            },
+        },
+    } | DeviceCfgParser.init_parser_defs  # type: ignore[assignment]
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         ms100.__init__(self, subid, hub, key_digest, model)
         self.sensor_temperature.device_scale = 100
-        # The light sensor could be better indexed by subid instead, but it is a sibling of a
-        # simple 'id' entity (the ms130 itself) and it is more natural to mantain the sibling
-        # relationship by using the same index. The sensor will anyway not use the index attribute
-        # for anything else, since the ns parsing is done here in the SubDevice instance.
         index = mn.IndexType.subId(subid, 0, None)
         try:
             # Configure parser for Appliance.Control.Sensor.LatestX:
@@ -268,36 +369,20 @@ class ms130(ms100):
             # expected (?) if LatestX not supported by the device firmware
             assert ke.args[0] == mn.Appliance_Control_Sensor_LatestX
 
+        try:
+            hub.ns_handlers[mn.Appliance_Config_DeviceCfg].register_parser(
+                DeviceCfgParser(
+                    subid, hub, index=index, parser_defs=ms130.DEVICE_CFG_DEFS
+                )
+            )
+        except KeyError as ke:
+            # if ns not supported by the device firmware
+            assert ke.args[0] == mn.Appliance_Config_DeviceCfg
+
     @override
     def __call__(self, payload: "mt.hub._ms130", /):
         # Parses the 'digest' payload.
         self._update_sensors(payload[mc.KEY_TEMP], payload[mc.KEY_HUMI])
-
-    def _parse_deviceCfg(self, payload: "mt.hub.SubIdPayload", /):
-        """TODO: implement entities
-        {
-            "calibrateCfg": {
-            "temp": 0,
-            "humi": 0
-            },
-            "timeCfg": {
-            "am": 2
-            },
-            "ms130Cfg": {
-            "bl": {
-                "bri": 2,
-                "lv": 4,
-                "sleep": 10
-            }
-            },
-            "channel": 0,
-            "subId": "1A00694ACBC7",
-            "unitCfg": {
-            "tempUnit": 1  # 1 °C - 2 °F
-            }
-        }
-        """
-        pass
 
 
 class ms200(SensorSubDevice, BinarySensorParser):

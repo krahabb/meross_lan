@@ -22,6 +22,7 @@ if TYPE_CHECKING:
         Iterable,
         NotRequired,
         Protocol,
+        Self,
         TypedDict,
         Unpack,
     )
@@ -191,6 +192,22 @@ class Loggable(metaclass=abc.ABCMeta):
     Loggable is shutdown, so that they can perform cleanup if needed.
     """
 
+    class Def[_T: Loggable](dict):
+        """Descriptor class used when populating maps used to dynamically instantiate
+        objects with a preset of kwargs."""
+
+        type: "Final[type[_T]]"
+
+        __slots__ = ("type",)
+
+        def __init__(self, type: "type[_T]", **kwargs: "Unpack[Loggable.Args]"):
+            dict.__init__(self, **kwargs)
+            self.type = type
+
+        def __call__(self, *args, **kwargs: "Unpack[Loggable.Args]") -> _T:
+            """This allows to use Def instances as if they were the actual class constructor."""
+            return self.type(*args, **(self | kwargs))
+
     class Broadcast[_ret, *_argsT](broadcast.Broadcast[_ret, *_argsT]):
         """create a broadcast object with auto-shutdown support when the parent Loggable is shutdown."""
 
@@ -291,6 +308,24 @@ class Loggable(metaclass=abc.ABCMeta):
                 pass
 
         return _added_slots - _existing_slots
+
+    @classmethod
+    def DEF(cls, **kwargs: "Unpack[Args]") -> type["Self"]:
+        # This method returns a special class 'Def' but
+        # type hinting suggests it is still self.cls so that the
+        # 'hidden' Def works like a wrapper for constructor
+        # keyword arguments and this semantic allows to chain different
+        # calls each one adding its own custom set of kwargs.
+        # In the end, the return type works exactly as a standard
+        # constructor in term of syntax and semantics (unless we inspect it ofc)
+        # This 'funny' semantic allows us to define maps wherever needed
+        # where both simple class types and cls.Def instances can work as consistent
+        # callables with the same syntax as the class constructor.
+        # TODO: This technique is very useful except we should still find a way to
+        # automatically 'infer' the kwargs unpacking for the relevant cls.
+        # This is actually overcomed with typing overwrites in child classes where the kwargs
+        # type differs from the base kwargs.
+        return cls.Def(cls, **kwargs)  # type: ignore[return-value]
 
     def __init__(
         self, id, parent: "LoggerType | None" = None, /, **kwargs: "Unpack[Args]"

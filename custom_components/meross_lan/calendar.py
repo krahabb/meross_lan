@@ -93,9 +93,9 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
         # save a flattened version of the device schedule to ease/optimize CalendarEvent management
         # since the original schedule has a fixed number of contiguous events spanning the day(s) (6 on my MTS100)
         # we might 'compress' these when 2 or more consecutive entries don't change the temperature
-        # ns_payload carries the original unpacked schedule payload from the device representing
+        # ns_value carries the original unpacked schedule payload from the device representing
         # its effective state
-        ns_payload: MtsScheduleNativeMappingType
+        ns_value: MtsScheduleNativeMappingType
         _schedule: MtsScheduleNativeType
         # set the 'granularity' of the schedule entries i.e. the schedule duration
         # must be a multiple of this time (in minutes). It is set lately by customized
@@ -570,7 +570,7 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
             schedule: "MtsScheduleNativeType" = {w: [] for w in MTS_SCHEDULE_WEEKDAY}
             for weekday, weekday_schedule in schedule.items():
                 try:
-                    weekday_state = self.ns_payload[weekday]
+                    weekday_state = self.ns_value[weekday]
                     # weekday_state = [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]]
                     if self.flatten:
                         current_entry = None
@@ -596,21 +596,14 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
         # the payload we receive from the device might be partial
         # if we're getting the PUSH in realtime since it only carries
         # the updated entries for the updated day.
-        """
-        native_schedule = self.ns_payload
-        if native_schedule:
-            payload = native_schedule | payload
-            if payload == native_schedule:
-                return
-        """
-        if len(payload) < len(self.ns_payload):
+        if len(payload) < len(self.ns_value):
             # This is a partial update. It happens when the device
             # pushes a single day array instead of the full week payload.
-            payload = self.ns_payload | payload  # type: ignore
-            if payload == self.ns_payload:
+            payload = self.ns_value | payload  # type: ignore
+            if payload == self.ns_value:
                 return
 
-        self.ns_payload = payload
+        self.ns_value = payload
         if mc.KEY_SECTION in payload:
             # mts960 carries 'section' to accomodate the
             # maximum number of entries according to @bernardpe

@@ -68,9 +68,7 @@ class GarageConfigMixin(ValueParser if TYPE_CHECKING else object):
     if TYPE_CHECKING:
 
         type InitArgs = ValueParser.InitArgs
-
-        class Args(ValueParser.Args):
-            device_value: NotRequired[int]
+        type Args = ValueParser.Args
 
     # Assuming by default we're parsing MultipleConfig
     # This will be overriden in kwargs when creating entities for Appliance.GarageDoor.Config
@@ -142,13 +140,6 @@ class GarageConfigNumber(GarageConfigMixin, NumberParser):
     number entity to manage MSG configuration (open/close timeout and the likes)
     'x channel' through mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
     """
-
-    if TYPE_CHECKING:
-
-        class Args(GarageConfigMixin.Args, NumberParser.Args):
-            pass
-
-        def __init__(self, *args, **kwargs: Unpack[Args]): ...
 
     # these are ok for almost all config entities (they're mostly durations with
     # milliseconds device_value)
@@ -226,27 +217,27 @@ class GarageDoorMultipleConfig(handler.MappingParser):
     POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
 
     init_parser_defs = {
-        mc.KEY_BUZZERENABLE: GarageConfigSwitch.ENTITY_DEF(
+        mc.KEY_BUZZERENABLE: GarageConfigSwitch.DEF(
             key_value=GarageConfigSwitch.SimpleKeyValue(mc.KEY_BUZZERENABLE)
         ),
-        mc.KEY_DOORENABLE: GarageEnableSwitch.ENTITY_DEF(
+        mc.KEY_DOORENABLE: GarageEnableSwitch.DEF(
             key_value=GarageEnableSwitch.SimpleKeyValue(mc.KEY_DOORENABLE)
         ),
-        mc.KEY_SIGNALDURATION: GarageConfigNumber.ENTITY_DEF(
+        mc.KEY_SIGNALDURATION: GarageConfigNumber.DEF(
             key_value=GarageConfigNumber.SimpleKeyValue(mc.KEY_SIGNALDURATION),
             native_step=0.1,
             native_min_value=0.1,
         ),
-        mc.KEY_SIGNALCLOSE: GarageConfigNumber.ENTITY_DEF(
+        mc.KEY_SIGNALCLOSE: GarageConfigNumber.DEF(
             key_value=GarageConfigNumber.SimpleKeyValue(mc.KEY_SIGNALCLOSE)
         ),
-        mc.KEY_SIGNALOPEN: GarageConfigNumber.ENTITY_DEF(
+        mc.KEY_SIGNALOPEN: GarageConfigNumber.DEF(
             key_value=GarageConfigNumber.SimpleKeyValue(mc.KEY_SIGNALOPEN)
         ),
-        mc.KEY_DOORCLOSEDURATION: GarageConfigNumber.ENTITY_DEF(
+        mc.KEY_DOORCLOSEDURATION: GarageConfigNumber.DEF(
             key_value=GarageConfigNumber.SimpleKeyValue(mc.KEY_DOORCLOSEDURATION)
         ),
-        mc.KEY_DOOROPENDURATION: GarageConfigNumber.ENTITY_DEF(
+        mc.KEY_DOOROPENDURATION: GarageConfigNumber.DEF(
             key_value=GarageConfigNumber.SimpleKeyValue(mc.KEY_DOOROPENDURATION)
         ),
     }

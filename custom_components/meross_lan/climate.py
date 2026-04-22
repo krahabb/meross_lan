@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from homeassistant.core import Event, State
     from homeassistant.helpers.event import EventStateChangedData
 
-    from .merossclient.protocol import namespaces as mn
+    from .merossclient.protocol import namespaces as mn, types as mt
 
 
 class MtsClimate(ParserEntity, climate.ClimateEntity):
@@ -331,6 +331,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
                 )
 
     if TYPE_CHECKING:
+        ns_value: mt.JsonMapping
         ATTR_HVAC_MODE: Final
         ATTR_TEMPERATURE: Final
         ATTR_TARGET_TEMP_HIGH: Final
@@ -591,7 +592,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         await self.handler_ns.async_set_parse_ex(
             payload,
             self,
-            self.ns_payload,
+            self.ns_value,
         )
 
 

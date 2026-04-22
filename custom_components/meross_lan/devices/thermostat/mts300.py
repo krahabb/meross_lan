@@ -54,7 +54,7 @@ class Mts300Climate(MtsThermostatClimate):
                 self.number_calibration_humi.update_device_value(humidity)
             except AttributeError:
                 self.number_calibration_humi = self.__class__.AdjustHumidityNumber(
-                    self, ns=self.ns, device_value=humidity
+                    self, ns=self.ns, ns_value=humidity
                 )
             except KeyError:  # missing humiValue
                 pass
@@ -81,7 +81,7 @@ class Mts300Climate(MtsThermostatClimate):
 
     if TYPE_CHECKING:
         # overrides
-        ns_payload: mt.thermostat.ModeC_C
+        ns_value: mt.thermostat.ModeC_C
 
         HVAC_MODE_TO_MODE_MAP: ClassVar
         ENTITY_ARGS: Final[dict[str, EnumParser.Args]]
@@ -314,15 +314,15 @@ class Mts300Climate(MtsThermostatClimate):
 
     @override
     def __call__(self, payload: "mt.thermostat.ModeC_C", /):
-        if self.ns_payload == payload:
+        if self.ns_value == payload:
             return
-        self.ns_payload = payload
+        self.ns_value = payload
         try:
             self._mts_work = payload["work"]
             self.preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_work)
             try:
                 # get current input sensor: 2 should be internal sensor though
-                temp_association = self.select_temp_association.device_value
+                temp_association = self.select_temp_association.ns_value
             except AttributeError:
                 temp_association = 0
             # currentTemp is always the controlled temperature input and might come from either
@@ -348,7 +348,7 @@ class Mts300Climate(MtsThermostatClimate):
             self.fan_mode = reverse_lookup(self.FAN_MODE_TO_FAN_SPEED_MAP, fan["speed"])
             fan_hold_time = fan["hTime"]
             if fan_hold_time == mc.MTS300_FAN_HOLD_DISABLED:
-                # this doesn't update device_value so that it is saved and
+                # this doesn't update ns_value so that it is saved and
                 # eventually reused when switch_fan_hold toggles on
                 self.number_fan_hold.update_native_value(None)
                 self.switch_fan_hold.update_boolean_value(False)
@@ -419,7 +419,7 @@ class Mts300Climate(MtsThermostatClimate):
         pass
 
     async def _async_turn_on_switch_fan_hold(self, **kwargs):
-        h_time = self.number_fan_hold.device_value
+        h_time = self.number_fan_hold.ns_value
         await self.async_request_parse_ex(
             {mc.KEY_FAN: {"hTime": 60 if h_time is None else h_time}}
         )

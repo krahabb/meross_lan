@@ -15,6 +15,7 @@ from ...merossclient.protocol import const as mc, namespaces as mn
 from ...merossclient.protocol.namespaces import hub as mn_h
 from ...sensor import SensorParser
 from ...switch import SwitchParser
+from ..misc import DeviceCfgParser
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final, Iterable, Mapping
@@ -267,6 +268,8 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         its own needs and SubDevice.__init__ will automatically add (self) parser registration
         for the ns iterable. If this subdevice/entity also defines self.ns (through init_ns) it will also
         be automatically added to the list of registrations."""
+        DEVICE_CFG_DEFS: ClassVar[DeviceCfgParser.ParserDefs]
+        """Parsing configuration map for devices supporting Appliance.Config.DeviceCfg."""
         parent: Final[Hub]  # type: ignore[override]
         model: Final[str]
 
@@ -574,7 +577,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
                 ),
                 ns=mn_h.Appliance_Hub_SubDevice_Beep,
                 name="Beep alarm",
-                device_value=payload[mc.KEY_ONOFF],
+                ns_value=payload[mc.KEY_ONOFF],
             ),
         )
 

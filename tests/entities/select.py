@@ -47,6 +47,11 @@ class EntityTest(EntityComponentTest):
         mc.TYPE_MTS100: [climate.MtsClimate.TrackSensorSelect],
         mc.TYPE_MTS100V3: [climate.MtsClimate.TrackSensorSelect],
         mc.TYPE_MTS150: [climate.MtsClimate.TrackSensorSelect],
+        mc.KEY_TEMPHUMI: [
+            select.SelectParser,  # timeCfg_am
+            select.SelectParser,  # ms130Cfg_bl_bri
+            select.SelectParser,  # unitCfg_tempUnit
+        ],
     }
 
     async def async_test_enabled_callback(self, entity: haec.SelectEntity):

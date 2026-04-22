@@ -10,7 +10,7 @@ class Mts200Climate(MtsThermostatClimate):
     """Climate entity for MTS200 devices"""
 
     if TYPE_CHECKING:
-        ns_payload: mt.thermostat.Mode_C
+        ns_value: mt.thermostat.Mode_C
 
     # MtsClimate class attributes
     temperature_scale = mc.MTS200_TEMP_SCALE
@@ -58,7 +58,7 @@ class Mts200Climate(MtsThermostatClimate):
                 mode = mc.MTS200_MODE_MANUAL
 
         target_temp = round(kwargs[self.ATTR_TEMPERATURE] * self.temperature_scale)
-        self.ns_payload[mc.KEY_TARGETTEMP] = target_temp  # optimistic update
+        self.ns_value[mc.KEY_TARGETTEMP] = target_temp  # optimistic update
         await self.async_request_parse_ex({mc.KEY_MODE: mode, key: target_temp})
 
     async def async_request_preset(self, mode: int, /):
@@ -71,9 +71,9 @@ class Mts200Climate(MtsThermostatClimate):
         return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
 
     def __call__(self, payload: "mt.thermostat.Mode_C", /):
-        if self.ns_payload == payload:
+        if self.ns_value == payload:
             return
-        self.ns_payload = payload
+        self.ns_value = payload
         if mc.KEY_MODE in payload:
             self._mts_mode = payload[mc.KEY_MODE]
         if mc.KEY_ONOFF in payload:

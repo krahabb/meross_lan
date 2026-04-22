@@ -112,8 +112,8 @@ class Mp3Player(ParserEntity, media_player.MediaPlayerEntity):
         """
         {"channel": 0, "lmTime": 1630691532, "song": 9, "mute": 1, "volume": 11}
         """
-        if self.ns_payload != payload:
-            self.ns_payload = payload
+        if self.ns_value != payload:
+            self.ns_value = payload
             if mc.KEY_MUTE in payload:
                 self.is_volume_muted = mute = payload[mc.KEY_MUTE]
                 self.state = MediaPlayerState.IDLE if mute else MediaPlayerState.PLAYING

@@ -32,7 +32,7 @@ class RollerShutter(Cover):
     ATTR_POSITION_NATIVE = "position_native"
     PARAM_TRANSITION_POLL_TIMEOUT = 2
     """used when polling the cover state to monitor an ongoing transition"""
-    NUMBER_CONFIG_DEF = NumberParser.ENTITY_DEF(
+    NUMBER_CONFIG_DEF = NumberParser.DEF(
         device_scale=1000,
         device_class=NumberParser.DeviceClass.DURATION,
         native_max_value=60,
@@ -166,13 +166,13 @@ class RollerShutter(Cover):
             if position > current_position:
                 timeout = (
                     (position - current_position)
-                    * (self.number_signalOpen.device_value or 30000)
+                    * (self.number_signalOpen.ns_value or 30000)
                 ) / 100000
                 position = mc.ROLLERSHUTTER_POSITION_OPENED
             elif position < current_position:
                 timeout = (
                     (current_position - position)
-                    * (self.number_signalClose.device_value or 30000)
+                    * (self.number_signalClose.ns_value or 30000)
                 ) / 100000
                 position = mc.ROLLERSHUTTER_POSITION_CLOSED
             else:
@@ -265,7 +265,7 @@ class RollerShutter(Cover):
                 self.current_cover_position = round(
                     self._position_start
                     + ((epoch - self._position_starttime) * 100000)
-                    / (self.number_signalOpen.device_value or 30000)
+                    / (self.number_signalOpen.ns_value or 30000)
                 )
                 if self.current_cover_position > mc.ROLLERSHUTTER_POSITION_OPENED:
                     self.current_cover_position = mc.ROLLERSHUTTER_POSITION_OPENED
@@ -274,7 +274,7 @@ class RollerShutter(Cover):
                 self.current_cover_position = round(
                     self._position_start
                     - ((epoch - self._position_starttime) * 100000)
-                    / (self.number_signalClose.device_value or 30000)
+                    / (self.number_signalClose.ns_value or 30000)
                 )
                 if self.current_cover_position < mc.ROLLERSHUTTER_POSITION_CLOSED:
                     self.current_cover_position = mc.ROLLERSHUTTER_POSITION_CLOSED

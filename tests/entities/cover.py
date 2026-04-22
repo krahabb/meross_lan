@@ -55,12 +55,8 @@ class EntityTest(EntityComponentTest):
                 | haec.CoverEntityFeature.CLOSE
                 | haec.CoverEntityFeature.STOP
             )
-            assert (
-                entity.number_signalClose.device_value == RollerShutterMixin.SIGNALCLOSE
-            )
-            assert (
-                entity.number_signalOpen.device_value == RollerShutterMixin.SIGNALOPEN
-            )
+            assert entity.number_signalClose.ns_value == RollerShutterMixin.SIGNALCLOSE
+            assert entity.number_signalOpen.ns_value == RollerShutterMixin.SIGNALOPEN
 
     async def async_test_enabled_callback(self, entity: Cover):
         get_hass_state = EntityComponentTest.get_hass_state

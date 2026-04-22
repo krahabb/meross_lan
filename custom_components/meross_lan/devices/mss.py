@@ -51,7 +51,7 @@ class _ElectricitySensor(SensorParser):
 
     init_entity_key = "energy_estimate"
     ENTITY_DEFS = {
-        mc.KEY_POWER: SensorParser.ENTITY_DEF(
+        mc.KEY_POWER: SensorParser.DEF(
             entity_key=mc.KEY_POWER,
             key_value=SensorParser.SimpleKeyValue(mc.KEY_POWER),
             device_class=SensorParser.DeviceClass.POWER,
@@ -59,7 +59,7 @@ class _ElectricitySensor(SensorParser):
             suggested_display_precision=1,
             device_scale=1000,
         ),
-        mc.KEY_CURRENT: SensorParser.ENTITY_DEF(
+        mc.KEY_CURRENT: SensorParser.DEF(
             entity_key=mc.KEY_CURRENT,
             key_value=SensorParser.SimpleKeyValue(mc.KEY_CURRENT),
             device_class=SensorParser.DeviceClass.CURRENT,
@@ -67,7 +67,7 @@ class _ElectricitySensor(SensorParser):
             suggested_display_precision=1,
             device_scale=1000,
         ),
-        mc.KEY_VOLTAGE: SensorParser.ENTITY_DEF(
+        mc.KEY_VOLTAGE: SensorParser.DEF(
             entity_key=mc.KEY_VOLTAGE,
             key_value=SensorParser.SimpleKeyValue(mc.KEY_VOLTAGE),
             device_class=SensorParser.DeviceClass.VOLTAGE,
@@ -93,7 +93,7 @@ class _ElectricitySensor(SensorParser):
         self._estimate = 0.0
         self._electricity_lastepoch = 0.0
         self.sensor_consumptionx = None
-        kwargs["device_value"] = 0
+        kwargs["ns_value"] = 0
         super().__init__(*args, **kwargs)
         self._schedule_reset()
         self.sensors = [
@@ -246,7 +246,7 @@ class ElectricityXSensor(_ElectricitySensor):
                 return True
 
     ENTITY_DEFS = _ElectricitySensor.ENTITY_DEFS | {
-        mc.KEY_VOLTAGE: SensorParser.ENTITY_DEF(
+        mc.KEY_VOLTAGE: SensorParser.DEF(
             entity_key=mc.KEY_VOLTAGE,
             key_value=SensorParser.SimpleKeyValue(mc.KEY_VOLTAGE),
             device_class=SensorParser.DeviceClass.VOLTAGE,
@@ -254,7 +254,7 @@ class ElectricityXSensor(_ElectricitySensor):
             suggested_display_precision=1,
             device_scale=1000,
         ),
-        mc.KEY_FACTOR: SensorParser.ENTITY_DEF(
+        mc.KEY_FACTOR: SensorParser.DEF(
             entity_key=mc.KEY_FACTOR,
             key_value=SensorParser.SimpleKeyValue(mc.KEY_FACTOR),
             device_class=SensorParser.DeviceClass.POWER_FACTOR,
@@ -262,7 +262,7 @@ class ElectricityXSensor(_ElectricitySensor):
             suggested_display_precision=2,
             device_scale=1,
         ),
-        mc.KEY_MCONSUME: MConsumeSensor.ENTITY_DEF(
+        mc.KEY_MCONSUME: MConsumeSensor.DEF(
             entity_key=mc.KEY_MCONSUME,
             key_value=SensorParser.SimpleKeyValue(mc.KEY_MCONSUME),
             device_class=SensorParser.DeviceClass.ENERGY,
@@ -657,10 +657,10 @@ class OverTempEnableSwitch(SwitchParser, EntityNamespaceMixin):
     @override
     def _handle(self, message: "MerossMessage", /):
         """{"overTemp": {"enable": 1,"type": 1}}"""
-        self.ns_payload = overtemp = message.payload[mc.KEY_OVERTEMP]
-        self.update_device_value(overtemp[self.key_value])
+        payload = message.payload[mc.KEY_OVERTEMP]
+        self.update_device_value(payload[self.key_value])
         try:
-            type = overtemp[mc.KEY_TYPE]
+            type = payload[mc.KEY_TYPE]
             self.sensor_overtemp_type.update_device_value(type)
         except AttributeError:
             self.sensor_overtemp_type = EnumParser(

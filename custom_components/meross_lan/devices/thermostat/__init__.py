@@ -36,7 +36,7 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
     """
 
     ENTITY_DEFS = {
-        key: ScreenBrightnessNumber.ENTITY_DEF(
+        key: ScreenBrightnessNumber.DEF(
             entity_key=f"screenbrightness_{key}",
             key_value=ScreenBrightnessNumber.SimpleKeyValue(key),
             name=f"Screen brightness ({key})",
@@ -109,7 +109,7 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
             self.sensor_warning = EnumParser(
                 self,
                 entity_key=entity_key,
-                device_value=warning,
+                ns_value=warning,
                 translation_key=f"mts_{entity_key}",
             )
         except KeyError:
@@ -183,7 +183,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
                     SensorParser.TEMPERATURE_ARGS
                     | {
                         "entity_key": "external sensor",
-                        "device_value": current_temp,
+                        "ns_value": current_temp,
                         "device_scale": self.device_scale,
                     }
                 ),
@@ -268,7 +268,7 @@ class MtsHoldAction(SelectParser):
                 self,
                 entity_key="hold_action_time",
                 device_scale=1,
-                device_value=time,
+                ns_value=time,
                 device_class=NumberParser.DEVICE_CLASS_DURATION,
                 native_unit_of_measurement=mlc.hac.UnitOfTime.MINUTES,
             )

@@ -30,7 +30,7 @@ class SelectEntity(mle.Entity, select.SelectEntity):
         def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
         @classmethod
-        def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
     _attr_entity_category = mle.Entity.EntityCategory.CONFIG
 
@@ -68,7 +68,7 @@ class SelectParser(mle.ValueParser, SelectEntity):
             # options: NotRequired[Never]
 
         @classmethod
-        def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
     # configure initial options(map) through a class default
     init_options_map = {}
@@ -77,14 +77,14 @@ class SelectParser(mle.ValueParser, SelectEntity):
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         self.options_map = kwargs.pop("options_map", self.init_options_map)
         try:
-            # if device_value is not provided this code is unnecessary and
+            # if ns_value is not provided this code is unnecessary and
             # the eventual other arguments will be managed by bases.
-            self.device_value = kwargs.pop("device_value")
+            self.ns_value = kwargs.pop("ns_value")
             try:
-                kwargs["current_option"] = self.options_map[self.device_value]
+                kwargs["current_option"] = self.options_map[self.ns_value]
             except KeyError:
                 self.options_map = dict(self.options_map)
-                self.options_map[self.device_value] = option = str(self.device_value)
+                self.options_map[self.ns_value] = option = str(self.ns_value)
                 kwargs["current_option"] = option
         except KeyError:
             pass
@@ -93,7 +93,7 @@ class SelectParser(mle.ValueParser, SelectEntity):
 
     @override
     def update_device_value(self, device_value, /):
-        if self.device_value != device_value:
+        if self.ns_value != device_value:
             try:
                 self.current_option = self.options_map[device_value]
             except KeyError:
@@ -103,7 +103,7 @@ class SelectParser(mle.ValueParser, SelectEntity):
                 self.options_map[device_value] = option = str(device_value)
                 self.options.append(option)
                 self.current_option = option
-            self.device_value = device_value
+            self.ns_value = device_value
             self.flush_state()
             return True
 

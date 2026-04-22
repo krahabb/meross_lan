@@ -33,7 +33,7 @@ class DiffuserLight(LightBase):
     """
 
     if TYPE_CHECKING:
-        ns_payload: mt.diffuser.Light
+        ns_value: mt.diffuser.Light
         effect_list: list[str]
 
     init_effect_list = mc.DIFFUSER_LIGHT_MODE_LIST
@@ -42,8 +42,8 @@ class DiffuserLight(LightBase):
     @override
     def __call__(self, payload: "mt.diffuser.Light", /):
         # taken from https://github.com/bwp91/homebridge-meross/blob/latest/lib/device/diffuser.js
-        if self.ns_payload != payload:
-            self.ns_payload = payload
+        if self.ns_value != payload:
+            self.ns_value = payload
             self.is_on = payload[mc.KEY_ONOFF]
             self.brightness = native_to_brightness(payload[mc.KEY_LUMINANCE])
             self.rgb_color = native_to_rgb(payload[mc.KEY_RGB])
@@ -60,7 +60,7 @@ class DiffuserLight(LightBase):
     async def async_turn_on(self, **kwargs):
         self.cancel_callback(self._transition_callback)
 
-        _light = dict(self.ns_payload)
+        _light = dict(self.ns_value)
         _light[mc.KEY_ONOFF] = 1
         if ATTR_TRANSITION in kwargs:
             _t_duration = self._transition_setup(_light, kwargs)
@@ -106,8 +106,8 @@ class DiffuserSensor(MappingParserHandler):
     POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_SLOWSENSOR
 
     init_parser_defs = {
-        mc.KEY_HUMIDITY: SensorParser.ENTITY_DEF(**SensorParser.HUMIDITY_ARGS),
-        mc.KEY_TEMPERATURE: SensorParser.ENTITY_DEF(**SensorParser.TEMPERATURE_ARGS),
+        mc.KEY_HUMIDITY: SensorParser.DEF(**SensorParser.HUMIDITY_ARGS),
+        mc.KEY_TEMPERATURE: SensorParser.DEF(**SensorParser.TEMPERATURE_ARGS),
     }
 
     def _handle(self, message: "MerossMessage", /):
@@ -119,5 +119,5 @@ class DiffuserSensor(MappingParserHandler):
                 if (ke.args[0] != key) or (key in self.parsers):
                     raise
                 self.parsers[key] = self.parser_defs[key](
-                    None, self.parent, device_value=message.payload[key][mc.KEY_VALUE]
+                    None, self.parent, ns_value=message.payload[key][mc.KEY_VALUE]
                 )

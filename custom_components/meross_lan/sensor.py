@@ -118,7 +118,7 @@ class EnumSensorEntity(SensorEntity):
         def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
         @classmethod
-        def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
         def update_native_value(
             self, native_value: sensor.StateType, /
@@ -143,12 +143,12 @@ class EnumParser(mle.ValueParser, EnumSensorEntity):
         def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
         @classmethod
-        def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
     @override
     def update_device_value(self, device_value: sensor.StateType, /):
-        if self.device_value != device_value:
-            self.device_value = device_value
+        if self.ns_value != device_value:
+            self.ns_value = device_value
             self.native_value = device_value
             self.flush_state()
             return True
@@ -169,7 +169,7 @@ class SensorParser(mle.NumericParser, SensorEntity):
         def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
         @classmethod
-        def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
     HUMIDITY_ARGS: "Args" = {
         "entity_key": mc.KEY_HUMIDITY,
@@ -186,7 +186,7 @@ class SensorParser(mle.NumericParser, SensorEntity):
 
     TEMPERATURE_ARGS: "Args" = {
         "entity_key": mc.KEY_TEMPERATURE,
-        "device_scale": 10,  # just a default - sometimes 100 or 1000
+        "device_scale": 10,  # TODO: use 100 as default since more common
         "device_class": SensorEntity.DeviceClass.TEMPERATURE,
         "suggested_display_precision": 1,
     }
@@ -209,7 +209,7 @@ class DiagnosticSensor(SensorEntity):
 
         def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"): ...
         @classmethod
-        def ENTITY_DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
         def update_native_value(
             self, native_value: sensor.StateType, /

@@ -167,6 +167,7 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
     """
 
     if TYPE_CHECKING:
+        ns_value: mt.control.Light | mt.diffuser.Light
 
         T_RESOLUTION_MIN: Final[float]
 
@@ -335,7 +336,7 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
         if not self.is_on:
             return
         t_now = monotonic()
-        _light = dict(self.ns_payload)
+        _light = dict(self.ns_value)
         if t_now >= (self._t_end - self._t_resolution):
             _light[mc.KEY_LUMINANCE] = self._t_luminance_end
             if self._t_rgb_end:
@@ -363,7 +364,7 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
                 )
             self._transition_schedule(self._t_end - t_now)
 
-        if _light == self.ns_payload:
+        if _light == self.ns_value:
             # Our time resolution might be too fast to produce
             # visible effects in light payload so we're skipping
             # sending redundant light commands
@@ -382,7 +383,7 @@ class Light(LightBase):
     """
 
     if TYPE_CHECKING:
-        ns_payload: mt.control.Light
+        ns_value: mt.control.Light
 
         ATTR_TOGGLEX_AUTO: Final[str]
         _togglex_auto: bool | None
@@ -440,8 +441,8 @@ class Light(LightBase):
 
     @override
     def __call__(self, payload: "mt.control.Light", /):
-        if self.ns_payload != payload:
-            self.ns_payload = payload
+        if self.ns_value != payload:
+            self.ns_value = payload
             if mc.KEY_ONOFF in payload:
                 self.is_on = payload[mc.KEY_ONOFF]
             capacity = payload[mc.KEY_CAPACITY]
@@ -481,7 +482,7 @@ class Light(LightBase):
             await self.async_request_onoff(1)
             return
 
-        _light = dict(self.ns_payload)
+        _light = dict(self.ns_value)
 
         if ATTR_TRANSITION in kwargs and kwargs[ATTR_TRANSITION] != 0:
             _t_duration = self._transition_setup(_light, kwargs)
@@ -673,7 +674,7 @@ class EffectLight(Light):
 
         # intercept light command if it is related to effects (on/off/change of luminance)
         if ATTR_EFFECT in kwargs:
-            _light = self.ns_payload.copy()
+            _light = self.ns_value.copy()
             effect_index = self.effect_list.index(kwargs[ATTR_EFFECT])
             if effect_index == len(self._light_effects):  # EFFECT_OFF
                 _light.pop(mc.KEY_EFFECT, None)
@@ -695,7 +696,7 @@ class EffectLight(Light):
             return
 
         if ATTR_BRIGHTNESS in kwargs:
-            _light = self.ns_payload
+            _light = self.ns_value
             if _light[mc.KEY_CAPACITY] & mc.LIGHT_CAPACITY_EFFECT:
                 # we're trying to control the luminance of the effect though...
                 _light_effect = None

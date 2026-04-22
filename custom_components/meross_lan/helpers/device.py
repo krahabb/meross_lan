@@ -325,6 +325,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         # ToggleX need to be created before any other possible 'conflicting' ns
         # like .Light or .Fan
         mn.Appliance_Control_ToggleX: (".switch", "ToggleX"),
+        mn.Appliance_Config_DeviceCfg: (".devices.misc", "DeviceCfgParser"),
         mn.Appliance_Config_OverTemp: (".devices.mss", "OverTempEnableSwitch"),
         mn.Appliance_Config_Alarm: (".siren", "ConfigAlarm"),
         mn.Appliance_Control_Alarm: (".siren", "ControlAlarm"),
@@ -1599,7 +1600,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                     self,
                     entity_key=f"{key_parent}_{key}",
                     index=index,
-                    device_value=value,
+                    ns_value=value,
                 )
             except Exception as e:
                 self.log_exception(

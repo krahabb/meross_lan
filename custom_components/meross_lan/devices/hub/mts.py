@@ -26,7 +26,7 @@ class mts100v3(SubDevice, MtsClimate):
         _attr_native_step = 0.5
 
     if TYPE_CHECKING:
-        ns_payload: mt.hub._Mts100_Temperature
+        ns_value: mt.hub._Mts100_Temperature
         binary_sensor_window: BinarySensorEntity
         switch_patch_hvacaction: EmulatedSwitch
 
@@ -161,8 +161,8 @@ class mts100v3(SubDevice, MtsClimate):
             )
             self._mts_onoff = 1
         try:
-            target_temperature = self.ns_payload[mc.MTS100_MODE_TO_CURRENTSET_MAP[mode]]
-            self.ns_payload[mc.KEY_CURRENTSET] = target_temperature
+            target_temperature = self.ns_value[mc.MTS100_MODE_TO_CURRENTSET_MAP[mode]]
+            self.ns_value[mc.KEY_CURRENTSET] = target_temperature
             self.target_temperature = target_temperature / self.temperature_scale
         except KeyError:
             pass
@@ -182,9 +182,9 @@ class mts100v3(SubDevice, MtsClimate):
 
     @override
     def __call__(self, payload: "mt.hub._Mts100_Temperature", /):
-        if self.ns_payload == payload:
+        if self.ns_value == payload:
             return
-        self.ns_payload = payload
+        self.ns_value = payload
         if mc.KEY_ROOM in payload:
             self._update_current_temperature(payload[mc.KEY_ROOM])
         if mc.KEY_CURRENTSET in payload:

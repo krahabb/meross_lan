@@ -6,7 +6,7 @@ from custom_components.meross_lan.devices import (
     ms600,
     rollershutter as rs,
 )
-from custom_components.meross_lan.devices.hub import ms, mst
+from custom_components.meross_lan.devices.hub import ms
 from custom_components.meross_lan.devices.hub.mts import mts100v3
 from custom_components.meross_lan.devices.thermostat import (
     MtsClimate,
@@ -89,7 +89,17 @@ class EntityTest(EntityComponentTest):
         mc.TYPE_MTS100: _MTS100_ENTITES,
         mc.TYPE_MTS100V3: _MTS100_ENTITES,
         mc.TYPE_MTS150: _MTS100_ENTITES,
-        mc.KEY_MST: [mst.mst100.WateringDurationNumber],
+        mc.KEY_MST: [
+            number.NumberParser,  # mstCfg_dura
+            number.NumberParser,  # mstCfg_calibration_waCon
+            # TODO: for mst200 we should duplicate this but the logic is way out of our testing configuration standards
+        ],
+        mc.KEY_TEMPHUMI: [
+            number.NumberParser,  # calibrateCfg_temp
+            number.NumberParser,  # calibrateCfg_humi
+            number.NumberParser,  # ms130Cfg_bl_lv
+            number.NumberParser,  # ms130Cfg_bl_sleep
+        ],
     }
 
     async def async_test_each_callback(self, entity: number.NumberEntity):
