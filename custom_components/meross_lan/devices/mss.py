@@ -339,7 +339,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
     def __init__(self, ns: mn.Namespace, device: "Device", /):
         self._indexes_to_poll = []
         NamespaceHandler.__init__(self, ns, device, parser_class=ConsumptionHSensor)
-        if len(device.descriptor.channels) > 1:
+        if len(device.descriptor.channels) == 6:
             self.polling_strategy = ConsumptionHNamespaceHandler.async_poll_probe
         device.enable_check_device_time()
 
@@ -378,8 +378,6 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         # since em06 looks like having a way more than our default estimated 2400 (3 * 800) bytes
         # We're then going to try a full poll and see what happens. Also, we're expecting the device
         # to reply with just 3 channels when queried with an empty list (em06).
-        if not self._indexes_to_poll:
-            return
         self.polling_response_size = (
             NamespaceHandler.HEADER_AVG_SIZE + 3 * self.id.payload_item_size
         )
@@ -521,7 +519,7 @@ class ConsumptionXSensor(SensorParser, EntityNamespaceMixin):
             # so our multiple requests are more reliable. If anything
             # goes wrong, the Device multiple payload managment
             # is smart enough to adapt to wrong estimates
-            self.handler_ns.polling_response_size_adj(len(days))
+            self.polling_response_size_adj(len(days))
             # catch the device starting a new day since our last update (yesterday)
             devtime = device.get_device_datetime(device.device_timestamp)
             devtime_today_midnight = datetime(
