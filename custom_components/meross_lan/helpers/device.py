@@ -34,12 +34,10 @@ if TYPE_CHECKING:
         Any,
         Callable,
         ClassVar,
-        Collection,
         Final,
         Iterable,
         Iterator,
         Mapping,
-        NotRequired,
         Unpack,
     )
 
@@ -139,6 +137,7 @@ class BaseDevice(device.PhysicalDevice):
         device_entry: dr.DeviceEntry
         device_info: dr.DeviceInfo
         entities: Mapping[object, Entity]
+        entities_iterable: Iterable[Entity]
 
         class Args(device.PhysicalDevice.Args):
             pass
@@ -155,21 +154,20 @@ class BaseDevice(device.PhysicalDevice):
     @override
     def on_connect(self):
         super().on_connect()
-        for entity in self.entities.values():
-            if not entity.available:
-                entity.set_available()
+        for entity in (_entity for _entity in self.entities_iterable if not _entity.available):
+            entity.set_available()
 
     @override
     def on_disconnect(self):
         super().on_disconnect()
-        for entity in self.entities.values():
-            if entity.available:
-                entity.set_unavailable()
+        for entity in (_entity for _entity in self.entities_iterable if _entity.available):
+            entity.set_unavailable()
 
     # interface: self
     device_entry = NotImplemented
     device_info = NotImplemented
     entities = NotImplemented
+    entities_iterable = NotImplemented
 
     @property
     def update_firmware(self) -> UpdateEntity | None:

@@ -403,7 +403,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         async_add_entities(
             [
                 entity
-                for entity in manager.entities.values()
+                for entity in manager.entities_iterable
                 if (entity.PLATFORM is platform) and not entity.platform
             ]
         )

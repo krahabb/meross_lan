@@ -37,15 +37,15 @@ if TYPE_CHECKING:
         ClassVar,
         Coroutine,
         Final,
+        Iterable,
         Mapping,
-        NotRequired,
         TypedDict,
         Unpack,
     )
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import CALLBACK_TYPE, HomeAssistant
-    from homeassistant.helpers.device_registry import DeviceEntry, DeviceInfo
+    from homeassistant.helpers.device_registry import DeviceInfo
     from homeassistant.helpers.entity_platform import EntityPlatform
 
     from ..merossclient import HostAddress
@@ -91,6 +91,7 @@ class ConfigEntryManager(logging.Loggable):
         obfuscate: bool
         platforms: dict[str, EntityPlatform]
         entities: Final[dict[object, Entity]]
+        entities_iterable: Final[Iterable[Entity]]  # RENAME to entities once migrated
         _added_platform_entities: dict[str, list[Entity]]
         """Entities added lately when ConfigEntry has already been loaded.
         This will be used to lazily forward them to the right platform.
@@ -124,6 +125,7 @@ class ConfigEntryManager(logging.Loggable):
         "obfuscate",
         "platforms",
         "entities",
+        "entities_iterable",
         "_added_platform_entities",
         "logger",
         "is_connected",
@@ -155,6 +157,7 @@ class ConfigEntryManager(logging.Loggable):
             self.obfuscate = True
         self.platforms = {}
         self.entities = {}
+        self.entities_iterable = self.entities.values()
         self.is_connected = self.init_is_connected
         self._trace_file = None
         self._trace_future = None
@@ -233,6 +236,7 @@ class ConfigEntryManager(logging.Loggable):
     # interface: self
     @property
     def create_diagnostic_entities(self):
+        # TODO: implement straigth attribute caching
         return self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
 
     @property
@@ -265,7 +269,7 @@ class ConfigEntryManager(logging.Loggable):
             pass
 
         await hass.config_entries.async_forward_entry_setups(
-            config_entry, set(entity.PLATFORM for entity in self.entities.values())
+            config_entry, set(entity.PLATFORM for entity in self.entities_iterable)
         )
         self._entry_update_listener_unsub = config_entry.add_update_listener(
             self.entry_update_listener
@@ -336,7 +340,7 @@ class ConfigEntryManager(logging.Loggable):
         """Explicit cleanup diagnostic entities. They will be removed from the entity registry as well."""
         ent_reg = self.parent.entity_registry
         for entity in tuple(
-            _entity for _entity in self.entities.values() if _entity.is_diagnostic
+            _entity for _entity in self.entities_iterable if _entity.is_diagnostic
         ):
             if entity.hass_connected:
                 await entity.async_remove()

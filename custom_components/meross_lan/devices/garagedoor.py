@@ -120,15 +120,18 @@ class GarageEnableSwitch(GarageConfigSwitch):
         enabled = self.is_on
         registry_update_entity = self.parent.parent.entity_registry.async_update_entity
         disabler = RegistryEntryDisabler.INTEGRATION
+        # TODO: split the loop in two branches
         for entry in (
             _entry
-            for entity in self.parent.entities.values()
+            for entity in self.parent.entities_iterable
             if (entity.device_info is self.device_info)
             and (entity is not self)
             and (_entry := entity.registry_entry)
         ):
             if enabled:
-                if entry.disabled_by == disabler:
+                if (
+                    entry.disabled_by == disabler
+                ):  # This check too might be done in comprehension
                     registry_update_entity(entry.entity_id, disabled_by=None)
             else:
                 if not entry.disabled_by:

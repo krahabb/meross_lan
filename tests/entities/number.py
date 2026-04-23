@@ -120,14 +120,11 @@ class EntityTest(EntityComponentTest):
             # the device is configured to disable 'fan hold'.
             # Again we can control this function through a dedicated switch.
             device = self.device_context.device
-            _switch = device.entities[
-                entity.id.replace("fan_hold_time", "fan_hold_enable")
-            ]
-            assert type(_switch) is switch.EmulatedSwitch
+            climate: Mts300Climate = device.ns_handlers[mn_t.Appliance_Control_Thermostat_ModeC].parsers[0]  # type: ignore
             # Here we cannot check for availability consistence
             # since at start it is a bit messed up.
-            if not _switch.is_on:
-                await _switch.async_turn_on()
+            if not climate.switch_fan_hold.is_on:
+                await climate.switch_fan_hold.async_turn_on()
         await super().async_test_each_callback(entity)
 
     async def async_test_enabled_callback(self, entity: number.NumberEntity):

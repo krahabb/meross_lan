@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
     from ...helpers.device import Device
     from ...merossclient.protocol import types as mt
+    from .mts200 import Mts200Climate
 
 
 class ScreenBrightnessNumber(NumberParser):
@@ -73,9 +74,27 @@ class MtsCommonTemperatureNumber(NumberParser):
         # We could maybe create a thermostats dict in Device so that we can always
         # access those entities wherever since MtsClimate entities are needed here and there
         # in the thermostat entity system.
-        climate: "MtsClimate" = args[0] if len(args) == 1 else args[1].entities[args[0]]  # type: ignore
+        if len(args) == 1:
+            # The 'sibling' arg is the climate entity itself, so we can get the temperature scale from it
+            if TYPE_CHECKING:
+                assert isinstance(args[0], MtsClimate)
+            kwargs["device_scale"] = args[0].temperature_scale
+        else:
+            handlers = args[1].ns_handlers
+            handler = next(
+                iter(
+                    handlers[ns]
+                    for ns in handlers
+                    if ns
+                    in (
+                        mn_t.Appliance_Control_Thermostat_Mode,
+                        mn_t.Appliance_Control_Thermostat_ModeB,
+                        mn_t.Appliance_Control_Thermostat_ModeC,
+                    )
+                )
+            )
+            kwargs["device_scale"] = handler.parsers[args[0]].temperature_scale  # type: ignore
         kwargs["entity_key"] = kwargs["ns"].slug_end
-        kwargs["device_scale"] = climate.temperature_scale
         NumberParser.__init__(self, *args, **kwargs)  # type: ignore
 
     @override
@@ -200,6 +219,9 @@ class MtsSummerMode(SwitchParser):
     so we need a custom parser to manage it.
     """
 
+    if TYPE_CHECKING:
+        SUMMER_MODE_HVAC_MODES: ClassVar[dict[mt.JsonType, list[MtsClimate.HVACMode]]]
+
     init_key_value = SwitchParser.SimpleKeyValue(mc.KEY_MODE)
     init_value_on = mc.MTS200_SUMMERMODE_COOL
     init_value_off = mc.MTS200_SUMMERMODE_HEAT
@@ -207,23 +229,28 @@ class MtsSummerMode(SwitchParser):
         f"{mn_t.Appliance_Control_Thermostat_SummerMode.slug}__{init_key_value}"
     )
 
+    SUMMER_MODE_HVAC_MODES = {
+        mc.MTS200_SUMMERMODE_HEAT: [
+            MtsClimate.HVACMode.OFF,
+            MtsClimate.HVACMode.HEAT,
+        ],
+        mc.MTS200_SUMMERMODE_COOL: [
+            MtsClimate.HVACMode.OFF,
+            MtsClimate.HVACMode.COOL,
+        ],
+    }
     _attr_name = "Summer mode"
 
     @override
     def flush_state(self):
         SwitchParser.flush_state(self)
-        climate: "MtsThermostatClimate" = self.parent.entities[self.index.value]  # type: ignore
-        if self.is_on:
-            climate.hvac_modes = [
-                MtsThermostatClimate.HVACMode.OFF,
-                MtsThermostatClimate.HVACMode.COOL,
-            ]
-        else:
-            climate.hvac_modes = [
-                MtsThermostatClimate.HVACMode.OFF,
-                MtsThermostatClimate.HVACMode.HEAT,
-            ]
-        climate.flush_state()
+        try:
+            climate: "Mts200Climate" = self.parent.ns_handlers[mn_t.Appliance_Control_Thermostat_Mode].parsers[self.index]  # type: ignore
+            climate.hvac_modes = self.SUMMER_MODE_HVAC_MODES[self.ns_value]
+            climate.flush_state()
+        except KeyError:
+            if self.available:
+                raise
 
 
 class MtsWindowOpened(BinarySensorParser):

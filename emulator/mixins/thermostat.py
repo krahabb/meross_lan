@@ -51,6 +51,10 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
             Emulator.NSDefaultMode.MixOut,
             {mc.KEY_CHANNEL: 0, "mode": 0, "time": 0},
         ),
+        mn_t.Appliance_Control_Thermostat_SummerMode: (
+            Emulator.NSDefaultMode.MixOut,
+            {mc.KEY_CHANNEL: 0, "mode": 1},
+        ),
         mn_t.Appliance_Control_Thermostat_Timer: (
             Emulator.NSDefaultMode.MixOut,
             {
@@ -335,9 +339,23 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
             pass
 
         if p_mode[mc.KEY_ONOFF]:
-            p_mode[mc.KEY_STATE] = (
-                1 if p_mode[mc.KEY_TARGETTEMP] > p_mode[mc.KEY_CURRENTTEMP] else 0
-            )
+            if (
+                mn_t.Appliance_Control_Thermostat_SummerMode in self.descriptor.ability
+                and (
+                    self.get_namespace_state(
+                        mn_t.Appliance_Control_Thermostat_SummerMode,
+                        p_mode[mc.KEY_CHANNEL],
+                    )[mc.KEY_MODE]
+                    == mc.MTS200_SUMMERMODE_COOL
+                )
+            ):
+                p_mode[mc.KEY_STATE] = (
+                    1 if p_mode[mc.KEY_TARGETTEMP] < p_mode[mc.KEY_CURRENTTEMP] else 0
+                )
+            else:
+                p_mode[mc.KEY_STATE] = (
+                    1 if p_mode[mc.KEY_TARGETTEMP] > p_mode[mc.KEY_CURRENTTEMP] else 0
+                )
         else:
             p_mode[mc.KEY_STATE] = 0
 

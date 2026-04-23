@@ -64,7 +64,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             # We'll then forward the callback to the climate entity in order to
             # ensure the climate state is consistent after a setpoint change.
             # Consider both ns reply with the full state in the SETACK response.
-            climate: "MtsClimate" = self.parent.entities[self.index.value]  # type: ignore
+            climate: "MtsClimate" = self.handler_ns.parsers[self.index]  # type: ignore
             return await climate.async_request_parse_ex(self.key_value(device_value))
 
     Schedule = MtsSchedule
@@ -84,8 +84,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             TRACKING_DEADTIME: Final[int]
             """minimum delay (dead-time) between trying to adjust the climate entity."""
 
-            def __init__(self, *args: *SelectEntity.InitArgs): ...
-
         init_entity_key = "tracked_sensor"
         TRACKING_DELAY = 5
         TRACKING_DEADTIME = 60
@@ -100,12 +98,17 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             "_tracking_state_change_unsub",
             "_track_last_epoch",
         )
-        __slots__ = ()
+        __slots__ = ("climate",)
+
+        def __init__(self, climate: "MtsClimate", /):
+            self.climate = climate
+            super().__init__(climate)
 
         @override
         async def async_shutdown(self):
             self._tracking_stop()
             await super().async_shutdown()
+            del self.climate
 
         @override
         def set_unavailable(self):
@@ -245,7 +248,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         def _track(self, tracked_state: "State"):
             """This is only called internally after a timeout when tracking needs to be updated
             due to state changes in either tracked entity or climate."""
-            climate: "MtsClimate" = self.parent.entities[self.index.value]  # type: ignore
+            climate = self.climate
             current_temperature = climate.current_temperature
             if not current_temperature:
                 # should be transitory - just a safety check
@@ -356,7 +359,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
         index: Final[mn.IndexValue]  # type: ignore[override]
         number_adjust_temperature: Final[NumberParser]
-        number_preset_temperature: Final[set[SetPointNumber]]
+        number_preset_temperature: Final[tuple[SetPointNumber, ...]]
         schedule: Final[MtsSchedule]
         select_track_sensor: Final[TrackSensorSelect]
         sensor_current_temperature: Final[SensorParser]
@@ -468,7 +471,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         )
 
         if cls.MTS_MODE_TO_TEMPERATUREKEY_MAP:
-            self.number_preset_temperature = set(
+            self.number_preset_temperature = tuple(
                 cls.SetPointNumber(
                     self,
                     entity_key=f"config_temperature_{key_value}",
@@ -515,10 +518,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         del self.select_track_sensor  # type: ignore
         del self.schedule  # type: ignore
         del self.number_adjust_temperature  # type: ignore
-        try:
-            del self.number_preset_temperature  # type: ignore
-        except AttributeError:
-            pass
 
     def set_unavailable(self):
         self.current_humidity = None

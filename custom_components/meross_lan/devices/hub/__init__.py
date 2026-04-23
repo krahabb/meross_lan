@@ -431,10 +431,19 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
     @override
     def entities(self) -> "Mapping[object, mle.Entity]":
         return {
-            id: entity
-            for id, entity in self.parent.entities.items()
+            entity.id: entity
+            for entity in self.parent.entities_iterable
             if entity.device_info is self.device_info
         }
+
+    @property
+    @override
+    def entities_iterable(self) -> "Iterable[mle.Entity]":
+        return (
+            entity
+            for entity in self.parent.entities_iterable
+            if entity.device_info is self.device_info
+        )
 
     @property
     @override
@@ -456,7 +465,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         and its related entities without affecting the whole hub device. This is useful when
         we discover a subdevice has been removed from the hub and we need to cleanup accordingly.
         """
-        for entity in [*self.entities.values()]:
+        for entity in [*self.entities_iterable]:
             await entity.async_shutdown()
 
     def update_sub_device_info(self, sub_device_info: "SubDeviceInfoType", /):

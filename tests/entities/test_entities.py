@@ -196,7 +196,7 @@ async def test_entities(
                         )
                     device = device_context.device
                     await _async_test_entities(
-                        device.entities.values(), expected, unexpected, unavailable
+                        device.entities_iterable, expected, unexpected, unavailable
                     )
                     assert device.descriptor.is_hub == ishub
 

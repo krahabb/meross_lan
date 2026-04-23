@@ -22,7 +22,6 @@ from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
 )
-from custom_components.meross_lan.sensor import SensorParser
 from emulator.mixins.electricity import (
     ConsumptionXMixin as EmulatorConsumptionMixin,
     ElectricityMixin as EmulatorElectricityMixin,
@@ -52,9 +51,9 @@ DEVICE_TIMEZONE = "Asia/Baku"
 
 
 def _get_sensors(device: "Device"):
-    sensor_consumption = device.entities[mn.Appliance_Control_ConsumptionX]
+    sensor_consumption = device.ns_handlers[mn.Appliance_Control_ConsumptionX]
     assert isinstance(sensor_consumption, ConsumptionXSensor)
-    sensor_electricity = device.entities[mn.Appliance_Control_Electricity]
+    sensor_electricity = device.ns_handlers[mn.Appliance_Control_Electricity]
     assert isinstance(sensor_electricity, ElectricitySensor)
     return sensor_consumption, sensor_electricity
 
@@ -101,9 +100,7 @@ class DeviceConsumptionContext(helpers.DeviceContext):
         self.sensor_consumption_entity_id = self.sensor_consumption.entity_id
         self.sensor_electricity_entity_id = self.sensor_electricity.entity_id
 
-        sensor_power = device.entities[mc.KEY_POWER]
-        assert isinstance(sensor_power, SensorParser)
-        powerstate = self.get_hass_state(sensor_power.entity_id)
+        powerstate = self.get_hass_state(self.sensor_electricity.sensor_power.entity_id)
         assert powerstate and (float(powerstate.state) == TEST_POWER)
 
         consumptionstate = self.get_hass_state(self.sensor_consumption_entity_id)
@@ -116,11 +113,11 @@ class DeviceConsumptionContext(helpers.DeviceContext):
 
     async def async_setup(self):
         assert await super().async_setup()
-        self.sensor_consumption: ConsumptionXSensor = self.device.entities[
+        self.sensor_consumption: ConsumptionXSensor = self.device.ns_handlers[
             mn.Appliance_Control_ConsumptionX
         ]  # type: ignore
         assert isinstance(self.sensor_consumption, ConsumptionXSensor)
-        self.sensor_electricity: ElectricitySensor = self.device.entities[mn.Appliance_Control_Electricity]  # type: ignore
+        self.sensor_electricity: ElectricitySensor = self.device.ns_handlers[mn.Appliance_Control_Electricity]  # type: ignore
         assert isinstance(self.sensor_electricity, ElectricitySensor)
         await self.async_poll_single()
 
