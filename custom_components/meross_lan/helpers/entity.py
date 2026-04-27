@@ -139,7 +139,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
     )
 
     # This works as a default for all the entities which are not NamespaceParsers.
-    index = mn.IndexType.none()
+    index = mn.IndexType.none.get()
 
     is_diagnostic = False
 

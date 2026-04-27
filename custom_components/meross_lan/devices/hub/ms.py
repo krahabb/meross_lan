@@ -338,7 +338,7 @@ class ms130(ms100):
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         ms100.__init__(self, subid, hub, key_digest, model)
-        index = mn.IndexType.subId(subid, 0, None)
+        index = mn.IndexType.subId.get(subid, 0, None)
         try:
             # Configure parser for Appliance.Control.Sensor.LatestX:
             # {

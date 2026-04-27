@@ -137,7 +137,7 @@ ENTITY_DEFS = (
 
 
 def namespace_init_presence_config(ns: mn.Namespace, device: "Device", /):
-    index = mn.IndexType.channel(0)
+    index = mn.IndexType.channel.get(0)
     sensor_presence = PresenceSensor(
         0,
         device,

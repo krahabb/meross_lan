@@ -49,7 +49,7 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
         NamespaceHandler.__init__(
             self, ns, device, config=mlc.POLLING_CONFIG_CONFIGURATION
         )
-        index = mn.IndexType.channel(0)
+        index = mn.IndexType.channel.get(0)
         device_info = device.get_device_entry_info(0)
         self.register_parsers(
             *(

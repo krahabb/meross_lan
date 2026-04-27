@@ -517,5 +517,7 @@ class GarageDoor(Cover):
         for channel_digest in ns.get_digest(descriptor.digest):
             channel = channel_digest[mc.KEY_CHANNEL]
             _handler.register_parser(
-                GarageDoor(channel, device, ns=ns, index=mn.IndexType.channel(channel))
+                GarageDoor(
+                    channel, device, ns=ns, index=mn.IndexType.channel.get(channel)
+                )
             )

@@ -96,7 +96,7 @@ class mst100(mst):
 
     def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
         SubDevice.__init__(self, subid, hub, key_digest, model)
-        index = mn.IndexType.subId(subid, 0, None)
+        index = mn.IndexType.subId.get(subid, 0, None)
         switch = mst.Switch(self, index=index)
         switch.unique_id = f"{hub.id}_{subid}_onoff"  # LEGACY
         hub.get_handler(mn_h.Appliance_Control_Water).register_parser(switch)
@@ -119,14 +119,14 @@ class mst200(mst):
         for channel in range(1, 3):
             # indexed by subId, channels
             handler_water.register_parser(
-                mst.Switch(self, index=mn.IndexType.subId(subid, None, channel))
+                mst.Switch(self, index=mn.IndexType.subId.get(subid, None, channel))
             )
             # indexed by subId, channel
             handler_devicecfg.register_parser(
                 DeviceCfgParser(
                     subid,
                     hub,
-                    index=mn.IndexType.subId(subid, channel, None),
+                    index=mn.IndexType.subId.get(subid, channel, None),
                     parser_defs=mst.DEVICE_CFG_DEFS,
                 )
             )

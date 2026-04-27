@@ -395,7 +395,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         )
         self.key_digest = key_digest
         self.model = model
-        kwargs["index"] = mn.IndexType.id(subid)
+        kwargs["index"] = mn.IndexType.id.get(subid)
         super().__init__(subid, hub, **kwargs)
         _ns_hub = [self.ns] if self.ns else []
         for _cls in self.__class__.__mro__:
@@ -412,7 +412,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
                 hub,
                 entity_key=mc.KEY_BATTERY,
                 ns=mn_h.Appliance_Hub_Battery,
-                index=mn.IndexType.id(subid),
+                index=mn.IndexType.id.get(subid),
                 device_class=SensorParser.DeviceClass.BATTERY,
             )
         )

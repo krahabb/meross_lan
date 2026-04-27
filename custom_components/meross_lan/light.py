@@ -582,7 +582,7 @@ class Light(LightBase):
         channel = ns.get_digest(descriptor.digest)[mc.KEY_CHANNEL]
         kwargs = {
             "ns": ns,
-            "index": mn.IndexType.channel(channel),
+            "index": mn.IndexType.channel.get(channel),
         }
         if mn.Appliance_Control_Light_Effect in descriptor.ability:
             light_class = EffectLight

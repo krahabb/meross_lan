@@ -196,7 +196,7 @@ class NamespaceHandler(logging.Loggable):
                         False
                     ), "parser_class only supported for 'channel' indexed namespaces"
             for channel in kwargs.pop("channels", parent.descriptor.channels):
-                index = mn.IndexType.channel(channel)
+                index = mn.IndexType.channel.get(channel)
                 self.parsers[index] = parser = parser_class(
                     channel, parent, ns=id, index=index
                 )
@@ -261,7 +261,7 @@ class NamespaceHandler(logging.Loggable):
                 # We provide here a 'quick' workaround to automatically bind to channel == 0
                 # since this seems pretty common.
                 if index.type is mn.IndexType.id:
-                    index = mn.IndexType.subId(index.value, 0, None)
+                    index = mn.IndexType.subId.get(index.value, 0, None)
                 elif index.type is mn.IndexType.channel:
                     pass
                 else:
@@ -515,7 +515,7 @@ class NamespaceHandler(logging.Loggable):
         # - KeyError in parser function
         """
         try:
-            index = mn.IndexType.channel(payload[KEY_CHANNEL])
+            index = mn.IndexType.channel.get(payload[KEY_CHANNEL])
         except KeyError as ke:
             self.log_handler_exception(ke, payload)
             return
@@ -1168,7 +1168,7 @@ class NamespaceParser(logging.Loggable):
         def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
 
     init_ns_value = mn.EMPTY_DICT
-    init_index = mn.IndexType.none()
+    init_index = mn.IndexType.none.get()
     SLOTS_AUTO_INIT = (
         "ns",
         "ns_value",

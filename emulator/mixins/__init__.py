@@ -819,7 +819,7 @@ class Emulator:
 
     def get_namespace_state(self, ns: mn.Namespace, *key_values):
         return get_element_by_index(
-            self.namespaces[ns][ns.key], ns.index_type(*key_values)
+            self.namespaces[ns][ns.key], ns.index_type.get(*key_values)
         )
 
     def update_namespace_state(
