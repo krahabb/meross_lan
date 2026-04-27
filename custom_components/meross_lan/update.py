@@ -9,12 +9,14 @@ from .merossclient.protocol import namespaces as mn
 if TYPE_CHECKING:
     from typing import ClassVar, Final, NotRequired
 
-    from .helpers.device import Device
+    from .helpers.device import BaseDevice, Device
 
 
 class UpdateEntity(Entity, update.UpdateEntity):
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
+        device: Final[BaseDevice]
+        """The PhysicalDevice associated with this entity. Could be either a subdevice or a plain device."""
         # HA core entity attributes:
         _attr_device_class: ClassVar[update.UpdateDeviceClass | None]
         installed_version: str | None
@@ -30,32 +32,33 @@ class UpdateEntity(Entity, update.UpdateEntity):
     init_entity_key = "firmware_update"
 
     __slots__ = (
+        "device",
         "installed_version",
         "latest_version",
         "release_summary",
         "title",
     )
 
-    def __init__(self, subid: str | None, device: "Device", /):
+    def __init__(self, device: "BaseDevice", parent: "Device", /):
+        self.device = device
         self.device_class = update.UpdateDeviceClass.FIRMWARE
         self.supported_features = update.UpdateEntityFeature.INSTALL
         self.title = device.display_name
         self.installed_version, self.latest_version, self.release_summary = (
             device.get_upgrade_info()
         )
-        # TODO: we still miss subdevice implementation for this...
-        # maybe we can get something by using index
-        Entity.__init__(self, subid, device, device_info=device.device_info)
+        Entity.__init__(self, device.id, parent, device_info=device.device_info)
         self.unique_id = None  # override
+        device.update_firmware = self
 
     def flush_state(self):
         self.installed_version, self.latest_version, self.release_summary = (
-            self.parent.get_upgrade_info()
+            self.device.get_upgrade_info()
         )
         Entity.flush_state(self)
 
     async def async_install(self, version: str | None, backup: bool, **kwargs):
-        device = self.parent
+        device = self.device
         if not device.is_connected:
             raise HomeAssistantError("Device is offline")
         upgrade_payload = device.get_upgrade_payload()

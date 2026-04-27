@@ -429,15 +429,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
     # interface: BaseDevice
     @property
     @override
-    def entities(self) -> "Mapping[object, mle.Entity]":
-        return {
-            entity.id: entity
-            for entity in self.parent.entities_iterable
-            if entity.device_info is self.device_info
-        }
-
-    @property
-    @override
     def entities_iterable(self) -> "Iterable[mle.Entity]":
         return (
             entity

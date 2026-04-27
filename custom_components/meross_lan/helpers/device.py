@@ -91,7 +91,6 @@ class DiagnosticHandler(handler.NamespaceHandler):
                 elif type(_payload) is list:
                     _key = f"{ns.slug_end}_{_key}"
                     for __payload in _payload:
-                        # not having a "channel" in the list payloads is unexpected so far
                         device.parse_undefined_dict(
                             _key, __payload, self.index_type.index(__payload)
                         )
@@ -136,8 +135,9 @@ class BaseDevice(device.PhysicalDevice):
         # to be implemented in derived classes
         device_entry: dr.DeviceEntry
         device_info: Entity.DeviceInfo
-        entities: Mapping[object, Entity]
         entities_iterable: Iterable[Entity]
+
+        update_firmware: UpdateEntity | None
 
         class Args(device.PhysicalDevice.Args):
             pass
@@ -150,6 +150,8 @@ class BaseDevice(device.PhysicalDevice):
         "device_entry",
         "device_info",
     )
+
+    SLOTS_AUTO_INIT = ("update_firmware",)
 
     @override
     def on_connect(self):
@@ -170,19 +172,7 @@ class BaseDevice(device.PhysicalDevice):
     # interface: self
     device_entry = NotImplemented
     device_info = NotImplemented
-    entities = NotImplemented
     entities_iterable = NotImplemented
-
-    @property
-    def update_firmware(self) -> UpdateEntity | None:
-        # TODO: this is to be refined in Hub SubDevice
-        return self.entities.get(UpdateEntity.init_entity_key)  # type: ignore
-
-    def check_update_firmware(self):
-        update_firmware: UpdateEntity | None
-        if update_firmware := self.entities.get(UpdateEntity.init_entity_key):  # type: ignore
-            update_firmware.flush_state()
-        return update_firmware
 
 
 class Device(ConfigEntryManager, device.Device, BaseDevice):
@@ -1355,7 +1345,8 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
 
     def _handle_Appliance_Mcu_Firmware(self, message: MerossMessage, /):
         self.descriptor.mcu = message.payload[mc.KEY_FIRMWARE]
-        self.check_update_firmware()
+        if self.update_firmware:
+            self.update_firmware.flush_state()
 
     _handle_Appliance_Mcu_Hp110_Firmware = _handle_Appliance_Mcu_Firmware
 
@@ -1383,7 +1374,8 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
 
         if oldfirmware != descr.firmware:
             self.schedule_entry_update(True)
-            self.check_update_firmware()
+            if self.update_firmware:
+                self.update_firmware.flush_state()
             if not self.config.get(mlc.CONF_HOST):
                 self._update_host(descr.innerIp)
         elif oldtimezone != descr.timezone:
@@ -1653,8 +1645,10 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         # check for firmware updates too
         if latest_version := profile.get_latest_version(*self.descriptor.type_subtype):
             self.latest_version = latest_version
-            if not self.check_update_firmware():
-                UpdateEntity(None, self)
+            if self.update_firmware:
+                self.update_firmware.flush_state()
+            else:
+                UpdateEntity(self, self)
 
         channels_info = device_info.get("channels")
         if not channels_info:
