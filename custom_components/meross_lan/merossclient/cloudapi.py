@@ -114,9 +114,14 @@ class SubDeviceInfoType(typing.TypedDict):
 
     subDeviceId: str
     subDeviceType: str
-    subDeviceVendor: str
+    subDeviceSubType: str
+    subDeviceVendor: typing.NotRequired[str]
     subDeviceName: str
     subDeviceIconId: str
+    bindTime: int
+    iconType: int
+    # channels appearing on mst200
+    channels: typing.NotRequired[list[DeviceInfoChannelType]]
 
 
 class DeviceInfoType(typing.TypedDict):

@@ -39,7 +39,6 @@ if TYPE_CHECKING:
     )
 
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.helpers.device_registry import DeviceInfo
     from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
     from ..merossclient.protocol.types import JsonDict
@@ -56,6 +55,9 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
 
     if TYPE_CHECKING:
 
+        class DeviceInfo(TypedDict):
+            identifiers: set[tuple[str, str]]
+
         class Sibling(Protocol):
             """Protocol for building sibling entities. This is used when we want to create multiple entities
             for the same channel/subid (i.e. entities with a common device_info/entry) so that they share the
@@ -66,7 +68,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             """
 
             index: Final[mn.IndexValue]
-            device_info: Final[DeviceInfo]
+            device_info: Final[Entity.DeviceInfo | None]
             parent: Final[Device]
 
         type InitArgs = tuple[Sibling | Any, *tuple[ConfigEntryManager, ...]]
@@ -76,7 +78,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             index: NotRequired[mn.IndexValue]
             # HA core entity attributes:
             device_class: NotRequired[str | None]
-            device_info: NotRequired[DeviceInfo | None]
+            device_info: NotRequired[Entity.DeviceInfo | None]
             entity_category: NotRequired[entity.EntityCategory | None]
             entity_registry_enabled_default: NotRequired[bool]
             name: NotRequired[str | None]
@@ -113,7 +115,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         _attr_assumed_state: ClassVar[bool]
         _attr_available: ClassVar[bool]
         _attr_device_class: ClassVar[str | None]
-        _attr_device_info: ClassVar[Mapping[str, Any] | None]
+        device_info: Final[DeviceInfo | None]
         _attr_entity_category: ClassVar[entity.EntityCategory | None]
         _attr_entity_registry_enabled_default: ClassVar[bool]
         force_update: Final[Literal[False]]
@@ -416,7 +418,7 @@ class ParserEntity(handler.NamespaceParser, Entity):
 
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
-        device_info: Final[DeviceInfo]  # type: ignore[override]
+        device_info: Final[Entity.DeviceInfo]  # type: ignore[override]
         handler_ns: handler.NamespaceHandler  # override
 
         _parse_togglex: Callable[[JsonDict], Any]

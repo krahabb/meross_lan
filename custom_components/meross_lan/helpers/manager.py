@@ -45,7 +45,6 @@ if TYPE_CHECKING:
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import CALLBACK_TYPE, HomeAssistant
-    from homeassistant.helpers.device_registry import DeviceInfo
     from homeassistant.helpers.entity_platform import EntityPlatform
 
     from ..merossclient import HostAddress
@@ -243,7 +242,7 @@ class ConfigEntryManager(logging.Loggable):
     def display_name(self) -> str:
         return self.config_entry.title if self.config_entry else self.logtag
 
-    def get_device_entry_info(self, index_value, /) -> "DeviceInfo | None":
+    def get_device_entry_info(self, index_value, /) -> "Entity.DeviceInfo | None":
         """
         Return the DeviceRegistry entry for a given channel (if any).
         By default this returns self.device_entry but derived classes

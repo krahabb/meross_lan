@@ -135,7 +135,7 @@ class BaseDevice(device.PhysicalDevice):
 
         # to be implemented in derived classes
         device_entry: dr.DeviceEntry
-        device_info: dr.DeviceInfo
+        device_info: Entity.DeviceInfo
         entities: Mapping[object, Entity]
         entities_iterable: Iterable[Entity]
 
@@ -296,7 +296,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         _check_device_time_enabled: bool
         """Scheduled 'on-demand' device time check. This is only created when enable_device_time_check is called."""
 
-        device_entries: dict[Any, dr.DeviceInfo]
+        device_entries_info: dict[Any, Entity.DeviceInfo]
         profile: Final[MQTTProfile | None]
 
         _async_create_diagnostic_entities_task: Task  # dynamic
@@ -461,7 +461,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
     __slots__ = device.Device._calc_slots(
         "conf_transport",
         "host",
-        "device_entries",
+        "device_entries_info",
         "device_timestamp",
         "device_timedelta",
         "_check_device_time_enabled",
@@ -522,7 +522,9 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             # This device presents various features on different channels
             # but we prefer to show them as a single device and
             # counter our general logic where each channel is a 'logical' device
-            self.device_entries = {channel: self.device_info for channel in range(3)}
+            self.device_entries_info = {
+                channel: self.device_info for channel in range(3)
+            }
         self.device_timestamp = 0
         self.device_timedelta = 0
         self._check_device_time_enabled = False
@@ -725,16 +727,16 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         await ConfigEntryManager.async_setup_entry(self, hass, config_entry)
 
     @override
-    def get_device_entry_info(self, index_value, /) -> dr.DeviceInfo:
+    def get_device_entry_info(self, index_value, /) -> "Entity.DeviceInfo":
         if not index_value:
             # Either a non parser entity or a parser entity with no indexing (i.e. unique for the device)
             # or an entity for channel == 0
             return self.device_info
         try:
-            return self.device_entries[index_value]
+            return self.device_entries_info[index_value]
         except AttributeError:
-            # device_entries only built if needed
-            self.device_entries = {}
+            # device_entries_info only built if needed
+            self.device_entries_info = {}
         except KeyError:
             pass
         # We expect index_value to be a channel number...
@@ -743,7 +745,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         ), "index_value is expected to be an int representing the channel number (got {})".format(
             type(index_value)
         )
-        device_info: dr.DeviceInfo = {
+        device_info: "Entity.DeviceInfo" = {
             "identifiers": {(mlc.DOMAIN, f"{self.id}_{index_value}")}
         }
         self.parent.device_registry.async_get_or_create(
@@ -752,9 +754,9 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             name=f"{self.device_entry.name} Channel {index_value}",
             model=self.device_entry.model,
             via_device=next(iter(self.device_entry.identifiers)),
-            **device_info,  # type: ignore
+            **device_info,
         )
-        self.device_entries[index_value] = device_info
+        self.device_entries_info[index_value] = device_info
         return device_info
 
     @property
@@ -1643,14 +1645,23 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
 
     def update_device_info(self, device_info: "DeviceInfoType", profile: "MQTTProfile"):
         """Called when linked to a (cloud) profile and device info is available or whenever updated."""
+        device_registry = self.parent.device_registry
         name = device_info.get(mc.KEY_DEVNAME) or self.descriptor.productname
         if name != self.device_entry.name:
-            self.parent.device_registry.async_update_device(
-                self.device_entry.id, name=name
-            )
+            device_registry.async_update_device(self.device_entry.id, name=name)
+
+        # check for firmware updates too
+        if latest_version := profile.get_latest_version(*self.descriptor.type_subtype):
+            self.latest_version = latest_version
+            if not self.check_update_firmware():
+                UpdateEntity(None, self)
+
+        channels_info = device_info.get("channels")
+        if not channels_info:
+            return
+
         channel = -1
-        async_update_entity = self.parent.entity_registry.async_update_entity
-        for device_info_channel in device_info.get("channels", []):
+        for device_info_channel in channels_info:
             # we assume the device_info.channels struct are mapped
             # to what we consider 'default' entities for the device
             # (i.e. GarageDoor for garageDoor devices, ToggleXSwitch for
@@ -1658,20 +1669,14 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             # also, the list looks like eventually containing empty dicts
             # for non-existent channel ids
             channel += 1
+            if not device_info_channel:
+                continue
             try:
                 if name := device_info_channel.get(mc.KEY_DEVNAME):
-                    entity = self.entities[channel]
-                    if (registry_entry := entity.registry_entry) and (
-                        name != registry_entry.original_name
-                    ):
-                        async_update_entity(
-                            registry_entry.entity_id, original_name=name
-                        )
+                    device_entry = device_registry.async_get_device(
+                        **self.get_device_entry_info(channel)
+                    )
+                    if device_entry and name != device_entry.name:
+                        device_registry.async_update_device(device_entry.id, name=name)
             except Exception:
                 pass
-
-        # check for firmware updates too
-        if latest_version := profile.get_latest_version(*self.descriptor.type_subtype):
-            self.latest_version = latest_version
-            if not self.check_update_firmware():
-                UpdateEntity(None, self)

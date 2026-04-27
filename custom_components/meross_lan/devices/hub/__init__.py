@@ -166,7 +166,7 @@ class Hub(mld.Device):
             )
 
     @override
-    def get_device_entry_info(self, index_value, /) -> mld.dr.DeviceInfo:
+    def get_device_entry_info(self, index_value, /) -> "mle.Entity.DeviceInfo":
         if not index_value:
             # Either a non parser entity or a parser entity with no indexing (i.e. unique for the device)
             return self.device_info
