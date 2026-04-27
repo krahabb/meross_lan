@@ -11,12 +11,12 @@ from custom_components.meross_lan.merossclient import (
     DeviceDescriptor,
     HostAddress,
     extract_dict_payloads,
-    get_element_by_key,
-    get_element_by_key_safe,
+    get_element_by_index,
+    get_element_by_index_safe,
     get_macaddress_from_uuid,
     merge_dicts,
     update_dict_strict,
-    update_dict_strict_by_key,
+    update_dict_strict_by_index,
 )
 from custom_components.meross_lan.merossclient.client.http import HttpClient
 from custom_components.meross_lan.merossclient.client.mqtt import MQTTDeviceClient
@@ -587,7 +587,7 @@ class Emulator:
                             assert type(key_payload) is dict
                             indexes = (
                                 None
-                                if ns.index_type.value(key_payload) == 65535
+                                if key_payload[mc.KEY_CHANNEL] == 65535
                                 else [key_payload]
                             )
                         case mn.PayloadType.UNSUPPORTED:
@@ -605,10 +605,9 @@ class Emulator:
                             ns_key: [
                                 index_state
                                 for index_state in (
-                                    get_element_by_key_safe(
+                                    get_element_by_index_safe(
                                         p_state,
-                                        p_index,
-                                        ns.index_type,
+                                        ns.index_type.index(p_index),
                                     )
                                     for p_index in indexes
                                 )
@@ -636,16 +635,16 @@ class Emulator:
                     case mn.PayloadType.LIST_IDX:
                         assert type(key_payload) is list
                         for p_payload_channel in key_payload:
-                            update_dict_strict_by_key(
+                            update_dict_strict_by_index(
                                 p_state, p_payload_channel, ns.index_type
                             )
                     case mn.PayloadType.DICT_IDX:
                         if type(p_state) is list:
-                            update_dict_strict_by_key(
+                            update_dict_strict_by_index(
                                 p_state, key_payload, ns.index_type
                             )
                         else:
-                            update_dict_strict_by_key(
+                            update_dict_strict_by_index(
                                 [p_state], key_payload, ns.index_type
                             )
                     case mn.PayloadType.DICT:
@@ -818,8 +817,10 @@ class Emulator:
         )
         self.update_epoch()
 
-    def get_namespace_state(self, ns: mn.Namespace, channel, /):
-        return get_element_by_key(self.namespaces[ns][ns.key], channel, ns.index_type)
+    def get_namespace_state(self, ns: mn.Namespace, *key_values):
+        return get_element_by_index(
+            self.namespaces[ns][ns.key], ns.index_type(*key_values)
+        )
 
     def update_namespace_state(
         self,
@@ -844,8 +845,8 @@ class Emulator:
 
             for index_payload in extract_dict_payloads(payload):
                 try:
-                    p_index_state = get_element_by_key(
-                        p_state, index_payload, ns.index_type
+                    p_index_state = get_element_by_index(
+                        p_state, ns.index_type.index(index_payload)
                     )
                     if nsdefaultmode is Emulator.NSDefaultMode.MixIn:
                         p_index_state |= index_payload

@@ -213,39 +213,21 @@ def merge_lists(
 
 
 def get_element_by_key[_T: "Mapping"](
-    src: list[_T], key_value: "str | Mapping", key: tuple[str, ...] = (mc.KEY_CHANNEL,)
+    src: list[_T], key_value: "mt.JsonType", key=mc.KEY_CHANNEL
 ) -> _T:
     """
     scans the payload(list) looking for the first item matching
     the key value. Usually looking for the matching channel payload
     inside list payloads
     """
-    if len(key) == 1:
-        try:
-            # extract in case key_value is a dict with the key
-            # inside instead of being the value itself
-            key_value = key_value[key[0]]  # type: ignore
-        except Exception:
-            pass
-        for p in src:
-            if p.get(key[0]) == key_value:
-                return p
-    else:
-        assert type(key_value) is dict
-        for p in src:
-            if all(p.get(k) == key_value.get(k) for k in key):
-                return p
+    if type(key_value) is dict:
+        key_value = key_value[key]
+
+    for p in src:
+        if p.get(key) == key_value:
+            return p
 
     raise KeyError(f"No match for key '{key}' on value:'{key_value}' in {src}")
-
-
-def get_element_by_key_safe[_T: "Mapping"](
-    src: list[_T], key_value: "str | Mapping", key: tuple[str, ...] = (mc.KEY_CHANNEL,)
-) -> _T | None:
-    try:
-        return get_element_by_key(src, key_value, key)
-    except KeyError:
-        return None
 
 
 def delete_element_by_key(payload: list, key: str, value):
@@ -258,6 +240,32 @@ def delete_element_by_key(payload: list, key: str, value):
                 payload.remove(p)
         except KeyError:
             pass
+
+
+def get_element_by_index[_T: "Mapping"](src: list[_T], index: "mn.IndexValue") -> _T:
+    """
+    scans the payload(list) looking for the first item matching
+    the index. Usually looking for the matching channel payload
+    inside list payloads
+    """
+    for p in src:
+        if index.matches(p):
+            return p
+
+    raise KeyError(f"No match for index '{index}' in {src}")
+
+
+def get_element_by_index_safe[_T: "Mapping"](
+    src: list[_T], index: "mn.IndexValue"
+) -> _T | None:
+    """
+    scans the payload(list) looking for the first item matching
+    the index. Usually looking for the matching channel payload
+    inside list payloads
+    """
+    for p in src:
+        if index.matches(p):
+            return p
 
 
 def update_dict_strict(dst_dict: "mt.JsonDict | Any", src_dict: "mt.JsonMapping"):
@@ -278,8 +286,8 @@ def update_dict_strict(dst_dict: "mt.JsonDict | Any", src_dict: "mt.JsonMapping"
                     dst_dict[key] = value
 
 
-def update_dict_strict_by_key[_T: "mt.JsonMapping"](
-    dst_lst: "Iterable[_T]", src_dict: _T, key: tuple[str, ...] = (mc.KEY_CHANNEL,)
+def update_dict_strict_by_index[_T: "mt.JsonMapping"](
+    dst_lst: "Iterable[_T]", src_dict: _T, index_type=mn.IndexType.channel
 ) -> _T:
     """
     Much like get_element_by_key scans the dst list looking for the first item matching
@@ -287,11 +295,12 @@ def update_dict_strict_by_key[_T: "mt.JsonMapping"](
     channel payload inside list payloads. Before returning, merges the src_dict into
     the matched dst_dict
     """
+    index = index_type.index(src_dict)
     for dst_dict in dst_lst:
-        if all(dst_dict.get(k) == src_dict.get(k) for k in key):
+        if index.matches(dst_dict):
             update_dict_strict(dst_dict, src_dict)
             return dst_dict
-    raise KeyError(f"No match for key '{key}' on '{src_dict}' in {dst_lst}")
+    raise KeyError(f"No match for index '{index_type}' on '{src_dict}' in {dst_lst}")
 
 
 def extract_dict_payloads[_T](payload: "_T | Sequence[_T]") -> "Iterable[_T]":

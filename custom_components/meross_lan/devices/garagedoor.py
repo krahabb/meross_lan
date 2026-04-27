@@ -515,7 +515,7 @@ class GarageDoor(Cover):
         # GarageDoor at channel 0 (msg200)
         _handler = handler.NamespaceHandler(ns, device)
         for channel_digest in ns.get_digest(descriptor.digest):
-            index = mn.IndexType.channel.index(channel_digest)
+            channel = channel_digest[mc.KEY_CHANNEL]
             _handler.register_parser(
-                GarageDoor(index.value, device, ns=ns, index=index)
+                GarageDoor(channel, device, ns=ns, index=mn.IndexType.channel(channel))
             )

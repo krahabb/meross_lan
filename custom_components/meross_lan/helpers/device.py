@@ -154,13 +154,17 @@ class BaseDevice(device.PhysicalDevice):
     @override
     def on_connect(self):
         super().on_connect()
-        for entity in (_entity for _entity in self.entities_iterable if not _entity.available):
+        for entity in (
+            _entity for _entity in self.entities_iterable if not _entity.available
+        ):
             entity.set_available()
 
     @override
     def on_disconnect(self):
         super().on_disconnect()
-        for entity in (_entity for _entity in self.entities_iterable if _entity.available):
+        for entity in (
+            _entity for _entity in self.entities_iterable if _entity.available
+        ):
             entity.set_unavailable()
 
     # interface: self
@@ -247,7 +251,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                     case _:
                         if not namespace.index_type:
                             raise
-                        list_break_matcher = f'}},{{"{namespace.index_type[0]}":'
+                        list_break_matcher = f'}},{{"{namespace.index_type.key[0]}":'
 
                 trunc_pos = response_text.rfind(list_break_matcher)
                 if trunc_pos == -1:

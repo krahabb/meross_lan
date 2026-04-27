@@ -87,9 +87,7 @@ class LightMixin(Emulator if TYPE_CHECKING else object):
                 effect_id_enabled = effect_id
             try:
                 p_state_effect = get_element_by_key(
-                    p_state_effect_list,
-                    effect_id,
-                    mn.Appliance_Control_Light_Effect.index_type,
+                    p_state_effect_list, effect_id, mc.KEY_ID_
                 )
                 p_state_effect.update(p_effect)
             except KeyError:

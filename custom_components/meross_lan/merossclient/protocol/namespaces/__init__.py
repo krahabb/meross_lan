@@ -161,24 +161,71 @@ EMPTY_DICT = _immutabledict()
 EMPTY_LIST = _immutablelist()  # type: ignore
 
 
-class _IndexType(tuple):
+class _IndexType(dict):
+    """
+    Descriptor for the indexing of items in namespace payloads. This is used to build the logic for parsing and building namespace payloads.
+    The IndexType defines the keys used to identify items in the payload and the logic to build and parse these keys.
+    It works in conjunction with a 'dedicated' familiy of IndexValue classes which represent the actual index values for a given namespace
+    item and provide the matching logic to identify the corresponding item in the payload.
+
+    This class instance embeds a dict which works as a cache of currently defined IndexValue instances for this IndexType.
+    The cache is used to speed-up IndexValue creation/retrieval since these are often duplicated in different code paths.
+    Also, Having a single instance per IndexValue allows to use simple 'is' checks in place of equality.
+    """
 
     if TYPE_CHECKING:
-        cache: Final[dict[tuple, "IndexValue"]]
-        class_value: Final[type["IndexValue"]]
+        value_class: Final[type["IndexValue"]]  # type: ignore
+        key: Final[tuple[str, ...]]  # type: ignore
 
-    # __slots__ = ("cache",)
-    cache = {}  # type: ignore
+    __slots__ = (
+        "value_class",
+        "key",
+    )
 
-    def __new__(cls, class_value, keys):
-        return tuple.__new__(cls, keys)
+    def __new__(cls, value_class: type["IndexValue"], *key: str):
+        self = dict.__new__(value_class.Type)
+        self._value_ = key  # type: ignore
+        return self
 
-    def __init__(self, class_value: type["IndexValue"], keys: tuple[str, ...]):
-        self.cache = {}
-        self.class_value = class_value
+    def __init__(self, value_class: type["IndexValue"], *key: str):
+        self.value_class = value_class
+        self.key = key
+
+    def __bool__(self):
+        return bool(self.key)
+
+    def __call__(self, *value) -> "IndexValue":
+        """IndexValue Factory method:
+        builds or retrieve an IndexValue instance for this IndexType with the given key value(s).
+        The values tuple is used to lookup a matching definition in a static cache for this IndexType. If no match is found,
+        a new IndexValue instance is created with the given value(s) and stored in the cache for future retrieval.
+        The values tuple must be a fully qualified set of values that matches the IndexType definition.
+        The items in the tuple will be used to populate a prototype dict for the IndexValue instance.
+        The tuple cardinality must match the number of keys that define the IndexType.
+        For IndexType.subId the tuple must be (subId, channel, channels) where channel and channels are mutually exclusive
+        and only one of them can be not None.
+        """
+        return self[value]
+
+    def index(self, payload: "JsonMapping") -> "IndexValue":
+        """IndexValue Factory method:
+        extracts the key values of this index type from the payload dict and
+        returns the corresponding IndexValue instance from the cache, creating it if necessary.
+        """
+        return self[tuple(payload.get(k) for k in self.key)]
+
+    def __missing__(self, key: tuple) -> "IndexValue":
+        self[key] = index_value = self.value_class(self, *key)
+        return index_value
+
+    def __repr__(self):
+        return f"IndexType(value_class={self.value_class.__name__}, key={self.key}, cache_size={len(self)})"
 
 
 class IndexValue(_immutabledict):
+
+    class Type(_IndexType):
+        pass
 
     if TYPE_CHECKING:
         type: Final["IndexType"]
@@ -187,15 +234,17 @@ class IndexValue(_immutabledict):
 
     __slots__ = ("type", "value", "slug", "_hash")
 
-    def __init__(self, index_type: "IndexType", _dict: "JsonDict", *values):
+    def __init__(self, index_type: _IndexType, _dict: "JsonDict"):
         super().__init__(_dict)
-        self.type = index_type
+        self.type = index_type  # type: ignore
         self._hash = hash(self.value)
-        index_type.cache[values] = self
 
-    def matches(self, payload: dict):
+    def matches(self, payload: "JsonMapping"):
+        """Checks if the payload matches this IndexValue by comparing
+        the index keys values in the payload with the ones of this IndexValue."""
         # Just a conceptual definition..sort of
-        # This should actually not be called anyway
+        # This should actually not be called anyway since
+        # our specializations will provide optimized versions of this check.
         return all(payload.get(k) == v for k, v in self.items())
 
     # IndexValue is immutable and hashable based on its content (type and value)
@@ -206,7 +255,7 @@ class IndexValue(_immutabledict):
         return self.value == other or (
             # assuming no subclassing and the fact that our indexes have different
             # value types ('id' vs 'channel' vs 'subId/channel')
-            type(other) is IndexValue
+            type(other) is type(self)
             and self.value == other.value
         )
 
@@ -223,24 +272,46 @@ class NoneIndexValue(IndexValue):
         value: Final[None]  # type: ignore[override]
         slug: Final[None]  # type: ignore[override]
 
-    def __init__(self, index_type: "IndexType"):
+    def __init__(self, index_type: _IndexType):
         self.value = None
         self.slug = None
         self.matches = lambda payload: True
         IndexValue.__init__(self, index_type, EMPTY_DICT)
+        index_type.index = lambda payload: self
 
 
 class SimpleIndexValue(IndexValue):
 
-    if TYPE_CHECKING:
-        value: Final[int | str]  # type: ignore[override]
-        slug: Final[int | str]  # type: ignore[override]
+    class Type(_IndexType):
 
-    def __init__(self, index_type: "IndexType", value: int | str):
+        if TYPE_CHECKING:
+            value_class: Final[type["SimpleIndexValue"]]  # type: ignore
+
+        def __init__(self, value_class: type[IndexValue], key: str):
+            super().__init__(value_class, key)
+            self.index = lambda payload: self[payload.get(key)]
+
+        def __call__(self, value):
+            return self[value]
+
+        def __missing__(self, key: str):
+            self[key] = index_value = self.value_class(self, key)
+            return index_value
+
+    if TYPE_CHECKING:
+        value: Final[int | str | None]  # type: ignore[override]
+        slug: Final[int | str | None]  # type: ignore[override]
+
+    def __init__(self, index_type: _IndexType, value: int | str | None):
         self.value = value
         self.slug = value
-        self.matches = lambda payload: payload.get(index_type[0]) == value
-        IndexValue.__init__(self, index_type, {index_type[0]: self.value}, value)
+        key = index_type.key[0]
+        self.matches = lambda payload: payload.get(key) == value
+        IndexValue.__init__(
+            self,
+            index_type,
+            {key: value} if value is not None else EMPTY_DICT,
+        )
 
 
 class SubIdIndexValue(IndexValue):
@@ -257,93 +328,90 @@ class SubIdIndexValue(IndexValue):
     to a (subId, channel) tuple.
     """
 
+    class Type(_IndexType):
+
+        def __init__(self, value_class: type["IndexValue"], *key: str):
+            super().__init__(value_class, *key)
+
+            def _index(payload: "JsonMapping"):
+                values = tuple(payload.get(k) for k in key)
+                if values[2]:
+                    values = (values[0], values[1], values[2][0])
+                return self[values]
+
+            self.index = _index
+
     if TYPE_CHECKING:
         value: Final[int | tuple[str, int]]  # type: ignore[override]
         slug: Final[int | str]  # type: ignore[override]
 
+    __slots__ = (mc.KEY_SUBID, mc.KEY_CHANNEL)
+
     def __init__(
-        self, index_type, subid: str | None, channel: int | None, channels: int | None
+        self,
+        index_type: _IndexType,
+        subid: str | None,
+        channel: int | None,
+        channels: int | None,
     ):
         if subid:
+            self.subId = subid
             # "channel" and "channels" should be mutually exclusive.
             if channels is None:
-                assert channel is not None
-                _dict = {index_type[0]: subid, index_type[1]: channel}
+                # In theory channel should be always valued (when no 'channels') but...
+                if channel is None:
+                    # Appliance.Control.Water payloads (in mst100) appear both with channel == 0
+                    # and without the channel key at all. In this case we assume that the
+                    # channel is 0 since these payloads are nonetheless referring to the single
+                    # channel of the mst100. Our 'match' member should take care of this duality.
+                    channel = 0
+                _dict = {index_type.key[0]: subid, index_type.key[1]: channel}
+                self.channel = channel
                 self.value = (subid, channel)
                 self.slug = f"{subid}_{channel}"
             else:
                 assert channel is None
-                _dict = {index_type[0]: subid, index_type[2]: [channels]}
+                _dict = {index_type.key[0]: subid, index_type.key[2]: [channels]}
+                self.channel = channels
                 self.value = (subid, channels)
                 self.slug = f"{subid}_{channels}"
         else:
             assert channels is None and channel is not None
-            _dict = {index_type[1]: channel}
+            _dict = {index_type.key[1]: channel}
+            self.channel = channel
             self.value = channel
             self.slug = channel
-            self.matches = lambda payload: payload.get(index_type[1]) == channel
-        IndexValue.__init__(self, index_type, _dict, subid, channel, channels)
+            self.matches = lambda payload: payload.get(index_type.key[1]) == channel
+        IndexValue.__init__(self, index_type, _dict)
 
     @override
-    def matches(self, payload: dict):
-        assert (
-            type(self.value) is tuple
-        ), "matches should be overridden for non subId indexes"
+    def matches(self, payload: "JsonMapping"):
         try:
-            return (
-                payload[mc.KEY_SUBID] == self.value[0]
-                and payload[mc.KEY_CHANNEL] == self.value[1]
+            return (payload[mc.KEY_SUBID] == self.subId) and (
+                payload[mc.KEY_CHANNEL] == self.channel
             )
         except KeyError as ke:
-            if ke.args[0] != mc.KEY_CHANNEL:
-                return False
-            # This is the case of a payload with 'channels' instead of 'channel' key (mst200 subdevice)
+            if ke.args[0] == mc.KEY_SUBID:
+                return False  # missing subId
+            # This might be the case of a payload with 'channels' instead of 'channel' key (mst200 subdevice)
+            # or the case of mst100 subdevice payloads with no channel key at all (see
+            # U0123456789012345678901234567892B-Kpippo-mst100-mst200.json.txt trace)
             try:
-                return payload[mc.KEY_SUBID] == self.value[0] and payload[
-                    mc.KEY_CHANNELS
-                ] == [self.value[1]]
+                return payload[mc.KEY_CHANNELS][0] == self.channel
             except KeyError:
+                # neither channel nor channels key are present.
+                return self.channel == 0
+            except Exception:
+                # malformed 'channels' key: not a list or empty list
                 return False
 
 
 class IndexType(_IndexType, enum.Enum):
-    none = NoneIndexValue, ()
-    channel = SimpleIndexValue, (mc.KEY_CHANNEL,)
-    id = SimpleIndexValue, (mc.KEY_ID,)
-    subId = SubIdIndexValue, (mc.KEY_SUBID, mc.KEY_CHANNEL, mc.KEY_CHANNELS)
-    Id = SimpleIndexValue, (mc.KEY_ID_,)
-
-    def __call__(self, *values):
-        """IndexValue Factory method:
-        builds or retrieve an IndexValue instance for this IndexType with the given key value(s).
-        The values tuple is used to lookup a matching definition in a static cache for this IndexType. If no match is found,
-        a new IndexValue instance is created with the given value(s) and stored in the cache for future retrieval.
-        The values tuple must be a fully qualified set of values that matches the IndexType definition.
-        The items in the tuple will be used to populate a prototype dict for the IndexValue instance.
-        The tuple cardinality must match the number of keys that define the IndexType.
-        For IndexType.subId the tuple must be (subId, channel, channels) where channel and channels are mutually exclusive
-        and only one of them can be not None.
-        """
-        try:
-            return self.cache[values]
-        except KeyError:
-            return self.class_value(self, *values)
-        except Exception as e:
-            raise
-
-    def index(self, payload: "JsonMapping"):
-        """IndexValue Factory method:
-        extracts the key values of this index type from the payload dict and
-        returns the corresponding IndexValue instance from the cache, creating it if necessary.
-        Uses __call__ to actually build the IndexValue instance if not found in cache.
-        """
-        return self(*(payload.get(k) for k in self))
-
-    def value(self, payload: "JsonMapping"):
-        return self.index(payload).value
-
-    def slug(self, payload: "JsonMapping"):
-        return self.index(payload).slug
+    none = NoneIndexValue
+    channel = SimpleIndexValue, mc.KEY_CHANNEL
+    id = SimpleIndexValue, mc.KEY_ID
+    subId = SubIdIndexValue, mc.KEY_SUBID, mc.KEY_CHANNEL, mc.KEY_CHANNELS
+    Id = SimpleIndexValue, mc.KEY_ID_
 
 
 class _PayloadType:

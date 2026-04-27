@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from custom_components.meross_lan.merossclient import (
     get_element_by_key,
     update_dict_strict,
-    update_dict_strict_by_key,
+    update_dict_strict_by_index,
 )
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
@@ -52,7 +52,7 @@ class GarageDoorMixin(Emulator if TYPE_CHECKING else object):
         p_state = self.descriptor.digest[mc.KEY_GARAGEDOOR]
         for p_channel_payload in payload[mc.KEY_CONFIG]:
             """{"channel":3,"doorEnable":0,"timestamp":1699130748,"timestampMs":663,"signalClose":10000,"signalOpen":10000,"buzzerEnable":1}"""
-            p_channel_config = update_dict_strict_by_key(p_config, p_channel_payload)
+            p_channel_config = update_dict_strict_by_index(p_config, p_channel_payload)
             p_channel_config[mc.KEY_TIMESTAMP] = self.epoch
             p_channel_state = get_element_by_key(p_state, p_channel_payload)
             if (mc.KEY_DOORENABLE in p_channel_state) and (

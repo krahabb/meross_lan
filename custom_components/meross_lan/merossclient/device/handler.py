@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     type PollingConfigType = tuple[int, int, PollingStrategyFunc | None]
 
 KEY_CHANNEL = mc.KEY_CHANNEL
+KEY_CHANNELS = mc.KEY_CHANNELS
 KEY_ID = mc.KEY_ID
 KEY_SUBID = mc.KEY_SUBID
 
@@ -388,20 +389,23 @@ class NamespaceHandler(logging.Loggable):
         """
         parsers = self.parsers
         for payload in message.payload[self.id.key]:
-            try:
+            # maybe we should just use ns.index_type.index(payload) instead of this subid/channel
+            # logic but for now this is seems more efficient.
+            if KEY_SUBID in payload:
                 subid = payload[KEY_SUBID]
-                try:
+                if KEY_CHANNEL in payload:
                     channel = payload[KEY_CHANNEL]
-                except KeyError:
-                    channel = payload[mc.KEY_CHANNELS][0]
-                    # WARNING receiving multiple channels in payload is not managed
+                elif KEY_CHANNELS in payload:
+                    channel = payload[KEY_CHANNELS][0]
+                else:
+                    channel = 0
                 try:
                     parsers[(subid, channel)](payload)  # type: ignore
                 except KeyError as ke:
                     self._handle_missing_subdevice(ke, payload, subid)
                 except Exception as e:
                     self.log_parser_exception(e, payload)
-            except KeyError:
+            else:
                 # message not related to a subdevice. Parse with plain 'channel' mechanics
                 try:
                     parsers[payload[KEY_CHANNEL]](payload)

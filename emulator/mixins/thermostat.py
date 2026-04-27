@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, override
 from custom_components.meross_lan.helpers import clamp
 from custom_components.meross_lan.merossclient import (
     get_element_by_key,
-    update_dict_strict_by_key,
+    update_dict_strict_by_index,
 )
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
@@ -298,14 +298,16 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
         ns = mn.Appliance_Control_TempUnit
         p_channel_state_list = self.namespaces[ns][ns.key]
         for p_channel in payload[ns.key]:
-            p_channel_state = update_dict_strict_by_key(p_channel_state_list, p_channel)
+            p_channel_state = update_dict_strict_by_index(
+                p_channel_state_list, p_channel
+            )
         return mc.METHOD_SETACK, {ns.key: p_channel_state_list}
 
     def _SET_Appliance_Control_Thermostat_Mode(self, header, payload):
         p_digest_thermostat = self.descriptor.digest[mc.KEY_THERMOSTAT]
         p_digest_mode_list = p_digest_thermostat[mc.KEY_MODE]
         for p_mode in payload[mc.KEY_MODE]:
-            p_digest_mode = update_dict_strict_by_key(p_digest_mode_list, p_mode)
+            p_digest_mode = update_dict_strict_by_index(p_digest_mode_list, p_mode)
             self._update_Mode(p_digest_mode)
 
         return mc.METHOD_SETACK, {}
@@ -313,7 +315,7 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
     def _SET_Appliance_Control_Thermostat_ModeB(self, header, payload):
         p_digest_modeb_list = self.descriptor.digest[mc.KEY_THERMOSTAT][mc.KEY_MODEB]
         for p_modeb in payload[mc.KEY_MODEB]:
-            p_digest_modeb = update_dict_strict_by_key(p_digest_modeb_list, p_modeb)
+            p_digest_modeb = update_dict_strict_by_index(p_digest_modeb_list, p_modeb)
             self._update_ModeB(p_digest_modeb)
         # WARNING: returning only the last element of the loop (usually just 1 item per device tho)
         return mc.METHOD_SETACK, {mc.KEY_MODEB: [p_digest_modeb]}
@@ -322,7 +324,7 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
         ns = mn_t.Appliance_Control_Thermostat_ModeC
         p_digest_modec_list = self.namespaces[ns][ns.key]
         for p_modec in payload[ns.key]:
-            p_digest_modec: "mt_t.ModeC_C" = update_dict_strict_by_key(
+            p_digest_modec: "mt_t.ModeC_C" = update_dict_strict_by_index(
                 p_digest_modec_list, p_modec
             )
             self._update_ModeC(p_digest_modec)
