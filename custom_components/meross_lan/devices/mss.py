@@ -52,24 +52,18 @@ class _ElectricitySensor(SensorParser):
     init_entity_key = "energy_estimate"
     ENTITY_DEFS = {
         mc.KEY_POWER: SensorParser.DEF(
-            entity_key=mc.KEY_POWER,
-            key_value=SensorParser.SimpleKeyValue(mc.KEY_POWER),
             device_class=SensorParser.DeviceClass.POWER,
             state_class=SensorParser.StateClass.MEASUREMENT,
             suggested_display_precision=1,
             device_scale=1000,
         ),
         mc.KEY_CURRENT: SensorParser.DEF(
-            entity_key=mc.KEY_CURRENT,
-            key_value=SensorParser.SimpleKeyValue(mc.KEY_CURRENT),
             device_class=SensorParser.DeviceClass.CURRENT,
             state_class=SensorParser.StateClass.MEASUREMENT,
             suggested_display_precision=1,
             device_scale=1000,
         ),
         mc.KEY_VOLTAGE: SensorParser.DEF(
-            entity_key=mc.KEY_VOLTAGE,
-            key_value=SensorParser.SimpleKeyValue(mc.KEY_VOLTAGE),
             device_class=SensorParser.DeviceClass.VOLTAGE,
             state_class=SensorParser.StateClass.MEASUREMENT,
             suggested_display_precision=1,
@@ -97,8 +91,10 @@ class _ElectricitySensor(SensorParser):
         super().__init__(*args, **kwargs)
         self._schedule_reset()
         self.sensors = [
-            _entity_def(self, ns=self.ns)
-            for _entity_def in self.__class__.ENTITY_DEFS.values()
+            _entity_def(
+                self, entity_key=_key, ns=self.ns, key_value=SensorParser.KeyValue(_key)
+            )
+            for _key, _entity_def in self.__class__.ENTITY_DEFS.items()
         ]
         self.sensor_power = self.sensors[0]
         # We enable the internal device time checks since the device could report
@@ -107,6 +103,7 @@ class _ElectricitySensor(SensorParser):
 
     def shutdown(self):
         super().shutdown()
+        # TODO: likely removable since these are not circular refs
         del self.sensor_consumptionx
         del self.sensor_power
         self.sensors.clear()
@@ -247,24 +244,18 @@ class ElectricityXSensor(_ElectricitySensor):
 
     ENTITY_DEFS = _ElectricitySensor.ENTITY_DEFS | {
         mc.KEY_VOLTAGE: SensorParser.DEF(
-            entity_key=mc.KEY_VOLTAGE,
-            key_value=SensorParser.SimpleKeyValue(mc.KEY_VOLTAGE),
             device_class=SensorParser.DeviceClass.VOLTAGE,
             state_class=SensorParser.StateClass.MEASUREMENT,
             suggested_display_precision=1,
             device_scale=1000,
         ),
         mc.KEY_FACTOR: SensorParser.DEF(
-            entity_key=mc.KEY_FACTOR,
-            key_value=SensorParser.SimpleKeyValue(mc.KEY_FACTOR),
             device_class=SensorParser.DeviceClass.POWER_FACTOR,
             state_class=SensorParser.StateClass.MEASUREMENT,
             suggested_display_precision=2,
             device_scale=1,
         ),
         mc.KEY_MCONSUME: MConsumeSensor.DEF(
-            entity_key=mc.KEY_MCONSUME,
-            key_value=SensorParser.SimpleKeyValue(mc.KEY_MCONSUME),
             device_class=SensorParser.DeviceClass.ENERGY,
             state_class=SensorParser.StateClass.TOTAL_INCREASING,  # quick patch for #621 (will be fixed in v6.x.x)
             suggested_display_precision=0,
@@ -283,7 +274,7 @@ class ConsumptionHSensor(SensorParser):
         handler_ns: "ConsumptionHNamespaceHandler"
 
     init_entity_key = mc.KEY_CONSUMPTIONH
-    init_key_value = SensorParser.SimpleKeyValue(mc.KEY_TOTAL)
+    init_key_value = SensorParser.KeyValue(mc.KEY_TOTAL)
 
     _attr_device_class = SensorParser.DeviceClass.ENERGY
     _attr_name = "Consumption"
@@ -648,7 +639,7 @@ class OverTempEnableSwitch(SwitchParser, EntityNamespaceMixin):
 
     POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
     init_entity_key = "config_overtemp_enable"
-    init_key_value = SwitchParser.SimpleKeyValue(mc.KEY_ENABLE)
+    init_key_value = SwitchParser.KeyValue(mc.KEY_ENABLE)
 
     __SLOTS__ = ("sensor_overtemp_type",)
 
@@ -656,7 +647,7 @@ class OverTempEnableSwitch(SwitchParser, EntityNamespaceMixin):
     def _handle(self, message: "MerossMessage", /):
         """{"overTemp": {"enable": 1,"type": 1}}"""
         payload = message.payload[mc.KEY_OVERTEMP]
-        self.update_device_value(payload[self.key_value])
+        self.update_device_value(payload[mc.KEY_ENABLE])
         try:
             type = payload[mc.KEY_TYPE]
             self.sensor_overtemp_type.update_device_value(type)

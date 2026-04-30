@@ -75,16 +75,16 @@ class GarageConfigMixin(ValueParser if TYPE_CHECKING else object):
     init_ns = mn.Appliance_GarageDoor_MultipleConfig
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
-        key_value = kwargs["key_value"]  # type: ignore
-        kwargs["entity_key"] = f"config_{key_value}"
-        kwargs["name"] = key_value
+        key_value_str = str(kwargs["key_value"])  # type:ignore
+        kwargs["entity_key"] = f"config_{key_value_str}"
+        kwargs["name"] = key_value_str
         super().__init__(*args, **kwargs)
         if self.index.value is not None:
             setattr(
                 self.parent.ns_handlers[mn.Appliance_GarageDoor_State].parsers[
                     self.index
                 ],  # GarageDoor instance
-                key_value,
+                key_value_str,
                 self,
             )
 
@@ -221,27 +221,20 @@ class GarageDoorMultipleConfig(handler.MappingParser):
 
     init_parser_defs = {
         mc.KEY_BUZZERENABLE: GarageConfigSwitch.DEF(
-            key_value=GarageConfigSwitch.SimpleKeyValue(mc.KEY_BUZZERENABLE)
         ),
         mc.KEY_DOORENABLE: GarageEnableSwitch.DEF(
-            key_value=GarageEnableSwitch.SimpleKeyValue(mc.KEY_DOORENABLE)
         ),
         mc.KEY_SIGNALDURATION: GarageConfigNumber.DEF(
-            key_value=GarageConfigNumber.SimpleKeyValue(mc.KEY_SIGNALDURATION),
             native_step=0.1,
             native_min_value=0.1,
         ),
         mc.KEY_SIGNALCLOSE: GarageConfigNumber.DEF(
-            key_value=GarageConfigNumber.SimpleKeyValue(mc.KEY_SIGNALCLOSE)
         ),
         mc.KEY_SIGNALOPEN: GarageConfigNumber.DEF(
-            key_value=GarageConfigNumber.SimpleKeyValue(mc.KEY_SIGNALOPEN)
         ),
         mc.KEY_DOORCLOSEDURATION: GarageConfigNumber.DEF(
-            key_value=GarageConfigNumber.SimpleKeyValue(mc.KEY_DOORCLOSEDURATION)
         ),
         mc.KEY_DOOROPENDURATION: GarageConfigNumber.DEF(
-            key_value=GarageConfigNumber.SimpleKeyValue(mc.KEY_DOOROPENDURATION)
         ),
     }
 

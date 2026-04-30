@@ -30,7 +30,7 @@ class Mts300Climate(MtsThermostatClimate):
 
         class AdjustHumidityNumber(NumberParser):
             init_entity_key = "humidity_calibration"
-            init_key_value = NumberParser.SimpleKeyValue(mc.KEY_HUMIVALUE)
+            init_key_value = NumberParser.KeyValue(mc.KEY_HUMIVALUE)
             init_device_scale = 10
 
             _attr_device_class = NumberParser.DeviceClass.HUMIDITY
@@ -66,7 +66,7 @@ class Mts300Climate(MtsThermostatClimate):
         """
 
         init_ns = mn.Appliance_Config_Sensor_Association
-        init_key_value = SelectParser.NestedKeyValue(mc.KEY_TEMP, init_ns.slug_end)
+        init_key_value = SelectParser.KeyValue(mc.KEY_TEMP, init_ns.slug_end)
         init_entity_key = f"{init_ns.slug}__{init_key_value}"
 
         _attr_entity_category = SelectParser.EntityCategory.DIAGNOSTIC
@@ -208,7 +208,7 @@ class Mts300Climate(MtsThermostatClimate):
             self,
             entity_key="fan_hold_time",
             ns=self.ns,
-            key_value=NumberParser.NestedKeyValue(mc.KEY_FAN, "hTime"),
+            key_value=NumberParser.KeyValue(mc.KEY_FAN, "hTime"),
             device_class=NumberParser.DEVICE_CLASS_DURATION,
             native_unit_of_measurement=mlc.hac.UnitOfTime.MINUTES,
             device_scale=1,

@@ -43,25 +43,18 @@ class mst(SubDevice):
             mc.KEY_CALIBRATION: {
                 mc.KEY_ONOFF: SwitchParser.DEF(
                     entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_MSTCFG}_{mc.KEY_CALIBRATION}_{mc.KEY_ONOFF}",
-                    key_value=SwitchParser.NestedKeyValue(
-                        KEY_MSTCFG, mc.KEY_CALIBRATION, mc.KEY_ONOFF
-                    ),
                     value_on=1,
                     value_off=2,
                     name="Calibration on/off",
                 ),
                 KEY_WACON: NumberParser.DEF(
                     entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_MSTCFG}_{mc.KEY_CALIBRATION}_{KEY_WACON}",
-                    key_value=NumberParser.NestedKeyValue(
-                        KEY_MSTCFG, mc.KEY_CALIBRATION, KEY_WACON
-                    ),
                     name="Calibration water consumption",
                     native_unit_of_measurement=mlc.hac.UnitOfVolume.MILLILITERS,
                 ),
             },
             KEY_DURA: NumberParser.DEF(
                 entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_MSTCFG}_{KEY_DURA}",
-                key_value=NumberParser.NestedKeyValue(KEY_MSTCFG, KEY_DURA),
                 name="Watering duration",
                 device_class=NumberParser.DEVICE_CLASS_DURATION,
                 native_unit_of_measurement=mlc.hac.UnitOfTime.SECONDS,
@@ -73,7 +66,6 @@ class mst(SubDevice):
             ),
             KEY_WFM: SwitchParser.DEF(
                 entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_MSTCFG}_{KEY_WFM}",
-                key_value=SwitchParser.NestedKeyValue(KEY_MSTCFG, KEY_WFM),
                 value_on=1,
                 value_off=2,
                 name="Water flow measurement",

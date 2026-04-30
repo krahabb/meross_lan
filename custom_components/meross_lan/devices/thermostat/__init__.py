@@ -39,7 +39,7 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
     ENTITY_DEFS = {
         key: ScreenBrightnessNumber.DEF(
             entity_key=f"screenbrightness_{key}",
-            key_value=ScreenBrightnessNumber.SimpleKeyValue(key),
+            key_value=ScreenBrightnessNumber.KeyValue(key),
             name=f"Screen brightness ({key})",
         )
         for key in (mc.KEY_OPERATION, mc.KEY_STANDBY)
@@ -222,7 +222,7 @@ class MtsSummerMode(SwitchParser):
     if TYPE_CHECKING:
         SUMMER_MODE_HVAC_MODES: ClassVar[dict[mt.JsonType, list[MtsClimate.HVACMode]]]
 
-    init_key_value = SwitchParser.SimpleKeyValue(mc.KEY_MODE)
+    init_key_value = SwitchParser.KeyValue(mc.KEY_MODE)
     init_value_on = mc.MTS200_SUMMERMODE_COOL
     init_value_off = mc.MTS200_SUMMERMODE_HEAT
     init_entity_key = (
@@ -257,7 +257,7 @@ class MtsWindowOpened(BinarySensorParser):
     # Specialized binary sensor for Thermostat.WindowOpened entity used in Mts200-Mts960(maybe).
 
     init_entity_key = mc.KEY_WINDOWOPENED
-    init_key_value = BinarySensorParser.SimpleKeyValue(mc.KEY_STATUS)
+    init_key_value = BinarySensorParser.KeyValue(mc.KEY_STATUS)
 
     _attr_device_class = BinarySensorParser.DeviceClass.WINDOW
 
@@ -266,7 +266,7 @@ class MtsExternalSensorSwitch(SwitchParser):
     # External sensor mode: use internal(0) vs external(1) sensor as temperature loopback.
 
     init_entity_key = "external sensor mode"
-    init_key_value = SwitchParser.SimpleKeyValue(mc.KEY_MODE)
+    init_key_value = SwitchParser.KeyValue(mc.KEY_MODE)
 
 
 class MtsHoldAction(SelectParser):
@@ -275,7 +275,7 @@ class MtsHoldAction(SelectParser):
         number_time: NumberParser
 
     init_entity_key = "hold action"
-    init_key_value = SelectParser.SimpleKeyValue(mc.KEY_MODE)
+    init_key_value = SelectParser.KeyValue(mc.KEY_MODE)
     init_options_map = {
         mc.MTS_HOLDACTION_PERMANENT: "permanent",
         mc.MTS_HOLDACTION_NEXT_SCHEDULE: "next_schedule",
@@ -315,7 +315,7 @@ class MtsHoldAction(SelectParser):
 class MtsTempUnit(SelectParser):
 
     init_entity_key = "display_temperature_unit"
-    init_key_value = SelectParser.SimpleKeyValue(mc.KEY_TEMPUNIT)
+    init_key_value = SelectParser.KeyValue(mc.KEY_TEMPUNIT)
     init_options_map = {
         mc.TEMPUNIT_CELSIUS: mlc.hac.UnitOfTemperature.CELSIUS,
         mc.TEMPUNIT_FAHRENHEIT: mlc.hac.UnitOfTemperature.FAHRENHEIT,

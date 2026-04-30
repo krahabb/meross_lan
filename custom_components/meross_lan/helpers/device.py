@@ -341,7 +341,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         mn.Appliance_Control_PhysicalLock: (".switch", "PhysicalLockSwitch"),
         mn.Appliance_Control_Presence_Config: (
             ".devices.ms600",
-            "namespace_init_presence_config",
+            "PresenceConfigParser",
         ),
         mn.Appliance_Control_Screen_Brightness: (
             ".devices.thermostat",

@@ -434,9 +434,6 @@ class ParserEntity(handler.NamespaceParser, Entity):
         @classmethod
         def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
-    class SimpleKeyValue(handler.ValueParser.SimpleKeyValue):
-        pass
-
     @override
     def set_available(self):
         self.available = True

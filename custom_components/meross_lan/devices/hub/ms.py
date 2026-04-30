@@ -65,7 +65,7 @@ class gs559(SensorSubDevice, EnumParser):
         sensor_interConn: EnumSensorEntity
 
     init_ns = mn_h.Appliance_Hub_Sensor_Smoke
-    init_key_value = EnumParser.SimpleKeyValue(mc.KEY_STATUS)
+    init_key_value = EnumParser.KeyValue(mc.KEY_STATUS)
     _attr_translation_key = "smoke_alarm_status"
 
     STATUS_MAP = {
@@ -146,12 +146,12 @@ class ms100(SensorSubDevice):
             # the 'new adjust value' we have to issue the difference against the
             # currently configured one
             await self.async_request_payload(
-                self.key_value(device_value - self.ns_value)
+                self.key_value.payload(device_value - self.ns_value)
             )
             self.update_device_value(device_value)
 
     SENSOR_ADJUST_DEFS = {
-        NumberParser.SimpleKeyValue(mc.KEY_HUMIDITY): SensorAdjustNumber.DEF(
+        mc.KEY_HUMIDITY: SensorAdjustNumber.DEF(
             entity_key="config_adjust_humidity",
             name="Adjust humidity",
             device_class=NumberParser.DeviceClass.HUMIDITY,
@@ -159,7 +159,7 @@ class ms100(SensorSubDevice):
             native_max_value=20,
             native_step=1,
         ),
-        NumberParser.SimpleKeyValue(mc.KEY_TEMPERATURE): SensorAdjustNumber.DEF(
+        mc.KEY_TEMPERATURE: SensorAdjustNumber.DEF(
             entity_key="config_adjust_temperature",
             name="Adjust temperature",
             device_class=NumberParser.DeviceClass.TEMPERATURE,
@@ -214,14 +214,14 @@ class ms100(SensorSubDevice):
         self.parent.ns_handlers[mn_h.Appliance_Hub_Sensor_Adjust].swap_parsers(
             self,
             *(
-                entity_def(
+                _entity_def(
                     self,
                     ns=mn_h.Appliance_Hub_Sensor_Adjust,
-                    key_value=key_value,
+                    key_value=NumberParser.KeyValue(_key),
                     device_scale=10,
-                    ns_value=payload[str(key_value)],
+                    ns_value=payload[_key],
                 )
-                for key_value, entity_def in ms100.SENSOR_ADJUST_DEFS.items()
+                for _key, _entity_def in ms100.SENSOR_ADJUST_DEFS.items()
             ),
         )
         # swap also the update_sensors method to a smarter one
@@ -306,15 +306,11 @@ class ms130(ms100):
             KEY_BL: {
                 KEY_BRI: SelectParser.DEF(
                     entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_MS130CFG}_{KEY_BL}_{KEY_BRI}",
-                    key_value=NumberParser.NestedKeyValue(
-                        KEY_MS130CFG, KEY_BL, KEY_BRI
-                    ),
                     name="Backlight brightness",
                     options_map={1: "Low", 2: "Medium", 3: "High"},
                 ),
                 KEY_LV: NumberParser.DEF(
                     entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_MS130CFG}_{KEY_BL}_{KEY_LV}",
-                    key_value=NumberParser.NestedKeyValue(KEY_MS130CFG, KEY_BL, KEY_LV),
                     name="Backlight level",
                     native_min_value=1,
                     native_max_value=18,
@@ -322,9 +318,6 @@ class ms130(ms100):
                 ),
                 KEY_SLEEP: NumberParser.DEF(
                     entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_MS130CFG}_{KEY_BL}_{KEY_SLEEP}",
-                    key_value=NumberParser.NestedKeyValue(
-                        KEY_MS130CFG, KEY_BL, KEY_SLEEP
-                    ),
                     name="Backlight sleep",
                     device_class=NumberParser.DeviceClass.DURATION,
                     native_unit_of_measurement=mlc.hac.UnitOfTime.SECONDS,
@@ -388,7 +381,7 @@ class ms130(ms100):
 
 class ms200(SensorSubDevice, BinarySensorParser):
     NS_HUB = (mn_h.Appliance_Hub_Sensor_DoorWindow,)
-    init_key_value = BinarySensorParser.SimpleKeyValue(mc.KEY_STATUS)
+    init_key_value = BinarySensorParser.KeyValue(mc.KEY_STATUS)
     _attr_device_class = BinarySensorParser.DeviceClass.WINDOW
 
     @property
@@ -402,7 +395,7 @@ class ms200(SensorSubDevice, BinarySensorParser):
 
 class ms400(SensorSubDevice, BinarySensorParser):
     NS_HUB = (mn_h.Appliance_Hub_Sensor_WaterLeak,)
-    init_key_value = BinarySensorParser.SimpleKeyValue(mc.KEY_LATESTWATERLEAK)
+    init_key_value = BinarySensorParser.KeyValue(mc.KEY_LATESTWATERLEAK)
     _attr_device_class = BinarySensorParser.DeviceClass.SAFETY
 
     @property

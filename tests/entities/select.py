@@ -1,11 +1,8 @@
 from homeassistant.components import select as haec
 
 from custom_components.meross_lan import climate, select
+from custom_components.meross_lan.devices import ms600
 from custom_components.meross_lan.devices.diffuser import DiffuserSpray
-from custom_components.meross_lan.devices.ms600 import (
-    PresenceConfigMode,
-    PresenceConfigSensitivity,
-)
 from custom_components.meross_lan.devices.spray import Spray
 from custom_components.meross_lan.devices.thermostat import (
     MtsHoldAction,
@@ -36,9 +33,9 @@ class EntityTest(EntityComponentTest):
         mn.Appliance_Config_Sensor_Association: [Mts300Climate.SensorAssociationSelect],
         mn.Appliance_Control_TempUnit: [MtsTempUnit],
         mn.Appliance_Control_Presence_Config: [
-            PresenceConfigMode,
-            PresenceConfigMode,
-            PresenceConfigSensitivity,
+            ms600.PresenceConfigMode,  # workmode
+            ms600.PresenceConfigMode,  # testmode
+            ms600.SelectParser,  # sensitivity
         ],
         mn_t.Appliance_Control_Thermostat_HoldAction: [MtsHoldAction],
         mn_t.Appliance_Control_Thermostat_ModeC: [climate.MtsClimate.TrackSensorSelect],

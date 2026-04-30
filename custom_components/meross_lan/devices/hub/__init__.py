@@ -379,10 +379,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         /,
         **kwargs,
     ):
-        assert (
-            subid not in hub.subdevices
-        ), f"Subdevice with id {subid} already exists in hub {hub.display_name}"
-        # Preset here so that device_entry lookup in case this is an Entity class will work
         hub.subdevices[subid] = self
         self.device_info = {"identifiers": {(mlc.DOMAIN, subid)}}
         self.device_entry = hub.parent.device_registry.async_get_or_create(

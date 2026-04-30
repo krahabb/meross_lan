@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from typing import ClassVar, Final, Mapping, NotRequired, Unpack
 
     from ..helpers.device import Device
-    from ..merossclient.device.handler import NamespaceHandler
+    from ..merossclient.device.handler import ValueParser
     from ..merossclient.protocol import types as mt
     from .thermostat.mts200 import Mts200Climate
 
@@ -40,7 +40,6 @@ class DeviceCfgParser(MappingParser):
         KEY_CALIBRATECFG: {
             mc.KEY_HUMI: NumberParser.DEF(
                 entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_CALIBRATECFG}_{mc.KEY_HUMI}",
-                key_value=NumberParser.NestedKeyValue(KEY_CALIBRATECFG, mc.KEY_HUMI),
                 device_scale=10,
                 device_class=NumberParser.DeviceClass.HUMIDITY,
                 name="Humidity Calibration",
@@ -50,7 +49,6 @@ class DeviceCfgParser(MappingParser):
             ),
             mc.KEY_TEMP: NumberParser.DEF(
                 entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_CALIBRATECFG}_{mc.KEY_TEMP}",
-                key_value=NumberParser.NestedKeyValue(KEY_CALIBRATECFG, mc.KEY_TEMP),
                 device_scale=100,
                 device_class=NumberParser.DeviceClass.TEMPERATURE,
                 name="Temperature Calibration",
@@ -62,7 +60,6 @@ class DeviceCfgParser(MappingParser):
         KEY_TIMECFG: {
             KEY_AM: SelectParser.DEF(
                 entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_TIMECFG}_{KEY_AM}",
-                key_value=SelectParser.NestedKeyValue(KEY_TIMECFG, KEY_AM),
                 options_map={1: "12 h", 2: "24 h"},
                 name="Time Format",
             )
@@ -70,13 +67,11 @@ class DeviceCfgParser(MappingParser):
         KEY_UNITCFG: {
             mc.KEY_TEMPUNIT: SelectParser.DEF(
                 entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_UNITCFG}_{mc.KEY_TEMPUNIT}",
-                key_value=SelectParser.NestedKeyValue(KEY_UNITCFG, mc.KEY_TEMPUNIT),
                 options_map={1: "Celsius", 2: "Fahrenheit"},
                 name="Temperature Unit",
             ),
             KEY_UNITTYPE: SelectParser.DEF(
                 entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_UNITCFG}_{KEY_UNITTYPE}",
-                key_value=SelectParser.NestedKeyValue(KEY_UNITCFG, KEY_UNITTYPE),
                 options_map={1: "US Customary", 2: "Metric"},
                 name="Unit Type",
             ),
@@ -132,14 +127,12 @@ class SensorLatestParser(MappingParser):
             **SensorParser.HUMIDITY_ARGS
             | {
                 "entity_key": f"sensor_{mc.KEY_HUMI}",
-                "key_value": SensorParser.SimpleKeyValue(mc.KEY_HUMI),
             }
         ),
         mc.KEY_TEMP: SensorParser.DEF(
             **SensorParser.TEMPERATURE_ARGS
             | {
                 "entity_key": f"sensor_{mc.KEY_TEMP}",
-                "key_value": SensorParser.SimpleKeyValue(mc.KEY_TEMP),
             }
         ),
     }
@@ -166,10 +159,10 @@ class SensorLatestXParser(MappingParser):
         parent: Final[Device]  # type: ignore[override]
         init_parser_defs: ClassVar[Mapping[str, type[SensorParser]]]
         parser_defs: Mapping[str, type[SensorParser]]
-        parsers: Final[dict[str, SensorParser]]  # type: ignore[override]
+        parsers: Final[dict[str, ValueParser]]  # type: ignore[override]
 
         class Args(MappingParser.Args):
-            parsers: NotRequired[dict[str, SensorParser]]
+            parsers: NotRequired[dict[str, ValueParser]]
 
         def __init__(self, *args, **kwargs: Unpack[Args]): ...  # pragma: no cover
 
@@ -208,14 +201,13 @@ class SensorLatestXParser(MappingParser):
             except KeyError:
                 if key in self.parsers:
                     raise
-                self.parsers[key] = self.parser_defs.get(key, SensorParser)(
+                self.parsers[key] = parser = self.parser_defs.get(key, SensorParser)(
                     self.index.value,  # FIXME: use a 'sibling' construction semantic
                     self.parent,
                     entity_key=f"sensor_{key}",
                     index=self.index,
-                    ns_value=value[0][mc.KEY_VALUE],
                 )
-
+                parser(value[0])
                 """
                 # TODO: add the data key to out polling request
                 for channel_payload in self.polling_request_payload:

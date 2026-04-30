@@ -96,7 +96,7 @@ class RollerShutter(Cover):
                     self,
                     entity_key=f"config_{_key_value}",
                     ns=ns_config,
-                    key_value=NumberParser.SimpleKeyValue(_key_value),
+                    key_value=NumberParser.KeyValue(_key_value),
                     name=_key_value,
                 ),
             )
@@ -342,7 +342,7 @@ class RollerShutterAdjustSwitch(SwitchParser):
     which seems to start some kind of adjustment operation.
     """
 
-    init_key_value = SwitchParser.SimpleKeyValue(mc.KEY_VALUE)
+    init_key_value = SwitchParser.KeyValue(mc.KEY_VALUE)
     init_value_on = 1
     init_value_off = 2
 

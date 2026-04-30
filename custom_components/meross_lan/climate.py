@@ -47,7 +47,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
             class Args(NumberParser.Args):
                 ns: mn.Namespace
-                key_value: NumberParser.SimpleKeyValue
+                key_value: NumberParser.KeyValue
 
             def __init__(
                 self, *args: Unpack[NumberParser.InitArgs], **kwargs: Unpack[Args]
@@ -65,7 +65,9 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             # ensure the climate state is consistent after a setpoint change.
             # Consider both ns reply with the full state in the SETACK response.
             climate: "MtsClimate" = self.handler_ns.parsers[self.index]  # type: ignore
-            return await climate.async_request_parse_ex(self.key_value(device_value))
+            return await climate.async_request_parse_ex(
+                self.key_value.payload(device_value)
+            )
 
     Schedule = MtsSchedule
     """Overriden in derived to provide specific behavior."""
@@ -348,7 +350,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         MTS_MODE_TO_PRESET_MAP: ClassVar[dict[int | None, str]]
         """Maps device 'mode' value to the HA climate.preset_mode"""
         MTS_MODE_TO_TEMPERATUREKEY_MAP: ClassVar[
-            dict[int | None, ParserEntity.SimpleKeyValue]
+            dict[int | None, NumberParser.KeyValue]
         ]
         """Maps the current mts mode to the name of a temperature setpoint key.
         Used also to setup SetPointNumber entities (when empty -> no setpoints)."""

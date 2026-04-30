@@ -11,11 +11,9 @@ from .select import SelectParser
 from .switch import SwitchParser
 
 if TYPE_CHECKING:
-    from typing import Any, ClassVar, Final, Mapping, NotRequired, Unpack
+    from typing import Final
 
     from .helpers.device import Device
-    from .merossclient.protocol import types as mt
-    from .merossclient.protocol.types import JsonDict
 
 
 class Siren(mle.BinaryParser, siren.SirenEntity):
@@ -69,16 +67,13 @@ class ConfigAlarm(MappingParser):
     init_parser_defs = {
         mc.KEY_ENABLE: SwitchParser.DEF(
             entity_key=f"{mn.Appliance_Config_Alarm.slug}__{mc.KEY_ENABLE}",
-            key_value=SwitchParser.SimpleKeyValue(mc.KEY_ENABLE),
         ),
         mc.KEY_SONG: SelectParser.DEF(
             entity_key=f"{mn.Appliance_Config_Alarm.slug}__{mc.KEY_SONG}",
-            key_value=SelectParser.SimpleKeyValue(mc.KEY_SONG),
             options_map=mc.CONFIG_ALARM_SONGS,
         ),
         mc.KEY_VOLUME: NumberParser.DEF(
             entity_key=f"{mn.Appliance_Config_Alarm.slug}__{mc.KEY_VOLUME}",
-            key_value=NumberParser.SimpleKeyValue(mc.KEY_VOLUME),
             native_min_value=0,
             native_max_value=100,
         ),
@@ -91,66 +86,25 @@ class ConfigAlarm(MappingParser):
 
 class ControlAlarm(MappingParser):
 
-    if TYPE_CHECKING:
-        parent: Final[Device]  # type:ignore[override]
-        parsers: Final[dict[str, mle.ValueParser]]  # type: ignore[override]
-        init_parser_defs: ClassVar[Mapping[str, type[mle.ValueParser]]]
-        parser_defs: Mapping[str, type[mle.ValueParser]]
-
     POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
 
+    init_excluded_keys = MappingParser.init_excluded_keys + ("source",)
     init_parser_defs = {
-        mc.KEY_DEMOLISH: Siren.DEF(
-            key_value=Siren.NestedKeyValue(mc.KEY_EVENT, mc.KEY_DEMOLISH, mc.KEY_VALUE),
-        ),
-        mc.KEY_INTERCONN: Siren.DEF(
-            key_value=Siren.NestedKeyValue(
-                mc.KEY_EVENT, mc.KEY_INTERCONN, mc.KEY_VALUE
-            ),
-        ),
-        mc.KEY_MASECURITY: Siren.DEF(
-            key_value=Siren.NestedKeyValue(
-                mc.KEY_EVENT, mc.KEY_MASECURITY, mc.KEY_VALUE
-            ),
-        ),
-        mc.KEY_SECURITY: Siren.DEF(
-            key_value=Siren.NestedKeyValue(mc.KEY_EVENT, mc.KEY_SECURITY, mc.KEY_VALUE),
-        ),
+        mc.KEY_EVENT: {
+            _key: {
+                mc.KEY_VALUE: Siren.DEF(
+                    entity_key=f"{mn.Appliance_Control_Alarm.slug}__{mc.KEY_EVENT}_{_key}_{mc.KEY_VALUE}",
+                    name=f"{_key.capitalize()} event",
+                ),
+            }
+            for _key in (
+                mc.KEY_DEMOLISH,
+                mc.KEY_INTERCONN,
+                mc.KEY_MASECURITY,
+                mc.KEY_SECURITY,
+            )
+        },
     }
-
-    def __call__(self, payload: "mt.control.Alarm"):
-        for key, value in payload[mc.KEY_EVENT].items():
-            try:
-                self.parsers[key](payload)
-            except Exception as e:
-                if key not in self.parsers:  # surely a KeyError
-                    try:
-                        self.parsers[key] = self.parser_defs[key](
-                            self.index.value,
-                            self.parent,
-                            entity_key=f"{self.ns.slug}__{self.parser_defs[key]["key_value"]}",  # type: ignore
-                            ns=self.ns,
-                            index=self.index,
-                            ns_value=value,
-                            name=key,
-                        )
-                    except Exception as e:
-                        self.log_exception(
-                            self.WARNING,
-                            e,
-                            "creating parser for '%s' key in '%s' namespace",
-                            key,
-                            self.ns,
-                        )
-                else:
-                    self.log_exception(
-                        self.WARNING,
-                        e,
-                        "parsing key '%s': payload=%s",
-                        key,
-                        _any=payload,
-                        timeout=14400,
-                    )
 
     @classmethod
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):

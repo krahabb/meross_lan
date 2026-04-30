@@ -1,6 +1,6 @@
 from homeassistant.components import number as haec
 
-from custom_components.meross_lan import number, switch
+from custom_components.meross_lan import number
 from custom_components.meross_lan.devices import (
     garagedoor as gd,
     ms600,
@@ -66,10 +66,12 @@ class EntityTest(EntityComponentTest):
         ],
         mn.Appliance_RollerShutter_Config: [rs.NumberParser] * 2,
         mn.Appliance_Control_Presence_Config: [
-            ms600.PresenceConfigNumber,
-            ms600.PresenceConfigNumber,
-        ]
-        + [ms600.PresenceConfigMthX] * 3,  # type: ignore
+            ms600.NumberParser,  # nobodytime
+            ms600.NumberParser,  # distance
+            ms600.NumberParser,  # mth1
+            ms600.NumberParser,  # mth2
+            ms600.NumberParser,  # mth3
+        ],
         mn.Appliance_Control_Screen_Brightness: [ScreenBrightnessNumber] * 2,
         mn_t.Appliance_Control_Thermostat_DeadZone: [MtsDeadZoneNumber],
         mn_t.Appliance_Control_Thermostat_Frost: [MtsFrostNumber],
