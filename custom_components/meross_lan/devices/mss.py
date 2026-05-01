@@ -101,13 +101,6 @@ class _ElectricitySensor(SensorParser):
         # 0 power readings when not able to sync time and/or correctly configured
         self.parent.enable_check_device_time()
 
-    def shutdown(self):
-        super().shutdown()
-        # TODO: likely removable since these are not circular refs
-        del self.sensor_consumptionx
-        del self.sensor_power
-        self.sensors.clear()
-
     async def async_added_to_hass(self):
         # state restoration is only needed on cold-start and we have to discriminate
         # from when this happens while the device is already working. In general
