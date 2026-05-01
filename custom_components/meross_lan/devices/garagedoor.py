@@ -75,7 +75,7 @@ class GarageConfigMixin(ValueParser if TYPE_CHECKING else object):
     init_ns = mn.Appliance_GarageDoor_MultipleConfig
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
-        key_value_str = str(kwargs["key_value"])  # type:ignore
+        key_value_str = str(kwargs["key_value"])  # type: ignore
         kwargs["entity_key"] = f"config_{key_value_str}"
         kwargs["name"] = key_value_str
         super().__init__(*args, **kwargs)
@@ -117,25 +117,28 @@ class GarageEnableSwitch(GarageConfigSwitch):
     def _check_channel_enable(self, /):
         """enables/disables all the entities of this channel garageDoor in the
         entity registry"""
-        enabled = self.is_on
         registry_update_entity = self.parent.parent.entity_registry.async_update_entity
         disabler = RegistryEntryDisabler.INTEGRATION
-        # TODO: split the loop in two branches
-        for entry in (
-            _entry
-            for entity in self.parent.entities_iterable
-            if (entity.device_info is self.device_info)
-            and (entity is not self)
-            and (_entry := entity.registry_entry)
-        ):
-            if enabled:
-                if (
-                    entry.disabled_by == disabler
-                ):  # This check too might be done in comprehension
-                    registry_update_entity(entry.entity_id, disabled_by=None)
-            else:
-                if not entry.disabled_by:
-                    registry_update_entity(entry.entity_id, disabled_by=disabler)
+        if self.is_on:
+            for entity_id in (
+                _entry.entity_id
+                for _entity in self.parent.entities_iterable
+                if (_entity.device_info is self.device_info)
+                and (_entity is not self)
+                and (_entry := _entity.registry_entry)
+                and (_entry.disabled_by == disabler)
+            ):
+                registry_update_entity(entity_id, disabled_by=None)
+        else:
+            for entity_id in (
+                _entry.entity_id
+                for _entity in self.parent.entities_iterable
+                if (_entity.device_info is self.device_info)
+                and (_entity is not self)
+                and (_entry := _entity.registry_entry)
+                and not _entry.disabled_by
+            ):
+                registry_update_entity(entity_id, disabled_by=disabler)
 
 
 class GarageConfigNumber(GarageConfigMixin, NumberParser):
@@ -220,22 +223,16 @@ class GarageDoorMultipleConfig(handler.MappingParser):
     POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
 
     init_parser_defs = {
-        mc.KEY_BUZZERENABLE: GarageConfigSwitch.DEF(
-        ),
-        mc.KEY_DOORENABLE: GarageEnableSwitch.DEF(
-        ),
+        mc.KEY_BUZZERENABLE: GarageConfigSwitch.DEF(),
+        mc.KEY_DOORENABLE: GarageEnableSwitch.DEF(),
         mc.KEY_SIGNALDURATION: GarageConfigNumber.DEF(
             native_step=0.1,
             native_min_value=0.1,
         ),
-        mc.KEY_SIGNALCLOSE: GarageConfigNumber.DEF(
-        ),
-        mc.KEY_SIGNALOPEN: GarageConfigNumber.DEF(
-        ),
-        mc.KEY_DOORCLOSEDURATION: GarageConfigNumber.DEF(
-        ),
-        mc.KEY_DOOROPENDURATION: GarageConfigNumber.DEF(
-        ),
+        mc.KEY_SIGNALCLOSE: GarageConfigNumber.DEF(),
+        mc.KEY_SIGNALOPEN: GarageConfigNumber.DEF(),
+        mc.KEY_DOORCLOSEDURATION: GarageConfigNumber.DEF(),
+        mc.KEY_DOOROPENDURATION: GarageConfigNumber.DEF(),
     }
 
 
