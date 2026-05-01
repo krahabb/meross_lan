@@ -47,7 +47,12 @@ class UpdateEntity(Entity, update.UpdateEntity):
         self.installed_version, self.latest_version, self.release_summary = (
             device.get_upgrade_info()
         )
-        Entity.__init__(self, device.id, parent, device_info=device.device_info)
+        Entity.__init__(
+            self,
+            device.id if device is not parent else None,
+            parent,
+            device_info=device.device_info,
+        )
         self.unique_id = None  # override
         device.update_firmware = self
 

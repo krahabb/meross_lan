@@ -298,7 +298,8 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         super().__init__(id, parent, **kwargs)
         parent.entities[id] = self
         parent.async_shutdown_broadcast.add(self.async_shutdown)
-        if parent.config_entry.state is ConfigEntryState.LOADED:
+        if parent.platforms:
+            # this entity is being created after entry setup
             parent.add_entity(self)
 
     def shutdown(self):
