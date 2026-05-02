@@ -133,8 +133,9 @@ class BaseDevice(device.PhysicalDevice):
     if TYPE_CHECKING:
 
         # to be implemented in derived classes
-        device_entry: dr.DeviceEntry
+        device_registry: dr.DeviceRegistry
         device_info: Entity.DeviceInfo
+        device_entry: dr.DeviceEntry
         entities_iterable: Iterable[Entity]
 
         update_firmware: UpdateEntity | None
@@ -147,8 +148,9 @@ class BaseDevice(device.PhysicalDevice):
         ): ...
 
     __SLOTS__ = (
-        "device_entry",
+        "device_registry",
         "device_info",
+        "device_entry",
     )
 
     SLOTS_AUTO_INIT = ("update_firmware",)
@@ -170,12 +172,29 @@ class BaseDevice(device.PhysicalDevice):
             entity.set_unavailable()
 
     # interface: self
+    device_registry = NotImplemented
     device_entry = NotImplemented
     device_info = NotImplemented
     entities_iterable = NotImplemented
 
+    def update_device_registry(self, **kwargs):
+        self.device_entry = (
+            self.device_registry.async_update_device(self.device_entry.id, **kwargs)
+            or self.device_entry
+        )
 
-class Device(ConfigEntryManager, device.Device, BaseDevice):
+    def update_device_registry_name(self, name: str):
+        if name != self.device_entry.name:
+            self.device_entry = (
+                self.device_registry.async_update_device(
+                    self.device_entry.id, name=name
+                )
+                or self.device_entry
+            )
+            return name
+
+
+class Device(ConfigEntryManager, BaseDevice, device.Device):
     """
     Generic protocol handler class managing the physical device stack/state
     """
@@ -286,7 +305,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         _check_device_time_enabled: bool
         """Scheduled 'on-demand' device time check. This is only created when enable_device_time_check is called."""
 
-        device_entries_info: dict[Any, Entity.DeviceInfo]
+        device_entries_info: dict[int, Entity.DeviceInfo]  # dynamic
         profile: Final[MQTTProfile | None]
 
         _async_create_diagnostic_entities_task: Task  # dynamic
@@ -439,6 +458,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         mn.Appliance_System_Online,
         mn.Appliance_System_Position,
         mn.Appliance_System_Time,
+        mn.Appliance_Config_Trace,
         mn.Appliance_Config_Wifi,
         mn.Appliance_Config_WifiList,
         mn.Appliance_Config_WifiX,
@@ -497,6 +517,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             key=config_entry.data.get(mlc.CONF_KEY) or "",  # type: ignore[argument]
             descriptor=descriptor,  # type: ignore[argument],
         )
+        self.device_registry = api.device_registry
         self.device_info = {"identifiers": {(mlc.DOMAIN, device_id)}}
         self.device_entry = api.device_registry.async_get_or_create(
             config_entry_id=config_entry.entry_id,
@@ -604,8 +625,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             if not self.bluetooth:
                 if _bluetooth := self.parent.get_bt_client(self.id):
                     self.add_client(_bluetooth)
-                    self.parent.device_registry.async_update_device(
-                        self.device_entry.id,
+                    self.update_device_registry(
                         new_connections={
                             (dr.CONNECTION_NETWORK_MAC, self.descriptor.macAddress),
                             (dr.CONNECTION_BLUETOOTH, _bluetooth.address),
@@ -614,8 +634,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
 
         elif self.bluetooth:
             self.remove_client(self.bluetooth)
-            self.parent.device_registry.async_update_device(
-                self.device_entry.id,
+            self.update_device_registry(
                 new_connections={
                     (dr.CONNECTION_NETWORK_MAC, self.descriptor.macAddress)
                 },
@@ -717,7 +736,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         await ConfigEntryManager.async_setup_entry(self, hass, config_entry)
 
     @override
-    def get_device_entry_info(self, index_value, /) -> "Entity.DeviceInfo":
+    def get_device_entry_info(self, index_value: int, /) -> "Entity.DeviceInfo":
         if not index_value:
             # Either a non parser entity or a parser entity with no indexing (i.e. unique for the device)
             # or an entity for channel == 0
@@ -738,7 +757,7 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
         device_info: "Entity.DeviceInfo" = {
             "identifiers": {(mlc.DOMAIN, f"{self.id}_{index_value}")}
         }
-        self.parent.device_registry.async_get_or_create(
+        self.device_registry.async_get_or_create(
             config_entry_id=self.config_entry.entry_id,
             manufacturer=mc.MANUFACTURER,
             name=f"{self.device_entry.name} Channel {index_value}",
@@ -1635,12 +1654,34 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
             translation_placeholders={"device_name": self.display_name},
         )
 
-    def update_device_info(self, device_info: "DeviceInfoType", profile: "MQTTProfile"):
+    def update_device_info(
+        self, device_info: "DeviceInfoType", profile: "MQTTProfile", /
+    ):
         """Called when linked to a (cloud) profile and device info is available or whenever updated."""
-        device_registry = self.parent.device_registry
-        name = device_info.get(mc.KEY_DEVNAME) or self.descriptor.productname
-        if name != self.device_entry.name:
-            device_registry.async_update_device(self.device_entry.id, name=name)
+        newname = self.update_device_registry_name(
+            device_info.get(mc.KEY_DEVNAME) or self.descriptor.productname,
+        )
+        if hasattr(self, "device_entries_info"):
+            device_info_channels = device_info.get("channels")
+            if device_info_channels or newname:
+                # need to update our channels device registry names too since
+                # they are based on the main device name
+                for channel, device_entry_info in self.device_entries_info.items():
+                    try:
+                        channel_name = device_info_channels[channel].get(mc.KEY_DEVNAME)
+                    except:
+                        channel_name = None
+                    if not channel_name:
+                        if not newname:
+                            continue
+                        channel_name = f"{newname} Channel {channel}"
+                    device_entry = self.device_registry.async_get_device(
+                        **device_entry_info
+                    )
+                    if device_entry and (channel_name != device_entry.name):
+                        self.device_registry.async_update_device(
+                            device_entry.id, name=channel_name
+                        )
 
         # check for firmware updates too
         if latest_version := profile.get_latest_version(*self.descriptor.type_subtype):
@@ -1649,28 +1690,3 @@ class Device(ConfigEntryManager, device.Device, BaseDevice):
                 self.update_firmware.flush_state()
             else:
                 UpdateEntity(self, self)
-
-        channels_info = device_info.get("channels")
-        if not channels_info:
-            return
-
-        channel = -1
-        for device_info_channel in channels_info:
-            # we assume the device_info.channels struct are mapped
-            # to what we consider 'default' entities for the device
-            # (i.e. GarageDoor for garageDoor devices, ToggleXSwitch for
-            # plain toggle devices, and so on).
-            # also, the list looks like eventually containing empty dicts
-            # for non-existent channel ids
-            channel += 1
-            if not device_info_channel:
-                continue
-            try:
-                if name := device_info_channel.get(mc.KEY_DEVNAME):
-                    device_entry = device_registry.async_get_device(
-                        **self.get_device_entry_info(channel)
-                    )
-                    if device_entry and name != device_entry.name:
-                        device_registry.async_update_device(device_entry.id, name=name)
-            except Exception:
-                pass

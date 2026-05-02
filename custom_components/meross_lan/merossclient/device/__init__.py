@@ -1,7 +1,6 @@
 from abc import abstractmethod
 import asyncio
 from datetime import UTC, tzinfo
-from functools import cached_property
 from typing import TYPE_CHECKING, override
 
 import aiohttp
@@ -69,7 +68,7 @@ class PhysicalDevice(AbstractClient):
     if TYPE_CHECKING:
         id: Final[str]  # type: ignore[override]
         """uuid for standard devices (including hub), subdevice id for hub-paired subdevices."""
-        descriptor: Final[DeviceDescriptor]  # type:ignore[override]
+        descriptor: Final[DeviceDescriptor]  # type: ignore[override]
         latest_version: LatestVersionType  # lazy init
 
     __SLOTS__ = ("latest_version",)
@@ -92,8 +91,8 @@ class PhysicalDevice(AbstractClient):
 
     @property
     @abstractmethod
-    def firmware_version(self, /) -> str:
-        raise NotImplementedError("firmware_version")
+    def firmware_version(self, /) -> str | None:
+        return None
 
     @abstractmethod
     def get_upgrade_payload(self, /) -> "mt.control.Upgrade":
@@ -1051,10 +1050,13 @@ class SubDevice(PhysicalDevice, NamespaceParser):
     @override
     def get_upgrade_payload(self, /) -> "mt.control.Upgrade":
         # start from hub upgrade payload (eventually)
+        firmware_version = self.firmware_version
+        if not firmware_version:
+            return {}
         upgrade_payload = self.parent.get_upgrade_payload()
         latest_version = self.latest_version
         if versiontuple(latest_version[mc.KEY_VERSION]) > versiontuple(
-            self.firmware_version
+            firmware_version
         ):
             upgrade_payload["subdev"] = [
                 {

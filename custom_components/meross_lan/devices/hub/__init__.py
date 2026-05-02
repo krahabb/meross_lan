@@ -114,7 +114,7 @@ class Hub(mld.Device):
         registry_subdevices: dict[str, "mld.dr.DeviceEntry"] = {}
         for (
             device_entry
-        ) in self.parent.device_registry.devices.get_devices_for_config_entry_id(
+        ) in self.device_registry.devices.get_devices_for_config_entry_id(
             self.config_entry.entry_id
         ):
             # The caveat here is to detect if a subdev has been re-binded to
@@ -161,12 +161,14 @@ class Hub(mld.Device):
                 subdevice_id,
                 severity=self.IssueSeverity.WARNING,
                 translation_placeholders={
-                    "device_name": device_entry.name or "unknown device"
+                    "device_name": device_entry.name_by_user
+                    or device_entry.name
+                    or "unknown device"
                 },
             )
 
     @override
-    def get_device_entry_info(self, index_value, /) -> "mle.Entity.DeviceInfo":
+    def get_device_entry_info(self, index_value: str, /) -> "mle.Entity.DeviceInfo":
         if not index_value:
             # Either a non parser entity or a parser entity with no indexing (i.e. unique for the device)
             return self.device_info
@@ -182,20 +184,17 @@ class Hub(mld.Device):
         self, device_info: "DeviceInfoExtType", profile: "MQTTProfile", /
     ):
         super().update_device_info(device_info, profile)
-        # propagate device info to subdevices
-        for sub_device_info in device_info.get("__subDeviceInfo", []):
+        for subdevice_info in device_info.get("__subDeviceInfo", []):
             try:
-                subdevice = self.subdevices[sub_device_info["subDeviceId"]]
-            except KeyError:
-                continue
-            else:
-                name = sub_device_info.get(mc.KEY_SUBDEVICENAME) or get_productname(
-                    subdevice.model
+                self.subdevices[subdevice_info["subDeviceId"]].update_subdevice_info(
+                    subdevice_info, profile)
+            except Exception as e:
+                self.log_exception(
+                    self.DEBUG,
+                    e,
+                    "updating subdevice info for subdevice with id %s",
+                    subdevice_info.get("subDeviceId", "unknown"),
                 )
-                if name != subdevice.device_entry.name:
-                    self.parent.device_registry.async_update_device(
-                        subdevice.device_entry.id, name=name
-                    )
 
     # interface: self
     async def async_pairsubdev(self, /):
@@ -319,7 +318,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
                 # we'll check our device registry for luck.
                 # The relationship between model and key_digest is not 1:1 so
                 # we need to accurately map the correct class.
-                device_entry = hub.parent.device_registry.async_get_device(
+                device_entry = hub.device_registry.async_get_device(
                     identifiers={(mlc.DOMAIN, subid)}
                 )
                 assert device_entry, (
@@ -380,8 +379,9 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         **kwargs,
     ):
         hub.subdevices[subid] = self
+        self.device_registry = hub.device_registry
         self.device_info = {"identifiers": {(mlc.DOMAIN, subid)}}
-        self.device_entry = hub.parent.device_registry.async_get_or_create(
+        self.device_entry = hub.device_registry.async_get_or_create(
             config_entry_id=hub.config_entry.entry_id,
             manufacturer=mc.MANUFACTURER,
             name=get_productname(model),
@@ -412,7 +412,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
                 device_class=SensorParser.DeviceClass.BATTERY,
             )
         )
-        # TODO: add the update entity
 
     def shutdown(self):
         super().shutdown()
@@ -443,8 +442,8 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
 
     @property
     @override  # interface: PhysicalDevice
-    def firmware_version(self, /) -> str:
-        return self.device_entry.sw_version or self.latest_version[mc.KEY_VERSION]
+    def firmware_version(self, /) -> str | None:
+        return self.device_entry.sw_version
 
     # interface: self
     async def async_subdevice_shutdown(self):
@@ -455,12 +454,14 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         for entity in [*self.entities_iterable]:
             await entity.async_shutdown()
 
-    def update_sub_device_info(self, sub_device_info: "SubDeviceInfoType", /):
-        name = sub_device_info.get(mc.KEY_SUBDEVICENAME) or get_productname(self.model)
-        if name != self.device_entry.name:
-            self.parent.parent.device_registry.async_update_device(
-                self.device_entry.id, name=name
-            )
+    def update_subdevice_info(
+        self, subdevice_info: "SubDeviceInfoType", profile: "MQTTProfile", /
+    ):
+        self.update_device_registry_name(
+            subdevice_info.get(mc.KEY_SUBDEVICENAME)
+            or get_productname(self.model),
+        )
+        # TODO: add the update entity
 
     def parse_digest(self, payload: "mt.hub.Digest_SubDevice", /):
         """
@@ -576,18 +577,9 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         )
 
     def _parse_version(self, payload: "mt.hub.SubDevice_Version", /):
-        device_entry = self.device_entry
-        kwargs = {}
-        hw_version = payload[mc.KEY_HARDWARE]
-        if hw_version != device_entry.hw_version:
-            kwargs["hw_version"] = hw_version
-        sw_version = payload[mc.KEY_FIRMWARE]
-        if sw_version != device_entry.sw_version:
-            kwargs["sw_version"] = sw_version
-        if kwargs:
-            self.parent.parent.device_registry.async_update_device(
-                device_entry.id, **kwargs
-            )
+        self.update_device_registry(
+            sw_version=payload[mc.KEY_FIRMWARE], hw_version=payload[mc.KEY_HARDWARE]
+        )
 
     def _hub_parse(self, key: str, payload: dict, /):
         """Heuristic subdevice parsing system. This will be eventually removed
