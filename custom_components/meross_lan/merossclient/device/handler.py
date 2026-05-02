@@ -899,6 +899,7 @@ class NamespaceHandler(logging.Loggable):
         the 'field' but that might likely be too much for many of these namespaces.
         """
 
+        self.log(self.DEBUG, "Tracing")
         ns = self.id
 
         async def _async_wrapped_get(payload: "JsonDict"):

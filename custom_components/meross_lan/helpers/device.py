@@ -886,7 +886,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 while not (ns_handler := self._trace_ability_next(abilities)):
                     continue
                 async with self.polling_lock:
-                    self.log(self.DEBUG, "Tracing %s ability", ns_handler.id)
                     await ns_handler.async_trace(self.async_request)
         except StopIteration:
             self.log(self.DEBUG, "Tracing abilities end")
