@@ -867,9 +867,11 @@ Appliance_Config_OverTemp = ns(
     "Appliance.Config.OverTemp", mc.KEY_OVERTEMP, 40, G_E, S_D
 )
 Appliance_Config_StandbyKiller = ns(
-    "Appliance.Config.StandbyKiller", mc.KEY_CONFIG, -1, G_LIS, S_LI, PSQ, IDX_C
-)  # according to Meross app could also support subId indexing
-Appliance_Config_Trace = ns("Appliance.Config.Trace", "trace", -1, G_D)
+    "Appliance.Config.StandbyKiller", mc.KEY_CONFIG, -1, G_LIS, S_LI, PSQ, IDX_SUB
+)
+Appliance_Config_Trace = ns(
+    "Appliance.Config.Trace", "trace", -1, G_D
+)  # likely available only while provisioning
 Appliance_Config_Wifi = ns("Appliance.Config.Wifi", mc.KEY_WIFI, -1, S_D)
 Appliance_Config_WifiList = ns("Appliance.Config.WifiList", "wifiList", -1, G_E)
 Appliance_Config_WifiX = ns("Appliance.Config.WifiX", mc.KEY_WIFI, -1, S_D)
@@ -1026,9 +1028,7 @@ Appliance_Control_TriggerX = ns(
     DIG,
 )  # ns indexed by both 'channel' and 'id'
 Appliance_Control_Unbind = ns("Appliance.Control.Unbind", mc.KEY_, -1, PSQ)
-Appliance_Control_Upgrade = ns(
-    "Appliance.Control.Upgrade", "upgrade", -1, S_D
-)  # TODO? (check app)
+Appliance_Control_Upgrade = ns("Appliance.Control.Upgrade", "upgrade", -1, S_D)
 Appliance_Control_Weather = ns("Appliance.Control.Weather", mc.KEY_, -1)
 
 Appliance_Digest_TimerX = ns("Appliance.Digest.TimerX", mc.KEY_DIGEST, -1, G_E)

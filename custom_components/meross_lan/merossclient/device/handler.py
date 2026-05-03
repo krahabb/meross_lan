@@ -680,6 +680,10 @@ class NamespaceHandler(logging.Loggable):
             # we'll reuse the default in the ns definition
             if ns.can_query:
                 self.polling_request = ns.request_default
+            else:
+                self.polling_strategy = (
+                    None  # disable polling since we dont have a request to send
+                )
             return
         match _payload_type:
             case mn.PayloadType.PUSH | mn.PayloadType.PUSH_QUERY:
@@ -689,7 +693,7 @@ class NamespaceHandler(logging.Loggable):
                     mn.EMPTY_DICT,
                 )
             case mn.PayloadType.UNSUPPORTED:
-                pass  # do nothing
+                self.polling_strategy = None
             case _:
                 self.polling_request = _payload_type.build_get(ns)
 

@@ -19,6 +19,7 @@ class UpdateEntity(Entity, update.UpdateEntity):
         """The PhysicalDevice associated with this entity. Could be either a subdevice or a plain device."""
         # HA core entity attributes:
         _attr_device_class: ClassVar[update.UpdateDeviceClass | None]
+        in_progress: bool
         installed_version: str | None
         latest_version: str | None
         release_summary: str | None
@@ -33,6 +34,7 @@ class UpdateEntity(Entity, update.UpdateEntity):
 
     __slots__ = (
         "device",
+        "in_progress",
         "installed_version",
         "latest_version",
         "release_summary",
@@ -42,8 +44,11 @@ class UpdateEntity(Entity, update.UpdateEntity):
     def __init__(self, device: "BaseDevice", parent: "Device", /):
         self.device = device
         self.device_class = update.UpdateDeviceClass.FIRMWARE
-        self.supported_features = update.UpdateEntityFeature.INSTALL
+        self.supported_features = (
+            update.UpdateEntityFeature.INSTALL | update.UpdateEntityFeature.PROGRESS
+        )
         self.title = device.display_name
+        self.in_progress = False
         self.installed_version, self.latest_version, self.release_summary = (
             device.get_upgrade_info()
         )
@@ -56,10 +61,16 @@ class UpdateEntity(Entity, update.UpdateEntity):
         self.unique_id = None  # override
         device.update_firmware = self
 
+    def shutdown(self):
+        super().shutdown()
+        self.device.update_firmware = None
+
     def flush_state(self):
         self.installed_version, self.latest_version, self.release_summary = (
             self.device.get_upgrade_info()
         )
+        if self.installed_version == self.latest_version:
+            self.in_progress = False
         Entity.flush_state(self)
 
     async def async_install(self, version: str | None, backup: bool, **kwargs):
@@ -72,6 +83,7 @@ class UpdateEntity(Entity, update.UpdateEntity):
         await device.async_request(
             *mn.Appliance_Control_Upgrade.request_set(upgrade_payload),
         )
+        self.in_progress = True
 
 
 async_setup_entry = UpdateEntity.platform_setup_entry

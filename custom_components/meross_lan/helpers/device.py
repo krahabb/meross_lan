@@ -330,6 +330,9 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
     # For example ms600/ms130 need to post-configure Sensor.LatestX handler
     # that need to be in place in order to be correctly configured.
     NAMESPACE_INIT = {
+        mn.Appliance_Control_Upgrade: handler.NamespaceHandler,
+        mn.Appliance_Mcu_Firmware: handler.NamespaceHandler,
+        mn.Appliance_Mcu_Hp110_Firmware: handler.NamespaceHandler,
         mn.Appliance_Control_Sensor_Latest: (".devices.misc", "SensorLatestParser"),
         mn.Appliance_Control_Sensor_LatestX: (".devices.misc", "SensorLatestXParser"),
         mn.Appliance_Control_Toggle: (".switch", "Toggle"),
@@ -417,14 +420,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             "GarageDoorConfig",
         ),  # install this after MultipleConfig since it could apply some fallbacks for missing MultipleConfig entities
         mn.Appliance_GarageDoor_State: (".devices.garagedoor", "GarageDoor"),
-        mn.Appliance_Mcu_Firmware: (
-            ".merossclient.device.handler",
-            "NamespaceHandler",  # handler in Device._handle_XXX
-        ),
-        mn.Appliance_Mcu_Hp110_Firmware: (
-            ".merossclient.device.handler",
-            "NamespaceHandler",  # handler in Device._handle_XXX
-        ),
         mn.Appliance_RollerShutter_Position: (
             ".devices.rollershutter",
             "RollerShutter",
@@ -1361,6 +1356,20 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
 
         ns_handler.handle_response(message)
 
+    def _handle_Appliance_Control_Upgrade(self, message: MerossMessage, /):
+        try:
+            if message.payload["upgradeInfo"][mc.KEY_STATUS] == 2:
+                # query the device for new abilities and features
+                # since a firmware update might have changed them
+                self.handler_all.schedule_get()
+        except Exception as e:
+            self.log_exception(
+                self.WARNING,
+                e,
+                "_handle_Appliance_Control_Upgrade (payload: %s)",
+                _payload=message.payload,
+            )
+
     def _handle_Appliance_Mcu_Firmware(self, message: MerossMessage, /):
         self.descriptor.mcu = message.payload[mc.KEY_FIRMWARE]
         if self.update_firmware:
@@ -1392,8 +1401,10 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
 
         if oldfirmware != descr.firmware:
             self.schedule_entry_update(True)
-            if self.update_firmware:
-                self.update_firmware.flush_state()
+            if oldfirmware.get("version") != descr.firmwareVersion:
+                self.update_device_registry(sw_version=descr.firmwareVersion)
+                if self.update_firmware:
+                    self.update_firmware.flush_state()
             if not self.config.get(mlc.CONF_HOST):
                 self._update_host(descr.innerIp)
         elif oldtimezone != descr.timezone:
