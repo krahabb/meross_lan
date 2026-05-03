@@ -1268,7 +1268,7 @@ class ValueParser(NamespaceParser):
     """A specialization of NamespaceParser providing a simple interface to manage
     a single item value in the namespace payload."""
 
-    class KeyValue(tuple[str, ...]):
+    class KeyValue:
         """Descriptor class to define how to extract the value from the payload and how to format it for requests.
         In general, most of the data points are stored in the first level key of a dictionary payload, but in
         some cases they are stored in nested dictionaries. This descriptor allows to abstract this logic and provide
@@ -1277,32 +1277,30 @@ class ValueParser(NamespaceParser):
         class Cache(dict[tuple[str, ...], "ValueParser.KeyValue"]):
 
             def __missing__(self, key: tuple[str, ...]):
-                match len(key):
-                    case 1:
-                        key_value = tuple.__new__(ValueParser.SimpleKeyValue, key)
-                        _key = key_value[0]
-                        # install optimized parse and payload methods for simple keys
-                        key_value.parse = lambda payload: payload[_key]
-                        key_value.payload = lambda value: {_key: value}
-                    case _:
-                        key_value = tuple.__new__(ValueParser.KeyValue, key)
-                self[key_value] = key_value
+                if len(key) == 1:
+                    return ValueParser.SimpleKeyValue(*key)
+                key_value = object.__new__(ValueParser.KeyValue)
+                key_value.key = key
+                self[key] = key_value
                 return key_value
 
         if TYPE_CHECKING:
             CACHE: Final[Cache]
+            key: tuple[str, ...]
 
         CACHE = Cache()
+
+        __slots__ = ("key",)
 
         def __new__(cls, *key: str):
             return cls.CACHE[key]
 
         def __str__(self):
-            return "_".join(self)
+            return "_".join(self.key)
 
         def parse(self, payload: "JsonMapping") -> "JsonType":
             """Extracts the value from the payload using the key(s) defined in this descriptor."""
-            for key in self:
+            for key in self.key:
                 payload = payload[key]
             # This generator expression would be equivalent but less efficient
             # in a scenario where we have few keys nesting.
@@ -1311,50 +1309,60 @@ class ValueParser(NamespaceParser):
 
         def payload(self, value: "JsonType") -> "JsonDict":
             """Returns a dict with the key(s) defined in this descriptor and the value provided as argument."""
-            for key in reversed(self):
+            for key in reversed(self.key):
                 value = {key: value}
             return value  # type: ignore[return-value]
 
         def chain(self, key: str):
             """Helper to create a new KeyValue with the given key chained to the current one.
             This is useful to create nested key descriptors in a fluent way."""
-            return self.CACHE[self + (key,)]
+            return self.CACHE[self.key + (key,)]
 
     class RootKeyValue(KeyValue):
         """Descriptor for the simple case where the value is the payload."""
+
+        __slots__ = ("parse", "payload")
+
+        def __new__(cls, /):
+            # RootKeyValue is a singleton
+            key = ()
+            if key in cls.CACHE:
+                return cls.CACHE[key]
+            key_value = object.__new__(cls)
+            key_value.key = key
+            cls.CACHE[key] = key_value
+            # install optimized parse and payload methods for simple keys
+            key_value.parse = lambda payload: payload
+            key_value.payload = lambda value: value  # type: ignore[return-value]
+            return key_value
 
         def __str__(self):
             # We could maybe think of using "_" as root key str/slug
             return mc.KEY_
 
-        def parse(self, payload: "JsonMapping"):
-            return payload
-
-        def payload(self, value: "JsonMapping"):
-            return value
-
-    KeyValue.CACHE[()] = tuple.__new__(RootKeyValue)
+    RootKeyValue()
 
     class SimpleKeyValue(KeyValue):
         """Descriptor for the simple case where the value is stored in the first level key of the payload."""
+
+        __slots__ = ("parse", "payload")
 
         def __new__(cls, *key: str):
             # In general we'll use KeyValue generic constructor which tries using the cache first.
             # This 'explicit' constructor is needed just to initialize the default init_key_value for
             # ValueParser since the default KeyValue constructor will only work once we leave the
             # ValueParser class definition
-            key_value = tuple.__new__(cls, key)
-            cls.CACHE[key_value] = key_value
+            key_value = object.__new__(cls)
+            key_value.key = key
+            cls.CACHE[key] = key_value
+            # install optimized parse and payload methods for simple keys
+            _key = key[0]
+            key_value.parse = lambda payload: payload[_key]
+            key_value.payload = lambda value: {_key: value}
             return key_value
 
         def __str__(self):
-            return self[0]
-
-        def parse(self, payload: "JsonMapping") -> "JsonType":
-            return payload[self[0]]
-
-        def payload(self, value: "JsonType") -> "JsonDict":
-            return {self[0]: value}
+            return self.key[0]
 
     if TYPE_CHECKING:
 
@@ -1387,7 +1395,6 @@ class ValueParser(NamespaceParser):
         """Issues a command SET to update the device and also updates
         the entity state if the command was acknowledged by the device.
         Raises exception on connection/protocol errors."""
-        # await self.async_request_payload({self.key_value: device_value})
         await self.parent.async_request(
             *self.ns.request_set(self.index | self.key_value.payload(device_value))
         )
@@ -1498,7 +1505,7 @@ class MappingParser(ValueParser):
 
     init_parser_def = ValueParser
 
-    init_key_value = ValueParser.RootKeyValue()
+    init_key_value = ValueParser.KeyValue()
 
     SLOTS_AUTO_INIT = (
         "excluded_keys",
@@ -1566,10 +1573,6 @@ class MappingParser(ValueParser):
                                 key_value=key_value,
                             )
                     self.parsers[key] = parser
-                    if parser.key_value != key_value:
-                        assert (
-                            parser.key_value == key_value
-                        ), "Parser key_value mismatch with payload key: %s != %s"
                     parser.update_device_value(key_payload)
                 else:
                     self.log_exception(
