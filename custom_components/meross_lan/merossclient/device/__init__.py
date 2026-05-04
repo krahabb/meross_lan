@@ -135,7 +135,7 @@ class Device(PhysicalDevice):
 
         NAMESPACE_INIT_PACKAGE: ClassVar[str]
         """Package/module path where to look for namespace initialization functions."""
-        NAMESPACE_INIT: ClassVar[dict[str, Any]]
+        NAMESPACE_INIT: ClassVar[dict[mn.Namespace, Any]]
         """Static dict of namespace initialization functions. This will be looked up
         and matched against the current device abilities (at device init time) and
         usually setups a dedicated namespace handler and/or a dedicated entity.
@@ -267,12 +267,11 @@ class Device(PhysicalDevice):
 
         await self._async_init_zoneinfo()
 
-        namespaces = mn.NAMESPACES
         namespace_init = self.__class__.NAMESPACE_INIT
         for ns, ns_init_func in {
-            namespaces[_ability]: _ns_init_conf
-            for _ability, _ns_init_conf in namespace_init.items()
-            if _ability in self.descriptor.ability
+            _ns: _ns_init_conf
+            for _ns, _ns_init_conf in namespace_init.items()
+            if _ns in self.descriptor.ability
         }.items():
             try:
                 try:
