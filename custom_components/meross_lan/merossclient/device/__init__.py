@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, override
 import aiohttp
 
 from .. import (
+    Descriptor,
     DeviceDescriptor,
     async_import_module,
     datetime_from_epoch,
@@ -20,22 +21,9 @@ from .handler import NamespaceHandler, NamespaceParser
 
 if TYPE_CHECKING:
     from asyncio import Task
-    from typing import (
-        Any,
-        Callable,
-        ClassVar,
-        Coroutine,
-        Final,
-        Generator,
-        Iterable,
-        Mapping,
-        NotRequired,
-        Protocol,
-        Self,
-        TypedDict,
-        Unpack,
-    )
+    from typing import Any, Callable, ClassVar, Final, Self, Unpack
 
+    from .. import SubDeviceDescriptor
     from ..client.bluetooth import BluetoothClient
     from ..client.http import HttpClient
     from ..client.mqtt import AbstractMQTTConnection
@@ -68,10 +56,14 @@ class PhysicalDevice(AbstractClient):
     if TYPE_CHECKING:
         id: Final[str]  # type: ignore[override]
         """uuid for standard devices (including hub), subdevice id for hub-paired subdevices."""
-        descriptor: Final[DeviceDescriptor]  # type: ignore[override]
-        latest_version: LatestVersionType  # lazy init
+        descriptor: Final[Descriptor]  # type: ignore[override]
 
-    __SLOTS__ = ("latest_version",)
+        class Args(AbstractClient.Args):
+            descriptor: Descriptor
+
+        def __init__(
+            self, id, parent: "LoggerType | None" = None, /, **kwargs: "Unpack[Args]"
+        ): ...
 
     @override
     async def async_request_raw(
@@ -87,22 +79,7 @@ class PhysicalDevice(AbstractClient):
     # interface: self
     @property
     def display_name(self) -> str:
-        return self.logtag
-
-    @property
-    @abstractmethod
-    def firmware_version(self, /) -> str | None:
-        return None
-
-    @abstractmethod
-    def get_upgrade_payload(self, /) -> "mt.control.Upgrade":
-        """Builds and returns the correct upgrade payload if an upgrade is available, otherwise returns None/empty dict."""
-        raise NotImplementedError("get_upgrade_payload")
-
-    @abstractmethod
-    def get_upgrade_info(self, /) -> tuple[str | None, ...]:
-        """If an update is available returns a tuple of (installed_version, latest_version, release_summary)"""
-        raise NotImplementedError("get_upgrade_info")
+        return self.descriptor.productname
 
     def _handle_missing_parser(
         self, nh: NamespaceHandler, index: mn.IndexValue, payload: "mt.JsonMapping", /
@@ -127,8 +104,8 @@ class Device(PhysicalDevice):
         type DigestParseFunc = Callable[[JsonDict], None] | Callable[[JsonList], None]
         type NamespaceInitFunc = Callable[[mn.Namespace, Self], Any]
 
-        class Args(AbstractClient.Args):
-            descriptor: NotRequired[DeviceDescriptor]
+        class Args(PhysicalDevice.Args):
+            descriptor: DeviceDescriptor
 
         class ConnectArgs(AbstractClient.ConnectArgs):
             pass
@@ -143,6 +120,8 @@ class Device(PhysicalDevice):
         they'll be cached in the dict.
         Namespace handlers will be initialized in the order as they appear in NAMESPACE_INIT
         so that dependencies are initialized in a consistent way."""
+
+        descriptor: Final[DeviceDescriptor]  # type: ignore[override]
 
         # Configuration
         preferred_transport: Transport
@@ -457,51 +436,6 @@ class Device(PhysicalDevice):
                 break
 
         raise last_exception  # type: ignore[unbound-variable]
-
-    # interface: PhysicalDevice
-    @property
-    @override
-    def display_name(self) -> str:
-        return self.descriptor.productname
-
-    @property
-    @override
-    def firmware_version(self, /) -> str:
-        return self.descriptor.firmwareVersion
-
-    @override
-    def get_upgrade_payload(self, /) -> "mt.control.Upgrade":
-        return self.descriptor.build_upgrade_payload(self.latest_version)
-
-    @override
-    def get_upgrade_info(self, /):
-        # assert self.latest_version
-        latest_version = self.latest_version
-        try:
-            descriptor = self.descriptor
-            upgrade_payload = descriptor.build_upgrade_payload(latest_version)
-            if upgrade_payload and mc.KEY_MCU in upgrade_payload:
-                assert descriptor.mcu
-                return (
-                    descriptor.mcu[mc.KEY_VERSION],
-                    latest_version[mc.KEY_MCU][0][mc.KEY_VERSION],
-                    latest_version.get(mc.KEY_DESCRIPTION),
-                )
-            else:
-                return (
-                    descriptor.firmwareVersion,
-                    latest_version[mc.KEY_VERSION],
-                    latest_version.get(mc.KEY_DESCRIPTION),
-                )
-        except Exception as e:
-            self.log_exception(
-                self.WARNING,
-                e,
-                "get_upgrade_info (latest_version:%s mcu:%s)",
-                str(latest_version),
-                str(descriptor.mcu),
-            )
-            return None, None, None
 
     # interface: self
     @property
@@ -1015,17 +949,18 @@ class SubDevice(PhysicalDevice, NamespaceParser):
 
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
+        descriptor: Final[SubDeviceDescriptor]  # type: ignore[override]
+
+        class Args(PhysicalDevice.Args):
+            descriptor: SubDeviceDescriptor
 
     __SLOTS__ = ("async_request",)
 
-    def __init__(
-        self, id: str, parent: "Device", **kwargs: "Unpack[PhysicalDevice.Args]"
-    ):
+    def __init__(self, id: str, parent: "Device", **kwargs: "Unpack[Args]"):
         self.async_request = parent.async_request
         kwargs["key"] = parent.key
         kwargs["from_"] = parent.from_
         kwargs["trigger_src"] = parent.trigger_src
-        kwargs["descriptor"] = parent.descriptor
         kwargs["timeout"] = parent.timeout
         kwargs["loop"] = parent.loop
         super().__init__(id, parent, **kwargs)
@@ -1042,37 +977,6 @@ class SubDevice(PhysicalDevice, NamespaceParser):
     @override
     async def async_disconnect(self, /):
         pass
-
-    # interface: PhysicalDevice
-
-    # TODO: implement maybe something for firmware_version
-    @override
-    def get_upgrade_payload(self, /) -> "mt.control.Upgrade":
-        # start from hub upgrade payload (eventually)
-        firmware_version = self.firmware_version
-        if not firmware_version:
-            return {}
-        upgrade_payload = self.parent.get_upgrade_payload()
-        latest_version = self.latest_version
-        if versiontuple(latest_version[mc.KEY_VERSION]) > versiontuple(
-            firmware_version
-        ):
-            upgrade_payload["subdev"] = [
-                {
-                    "devid": self.id,
-                    mc.KEY_URL: latest_version[mc.KEY_URL],
-                    mc.KEY_MD5: latest_version[mc.KEY_MD5],
-                }
-            ]
-        return upgrade_payload
-
-    @override
-    def get_upgrade_info(self, /):
-        return (
-            self.firmware_version,
-            self.latest_version.get(mc.KEY_VERSION),
-            self.latest_version.get(mc.KEY_DESCRIPTION),
-        )
 
     # interface: self
     def log_duplicated(self, /):

@@ -151,7 +151,7 @@ class RollerShutterMixin(Emulator if TYPE_CHECKING else object):
     def __init__(self, descriptor: "EmulatorDescriptor", key: str):
         super().__init__(descriptor, key)
         self._transitions: dict[int, _Transition] = {}
-        self.has_native_position = descriptor.firmware_version >= (6, 6, 6)
+        self.has_native_position = descriptor.fw_version_t >= (6, 6, 6)
 
     def shutdown(self):
         for transition in tuple(self._transitions.values()):

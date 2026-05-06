@@ -71,7 +71,7 @@ class RollerShutter(Cover):
         # flag indicating the device position is reliable (#227)
         # this will anyway be set in case we 'decode' a meaningful device position
         try:
-            fw_version = descriptor.firmware_version
+            fw_version = descriptor.fw_version_t
             if fw_version >= (6, 6, 6):
                 self._position_native_isgood = True
                 self.supported_features |= Cover.EntityFeature.SET_POSITION

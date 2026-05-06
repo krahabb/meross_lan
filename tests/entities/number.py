@@ -7,7 +7,7 @@ from custom_components.meross_lan.devices import (
     rollershutter as rs,
 )
 from custom_components.meross_lan.devices.hub import ms
-from custom_components.meross_lan.devices.hub.mts import mts100v3
+from custom_components.meross_lan.devices.hub.mts import mts100
 from custom_components.meross_lan.devices.thermostat import (
     MtsClimate,
     MtsCommonTemperatureExtNumber,
@@ -35,7 +35,7 @@ def _climate_number_entities(climate_class: type[MtsClimate]) -> list[type[Entit
     return [climate_class.AdjustNumber] + [climate_class.SetPointNumber] * 3  # type: ignore
 
 
-_MTS100_ENTITES = _climate_number_entities(mts100v3)
+_MTS100_ENTITES = _climate_number_entities(mts100)
 
 
 class EntityTest(EntityComponentTest):

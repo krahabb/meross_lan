@@ -39,10 +39,6 @@ def get_mts_digest(digest: "mt.JsonMapping") -> "mt.JsonDict | None":
 
 class HubMixin(Emulator if TYPE_CHECKING else object):
 
-    if TYPE_CHECKING:
-        subdevices: list[mt.hub.Digest_SubDevice]
-        """list of subdevice dicts as per hub digest"""
-
     MAXIMUM_RESPONSE_SIZE = 4000
 
     NAMESPACES_DEFAULT = {
@@ -162,7 +158,7 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
             ]
         }
         """
-        self.subdevices = descriptor.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE]
+        subdevices = descriptor.subdevices
         namespaces = descriptor.namespaces
         ability = descriptor.ability
 
@@ -208,16 +204,18 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
         """specialization based on subdevice type for digest <-> ns_all relationship"""
 
         # DEBUG/TESTING feature: remove a subdevice from hub definitions
+        """
         if subdevice_id_remove := "28004811B776":
-            delete_element_by_key(self.subdevices, mc.KEY_ID, subdevice_id_remove)
+            delete_element_by_key(subdevices, mc.KEY_ID, subdevice_id_remove)
             for _, _ns_state in ns_state.items():
                 delete_element_by_key(_ns_state, mc.KEY_ID, subdevice_id_remove)
+        """
 
         p_subdevice_all: "mt.JsonDict"
 
-        for p_subdevice_digest in self.subdevices:
-            subdevice_id = p_subdevice_digest[mc.KEY_ID]
-            key_digest = get_subdevice_key_digest(p_subdevice_digest)
+        for p_subdevice in subdevices:
+            subdevice_id = p_subdevice.id
+            key_digest = p_subdevice.key_digest
 
             try:
                 for subid_ns in self.DIGEST_SUBID_NAMESPACES_MAP[key_digest]:
@@ -274,7 +272,7 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
                 match key_digest:
                     case mc.KEY_MST:
                         # mst devices have 'funny' syntax
-                        if "waDet" in p_subdevice_digest[mc.KEY_MST]:  # type: ignore
+                        if "waDet" in p_subdevice[mc.KEY_MST]:  # type: ignore
                             # mst200
                             channels = (1, 2)
                             self.update_namespace_state(
@@ -336,8 +334,8 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
                 # state is maintained consistent. For instance, the 'temperature' dict
                 # in the subdevice ns_all payload is the same as the corresponding
                 # payload in Mts100.Temperature
-                if mc.KEY_SCHEDULEBMODE in p_subdevice_digest:
-                    p_subdevice_all[mc.KEY_SCHEDULEBMODE] = p_subdevice_digest[
+                if mc.KEY_SCHEDULEBMODE in p_subdevice:
+                    p_subdevice_all[mc.KEY_SCHEDULEBMODE] = p_subdevice[
                         mc.KEY_SCHEDULEBMODE
                     ]
             for subnamespace, digest_key in NS_TO_DIGEST_MAP[ns_all].items():
@@ -354,8 +352,8 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
                         # we don't have the state in the specific ns
                         # so we default it eventually initializing with the digest data
                         p_subdevice_substate = {mc.KEY_ID: subdevice_id}
-                        if digest_key in p_subdevice_digest:
-                            p_subdevice_substate[digest_key] = p_subdevice_digest[
+                        if digest_key in p_subdevice:
+                            p_subdevice_substate[digest_key] = p_subdevice[
                                 digest_key
                             ]
                         ns_state[subnamespace].append(p_subdevice_substate)
@@ -363,25 +361,29 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
 
     def _scheduler(self):
         super()._scheduler()
-        for subdevice_digest in self.subdevices:
+        for subdevice in self.descriptor.subdevices:
             # we randomly change the status of subdevices to emulate
             # motion/smoke/doorwindow triggers
-            if mc.KEY_DOORWINDOW in subdevice_digest:
+            if mc.KEY_DOORWINDOW in subdevice:
                 if randint(0, 4) == 0:
-                    subdevice_digest[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 1
+                    subdevice[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 1
                 else:
-                    subdevice_digest[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 0
-            elif mc.KEY_SMOKEALARM in subdevice_digest:
+                    subdevice[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 0
+            elif mc.KEY_SMOKEALARM in subdevice:
                 a = randint(0, 2)
                 if a == 0:
-                    subdevice_digest[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = randint(17, 27)
+                    subdevice[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = randint(17, 27)
                 elif a == 1:
-                    subdevice_digest[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = 170
+                    subdevice[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = 170
             # TODO: add randomization for other subdevices payloads
 
     def _get_subdevice_digest(self, subdevice_id: str):
         """returns the subdevice dict from the hub digest key"""
-        return get_element_by_key(self.subdevices, subdevice_id, mc.KEY_ID)
+        return get_element_by_key(
+            self.descriptor.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE],
+            subdevice_id,
+            mc.KEY_ID,
+        )
 
     def _get_subdevice_namespace(
         self, subdevice_id: str, ns: mn.Namespace, *, force_create: bool = True

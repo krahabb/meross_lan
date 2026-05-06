@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from ..const import ProfileConfigType
+    from ..merossclient import Descriptor
     from ..merossclient.cloudapi import (
         DeviceInfoType,
         LatestVersionType,
@@ -289,11 +290,13 @@ class MerossProfile(MQTTProfile):
         return self._data[self.KEY_DEVICE_INFO].get(uuid)
 
     @override
-    def get_latest_version(self, type: str, subtype: str, /):
+    def get_latest_version(self, descriptor: "Descriptor", /):
         """returns LatestVersionType info if device has an update available"""
         try:
             return (
-                self._data[self.KEY_LATEST_VERSION_HISTORY][f"{type}:{subtype}"][-1]
+                self._data[self.KEY_LATEST_VERSION_HISTORY][
+                    f"{descriptor.type}:{descriptor.subType}"
+                ][-1]
                 .values()
                 .__iter__()
                 .__next__()

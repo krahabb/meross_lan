@@ -515,7 +515,7 @@ class Light(LightBase):
         await self.async_request_light_on_flush(_light)
         # 87: @nao-pon bulbs need a 'double' send when setting Temp
         if ATTR_COLOR_TEMP_KELVIN in kwargs:
-            if self.parent.descriptor.firmwareVersion == "2.1.2":
+            if self.parent.descriptor.fw_version == "2.1.2":
                 with self.exception_warning("async_turn_on fw 2.1.2 patch"):
                     await self.async_request_parse(_light)
         if _t_duration:

@@ -1067,14 +1067,13 @@ class NamespaceHandler(logging.Loggable):
                     # the namespace might need an index in the request
                     # 'channel' index might be used in any kind of device (also hubs)
                     await _async_wrapped_get({ns_key: [{KEY_CHANNEL: 0}]})
-                    subdevices = self.parent.descriptor.subdevices
-                    if subdevices:
+                    if self.parent.descriptor.is_hub:
                         # typical 'legacy' devices are queried by "id"
+                        subdevices = self.parent.descriptor.subdevices
                         if response := await _async_wrapped_get(
                             {
                                 ns_key: [
-                                    {KEY_ID: subdevice[KEY_ID]}
-                                    for subdevice in subdevices
+                                    {KEY_ID: subdevice.id} for subdevice in subdevices
                                 ]
                             },
                         ):
@@ -1085,7 +1084,7 @@ class NamespaceHandler(logging.Loggable):
                         await _async_wrapped_get(
                             {
                                 ns_key: [
-                                    {KEY_SUBID: subdevice[KEY_ID], KEY_CHANNEL: 0}
+                                    {KEY_SUBID: subdevice.id, KEY_CHANNEL: 0}
                                     for subdevice in subdevices
                                 ]
                             },

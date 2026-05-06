@@ -486,7 +486,7 @@ class GarageDoor(Cover):
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
         descriptor = device.descriptor
         if descriptor.type.startswith(mc.TYPE_MSG200) and (
-            descriptor.firmware_version <= (4, 2, 1)
+            descriptor.fw_version_t <= (4, 2, 1)
         ):
             # trying to patch lacking of state polling (#538)
             # It's not sure querying with the list of channels works.

@@ -9,10 +9,11 @@ if TYPE_CHECKING:
     from typing import Unpack
 
     from . import Hub
+    from ...merossclient import SubDeviceDescriptor
     from ...merossclient.protocol import types as mt
 
 
-class mts100v3(SubDevice, MtsClimate):
+class mts100(SubDevice, MtsClimate):
     """Climate entity for hub paired devices MTS100, MTS100V3, MTS150"""
 
     class AdjustNumber(MtsClimate.AdjustNumber):
@@ -70,9 +71,9 @@ class mts100v3(SubDevice, MtsClimate):
         "switch_patch_hvacaction",
     )
 
-    def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
+    def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
+        SubDevice.__init__(self, descriptor, hub, **kwargs)
         self.extra_state_attributes = {}
-        SubDevice.__init__(self, subid, hub, key_digest, model)
         self.schedule._schedule_unit_time = hub.descriptor.ability.get(
             mn_h.Appliance_Hub_Mts100_ScheduleB, {}
         ).get(mc.KEY_SCHEDULEUNITTIME, 15)
@@ -143,7 +144,7 @@ class mts100v3(SubDevice, MtsClimate):
 
         key = mc.MTS100_MODE_TO_CURRENTSET_MAP.get(self._mts_mode) or mc.KEY_CUSTOM
         await self.async_request_parse_ex(
-            {key: round(kwargs[mts100v3.ATTR_TEMPERATURE] * self.temperature_scale)}
+            {key: round(kwargs[mts100.ATTR_TEMPERATURE] * self.temperature_scale)}
         )
 
     @override
@@ -222,19 +223,17 @@ class mts100v3(SubDevice, MtsClimate):
     # interface: SubDevice
     @override
     def _parse_all(self, payload: "mt.hub.Mts100_All", /):
-        self._parse_online(payload[mc.KEY_ONLINE])
-        if not self.is_connected:
-            return
-        if mc.KEY_SCHEDULEBMODE in payload:
-            self.update_scheduleb_mode(payload[mc.KEY_SCHEDULEBMODE])
-        if p_mode := payload.get(mc.KEY_MODE):
-            self._mts_mode = p_mode[mc.KEY_STATE]
-        if p_togglex := payload.get(mc.KEY_TOGGLEX):
-            self._mts_onoff = p_togglex[mc.KEY_ONOFF]
-        if p_temperature := payload.get(mc.KEY_TEMPERATURE):
-            self(p_temperature)
-        else:
-            self.flush_state()
+        if self._parse_online(payload[mc.KEY_ONLINE]):
+            if mc.KEY_SCHEDULEBMODE in payload:
+                self.update_scheduleb_mode(payload[mc.KEY_SCHEDULEBMODE])
+            if p_mode := payload.get(mc.KEY_MODE):
+                self._mts_mode = p_mode[mc.KEY_STATE]
+            if p_togglex := payload.get(mc.KEY_TOGGLEX):
+                self._mts_onoff = p_togglex[mc.KEY_ONOFF]
+            if p_temperature := payload.get(mc.KEY_TEMPERATURE):
+                self(p_temperature)
+            else:
+                self.flush_state()
 
     # interface: self
     def _parse_togglex(self, payload: "mt.hub.ToggleX", /):
@@ -262,10 +261,15 @@ class mts100v3(SubDevice, MtsClimate):
         self.schedule._schedule_entry_count_min = mode
 
 
-class mts150(mts100v3):
+# No known differences between mts100 and mts100v3, they share the same
+# structure and ns support, just different key_digest. So we can just alias the class.
+mts100v3 = mts100
+
+
+class mts150(mts100):
     """Climate entity for hub paired devices MTS150, MTS150P"""
 
-    def _parse_digest_(self, payload: "mt.hub._mts100v3", /):
+    def _parse_digest_(self, payload: "mt.hub._mts150", /):
         """parse digest key for mts150/mts150p subdevice"""
         mode = payload[mc.KEY_MODE]
         if self._mts_mode != mode:

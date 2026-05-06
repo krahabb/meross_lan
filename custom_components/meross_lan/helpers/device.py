@@ -155,6 +155,15 @@ class BaseDevice(device.PhysicalDevice):
 
     SLOTS_AUTO_INIT = ("update_firmware",)
 
+    @property
+    @override
+    def display_name(self) -> str:
+        return (
+            self.device_entry.name_by_user
+            or self.device_entry.name
+            or self.descriptor.productname
+        )
+
     @override
     def on_connect(self):
         super().on_connect()
@@ -276,7 +285,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         config_entry: Final[ConfigEntry]  # type: ignore[override]
         config: mlc.DeviceConfigType
 
-        descriptor: Final[DeviceDescriptor]  # type: ignore[override]
+        # descriptor: Final[DeviceDescriptor]  # type: ignore[override]
         bluetooth: Final[ComponentApi.BTClient | None]  # type: ignore[override]
         http: Final[Http | None]  # type: ignore[override]
         mqtt: Final[MQTTConnection.Client | None]  # type: ignore[override]
@@ -520,8 +529,8 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             manufacturer=mc.MANUFACTURER,
             name=descriptor.productname,
             model=descriptor.productmodel,
-            hw_version=descriptor.hardwareVersion,
-            sw_version=descriptor.firmwareVersion,
+            hw_version=descriptor.hw_version,
+            sw_version=descriptor.fw_version,
             **self.device_info,  # type: ignore
         )
         if descriptor.type.startswith(mc.TYPE_MFC100):
@@ -763,15 +772,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         self.device_entries_info[index_value] = device_info
         return device_info
 
-    @property
-    @override
-    def display_name(self) -> str:
-        return (
-            self.device_entry.name_by_user
-            or self.device_entry.name
-            or self.descriptor.productname
-        )
-
     # interface: ConfigEntryManager
     async def entry_update_listener(
         self, hass: "HomeAssistant", config_entry: "ConfigEntry"
@@ -951,7 +951,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         profile = self.profile
         if profile:
             device_info = profile.get_device_info(self.id)
-            latest_version = profile.get_latest_version(*self.descriptor.type_subtype)
+            latest_version = profile.get_latest_version(self.descriptor)
             latest_versions = profile.get_latest_versions()
         else:
             device_info = None
@@ -961,9 +961,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             for _profile in self.parent.active_profiles():
                 if _profile is profile:
                     continue
-                if latest_version := _profile.get_latest_version(
-                    *self.descriptor.type_subtype
-                ):
+                if latest_version := _profile.get_latest_version(self.descriptor):
                     break
         return {
             "class": type(self).__name__,
@@ -1401,8 +1399,8 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
 
         if oldfirmware != descr.firmware:
             self.schedule_entry_update(True)
-            if oldfirmware.get("version") != descr.firmwareVersion:
-                self.update_device_registry(sw_version=descr.firmwareVersion)
+            if oldfirmware.get("version") != descr.fw_version:
+                self.update_device_registry(sw_version=descr.fw_version)
                 if self.update_firmware:
                     self.update_firmware.flush_state()
             if not self.config.get(mlc.CONF_HOST):
@@ -1694,8 +1692,8 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                         )
 
         # check for firmware updates too
-        if latest_version := profile.get_latest_version(*self.descriptor.type_subtype):
-            self.latest_version = latest_version
+        if latest_version := profile.get_latest_version(self.descriptor):
+            self.descriptor.latest_version = latest_version
             if self.update_firmware:
                 self.update_firmware.flush_state()
             else:

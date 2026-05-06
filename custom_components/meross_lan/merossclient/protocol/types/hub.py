@@ -185,7 +185,10 @@ class Water(SubIdPayload):
 class Digest_SubDevice(_Online, ToggleX, mt.IdPayload):
     """Common fields for subdevices in hub digest."""
 
-    pass
+    ms100: NotRequired[_ms100]
+    tempHumi: NotRequired[_ms130]
+    doorWindow: NotRequired[mt.JsonDict]
+    smokeAlarm: NotRequired[_gs559]
 
 
 class Digest_gs559(Digest_SubDevice):

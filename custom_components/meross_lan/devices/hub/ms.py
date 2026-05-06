@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
     from . import Hub
     from ...helpers.entity import Entity
+    from ...merossclient import SubDeviceDescriptor
     from ...merossclient.protocol import types as mt
 
 
@@ -21,10 +22,8 @@ class SensorSubDevice(SubDevice):
     NS_HUB = (mn_h.Appliance_Hub_Sensor_All,)
 
     def _parse_all(self, payload: dict, /):
-        self._parse_online(payload[mc.KEY_ONLINE])
-        if not self.is_connected:
-            return
-        self._parse_digest_(payload[self.key_digest])
+        if self._parse_online(payload[mc.KEY_ONLINE]):
+            self._parse_digest_(payload[self.key_digest])
 
 
 class gs559(SensorSubDevice, EnumParser):
@@ -99,9 +98,9 @@ class gs559(SensorSubDevice, EnumParser):
     }
     __slots__ = ENTITY_DEFS.keys()
 
-    def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
-        SensorSubDevice.__init__(self, subid, hub, key_digest, model)
-        self.unique_id = f"{hub.id}_{subid}_status"  # LEGACY unique_id scheme
+    def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
+        SensorSubDevice.__init__(self, descriptor, hub, **kwargs)
+        self.unique_id = f"{hub.id}_{descriptor.id}_status"  # LEGACY unique_id scheme
         for key, entity_def in self.__class__.ENTITY_DEFS.items():
             setattr(self, key, entity_def(self))
         Button(self, async_press=self.async_mute, name="Mute")
@@ -183,8 +182,8 @@ class ms100(SensorSubDevice):
         "sensor_humidity",
     )
 
-    def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
-        SensorSubDevice.__init__(self, subid, hub, key_digest, model)
+    def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
+        SensorSubDevice.__init__(self, descriptor, hub, **kwargs)
         self.sensor_temperature = SensorParser(self, **self.TEMPERATURE_ARGS)
         self.sensor_humidity = SensorParser(self, **SensorParser.HUMIDITY_ARGS)
 
@@ -203,8 +202,7 @@ class ms100(SensorSubDevice):
 
     @override
     def _parse_all(self, payload: "mt.hub.Sensor_All_ms100", /):
-        self._parse_online(payload[mc.KEY_ONLINE])
-        if self.is_connected:
+        if self._parse_online(payload[mc.KEY_ONLINE]):
             self._update_sensors(
                 payload[mc.KEY_TEMPERATURE][mc.KEY_LATEST],
                 payload[mc.KEY_HUMIDITY][mc.KEY_LATEST],
@@ -251,7 +249,16 @@ class ms100(SensorSubDevice):
                 handler.next_poll_epoch = 0.0
 
 
+# Slighly different model sharing the same structure and ns support.
+# Here ms100f has tempHum as key_digest but this is handled in actual instance construction
+ms100f = ms100
+
+
 class ms130(ms100):
+    """
+    This device shares the same structure and ns support of ms100 but with a different key_digest ('tempHumi')
+    and some added features (light, more configurations).
+    """
 
     TEMPERATURE_ARGS = SensorParser.TEMPERATURE_ARGS
     # Configure parser for Appliance.Config.DeviceCfg:
@@ -329,9 +336,9 @@ class ms130(ms100):
         },
     } | DeviceCfgParser.init_parser_defs  # type: ignore[assignment]
 
-    def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
-        ms100.__init__(self, subid, hub, key_digest, model)
-        index = mn.IndexType.subId.get(subid, 0, None)
+    def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
+        ms100.__init__(self, descriptor, hub, **kwargs)
+        index = mn.IndexType.subId.get(self.id, 0, None)
         try:
             # Configure parser for Appliance.Control.Sensor.LatestX:
             # {
@@ -349,7 +356,7 @@ class ms130(ms100):
             # }
             hub.ns_handlers[mn.Appliance_Control_Sensor_LatestX].register_parser(
                 SensorLatestXParser(
-                    subid,
+                    self.id,
                     hub,
                     index=index,
                     parsers={
@@ -366,7 +373,7 @@ class ms130(ms100):
         try:
             hub.ns_handlers[mn.Appliance_Config_DeviceCfg].register_parser(
                 DeviceCfgParser(
-                    subid, hub, index=index, parser_defs=ms130.DEVICE_CFG_DEFS
+                    self.id, hub, index=index, parser_defs=ms130.DEVICE_CFG_DEFS
                 )
             )
         except KeyError as ke:
