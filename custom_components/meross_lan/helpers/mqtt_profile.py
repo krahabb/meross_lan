@@ -620,7 +620,12 @@ class MQTTProfile(ConfigEntryManager):
         return None
 
     def get_latest_version(
-        self, type: str, subtype: str, /
+        self,
+        type: str,
+        subtype: str,
+        /,
+        firmware_version: str | None = None,
+        hardware_version: str | None = None,
     ) -> "LatestVersionType | None":
         return None
 

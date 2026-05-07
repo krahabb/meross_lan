@@ -289,16 +289,44 @@ class MerossProfile(MQTTProfile):
         return self._data[self.KEY_DEVICE_INFO].get(uuid)
 
     @override
-    def get_latest_version(self, type: str, subtype: str, /):
+    def get_latest_version(
+        self,
+        type: str,
+        subtype: str,
+        /,
+        firmware_version: str | None = None,
+        hardware_version: str | None = None,
+    ):
         """returns LatestVersionType info if device has an update available"""
         try:
-            return (
-                self._data[self.KEY_LATEST_VERSION_HISTORY][f"{type}:{subtype}"][-1]
-                .values()
-                .__iter__()
-                .__next__()
-            )
+            latest_version_history = self._data[self.KEY_LATEST_VERSION_HISTORY][
+                f"{type}:{subtype}"
+            ]
         except KeyError:
+            return None
+        latest_versions = [
+            latest_version
+            for latest_version_entry in latest_version_history
+            for latest_version in latest_version_entry.values()
+        ]
+        if firmware_version and hardware_version:
+            try:
+                _firmware_version = versiontuple(firmware_version)
+                _hardware_version = versiontuple(hardware_version)
+                if _firmware_version[0] == _hardware_version[0]:
+                    same_train_latest_versions = [
+                        latest_version
+                        for latest_version in latest_versions
+                        if versiontuple(latest_version[mc.KEY_VERSION])[0]
+                        == _firmware_version[0]
+                    ]
+                    if same_train_latest_versions:
+                        latest_versions = same_train_latest_versions
+            except (KeyError, TypeError, ValueError):
+                pass
+        try:
+            return latest_versions[-1]
+        except IndexError:
             return None
 
     @override

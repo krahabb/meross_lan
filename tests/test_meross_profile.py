@@ -25,6 +25,54 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 
+def test_get_latest_version_prefers_hardware_train():
+    profile = mock.Mock()
+    profile._data = {
+        MerossProfile.KEY_LATEST_VERSION_HISTORY: {
+            "mss110:us": [
+                {"2026-05-07T00:00:00+00:00": {mc.KEY_VERSION: "7.3.46"}},
+                {"2026-05-07T00:01:00+00:00": {mc.KEY_VERSION: "4.2.14"}},
+            ]
+        }
+    }
+
+    assert (
+        MerossProfile.get_latest_version(profile, "mss110", "us")[mc.KEY_VERSION]
+        == "4.2.14"
+    )
+    assert (
+        MerossProfile.get_latest_version(
+            profile, "mss110", "us", "4.2.14", "4.0.0"
+        )[mc.KEY_VERSION]
+        == "4.2.14"
+    )
+
+    profile._data[MerossProfile.KEY_LATEST_VERSION_HISTORY]["mss110:us"] = [
+        {"2026-05-07T00:00:00+00:00": {mc.KEY_VERSION: "4.2.14"}},
+        {"2026-05-07T00:01:00+00:00": {mc.KEY_VERSION: "7.3.46"}},
+    ]
+    assert (
+        MerossProfile.get_latest_version(profile, "mss110", "us")[mc.KEY_VERSION]
+        == "7.3.46"
+    )
+    assert (
+        MerossProfile.get_latest_version(
+            profile, "mss110", "us", "4.2.14", "4.0.0"
+        )[mc.KEY_VERSION]
+        == "4.2.14"
+    )
+
+    profile._data[MerossProfile.KEY_LATEST_VERSION_HISTORY]["mss110:us"][-1] = {
+        "2026-05-07T00:01:00+00:00": {mc.KEY_VERSION: "4.2.15"}
+    }
+    assert (
+        MerossProfile.get_latest_version(
+            profile, "mss110", "us", "4.2.14", "4.0.0"
+        )[mc.KEY_VERSION]
+        == "4.2.15"
+    )
+
+
 async def test_meross_profile(
     request,
     hass: "HomeAssistant",

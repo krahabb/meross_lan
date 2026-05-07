@@ -951,7 +951,11 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         profile = self.profile
         if profile:
             device_info = profile.get_device_info(self.id)
-            latest_version = profile.get_latest_version(*self.descriptor.type_subtype)
+            latest_version = profile.get_latest_version(
+                *self.descriptor.type_subtype,
+                self.descriptor.firmwareVersion,
+                self.descriptor.hardwareVersion,
+            )
             latest_versions = profile.get_latest_versions()
         else:
             device_info = None
@@ -962,7 +966,9 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 if _profile is profile:
                     continue
                 if latest_version := _profile.get_latest_version(
-                    *self.descriptor.type_subtype
+                    *self.descriptor.type_subtype,
+                    self.descriptor.firmwareVersion,
+                    self.descriptor.hardwareVersion,
                 ):
                     break
         return {
@@ -1694,7 +1700,11 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                         )
 
         # check for firmware updates too
-        if latest_version := profile.get_latest_version(*self.descriptor.type_subtype):
+        if latest_version := profile.get_latest_version(
+            *self.descriptor.type_subtype,
+            self.descriptor.firmwareVersion,
+            self.descriptor.hardwareVersion,
+        ):
             self.latest_version = latest_version
             if self.update_firmware:
                 self.update_firmware.flush_state()
