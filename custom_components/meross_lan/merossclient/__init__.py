@@ -846,6 +846,10 @@ class DeviceDescriptor(Descriptor):
             pass
         return _servers
 
+    def get_subdevice(self, subid: str) -> SubDeviceDescriptor:
+        """Returns the SubDeviceDescriptor matching the sub_id"""
+        return next((sd for sd in self.subdevices if sd.id == subid))
+
     @override
     def get_upgrade_info(self, /) -> tuple[str | None, ...]:
         try:

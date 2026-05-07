@@ -4,7 +4,6 @@ from random import randint
 from typing import TYPE_CHECKING
 
 from custom_components.meross_lan.merossclient import (
-    SubDeviceDescriptor,
     extract_dict_payloads,
     get_element_by_key,
     update_dict_strict,
@@ -23,17 +22,6 @@ if TYPE_CHECKING:
     from custom_components.meross_lan.merossclient.protocol import types as mt
 
     from . import EmulatorDescriptor
-
-
-# TODO: wrap-up these helpers in a SubDeviceDescriptor-like class
-# to manage type/version and common info (like id/online maybe more)
-
-
-def get_mts_digest(digest: "mt.JsonMapping") -> "mt.JsonDict | None":
-    """Parses the subdevice dict from the hub digest to identify if it's
-    an mts-like (and so queried through 'Hub.Mts100.All')."""
-    subdevtype = SubDeviceDescriptor.get_key_digest(digest)
-    return digest[subdevtype] if subdevtype.startswith(mc.TYPE_MTS) else None
 
 
 class HubMixin(Emulator if TYPE_CHECKING else object):
@@ -376,14 +364,6 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
                     digest[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = 170
             # TODO: add randomization for other subdevices payloads
 
-    def _get_subdevice_digest(self, subdevice_id: str):
-        """returns the subdevice dict from the hub digest key"""
-        return get_element_by_key(
-            self.descriptor.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE],
-            subdevice_id,
-            mc.KEY_ID,
-        )
-
     def _get_subdevice_namespace(
         self, subdevice_id: str, ns: mn.Namespace, *, force_create: bool = True
     ) -> "dict[str, Any]":
@@ -442,11 +422,10 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
         for p_mode in payload[mc.KEY_MODE]:
             subdevice_id = p_mode[mc.KEY_ID]
             mts_mode = p_mode[mc.KEY_STATE]
-            p_subdevice_digest = self._get_subdevice_digest(subdevice_id)
-            mts_digest = get_mts_digest(p_subdevice_digest)
-            if mts_digest and mc.KEY_MODE in mts_digest:
+            subdevice = self.descriptor.get_subdevice(subdevice_id)
+            mts_digest = subdevice.digest[subdevice.key_digest]
+            if mc.KEY_MODE in mts_digest:
                 mts_digest[mc.KEY_MODE] = mts_mode
-
             p_subdevice_mode = self._get_subdevice_namespace(
                 subdevice_id, mn_h.Appliance_Hub_Mts100_Mode
             )
@@ -523,10 +502,9 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
     def _SET_Appliance_Hub_ToggleX(self, header, payload):
         for p_togglex in payload[mc.KEY_TOGGLEX]:
             subdevice_id = p_togglex[mc.KEY_ID]
-            p_subdevice_digest = self._get_subdevice_digest(subdevice_id)
-            if mc.KEY_ONOFF in p_subdevice_digest:
-                p_subdevice_digest[mc.KEY_ONOFF] = p_togglex[mc.KEY_ONOFF]
-
+            subdevice = self.descriptor.get_subdevice(subdevice_id)
+            if mc.KEY_ONOFF in subdevice.digest:
+                subdevice.digest[mc.KEY_ONOFF] = p_togglex[mc.KEY_ONOFF]
             p_subdevice_all = self._get_subdevice_all(subdevice_id)
             if mc.KEY_TOGGLEX in p_subdevice_all:
                 # beware the "onoff" key in "all" is a embedded in the "togglex" dict
