@@ -614,7 +614,7 @@ class EffectLight(Light):
     )
 
     def __init__(self, id, device: "Device", /, **kwargs: "Unpack[Light.Args]"):
-        self.handler_light_effect = NamespaceHandler(
+        self.handler_light_effect = handler_light_effect = NamespaceHandler(
             mn.Appliance_Control_Light_Effect,
             device,
             handler=self._handle_Appliance_Control_Light_Effect,
@@ -623,14 +623,18 @@ class EffectLight(Light):
         # This is a 'new' (2025-06-17) key appearing in msl320cpr digest.
         # The key itself is 'light.entity' and carries the effect list
         # (same as Appliance.Control.Light.Effect)
-        self._light_effects = self.handler_light_effect.digest  # type: ignore
+        self._light_effects = handler_light_effect.digest  # type: ignore
         if self._light_effects:
             kwargs["effect_list"] = [
                 _light_effect[mc.KEY_EFFECTNAME]
                 for _light_effect in self._light_effects
             ] + EffectLight.init_effect_list
-            self.handler_light_effect.parse_digest = self._update_effects  # type: ignore
-            # BEWARE: curcular ref on the way here
+            handler_light_effect.parse_digest = self._update_effects  # type: ignore
+
+            def _handler_light_effect_shutdown():
+                del handler_light_effect.parse_digest
+
+            handler_light_effect.shutdown_broadcast.add(_handler_light_effect_shutdown)
         else:
             self._light_effects = []
         Light.__init__(self, id, device, **kwargs)
@@ -639,6 +643,9 @@ class EffectLight(Light):
             # special rgb channels mgmt here
             self._rgb_to_native = rgbw_patch_to_native
             self._native_to_rgb = native_to_rgbw_patch
+
+    def shutdown(self):
+        super().shutdown()
 
     @override
     def flush_state(self):
@@ -749,7 +756,7 @@ class EffectLight(Light):
         # already flush the updated 'effect_list' anyway.
         self._update_effects(message.payload[mc.KEY_EFFECT])
 
-    def _update_effects(self, light_effects: list[mt.control.Light_Effect], /):
+    def _update_effects(self, light_effects: list["mt.control.Light_Effect"], /):
         self._light_effects = light_effects
         self.effect_list = [
             _light_effect[mc.KEY_EFFECTNAME] for _light_effect in light_effects
