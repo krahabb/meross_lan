@@ -512,15 +512,7 @@ def get_productnametype(producttype: str) -> str:
     return f"{name} ({producttype})" if name is not producttype else producttype
 
 
-def get_subdevice_key_digest(digest: "mt.JsonMapping") -> str:
-    """Parses the subdevice dict from the hub digest to identify it's 'type'.
-    Raises StopIteration if unable to find a valid digest key."""
-    return (
-        p_key for p_key, p_value in digest.items() if type(p_value) is dict
-    ).__next__()
-
-
-class Descriptor(dict[str, "Any"]):
+class Descriptor:
     """
     Base class for device descriptors. This implements a standard interface common to both Devices
     and SubDevices.
@@ -547,7 +539,7 @@ class Descriptor(dict[str, "Any"]):
         "productnametype": lambda _self: get_productnametype(_self.type),
         "productmodel": lambda _self: f"{_self.type}-{_self.subType}",
         "type_class": lambda _self: (
-            re.match(r"^[a-z]*", _self.type).group(0) # type: ignore # This will always match
+            re.match(r"^[a-z]*", _self.type).group(0)  # type: ignore # This will always match
         ),
         "is_mts": lambda _self: _self.type_class == mc.TYPE_MTS,
         "is_refoss": lambda _self: mc.RefossModel.match(_self.type),
@@ -616,6 +608,7 @@ class SubDeviceDescriptor(Descriptor):
 
     if TYPE_CHECKING:
         parent: "DeviceDescriptor"
+        digest: mt.hub.Digest_SubDevice
         id: Final[str]
 
         _DYNAMIC_ATTRS: ClassVar[Mapping[str, Callable[["SubDeviceDescriptor"], Any]]]
@@ -632,6 +625,14 @@ class SubDeviceDescriptor(Descriptor):
     }
 
     @staticmethod
+    def get_key_digest(digest: "mt.JsonMapping") -> str:
+        """Parses the subdevice dict from the hub digest to identify it's 'type'.
+        Raises StopIteration if unable to find a valid digest key."""
+        return (
+            p_key for p_key, p_value in digest.items() if type(p_value) is dict
+        ).__next__()
+
+    @staticmethod
     def _infer_type_from_digest(_self: "SubDeviceDescriptor", /) -> str:
         """Infers the subdevice type from the digest keys. This is needed since some subdevices
         don't include a 'type' key in their digest and we need to infer it from the keys present in the digest.
@@ -639,29 +640,33 @@ class SubDeviceDescriptor(Descriptor):
         try:
             return SubDeviceDescriptor.DIGEST_TYPE_MAP[_self.key_digest]
         except KeyError:
-            if _self.key_digest == mc.KEY_MST:
+            if mc.KEY_MST in _self.digest:
                 return (
-                    mc.TYPE_MST200 if "waDet" in _self[mc.KEY_MST] else mc.TYPE_MST100
+                    mc.TYPE_MST200
+                    if "waDet" in _self.digest[mc.KEY_MST]
+                    else mc.TYPE_MST100
                 )
             return _self.key_digest
 
     _DYNAMIC_ATTRS = {
-        "key_digest": lambda _self: (
-            p_key for p_key, p_value in _self.items() if type(p_value) is dict
-        ).__next__(),
+        "key_digest": lambda _self: SubDeviceDescriptor.get_key_digest(_self.digest),
         "type": lambda _self: SubDeviceDescriptor._infer_type_from_digest(_self),
     }
 
     __slots__ = (
         "parent",
+        "digest",
         "id",
         *(set(_DYNAMIC_ATTRS.keys()) - set(Descriptor.__slots__)),
     )
 
     def __init__(self, parent: "DeviceDescriptor", digest: "mt.hub.Digest_SubDevice"):
-        Descriptor.__init__(self, digest)
         self.parent = parent
+        self.digest = digest
         self.id = digest[mc.KEY_ID]
+
+    def update(self, digest: "mt.hub.Digest_SubDevice"):
+        self.digest = digest
 
     @override
     def get_upgrade_payload(self, /) -> "mt.control.Upgrade":
@@ -692,6 +697,7 @@ class DeviceDescriptor(Descriptor):
 
         _DYNAMIC_ATTRS: ClassVar[Mapping[str, Callable[["DeviceDescriptor"], Any]]]
 
+        payload: mt.JsonDict
         channels: Final[Sequence[int]]
         # cached accessors to native keys in Appliance.System.All payload
         all: mt.system.All
@@ -734,8 +740,8 @@ class DeviceDescriptor(Descriptor):
     }
 
     _DYNAMIC_ATTRS = {
-        mc.KEY_ALL: lambda _self: _self.get(mc.KEY_ALL, mn.EMPTY_DICT),
-        mc.KEY_ABILITY: lambda _self: _self.get(mc.KEY_ABILITY, mn.EMPTY_DICT),
+        mc.KEY_ALL: lambda _self: _self.payload.get(mc.KEY_ALL, mn.EMPTY_DICT),
+        mc.KEY_ABILITY: lambda _self: _self.payload.get(mc.KEY_ABILITY, mn.EMPTY_DICT),
         mc.KEY_DIGEST: lambda _self: _self.all.get(mc.KEY_DIGEST, mn.EMPTY_DICT),
         mc.KEY_CONTROL: lambda _self: _self.all.get(mc.KEY_CONTROL, mn.EMPTY_DICT),
         mc.KEY_SYSTEM: lambda _self: _self.all.get(mc.KEY_SYSTEM, mn.EMPTY_DICT),
@@ -770,13 +776,14 @@ class DeviceDescriptor(Descriptor):
     }
 
     __slots__ = (
+        "payload",
         "channels",
         "mcu",
         *(set(_DYNAMIC_ATTRS.keys()) - set(Descriptor.__slots__)),
     )
 
     def __init__(self, payload: "mt.JsonDict"):
-        Descriptor.__init__(self, payload)
+        self.payload = payload
         # infer supported channels from device type
         device_type = self.type
         for _type, _channels in DeviceDescriptor.TYPE_CHANNELS_MAP.items():
@@ -816,7 +823,7 @@ class DeviceDescriptor(Descriptor):
             self.mcu = None
 
     def update(self, payload: "mt.JsonDict"):
-        Descriptor.update(self, payload)
+        self.payload.update(payload)
         self._reset()
 
     def update_time(self, p_time: "mt.system.Time"):

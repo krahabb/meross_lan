@@ -4,10 +4,9 @@ from random import randint
 from typing import TYPE_CHECKING
 
 from custom_components.meross_lan.merossclient import (
-    delete_element_by_key,
+    SubDeviceDescriptor,
     extract_dict_payloads,
     get_element_by_key,
-    get_subdevice_key_digest,
     update_dict_strict,
 )
 from custom_components.meross_lan.merossclient.protocol import (
@@ -33,7 +32,7 @@ if TYPE_CHECKING:
 def get_mts_digest(digest: "mt.JsonMapping") -> "mt.JsonDict | None":
     """Parses the subdevice dict from the hub digest to identify if it's
     an mts-like (and so queried through 'Hub.Mts100.All')."""
-    subdevtype = get_subdevice_key_digest(digest)
+    subdevtype = SubDeviceDescriptor.get_key_digest(digest)
     return digest[subdevtype] if subdevtype.startswith(mc.TYPE_MTS) else None
 
 
@@ -212,10 +211,9 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
         """
 
         p_subdevice_all: "mt.JsonDict"
-
-        for p_subdevice in subdevices:
-            subdevice_id = p_subdevice.id
-            key_digest = p_subdevice.key_digest
+        for subdevice in subdevices:
+            subdevice_id = subdevice.id
+            key_digest = subdevice.key_digest
 
             try:
                 for subid_ns in self.DIGEST_SUBID_NAMESPACES_MAP[key_digest]:
@@ -272,7 +270,7 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
                 match key_digest:
                     case mc.KEY_MST:
                         # mst devices have 'funny' syntax
-                        if "waDet" in p_subdevice[mc.KEY_MST]:  # type: ignore
+                        if "waDet" in subdevice.digest[mc.KEY_MST]:  # type: ignore
                             # mst200
                             channels = (1, 2)
                             self.update_namespace_state(
@@ -334,8 +332,8 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
                 # state is maintained consistent. For instance, the 'temperature' dict
                 # in the subdevice ns_all payload is the same as the corresponding
                 # payload in Mts100.Temperature
-                if mc.KEY_SCHEDULEBMODE in p_subdevice:
-                    p_subdevice_all[mc.KEY_SCHEDULEBMODE] = p_subdevice[
+                if mc.KEY_SCHEDULEBMODE in subdevice.digest:
+                    p_subdevice_all[mc.KEY_SCHEDULEBMODE] = subdevice.digest[
                         mc.KEY_SCHEDULEBMODE
                     ]
             for subnamespace, digest_key in NS_TO_DIGEST_MAP[ns_all].items():
@@ -352,8 +350,8 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
                         # we don't have the state in the specific ns
                         # so we default it eventually initializing with the digest data
                         p_subdevice_substate = {mc.KEY_ID: subdevice_id}
-                        if digest_key in p_subdevice:
-                            p_subdevice_substate[digest_key] = p_subdevice[
+                        if digest_key in subdevice.digest:
+                            p_subdevice_substate[digest_key] = subdevice.digest[
                                 digest_key
                             ]
                         ns_state[subnamespace].append(p_subdevice_substate)
@@ -364,17 +362,18 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
         for subdevice in self.descriptor.subdevices:
             # we randomly change the status of subdevices to emulate
             # motion/smoke/doorwindow triggers
-            if mc.KEY_DOORWINDOW in subdevice:
+            digest = subdevice.digest
+            if mc.KEY_DOORWINDOW in digest:
                 if randint(0, 4) == 0:
-                    subdevice[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 1
+                    digest[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 1
                 else:
-                    subdevice[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 0
-            elif mc.KEY_SMOKEALARM in subdevice:
+                    digest[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 0
+            elif mc.KEY_SMOKEALARM in digest:
                 a = randint(0, 2)
                 if a == 0:
-                    subdevice[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = randint(17, 27)
+                    digest[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = randint(17, 27)
                 elif a == 1:
-                    subdevice[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = 170
+                    digest[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = 170
             # TODO: add randomization for other subdevices payloads
 
     def _get_subdevice_digest(self, subdevice_id: str):

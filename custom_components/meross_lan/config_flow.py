@@ -809,7 +809,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         return (
             {
                 mlc.CONF_HOST: host,
-                mlc.CONF_PAYLOAD: descriptor,
+                mlc.CONF_PAYLOAD: descriptor.payload,
                 mlc.CONF_KEY: http_client.key,
                 mlc.CONF_DEVICE_ID: descriptor.uuid,
             },
@@ -971,7 +971,7 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
                 device_config = {
                     mlc.CONF_KEY: "",
                     mlc.CONF_DEVICE_ID: uuid,
-                    mlc.CONF_PAYLOAD: descriptor,
+                    mlc.CONF_PAYLOAD: descriptor.payload,
                     mlc.CONF_PROTOCOL: Transport.BLUETOOTH,
                 }
                 self.clone_api_diagnostic_config(device_config)

@@ -1215,7 +1215,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
 
     def schedule_entry_update(self, query_abilities: bool, /):
         """
-        Schedule the ConfigEntry update due to self.descriptor changing.
+        Schedule the ConfigEntry update (in 5 sec) due to self.descriptor changing.
         """
         self.schedule_async_callback(
             5,
@@ -1247,6 +1247,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                         *mn.Appliance_System_Ability.request_default
                     )
                 ).payload[mc.KEY_ABILITY]
+                # Our entry_update_listener will detect and trigger a reload if needed.
             self.parent.config_entries.async_update_entry(self.config_entry, data=data)
 
         # we also take the time to sync our tz to the device timezone

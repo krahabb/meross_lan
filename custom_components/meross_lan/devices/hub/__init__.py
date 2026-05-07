@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, override
 from ... import const as mlc
 from ...button import Button
 from ...helpers import device as mld, entity as mle
-from ...merossclient import async_import_module, device
+from ...merossclient import SubDeviceDescriptor, async_import_module, device
 from ...merossclient.device.handler import NamespaceHandler
 from ...merossclient.protocol import const as mc, namespaces as mn
 from ...merossclient.protocol.namespaces import hub as mn_h
@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from ...helpers.device import MerossMessage
     from ...helpers.meross_profile import DeviceInfoExtType
     from ...helpers.mqtt_profile import MQTTProfile
-    from ...merossclient import SubDeviceDescriptor
     from ...merossclient.cloudapi import SubDeviceInfoType
     from ...merossclient.protocol import types as mt
     from ...merossclient.protocol.namespaces import Namespace
@@ -45,6 +44,7 @@ class ApplianceDigestHubHandler(NamespaceHandler):
 
     def _handle(self, message: "MerossMessage"):
         self.digest = message.payload[mc.KEY_HUB]
+        self.parent.descriptor.digest[mc.KEY_HUB] = self.digest
         self.parent.parse_digest(self.digest)
 
     def parse_digest(self, digest: "mt.hub.Digest", /):
@@ -152,7 +152,7 @@ class Hub(mld.Device):
                     self.log(
                         self.WARNING,
                         "Unable to detect subdevice model for %s. Likely offline.",
-                        _payload=descriptor,
+                        _payload=descriptor.digest,
                     )
                     continue
                 descriptor.type = device_entry.model or "unknown"
@@ -163,36 +163,7 @@ class Hub(mld.Device):
                 else:
                     descriptor.key_digest = descriptor.type
 
-            module_name = descriptor.type_class
-            if module_name == "gs":  # smokeAlarm is defined in 'ms' module
-                module_name = "ms"
-            try:
-                subdev_module = await async_import_module(
-                    f".devices.hub.{module_name}",
-                    self.NAMESPACE_INIT_PACKAGE,
-                )
-                subdevice_class: type[SubDevice] = getattr(
-                    subdev_module, descriptor.type
-                )
-            except Exception as e:
-                self.log_exception(
-                    self.WARNING,
-                    e,
-                    "detecting subdevice model (digest: %s). Proceeding with fall-back",
-                    _payload=descriptor,
-                )
-                subdevice_class = SubDevice
-
-            try:
-                subdevice_class(descriptor, self)
-            except Exception as exception:
-                self.log_exception(
-                    self.WARNING,
-                    exception,
-                    "initializing subdevice class '%s' (digest: %s)",
-                    subdevice_class.__name__,
-                    _payload=descriptor,
-                )
+            await self._async_build_subdevice(descriptor)
 
         for subdevice_id, device_entry in registry_subdevices.items():
             self.create_issue(
@@ -247,22 +218,45 @@ class Hub(mld.Device):
         subdevices = dict(self.subdevices)
         for p_subdevice_digest in p_hub[mc.KEY_SUBDEVICE]:
             try:
-                subdevice_id = p_subdevice_digest[mc.KEY_ID]
+                subid = p_subdevice_digest[mc.KEY_ID]
                 try:
-                    subdevice = subdevices.pop(subdevice_id)
+                    subdevice = subdevices.pop(subid)
                 except KeyError:
-                    if subdevice_id in self.subdevices:
+                    if subid in self.subdevices:
                         # this shouldnt but happened in a trace (#331)
-                        self.subdevices[subdevice_id].log_duplicated()
-                    else:  # full reload to cleanly add a new subdevice
-                        # TODO: we could likely add on the fly (just register newly added entities)
-                        # without reloading but we still should save the new digest in config entry.
-                        self.schedule_entry_update(True)
+                        self.subdevices[subid].log_duplicated()
+                        continue
+
+                    descriptor = SubDeviceDescriptor(
+                        self.descriptor, p_subdevice_digest
+                    )
+                    try:
+                        descriptor.key_digest
+                    except StopIteration:
+                        self.log(
+                            self.WARNING,
+                            "Unable to detect model for new subdevice (id:%s digest:%s). Likely offline.",
+                            subid,
+                            _payload=p_subdevice_digest,
+                            timeout=14400,
+                        )
+                        continue
+                    self.schedule_async_callback(
+                        2, self._async_build_subdevice, descriptor
+                    )
+                    # schedule_entry_update will also check abilities
+                    # and issue a ConfigEntry reload if necessary.
+                    self.schedule_entry_update(True)
                 else:
                     subdevice.parse_digest(p_subdevice_digest)
             except Exception as exception:
                 self.log_exception(
-                    self.WARNING, exception, "parse_digest(%s)", p_subdevice_digest
+                    self.WARNING,
+                    exception,
+                    "parse_digest(id:%s digest:%s)",
+                    p_subdevice_digest.get(mc.KEY_ID),
+                    _payload=p_subdevice_digest,
+                    timeout=14400,
                 )
 
         if subdevices:
@@ -291,6 +285,40 @@ class Hub(mld.Device):
         super()._handle_Appliance_System_All(message)
         self.parse_digest(self.descriptor.digest[mc.KEY_HUB])
 
+    async def _async_build_subdevice(self, descriptor: "SubDeviceDescriptor", /):
+        module_name = descriptor.type_class
+        if module_name == "gs":  # smokeAlarm is defined in 'ms' module
+            module_name = "ms"
+        try:
+            subdev_module = await async_import_module(
+                f".devices.hub.{module_name}",
+                self.NAMESPACE_INIT_PACKAGE,
+            )
+            subdevice_class: type[SubDevice] = getattr(subdev_module, descriptor.type)
+        except Exception as e:
+            self.log_exception(
+                self.WARNING,
+                e,
+                "subdevice model lookup (id:%s digest:%s). Proceeding with fall-back",
+                descriptor.id,
+                _payload=descriptor.digest,
+                timeout=14400,
+            )
+            subdevice_class = SubDevice
+
+        try:
+            subdevice_class(descriptor, self)
+        except Exception as exception:
+            self.log_exception(
+                self.WARNING,
+                exception,
+                "subdevice class '%s' initialization (id:%s digest:%s)",
+                subdevice_class.__name__,
+                descriptor.id,
+                _payload=descriptor.digest,
+                timeout=14400,
+            )
+
 
 class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
     """
@@ -317,54 +345,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
     )
 
     __SLOTS__ = ("key_digest",)
-
-    @staticmethod
-    async def async_build(hub: Hub, descriptor: "SubDeviceDescriptor", /):
-        # parses the subdevice payload in 'digest' to look for a well-known type
-        # and builds accordingly
-        hub.remove_issue(mlc.ISSUE_HUB_SUBDEVICE_REMOVED, descriptor.id)
-        try:
-            try:
-                key_digest = descriptor.key_digest
-            except StopIteration:
-                # the hub could report incomplete info anytime so beware.
-                # this is true when subdevice is offline and hub has no recent info
-                # we'll check our device registry for luck.
-                # The relationship between model and key_digest is not 1:1 so
-                # we need to accurately map the correct class.
-                device_entry = hub.device_registry.async_get_device(
-                    identifiers={(mlc.DOMAIN, descriptor.id)}
-                )
-                assert device_entry, (
-                    "Device entry not found for subdevice with id %s" % descriptor.id
-                )
-                descriptor.type = device_entry.model or "unknown"
-                for key_digest, _type in SubDeviceDescriptor.DIGEST_TYPE_MAP.items():
-                    if _type == descriptor.type:
-                        descriptor.key_digest = key_digest
-                        break
-                else:
-                    descriptor.key_digest = descriptor.type
-
-            module_name = descriptor.type_class
-            if module_name == "gs":  # smokeAlarm is defined in 'ms' module
-                module_name = "ms"
-            subdev_module = await async_import_module(
-                f".devices.hub.{module_name}",
-                hub.NAMESPACE_INIT_PACKAGE,
-            )
-            subdevice_class = getattr(subdev_module, descriptor.type)
-            if TYPE_CHECKING:
-                assert issubclass(subdevice_class, SubDevice)
-            return subdevice_class(descriptor, hub)
-        except Exception as e:
-            hub.log_exception(
-                hub.WARNING,
-                e,
-                "detecting subdevice model for %s. Proceeding with fall-back",
-                _payload=descriptor,
-            )
-            return SubDevice(descriptor, hub)
 
     def __init_subclass__(cls):
         super().__init_subclass__()
@@ -491,6 +471,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
             "doorWindow": {"status": 0, "lmTime": 1681983460}
         }
         """
+        self.descriptor.update(payload)
         if self._parse_online(payload):
             self._parse_digest_(payload[self.key_digest])
 
