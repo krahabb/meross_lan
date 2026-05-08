@@ -1,6 +1,7 @@
 """Test for meross cloud profiles"""
 
 from typing import TYPE_CHECKING
+from types import SimpleNamespace
 from unittest import mock
 
 from homeassistant.helpers import device_registry as dr
@@ -26,7 +27,16 @@ if TYPE_CHECKING:
 
 
 def test_get_latest_version_prefers_hardware_train():
-    profile = mock.Mock()
+    class ProfileStub:
+        KEY_LATEST_VERSION_HISTORY = MerossProfile.KEY_LATEST_VERSION_HISTORY
+
+    profile = ProfileStub()
+    descriptor = SimpleNamespace(
+        type="mss110",
+        subType="us",
+        fw_version="4.2.14",
+        hw_version="4.0.0",
+    )
     profile._data = {
         MerossProfile.KEY_LATEST_VERSION_HISTORY: {
             "mss110:us": [
@@ -37,13 +47,7 @@ def test_get_latest_version_prefers_hardware_train():
     }
 
     assert (
-        MerossProfile.get_latest_version(profile, "mss110", "us")[mc.KEY_VERSION]
-        == "4.2.14"
-    )
-    assert (
-        MerossProfile.get_latest_version(
-            profile, "mss110", "us", "4.2.14", "4.0.0"
-        )[mc.KEY_VERSION]
+        MerossProfile.get_latest_version(profile, descriptor)[mc.KEY_VERSION]
         == "4.2.14"
     )
 
@@ -52,13 +56,7 @@ def test_get_latest_version_prefers_hardware_train():
         {"2026-05-07T00:01:00+00:00": {mc.KEY_VERSION: "7.3.46"}},
     ]
     assert (
-        MerossProfile.get_latest_version(profile, "mss110", "us")[mc.KEY_VERSION]
-        == "7.3.46"
-    )
-    assert (
-        MerossProfile.get_latest_version(
-            profile, "mss110", "us", "4.2.14", "4.0.0"
-        )[mc.KEY_VERSION]
+        MerossProfile.get_latest_version(profile, descriptor)[mc.KEY_VERSION]
         == "4.2.14"
     )
 
@@ -66,9 +64,29 @@ def test_get_latest_version_prefers_hardware_train():
         "2026-05-07T00:01:00+00:00": {mc.KEY_VERSION: "4.2.15"}
     }
     assert (
-        MerossProfile.get_latest_version(
-            profile, "mss110", "us", "4.2.14", "4.0.0"
-        )[mc.KEY_VERSION]
+        MerossProfile.get_latest_version(profile, descriptor)[mc.KEY_VERSION]
+        == "4.2.15"
+    )
+
+    profile._data[MerossProfile.KEY_LATEST_VERSION_HISTORY]["mss110:us"] = [
+        {"2026-05-07T00:00:00+00:00": {mc.KEY_VERSION: "7.3.46"}},
+    ]
+    descriptor.fw_version = "4.2.14"
+    assert MerossProfile.get_latest_version(profile, descriptor) is None
+
+    descriptor.fw_version = "3.2.14"
+    assert (
+        MerossProfile.get_latest_version(profile, descriptor)[mc.KEY_VERSION]
+        == "7.3.46"
+    )
+
+    profile._data[MerossProfile.KEY_LATEST_VERSION_HISTORY]["mss110:us"] = [
+        {"2026-05-07T00:00:00+00:00": {mc.KEY_VERSION: None}},
+        {"2026-05-07T00:01:00+00:00": {mc.KEY_VERSION: "4.2.15"}},
+    ]
+    descriptor.fw_version = "4.2.14"
+    assert (
+        MerossProfile.get_latest_version(profile, descriptor)[mc.KEY_VERSION]
         == "4.2.15"
     )
 

@@ -270,7 +270,7 @@ class GarageDoorConfig(handler.MappingParserHandler):
         self.handler = handler
 
 
-class GarageDoor(Cover):
+class GarageDoor(Cover.RestoreEntity, Cover):
 
     if TYPE_CHECKING:
 
@@ -320,10 +320,10 @@ class GarageDoor(Cover):
 
     async def async_added_to_hass(self):
         with self.exception_warning("restoring previous state"):
-            if last_state := await self.get_last_state_available():
+            if restored_state := self._async_get_restored_data():
                 try:
                     # to restore previously estimated transition duration
-                    self._transition_duration = last_state.attributes[
+                    self._transition_duration = restored_state.state.attributes[
                         self.ATTR_TRANSITION_DURATION
                     ]
                     self.extra_state_attributes[self.ATTR_TRANSITION_DURATION] = (
@@ -486,7 +486,7 @@ class GarageDoor(Cover):
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
         descriptor = device.descriptor
         if descriptor.type.startswith(mc.TYPE_MSG200) and (
-            descriptor.firmware_version <= (4, 2, 1)
+            descriptor.fw_version_t <= (4, 2, 1)
         ):
             # trying to patch lacking of state polling (#538)
             # It's not sure querying with the list of channels works.

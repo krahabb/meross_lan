@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from homeassistant.helpers.service_info.mqtt import MqttServiceInfo
     import paho.mqtt.client as paho_mqtt
 
-    from ..merossclient import HostAddress
+    from ..merossclient import Descriptor, HostAddress
     from ..merossclient.client import Direction
     from ..merossclient.cloudapi import DeviceInfoType, LatestVersionType
     from ..merossclient.logging import Loggable
@@ -620,12 +620,7 @@ class MQTTProfile(ConfigEntryManager):
         return None
 
     def get_latest_version(
-        self,
-        type: str,
-        subtype: str,
-        /,
-        firmware_version: str | None = None,
-        hardware_version: str | None = None,
+        self, descriptor: "Descriptor", /
     ) -> "LatestVersionType | None":
         return None
 

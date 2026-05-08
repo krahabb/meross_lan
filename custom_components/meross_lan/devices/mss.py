@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from ..merossclient.protocol import types as mt
 
 
-class _ElectricitySensor(SensorParser):
+class _ElectricitySensor(SensorParser.RestoreEntity, SensorParser):
     """
     This sensor acts as the main parser for 'Electricity' and 'ElectricityX' namespaces
     taking care of power, current, voltage, etc, sensors for the same channel.
@@ -105,7 +105,7 @@ class _ElectricitySensor(SensorParser):
         # state restoration is only needed on cold-start and we have to discriminate
         # from when this happens while the device is already working. In general
         # the sensor state is always kept in the instance even when it's disabled
-        # so we don't want to overwrite that should we enable an entity after
+        # so we don't want to overwrite that, should we enable an entity after
         # it has been initialized. Checking native_value here should be enough
         # since it's surely 0 on boot/initial setup (entities are added before
         # device reading data). If an entity is disabled on startup of course our state
@@ -113,13 +113,12 @@ class _ElectricitySensor(SensorParser):
         # anyway)
         if not self.native_value:
             with self.exception_warning("restoring previous state"):
-                state = await self.get_last_state_available()
-                if state and (state.last_updated >= dt_util.start_of_local_day()):
-                    # state should be an int though but in case we decide some
-                    # tweaks here or there this conversion is safer (allowing for a float state)
-                    # and more consistent
-                    self._estimate = float(state.state)
-                    self.native_value = int(self._estimate)
+                if restored_state := self._async_get_restored_data():
+                    state = restored_state.state
+                    if state.last_updated >= dt_util.start_of_local_day():
+                        self._estimate = float(state.state)
+                        self.native_value = int(self._estimate)
+
         await SensorParser.async_added_to_hass(self)
 
     async_will_remove_from_hass = SensorParser.async_will_remove_from_hass  # type: ignore[assignment]
@@ -396,7 +395,9 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
     )
 
 
-class ConsumptionXSensor(SensorParser, EntityNamespaceMixin):
+class ConsumptionXSensor(
+    SensorParser.RestoreEntity, SensorParser, EntityNamespaceMixin
+):
 
     if TYPE_CHECKING:
         ATTR_OFFSET: Final
@@ -470,7 +471,8 @@ class ConsumptionXSensor(SensorParser, EntityNamespaceMixin):
         # anyway)
         if (self.native_value is None) and not self.extra_state_attributes:
             with self.exception_warning("restoring previous state"):
-                if state := await self.get_last_state_available():
+                if restored_state := self._async_get_restored_data():
+                    state = restored_state.state
                     # check if the restored sample is fresh enough i.e. it was
                     # updated after the device midnight for today..else it is too
                     # old to be good. Since we don't have actual device epoch we

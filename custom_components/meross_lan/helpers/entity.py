@@ -4,17 +4,10 @@ We also try to 'commonize' HA core symbols import in order to better manage
 versioning
 """
 
-from functools import cached_property, partial
+from functools import cached_property
 from typing import TYPE_CHECKING, final, overload, override
 
-try:
-    from homeassistant.components.recorder import get_instance as r_get_instance
-    from homeassistant.components.recorder.history import get_last_state_changes
-except ImportError:
-    get_last_state_changes = None
-
-from homeassistant.config_entries import ConfigEntryState
-from homeassistant.helpers import entity
+from homeassistant.helpers import entity, restore_state
 from homeassistant.helpers.entity_platform import async_get_current_platform
 
 from .. import const as mlc
@@ -129,6 +122,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         extra_state_attributes: dict[str, Any]
 
     EntityCategory = entity.EntityCategory
+    RestoreEntity = restore_state.RestoreEntity
 
     HA_ENTITY_ATTRIBUTES = (
         "device_class",
@@ -346,35 +340,6 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             self.schedule_callback(delay, self.flush_state)
         else:
             self.cancel_callback(self.flush_state)
-
-    async def get_last_state_available(self):
-        """
-        Recover the last known good state from recorder in order to
-        restore transient state information when restarting HA.
-        If the device/entity was disconnected before restarting and we need
-        the last good reading from the device, we need to skip the last
-        state since it is 'unavailable'
-        """
-
-        if not get_last_state_changes:
-            raise Exception("Cannot find history.get_last_state_changes api")
-
-        _last_state = await r_get_instance(self.hass).async_add_executor_job(
-            partial(
-                get_last_state_changes,
-                self.hass,
-                2,
-                self.entity_id,
-            )
-        )
-        if states := _last_state.get(self.entity_id):
-            for state in reversed(states):
-                if state.state not in (
-                    entity.STATE_UNKNOWN,
-                    entity.STATE_UNAVAILABLE,
-                ):
-                    return state
-        return None
 
     def set_available(self):
         """Expected to be called by device/subdevice on_connect."""

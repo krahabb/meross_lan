@@ -72,7 +72,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
     Schedule = MtsSchedule
     """Overriden in derived to provide specific behavior."""
 
-    class TrackSensorSelect(SelectEntity):
+    class TrackSensorSelect(SelectEntity.RestoreEntity, SelectEntity):
         """
         A select entity used to select among all temperature sensors in HA
         an entity to track so that the thermostat regulates T against
@@ -117,22 +117,15 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             self.cancel_callback(self._track)
 
         async def async_added_to_hass(self):
-            hass = self.hass
+            if not self.current_option and (
+                restore_data := self._async_get_restored_data()
+            ):
+                self.current_option = restore_data.state.state
 
-            if not self.current_option:
-                with self.exception_warning("restoring previous state"):
-                    if last_state := await self.get_last_state_available():
-                        self.current_option = last_state.state
-
-            if hass.state == CoreState.running:
+            if self.hass.state == CoreState.running:
                 self._setup_tracking_entities()
             else:
-                # setup a temp list in order to not loose restored state
-                # since HA validates 'current_option' against 'options'
-                # when persisting the state and we could loose the
-                # current restored state if we don't setup the tracking
-                # list soon enough
-                hass.bus.async_listen_once(
+                self.hass.bus.async_listen_once(
                     hac.EVENT_HOMEASSISTANT_STARTED,
                     self._setup_tracking_entities,
                 )

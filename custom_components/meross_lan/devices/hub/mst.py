@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from typing import TypedDict, Unpack
 
     from . import Hub
+    from ...merossclient import SubDeviceDescriptor
     from ...merossclient.protocol import types as mt
 
 
@@ -86,8 +87,9 @@ class mst(SubDevice):
 
 class mst100(mst):
 
-    def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
-        SubDevice.__init__(self, subid, hub, key_digest, model)
+    def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
+        SubDevice.__init__(self, descriptor, hub, **kwargs)
+        subid = descriptor.id
         index = mn.IndexType.subId.get(subid, 0, None)
         switch = mst.Switch(self, index=index)
         switch.unique_id = f"{hub.id}_{subid}_onoff"  # LEGACY
@@ -104,10 +106,11 @@ class mst100(mst):
 
 class mst200(mst):
 
-    def __init__(self, subid: str, hub: "Hub", key_digest: str, model: str, /):
-        SubDevice.__init__(self, subid, hub, key_digest, model)
+    def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
+        SubDevice.__init__(self, descriptor, hub, **kwargs)
         handler_water = hub.get_handler(mn_h.Appliance_Control_Water)
         handler_devicecfg = hub.ns_handlers[mn.Appliance_Config_DeviceCfg]
+        subid = descriptor.id
         for channel in range(1, 3):
             # indexed by subId, channels
             handler_water.register_parser(

@@ -50,7 +50,7 @@ class UpdateEntity(Entity, update.UpdateEntity):
         self.title = device.display_name
         self.in_progress = False
         self.installed_version, self.latest_version, self.release_summary = (
-            device.get_upgrade_info()
+            device.descriptor.get_upgrade_info()
         )
         Entity.__init__(
             self,
@@ -67,17 +67,17 @@ class UpdateEntity(Entity, update.UpdateEntity):
 
     def flush_state(self):
         self.installed_version, self.latest_version, self.release_summary = (
-            self.device.get_upgrade_info()
+            self.device.descriptor.get_upgrade_info()
         )
         if self.installed_version == self.latest_version:
             self.in_progress = False
         Entity.flush_state(self)
 
-    async def async_install(self, version: str | None, backup: bool, **kwargs):
+    async def async_install(self, *args, **kwargs):
         device = self.device
         if not device.is_connected:
             raise HomeAssistantError("Device is offline")
-        upgrade_payload = device.get_upgrade_payload()
+        upgrade_payload = device.descriptor.get_upgrade_payload()
         if not upgrade_payload:
             raise HomeAssistantError("No upgrade available")
         await device.async_request(

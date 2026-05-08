@@ -127,7 +127,7 @@ class NumberParser(mle.NumericParser, NumberEntity):
                 pass  # self.ns_value is None
 
 
-class EmulatedNumber(NumberEntity):
+class EmulatedNumber(NumberEntity.RestoreEntity, NumberEntity):
     """
     Number entity not directly binded to a device parameter (like ConfigNumber)
     but used to store in HA a bit of component configuration.
@@ -137,8 +137,8 @@ class EmulatedNumber(NumberEntity):
 
     async def async_added_to_hass(self):
         with self.exception_warning("restoring previous state"):
-            if last_state := await self.get_last_state_available():
-                self.native_value = float(last_state.state)
+            if restored_state := self._async_get_restored_data():
+                self.native_value = float(restored_state.state.state)
         await super().async_added_to_hass()
 
     async def async_set_native_value(self, value: float):

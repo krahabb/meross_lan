@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import importlib
 import re
 from time import gmtime, time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 import zoneinfo
 
 from .protocol import const as mc, namespaces as mn
@@ -19,14 +19,12 @@ if TYPE_CHECKING:
         Any,
         Callable,
         ClassVar,
-        Container,
         Final,
-        Generator,
         Iterable,
         Mapping,
-        MutableSequence,
         NotRequired,
         Protocol,
+        Self,
         Sequence,
         TypedDict,
         Unpack,
@@ -132,7 +130,7 @@ def _meross_payload_merge_hasher(item):
             pass
 
         try:
-            sub_item: tuple[str, Any] = next(iter(item.items()))
+            sub_item: tuple[str, "Any"] = next(iter(item.items()))
             return ":".join(
                 (sub_item[0], str(_meross_payload_merge_hasher(sub_item[1])))
             )
@@ -340,11 +338,11 @@ def simple_slug(value: str):
     return value.lower().replace(".", "_")
 
 
-def versiontuple(version: str) -> "mt.VersionTupleType":
+def versiontuple(version: str | None) -> "mt.VersionTupleType":
     """
     Splits a version string like "1.2.3" into a tuple of integers (1,2,3)
     """
-    return tuple(map(int, version.split(".")))
+    return tuple(map(int, version.split("."))) if version else ()
 
 
 _ASYNC_LOCK = asyncio.Lock()
@@ -514,15 +512,182 @@ def get_productnametype(producttype: str) -> str:
     return f"{name} ({producttype})" if name is not producttype else producttype
 
 
-def get_subdevice_key_digest(digest: "mt.JsonMapping") -> str:
-    """Parses the subdevice dict from the hub digest to identify it's 'type'.
-    Raises StopIteration if unable to find a valid digest key."""
-    return (
-        p_key for p_key, p_value in digest.items() if type(p_value) is dict
-    ).__next__()
+class Descriptor:
+    """
+    Base class for device descriptors. This implements a standard interface common to both Devices
+    and SubDevices.
+    """
+
+    if TYPE_CHECKING:
+        type: str
+        subType: str
+        hw_version: str | None
+        fw_version: str | None  # current firmware version installed on the device
+        latest_version: LatestVersionType  # latest firmware version available for the device (if any).
+        # This is usually obtained from the active profile.
+
+        _DYNAMIC_ATTRS: ClassVar[Mapping[str, Callable[[Self], Any]]]
+        productname: str
+        productnametype: str
+        productmodel: str
+        type_class: str  # The 'prefix' of the device type
+        is_mts: bool
+        is_refoss: bool
+
+    _DYNAMIC_ATTRS = {
+        "productname": lambda _self: get_productname(_self.type),
+        "productnametype": lambda _self: get_productnametype(_self.type),
+        "productmodel": lambda _self: f"{_self.type}-{_self.subType}",
+        "type_class": lambda _self: (
+            re.match(r"^[a-z]*", _self.type).group(0)  # type: ignore # This will always match
+        ),
+        "is_mts": lambda _self: _self.type_class == mc.TYPE_MTS,
+        "is_refoss": lambda _self: mc.RefossModel.match(_self.type),
+    }
+
+    __slots__ = (
+        "type",
+        "subType",
+        "hw_version",
+        "fw_version",
+        "latest_version",  # on demand
+        *_DYNAMIC_ATTRS.keys(),
+    )
+
+    def __getattr__(self, name):
+        for cls in type(self).mro():
+            try:
+                value = cls._DYNAMIC_ATTRS[name](self)
+                setattr(self, name, value)
+                return value
+            except KeyError:
+                if cls is Descriptor:
+                    break
+                else:
+                    continue
+        raise AttributeError(
+            f"'{type(self).__name__}' object has no attribute '{name}'"
+        )
+
+    def _reset(self):
+        for cls in type(self).mro():
+            for attr in cls._DYNAMIC_ATTRS.keys():
+                try:
+                    delattr(self, attr)
+                except AttributeError:
+                    pass
+            if cls is Descriptor:
+                break
+
+    @property
+    def fw_version_t(self):
+        return versiontuple(self.fw_version)
+
+    def get_upgrade_info(self, /) -> tuple[str | None, ...]:
+        """If an update is available returns a tuple of (installed_version, latest_version, release_summary).
+        This might raise AttributeError if latest_version is not externally set."""
+        try:
+            return (
+                self.fw_version,
+                self.latest_version.get(mc.KEY_VERSION),
+                self.latest_version.get(mc.KEY_DESCRIPTION),
+            )
+        except Exception:
+            return None, None, None
+
+    def get_upgrade_payload(self, /) -> "mt.control.Upgrade":
+        """Builds and returns the correct upgrade payload if an upgrade is available, otherwise returns empty mutable dict."""
+        raise NotImplementedError("get_upgrade_payload")
 
 
-class DeviceDescriptor:
+class SubDeviceDescriptor(Descriptor):
+    """
+    Utility class to extract various info from Hub subdevice descriptors
+    coming from the hub digest payload
+    """
+
+    if TYPE_CHECKING:
+        parent: "DeviceDescriptor"
+        digest: mt.hub.Digest_SubDevice
+        id: Final[str]
+
+        _DYNAMIC_ATTRS: ClassVar[Mapping[str, Callable[["SubDeviceDescriptor"], Any]]]
+        key_digest: str
+        """Parses the subdevice dict from the hub digest to identify it's 'type'.
+        Raises StopIteration if unable to find a valid digest key."""
+
+    DIGEST_TYPE_MAP = {
+        mc.KEY_SMOKEALARM: mc.TYPE_GS559,
+        mc.KEY_TEMPHUM: mc.TYPE_MS100F,
+        mc.KEY_TEMPHUMI: mc.TYPE_MS130,
+        mc.KEY_DOORWINDOW: mc.TYPE_MS200,
+        mc.KEY_WATERLEAK: mc.TYPE_MS400,
+    }
+
+    @staticmethod
+    def get_key_digest(digest: "mt.JsonMapping") -> str:
+        """Parses the subdevice dict from the hub digest to identify it's 'type'.
+        Raises StopIteration if unable to find a valid digest key."""
+        return (
+            p_key for p_key, p_value in digest.items() if type(p_value) is dict
+        ).__next__()
+
+    @staticmethod
+    def _infer_type_from_digest(_self: "SubDeviceDescriptor", /) -> str:
+        """Infers the subdevice type from the digest keys. This is needed since some subdevices
+        don't include a 'type' key in their digest and we need to infer it from the keys present in the digest.
+        """
+        try:
+            return SubDeviceDescriptor.DIGEST_TYPE_MAP[_self.key_digest]
+        except KeyError:
+            if mc.KEY_MST in _self.digest:
+                return (
+                    mc.TYPE_MST200
+                    if "waDet" in _self.digest[mc.KEY_MST]
+                    else mc.TYPE_MST100
+                )
+            return _self.key_digest
+
+    _DYNAMIC_ATTRS = {
+        "key_digest": lambda _self: SubDeviceDescriptor.get_key_digest(_self.digest),
+        "type": lambda _self: SubDeviceDescriptor._infer_type_from_digest(_self),
+    }
+
+    __slots__ = (
+        "parent",
+        "digest",
+        "id",
+        *(set(_DYNAMIC_ATTRS.keys()) - set(Descriptor.__slots__)),
+    )
+
+    def __init__(self, parent: "DeviceDescriptor", digest: "mt.hub.Digest_SubDevice"):
+        self.parent = parent
+        self.digest = digest
+        self.id = digest[mc.KEY_ID]
+
+    def update(self, digest: "mt.hub.Digest_SubDevice"):
+        self.digest = digest
+
+    @override
+    def get_upgrade_payload(self, /) -> "mt.control.Upgrade":
+        # start from hub upgrade payload (eventually)
+        fw_version = self.fw_version
+        if not fw_version:
+            return {}
+        upgrade_payload = self.parent.get_upgrade_payload()
+        latest_version = self.latest_version
+        if versiontuple(latest_version[mc.KEY_VERSION]) > versiontuple(fw_version):
+            upgrade_payload["subdev"] = [
+                {
+                    "devid": self.id,
+                    mc.KEY_URL: latest_version[mc.KEY_URL],
+                    mc.KEY_MD5: latest_version[mc.KEY_MD5],
+                }
+            ]
+        return upgrade_payload
+
+
+class DeviceDescriptor(Descriptor):
     """
     Utility class to extract various info from Appliance.System.All/Ability
     device descriptor
@@ -530,9 +695,9 @@ class DeviceDescriptor:
 
     if TYPE_CHECKING:
 
-        DYNAMIC_ATTRS: Final[Mapping[str, Callable[["DeviceDescriptor"], Any]]]
+        _DYNAMIC_ATTRS: ClassVar[Mapping[str, Callable[["DeviceDescriptor"], Any]]]
 
-        payload: Final[mt.JsonDict]
+        payload: mt.JsonDict
         channels: Final[Sequence[int]]
         # cached accessors to native keys in Appliance.System.All payload
         all: mt.system.All
@@ -545,26 +710,19 @@ class DeviceDescriptor:
         online: mt.system.Online
         type: str
         subType: str
-        hardwareVersion: str
         uuid: str
         macAddress: str
         macAddress_fmt: str
         innerIp: str | None
         userId: str
-        firmwareVersion: str
         time: mt.system.Time
         timezone: str | None
         is_hub: bool
-        subdevices: list[mt.hub.Digest_SubDevice] | None
+        subdevices: list[
+            SubDeviceDescriptor
+        ]  # raises exception if the device is not a hub
         server: Final[HostAddress]  # type: ignore
         secondServer: Final[HostAddress]  # type: ignore
-        # computed cached helpers
-        productname: str
-        productnametype: str
-        productmodel: str
-        type_subtype: tuple[str, str]
-        is_refoss: bool
-        firmware_version: mt.VersionTupleType
         # devices with additional mcu firmware
         mcu: mt.mcu.Firmware | mt.JsonDict | None
 
@@ -581,7 +739,7 @@ class DeviceDescriptor:
         "mts300": SINGLE_CHANNEL,
     }
 
-    DYNAMIC_ATTRS = {
+    _DYNAMIC_ATTRS = {
         mc.KEY_ALL: lambda _self: _self.payload.get(mc.KEY_ALL, mn.EMPTY_DICT),
         mc.KEY_ABILITY: lambda _self: _self.payload.get(mc.KEY_ABILITY, mn.EMPTY_DICT),
         mc.KEY_DIGEST: lambda _self: _self.all.get(mc.KEY_DIGEST, mn.EMPTY_DICT),
@@ -592,18 +750,21 @@ class DeviceDescriptor:
         mc.KEY_ONLINE: lambda _self: _self.system.get(mc.KEY_ONLINE, mn.EMPTY_DICT),
         mc.KEY_TYPE: lambda _self: _self.hardware.get(mc.KEY_TYPE, mc.MANUFACTURER),
         mc.KEY_SUBTYPE: lambda _self: _self.hardware.get(mc.KEY_SUBTYPE, mc.KEY_),
-        "hardwareVersion": lambda _self: _self.hardware.get(mc.KEY_VERSION, mc.KEY_),
+        "hw_version": lambda _self: _self.hardware.get(mc.KEY_VERSION),
         mc.KEY_UUID: lambda _self: _self.hardware.get(mc.KEY_UUID),
         mc.KEY_MACADDRESS: lambda _self: _self.hardware.get(mc.KEY_MACADDRESS, mc.KEY_),
         "macAddress_fmt": lambda _self: fmt_macaddress(_self.macAddress),
         mc.KEY_INNERIP: lambda _self: _self.firmware.get(mc.KEY_INNERIP),
         mc.KEY_USERID: lambda _self: str(_self.firmware.get(mc.KEY_USERID)),
-        "firmwareVersion": lambda _self: _self.firmware.get(mc.KEY_VERSION, mc.KEY_),
+        "fw_version": lambda _self: _self.firmware.get(mc.KEY_VERSION),
         mc.KEY_TIME: lambda _self: _self.system.get(mc.KEY_TIME, mn.EMPTY_DICT),
         mc.KEY_TIMEZONE: lambda _self: _self.time.get(mc.KEY_TIMEZONE),
         "is_hub": lambda _self: mc.KEY_HUB in _self.digest,
         "subdevices": lambda _self: (
-            _self.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE] if _self.is_hub else None
+            [
+                SubDeviceDescriptor(_self, sd)
+                for sd in _self.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE]
+            ]
         ),
         "server": lambda _self: HostAddress(
             _self.firmware[mc.KEY_SERVER], get_port_safe(_self.firmware, mc.KEY_PORT)
@@ -612,22 +773,13 @@ class DeviceDescriptor:
             _self.firmware[mc.KEY_SECONDSERVER],
             get_port_safe(_self.firmware, mc.KEY_SECONDPORT),
         ),
-        "productname": lambda _self: get_productname(_self.type),
-        "productnametype": lambda _self: get_productnametype(_self.type),
-        "productmodel": lambda _self: f"{_self.type} {_self.hardware.get(mc.KEY_VERSION, mc.KEY_)}",
-        "type_subtype": lambda _self: (_self.type, _self.subType),
-        "is_refoss": lambda _self: mc.RefossModel.match(_self.type),
-        "firmware_version": lambda _self: versiontuple(_self.firmwareVersion),
     }
 
     __slots__ = (
         "payload",
         "channels",
-        "all",
-        "ability",
         "mcu",
-        "digest",
-        "__dict__",
+        *(set(_DYNAMIC_ATTRS.keys()) - set(Descriptor.__slots__)),
     )
 
     def __init__(self, payload: "mt.JsonDict"):
@@ -666,34 +818,20 @@ class DeviceDescriptor:
         if (mn.Appliance_Mcu_Firmware in self.ability) or (
             mn.Appliance_Mcu_Hp110_Firmware in self.ability
         ):
-            self.mcu = {}
+            self.mcu = mn.EMPTY_DICT
         else:
             self.mcu = None
 
-    def __getattr__(self, name):
-        value = DeviceDescriptor.DYNAMIC_ATTRS[name](self)
-        setattr(self, name, value)
-        return value
-
     def update(self, payload: "mt.JsonDict"):
-        """
-        reset the cached pointers
-        """
         self.payload.update(payload)
-        for key in DeviceDescriptor.DYNAMIC_ATTRS:
-            # don't use hasattr() or so to inspect else the whole
-            # dynamic attrs logic gets f...d
-            try:
-                delattr(self, key)
-            except Exception:
-                pass
+        self._reset()
 
     def update_time(self, p_time: "mt.system.Time"):
         self.system[mc.KEY_TIME] = p_time
         for key in (mc.KEY_TIME, mc.KEY_TIMEZONE):
             try:
                 delattr(self, key)
-            except Exception:
+            except AttributeError:
                 pass
 
     @property
@@ -708,17 +846,40 @@ class DeviceDescriptor:
             pass
         return _servers
 
-    def build_upgrade_payload(
-        self,
-        latest_version: "LatestVersionType",
-        /,
-    ) -> "mt.control.Upgrade":
+    def get_subdevice(self, subid: str) -> SubDeviceDescriptor:
+        """Returns the SubDeviceDescriptor matching the sub_id"""
+        return next((sd for sd in self.subdevices if sd.id == subid))
+
+    @override
+    def get_upgrade_info(self, /) -> tuple[str | None, ...]:
+        try:
+            latest_version = self.latest_version
+            upgrade_payload = self.get_upgrade_payload()
+            if mc.KEY_MCU in upgrade_payload:
+                assert self.mcu
+                return (
+                    self.mcu[mc.KEY_VERSION],
+                    latest_version[mc.KEY_MCU][0][mc.KEY_VERSION],
+                    latest_version.get(mc.KEY_DESCRIPTION),
+                )
+            else:
+                return (
+                    self.fw_version,
+                    latest_version[mc.KEY_VERSION],
+                    latest_version.get(mc.KEY_DESCRIPTION),
+                )
+        except Exception as e:
+            return None, None, None
+
+    @override
+    def get_upgrade_payload(self, /) -> "mt.control.Upgrade":
+        latest_version = self.latest_version
         assert (
             self.type == latest_version[mc.KEY_TYPE]
             and self.subType == latest_version[mc.KEY_SUBTYPE]
         )
         upgrade_payload: "mt.control.Upgrade" = {}
-        if versiontuple(latest_version[mc.KEY_VERSION]) > self.firmware_version:
+        if versiontuple(latest_version[mc.KEY_VERSION]) > versiontuple(self.fw_version):
             upgrade_payload[mc.KEY_URL] = latest_version[mc.KEY_URL]
             upgrade_payload[mc.KEY_MD5] = latest_version[mc.KEY_MD5]
         if self.mcu is not None:
@@ -731,5 +892,4 @@ class DeviceDescriptor:
                         mc.KEY_MD5: mcu_latest_version[mc.KEY_MD5],
                     }
                 ]
-
         return upgrade_payload

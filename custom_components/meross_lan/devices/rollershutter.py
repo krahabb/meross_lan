@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from ..merossclient.protocol import types as mt
 
 
-class RollerShutter(Cover):
+class RollerShutter(Cover.RestoreEntity, Cover):
     """
     Meross Roller Shutter cover device implementation.
     """
@@ -71,7 +71,7 @@ class RollerShutter(Cover):
         # flag indicating the device position is reliable (#227)
         # this will anyway be set in case we 'decode' a meaningful device position
         try:
-            fw_version = descriptor.firmware_version
+            fw_version = descriptor.fw_version_t
             if fw_version >= (6, 6, 6):
                 self._position_native_isgood = True
                 self.supported_features |= Cover.EntityFeature.SET_POSITION
@@ -122,14 +122,15 @@ class RollerShutter(Cover):
         if not self._position_native_isgood:
             # at this stage, the euristic on fw version doesn't say anything
             with self.exception_warning("restoring previous state"):
-                if last_state := await self.get_last_state_available():
+                if restored_state := self._async_get_restored_data():
+                    attributes = restored_state.state.attributes
                     try:
                         self.extra_state_attributes[
                             RollerShutter.ATTR_POSITION_NATIVE
-                        ] = last_state.attributes[RollerShutter.ATTR_POSITION_NATIVE]
+                        ] = attributes[RollerShutter.ATTR_POSITION_NATIVE]
                         # Having ATTR_POSITION_NATIVE in attributes
                         # means we didn't trust native position so far
-                        self.current_cover_position = last_state.attributes[
+                        self.current_cover_position = attributes[
                             cover.ATTR_CURRENT_POSITION
                         ]
                         # If this didn't fail, we can now assume device native_position is reliable

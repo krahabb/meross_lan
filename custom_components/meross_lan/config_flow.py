@@ -1402,8 +1402,8 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                                         suggested_area=_area_id,
                                         name=descriptor_update.productname,
                                         model=descriptor_update.productmodel,
-                                        hw_version=descriptor_update.hardwareVersion,
-                                        sw_version=descriptor_update.firmwareVersion,
+                                        hw_version=descriptor_update.hw_version,
+                                        sw_version=descriptor_update.fw_version,
                                         manufacturer=mc.MANUFACTURER,
                                         connections={
                                             (
