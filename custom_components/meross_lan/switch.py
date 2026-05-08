@@ -33,7 +33,7 @@ class SwitchEntity(mle.BinaryEntity, switch.SwitchEntity):
     _attr_entity_category = mle.BinaryEntity.EntityCategory.CONFIG
 
 
-class EmulatedSwitch(SwitchEntity):
+class EmulatedSwitch(SwitchEntity.RestoreEntity, SwitchEntity):
     """
     Switch entity not related to any device feature but used to configure
     behaviors for meross_lan entities.
@@ -41,8 +41,8 @@ class EmulatedSwitch(SwitchEntity):
 
     async def async_added_to_hass(self):
         with self.exception_warning("restoring previous state"):
-            if last_state := await self.get_last_state_available():
-                self.is_on = last_state.state == mlc.hac.STATE_ON
+            if restored_state := self._async_get_restored_data():
+                self.is_on = restored_state.state.state == mlc.hac.STATE_ON
         await SwitchEntity.async_added_to_hass(self)
 
     @override
