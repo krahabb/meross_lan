@@ -499,7 +499,7 @@ class MQTTConnection(AbstractMQTTConnection):
             mlc.DeviceConfigType(
                 {
                     mlc.CONF_DEVICE_ID: descriptor.uuid,
-                    mlc.CONF_PAYLOAD: descriptor,
+                    mlc.CONF_PAYLOAD: descriptor.payload,
                     mlc.CONF_KEY: key,
                 }
             ),
