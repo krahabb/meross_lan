@@ -14,7 +14,7 @@ from . import (
     get_default_ssl_context,
 )
 from .. import const as mlc
-from ..merossclient import HostAddress, cloudapi, datetime_from_epoch
+from ..merossclient import HostAddress, cloudapi, datetime_from_epoch, versiontuple
 from ..merossclient.client.mqtt import MQTTAppClient
 from ..merossclient.obfuscate import OBFUSCATE_DICT, OBFUSCATE_UUID_MAP
 from ..merossclient.protocol import const as mc
@@ -293,15 +293,38 @@ class MerossProfile(MQTTProfile):
     def get_latest_version(self, descriptor: "Descriptor", /):
         """returns LatestVersionType info if device has an update available"""
         try:
-            return (
-                self._data[self.KEY_LATEST_VERSION_HISTORY][
-                    f"{descriptor.type}:{descriptor.subType}"
-                ][-1]
-                .values()
-                .__iter__()
-                .__next__()
-            )
+            latest_version_history = self._data[self.KEY_LATEST_VERSION_HISTORY][
+                f"{descriptor.type}:{descriptor.subType}"
+            ]
         except KeyError:
+            return None
+        latest_versions = [
+            latest_version
+            for latest_version_entry in latest_version_history
+            for latest_version in latest_version_entry.values()
+        ]
+        if descriptor.fw_version and descriptor.hw_version:
+            try:
+                _firmware_version = versiontuple(descriptor.fw_version)
+                _hardware_version = versiontuple(descriptor.hw_version)
+                if _firmware_version[0] == _hardware_version[0]:
+                    # Devices on matching hw/fw major versions should stay on that train.
+                    same_train_latest_versions = [
+                        latest_version
+                        for latest_version in latest_versions
+                        if versiontuple(latest_version[mc.KEY_VERSION])[0]
+                        == _firmware_version[0]
+                    ]
+                    return (
+                        same_train_latest_versions[-1]
+                        if same_train_latest_versions
+                        else None
+                    )
+            except (IndexError, KeyError, TypeError, ValueError):
+                pass
+        try:
+            return latest_versions[-1]
+        except IndexError:
             return None
 
     @override
