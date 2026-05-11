@@ -104,6 +104,9 @@ Appliance_Hub_SubdeviceList = mn.ns(
 Appliance_Hub_SubDevice_Beep = mn.ns(
     "Appliance.Hub.SubDevice.Beep", mc.KEY_ALARM, 35, GETSET_ID
 )
+Appliance_Hub_SubDevice_Lock = mn.ns(
+    "Appliance.Hub.SubDevice.Lock", mc.KEY_LOCK, 35, GETSET_ID
+)
 Appliance_Hub_SubDevice_MotorAdjust = mn.ns(
     "Appliance.Hub.SubDevice.MotorAdjust",
     mc.KEY_ADJUST,

@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, override
 from . import SubDevice, mc, mn_h
 from ...binary_sensor import BinarySensorEntity
 from ...climate import MtsClimate
-from ...switch import EmulatedSwitch
+from ...switch import EmulatedSwitch, SwitchParser
 
 if TYPE_CHECKING:
     from typing import Unpack
@@ -34,6 +34,7 @@ class mts100(SubDevice, MtsClimate):
     NS_HUB = (
         mn_h.Appliance_Hub_Mts100_All,
         mn_h.Appliance_Hub_Mts100_Mode,
+        mn_h.Appliance_Hub_SubDevice_Lock,
         mn_h.Appliance_Hub_ToggleX,
     )
     init_ns = mn_h.Appliance_Hub_Mts100_Temperature
@@ -236,16 +237,34 @@ class mts100(SubDevice, MtsClimate):
                 self.flush_state()
 
     # interface: self
-    def _parse_togglex(self, payload: "mt.hub.ToggleX", /):
-        onoff = payload[mc.KEY_ONOFF]
-        if self._mts_onoff != onoff:
-            self._mts_onoff = onoff
-            self.flush_state()
-
     def _parse_mode(self, payload: "mt.hub._Mts100_Mode", /):
         mode = payload[mc.KEY_STATE]
         if self._mts_mode != mode:
             self._mts_mode = mode
+            self.flush_state()
+
+    def _parse_lock(self, payload: "mt.hub.SubDevice_Lock", /):
+        # only install the switch entity when we receive the lock state update,
+        # this is to avoid creating the entity if the lock feature is not actually
+        # supported by the subdevice (it is not clear to me which hw/fw really supports this)
+        self.parent.ns_handlers[mn_h.Appliance_Hub_SubDevice_Lock].swap_parsers(
+            self,
+            SwitchParser(
+                self,
+                entity_key=(
+                    f"{mn_h.Appliance_Hub_SubDevice_Lock.slug}__{mc.KEY_STATE}"
+                ),
+                ns=mn_h.Appliance_Hub_SubDevice_Lock,
+                key_value=SwitchParser.KeyValue(mc.KEY_STATE),
+                name="Child lock",
+                ns_value=payload[mc.KEY_STATE],
+            ),
+        )
+
+    def _parse_togglex(self, payload: "mt.hub.ToggleX", /):
+        onoff = payload[mc.KEY_ONOFF]
+        if self._mts_onoff != onoff:
+            self._mts_onoff = onoff
             self.flush_state()
 
     def _parse_digest_(self, payload: "mt.hub._mts100v3", /):

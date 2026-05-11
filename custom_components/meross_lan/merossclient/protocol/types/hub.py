@@ -167,6 +167,13 @@ class SubDevice_Beep(mt.IdPayload):
     onoff: int  # 1: on, 0: off
 
 
+class SubDevice_Lock(mt.IdPayload):
+    """Appliance.Hub.SubDevice.Lock"""
+
+    state: int  # 1: on, 0: off
+    exception: NotRequired[str]
+
+
 class SubDevice_Version(mt.IdPayload):
     """Appliance.Hub.SubDevice.Version"""
 

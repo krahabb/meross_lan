@@ -607,6 +607,7 @@ NamespaceHandler.POLLING_CONFIG_MAP.update(
         mn_h.Appliance_Hub_Online: NamespaceHandler.POLLING_CONFIG_NONE,
         mn_h.Appliance_Hub_ToggleX: NamespaceHandler.POLLING_CONFIG_NONE,
         mn_h.Appliance_Hub_SubDevice_Beep: mlc.POLLING_CONFIG_CONFIGURATION,
+        mn_h.Appliance_Hub_SubDevice_Lock: mlc.POLLING_CONFIG_CONFIGURATION,
         mn_h.Appliance_Hub_SubDevice_Version: NamespaceHandler.POLLING_CONFIG_ONCE,
         mn_h.Appliance_Hub_Mts100_Adjust: mlc.POLLING_CONFIG_CONFIGURATION,
         mn_h.Appliance_Hub_Mts100_All: (
