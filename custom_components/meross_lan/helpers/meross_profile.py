@@ -66,18 +66,18 @@ if TYPE_CHECKING:
         tokenRequestTime: float
 
 
-class MerossMQTTConnection(MQTTAppClient, MQTTConnection):
+class MerossMQTTConnection(MQTTConnection, MQTTAppClient):
 
     __slots__ = MQTTAppClient._calc_slots()
 
     def __init__(self, broker: "HostAddress", profile: "MerossProfile"):
-        MQTTAppClient.__init__(
+        MQTTConnection.__init__(
             self,
             broker,
             profile,
-            app_id=profile.app_id,
-            user_id=profile.userid,
-            sslcontext=get_default_ssl_context(),
+            app_id=profile.app_id,  # type: ignore
+            user_id=profile.userid,  # type: ignore
+            sslcontext=get_default_ssl_context(),  # type: ignore
             loop=profile.loop,
         )
 
