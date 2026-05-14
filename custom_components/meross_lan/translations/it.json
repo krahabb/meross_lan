@@ -89,7 +89,9 @@
             "cloud_profile_mismatch": "Il profilo cloud non corrisponde",
             "invalid_auth": "Errore di autenticazione",
             "invalid_key": "Chiave errata: usa 'Cloud retrieve' per recuperare dall'account Meross",
-            "invalid_nullkey": "Chiave errata: usa 'Hack mode' per consentire un valore vuoto"
+            "invalid_nullkey": "Chiave errata: usa 'Hack mode' per consentire un valore vuoto",
+            "broker_address_invalid": "MQTT broker address not recognized",
+            "broker_connection_error": "MQTT broker connection error"
         },
         "step": {
             "user": {
@@ -140,6 +142,24 @@
             "finalize": {
                 "title": "Configurazione dispositivo",
                 "description": "Tipo: {device_type}\nUUID: {device_id}"
+            },
+            "bind": {
+                "title": "Configurazione Wifi\/MQTT",
+                "description": "Collega (Bind) il dispositivo a una rete WiFi e\/o a un altro broker MQTT\nWi-Fi attuale: {ssid}\nMQTT broker attuale: {server}\nI campi vuoti verranno ignorati o impostati automaticamente.",
+                "data": {
+                    "ssid": "Wi-Fi SSID",
+                    "password": "Wi-Fi password",
+                    "server": "Indirizzo del nuovo broker MQTT",
+                    "check": "Verifica la compatibilità del broker MQTT prima di riconfigurarlo",
+                    "key": "Chiave dispositivo",
+                    "userid": "Id utente",
+                    "error": "Messaggio di errore"
+                },
+                "data_description": {
+                    "server": "Inserire l'indirizzo nella forma 'host(:port)' (lasciare vuoto per saltare)",
+                    "key": "Inserire la chiave utilizzata per firmare i messaggi del protocollo (vuoto mantiene il valore corrente)",
+                    "userid": "Inserire l'Id utente (vuoto mantiene il valore corrente)"
+                }
             }
         }
     },
@@ -174,7 +194,7 @@
                     "key": "Chiave dispositivo",
                     "protocol": "Protocollo",
                     "polling_period": "Intervallo di aggiornamento",
-                    "timezone": "Zona oraria",
+                    "timezone": "Fuso orario",
                     "trace_timeout": "Durata debug tracing (sec)",
                     "error": "Messaggio di errore",
                     "disable_multiple": "Disabilita il raggruppamento di richieste multiple"
@@ -208,24 +228,26 @@
                     "device": "Configura",
                     "profile": "Configura",
                     "diagnostics": "Diagnostica",
-                    "bind": "Riconfigura MQTT (binding locale)",
+                    "bind": "Configurazione Wifi\/MQTT",
                     "unbind": "Reset hardware"
                 }
             },
             "bind": {
-                "title": "Riconfigura MQTT (binding locale)",
-                "description": "Collega (Bind) il dispositivo a un altro broker MQTT\nAttuale: {domain}",
+                "title": "Configurazione Wifi\/MQTT",
+                "description": "Collega (Bind) il dispositivo a una rete WiFi e\/o a un altro broker MQTT\nWi-Fi attuale: {ssid}\nMQTT broker attuale: {server}\nI campi vuoti verranno ignorati o impostati automaticamente.",
                 "data": {
-                    "domain": "Indirizzo del nuovo broker MQTT",
                     "check": "Verifica la compatibilità del broker MQTT prima di riconfigurarlo",
                     "key": "Chiave dispositivo",
                     "userid": "Id utente",
-                    "error": "Messaggio di errore"
+                    "error": "Messaggio di errore",
+                    "ssid": "Wi-Fi SSID",
+                    "password": "Wi-Fi password",
+                    "server": "Indirizzo del nuovo broker MQTT"
                 },
                 "data_description": {
-                    "domain": "Inserire l'indirizzo nella forma \"host(:port)\" o lasciare vuoto per utilizzare quello di HomeAssistant.",
-                    "userid": "Lascia vuoto per una migliore compatibilità con meross_lan",
-                    "key": "Lascia vuoto per una migliore compatibilità con meross_lan"
+                    "userid": "Inserire l'Id utente (vuoto mantiene il valore corrente)",
+                    "key": "Inserire la chiave utilizzata per firmare i messaggi del protocollo (vuoto mantiene il valore corrente)",
+                    "server": "Inserire l'indirizzo nella forma 'host(:port)' (lasciare vuoto per saltare)"
                 }
             },
             "unbind": {
@@ -235,10 +257,6 @@
                     "post_action": "Dopo il reset:",
                     "error": "Messaggio di errore"
                 }
-            },
-            "bind_finalize": {
-                "title": "Riconfigura MQTT (binding locale)",
-                "description": "Il dispositivo è stato configurato con successo con il nuovo broker MQTT su {domain}.\nLa configurazione è stata aggiornata e ricaricata, ma potrebbe essere necessario riavviare (spegnere e riaccendere) il dispositivo per connettersi al nuovo broker."
             }
         },
         "error": {
@@ -249,7 +267,9 @@
             "invalid_auth": "Errore di autenticazione",
             "invalid_key": "Chiave errata: usa 'Cloud retrieve' per recuperare dall'account Meross",
             "invalid_nullkey": "Chiave errata: usa 'Hack mode' per consentire un valore vuoto",
-            "habroker_not_connected": "Il broker MQTT di HomeAssistant non è collegato"
+            "habroker_not_connected": "Il broker MQTT di HomeAssistant non è collegato",
+            "broker_address_invalid": "MQTT broker address not recognized",
+            "broker_connection_error": "MQTT broker connection error"
         }
     },
     "issues": {
@@ -284,7 +304,7 @@
                             "key": "Chiave dispositivo",
                             "protocol": "Protocollo",
                             "polling_period": "Intervallo di aggiornamento",
-                            "timezone": "Zona oraria",
+                            "timezone": "Fuso orario",
                             "trace_timeout": "Durata debug tracing (sec)",
                             "error": "Messaggio di errore",
                             "disable_multiple": "Disabilita il raggruppamento di richieste multiple"

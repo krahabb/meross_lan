@@ -89,7 +89,9 @@
             "cloud_profile_mismatch": "Profil chmury nie pasuje do konfiguracji",
             "invalid_auth": "Błąd uwierzytelniania",
             "invalid_key": "Błąd klucza: wybierz 'Pobierz z chmury', aby uzyskać dostęp do konta Meross",
-            "invalid_nullkey": "Błąd klucza: wybierz 'Tryb hakerski' umożliwiający użycie pustego klucza"
+            "invalid_nullkey": "Błąd klucza: wybierz 'Tryb hakerski' umożliwiający użycie pustego klucza",
+            "broker_address_invalid": "MQTT broker address not recognized",
+            "broker_connection_error": "MQTT broker connection error"
         },
         "step": {
             "user": {
@@ -140,6 +142,24 @@
             "finalize": {
                 "title": "Konfiguracja urządzenia",
                 "description": "Typ: {device_type}\nUUID: {device_id}"
+            },
+            "bind": {
+                "title": "Skonfiguruj ponownie WiFi\/MQTT (powiązanie lokalne)",
+                "description": "Połącz (powiąż) urządzenie z innym brokerem MQTT\nCurrent Wi-Fi: {ssid}\nBieżący broker: {server}",
+                "data": {
+                    "ssid": "Wi-Fi SSID",
+                    "password": "Hasło Wi-Fi",
+                    "server": "Adres nowego brokera MQTT",
+                    "check": "Przed ponowną konfiguracją sprawdź kompatybilność brokera",
+                    "key": "Klucz urządzenia",
+                    "userid": "Id użytkownika",
+                    "error": "Komunikat błędu"
+                },
+                "data_description": {
+                    "server": "Wprowadź adres w formacie 'host(:port)'",
+                    "key": "Enter the Key used to sign protocol messages (empty keeps current value)",
+                    "userid": "Enter the User Id (empty keeps current value)"
+                }
             }
         }
     },
@@ -208,24 +228,26 @@
                     "device": "Konfiguruj",
                     "profile": "Konfiguruj",
                     "diagnostics": "Diagnostyka",
-                    "bind": "Skonfiguruj ponownie MQTT (powiązanie lokalne)",
+                    "bind": "Skonfiguruj ponownie WiFi\/MQTT (powiązanie lokalne)",
                     "unbind": "Resetowanie sprzętu"
                 }
             },
             "bind": {
-                "title": "Skonfiguruj ponownie MQTT (powiązanie lokalne)",
-                "description": "Połącz (powiąż) urządzenie z innym brokerem MQTT\nBieżący broker: {domain}",
+                "title": "Skonfiguruj ponownie WiFi\/MQTT (powiązanie lokalne)",
+                "description": "Połącz (powiąż) urządzenie z innym brokerem MQTT\nCurrent Wi-Fi: {ssid}\nBieżący broker: {server}",
                 "data": {
-                    "domain": "Adres nowego brokera MQTT",
                     "check": "Przed ponowną konfiguracją sprawdź kompatybilność brokera",
                     "key": "Klucz urządzenia",
                     "userid": "Id użytkownika",
-                    "error": "Komunikat błędu"
+                    "error": "Komunikat błędu",
+                    "ssid": "Wi-Fi SSID",
+                    "password": "Hasło Wi-Fi",
+                    "server": "Adres nowego brokera MQTT"
                 },
                 "data_description": {
-                    "domain": "Wprowadź adres w formacie 'host(:port)' lub pozostaw pusty, aby użyć adresu HA",
-                    "userid": "Pozostaw puste, aby uzyskać lepszą zgodność z meross_lan",
-                    "key": "Pozostaw puste, aby uzyskać lepszą zgodność z meross_lan"
+                    "userid": "Enter the User Id (empty keeps current value)",
+                    "key": "Enter the Key used to sign protocol messages (empty keeps current value)",
+                    "server": "Wprowadź adres w formacie 'host(:port)'"
                 }
             },
             "unbind": {
@@ -235,10 +257,6 @@
                     "post_action": "Po odwiązaniu:",
                     "error": "Komunikat błędu"
                 }
-            },
-            "bind_finalize": {
-                "title": "Skonfiguruj ponownie MQTT (powiązanie lokalne)",
-                "description": "Urządzenie zostało pomyślnie skonfigurowane z nowym brokerem MQTT w domenie {domain}.\nKonfiguracja została zaktualizowana i ponownie załadowana, ale może być konieczne ponowne uruchomienie urządzenia (wyłączenie i ponowne uruchomienie), aby mogło połączyć się z nowym brokerem."
             }
         },
         "error": {
@@ -249,7 +267,9 @@
             "invalid_auth": "Błąd uwierzytelniania",
             "invalid_key": "Błąd klucza: wybierz 'Pobierz z chmury', aby uzyskać dostęp do konta Meross",
             "invalid_nullkey": "Błąd klucza: wybierz 'Tryb hakerski' umożliwiający użycie pustego klucza",
-            "habroker_not_connected": "Broker MQTT Home Assistant'a nie jest podłączony"
+            "habroker_not_connected": "Broker MQTT Home Assistant'a nie jest podłączony",
+            "broker_address_invalid": "MQTT broker address not recognized",
+            "broker_connection_error": "MQTT broker connection error"
         }
     },
     "issues": {

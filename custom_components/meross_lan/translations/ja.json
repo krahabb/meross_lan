@@ -89,7 +89,9 @@
             "cloud_profile_mismatch": "クラウドプロファイルが構成と一致しません",
             "invalid_auth": "認証エラー",
             "invalid_key": "キーエラー: select 'Cloud retrieve' to get from Meross",
-            "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key"
+            "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key",
+            "broker_address_invalid": "MQTT broker address not recognized",
+            "broker_connection_error": "MQTT broker connection error"
         },
         "step": {
             "user": {
@@ -140,6 +142,24 @@
             "finalize": {
                 "title": "デバイス設定",
                 "description": "タイップ: {device_type}\nUUID: {device_id}"
+            },
+            "bind": {
+                "title": "WiFi\/MQTTの再設定（ローカルバインディング）",
+                "description": "デバイスを別のMQTTブローカーに接続（バインド）します\nCurrent Wi-Fi: {ssid}\n現在のブローカー：{server}",
+                "data": {
+                    "ssid": "Wi-Fi SSID",
+                    "password": "パスワード",
+                    "server": "新しいMQTTブローカーのアドレス",
+                    "check": "再設定前にMQTTブローカーとの互換性を確認する",
+                    "key": "デバイスキー",
+                    "userid": "ユーザーID",
+                    "error": "エラーメッセージ"
+                },
+                "data_description": {
+                    "server": "ホスト(:port)'形式でアドレスを入力するか",
+                    "key": "Enter the Key used to sign protocol messages (empty keeps current value)",
+                    "userid": "Enter the User Id (empty keeps current value)"
+                }
             }
         }
     },
@@ -208,24 +228,26 @@
                     "device": "設定",
                     "profile": "設定",
                     "diagnostics": "診断",
-                    "bind": "MQTTの再設定（ローカルバインディング）",
+                    "bind": "WiFi\/MQTTの再設定（ローカルバインディング）",
                     "unbind": "ハードウェア・リセット"
                 }
             },
             "bind": {
-                "title": "MQTTの再設定（ローカルバインディング）",
-                "description": "デバイスを別のMQTTブローカーに接続（バインド）します\n現在のブローカー：{domain}",
+                "title": "WiFi\/MQTTの再設定（ローカルバインディング）",
+                "description": "デバイスを別のMQTTブローカーに接続（バインド）します\nCurrent Wi-Fi: {ssid}\n現在のブローカー：{server}",
                 "data": {
-                    "domain": "新しいMQTTブローカーのアドレス",
                     "check": "再設定前にMQTTブローカーとの互換性を確認する",
                     "key": "デバイスキー",
                     "userid": "ユーザーID",
-                    "error": "エラーメッセージ"
+                    "error": "エラーメッセージ",
+                    "ssid": "Wi-Fi SSID",
+                    "password": "パスワード",
+                    "server": "新しいMQTTブローカーのアドレス"
                 },
                 "data_description": {
-                    "domain": "host(:port)'形式でアドレスを入力するか、HomeAssistantのものを使用する場合は空のままにします。",
-                    "userid": "meross_lanとの互換性を高めるために空白にしてください",
-                    "key": "meross_lanとの互換性を高めるために空白にしてください"
+                    "userid": "Enter the User Id (empty keeps current value)",
+                    "key": "Enter the Key used to sign protocol messages (empty keeps current value)",
+                    "server": "ホスト(:port)'形式でアドレスを入力するか"
                 }
             },
             "unbind": {
@@ -235,10 +257,6 @@
                     "post_action": "バインドを解いた後",
                     "error": "エラーメッセージ"
                 }
-            },
-            "bind_finalize": {
-                "title": "MQTTの再設定（ローカルバインディング）",
-                "description": "デバイスは新しいMQTTブローカーに成功的に設定されました{domain}。\n設定は更新され、再読み込みされましたが、新しいブローカーに接続するためにはデバイスを再起動（電源を切る）する必要があるかもしれません。"
             }
         },
         "error": {
@@ -249,7 +267,9 @@
             "invalid_auth": "認証エラー",
             "invalid_key": "キーエラー: select 'Cloud retrieve' to get from Meross",
             "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key",
-            "habroker_not_connected": "HomeAssistant MQTTブローカーが接続されていない"
+            "habroker_not_connected": "HomeAssistant MQTTブローカーが接続されていない",
+            "broker_address_invalid": "MQTT broker address not recognized",
+            "broker_connection_error": "MQTT broker connection error"
         }
     },
     "issues": {

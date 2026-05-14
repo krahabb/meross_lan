@@ -89,7 +89,9 @@
             "cloud_profile_mismatch": "Das Cloud-Profil stimmt nicht mit der Konfiguration überein",
             "invalid_auth": "Fehlerhafte Zugangsdaten",
             "invalid_key": "Geräteschlüssel fehlerhaft: Wählen Sie 'Cloud retrieve' um von Meross zu kommen",
-            "invalid_nullkey": "Geräteschlüssel fehlerhaft: Wählen Sie 'Hack mode' um einen leeren Schlüssel zuzulassen"
+            "invalid_nullkey": "Geräteschlüssel fehlerhaft: Wählen Sie 'Hack mode' um einen leeren Schlüssel zuzulassen",
+            "broker_address_invalid": "MQTT broker address not recognized",
+            "broker_connection_error": "MQTT broker connection error"
         },
         "step": {
             "user": {
@@ -128,7 +130,7 @@
                 "description": "Bitte einloggen um den Geräteschlüssel aus Ihrem Meross Account zu übertragen",
                 "data": {
                     "email": "Meross Benutzername",
-                    "password": "Meross Passwort",
+                    "password": "Meross passwort",
                     "save_password": "Passwort speichern",
                     "allow_mqtt_publish": "Cloud-MQTT-Veröffentlichung zulassen",
                     "check_firmware_updates": "Überprüfen Sie Firmware-Updates",
@@ -140,6 +142,24 @@
             "finalize": {
                 "title": "Gerätekonfiguration",
                 "description": "Typ: {device_type}\nUUID: {device_id}"
+            },
+            "bind": {
+                "title": "WiFi\/MQTT neu konfigurieren (lokale Bindung)",
+                "description": "Verbinden (Binden) Sie das Gerät mit einem anderen MQTT-Broker\nAktueller Wi-Fi: {ssid}\nAktueller Broker: {server}",
+                "data": {
+                    "ssid": "Wi-Fi SSID",
+                    "password": "Wi-Fi passwort",
+                    "server": "Adresse des neuen MQTT-Brokers",
+                    "check": "Prüfen Sie vor der Neukonfiguration die Kompatibilität mit MQTT-Brokern",
+                    "key": "Geräteschlüssel",
+                    "userid": "Benutzer-ID",
+                    "error": "Fehlermeldung"
+                },
+                "data_description": {
+                    "server": "Geben Sie die Adresse in der Form 'host(:port)'",
+                    "key": "Enter the Key used to sign protocol messages (empty keeps current value)",
+                    "userid": "Enter the User Id (empty keeps current value)"
+                }
             }
         }
     },
@@ -208,24 +228,26 @@
                     "device": "Konfigurieren",
                     "profile": "Konfigurieren",
                     "diagnostics": "Diagnostik",
-                    "bind": "MQTT neu konfigurieren (lokale Bindung)",
+                    "bind": "WiFi\/MQTT neu konfigurieren (lokale Bindung)",
                     "unbind": "Hardware-Reset"
                 }
             },
             "bind": {
-                "title": "MQTT neu konfigurieren (lokale Bindung)",
-                "description": "Verbinden (Binden) Sie das Gerät mit einem anderen MQTT-Broker\nAktueller Broker: {domain}",
+                "title": "WiFi\/MQTT neu konfigurieren (lokale Bindung)",
+                "description": "Verbinden (Binden) Sie das Gerät mit einem anderen MQTT-Broker\nAktueller Wi-Fi: {ssid}\nAktueller Broker: {server}",
                 "data": {
-                    "domain": "Adresse des neuen MQTT-Brokers",
                     "check": "Prüfen Sie vor der Neukonfiguration die Kompatibilität mit MQTT-Brokern",
                     "key": "Geräteschlüssel",
                     "userid": "Benutzer-ID",
-                    "error": "Fehlermeldung"
+                    "error": "Fehlermeldung",
+                    "ssid": "Wi-Fi SSID",
+                    "password": "Wi-Fi passwort",
+                    "server": "Adresse des neuen MQTT-Brokers"
                 },
                 "data_description": {
-                    "domain": "Geben Sie die Adresse in der Form 'host(:port)' ein oder lassen Sie sie leer, um die Adresse von HomeAssistant zu verwenden",
-                    "userid": "Lassen Sie es leer für eine bessere Kompatibilität mit meross_lan",
-                    "key": "Lassen Sie es leer für eine bessere Kompatibilität mit meross_lan"
+                    "userid": "Enter the User Id (empty keeps current value)",
+                    "key": "Enter the Key used to sign protocol messages (empty keeps current value)",
+                    "server": "Geben Sie die Adresse in der Form 'host(:port)'"
                 }
             },
             "unbind": {
@@ -235,10 +257,6 @@
                     "post_action": "Nach dem Entbinden:",
                     "error": "Fehlermeldung"
                 }
-            },
-            "bind_finalize": {
-                "title": "MQTT neu konfigurieren (lokale Bindung)",
-                "description": "Das Gerät wurde erfolgreich mit dem neuen MQTT-Broker unter {domain} konfiguriert.\nDie Konfiguration wurde aktualisiert und neu geladen, aber es könnte notwendig sein, das Gerät neu zu starten (Stromkreislauf), damit es sich mit dem neuen Broker verbinden kann."
             }
         },
         "error": {
@@ -249,7 +267,9 @@
             "invalid_auth": "Fehlerhafte Zugangsdaten",
             "invalid_key": "Geräteschlüssel fehlerhaft: Wählen Sie 'Cloud retrieve' um von Meross zu kommen",
             "invalid_nullkey": "Geräteschlüssel fehlerhaft: Wählen Sie 'Hack mode' um einen leeren Schlüssel zuzulassen",
-            "habroker_not_connected": "Der HomeAssistant MQTT-Broker ist nicht verbunden"
+            "habroker_not_connected": "Der HomeAssistant MQTT-Broker ist nicht verbunden",
+            "broker_address_invalid": "MQTT broker address not recognized",
+            "broker_connection_error": "MQTT broker connection error"
         }
     },
     "issues": {

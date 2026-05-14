@@ -60,14 +60,12 @@ if TYPE_CHECKING:
 
 class FlowErrorKey(enum.StrEnum):
     ALREADY_CONFIGURED = "already_configured"
-    ALREADY_CONFIGURED_DEVICE = "already_configured_device"
     CANNOT_CONNECT = "cannot_connect"
     CLOUD_PROFILE_MISMATCH = "cloud_profile_mismatch"
     INVALID_AUTH = "invalid_auth"
     INVALID_KEY = "invalid_key"
     INVALID_NULL_KEY = "invalid_nullkey"
     DEVICE_ID_MISMATCH = "device_id_mismatch"
-    HABROKER_NOT_CONNECTED = "habroker_not_connected"
     BROKER_ADDRESS_INVALID = "broker_address_invalid"
     BROKER_CONNECTION_ERROR = "broker_connection_error"
 
@@ -143,7 +141,6 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
             userid: NotRequired[int | None]
 
         bind_config: BindConfigType
-        bind_placeholders: dict[str, str]
 
         # instance properties managed with show_form_errorcontext
         # and async_show_form_with_errors
@@ -1242,7 +1239,6 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
         "config",
         "repair_issue_id",
         "bind_config",
-        "bind_placeholders",
     )
 
     def __init__(

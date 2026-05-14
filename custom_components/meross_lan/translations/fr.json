@@ -89,7 +89,9 @@
             "cloud_profile_mismatch": "Le profil cloud ne correspond pas à la configuration",
             "invalid_auth": "Authentication",
             "invalid_key": "Erreur de clé: sélectionnez 'Cloud retrieve' pour obtenir de Meross",
-            "invalid_nullkey": "Erreur de clé: sélectionnez 'Hack mode' pour autoriser la clé vide"
+            "invalid_nullkey": "Erreur de clé: sélectionnez 'Hack mode' pour autoriser la clé vide",
+            "broker_address_invalid": "MQTT broker address not recognized",
+            "broker_connection_error": "MQTT broker connection error"
         },
         "step": {
             "user": {
@@ -140,6 +142,24 @@
             "finalize": {
                 "title": "Configuration de l'appareil",
                 "description": "Type: {device_type}\nUUID: {device_id}"
+            },
+            "bind": {
+                "title": "Reconfigurer WiFi\/MQTT (liaison locale)",
+                "description": "Connectez (Liez) l'appareil à un autre courtier MQTT\nWi-Fi actuel: {ssid}\nCourtier actuel : {server}",
+                "data": {
+                    "ssid": "Wi-Fi SSID",
+                    "password": "Mot de passe du Wi-Fi",
+                    "server": "Adresse du nouveau courtier MQTT",
+                    "check": "Vérifier la compatibilité du courtier MQTT avant de reconfigurer",
+                    "key": "Clé",
+                    "userid": "ID de l'utilisateur",
+                    "error": "Message d'erreur"
+                },
+                "data_description": {
+                    "server": "Entrez l'adresse sous la forme 'host(:port)'",
+                    "key": "Enter the Key used to sign protocol messages (empty keeps current value)",
+                    "userid": "Enter the User Id (empty keeps current value)"
+                }
             }
         }
     },
@@ -208,24 +228,26 @@
                     "device": "Configurer",
                     "profile": "Configurer",
                     "diagnostics": "Diagnostique",
-                    "bind": "Reconfigurer MQTT (liaison locale)",
+                    "bind": "Reconfigurer WiFi\/MQTT (liaison locale)",
                     "unbind": "Réinitialisation du matériel"
                 }
             },
             "bind": {
-                "title": "Reconfigurer MQTT (liaison locale)",
-                "description": "Connectez (Liez) l'appareil à un autre courtier MQTT\nCourtier actuel : {domain}",
+                "title": "Reconfigurer WiFi\/MQTT (liaison locale)",
+                "description": "Connectez (Liez) l'appareil à un autre courtier MQTT\nWi-Fi actuel: {ssid}\nCourtier actuel : {server}",
                 "data": {
-                    "domain": "Adresse du nouveau courtier MQTT",
                     "check": "Vérifier la compatibilité du courtier MQTT avant de reconfigurer",
                     "key": "Clé",
                     "userid": "ID de l'utilisateur",
-                    "error": "Message d'erreur"
+                    "error": "Message d'erreur",
+                    "ssid": "Wi-Fi SSID",
+                    "password": "Mot de passe du Wi-Fi",
+                    "server": "Adresse du nouveau courtier MQTT"
                 },
                 "data_description": {
-                    "domain": "Entrez l'adresse sous la forme 'host(:port)' ou laissez vide pour utiliser celle de HomeAssistant.",
-                    "userid": "Laissez vide pour une meilleure compatibilité avec meross_lan",
-                    "key": "Laissez vide pour une meilleure compatibilité avec meross_lan"
+                    "userid": "Enter the User Id (empty keeps current value)",
+                    "key": "Enter the Key used to sign protocol messages (empty keeps current value)",
+                    "server": "Entrez l'adresse sous la forme 'host(:port)'"
                 }
             },
             "unbind": {
@@ -235,10 +257,6 @@
                     "post_action": "Après la déliaison:",
                     "error": "Message d'erreur"
                 }
-            },
-            "bind_finalize": {
-                "title": "Reconfigurer MQTT (liaison locale)",
-                "description": "L'appareil a été configuré avec succès avec le nouveau courtier MQTT à {domain}.\nLa configuration a été mise à jour et rechargée, mais vous devrez peut-être redémarrer (cycle d'alimentation) l'appareil pour qu'il se connecte au nouveau courtier."
             }
         },
         "error": {
@@ -249,7 +267,9 @@
             "invalid_auth": "Authentication",
             "invalid_key": "Erreur de clé: sélectionnez 'Cloud retrieve' pour obtenir de Meross",
             "invalid_nullkey": "Erreur de clé: sélectionnez 'Hack mode' pour autoriser la clé vide",
-            "habroker_not_connected": "Le courtier HomeAssistant MQTT n'est pas connecté"
+            "habroker_not_connected": "Le courtier HomeAssistant MQTT n'est pas connecté",
+            "broker_address_invalid": "MQTT broker address not recognized",
+            "broker_connection_error": "MQTT broker connection error"
         }
     },
     "issues": {

@@ -139,9 +139,13 @@
                     "mfa_code": "Authenticator code"
                 }
             },
+            "finalize": {
+                "title": "Device configuration",
+                "description": "Type: {device_type}\nUUID: {device_id}"
+            },
             "bind": {
-                "title": "Wifi/MQTT binding",
-                "description": "Connect the device to a different Wifi network and/or MQTT broker\nCurrent WiFi: {ssid}\nCurrent broker: {server}\nEmpty fields will be skipped or automatically set.",
+                "title": "Wifi\/MQTT binding",
+                "description": "Connect the device to a different Wifi network and\/or MQTT broker\nCurrent Wi-Fi: {ssid}\nCurrent broker: {server}\nEmpty fields will be skipped or automatically set.",
                 "data": {
                     "ssid": "Wi-Fi SSID",
                     "password": "Wi-Fi password",
@@ -156,10 +160,6 @@
                     "key": "Enter the Key used to sign protocol messages (empty keeps current value)",
                     "userid": "Enter the User Id (empty keeps current value)"
                 }
-            },
-            "finalize": {
-                "title": "Device configuration",
-                "description": "Type: {device_type}\nUUID: {device_id}"
             }
         }
     },
@@ -228,26 +228,26 @@
                     "device": "Configure",
                     "profile": "Configure",
                     "diagnostics": "Diagnostics",
-                    "bind": "Wifi/MQTT binding",
+                    "bind": "Wifi\/MQTT binding",
                     "unbind": "Hardware reset"
                 }
             },
             "bind": {
-                "title": "Wifi/MQTT binding",
-                "description": "Connect the device to a different Wifi network and/or MQTT broker\nCurrent WiFi: {ssid}\nCurrent broker: {server}\nEmpty fields will be skipped or automatically set.",
+                "title": "Wifi\/MQTT binding",
+                "description": "Connect the device to a different Wifi network and\/or MQTT broker\nCurrent Wi-Fi: {ssid}\nCurrent broker: {server}\nEmpty fields will be skipped or automatically set.",
                 "data": {
-                    "ssid": "Wi-Fi SSID",
-                    "password": "Wi-Fi password",
-                    "server": "Address of the new MQTT broker",
                     "check": "Check broker compatibility before reconfiguring",
                     "key": "Device key",
                     "userid": "User Id",
-                    "error": "Error message"
+                    "error": "Error message",
+                    "ssid": "Wi-Fi SSID",
+                    "password": "Wi-Fi password",
+                    "server": "Address of the new MQTT broker"
                 },
                 "data_description": {
-                    "server": "Enter the address in the form 'host(:port)' (leave empty to skip)",
+                    "userid": "Enter the User Id (empty keeps current value)",
                     "key": "Enter the Key used to sign protocol messages (empty keeps current value)",
-                    "userid": "Enter the User Id (empty keeps current value)"
+                    "server": "Enter the address in the form 'host(:port)' (leave empty to skip)"
                 }
             },
             "unbind": {
@@ -257,10 +257,6 @@
                     "post_action": "After unbinding:",
                     "error": "Error message"
                 }
-            },
-            "bind_finalize": {
-                "title": "Reconfigure MQTT (local binding)",
-                "description": "The device has been succesfully configured with the new MQTT broker at {domain}.\nThe configuration has been updated and reloaded but you might need to reboot (power-cycle) the device for it to connect to the new broker."
             }
         },
         "error": {

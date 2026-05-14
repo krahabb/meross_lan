@@ -89,7 +89,9 @@
             "cloud_profile_mismatch": "Cloudový profil neodpovídá konfiguraci",
             "invalid_auth": "Ověření selhalo",
             "invalid_key": "Neplatný klíč: select 'Cloud retrieve' to get from Meross",
-            "invalid_nullkey": "Neplatný klíč: select 'Hack mode' to allow empty key"
+            "invalid_nullkey": "Neplatný klíč: select 'Hack mode' to allow empty key",
+            "broker_address_invalid": "MQTT broker address not recognized",
+            "broker_connection_error": "MQTT broker connection error"
         },
         "step": {
             "user": {
@@ -140,6 +142,24 @@
             "finalize": {
                 "title": "Konfigurace zařízení",
                 "description": "Typ: {device_type}\nIdentifikátor UUID: {device_id}"
+            },
+            "bind": {
+                "title": "Překonfigurovat Wifi\/MQTT (místní vazba)",
+                "description": "Připojte (svažte) zařízení k jinému MQTT brokerovi\nAktuální Wi-Fi: {ssid}\nAktuální broker: {server}",
+                "data": {
+                    "ssid": "Wi-Fi SSID",
+                    "password": "Heslo k účtu Wi-Fi",
+                    "server": "Adresa nového zprostředkovatele MQTT",
+                    "check": "Zkontrolujte kompatibilitu zprostředkovatele MQTT před rekonfigurací",
+                    "key": "Klíč zařízení",
+                    "userid": "Id uživatele",
+                    "error": "Chybová zpráva"
+                },
+                "data_description": {
+                    "server": "Zadejte adresu ve tvaru 'host(:port)'",
+                    "key": "Enter the Key used to sign protocol messages (empty keeps current value)",
+                    "userid": "Enter the User Id (empty keeps current value)"
+                }
             }
         }
     },
@@ -208,24 +228,26 @@
                     "device": "Konfigurovat",
                     "profile": "Konfigurovat",
                     "diagnostics": "Diagnostika",
-                    "bind": "Překonfigurovat MQTT (místní vazba)",
+                    "bind": "Překonfigurovat Wifi\/MQTT (místní vazba)",
                     "unbind": "Hardwarový reset"
                 }
             },
             "bind": {
-                "title": "Překonfigurovat MQTT (místní vazba)",
-                "description": "Připojte (svažte) zařízení k jinému MQTT brokerovi\nAktuální broker: {domain}",
+                "title": "Překonfigurovat Wifi\/MQTT (místní vazba)",
+                "description": "Připojte (svažte) zařízení k jinému MQTT brokerovi\nAktuální Wi-Fi: {ssid}\nAktuální broker: {server}",
                 "data": {
-                    "domain": "Adresa nového zprostředkovatele MQTT",
                     "check": "Zkontrolujte kompatibilitu zprostředkovatele MQTT před rekonfigurací",
                     "key": "Klíč zařízení",
                     "userid": "Id uživatele",
-                    "error": "Chybová zpráva"
+                    "error": "Chybová zpráva",
+                    "ssid": "Wi-Fi SSID",
+                    "password": "Heslo k účtu Wi-Fi",
+                    "server": "Adresa nového zprostředkovatele MQTT"
                 },
                 "data_description": {
-                    "domain": "Zadejte adresu ve tvaru 'host(:port)' nebo nechte prázdnou, chcete-li použít adresu HomeAssistant.",
-                    "userid": "Pro lepší kompatibilitu s meross_lan ponechte prázdné",
-                    "key": "Pro lepší kompatibilitu s meross_lan ponechte prázdné"
+                    "userid": "Enter the User Id (empty keeps current value)",
+                    "key": "Enter the Key used to sign protocol messages (empty keeps current value)",
+                    "server": "Zadejte adresu ve tvaru 'host(:port)'"
                 }
             },
             "unbind": {
@@ -235,10 +257,6 @@
                     "post_action": "Po rozvázání:",
                     "error": "Chybová zpráva"
                 }
-            },
-            "bind_finalize": {
-                "title": "Překonfigurovat MQTT (místní vazba)",
-                "description": "Zařízení bylo úspěšně nakonfigurováno s novým MQTT brokerem na {domain}.\nKonfigurace byla aktualizována a znovu načtena, ale může být nutné zařízení restartovat (vypnout a zapnout), aby se mohlo připojit k novému brokerovi."
             }
         },
         "error": {
@@ -249,7 +267,9 @@
             "invalid_auth": "Ověření selhalo",
             "invalid_key": "Neplatný klíč: select 'Cloud retrieve' to get from Meross",
             "invalid_nullkey": "Neplatný klíč: select 'Hack mode' to allow empty key",
-            "habroker_not_connected": "Zprostředkovatel HomeAssistant MQTT není připojen"
+            "habroker_not_connected": "Zprostředkovatel HomeAssistant MQTT není připojen",
+            "broker_address_invalid": "MQTT broker address not recognized",
+            "broker_connection_error": "MQTT broker connection error"
         }
     },
     "issues": {
