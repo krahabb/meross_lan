@@ -45,14 +45,14 @@
                     "idle": "Leerlauf"
                 }
             },
-            "mts_overheat_warning": {
+            "overheat_warning": {
                 "state": {
                     "1": "Überhitzung",
                     "0": "Ok",
                     "2": "Getrennt"
                 }
             },
-            "mts_frost_warning": {
+            "frost_warning": {
                 "state": {
                     "0": "Ok",
                     "1": "Freezing",

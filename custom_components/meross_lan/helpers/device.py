@@ -551,15 +551,15 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             None,
             self,
             async_press=self.async_poll_full,
-            name="Refresh",
-            device_class=PersistentButton.DeviceClass.RESTART,
+            entity_key="button_refresh",
+            device_class=PersistentButton.DeviceClass.UPDATE,
             entity_category=PersistentButton.EntityCategory.DIAGNOSTIC,
         )
         PersistentButton(
             None,
             self,
             press=self.schedule_reload,
-            name="Reload",
+            entity_key="button_reload",
             device_class=PersistentButton.DeviceClass.RESTART,
             entity_category=PersistentButton.EntityCategory.DIAGNOSTIC,
         )

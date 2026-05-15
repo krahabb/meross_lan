@@ -260,6 +260,7 @@ class ProtocolSensor(EnumSensorEntity):
     _attr_available = True
     _attr_entity_category = SensorEntity.EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
+    _attr_name = "Protocol"
 
     options: list[str] = [
         STATE_DISCONNECTED,
@@ -348,8 +349,9 @@ class SignalStrengthSensor(SensorParser, mle.EntityNamespaceMixin):
     init_key_value = SensorParser.KeyValue(mc.KEY_SIGNAL)
     # HA core entity attributes:
     _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC
-    _attr_native_unit_of_measurement = hac.PERCENTAGE
     _attr_icon = "mdi:wifi"
+    _attr_name = "Signal strength"
+    _attr_native_unit_of_measurement = hac.PERCENTAGE
 
 
 class FilterMaintenanceSensor(SensorParser):

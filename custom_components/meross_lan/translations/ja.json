@@ -45,14 +45,14 @@
                     "idle": "アイドル"
                 }
             },
-            "mts_overheat_warning": {
+            "overheat_warning": {
                 "state": {
                     "1": "過熱",
                     "0": "良い",
                     "2": "切断された"
                 }
             },
-            "mts_frost_warning": {
+            "frost_warning": {
                 "state": {
                     "0": "良い",
                     "1": "Freezing",

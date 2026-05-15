@@ -75,7 +75,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             entity_category: NotRequired[entity.EntityCategory | None]
             entity_registry_enabled_default: NotRequired[bool]
             name: NotRequired[str | None]
-            translation_key: NotRequired[str]
+            translation_key: NotRequired[str | None]
             icon: NotRequired[str]
 
         @classmethod
@@ -128,7 +128,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         "device_class",
         "entity_category",
         "entity_registry_enabled_default",
-        "translation_key",
+        "name",
         "icon",
     )
 
@@ -144,6 +144,8 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
     __slots__ = (
         "entity_key",
         "hass_connected",
+        # HA core entity attributes
+        "translation_key",
     )
 
     @overload
@@ -208,16 +210,6 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
                     self.device_info = kwargs.pop("device_info")  # type: ignore
                 except KeyError:
                     self.device_info = parent.get_device_entry_info(id)
-                if id is None:
-                    _legacy_id = entity_key
-                elif entity_key:
-                    _legacy_id = (
-                        f"{id[0]}_{id[1]}_{entity_key}"
-                        if type(id) is tuple
-                        else f"{id}_{entity_key}"
-                    )
-                else:
-                    _legacy_id = id
                 try:
                     # REMOVE
                     # intercept 'index' arg targeting NamespaceParser mixin
@@ -231,15 +223,6 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
                 except KeyError:
                     id = entity_key
 
-                if id != _legacy_id:
-                    parent.log(
-                        self.WARNING,
-                        "Legacy id '%s' adjusted to '%s' for entity with entity_key '%s'",
-                        _legacy_id,
-                        id,
-                        entity_key,
-                    )
-
         assert (
             id not in parent.entities
         ), f"id:{id} is not unique inside parent.entities"
@@ -251,6 +234,11 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         self.force_update = False
         self.has_entity_name = True
         self.should_poll = False
+        self.translation_key = (
+            kwargs["translation_key"]
+            if "translation_key" in kwargs
+            else getattr(self, "_attr_translation_key", entity_key)
+        )
         # unique_id is by default computed internally so to have a consistent layout.
         # Not all entities should or will adhere to this but since
         # they should be rare we're using local overrides here and there in descendants.
@@ -265,30 +253,12 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         # "{subdev_id}_{ns.slug}_{key_value}_{channel}" where channel is optional ofc
         # This way we could maybe get rid of entity_key
         self.unique_id = f"{parent.id}_{id}"
-        # HA core special handling
-        try:
-            # TODO: For multi-functional devices, find a way to correctly name
-            # those entities which are not the main feature of the device (for example
-            # accessory light/spray for mod100)
-            self.name = kwargs.pop("name")
-        except KeyError:
-            try:
-                self.name = self._attr_name
-            except AttributeError:
-                if entity_key:
-                    entity_key_split = entity_key.split("_")
-                    if len(entity_key_split) > 2:
-                        self.name = entity_key_split[-1].capitalize()
-                    else:
-                        self.name = entity_key.replace("_", " ").capitalize()
         # simple setting of HA core attributes if provided in kwargs
         # else fallback to HA core mechanics
-        for _attr_name in tuple(
-            _attr_name
-            for _attr_name in kwargs
-            if _attr_name in self.__class__.HA_ENTITY_ATTRIBUTES
+        for _attr in tuple(
+            _attr for _attr in kwargs if _attr in self.__class__.HA_ENTITY_ATTRIBUTES
         ):
-            setattr(self, _attr_name, kwargs.pop(_attr_name))
+            setattr(self, _attr, kwargs.pop(_attr))
         super().__init__(id, parent, **kwargs)
         parent.entities[id] = self
         parent.async_shutdown_broadcast.add(self.async_shutdown)
@@ -306,6 +276,36 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         del self.parent.entities[self.id]
 
     # interface: entity.Entity
+    def _name_internal(
+        self,
+        device_class_name: str | None,
+        platform_translations: dict[str, str],
+    ) -> str | entity.UndefinedType | None:
+        """Return the name of the entity. This is a (dangerous?!) patch overriding
+        the HA core Entity name mechanics in order to provide more flexible naming mechanics.
+        """
+        if hasattr(self, "_attr_name"):
+            return self._attr_name
+
+        translation_key = f"component.{self.platform_data.platform_name}.entity.{self.platform_data.domain}.{self.translation_key}.name"
+        if translation_key in platform_translations:
+            return self._substitute_name_placeholders(
+                platform_translations[translation_key]
+            )
+
+        if self._default_to_device_class_name():
+            return device_class_name
+
+        if entity_key := self.entity_key:
+            entity_key_split = entity_key.split("_")
+            if len(entity_key_split) > 2:
+                # For 'new style' entity_key(s) in the order of 'ns_slug__key_value' we want to use
+                # only the (last split) key_value part as name.
+                return entity_key_split[-1].capitalize()
+            else:
+                return entity_key.replace("_", " ").capitalize()
+        return entity.UNDEFINED
+
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
         self.log(self.VERBOSE, "Added to HomeAssistant")

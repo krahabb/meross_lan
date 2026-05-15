@@ -124,12 +124,10 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
             warning = payload[mc.KEY_WARNING]
             self.sensor_warning.update_device_value(warning)
         except AttributeError:
-            entity_key = f"{self.entity_key}_warning"
             self.sensor_warning = EnumParser(
                 self,
-                entity_key=entity_key,
+                entity_key=f"{self.entity_key}_warning",
                 ns_value=warning,
-                translation_key=f"mts_{entity_key}",
             )
         except KeyError:
             pass

@@ -45,14 +45,14 @@
                     "idle": "Bezczynny"
                 }
             },
-            "mts_overheat_warning": {
+            "overheat_warning": {
                 "state": {
                     "1": "Przegrzewanie",
                     "0": "Ok",
                     "2": "Rozłączony"
                 }
             },
-            "mts_frost_warning": {
+            "frost_warning": {
                 "state": {
                     "0": "Ok",
                     "1": "Zamarzanie",

@@ -45,14 +45,14 @@
                     "idle": "Inactif"
                 }
             },
-            "mts_overheat_warning": {
+            "overheat_warning": {
                 "state": {
                     "1": "Surchauffe",
                     "0": "Ok",
                     "2": "Débranché"
                 }
             },
-            "mts_frost_warning": {
+            "frost_warning": {
                 "state": {
                     "0": "Ok",
                     "1": "Freezing",

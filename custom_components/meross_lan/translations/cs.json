@@ -45,14 +45,14 @@
                     "idle": "Nečinný"
                 }
             },
-            "mts_overheat_warning": {
+            "overheat_warning": {
                 "state": {
                     "1": "Přehřívání",
                     "0": "Ok",
                     "2": "Odpojeno"
                 }
             },
-            "mts_frost_warning": {
+            "frost_warning": {
                 "state": {
                     "0": "Ok",
                     "1": "Freezing",

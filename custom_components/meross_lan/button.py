@@ -23,7 +23,6 @@ class Button(Entity, button.ButtonEntity):
         class Args(Entity.Args):
             press: NotRequired[Callable[[], None]]
             async_press: NotRequired[Callable[[], CoroutineType[Any, Any, None]]]
-            name: str  # Override
             device_class: NotRequired[button.ButtonDeviceClass | None]
 
     PLATFORM = button.DOMAIN
@@ -31,7 +30,10 @@ class Button(Entity, button.ButtonEntity):
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         """Provide either 'async_press' or 'press' callback to install an action on this button."""
-        kwargs.setdefault("entity_key", f"button_{slugify(kwargs['name'])}")
+        if "entity_key" not in kwargs:
+            # name is required if entity_key missing
+            kwargs["entity_key"] = f"button_{slugify(kwargs['name'])}"  # type: ignore
+
         try:
             self.async_press = kwargs.pop("async_press")  # type: ignore
         except KeyError:

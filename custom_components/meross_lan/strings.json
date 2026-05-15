@@ -45,14 +45,14 @@
                     "high": "High"
                 }
             },
-            "mts_overheat_warning": {
+            "overheat_warning": {
                 "state": {
                     "1": "Overheating",
                     "0": "[%key:entity::sensor::common::state::ok%]",
                     "2": "[%key:entity::sensor::common::state::disconnected%]"
                 }
             },
-            "mts_frost_warning": {
+            "frost_warning": {
                 "state": {
                     "0": "[%key:entity::sensor::common::state::ok%]",
                     "1": "Freezing",
