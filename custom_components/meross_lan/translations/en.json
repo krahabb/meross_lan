@@ -35,29 +35,21 @@
                     "ok": "No issues"
                 }
             },
-            "common": {
-                "state": {
-                    "ok": "Ok",
-                    "disconnected": "Disconnected",
-                    "low": "Low",
-                    "medium": "Medium",
-                    "high": "High",
-                    "idle": "Idle"
-                }
-            },
             "overheat_warning": {
                 "state": {
-                    "1": "Overheating",
+                    "1": "Alarm",
                     "0": "Ok",
                     "2": "Disconnected"
-                }
+                },
+                "name": "Overheat protection"
             },
             "frost_warning": {
                 "state": {
                     "0": "Ok",
-                    "1": "Freezing",
+                    "1": "Alarm",
                     "2": "Disconnected"
-                }
+                },
+                "name": "Frost protection"
             },
             "mts300_status": {
                 "state": {
@@ -73,7 +65,87 @@
                     "2": "Humidifying",
                     "0": "Idle"
                 }
+            },
+            "consumption": {
+                "name": "Consumption"
+            },
+            "energy_estimate": {
+                "name": "Estimated daily consumption"
+            },
+            "mConsume": {
+                "name": "Monthly consumption"
+            },
+            "overheat_currentTemp": {
+                "name": "External temperature"
             }
+        },
+        "number": {
+            "calibration_humidity": {
+                "name": "Calibration (humidity)"
+            },
+            "calibration_temperature": {
+                "name": "Calibration (temperature)"
+            },
+            "temperature_comfort": {
+                "name": "Preset comfort"
+            },
+            "temperature_sleep": {
+                "name": "Preset sleep"
+            },
+            "temperature_away": {
+                "name": "Preset away"
+            },
+            "deadZone": {
+                "name": "Differential temperature"
+            },
+            "frost": {
+                "name": "Frost protection"
+            },
+            "overheat": {
+                "name": "Overheat protection"
+            }
+        },
+        "switch": {
+            "frost_switch": {
+                "name": "Frost protection"
+            },
+            "overheat_switch": {
+                "name": "Overheat protection"
+            }
+        },
+        "select": {
+            "appliance_config_devicecfg__unitCfg_tempUnit": {
+                "name": "Display: temperature unit"
+            },
+            "appliance_config_devicecfg__timeCfg_am": {
+                "name": "Display: time format",
+                "state": {
+                    "12_hours": "12 hours",
+                    "24_hours": "24 hours"
+                }
+            },
+            "appliance_config_devicecfg__unitCfg_unitType": {
+                "name": "Display: unit system",
+                "state": {
+                    "us_customary": "US customary",
+                    "metric": "Metric"
+                }
+            }
+        }
+    },
+    "common": {
+        "state": {
+            "ok": "Ok",
+            "disconnected": "Disconnected",
+            "low": "Low",
+            "medium": "Medium",
+            "high": "High",
+            "idle": "Idle",
+            "alarm": "Alarm"
+        },
+        "name": {
+            "frost": "Frost protection",
+            "overheat": "Overheat protection"
         }
     },
     "config": {
@@ -145,7 +217,7 @@
             },
             "bind": {
                 "title": "Wifi\/MQTT binding",
-                "description": "Connect the device to a different Wifi network and\/or MQTT broker\nCurrent Wi-Fi: {ssid}\nCurrent broker: {server}\nEmpty fields will be skipped or automatically set.",
+                "description": "Connect the device to a different Wifi network and\/or MQTT broker\nCurrent WiFi: {ssid}\nCurrent broker: {server}\nEmpty fields will be skipped or automatically set.",
                 "data": {
                     "ssid": "Wi-Fi SSID",
                     "password": "Wi-Fi password",
@@ -234,7 +306,7 @@
             },
             "bind": {
                 "title": "Wifi\/MQTT binding",
-                "description": "Connect the device to a different Wifi network and\/or MQTT broker\nCurrent Wi-Fi: {ssid}\nCurrent broker: {server}\nEmpty fields will be skipped or automatically set.",
+                "description": "Connect the device to a different Wifi network and\/or MQTT broker\nCurrent WiFi: {ssid}\nCurrent broker: {server}\nEmpty fields will be skipped or automatically set.",
                 "data": {
                     "check": "Check broker compatibility before reconfiguring",
                     "key": "Device key",

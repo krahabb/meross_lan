@@ -259,6 +259,13 @@ KEY_UPGRADE = "upgrade"
 KEY_URL = "url"
 KEY_MD5 = "md5"
 KEY_MCU = "mcu"
+# Appliance.Config.DeviceCfg keys
+KEY_CALIBRATECFG = "calibrateCfg"
+KEY_TIMECFG = "timeCfg"
+KEY_AM = "am"
+KEY_UNITCFG = "unitCfg"
+KEY_UNITTYPE = "unitType"  # This doesn't appear in ms130 but it seems to be available in mst devices
+
 # mostly related to Meross cloud api
 KEY_NONCE = "nonce"
 KEY_PARAMS = "params"

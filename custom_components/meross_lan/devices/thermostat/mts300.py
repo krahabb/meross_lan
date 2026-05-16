@@ -29,7 +29,7 @@ class Mts300Climate(MtsThermostatClimate):
     class AdjustNumber(MtsThermostatClimate.AdjustNumber):
 
         class AdjustHumidityNumber(NumberParser):
-            init_entity_key = "humidity_calibration"
+            init_entity_key = "calibration_humidity"
             init_key_value = NumberParser.KeyValue(mc.KEY_HUMIVALUE)
             init_device_scale = 10
 

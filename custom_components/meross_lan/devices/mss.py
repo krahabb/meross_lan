@@ -269,8 +269,8 @@ class ConsumptionHSensor(SensorParser):
     init_key_value = SensorParser.KeyValue(mc.KEY_TOTAL)
 
     _attr_device_class = SensorParser.DeviceClass.ENERGY
-    _attr_name = "Consumption"
     _attr_suggested_display_precision = 0
+    _attr_translation_key = "consumption"
 
     async def async_added_to_hass(self):
         self.handler_ns.channel_polling_add(self.index)
@@ -416,6 +416,7 @@ class ConsumptionXSensor(
     )
     init_entity_key = "energy"
     _attr_device_class = SensorParser.DeviceClass.ENERGY
+    _attr_translation_key = "consumption"
 
     ATTR_OFFSET = "offset"
     ATTR_RESET_TS = "reset_ts"

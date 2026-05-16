@@ -35,29 +35,21 @@
                     "ok": "Ok"
                 }
             },
-            "common": {
-                "state": {
-                    "ok": "Ok",
-                    "disconnected": "Disconnesso",
-                    "low": "Bassa",
-                    "medium": "Media",
-                    "high": "Alta",
-                    "idle": "Inattivo"
-                }
-            },
             "overheat_warning": {
                 "state": {
-                    "1": "Surriscaldamento",
+                    "1": "Allarme",
                     "0": "Ok",
                     "2": "Disconnesso"
-                }
+                },
+                "name": "Protezione surriscaldamento"
             },
             "frost_warning": {
                 "state": {
                     "0": "Ok",
-                    "1": "Freezing",
+                    "1": "Allarme",
                     "2": "Disconnesso"
-                }
+                },
+                "name": "Protezione antigelo"
             },
             "mts300_status": {
                 "state": {
@@ -73,7 +65,87 @@
                     "2": "Umidificazione",
                     "0": "Inattivo"
                 }
+            },
+            "consumption": {
+                "name": "Consumo"
+            },
+            "energy_estimate": {
+                "name": "Consumo giornaliero stimato"
+            },
+            "mConsume": {
+                "name": "Consumo mensile"
+            },
+            "overheat_currentTemp": {
+                "name": "Temperatura esterna"
             }
+        },
+        "number": {
+            "calibration_humidity": {
+                "name": "Calibrazione umidità"
+            },
+            "calibration_temperature": {
+                "name": "Calibrazione temperatura"
+            },
+            "temperature_comfort": {
+                "name": "Temperatura comfort"
+            },
+            "temperature_sleep": {
+                "name": "Temperatura notturna"
+            },
+            "temperature_away": {
+                "name": "Temperatura vacanza"
+            },
+            "deadZone": {
+                "name": "Differenziale temperatura"
+            },
+            "frost": {
+                "name": "Protezione antigelo"
+            },
+            "overheat": {
+                "name": "Protezione surriscaldamento"
+            }
+        },
+        "switch": {
+            "frost_switch": {
+                "name": "Protezione antigelo"
+            },
+            "overheat_switch": {
+                "name": "Protezione surriscaldamento"
+            }
+        },
+        "select": {
+            "appliance_config_devicecfg__unitCfg_tempUnit": {
+                "name": "Display: unità temperatura"
+            },
+            "appliance_config_devicecfg__timeCfg_am": {
+                "name": "Display: formato ora",
+                "state": {
+                    "12_hours": "12 ore",
+                    "24_hours": "24 ore"
+                }
+            },
+            "appliance_config_devicecfg__unitCfg_unitType": {
+                "name": "Display: sistema di unità",
+                "state": {
+                    "us_customary": "Imperiale\/US",
+                    "metric": "Metrico"
+                }
+            }
+        }
+    },
+    "common": {
+        "state": {
+            "ok": "Ok",
+            "disconnected": "Disconnesso",
+            "low": "Bassa",
+            "medium": "Media",
+            "high": "Alta",
+            "idle": "Inattivo",
+            "alarm": "Allarme"
+        },
+        "name": {
+            "frost": "Protezione antigelo",
+            "overheat": "Protezione surriscaldamento"
         }
     },
     "config": {

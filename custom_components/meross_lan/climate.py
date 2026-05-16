@@ -34,8 +34,8 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
     class AdjustNumber(NumberParser):
 
-        _attr_name = "Calibration"
         _attr_device_class = NumberParser.DEVICE_CLASS_TEMPERATURE_DELTA
+        _attr_translation_key = "calibration_temperature"
 
     class SetPointNumber(NumberParser):
         """
@@ -476,8 +476,8 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
                     native_max_value=self.max_temp,
                     native_min_value=self.min_temp,
                     native_step=self.target_temperature_step,
-                    name=f"{preset} temperature",
                     icon=cls.SETPOINT_ICON_MAP[preset],
+                    translation_key=f"temperature_{preset}",
                 )
                 for preset, key_value in {
                     preset: cls.MTS_MODE_TO_TEMPERATUREKEY_MAP[

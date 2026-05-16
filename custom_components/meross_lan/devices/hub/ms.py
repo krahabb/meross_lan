@@ -152,16 +152,16 @@ class ms100(SensorSubDevice):
     SENSOR_ADJUST_DEFS = {
         mc.KEY_HUMIDITY: SensorAdjustNumber.DEF(
             entity_key="config_adjust_humidity",
-            name="Adjust humidity",
             device_class=NumberParser.DeviceClass.HUMIDITY,
+            translation_key="calibration_humidity",
             native_min_value=-20,
             native_max_value=20,
             native_step=1,
         ),
         mc.KEY_TEMPERATURE: SensorAdjustNumber.DEF(
             entity_key="config_adjust_temperature",
-            name="Adjust temperature",
             device_class=NumberParser.DeviceClass.TEMPERATURE,
+            translation_key="calibration_temperature",
             native_min_value=-5,
             native_max_value=5,
             native_step=0.1,

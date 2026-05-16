@@ -10,6 +10,7 @@ from ...number import NumberParser
 from ...select import SelectParser
 from ...sensor import EnumParser, SensorParser
 from ...switch import SwitchParser
+from ..misc import DeviceCfgParser
 
 if TYPE_CHECKING:
     from typing import Any, Callable, ClassVar, Final, Unpack
@@ -142,7 +143,6 @@ class MtsCommonTemperatureExtNumber(MtsCommonTemperatureNumber):
                 entity_key=f"{self.entity_key}_switch",
                 ns=self.ns,
                 is_on=self.available,
-                name=(f"{self.entity_key} Alarm").capitalize(),
             )
             self.switch.register_state_callback(self._switch_state_callback)
         except KeyError:
@@ -202,6 +202,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
                         "entity_key": "external sensor",
                         "ns_value": current_temp,
                         "device_scale": self.device_scale,
+                        "translation_key": "overheat_currentTemp",
                     }
                 ),
             )
@@ -266,6 +267,8 @@ class MtsExternalSensorSwitch(SwitchParser):
     init_entity_key = "external sensor mode"
     init_key_value = SwitchParser.KeyValue(mc.KEY_MODE)
 
+    # TODO: use a SelectParser instead with options "internal" and "external"
+
 
 class MtsHoldAction(SelectParser):
 
@@ -294,6 +297,7 @@ class MtsHoldAction(SelectParser):
                 entity_key="hold_action_time",
                 device_scale=1,
                 ns_value=time,
+                name="Hold action time",
                 device_class=NumberParser.DEVICE_CLASS_DURATION,
                 native_unit_of_measurement=mlc.hac.UnitOfTime.MINUTES,
             )
@@ -312,12 +316,13 @@ class MtsHoldAction(SelectParser):
 
 class MtsTempUnit(SelectParser):
 
+    _tempunit_cfg: "mt.JsonMapping" = DeviceCfgParser.init_parser_defs[mc.KEY_UNITCFG][mc.KEY_TEMPUNIT]  # type: ignore
+
     init_entity_key = "display_temperature_unit"
     init_key_value = SelectParser.KeyValue(mc.KEY_TEMPUNIT)
-    init_options_map = {
-        mc.TEMPUNIT_CELSIUS: mlc.hac.UnitOfTemperature.CELSIUS,
-        mc.TEMPUNIT_FAHRENHEIT: mlc.hac.UnitOfTemperature.FAHRENHEIT,
-    }
+    init_options_map = _tempunit_cfg["options_map"]
+
+    _attr_translation_key = _tempunit_cfg["entity_key"]
 
 
 class MtsThermostatClimate(MtsClimate):
@@ -338,6 +343,7 @@ class MtsThermostatClimate(MtsClimate):
         init_ns = mn_t.Appliance_Control_Thermostat_Calibration
 
         _attr_device_class = NumberParser.DEVICE_CLASS_TEMPERATURE_DELTA
+        _attr_translation_key = "calibration_temperature"
         _attr_native_max_value = 8
         _attr_native_min_value = -8
         _attr_native_step = 0.1

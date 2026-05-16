@@ -30,50 +30,45 @@ class DeviceCfgParser(MappingParser):
 
     # These are extracted from ms130 payload but they look like generic enough
     # to be available through a wide set of devices.
-    KEY_CALIBRATECFG = "calibrateCfg"
-    KEY_TIMECFG = "timeCfg"
-    KEY_AM = "am"
-    KEY_UNITCFG = "unitCfg"
-    KEY_UNITTYPE = "unitType"  # This doesn't appear in ms130 but it seems to be available in mst devices
-
     init_parser_defs = {
-        KEY_CALIBRATECFG: {
+        mc.KEY_CALIBRATECFG: {
             mc.KEY_HUMI: NumberParser.DEF(
-                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_CALIBRATECFG}_{mc.KEY_HUMI}",
+                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{mc.KEY_CALIBRATECFG}_{mc.KEY_HUMI}",
                 device_scale=10,
                 device_class=NumberParser.DeviceClass.HUMIDITY,
-                name="Humidity Calibration",
+                translation_key="calibration_humidity",
                 native_min_value=-20,
                 native_max_value=20,
                 native_step=1,
             ),
             mc.KEY_TEMP: NumberParser.DEF(
-                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_CALIBRATECFG}_{mc.KEY_TEMP}",
+                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{mc.KEY_CALIBRATECFG}_{mc.KEY_TEMP}",
                 device_scale=100,
                 device_class=NumberParser.DeviceClass.TEMPERATURE,
-                name="Temperature Calibration",
+                translation_key="calibration_temperature",
                 native_min_value=-5,
                 native_max_value=5,
                 native_step=0.1,
             ),
         },
-        KEY_TIMECFG: {
-            KEY_AM: SelectParser.DEF(
-                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_TIMECFG}_{KEY_AM}",
-                options_map={1: "12 h", 2: "24 h"},
-                name="Time Format",
+        mc.KEY_TIMECFG: {
+            mc.KEY_AM: SelectParser.DEF(
+                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{mc.KEY_TIMECFG}_{mc.KEY_AM}",
+                options_map={1: "12_hours", 2: "24_hours"},
             )
         },
-        KEY_UNITCFG: {
+        mc.KEY_UNITCFG: {
             mc.KEY_TEMPUNIT: SelectParser.DEF(
-                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_UNITCFG}_{mc.KEY_TEMPUNIT}",
-                options_map={1: "Celsius", 2: "Fahrenheit"},
-                name="Temperature Unit",
+                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{mc.KEY_UNITCFG}_{mc.KEY_TEMPUNIT}",
+                options_map={
+                    mc.TEMPUNIT_CELSIUS: mlc.hac.UnitOfTemperature.CELSIUS,
+                    mc.TEMPUNIT_FAHRENHEIT: mlc.hac.UnitOfTemperature.FAHRENHEIT,
+                },
             ),
-            KEY_UNITTYPE: SelectParser.DEF(
-                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{KEY_UNITCFG}_{KEY_UNITTYPE}",
-                options_map={1: "US Customary", 2: "Metric"},
-                name="Unit Type",
+            # This doesn't appear in ms130 but it seems to be available in mst devices
+            mc.KEY_UNITTYPE: SelectParser.DEF(
+                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{mc.KEY_UNITCFG}_{mc.KEY_UNITTYPE}",
+                options_map={1: "us_customary", 2: "metric"},
             ),
         },
     }
