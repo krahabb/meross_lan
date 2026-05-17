@@ -225,6 +225,11 @@ class ms100(SensorSubDevice):
         # swap also the update_sensors method to a smarter one
         self._update_sensors = self._update_sensors_adjust
 
+        def _cleanup():
+            del self._update_sensors
+
+        self.shutdown_broadcast.add(_cleanup)
+
     def _parse_latest(self, payload: "mt.hub.Sensor_Latest"):
         self._update_sensors(
             payload[mc.KEY_TEMPERATURE]["sample"],

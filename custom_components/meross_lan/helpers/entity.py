@@ -261,19 +261,9 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             setattr(self, _attr, kwargs.pop(_attr))
         super().__init__(id, parent, **kwargs)
         parent.entities[id] = self
-        parent.async_shutdown_broadcast.add(self.async_shutdown)
         if parent.platforms:
             # this entity is being created after entry setup
             parent.add_entity(self)
-
-    def shutdown(self):
-        super().shutdown()
-        self.parent.async_shutdown_broadcast.remove(self.async_shutdown)
-        try:
-            del self.flush_state  # remove any possible state callback registration
-        except AttributeError:
-            pass
-        del self.parent.entities[self.id]
 
     # interface: entity.Entity
     def _name_internal(
@@ -328,6 +318,11 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             state_callback()
 
         self.flush_state = _wrapper
+
+        def _cleanup():
+            del self.flush_state
+
+        self.shutdown_broadcast.add(_cleanup)
 
     def flush_state(self):
         """Actually commits a state change to HA."""
@@ -650,6 +645,12 @@ class EntityNamespaceMixin(ParserEntity, handler.ParserHandler):
         ns_entity.handler_ns = ns_entity
         ns_entity.polling_strategy = None
         return ns_entity
+
+    def shutdown(self):
+        # Because of the mixin nature of this class the shutdown sequence could be invoked by
+        # both Entity and NamespaceHandler shutdown mechanics so we need filter out the duplicate.
+        super().shutdown()
+        del self.parent.ns_handlers[self.id]
 
     async def async_added_to_hass(self):
         self.polling_strategy = self.POLLING_CONFIG_DEFAULT[-1]

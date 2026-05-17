@@ -142,8 +142,6 @@ class Device(PhysicalDevice):
         _clients: Final[dict[Transport, AbstractClient]]
         _clients_connected: Final[dict[Transport, AbstractClient]]
         subdevices: dict[str, "SubDevice"]
-        """This is by default an immutable empty dict in order to set an efficient placeholder. For real Hubs
-        it must be reinitialized with an effective dict to allow storing the map of subdevices."""
         ns_handlers: Final[dict[mn.Namespace, NamespaceHandler]]
         handler_all: Final[NamespaceHandler]
 
@@ -212,7 +210,7 @@ class Device(PhysicalDevice):
         self.mqtt_active = False
         self._clients = {}
         self._clients_connected = {}
-        self.subdevices = mn.EMPTY_DICT
+        self.subdevices = {}
         self.ns_handlers = {}
         self.handler_all = NamespaceHandler(
             mn.Appliance_System_All,
@@ -298,14 +296,17 @@ class Device(PhysicalDevice):
         self.polling_stop()
         for client in tuple(self._clients.values()):
             await client.async_shutdown()
+        for subdevice in self.subdevices.values():
+            await subdevice.async_shutdown()
+        self.subdevices.clear()
+        for handler in self.ns_handlers.values():
+            await handler.async_shutdown()
+        self.ns_handlers.clear()
         await super().async_shutdown()
         del self.handler_all  # type: ignore
         # This must be by design
         assert self.is_connected is False, "Device shutdown failed: still connected"
         assert not self.client, "Device shutdown failed: client still set"
-        assert (
-            not self.ns_handlers
-        ), "Device shutdown failed: namespace handlers still set"
         assert not self._clients, "Device shutdown failed: clients still set"
         assert (
             not self._clients_connected
@@ -956,17 +957,18 @@ class SubDevice(PhysicalDevice, NamespaceParser):
 
     __SLOTS__ = ("async_request",)
 
-    def __init__(self, id: str, parent: "Device", **kwargs: "Unpack[Args]"):
+    def __init__(self, subid: str, parent: "Device", **kwargs: "Unpack[Args]"):
         self.async_request = parent.async_request
         kwargs["key"] = parent.key
         kwargs["from_"] = parent.from_
         kwargs["trigger_src"] = parent.trigger_src
         kwargs["timeout"] = parent.timeout
         kwargs["loop"] = parent.loop
-        super().__init__(id, parent, **kwargs)
+        parent.subdevices[subid] = self
+        super().__init__(subid, parent, **kwargs)
 
-    async def async_shutdown(self):
-        await super().async_shutdown()
+    def shutdown(self):
+        super().shutdown()
         del self.async_request
 
     # interface: AbstractClient

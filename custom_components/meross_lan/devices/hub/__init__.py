@@ -104,7 +104,6 @@ class Hub(mld.Device):
         # Also, the base Device class mixed-in might be different at test time since it gets mocked
         # so we have to dynamically create a new class on the fly. and ensure Hub is not
         # overriding any mocked attribute (see test.helpers.ConfigEntryMocker.ManagerMock)
-        self.subdevices = {}
         await super().async_init()
 
         # Check for unbinded subdevices which are 'still' in the device_registry
@@ -276,8 +275,8 @@ class Hub(mld.Device):
                     translation_placeholders={"device_name": subdevice.display_name},
                 )
                 self.create_task(
-                    subdevice.async_subdevice_shutdown(),
-                    f"{subdevice.__class__.__name__}.async_subdevice_shutdown()",
+                    self._async_remove_subdevice(subdevice),
+                    f"{subdevice.__class__.__name__}._async_remove_subdevice()",
                     eager_start=True,
                 )
 
@@ -319,6 +318,18 @@ class Hub(mld.Device):
                 timeout=14400,
             )
 
+    async def _async_remove_subdevice(self, subdevice: "SubDevice", /):
+        """Dedicated method for subdevice 'standalone' shutdown when we want to just remove this
+        and its related entities without affecting the whole hub device. This is useful when
+        we discover a subdevice has been removed from the hub and we need to cleanup accordingly.
+        """
+        for entity in [*subdevice.entities_iterable]:
+            if entity is not subdevice:
+                await entity.async_shutdown()
+            del self.entities[entity.id]
+        await subdevice.async_shutdown()
+        del self.subdevices[subdevice.id]
+
 
 class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
     """
@@ -357,7 +368,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
 
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: Hub, /, **kwargs):
         subid = descriptor.id
-        hub.subdevices[subid] = self
         self.device_registry = hub.device_registry
         self.device_info = {"identifiers": {(mlc.DOMAIN, subid)}}
         self.device_entry = hub.device_registry.async_get_or_create(
@@ -394,11 +404,12 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
 
     def shutdown(self):
         super().shutdown()
-        for _parse_method in tuple(
-            _p for _p in self.__dict__ if _p.startswith("_parse_")
-        ):
+        for _parse_method in [_p for _p in self.__dict__ if _p.startswith("_parse_")]:
             delattr(self, _parse_method)
-        del self.parent.subdevices[self.id]
+        # Because of the possible Entity mixin nature of this class the shutdown sequence could be invoked by
+        # both Entity and SubDevice shutdown mechanics so we need filter out the duplicate.
+        if self.id in self.parent.entities:
+            del self.parent.subdevices[self.id]
 
     # interface: BaseDevice
     @property
@@ -411,14 +422,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         )
 
     # interface: self
-    async def async_subdevice_shutdown(self):
-        """Dedicated method for subdevice 'standalone' shutdown when we want to just remove this
-        and its related entities without affecting the whole hub device. This is useful when
-        we discover a subdevice has been removed from the hub and we need to cleanup accordingly.
-        """
-        for entity in [*self.entities_iterable]:
-            await entity.async_shutdown()
-
     def update_subdevice_info(
         self, subdevice_info: "SubDeviceInfoType", profile: "MQTTProfile", /
     ):

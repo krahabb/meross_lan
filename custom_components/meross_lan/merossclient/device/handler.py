@@ -236,12 +236,9 @@ class NamespaceHandler(logging.Loggable):
             else None
         )
         parent.ns_handlers[id] = self
-        parent.shutdown_broadcast.add(self.shutdown)
 
     def shutdown(self):
         super().shutdown()
-        self.parent.shutdown_broadcast.remove(self.shutdown)
-        del self.parent.ns_handlers[self.id]
         del self.handler  # especially this one
         for index in tuple(self.parsers):
             self.log(self.DEBUG, "Cleaning up dangling parser for index %s", index)

@@ -415,7 +415,7 @@ class Loggable(metaclass=abc.ABCMeta):
     def shutdown(self):
         self.log(VERBOSE, "shutdown")
         if self.shutdown_broadcast:
-            for _listener in tuple(self.shutdown_broadcast):
+            for _listener in self.shutdown_broadcast:
                 _listener()
             self.shutdown_broadcast.clear()
 

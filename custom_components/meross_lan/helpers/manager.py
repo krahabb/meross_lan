@@ -164,7 +164,7 @@ class ConfigEntryManager(logging.Loggable):
         kwargs.setdefault("loop", parent.hass.loop)
         super().__init__(id, parent, **kwargs)
 
-    def shutdown(self):
+    async def async_shutdown(self):
         """
         Cleanup code called when the config entry is unloaded.
         Beware, when a derived class owns some direct member pointers to entities,
@@ -173,7 +173,10 @@ class ConfigEntryManager(logging.Loggable):
         their async polling before invalidating the member pointers (which are
         usually referred to inside the polling /parsing code)
         """
-        super().shutdown()
+        for entity in self.entities_iterable:
+            await entity.async_shutdown()
+        self.entities.clear()
+        await super().async_shutdown()
         if self.is_tracing:
             self.trace_close()
 
@@ -343,8 +346,9 @@ class ConfigEntryManager(logging.Loggable):
         ):
             if entity.hass_connected:
                 await entity.async_remove()
-            await entity.async_shutdown()
             ent_reg.async_remove(entity.entity_id)
+            await entity.async_shutdown()
+            del self.entities[entity.id]
 
     def add_entity[_T: "Entity"](self, entity: _T):  # type: ignore
         try:
