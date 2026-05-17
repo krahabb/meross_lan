@@ -41,7 +41,7 @@ class Fan(ToggleXParser, fan.FanEntity):
 
     init_speed_count = 1
     init__saved_speed = 1
-    SLOTS_AUTO_INIT = ("percentage", "speed_count", "_saved_speed")
+    AUTO_INIT = ("percentage", "speed_count", "_saved_speed")
     __slots__ = ()
 
     # interface: fan.FanEntity

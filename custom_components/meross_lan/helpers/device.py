@@ -153,7 +153,7 @@ class BaseDevice(device.PhysicalDevice):
         "device_entry",
     )
 
-    SLOTS_AUTO_INIT = ("update_firmware",)
+    AUTO_INIT = ("update_firmware",)
 
     @property
     @override

@@ -55,7 +55,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
         _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
 
-        SLOTS_AUTO_INIT = ("icon",)
+        AUTO_INIT = ("icon",)
         __slots__ = ()
 
         async def async_request_value(self, device_value, /):
@@ -95,7 +95,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         _attr_entity_registry_enabled_default = False
 
         init__track_last_epoch = 0
-        SLOTS_AUTO_INIT = (
+        AUTO_INIT = (
             "_tracking_state",
             "_tracking_state_change_unsub",
             "_track_last_epoch",
@@ -417,6 +417,12 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
     _attr_translation_key = "mts_climate"
 
+    AUTO_DESTROY = (
+        "number_adjust_temperature",
+        "schedule",
+        "select_track_sensor",
+        "sensor_current_temperature",
+    )
     __slots__ = (
         "current_humidity",
         "current_temperature",
@@ -434,11 +440,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         "_mts_active",
         "_mts_mode",
         "_mts_onoff",
-        "number_adjust_temperature",
         "number_preset_temperature",
-        "schedule",
-        "select_track_sensor",
-        "sensor_current_temperature",
     )
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
@@ -506,13 +508,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         )
         for _entity in (self.number_adjust_temperature, self.schedule):
             self.parent.get_handler(_entity.ns).register_parser(_entity)
-
-    def shutdown(self):
-        super().shutdown()
-        del self.sensor_current_temperature  # type: ignore
-        del self.select_track_sensor  # type: ignore
-        del self.schedule  # type: ignore
-        del self.number_adjust_temperature  # type: ignore
 
     def set_unavailable(self):
         self.current_humidity = None

@@ -216,6 +216,7 @@ class MQTTConnection(AbstractMQTTConnection):
         session_handlers: SessionHandlersType
         sensor_connection: ConnectionSensor | None
 
+    AUTO_DESTROY = ("sensor_connection",)
     __SLOTS__ = (
         "mqttdiscovering",
         "session_handlers",
@@ -241,10 +242,6 @@ class MQTTConnection(AbstractMQTTConnection):
             **kwargs,
         )
         profile.mqttconnections[str(broker)] = self
-
-    def shutdown(self):
-        super().shutdown()
-        self.sensor_connection = None
 
     @override  # Loggable
     def configure_logger(self, /):

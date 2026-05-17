@@ -454,7 +454,7 @@ class NumericEntity(Entity):
     # device classes which are nevertheless shared between sensor and number entities. Tha mapping should
     # be done by str value despite the fact numbers and sensors each defines their own enums.
     HA_ENTITY_ATTRIBUTES = Entity.HA_ENTITY_ATTRIBUTES + ("native_unit_of_measurement",)
-    SLOTS_AUTO_INIT = ("native_value",)
+    AUTO_INIT = ("native_value",)
     __slots__ = ("native_value",)
 
     def update_native_value(self, native_value: int | float | None, /):
@@ -492,7 +492,7 @@ class NumericParser(ValueParser, NumericEntity):
             device_scale: NotRequired[int | float]
 
     init_device_scale = 1
-    SLOTS_AUTO_INIT = ("device_scale",)
+    AUTO_INIT = ("device_scale",)
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         try:
@@ -524,7 +524,7 @@ class BinaryEntity(Entity):
 
         def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
-    SLOTS_AUTO_INIT = ("is_on",)
+    AUTO_INIT = ("is_on",)
     __slots__ = ("is_on",)
     # TODO: fix _calc_slots in descendants by maybe adding an init_subclass in BinaryParser.
 

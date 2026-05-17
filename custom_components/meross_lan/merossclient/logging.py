@@ -216,16 +216,22 @@ class Loggable(metaclass=abc.ABCMeta):
 
     if TYPE_CHECKING:
         __SLOTS__: ClassVar[tuple[str, ...]]
-        SLOTS_AUTO_INIT: ClassVar[tuple[str, ...]]
+        AUTO_INIT: ClassVar[Iterable[str]]
         """Provides a list of slotted attributes which need to be initialized during construction.
         Some of these attributes might be retrieved from kwargs. If not available these need to be retrieved from
         class instance defaults or set to None as last resort.
-        This attribute will be read during class construction in order to update the internal cache (__SLOTS_AUTO_INIT)
+        This attribute will be read during class construction in order to update the internal cache (__AUTO_INIT)
         of all the inherited 'auto init slots' (See __init_subclass__).
         Attributes listed here will also be automatically added to the class __SLOTS__ so they'd not need to be defined twice."""
-        __SLOTS_AUTO_INIT: Final[tuple[str, ...]]
-        """Auto-built cache of all the 'SLOTS_AUTO_INIT' defined for the full class hierarchy so that
+        __AUTO_INIT: Final[frozenset[str]]
+        """Auto-built cache of all the 'AUTO_INIT' defined for the full class hierarchy so that
         the constructor doesn't have to traverse the mro every time in order to apply initialization."""
+        AUTO_DESTROY: ClassVar[Iterable[str]]
+        """Provides a list of attributes which need to be destroyed during shutdown. These will eventually be added
+        to __slots__ if not already there.
+        This will ease removing circular references without needing to override the shutdown() method."""
+        __AUTO_DESTROY: Final[frozenset[str]]
+        """Same as __AUTO_INIT but for AUTO_DESTROY."""
 
         id: Final[Any]
         parent: Final[LoggerType]
@@ -260,31 +266,50 @@ class Loggable(metaclass=abc.ABCMeta):
         "__dict__",
     )
     __SLOTS__ = ()
-    __SLOTS_AUTO_INIT = ()
+    __AUTO_INIT = frozenset()
+    __AUTO_DESTROY = frozenset()
 
     def __init_subclass__(cls, *args, **kwargs):
-        slots_auto_init = set()
+        auto_init = set()
+        auto_destroy = set()
 
         for _base in cls.__bases__:
             try:
-                slots_auto_init.update(_base.__SLOTS_AUTO_INIT)
+                auto_init.update(_base.__AUTO_INIT)
             except AttributeError:
                 pass
-        try:
-            _slots_auto_init = cls.__dict__["SLOTS_AUTO_INIT"]
-            slots_auto_init.update(_slots_auto_init)
             try:
-                # if class defines its own slots then we update it so that it is not needed to duplicate typing
-                existing_slots = set(cls.__dict__["__slots__"])
-                existing_slots.update(_slots_auto_init)
-                cls.__slots__ = tuple(existing_slots)
-            except KeyError:
+                auto_destroy.update(_base.__AUTO_DESTROY)
+            except AttributeError:
                 pass
-        except KeyError:
-            pass  # no SLOTS_AUTO_INIT defined in this class, just inherit from parent
 
-        if len(slots_auto_init) > len(cls.__SLOTS_AUTO_INIT):
-            cls.__SLOTS_AUTO_INIT = tuple(slots_auto_init)  # type: ignore
+        cls_dict = cls.__dict__
+
+        if "__slots__" in cls_dict:
+            cls_slots = set(cls_dict["__slots__"])
+        else:
+            cls_slots = None
+
+        if "AUTO_INIT" in cls_dict:
+            # no AUTO_INIT defined in this class, just inherit from parents
+            _slots_auto_init = cls_dict["AUTO_INIT"]
+            auto_init.update(_slots_auto_init)
+            if cls_slots:
+                cls_slots.update(_slots_auto_init)
+
+        if "AUTO_DESTROY" in cls_dict:
+            _slots_auto_destroy = cls_dict["AUTO_DESTROY"]
+            auto_destroy.update(_slots_auto_destroy)
+            if cls_slots:
+                cls_slots.update(_slots_auto_destroy)
+
+        if len(auto_init) > len(cls.__AUTO_INIT):
+            cls.__AUTO_INIT = auto_init  # type: ignore
+        if len(auto_destroy) > len(cls.__AUTO_DESTROY):
+            cls.__AUTO_DESTROY = auto_destroy  # type: ignore
+
+        if cls_slots:
+            cls.__slots__ = tuple(cls_slots)
 
     @classmethod
     def _calc_slots(cls, *slots: "Unpack[tuple[str, ...]]"):
@@ -299,7 +324,7 @@ class Loggable(metaclass=abc.ABCMeta):
             except KeyError:
                 pass
             try:
-                _added_slots.update(_base.__dict__["SLOTS_AUTO_INIT"])
+                _added_slots.update(_base.__dict__["AUTO_INIT"])
             except KeyError:
                 pass
             try:
@@ -340,7 +365,7 @@ class Loggable(metaclass=abc.ABCMeta):
             or asyncio.get_event_loop()
         )
         _cls = self.__class__
-        for _attr in _cls.__SLOTS_AUTO_INIT:
+        for _attr in _cls.__AUTO_INIT:
             try:
                 # extract from kwargs
                 setattr(self, _attr, kwargs.pop(_attr))
@@ -418,6 +443,8 @@ class Loggable(metaclass=abc.ABCMeta):
             for _listener in self.shutdown_broadcast:
                 _listener()
             self.shutdown_broadcast.clear()
+        for _attr in self.__class__.__AUTO_DESTROY:
+            delattr(self, _attr)
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.id})"

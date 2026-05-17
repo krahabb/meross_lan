@@ -135,7 +135,7 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
     init__schedule_unit_time = 15
     init__schedule_entry_count_max = 0
     init__schedule_entry_count_min = 0
-    SLOTS_AUTO_INIT = (
+    AUTO_INIT = (
         "climate",
         "flatten",
         "_schedule",
@@ -143,11 +143,8 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
         "_schedule_entry_count_max",
         "_schedule_entry_count_min",
     )
+    AUTO_DESTROY = ("climate",)
     __slots__ = ()
-
-    def shutdown(self):
-        super().shutdown()
-        del self.climate  # type: ignore
 
     def set_unavailable(self):
         self._schedule = mn.EMPTY_DICT

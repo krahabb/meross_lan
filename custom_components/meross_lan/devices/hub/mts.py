@@ -67,10 +67,7 @@ class mts100(SubDevice, MtsClimate):
         }
     )
 
-    __slots__ = (
-        "binary_sensor_window",
-        "switch_patch_hvacaction",
-    )
+    AUTO_DESTROY = ("binary_sensor_window", "switch_patch_hvacaction")
 
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
         SubDevice.__init__(self, descriptor, hub, **kwargs)
@@ -87,11 +84,6 @@ class mts100(SubDevice, MtsClimate):
             self, entity_key="patch_hvacaction", is_on=False
         )
         self.switch_patch_hvacaction.register_state_callback(self.flush_state)
-
-    def shutdown(self):
-        SubDevice.shutdown(self)
-        del self.binary_sensor_window
-        del self.switch_patch_hvacaction
 
     # interface: MtsClimate
     @override

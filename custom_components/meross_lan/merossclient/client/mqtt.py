@@ -438,7 +438,7 @@ class AbstractMQTTConnection(AbstractClient):
 
 
 class MQTTConnection(AbstractMQTTConnection):
-    """ Implements an MQTT broker client through paho mqtt."""
+    """Implements an MQTT broker client through paho mqtt."""
 
     class ClientState(Enum):
         CONNECTING = "connecting"
@@ -468,6 +468,7 @@ class MQTTConnection(AbstractMQTTConnection):
     def generate_app_id():
         return md5hexdigest(uuid4().hex)
 
+    AUTO_DESTROY = ("_mqttc",)
     __SLOTS__ = (
         "client_state",
         "_mqttc",
@@ -506,10 +507,6 @@ class MQTTConnection(AbstractMQTTConnection):
         _mqttc.on_publish = self._mqttc_publish
         _mqttc.suppress_exceptions = True
         _mqttc._easy_log = self._easy_log
-
-    def shutdown(self):
-        super().shutdown()
-        del self._mqttc
 
     def _easy_log(self, level, fmt: str, *args) -> None:
         # TODO: obfuscate in case (paho logs the topics...)

@@ -28,6 +28,9 @@ class Button(Entity, button.ButtonEntity):
     PLATFORM = button.DOMAIN
     DeviceClass = button.ButtonDeviceClass
 
+    AUTO_DESTROY = ("async_press",)
+    __slots__ = ()
+
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         """Provide either 'async_press' or 'press' callback to install an action on this button."""
         if "entity_key" not in kwargs:
@@ -45,10 +48,6 @@ class Button(Entity, button.ButtonEntity):
             self.async_press = _async_press
 
         Entity.__init__(self, *args, **kwargs)
-
-    def shutdown(self):
-        Entity.shutdown(self)
-        del self.async_press
 
 
 class PersistentButton(Button):

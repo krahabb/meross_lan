@@ -1170,7 +1170,7 @@ class NamespaceParser(logging.Loggable):
 
     init_ns_value = mn.EMPTY_DICT
     init_index = mn.IndexType.none.get()
-    SLOTS_AUTO_INIT = (
+    AUTO_INIT = (
         "ns",
         "ns_value",
         "index",
@@ -1376,7 +1376,7 @@ class ValueParser(NamespaceParser):
     init_ns_value = None
     init_key_value = SimpleKeyValue(mc.KEY_VALUE)
 
-    SLOTS_AUTO_INIT = ("key_value",)
+    AUTO_INIT = ("key_value",)
 
     def update_device_value(self, device_value, /) -> bool | None:
         # Called when the device value is being updated, either by parsing a new payload or by issuing a request.
@@ -1422,7 +1422,7 @@ class BooleanParser(ValueParser):
     init_value_on = 1
     init_value_off = 0
 
-    SLOTS_AUTO_INIT = ("value_on", "value_off", "is_on")
+    AUTO_INIT = ("value_on", "value_off", "is_on")
 
     @override
     def update_device_value(self, device_value, /) -> bool | None:
@@ -1503,7 +1503,7 @@ class MappingParser(ValueParser):
 
     init_key_value = ValueParser.KeyValue()
 
-    SLOTS_AUTO_INIT = (
+    AUTO_INIT = (
         "excluded_keys",
         "parser_defs",
         "parser_def",

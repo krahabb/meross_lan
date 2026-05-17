@@ -46,7 +46,7 @@ class Mp3Player(ParserEntity, media_player.MediaPlayerEntity):
     )
     _attr_volume_step = 1 / mc.HP110A_MP3_VOLUME_MAX
 
-    SLOTS_AUTO_INIT = (
+    AUTO_INIT = (
         "is_volume_muted",
         "media_title",
         "media_track",

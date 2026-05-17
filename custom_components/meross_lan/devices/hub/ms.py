@@ -96,7 +96,9 @@ class gs559(SensorSubDevice, EnumParser):
         "binary_sensor_muted": BinarySensorEntity.DEF(entity_key="muted"),
         "sensor_interConn": EnumParser.DEF(entity_key=mc.KEY_INTERCONN),
     }
-    __slots__ = ENTITY_DEFS.keys()
+
+    AUTO_DESTROY = ENTITY_DEFS.keys()
+    __slots__ = ()
 
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
         SensorSubDevice.__init__(self, descriptor, hub, **kwargs)
@@ -105,11 +107,6 @@ class gs559(SensorSubDevice, EnumParser):
             setattr(self, key, entity_def(self))
         Button(self, async_press=self.async_mute, name="Mute")
         Button(self, async_press=self.async_test, name="Test")
-
-    def shutdown(self):
-        SensorSubDevice.shutdown(self)
-        for key in self.__class__.ENTITY_DEFS.keys():
-            delattr(self, key)
 
     @override
     def __call__(self, payload: "mt.hub._gs559 | mt.hub.Sensor_Smoke", /):
@@ -177,20 +174,13 @@ class ms100(SensorSubDevice):
     # These class cfgs are needed to dynamically customize entities in ms130
     TEMPERATURE_ARGS = SensorParser.TEMPERATURE_ARGS | {"device_scale": 10}
 
-    __slots__ = (
-        "sensor_temperature",
-        "sensor_humidity",
-    )
+    AUTO_DESTROY = ("sensor_temperature", "sensor_humidity")
+    __slots__ = ()
 
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
         SensorSubDevice.__init__(self, descriptor, hub, **kwargs)
         self.sensor_temperature = SensorParser(self, **self.TEMPERATURE_ARGS)
         self.sensor_humidity = SensorParser(self, **SensorParser.HUMIDITY_ARGS)
-
-    def shutdown(self):
-        SensorSubDevice.shutdown(self)
-        del self.sensor_temperature
-        del self.sensor_humidity
 
     @override
     def __call__(self, payload: "mt.hub._ms100 | mt.hub.Sensor_TempHum", /):

@@ -173,6 +173,11 @@ class Mts300Climate(MtsThermostatClimate):
         | MtsThermostatClimate.ClimateEntityFeature.FAN_MODE
     )
 
+    AUTO_DESTROY = (
+        "number_fan_hold",
+        "switch_fan_hold",
+        *(f"sensor_{_key}" for _key in ENTITY_ARGS),
+    )
     __slots__ = (
         "fan_mode",
         "fan_modes",
@@ -180,10 +185,8 @@ class Mts300Climate(MtsThermostatClimate):
         "target_temperature_low",
         "_mts_work",
         "sensor_current_humidity",
-        "number_fan_hold",
-        "switch_fan_hold",
         "select_temp_association",
-    ) + tuple(f"sensor_{_key}" for _key in ENTITY_ARGS)
+    )
 
     def __init__(self, id, device: "Device", /, **kwargs):
         MtsThermostatClimate.__init__(self, id, device, **kwargs)
@@ -219,13 +222,6 @@ class Mts300Climate(MtsThermostatClimate):
         )
         self.switch_fan_hold.async_turn_on = self._async_turn_on_switch_fan_hold
         self.switch_fan_hold.async_turn_off = self._async_turn_off_switch_fan_hold
-
-    def shutdown(self):
-        MtsThermostatClimate.shutdown(self)
-        del self.switch_fan_hold
-        del self.number_fan_hold
-        for _key in Mts300Climate.ENTITY_ARGS:
-            delattr(self, f"sensor_{_key}")
 
     # interface: MtsClimate
     def set_unavailable(self):

@@ -955,7 +955,8 @@ class SubDevice(PhysicalDevice, NamespaceParser):
         class Args(PhysicalDevice.Args):
             descriptor: SubDeviceDescriptor
 
-    __SLOTS__ = ("async_request",)
+    AUTO_DESTROY = ("async_request",)
+    __slots__ = ()
 
     def __init__(self, subid: str, parent: "Device", **kwargs: "Unpack[Args]"):
         self.async_request = parent.async_request
@@ -966,10 +967,6 @@ class SubDevice(PhysicalDevice, NamespaceParser):
         kwargs["loop"] = parent.loop
         parent.subdevices[subid] = self
         super().__init__(subid, parent, **kwargs)
-
-    def shutdown(self):
-        super().shutdown()
-        del self.async_request
 
     # interface: AbstractClient
     @override

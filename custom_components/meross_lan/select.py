@@ -35,7 +35,7 @@ class SelectEntity(mle.Entity, select.SelectEntity):
     _attr_entity_category = mle.Entity.EntityCategory.CONFIG
 
     init_options = []
-    SLOTS_AUTO_INIT = ("current_option", "options")
+    AUTO_INIT = ("current_option", "options")
     __slots__ = ()
 
     def set_unavailable(self):

@@ -631,10 +631,10 @@ class EffectLight(Light):
             ] + EffectLight.init_effect_list
             handler_light_effect.parse_digest = self._update_effects  # type: ignore
 
-            def _handler_light_effect_shutdown():
+            def _shutdown():
                 del handler_light_effect.parse_digest
 
-            handler_light_effect.shutdown_broadcast.add(_handler_light_effect_shutdown)
+            handler_light_effect.shutdown_broadcast.add(_shutdown)
         else:
             self._light_effects = []
         Light.__init__(self, id, device, **kwargs)
@@ -643,9 +643,6 @@ class EffectLight(Light):
             # special rgb channels mgmt here
             self._rgb_to_native = rgbw_patch_to_native
             self._native_to_rgb = native_to_rgbw_patch
-
-    def shutdown(self):
-        super().shutdown()
 
     @override
     def flush_state(self):

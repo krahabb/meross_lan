@@ -94,11 +94,11 @@ class Mts960Climate(MtsThermostatClimate):
     ]
     _attr_preset_modes = list(Preset)
 
+    AUTO_DESTROY = ENTITY_DEFS.keys()
     __slots__ = (
         "_mts_working",
         "_mts_timer_payload",
         "_mts_timer_mode",
-        *ENTITY_DEFS,
         *DIAGNOSTIC_SENSOR_KEYS,
     )
 
@@ -114,11 +114,6 @@ class Mts960Climate(MtsThermostatClimate):
         )
         for key, entity_def in self.__class__.ENTITY_DEFS.items():
             setattr(self, key, entity_def(self))
-
-    def shutdown(self):
-        MtsThermostatClimate.shutdown(self)
-        for key in self.__class__.ENTITY_DEFS:
-            delattr(self, key)
 
     def set_unavailable(self):
         self._mts_working = None
