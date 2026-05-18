@@ -404,8 +404,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
 
     def shutdown(self):
         super().shutdown()
-        for _parse_method in [_p for _p in self.__dict__ if _p.startswith("_parse_")]:
-            delattr(self, _parse_method)
         # Because of the possible Entity mixin nature of this class the shutdown sequence could be invoked by
         # both Entity and SubDevice shutdown mechanics so we need filter out the duplicate.
         if self.id in self.parent.entities:
@@ -434,11 +432,10 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         )
 
         if latest_version := profile.get_latest_version(descriptor):
-            descriptor.latest_version = latest_version
             if self.update_firmware:
-                self.update_firmware.flush_state()
+                self.update_firmware.update_latest_version(latest_version)
             else:
-                UpdateEntity(self, self.parent)
+                UpdateEntity(self, self.parent, latest_version)
 
     def parse_digest(self, payload: "mt.hub.Digest_SubDevice", /):
         """

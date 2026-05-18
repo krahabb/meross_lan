@@ -27,7 +27,6 @@ if TYPE_CHECKING:
     from ..client.bluetooth import BluetoothClient
     from ..client.http import HttpClient
     from ..client.mqtt import AbstractMQTTConnection
-    from ..cloudapi import LatestVersionType
     from ..logging import LoggerType
     from ..protocol import types as mt
     from ..protocol.message import MerossRequest, MerossResponse

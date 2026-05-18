@@ -523,7 +523,6 @@ class Descriptor:
         subType: str
         hw_version: str | None
         fw_version: str | None  # current firmware version installed on the device
-        latest_version: LatestVersionType  # latest firmware version available for the device (if any).
         # This is usually obtained from the active profile.
 
         _DYNAMIC_ATTRS: ClassVar[Mapping[str, Callable[[Self], Any]]]
@@ -583,19 +582,23 @@ class Descriptor:
     def fw_version_t(self):
         return versiontuple(self.fw_version)
 
-    def get_upgrade_info(self, /) -> tuple[str | None, ...]:
+    def get_upgrade_info(
+        self, latest_version: "LatestVersionType", /
+    ) -> tuple[str | None, ...]:
         """If an update is available returns a tuple of (installed_version, latest_version, release_summary).
         This might raise AttributeError if latest_version is not externally set."""
         try:
             return (
                 self.fw_version,
-                self.latest_version.get(mc.KEY_VERSION),
-                self.latest_version.get(mc.KEY_DESCRIPTION),
+                latest_version.get(mc.KEY_VERSION),
+                latest_version.get(mc.KEY_DESCRIPTION),
             )
         except Exception:
             return None, None, None
 
-    def get_upgrade_payload(self, /) -> "mt.control.Upgrade":
+    def get_upgrade_payload(
+        self, latest_version: "LatestVersionType", /
+    ) -> "mt.control.Upgrade":
         """Builds and returns the correct upgrade payload if an upgrade is available, otherwise returns empty mutable dict."""
         raise NotImplementedError("get_upgrade_payload")
 
@@ -669,13 +672,19 @@ class SubDeviceDescriptor(Descriptor):
         self.digest = digest
 
     @override
-    def get_upgrade_payload(self, /) -> "mt.control.Upgrade":
-        # start from hub upgrade payload (eventually)
+    def get_upgrade_payload(
+        self, latest_version: "LatestVersionType", /
+    ) -> "mt.control.Upgrade":
+        if (self.type != latest_version[mc.KEY_TYPE]) or (
+            self.subType != latest_version[mc.KEY_SUBTYPE]
+        ):
+            raise ValueError(
+                f"Latest version info {latest_version} does not match device type/subtype {self.type}/{self.subType}"
+            )
         fw_version = self.fw_version
         if not fw_version:
             return {}
-        upgrade_payload = self.parent.get_upgrade_payload()
-        latest_version = self.latest_version
+        upgrade_payload: "mt.control.Upgrade" = {}
         if versiontuple(latest_version[mc.KEY_VERSION]) > versiontuple(fw_version):
             upgrade_payload["subdev"] = [
                 {
@@ -851,10 +860,11 @@ class DeviceDescriptor(Descriptor):
         return next((sd for sd in self.subdevices if sd.id == subid))
 
     @override
-    def get_upgrade_info(self, /) -> tuple[str | None, ...]:
+    def get_upgrade_info(
+        self, latest_version: "LatestVersionType", /
+    ) -> tuple[str | None, ...]:
         try:
-            latest_version = self.latest_version
-            upgrade_payload = self.get_upgrade_payload()
+            upgrade_payload = self.get_upgrade_payload(latest_version)
             if mc.KEY_MCU in upgrade_payload:
                 assert self.mcu
                 return (
@@ -872,12 +882,15 @@ class DeviceDescriptor(Descriptor):
             return None, None, None
 
     @override
-    def get_upgrade_payload(self, /) -> "mt.control.Upgrade":
-        latest_version = self.latest_version
-        assert (
-            self.type == latest_version[mc.KEY_TYPE]
-            and self.subType == latest_version[mc.KEY_SUBTYPE]
-        )
+    def get_upgrade_payload(
+        self, latest_version: "LatestVersionType", /
+    ) -> "mt.control.Upgrade":
+        if (self.type != latest_version[mc.KEY_TYPE]) or (
+            self.subType != latest_version[mc.KEY_SUBTYPE]
+        ):
+            raise ValueError(
+                f"Latest version info {latest_version} does not match device type/subtype {self.type}/{self.subType}"
+            )
         upgrade_payload: "mt.control.Upgrade" = {}
         if versiontuple(latest_version[mc.KEY_VERSION]) > versiontuple(self.fw_version):
             upgrade_payload[mc.KEY_URL] = latest_version[mc.KEY_URL]

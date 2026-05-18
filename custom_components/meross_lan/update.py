@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from typing import ClassVar, Final, NotRequired
 
     from .helpers.device import BaseDevice, Device
+    from .merossclient.cloudapi import LatestVersionType
 
 
 class UpdateEntity(Entity, update.UpdateEntity):
@@ -17,6 +18,7 @@ class UpdateEntity(Entity, update.UpdateEntity):
         parent: Final[Device]  # type: ignore[override]
         device: Final[BaseDevice]
         """The PhysicalDevice associated with this entity. Could be either a subdevice or a plain device."""
+        latest_version_info: LatestVersionType  # latest firmware version available for the device (if any).
         # HA core entity attributes:
         _attr_device_class: ClassVar[update.UpdateDeviceClass | None]
         in_progress: bool
@@ -34,6 +36,7 @@ class UpdateEntity(Entity, update.UpdateEntity):
 
     __slots__ = (
         "device",
+        "latest_version_info",
         "in_progress",
         "installed_version",
         "latest_version",
@@ -41,8 +44,15 @@ class UpdateEntity(Entity, update.UpdateEntity):
         "title",
     )
 
-    def __init__(self, device: "BaseDevice", parent: "Device", /):
+    def __init__(
+        self,
+        device: "BaseDevice",
+        parent: "Device",
+        latest_version_info: "LatestVersionType",
+        /,
+    ):
         self.device = device
+        self.latest_version_info = latest_version_info
         self.device_class = update.UpdateDeviceClass.FIRMWARE
         self.supported_features = (
             update.UpdateEntityFeature.INSTALL | update.UpdateEntityFeature.PROGRESS
@@ -50,7 +60,7 @@ class UpdateEntity(Entity, update.UpdateEntity):
         self.title = device.display_name
         self.in_progress = False
         self.installed_version, self.latest_version, self.release_summary = (
-            device.descriptor.get_upgrade_info()
+            device.descriptor.get_upgrade_info(latest_version_info)
         )
         Entity.__init__(
             self,
@@ -61,13 +71,13 @@ class UpdateEntity(Entity, update.UpdateEntity):
         self.unique_id = None  # override
         device.update_firmware = self
 
-    def shutdown(self):
-        super().shutdown()
-        self.device.update_firmware = None
+    def update_latest_version(self, latest_version_info: "LatestVersionType"):
+        self.latest_version_info = latest_version_info
+        self.flush_state()
 
     def flush_state(self):
         self.installed_version, self.latest_version, self.release_summary = (
-            self.device.descriptor.get_upgrade_info()
+            self.device.descriptor.get_upgrade_info(self.latest_version_info)
         )
         if self.installed_version == self.latest_version:
             self.in_progress = False
@@ -77,7 +87,9 @@ class UpdateEntity(Entity, update.UpdateEntity):
         device = self.device
         if not device.is_connected:
             raise HomeAssistantError("Device is offline")
-        upgrade_payload = device.descriptor.get_upgrade_payload()
+        upgrade_payload = device.descriptor.get_upgrade_payload(
+            self.latest_version_info
+        )
         if not upgrade_payload:
             raise HomeAssistantError("No upgrade available")
         await device.async_request(

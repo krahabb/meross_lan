@@ -45,13 +45,10 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from ..merossclient.protocol import types as mt
-    from ..merossclient.protocol.types import (
-        MerossPayloadType,
-        MerossRequestType,
-    )
+    from ..merossclient.protocol.types import MerossPayloadType, MerossRequestType
     from .component_api import ComponentApi
     from .entity import Entity, ParserEntity
-    from .meross_profile import DeviceInfoType, LatestVersionType
+    from .meross_profile import DeviceInfoType
     from .mqtt_profile import MQTTConnection, MQTTProfile
 
 
@@ -154,6 +151,7 @@ class BaseDevice(device.PhysicalDevice):
     )
 
     AUTO_INIT = ("update_firmware",)
+    AUTO_DESTROY = ("update_firmware",)
 
     @property
     @override
@@ -1694,8 +1692,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
 
         # check for firmware updates too
         if latest_version := profile.get_latest_version(self.descriptor):
-            self.descriptor.latest_version = latest_version
             if self.update_firmware:
-                self.update_firmware.flush_state()
+                self.update_firmware.update_latest_version(latest_version)
             else:
-                UpdateEntity(self, self)
+                UpdateEntity(self, self, latest_version)
