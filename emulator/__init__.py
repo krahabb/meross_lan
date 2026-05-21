@@ -14,6 +14,7 @@ a mixin based class.
 set of emulators from all the traces stored in a path.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 import os
 from typing import TYPE_CHECKING
 
@@ -260,12 +261,13 @@ def run(argv):
         app.router.add_post("/config", web_post_handler(emulator))
 
     async def _on_startup(app: web.Application):
+        app.loop.set_default_executor(ThreadPoolExecutor(max_workers=2))
         for emulator in emulators.values():
             await emulator.async_startup(enable_scheduler=True, enable_mqtt=True)
 
     async def _on_shutdown(app: web.Application):
         for emulator in emulators.values():
-            emulator.shutdown()
+            await emulator.async_shutdown()
 
     app.on_startup.append(_on_startup)
     app.on_shutdown.append(_on_shutdown)

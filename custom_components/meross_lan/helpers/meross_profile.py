@@ -212,10 +212,7 @@ class MerossProfile(MQTTProfile):
             mqttconnection = MerossMQTTConnection(
                 HostAddress.build(self.config[mc.KEY_MQTTDOMAIN]), self
             )
-            try:
-                await mqttconnection.async_connect()
-            except Exception:
-                pass
+            mqttconnection.start()
         # compute the next cloud devlist query and setup the scheduled callback
         next_query_epoch = (
             self._device_info_time + mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
@@ -369,12 +366,7 @@ class MerossProfile(MQTTProfile):
                 return
 
         mqttconnection = self._get_mqttconnection(broker)
-        if mqttconnection.client_inactive:
-            mqttconnection.create_task(
-                mqttconnection.async_connect(),
-                "attach_mqtt.schedule_connect",
-                eager_start=True,
-            )
+        mqttconnection.start()  # ensure connection loop is on
         return mqttconnection
 
     @property
@@ -441,21 +433,12 @@ class MerossProfile(MQTTProfile):
         and we so need it soon).
         """
         mqttconnection = self._get_mqttconnection(broker)
-
-        match mqttconnection.client_state:
-            case MerossMQTTConnection.ClientState.CONNECTED:
-                return mqttconnection
-            case (
-                MerossMQTTConnection.ClientState.DISCONNECTING
-                | MerossMQTTConnection.ClientState.DISCONNECTED
-            ):
-                try:
-                    await mqttconnection.async_connect()
-                    return mqttconnection
-                except:
-                    return None
-            case _:
+        if not mqttconnection.is_connected:
+            try:
+                await mqttconnection.async_connect()
+            except:
                 return None
+        return mqttconnection
 
     async def _async_token_refresh(self):
         """

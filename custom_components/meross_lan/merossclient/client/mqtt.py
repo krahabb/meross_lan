@@ -2,11 +2,9 @@ from abc import abstractmethod
 import asyncio
 from collections import deque
 from contextlib import AbstractContextManager
-from enum import Enum
 import random
 import ssl
 import string
-import threading
 from time import monotonic
 from typing import TYPE_CHECKING, override
 from uuid import uuid4
@@ -422,14 +420,14 @@ class AbstractMQTTConnection(AbstractClient):
                     self.log(self.DEBUG, "random disconnect")
                     self.create_task(
                         self.async_disconnect(),
-                        "random disconnect",
+                        ".random disconnect",
                         eager_start=True,
                     )
             else:
                 if MEROSSDEBUG.mqtt_random_connect():
                     self.log(self.DEBUG, "random connect")
                     self.create_task(
-                        self.async_connect(), "random connect", eager_start=True
+                        self.async_connect(), ".random connect", eager_start=True
                     )
 
     @staticmethod
@@ -439,15 +437,6 @@ class AbstractMQTTConnection(AbstractClient):
 
 class MQTTConnection(AbstractMQTTConnection):
     """Implements an MQTT broker client through paho mqtt."""
-
-    class ClientState(Enum):
-        CONNECTING = "connecting"
-        CONNECTED = "connected"
-        RECONNECTING = "reconnecting"
-        DISCONNECTING = "disconnecting"
-        DISCONNECTED = "disconnected"
-        ACTIVE = (CONNECTING, CONNECTED, RECONNECTING)
-        INACTIVE = (DISCONNECTING, DISCONNECTED)
 
     if TYPE_CHECKING:
 
@@ -460,8 +449,9 @@ class MQTTConnection(AbstractMQTTConnection):
         class RequestRawArgs(AbstractMQTTConnection.RequestRawArgs):
             pass
 
-        client_state: ClientState
         _mqttc: mqtt.Client
+        _mqtt_loop_task: asyncio.Task | None
+        _connect_future: asyncio.Future | None
         _rl_queues: dict[str, _MQTTRateLimiter]
 
     @staticmethod
@@ -470,11 +460,10 @@ class MQTTConnection(AbstractMQTTConnection):
 
     AUTO_DESTROY = ("_mqttc",)
     __SLOTS__ = (
-        "client_state",
         "_mqttc",
-        "_lock_state",
-        "_rl_queues",
+        "_mqtt_loop_task",
         "_connect_future",
+        "_rl_queues",
     )
 
     def __init__(
@@ -486,11 +475,9 @@ class MQTTConnection(AbstractMQTTConnection):
         **kwargs: "Unpack[Args]",
     ):
         super().__init__(broker, parent, **kwargs)
-        self.client_state = MQTTConnection.ClientState.DISCONNECTED
-        self._lock_state = threading.Lock()
-        """synchronize connect/disconnect (not contended by the mqtt thread)"""
         self._rl_queues: dict[str, _MQTTRateLimiter] = {}
         self._connect_future = None
+        self._mqtt_loop_task = None
         try:
             _mqttc = mqtt.Client(
                 client_id=client_id,
@@ -500,6 +487,8 @@ class MQTTConnection(AbstractMQTTConnection):
         except:  # fallback to legacy (pre v2)
             _mqttc = mqtt.Client(client_id=client_id, protocol=mqtt.MQTTv311)
         self._mqttc = _mqttc
+        _mqttc.on_socket_close = self._mqttc_socket_close
+        _mqttc.on_socket_unregister_write = self._mqttc_socket_unregister_write
         _mqttc.on_connect = self._mqttc_connect
         _mqttc.on_subscribe = self._mqttc_subscribe
         _mqttc.on_disconnect = self._mqttc_disconnect
@@ -507,15 +496,6 @@ class MQTTConnection(AbstractMQTTConnection):
         _mqttc.on_publish = self._mqttc_publish
         _mqttc.suppress_exceptions = True
         _mqttc._easy_log = self._easy_log
-
-    def _easy_log(self, level, fmt: str, *args) -> None:
-        # TODO: obfuscate in case (paho logs the topics...)
-        self.log(self.VERBOSE, f"PAHO-LOG{{%s}} -> {fmt}", level, *args)
-
-    # interface: self
-    @property
-    def client_inactive(self):
-        return self.client_state.value in MQTTConnection.ClientState.INACTIVE.value
 
     @override
     async def async_connect(self, /, **kwargs: "Unpack[ConnectArgs]"):
@@ -525,48 +505,34 @@ class MQTTConnection(AbstractMQTTConnection):
             ):
                 future = self._connect_future
                 if not future:
+                    assert not self._mqtt_loop_task, "MQTT loop task already running"
                     self._connect_future = future = self.loop.create_future()
-                    await self.loop.run_in_executor(None, self.safe_start)
+                    self.start(**kwargs)
                 await future
         except Exception as e:
             self.log_exception(self.WARNING, e, "async_connect")
             raise
+        finally:
+            self._connect_future = None
+
+    @override
+    def on_connect(self, /):
+        super().on_connect()
+        if self._connect_future:
+            self._connect_future.set_result(True)
+            self._connect_future = None
 
     @override
     async def async_disconnect(self):
         if self._connect_future:
             self._connect_future.cancel()
-            self._connect_future = None
-        if self.client_state.value in MQTTConnection.ClientState.ACTIVE.value:
-            await self.loop.run_in_executor(None, self.safe_stop)
-            await asyncio.sleep(0)  # yield to mqtt thread to process the disconnect
-
-    def safe_start(self, /):
-        """
-        Initiates an async connection and starts the managing thread.
-        Safe to be called from any thread (except the mqtt one). Could be a bit
-        'blocking' if the thread needs to be stopped (in case it was still running).
-        The effective connection is asynchronous and will be managed by the thread.
-        The future (optional) allows for synchronization and will be set after
-        succesfully subscribing (see _mqttc_connect and overrides)
-        """
-        with self._lock_state:
-            self._mqttc.loop_stop()
-            self._mqttc.connect_async(self.id.host, self.id.port)
-            self._mqttc.loop_start()
-            self.client_state = MQTTConnection.ClientState.CONNECTING
-
-    def safe_stop(self, /):
-        """
-        Safe to be called from any thread (except the mqtt one)
-        This is non-blocking and the thread will just die
-        by itself.
-        """
-        with self._lock_state:
-            self.client_state = MQTTConnection.ClientState.DISCONNECTING
-            self._mqttc.disconnect()
-            self._mqttc.loop_stop()
-            self.client_state = MQTTConnection.ClientState.DISCONNECTED
+        if self._mqtt_loop_task:
+            self._mqtt_loop_task.cancel()
+            try:
+                await self._mqtt_loop_task
+            except (asyncio.CancelledError, Exception):
+                pass
+            self._mqtt_loop_task = None
 
     @override
     def get_rl_safe_delay(self, uuid: str, /):
@@ -651,38 +617,106 @@ class MQTTConnection(AbstractMQTTConnection):
             )
             raise
 
+    # interface: self
+    @property
+    def running(self):
+        return self._mqtt_loop_task
+
+    def start(self, /, **kwargs: "Unpack[ConnectArgs]"):
+        if not self._mqtt_loop_task:
+            self._mqttc.connect_timeout = kwargs.get("timeout", self.timeout)
+            self._mqttc.connect_async(self.id.host, self.id.port)
+            self._mqtt_loop_task = self.create_task(
+                self._async_loop(),
+                ".connection loop",
+            )
+
+    def stop(self):
+        if self._mqtt_loop_task:
+            self._mqtt_loop_task.cancel()
+
     def publish(self, topic: str, message: str, /):
         self._mqttc.publish(topic, message)
 
-    @override
-    def on_connect(self, /):
-        super().on_connect()
-        if self._connect_future:
-            self._connect_future.set_result(True)
-            self._connect_future = None
+    async def _async_loop(self):
+        client = self._mqttc
+        loop = self.loop
+        try:
+            while True:
+                if client.loop_misc() == mqtt.MQTT_ERR_SUCCESS:
+                    await asyncio.sleep(1)
+                else:
+                    if sock := await loop.run_in_executor(
+                        None, self._reconnect, client
+                    ):
+                        loop.add_reader(sock, client.loop_read)
+                        # CONNECT already in queue..start sending
+                        client.loop_write()
+                    else:
+                        if client._reconnect_delay is None:
+                            client._reconnect_delay = client._reconnect_min_delay
+                        else:
+                            client._reconnect_delay = min(
+                                client._reconnect_delay * 2,
+                                client._reconnect_max_delay,
+                            )
+                        await asyncio.sleep(client._reconnect_delay)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            self._mqtt_loop_task = None
+            client.disconnect()
+            if self.is_connected:
+                self.on_disconnect()
+
+    def _reconnect(self, client: mqtt.Client):
+        try:
+            client.on_socket_register_write = self._mqttc_socket_register_write_stub
+            client.reconnect()
+            client.on_socket_register_write = self._mqttc_socket_register_write
+            return client.socket()
+        except OSError:
+            self._easy_log(mqtt.MQTT_LOG_DEBUG, "Connection failed, retrying")
+        except Exception as e:
+            self.log_exception(self.WARNING, e, "_reconnect")
+
+    def _easy_log(self, level, fmt: str, *args) -> None:
+        # TODO: obfuscate in case (paho logs the topics...)
+        self.log(self.VERBOSE, f"PAHO-LOG{{%s}} -> {fmt}", level, *args)
+
+    def _mqttc_socket_close(self, client, userdata, sock):
+        self.loop.remove_reader(sock)
+
+    def _mqttc_socket_register_write_stub(self, client: mqtt.Client, userdata, sock):
+        # This is a temporary callback installed during reconnect so that paho doesn't actually
+        # write any data in the executor thread since we want to handle connect/disconnect events
+        # in asyncio code and not in the executor.
+        pass
+
+    def _mqttc_socket_register_write(self, client: mqtt.Client, userdata, sock):
+        self.loop.add_writer(sock, client.loop_write)
+
+    def _mqttc_socket_unregister_write(self, client, userdata, sock):
+        self.loop.remove_writer(sock)
 
     def _mqttc_connect(self, *args):
-        pass  # subscription implemented in derived classes
+        # By default we're waiting for subscription before considering 'connected'.
+        # Subscription implemented in derived classes
+        pass
 
     def _mqttc_subscribe(self, *args):
-        self.client_state = MQTTConnection.ClientState.CONNECTED
-        self.loop.call_soon_threadsafe(self.on_connect)
+        self.on_connect()
 
-    def _mqttc_disconnect(self, *args):
-        match self.client_state:
-            case MQTTConnection.ClientState.DISCONNECTING:
-                self.client_state = MQTTConnection.ClientState.DISCONNECTED
-            case MQTTConnection.ClientState.DISCONNECTED:
-                pass  # already disconnected, not that it should happen..
-            case _:
-                self.client_state = MQTTConnection.ClientState.RECONNECTING
-        self.loop.call_soon_threadsafe(self.on_disconnect)
+    def _mqttc_disconnect(self, client: mqtt.Client, *args):
+        if self.is_connected:
+            self.on_disconnect()
 
     def _mqttc_message(self, client, userdata, msg: mqtt.MQTTMessage):
-        self.loop.call_soon_threadsafe(self.on_message, msg)
+        self.on_message(msg)
 
     def _mqttc_publish(self, *args):
-        self.loop.call_soon_threadsafe(self.on_publish)
+        self.on_publish()
+
 
 
 class MQTTAppClient(MQTTConnection):

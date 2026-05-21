@@ -401,22 +401,20 @@ class Loggable(metaclass=abc.ABCMeta):
 
         try:
             for task in tuple(self._tasks):
-                if task.done():
-                    continue
-                self.log(self.DEBUG, "Shutting down pending task %r", task)
-                task.cancel(f"{self} shutdown")
-                try:
-                    async with asyncio.Timeout(self.loop.time() + 0.5):
-                        await task
-                except asyncio.CancelledError:
-                    continue
-                except Exception as exception:
-                    self.log_exception(
-                        self.WARNING,
-                        exception,
-                        "cancelling task %r during shutdown",
-                        task,
-                    )
+                if task.cancel(f"{self} shutdown"):
+                    self.log(self.DEBUG, "Shutting down pending task %r", task)
+                    try:
+                        async with asyncio.Timeout(self.loop.time() + 0.5):
+                            await task
+                    except asyncio.CancelledError:
+                        continue
+                    except Exception as exception:
+                        self.log_exception(
+                            self.WARNING,
+                            exception,
+                            "cancelling task %r during shutdown",
+                            task,
+                        )
 
             if self._tasks:
                 self.log(

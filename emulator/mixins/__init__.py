@@ -127,7 +127,7 @@ class EmulatorDescriptor(DeviceDescriptor):
             if row[2] == "auto":
                 continue
             row[-1] = json_loads(row[-1])
-            self._import_tracerow(*row)  # type:ignore
+            self._import_tracerow(*row)  # type: ignore
 
     def _import_json(self, f: "TextIOWrapper"):
         """
@@ -391,15 +391,15 @@ class Emulator:
                 self._scheduler,
             )
         if enable_mqtt:
-            self._mqtt_setup()
+            await self._async_mqtt_setup()
 
-    def shutdown(self):
+    async def async_shutdown(self):
         """cleanup when the emulator is stopped/destroyed"""
         if self._scheduler_unsub:
             self._scheduler_unsub.cancel()
             self._scheduler_unsub = None
         if self.mqtt_client:
-            self._mqtt_shutdown()
+            await self._async_mqtt_shutdown()
 
     def set_timezone(self, timezone: str, /):
         # beware when using TZ names: here we expect a IANA zoneinfo key
@@ -699,20 +699,26 @@ class Emulator:
                     # with our emulator like if it was the real device.
                     pass
                 case _:
-                    if self.mqtt_client:
-                        self._mqtt_shutdown()
-                    firmware = self.descriptor.firmware
-                    if mc.KEY_HOST in p_gateway:
-                        firmware[mc.KEY_SERVER] = p_gateway[mc.KEY_HOST]
-                        if mc.KEY_PORT in p_gateway:
-                            firmware[mc.KEY_PORT] = p_gateway[mc.KEY_PORT]
-                    if mc.KEY_SECONDHOST in p_gateway:
-                        firmware[mc.KEY_SECONDSERVER] = p_gateway[mc.KEY_SECONDHOST]
-                        if mc.KEY_SECONDPORT in p_gateway:
-                            firmware[mc.KEY_SECONDPORT] = p_gateway[mc.KEY_SECONDPORT]
-                    firmware[mc.KEY_USERID] = p_key[mc.KEY_USERID]
-                    self.key = p_key[mc.KEY_KEY]
-                    self._mqtt_setup()
+
+                    async def _async_reconfigure():
+                        if self.mqtt_client:
+                            await self._async_mqtt_shutdown()
+                        firmware = self.descriptor.firmware
+                        if mc.KEY_HOST in p_gateway:
+                            firmware[mc.KEY_SERVER] = p_gateway[mc.KEY_HOST]
+                            if mc.KEY_PORT in p_gateway:
+                                firmware[mc.KEY_PORT] = p_gateway[mc.KEY_PORT]
+                        if mc.KEY_SECONDHOST in p_gateway:
+                            firmware[mc.KEY_SECONDSERVER] = p_gateway[mc.KEY_SECONDHOST]
+                            if mc.KEY_SECONDPORT in p_gateway:
+                                firmware[mc.KEY_SECONDPORT] = p_gateway[
+                                    mc.KEY_SECONDPORT
+                                ]
+                        firmware[mc.KEY_USERID] = p_key[mc.KEY_USERID]
+                        self.key = p_key[mc.KEY_KEY]
+                        await self._async_mqtt_setup()
+
+                    self.loop.create_task(_async_reconfigure())
 
         return mc.METHOD_SETACK, {}
 
@@ -811,10 +817,7 @@ class Emulator:
         """Called by asyncio at (almost) regular intervals to trigger
         internal state changes useful for PUSHes. To be called by
         inherited implementations at start so to update the epoch."""
-        self._scheduler_unsub = asyncio.get_event_loop().call_later(
-            30,
-            self._scheduler,
-        )
+        self._scheduler_unsub = self.loop.call_later(30, self._scheduler)
         self.update_epoch()
 
     def get_namespace_state(self, ns: mn.Namespace, *key_values):
@@ -884,7 +887,7 @@ class Emulator:
         self._log_message("TX(MQTT)", message)
         mqtt_client.publish(mqtt_client.topic_publish, message)
 
-    def _mqtt_setup(self):
+    async def _async_mqtt_setup(self):
         self.mqtt_client = mqtt_client = MQTTDeviceClient(
             self.descriptor.server,
             None,
@@ -895,15 +898,16 @@ class Emulator:
         mqtt_client.on_connect = self._mqtt_connect
         mqtt_client.on_disconnect = self._mqtt_disconnect
         mqtt_client.on_message = self._mqtt_message
-        mqtt_client.safe_start()
+        mqtt_client.start()
 
-    def _mqtt_shutdown(self):
-        self.mqtt_client.safe_stop()
+    async def _async_mqtt_shutdown(self):
+        await self.mqtt_client.async_shutdown()
         self.mqtt_client = None  # type: ignore
         self.mqtt_connected = None
 
-    def _mqtt_connect(self, *args):
+    def _mqtt_connect(self, /):
         mqtt_client = self.mqtt_client
+        MQTTDeviceClient.on_connect(mqtt_client)
         self.mqtt_connected = mqtt_client
         self.update_epoch()
         self.descriptor.online[mc.KEY_STATUS] = mc.STATUS_ONLINE
@@ -927,7 +931,8 @@ class Emulator:
         self._log_message("TX(MQTT)", message)
         mqtt_client.publish(mqtt_client.topic_publish, message)
 
-    def _mqtt_disconnect(self, *args):
+    def _mqtt_disconnect(self, /):
+        MQTTDeviceClient.on_disconnect(self.mqtt_client)
         self.mqtt_connected = None
         self.descriptor.online[mc.KEY_STATUS] = mc.STATUS_NOTONLINE
 

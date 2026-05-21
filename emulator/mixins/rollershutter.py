@@ -153,10 +153,10 @@ class RollerShutterMixin(Emulator if TYPE_CHECKING else object):
         self._transitions: dict[int, _Transition] = {}
         self.has_native_position = descriptor.fw_version_t >= (6, 6, 6)
 
-    def shutdown(self):
+    async def async_shutdown(self):
         for transition in tuple(self._transitions.values()):
             transition.shutdown()
-        super().shutdown()
+        await super().async_shutdown()
 
     def _GET_Appliance_Control_ToggleX(self, header, payload):
         # this code was used to debug our 'resiliency' to

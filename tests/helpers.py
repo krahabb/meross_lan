@@ -779,7 +779,7 @@ def build_emulators(included_uuid: "Iterable[str] | None" = None):
     )
 
 
-class EmulatorContext(contextlib.AbstractContextManager):
+class EmulatorContext(contextlib.AbstractAsyncContextManager):
     def __init__(
         self,
         emulator: "Emulator | str",
@@ -799,16 +799,16 @@ class EmulatorContext(contextlib.AbstractContextManager):
         else:
             self.frozen_time = None
 
-    def __enter__(self):
+    async def __aenter__(self):
         self.aioclient_mock.post(
             f"http://{self.host}/config",
             side_effect=self._handle_http_request,
         )
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    async def __aexit__(self, exc_type, exc_value, traceback):
         self.aioclient_mock.clear_requests()
-        self.emulator.shutdown()
+        await self.emulator.async_shutdown()
         return None
 
     async def _handle_http_request(self, method, url, data):
@@ -900,7 +900,7 @@ class DeviceContext(ConfigEntryMocker):
         self.emulator_context = EmulatorContext(
             self.emulator, self.aioclient_mock, frozen_time=self.time_mock.time
         )
-        self.emulator_context.__enter__()
+        await self.emulator_context.__aenter__()
         await super().__aenter__()
         if self.auto_poll:
             await self.perform_coldstart()
@@ -910,7 +910,7 @@ class DeviceContext(ConfigEntryMocker):
         try:
             return await super().__aexit__(exc_type, exc_value, traceback)
         finally:
-            self.emulator_context.__exit__(exc_type, exc_value, traceback)
+            await self.emulator_context.__aexit__(exc_type, exc_value, traceback)
             if exc_value:
                 exc_value.args = (*exc_value.args, self.emulator.uuid)
 
@@ -1201,41 +1201,75 @@ class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
 
 
 class MerossMQTTMocker(MQTTConnectionMocker):
+
+    class SocketLike:  # from paho.mqtt.client.SocketLike
+        def recv(self, buffer_size: int) -> bytes:
+            return b""
+
+        def send(self, buffer: bytes) -> int:
+            return len(buffer)
+
+        def close(self) -> None:
+            pass
+
+        def fileno(self) -> int:
+            return 1
+
+        def setblocking(self, flag: bool) -> None:
+            pass
+
     def __init__(self, hass: "HomeAssistant"):
         super().__init__(hass)
 
-        def _safe_start(_self: mlp.MerossMQTTConnection):
-            """this runs in an executor"""
-            _self.client_state = mlp.MerossMQTTConnection.ClientState.CONNECTED
-            hass.add_job(_self.on_connect)
+        async def _async_loop(_self: mlp.MerossMQTTConnection, /):
+            try:
+                _self.on_connect()
+                while True:
+                    await asyncio.sleep(1)
+            except asyncio.CancelledError:
+                pass
+            finally:
+                _self._mqtt_loop_task = None
+                _self.on_disconnect()
 
-        self.safe_start_patcher = patch.object(
+        self.async_loop_patcher = patch.object(
             mlp.MerossMQTTConnection,
-            "safe_start",
+            "_async_loop",
             autospec=True,
-            side_effect=_safe_start,
+            side_effect=_async_loop,
         )
 
-        def _safe_stop(_self: mlp.MerossMQTTConnection):
-            """this runs in an executor"""
-            _self.client_state = mlp.MerossMQTTConnection.ClientState.DISCONNECTED
-            hass.add_job(_self.on_disconnect)
-
-        self.safe_stop_patcher = patch.object(
+        self.start_patcher = patch.object(
             mlp.MerossMQTTConnection,
-            "safe_stop",
+            "start",
             autospec=True,
-            side_effect=_safe_stop,
+            side_effect=mlp.MerossMQTTConnection.start,
+        )
+
+        self.stop_patcher = patch.object(
+            mlp.MerossMQTTConnection,
+            "stop",
+            autospec=True,
+            side_effect=mlp.MerossMQTTConnection.stop,
+        )
+
+        self.async_disconnect_patcher = patch.object(
+            mlp.MerossMQTTConnection,
+            "async_disconnect",
+            autospec=True,
+            side_effect=mlp.MerossMQTTConnection.async_disconnect,
         )
 
     def __enter__(self):
-        self.safe_start_mock = self.safe_start_patcher.start()
-        self.safe_stop_mock = self.safe_stop_patcher.start()
+        self.async_loop_patcher.start()
+        self.start_mock = self.start_patcher.start()
+        self.stop_mock = self.stop_patcher.start()
+        self.async_disconnect_mock = self.async_disconnect_patcher.start()
         return super().__enter__()
 
     def __exit__(self, exc_type, exc_value, traceback):
-        if self.safe_start_mock:
-            self.safe_start_patcher.stop()
-        if self.safe_stop_mock:
-            self.safe_stop_patcher.stop()
+        self.async_disconnect_patcher.stop()
+        self.stop_patcher.stop()
+        self.start_patcher.stop()
+        self.async_loop_patcher.stop()
         return super().__exit__(exc_type, exc_value, traceback)

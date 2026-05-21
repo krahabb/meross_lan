@@ -1,7 +1,7 @@
 """Test for meross cloud profiles"""
 
-from typing import TYPE_CHECKING
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 from unittest import mock
 
 from homeassistant.helpers import device_registry as dr
@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
 def test_get_latest_version_prefers_hardware_train():
     class ProfileStub:
+        _data: dict
         KEY_LATEST_VERSION_HISTORY = MerossProfile.KEY_LATEST_VERSION_HISTORY
 
     profile = ProfileStub()
@@ -131,15 +132,15 @@ async def test_meross_profile(
         mqttconnections = list(profile.mqttconnections.values())
         assert len(mqttconnections) == len(expected_connections)
         # and activated them (not less/no more)
-        safe_start_calls = []
+        connect_calls = []
         for expected_connection in expected_connections:
             broker = HostAddress.build(expected_connection)
             mqttconnection = profile.mqttconnections[f"{broker.host}:{broker.port}"]
             mqttconnections.remove(mqttconnection)
-            safe_start_calls.append(mock.call(mqttconnection))
+            connect_calls.append(mock.call(mqttconnection))
         assert len(mqttconnections) == 0
-        merossmqtt_mock.safe_start_mock.assert_has_calls(
-            safe_start_calls,
+        merossmqtt_mock.start_mock.assert_has_calls(
+            connect_calls,
             any_order=True,
         )
         await flush_store(profile._store)
@@ -162,7 +163,7 @@ async def test_meross_profile(
         # check cleanup
         assert await context.async_unload()
         assert context.api.profiles[tc.MOCK_PROFILE_ID] is None
-        assert merossmqtt_mock.safe_stop_mock.call_count == len(safe_start_calls)
+        assert merossmqtt_mock.async_disconnect_mock.call_count == len(connect_calls)
 
 
 async def test_meross_profile_cloudapi_offline(
@@ -205,21 +206,21 @@ async def test_meross_profile_cloudapi_offline(
         mqttconnections = list(profile.mqttconnections.values())
         assert len(mqttconnections) == len(expected_connections)
         # and activated them (not less/no more)
-        safe_start_calls = []
+        connect_calls = []
         for expected_connection in expected_connections:
             broker = HostAddress.build(expected_connection)
             mqttconnection = profile.mqttconnections[f"{broker.host}:{broker.port}"]
             mqttconnections.remove(mqttconnection)
-            safe_start_calls.append(mock.call(mqttconnection))
+            connect_calls.append(mock.call(mqttconnection))
         assert len(mqttconnections) == 0
-        merossmqtt_mock.safe_start_mock.assert_has_calls(
-            safe_start_calls,
+        merossmqtt_mock.start_mock.assert_has_calls(
+            connect_calls,
             any_order=True,
         )
         # check cleanup
         assert await context.async_unload()
         assert context.api.profiles[tc.MOCK_PROFILE_ID] is None
-        assert merossmqtt_mock.safe_stop_mock.call_count == len(safe_start_calls)
+        assert merossmqtt_mock.async_disconnect_mock.call_count == len(connect_calls)
 
 
 async def test_meross_profile_with_device(
@@ -284,7 +285,7 @@ async def test_meross_profile_with_device(
         mqttconnections = list(profile.mqttconnections.values())
         assert mqttconnections[0].id == HostAddress(tc.MOCK_PROFILE_MSS310_DOMAIN, 443)
         assert mqttconnections[1].id == HostAddress(tc.MOCK_PROFILE_MSH300_DOMAIN, 443)
-        merossmqtt_mock.safe_start_mock.assert_has_calls(
+        merossmqtt_mock.start_mock.assert_has_calls(
             [mock.call(mqttconnections[0]), mock.call(mqttconnections[1])],
             any_order=True,
         )

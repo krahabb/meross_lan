@@ -8,12 +8,8 @@ from homeassistant import config_entries
 from homeassistant.components import dhcp
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState, ConfigFlowResult
 from homeassistant.data_entry_flow import FlowResultType
-
-try:
-    from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
-except ImportError:
-    from homeassistant.components.dhcp import DhcpServiceInfo  # type: ignore
-
+from homeassistant.helpers import discovery_flow
+from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
 
 from custom_components.meross_lan import const as mlc
@@ -26,12 +22,6 @@ from custom_components.meross_lan.merossclient.protocol import (
 from custom_components.meross_lan.merossclient.protocol.message import MerossMessage
 
 from tests import const as tc, helpers
-
-try:
-    from homeassistant.helpers import discovery_flow
-except ImportError:
-    discovery_flow = None
-
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -51,7 +41,9 @@ async def test_device_config_flow(hass: "HomeAssistant", aioclient_mock, hamqtt_
     """
     Test standard manual device entry config flow
     """
-    with helpers.EmulatorContext(mc.TYPE_MTS200, aioclient_mock) as emulator_context:
+    async with helpers.EmulatorContext(
+        mc.TYPE_MTS200, aioclient_mock
+    ) as emulator_context:
         emulator = emulator_context.emulator
         host = emulator_context.host
 
@@ -86,6 +78,7 @@ async def test_device_config_flow(hass: "HomeAssistant", aioclient_mock, hamqtt_
         payload = data[mlc.CONF_PAYLOAD]
         payload_all = payload[mc.KEY_ALL]
         payload_time = payload_all[mc.KEY_SYSTEM][mc.KEY_TIME]
+        assert mc.KEY_TIMESTAMP in descriptor.time
         if payload_time[mc.KEY_TIMESTAMP] == descriptor.time[mc.KEY_TIMESTAMP] - 1:
             # we just have to patch when the emulator timestamp ticked around a second
             payload_time[mc.KEY_TIMESTAMP] = descriptor.time[mc.KEY_TIMESTAMP]
@@ -173,7 +166,7 @@ async def test_device_config_flow_with_profile(
         mc.TYPE_MSS310, key=tc.MOCK_PROFILE_KEY, uuid=tc.MOCK_PROFILE_MSS310_UUID
     )
 
-    with helpers.EmulatorContext(emulator, aioclient_mock) as emulator_context:
+    async with helpers.EmulatorContext(emulator, aioclient_mock) as emulator_context:
 
         user_input = {mlc.CONF_HOST: emulator_context.host, mlc.CONF_KEY: ""}
 
@@ -313,7 +306,9 @@ async def _create_dhcp_discovery_flow(
 
 
 async def test_dhcp_discovery_config_flow(hass: "HomeAssistant", aioclient_mock):
-    with helpers.EmulatorContext(mc.TYPE_MTS200, aioclient_mock) as emulator_context:
+    async with helpers.EmulatorContext(
+        mc.TYPE_MTS200, aioclient_mock
+    ) as emulator_context:
         result = await _create_dhcp_discovery_flow(
             hass,
             DhcpServiceInfo(
@@ -327,7 +322,9 @@ async def test_dhcp_discovery_config_flow(hass: "HomeAssistant", aioclient_mock)
 
 
 async def test_dhcp_ignore_config_flow(hass: "HomeAssistant", aioclient_mock):
-    with helpers.EmulatorContext(mc.TYPE_MTS200, aioclient_mock) as emulator_context:
+    async with helpers.EmulatorContext(
+        mc.TYPE_MTS200, aioclient_mock
+    ) as emulator_context:
         flow = hass.config_entries.flow
 
         dhcp_service_info = DhcpServiceInfo(
@@ -412,7 +409,7 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
         ), "wrong emulator clone"
         # now we mock the device emulator at new address
         DHCP_GOOD_HOST = "88.88.88.88"
-        with helpers.EmulatorContext(
+        async with helpers.EmulatorContext(
             emulator_dhcp, aioclient_mock, host=DHCP_GOOD_HOST
         ):
             result = await flow.async_init(
@@ -442,7 +439,7 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
         ), "wrong emulator clone"
         # now we mock the device emulator at new address
         DHCP_BOGUS_HOST = "99.99.99.99"
-        with helpers.EmulatorContext(
+        async with helpers.EmulatorContext(
             emulator_dhcp, aioclient_mock, host=DHCP_BOGUS_HOST
         ):
             result = await flow.async_init(
