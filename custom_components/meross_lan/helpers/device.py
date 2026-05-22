@@ -1272,7 +1272,13 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         self.log(self.DEBUG, "linked to profile:%s", userid=profile.id)
         self._check_protocol()
         if device_info := profile.get_device_info(self.id):
-            self.update_device_info(device_info, profile)
+            try:
+                # protect this since device_info is coming from cloud api and we cannot really trust it..
+                self.update_device_info(device_info, profile)
+            except Exception as e:
+                self.log_exception(
+                    self.WARNING, e, "updating device info: %s", _any=device_info
+                )
 
     def profile_unlinked(self):
         assert self.profile
