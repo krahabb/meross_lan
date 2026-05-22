@@ -54,9 +54,9 @@ class UpdateEntity(Entity, update.UpdateEntity):
         self.device = device
         self.latest_version_info = latest_version_info
         self.device_class = update.UpdateDeviceClass.FIRMWARE
-        self.supported_features = (
-            update.UpdateEntityFeature.INSTALL | update.UpdateEntityFeature.PROGRESS
-        )
+        # self.supported_features = (
+        #    update.UpdateEntityFeature.INSTALL | update.UpdateEntityFeature.PROGRESS
+        # )
         self.title = device.display_name
         self.in_progress = False
         self.installed_version, self.latest_version, self.release_summary = (
@@ -84,6 +84,7 @@ class UpdateEntity(Entity, update.UpdateEntity):
         Entity.flush_state(self)
 
     async def async_install(self, *args, **kwargs):
+        raise HomeAssistantError("Temporarily unsupproted")
         device = self.device
         if not device.is_connected:
             raise HomeAssistantError("Device is offline")
