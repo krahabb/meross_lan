@@ -216,22 +216,52 @@ MOCK_CLOUDAPI_DEVICE_LATESTVERSION: list[cloudapi.LatestVersionType] = [
         "upgradeType": "01",
         "description": "Release Notes:\n1. Enhanced the stability of connection;\n2. Fixed the issue that devices are often offline.",
     },
+    {
+        "type": "mts300",
+        "subType": "us",
+        "version": "9.1.16",
+        "url": "http://bucket-meross-static.meross.com/staticfile/firmware/2025/11/21/9f9f6a3e69df104d37e835f648df0a2a.bin",
+        "md5": "05b2c9835e6d35fdb35e673984b530f0",
+        "description": "1. Modified the humidity calibration range to ±99%.\n2. Fixed other known issues.",
+        "alias": "",
+        "mcu": [
+            {
+                "type": "mts300_mcu_v1",
+                "md5": "653c111dc5892771a6796eb833acaeaf",
+                "url": "http://bucket-meross-static.meross.com/staticfile/firmware/2026/01/07/ca84cd3bbbbea2587ef54ed7da77d7ef.bin",
+                "version": "1.2.6",
+            },
+            {
+                "type": "mts300_mcu_v3",
+                "md5": "9f46c2da3b271f5d99eca26c6c7b6b08",
+                "url": "http://bucket-meross-static.meross.com/staticfile/firmware/2025/12/19/27bfee7c96e1148c57d310d2224905c4.bin",
+                "version": "3.2.4",
+            },
+        ],
+        "upgradeType": "01",
+    },
 ]
 MOCK_CLOUDAPI_HUB_GETSUBDEVICES: dict[str, list[cloudapi.SubDeviceInfoType]] = {
     MOCK_PROFILE_MSH300_UUID: [
         {
             "subDeviceId": "00001234",
             "subDeviceType": mc.TYPE_MTS100V3,
+            "subDeviceSubType": "it",
             "subDeviceVendor": "Meross",
             "subDeviceName": "Awesome thermostat",
             "subDeviceIconId": "device045_it",
+            "bindTime": 0,
+            "iconType": 0,
         },
         {
             "subDeviceId": "00001235",
             "subDeviceType": mc.TYPE_MS100,
+            "subDeviceSubType": "it",
             "subDeviceVendor": "Meross",
             "subDeviceName": "Nice temp/humidity outside",
             "subDeviceIconId": "device045_it",
+            "bindTime": 0,
+            "iconType": 0,
         },
     ]
 }
