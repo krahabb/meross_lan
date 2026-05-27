@@ -47,7 +47,7 @@ Appliance_Hub_Mts100_Adjust = mn.ns(
 )
 Appliance_Hub_Mts100_All = mn.ns("Appliance.Hub.Mts100.All", mc.KEY_ALL, 350, GET_ID)
 Appliance_Hub_Mts100_Config = mn.ns(
-    "Appliance.Hub.Mts100.Config", mc.KEY_CONFIG, -1, GETSET_ID
+    "Appliance.Hub.Mts100.Config", mc.KEY_CONFIG, 60, GETSET_ID
 )
 Appliance_Hub_Mts100_Mode = mn.ns(
     "Appliance.Hub.Mts100.Mode", mc.KEY_MODE, -1, GETSET_ID, mn.PSH

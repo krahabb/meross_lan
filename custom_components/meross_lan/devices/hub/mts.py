@@ -1,8 +1,11 @@
+from enum import StrEnum
 from typing import TYPE_CHECKING, override
 
 from . import SubDevice, mc, mn_h
 from ...binary_sensor import BinarySensorEntity
 from ...climate import MtsClimate
+from ...number import NumberParser
+from ...select import SelectParser
 from ...switch import EmulatedSwitch, SwitchParser
 
 if TYPE_CHECKING:
@@ -81,7 +84,10 @@ class mts100(SubDevice, MtsClimate):
             device_class=BinarySensorEntity.DeviceClass.WINDOW,
         )
         self.switch_patch_hvacaction = EmulatedSwitch(
-            self, entity_key="patch_hvacaction", is_on=False
+            self,
+            entity_key="patch_hvacaction",
+            is_on=False,
+            entity_registry_enabled_default=False,
         )
         self.switch_patch_hvacaction.register_state_callback(self.flush_state)
 
@@ -215,6 +221,14 @@ class mts100(SubDevice, MtsClimate):
 
     # interface: SubDevice
     @override
+    def _parse_digest_(self, payload: "mt.hub._mts100v3", /):
+        """parse digest key for mts100/mts100v3 subdevice"""
+        mode = payload[mc.KEY_MODE]
+        if self._mts_mode != mode:
+            self._mts_mode = mode
+            self.flush_state()
+
+    @override
     def _parse_all(self, payload: "mt.hub.Mts100_All", /):
         if self._parse_online(payload[mc.KEY_ONLINE]):
             if mc.KEY_SCHEDULEBMODE in payload:
@@ -259,13 +273,6 @@ class mts100(SubDevice, MtsClimate):
             self._mts_onoff = onoff
             self.flush_state()
 
-    def _parse_digest_(self, payload: "mt.hub._mts100v3", /):
-        """parse digest key for mts100/mts100v3 subdevice"""
-        mode = payload[mc.KEY_MODE]
-        if self._mts_mode != mode:
-            self._mts_mode = mode
-            self.flush_state()
-
     def update_scheduleb_mode(self, mode, /):
         self.extra_state_attributes[mc.KEY_SCHEDULEBMODE] = mode
         self.schedule._schedule_entry_count_max = mode
@@ -280,6 +287,99 @@ mts100v3 = mts100
 class mts150(mts100):
     """Climate entity for hub paired devices MTS150, MTS150P"""
 
+    class PidGradeSelect(SelectParser):
+
+        class Option(StrEnum):
+            DEFAULT = "0"
+            LOW = "1"
+            MILD = "2"
+            MIDDLE = "3"
+            STRONG = "4"
+
+        if TYPE_CHECKING:
+            MTS150_PID_GRADE_MAP: dict[str, mt.hub.Mts100_Config_pid]
+            MTS150P_PID_GRADE_MAP: dict[str, mt.hub.Mts100_Config_pid]
+            _pid_grade_map: dict[str, mt.hub.Mts100_Config_pid]
+
+        init_ns = mn_h.Appliance_Hub_Mts100_Config
+        init_key_value = SelectParser.KeyValue(mc.KEY_PID, mc.KEY_GRADE)
+        init_entity_key = f"{init_ns.slug}__{init_key_value}"
+        init_options_map = {
+            0: Option.DEFAULT,
+            1: Option.LOW,
+            2: Option.MILD,
+            3: Option.MIDDLE,
+            4: Option.STRONG,
+        }
+
+        # presets from Meross App
+        MTS150_PID_GRADE_MAP = {
+            Option.DEFAULT: {mc.KEY_GRADE: 0, mc.KEY_P: 0, mc.KEY_I: 0},
+            Option.LOW: {mc.KEY_GRADE: 1, mc.KEY_P: 30, mc.KEY_I: 90},
+            Option.MILD: {mc.KEY_GRADE: 2, mc.KEY_P: 24, mc.KEY_I: 75},
+            Option.MIDDLE: {mc.KEY_GRADE: 3, mc.KEY_P: 16, mc.KEY_I: 45},
+            Option.STRONG: {mc.KEY_GRADE: 4, mc.KEY_P: 10, mc.KEY_I: 30},
+        }
+        MTS150P_PID_GRADE_MAP = {
+            Option.DEFAULT: {mc.KEY_GRADE: 0, mc.KEY_P: 0, mc.KEY_I: 0, mc.KEY_D: 0},
+            Option.LOW: {mc.KEY_GRADE: 1, mc.KEY_P: 12, mc.KEY_I: 4, mc.KEY_D: 2},
+            Option.MILD: {mc.KEY_GRADE: 2, mc.KEY_P: 18, mc.KEY_I: 5, mc.KEY_D: 2},
+            Option.MIDDLE: {mc.KEY_GRADE: 3, mc.KEY_P: 25, mc.KEY_I: 8, mc.KEY_D: 4},
+            Option.STRONG: {mc.KEY_GRADE: 4, mc.KEY_P: 30, mc.KEY_I: 11, mc.KEY_D: 5},
+        }
+        init__pid_grade_map = MTS150P_PID_GRADE_MAP
+
+        AUTO_INIT = ("_pid_grade_map",)
+        __slots__ = ("p", "i", "d")
+
+        @override
+        async def async_select_option(self, option: str):
+            try:
+                payload = {mc.KEY_PID: self._pid_grade_map[option]}
+            except KeyError:
+                await super().async_select_option(option)
+            else:
+                await self.parent.async_request(
+                    *self.ns.request_set(self.index | payload)
+                )
+                self(payload)  # type: ignore[call-arg]
+
+        @override
+        def __call__(self, payload: "mt.hub.Mts100_Config", /):
+            pid = payload[mc.KEY_PID]
+            self.update_device_value(pid[mc.KEY_GRADE])
+            for _key in (mc.KEY_P, mc.KEY_I, mc.KEY_D):
+                try:
+                    value = pid[_key]  # type: ignore
+                    getattr(self, _key).update_device_value(value)
+                except KeyError:
+                    # Auto-detect mts150/mts150p different payload layout
+                    if _key == mc.KEY_D:
+                        self._pid_grade_map = self.MTS150_PID_GRADE_MAP
+                    continue
+                except AttributeError:
+                    key_value = NumberParser.KeyValue(mc.KEY_PID, _key)
+                    setattr(
+                        self,
+                        _key,
+                        NumberParser(
+                            self,
+                            entity_key=f"{self.ns.slug}__{key_value}",
+                            ns=self.ns,
+                            key_value=key_value,
+                            ns_value=value,
+                        ),
+                    )
+
+    def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
+        mts100.__init__(self, descriptor, hub, **kwargs)
+        PidGradeSelect = mts150.PidGradeSelect
+        if PidGradeSelect.init_ns in hub.descriptor.ability:
+            hub.get_handler(PidGradeSelect.init_ns).register_parser(
+                PidGradeSelect(self)
+            )
+
+    @override
     def _parse_digest_(self, payload: "mt.hub._mts150", /):
         """parse digest key for mts150/mts150p subdevice"""
         mode = payload[mc.KEY_MODE]

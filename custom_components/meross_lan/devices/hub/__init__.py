@@ -615,6 +615,7 @@ NamespaceHandler.POLLING_CONFIG_MAP.update(
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
             NamespaceHandler.async_poll_chunked,
         ),
+        mn_h.Appliance_Hub_Mts100_Config: mlc.POLLING_CONFIG_CONFIGURATION,
         mn_h.Appliance_Hub_Mts100_Mode: NamespaceHandler.POLLING_CONFIG_NONE,
         mn_h.Appliance_Hub_Mts100_ScheduleB: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,

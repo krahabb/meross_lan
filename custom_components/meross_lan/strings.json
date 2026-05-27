@@ -39,6 +39,18 @@
             }
         },
         "number": {
+            "appliance_hub_mts100_config__pid_grade": {
+                "name": "PID: Grade"
+            },
+            "appliance_hub_mts100_config__pid_p": {
+                "name": "PID: Proportional"
+            },
+            "appliance_hub_mts100_config__pid_i": {
+                "name": "PID: Integral"
+            },
+            "appliance_hub_mts100_config__pid_d": {
+                "name": "PID: Derivative"
+            },
             "calibration_humidity": {
                 "name": "Calibration (humidity)"
             },
@@ -80,6 +92,16 @@
                 "state": {
                     "us_customary": "US customary",
                     "metric": "Metric"
+                }
+            },
+            "appliance_hub_mts100_config__pid_grade": {
+                "name": "PID: Preset",
+                "state": {
+                    "0": "Default",
+                    "1": "Low",
+                    "2": "Mild",
+                    "3": "Middle",
+                    "4": "Strong"
                 }
             }
         },

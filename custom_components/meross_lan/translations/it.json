@@ -103,6 +103,18 @@
             },
             "overheat": {
                 "name": "Protezione surriscaldamento"
+            },
+            "appliance_hub_mts100_config__pid_grade": {
+                "name": "PID: Grade"
+            },
+            "appliance_hub_mts100_config__pid_p": {
+                "name": "PID: Proporzionale"
+            },
+            "appliance_hub_mts100_config__pid_i": {
+                "name": "PID: Integrale"
+            },
+            "appliance_hub_mts100_config__pid_d": {
+                "name": "PID: Derivativo"
             }
         },
         "switch": {
@@ -129,6 +141,16 @@
                 "state": {
                     "us_customary": "Imperiale\/US",
                     "metric": "Metrico"
+                }
+            },
+            "appliance_hub_mts100_config__pid_grade": {
+                "name": "PID: Preset",
+                "state": {
+                    "0": "Default",
+                    "1": "Basso",
+                    "2": "Leggero",
+                    "3": "Medio",
+                    "4": "Forte"
                 }
             }
         }

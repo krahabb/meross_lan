@@ -42,6 +42,20 @@ class ToggleX(_ToggleX, mt.IdPayload):
     pass
 
 
+class Mts100_Config_pid(TypedDict):
+    grade: int
+    p: int
+    i: int
+    d: NotRequired[int]  # only for mts150p
+
+
+class Mts100_Config(mt.IdPayload):
+    """Appliance.Hub.Mts100.Config"""
+
+    # ns supported in mts150/mts150p
+    pid: Mts100_Config_pid
+
+
 class _Mts100_Mode(TypedDict):
     """Appliance.Hub.Mts100.Mode"""
 
