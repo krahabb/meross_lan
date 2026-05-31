@@ -261,7 +261,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             setattr(self, _attr, kwargs.pop(_attr))
         super().__init__(id, parent, **kwargs)
         parent.entities[id] = self
-        if parent.platforms:
+        if parent.added_entities is not None:
             # this entity is being created after entry setup
             parent.add_entity(self)
 

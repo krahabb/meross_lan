@@ -91,7 +91,7 @@ class ConfigEntryManager(logging.Loggable):
         platforms: dict[str, EntityPlatform]
         entities: Final[dict[object, Entity]]
         entities_iterable: Final[Iterable[Entity]]  # RENAME to entities once migrated
-        _added_platform_entities: dict[str, list[Entity]]
+        added_entities: dict[str, list[Entity]] | None
         """Entities added lately when ConfigEntry has already been loaded.
         This will be used to lazily forward them to the right platform.
         This is needed because 'dynamic' entities are mostly created in sync code
@@ -125,7 +125,7 @@ class ConfigEntryManager(logging.Loggable):
         "platforms",
         "entities",
         "entities_iterable",
-        "_added_platform_entities",
+        "added_entities",
         "logger",
         "is_connected",
         "_issues",
@@ -157,6 +157,7 @@ class ConfigEntryManager(logging.Loggable):
         self.platforms = {}
         self.entities = {}
         self.entities_iterable = self.entities.values()
+        self.added_entities = None
         self.is_connected = self.init_is_connected
         self._trace_file = None
         self._trace_future = None
@@ -273,6 +274,7 @@ class ConfigEntryManager(logging.Loggable):
         await hass.config_entries.async_forward_entry_setups(
             config_entry, set(entity.PLATFORM for entity in self.entities_iterable)
         )
+        self.added_entities = {}
         self._entry_update_listener_unsub = config_entry.add_update_listener(
             self.entry_update_listener
         )
@@ -291,8 +293,9 @@ class ConfigEntryManager(logging.Loggable):
         try:
             self._entry_update_listener_unsub()
             del self._entry_update_listener_unsub
-            self.platforms.clear()
             await self.async_shutdown()
+            self.platforms.clear()
+            self.added_entities = None
             return True
         except Exception as exception:
             self.log_exception(self.WARNING, exception, "async_unload_entry")
@@ -351,27 +354,25 @@ class ConfigEntryManager(logging.Loggable):
             del self.entities[entity.id]
 
     def add_entity[_T: "Entity"](self, entity: _T):  # type: ignore
-        try:
-            self._added_platform_entities[entity.PLATFORM].append(entity)
-        except AttributeError:
-            self._added_platform_entities = {entity.PLATFORM: [entity]}
-            self.schedule_async_callback(0, self.async_check_add_entities)
-        except KeyError:
-            self._added_platform_entities[entity.PLATFORM] = [entity]
-        return entity
+        if not self.added_entities:
+            self.added_entities = {entity.PLATFORM: [entity]}
+            self.schedule_async_callback(0, self._async_check_add_entities)
+        else:
+            try:
+                self.added_entities[entity.PLATFORM].append(entity)
+            except KeyError:
+                self.added_entities[entity.PLATFORM] = [entity]
 
-    async def async_check_add_entities(self, /):
-        try:
-            for platform, entities in self._added_platform_entities.items():
-                try:
-                    await self.platforms[platform].async_add_entities(entities)
-                except KeyError:
-                    await self.parent.config_entries.async_forward_entry_setups(
-                        self.config_entry, (platform,)
-                    )
-            del self._added_platform_entities
-        except AttributeError:
-            return
+    async def _async_check_add_entities(self, /):
+        assert self.added_entities
+        for platform, entities in self.added_entities.items():
+            try:
+                await self.platforms[platform].async_add_entities(entities)
+            except KeyError:
+                await self.parent.config_entries.async_forward_entry_setups(
+                    self.config_entry, (platform,)
+                )
+        self.added_entities.clear()
 
     def create_issue(
         self,
