@@ -218,12 +218,12 @@ class ConfigEntryManager(logging.Loggable):
 
     @override
     def create_task[_T](
-        self, target: "Coroutine[Any, Any, _T]", name: str, eager_start: bool = False
+        self,
+        target: "Coroutine[Any, Any, _T]",
+        name: str = "",
+        eager_start: bool = False,
     ):
-        # this override is needed to rely on a more reliable eager_start behavior
-        # which should be incorporated in HA core.
-        # Loggable.create_task could be fragile about eager_start since
-        # it uses a kind of 'official' trick in case we're on python < 3.14
+        # This override is needed to let HA be aware of the tasks we create (especially for testing)
         task = self.parent.hass.async_create_task(
             target, f"{self.logtag}{name}", eager_start=eager_start
         )

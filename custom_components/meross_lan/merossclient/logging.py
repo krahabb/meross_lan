@@ -6,6 +6,7 @@ import abc
 import asyncio
 from contextlib import contextmanager
 import logging
+import sys
 from time import time
 from typing import TYPE_CHECKING, override
 
@@ -482,25 +483,48 @@ class Loggable(metaclass=abc.ABCMeta):
         except Exception as exception:
             self.log_exception(self.WARNING, exception, msg, *args, **kwargs)
 
-    def create_task[_T](
-        self, coro: "Coroutine[Any, Any, _T]", name: str, eager_start: bool = False
-    ):
-        if eager_start:
-            # WARNING: direct Task creation should be avoided in favor of asyncio dedicated apis.
-            # In 3.14 this will be possible with create_task(..., eager_start=True)
-            task = asyncio.Task(
-                coro, loop=self.loop, name=f"{self.logtag}{name}", eager_start=True
-            )
-            if task.done():
+    if sys.version_info >= (3, 14):
+
+        def create_task[_T](
+            self,
+            coro: "Coroutine[Any, Any, _T]",
+            name: str = "",
+            eager_start: bool = False,
+        ):
+            task: asyncio.Task[_T] = self.loop.create_task(coro, name=f"{self.logtag}{name}", eager_start=eager_start)  # type: ignore
+            if eager_start and task.done():
                 return task
-        else:
-            task = self.loop.create_task(coro, name=f"{self.logtag}{name}")
-        try:
-            self._tasks.add(task)
-        except AttributeError:
-            self._tasks = {task}
-        task.add_done_callback(self._done_task_callback)
-        return task
+            try:
+                self._tasks.add(task)
+            except AttributeError:
+                self._tasks = {task}
+            task.add_done_callback(self._done_task_callback)
+            return task
+
+    else:
+
+        def create_task[_T](
+            self,
+            coro: "Coroutine[Any, Any, _T]",
+            name: str = "",
+            eager_start: bool = False,
+        ):
+            if eager_start:
+                # WARNING: direct Task creation should be avoided in favor of asyncio dedicated apis.
+                # In 3.14 this will be possible with create_task(..., eager_start=True)
+                task = asyncio.Task(
+                    coro, loop=self.loop, name=f"{self.logtag}{name}", eager_start=True
+                )
+                if task.done():
+                    return task
+            else:
+                task = self.loop.create_task(coro, name=f"{self.logtag}{name}")
+            try:
+                self._tasks.add(task)
+            except AttributeError:
+                self._tasks = {task}
+            task.add_done_callback(self._done_task_callback)
+            return task
 
     def _done_task_callback(self, task: asyncio.Future):
         self._tasks.remove(task)
