@@ -137,7 +137,6 @@ class Hub(mld.Device):
                 self.subdevices[subid].log_duplicated()
                 continue
 
-            self.remove_issue(mlc.ISSUE_HUB_SUBDEVICE_REMOVED, subid)
             device_entry = registry_subdevices.pop(subid, None)
             try:
                 key_digest = descriptor.key_digest
@@ -162,7 +161,7 @@ class Hub(mld.Device):
                 else:
                     descriptor.key_digest = descriptor.type
 
-            await self._async_build_subdevice(descriptor)
+            await self._async_build_subdevice(descriptor, device_entry)
 
         for subdevice_id, device_entry in registry_subdevices.items():
             self.create_issue(
@@ -248,7 +247,7 @@ class Hub(mld.Device):
                         )
                         continue
                     self.schedule_async_callback(
-                        2, self._async_build_subdevice, descriptor
+                        2, self._async_build_subdevice, descriptor, None
                     )
                     # schedule_entry_update will also check abilities
                     # and issue a ConfigEntry reload if necessary.
@@ -291,7 +290,18 @@ class Hub(mld.Device):
         super()._handle_Appliance_System_All(message)
         self.parse_digest(self.descriptor.digest[mc.KEY_HUB])
 
-    async def _async_build_subdevice(self, descriptor: "SubDeviceDescriptor", /):
+    async def _async_build_subdevice(
+        self,
+        descriptor: "SubDeviceDescriptor",
+        device_entry: "mld.dr.DeviceEntry | None",
+        /,
+    ):
+        self.remove_issue(mlc.ISSUE_HUB_SUBDEVICE_REMOVED, descriptor.id)
+        if not device_entry:
+            self.create_notification(
+                f"Model: {descriptor.productnametype} (id:{descriptor.id})",
+                "New Meross subdevice detected",
+            )
         module_name = descriptor.type_class
         if module_name == "gs":  # smokeAlarm is defined in 'ms' module
             module_name = "ms"

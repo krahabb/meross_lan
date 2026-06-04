@@ -120,10 +120,12 @@ class NamespaceHandler(logging.Loggable):
         /,
         **kwargs: "Unpack[NamespaceHandler.Args]",
     ):
-        assert id in parent.descriptor.ability, (
-            "Namespace not supported by device",
-            id,
-        )
+        # Some namespaces (Appliance.Hub.Bind on my old msh300) are not reported in device abilities,
+        # still they're appearing on the wire and need to be handled.
+        # assert id in parent.descriptor.ability, (
+        #    "Namespace not supported by device",
+        #    id,
+        # )
         assert id not in parent.ns_handlers, ("Namespace already registered", id)
         self.parsers = {}
         if id.index_type is mn.IndexType.subId and not parent.descriptor.is_hub:
@@ -539,20 +541,10 @@ class NamespaceHandler(logging.Loggable):
                 self.log_parser_exception(ke, payload)
             return
 
-        try:
-            subdevice = self.parent.subdevices[subdevice_id]
-        except KeyError as ke:
-            # this is a new subdevice for which we dont have a parser yet and we
-            # didnt know it existed so we need to do a digest rescan to discover it
-            # WARNING/TODO: this might cause a storm of rescans if the device is sending
-            # a lot of messages for the same unknown subdevice before we discover it.
-            # We should implement a temporary blocklist of unknown subdevices to avoid this.
-            # or maybe setup a stub parser for this subdevice that will log and ignore
-            # messages until we discover it.
+        if subdevice_id in self.parent.subdevices:
+            self._handle_missing_parser(index, payload)
+        else:  # New subdevice: force a 'digest rescan' in the hub
             self.parent.handler_all.next_poll_epoch = 0.0
-            return
-
-        self._handle_missing_parser(index, payload)
 
     async def async_get(self, *indexes: mn.IndexValue):
         """

@@ -6,6 +6,7 @@ from .. import const as mc, namespaces as mn
 
 GET_ID = mn.IDX_ID | mn.G_LI
 SET_ID = mn.IDX_ID | mn.S_LI
+PSH_ID = mn.IDX_ID | mn.PSH
 GETSET_ID = mn.IDX_ID | mn.G_LI | mn.S_LI
 GETPSH_ID = GET_ID | mn.PSH
 
@@ -36,6 +37,10 @@ Appliance_Digest_WaterPlan = mn.ns(
     "Appliance.Digest.WaterPlan", mc.KEY_DIGEST, -1, GETSET_SUBID, mn.EXP
 )  # mst100 (used to read/write watering schedules)
 Appliance_Hub_Battery = mn.ns("Appliance.Hub.Battery", mc.KEY_BATTERY, 40, GETPSH_ID)
+Appliance_Hub_Bind = mn.ns(
+    "Appliance.Hub.Bind", mc.KEY_BIND, 60, PSH_ID
+)  # PUSHed by an hub when a subdevice is bound to it, contains the subdevice type and bind time.
+# Interesting note: this is emitted even by hubs which don't expose it in abilities.
 Appliance_Hub_Exception = mn.ns(
     "Appliance.Hub.Exception", mc.KEY_EXCEPTION, -1, mn.PSQ, mn.IDX_ID
 )

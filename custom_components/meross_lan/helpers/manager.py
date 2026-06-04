@@ -413,6 +413,20 @@ class ConfigEntryManager(logging.Loggable):
     def remove_issue(self, issue_key: str, issue_subkey: str = "", /):
         self.remove_issue_id(f"{issue_key}.{self.id}.{issue_subkey}")
 
+    def create_notification(
+        self,
+        message: str,
+        title: str = "meross_lan",
+        notification_id: str = "notification",
+    ):
+        """Generate (or updates) a persistent notification."""
+        pn.async_create(
+            self.parent.hass,
+            message,
+            title,
+            f"{DOMAIN}.{self.config_entry.entry_id}.{notification_id}",
+        )
+
     @abstractmethod
     def get_logger_name(self) -> str:
         raise NotImplementedError()
@@ -500,11 +514,10 @@ class ConfigEntryManager(logging.Loggable):
                 )
 
             self._trace_opened(epoch)
-            pn.async_create(
-                self.parent.hass,
+            self.create_notification(
                 f"Device: {self.display_name}\nFile: {_t.name}",  # type: ignore
                 "meross_lan tracing started",
-                f"{DOMAIN}.{self.id}.tracing",
+                "tracing",
             )
 
         except Exception as exception:
@@ -547,11 +560,8 @@ class ConfigEntryManager(logging.Loggable):
             notify_message = f"{exception} in {error_context}\n{notify_message}"
         else:
             notify_title = "Tracing terminated"
-        pn.async_create(
-            self.parent.hass,
-            f"Device: {self.display_name}\n{notify_message}",
-            notify_title,
-            f"{DOMAIN}.{self.id}.tracing",
+        self.create_notification(
+            f"Device: {self.display_name}\n{notify_message}", notify_title, "tracing"
         )
 
     def trace(

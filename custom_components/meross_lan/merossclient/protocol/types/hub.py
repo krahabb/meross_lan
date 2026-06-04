@@ -23,6 +23,13 @@ class Battery(mt.IdPayload):
     value: int
 
 
+class Bind(mt.IdPayload):
+    """Appliance.Hub.Bind"""
+
+    bindTime: int
+    deviceType: str  # mts100v3
+
+
 class _Online(TypedDict):
     status: int
     lastActiveTime: int
