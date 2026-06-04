@@ -519,13 +519,11 @@ class Descriptor:
     """
 
     if TYPE_CHECKING:
+        _DYNAMIC_ATTRS: ClassVar[Mapping[str, Callable[[Self], Any]]]
         type: str
         subType: str
         hw_version: str | None
-        fw_version: str | None  # current firmware version installed on the device
-        # This is usually obtained from the active profile.
-
-        _DYNAMIC_ATTRS: ClassVar[Mapping[str, Callable[[Self], Any]]]
+        fw_version: str | None
         productname: str
         productnametype: str
         productmodel: str
@@ -534,6 +532,10 @@ class Descriptor:
         is_refoss: bool
 
     _DYNAMIC_ATTRS = {
+        mc.KEY_TYPE: lambda _self: mc.TYPE_UNKNOWN,
+        mc.KEY_SUBTYPE: lambda _self: mc.TYPE_UNKNOWN,
+        "hw_version": lambda _self: None,
+        "fw_version": lambda _self: None,
         "productname": lambda _self: get_productname(_self.type),
         "productnametype": lambda _self: get_productnametype(_self.type),
         "productmodel": lambda _self: f"{_self.type}-{_self.subType}",
@@ -544,14 +546,7 @@ class Descriptor:
         "is_refoss": lambda _self: mc.RefossModel.match(_self.type),
     }
 
-    __slots__ = (
-        "type",
-        "subType",
-        "hw_version",
-        "fw_version",
-        "latest_version",  # on demand
-        *_DYNAMIC_ATTRS.keys(),
-    )
+    __slots__ = (*_DYNAMIC_ATTRS.keys(),)
 
     def __getattr__(self, name):
         for cls in type(self).mro():
@@ -652,8 +647,8 @@ class SubDeviceDescriptor(Descriptor):
             return _self.key_digest
 
     _DYNAMIC_ATTRS = {
+        mc.KEY_TYPE: lambda _self: SubDeviceDescriptor._infer_type_from_digest(_self),
         "key_digest": lambda _self: SubDeviceDescriptor.get_key_digest(_self.digest),
-        "type": lambda _self: SubDeviceDescriptor._infer_type_from_digest(_self),
     }
 
     __slots__ = (
