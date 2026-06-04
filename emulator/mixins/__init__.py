@@ -27,7 +27,6 @@ from custom_components.meross_lan.merossclient.protocol import (
 from custom_components.meross_lan.merossclient.protocol.message import (
     MerossMessage,
     MerossRequest,
-    get_replykey,
     json_loads,
 )
 
@@ -461,7 +460,9 @@ class Emulator:
         self._log_message("RX", request.json)
         self.update_epoch()
 
-        if get_replykey(request.header, self.key) is not self.key:
+        if request.validate_signature(self.key):
+            response = self._handle_message(request.header, request.payload)
+        else:
             response = MerossMessage.build(
                 request.namespace,
                 mc.METHOD_ERROR,
@@ -470,8 +471,6 @@ class Emulator:
                 messageid=request.messageid,
                 from_=self.topic_response,
             )
-        else:
-            response = self._handle_message(request.header, request.payload)
 
         if response:
             response_json = response.json

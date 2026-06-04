@@ -499,8 +499,9 @@ TYPE_MSG100 = "msg100"  # smart garage door (1 channel)
 TYPE_MSG200 = "msg200"  # smart garage door (3 channels)
 TYPE_NAME_MAP["msg"] = "Garage Door"
 
+TYPE_HUB = "msh"
 TYPE_MSH300 = "msh300"  # WiFi Hub
-TYPE_NAME_MAP["msh"] = "Smart Hub"
+TYPE_NAME_MAP[TYPE_HUB] = "Smart Hub"
 
 TYPE_MSL100 = "msl100"  # smart bulb
 TYPE_NAME_MAP[TYPE_MSL100] = "Smart Bulb"

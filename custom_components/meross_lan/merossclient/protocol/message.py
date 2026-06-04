@@ -44,10 +44,9 @@ def get_replykey(header: "MerossHeaderType", key: "KeyType", /) -> "KeyType":
     anyway and could be reused in a future attempt
     """
     if isinstance(key, str):
-        sign = compute_message_signature(
+        if header[mc.KEY_SIGN] == compute_message_signature(
             header[mc.KEY_MESSAGEID], key, header[mc.KEY_TIMESTAMP]
-        )
-        if sign == header[mc.KEY_SIGN]:
+        ):
             return key
 
     return header
@@ -181,6 +180,13 @@ class MerossMessage(dict):
 
     def compute_signature(self, key: str, /):
         return compute_message_signature(
+            self.messageid,
+            key,
+            self.header[mc.KEY_TIMESTAMP],
+        )
+
+    def validate_signature(self, key: str, /):
+        return self.header[mc.KEY_SIGN] == compute_message_signature(
             self.messageid,
             key,
             self.header[mc.KEY_TIMESTAMP],

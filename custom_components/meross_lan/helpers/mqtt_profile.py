@@ -9,7 +9,7 @@ from ..merossclient import HostAddress
 from ..merossclient.client import Transport
 from ..merossclient.client.mqtt import AbstractMQTTConnection
 from ..merossclient.protocol import const as mc, namespaces as mn
-from ..merossclient.protocol.message import MerossResponse, get_replykey
+from ..merossclient.protocol.message import MerossResponse
 from ..sensor import DiagnosticSensor
 
 # import core modules instead of symbols to ease patching in a single place
@@ -278,18 +278,20 @@ class MQTTConnection(AbstractMQTTConnection):
         mqtt_msg: "ha_mqtt.ReceiveMessage | paho_mqtt.MQTTMessage | MqttServiceInfo",
         /,
     ):
-        with self.exception_warning("async_mqtt_message"):
+        with self.exception_warning(
+            "async_mqtt_message (msg:%s)", mqtt_msg.payload
+        ):  # BEWARE:missing obfuscation
+
             if sensor_connection := self.sensor_connection:
                 sensor_connection.extra_state_attributes[
                     ConnectionSensor.ATTR_RECEIVED
                 ] += 1
                 sensor_connection.flush_state()
 
-            mqtt_payload = mqtt_msg.payload
             message = MerossResponse(
-                mqtt_payload
-                if type(mqtt_payload) is str
-                else mqtt_payload.decode("utf-8")  # type: ignore
+                mqtt_msg.payload
+                if type(mqtt_msg.payload) is str
+                else mqtt_msg.payload.decode("utf-8")  # type: ignore
             )
             self.log_message(message, self.Direction.RX)
             # first check among pending transactions (i.e. replies to our requests)
@@ -298,26 +300,14 @@ class MQTTConnection(AbstractMQTTConnection):
                 return
             except KeyError:
                 pass
-
             # then check for any special 'cloud' session management:
             # cloud connections would behave differently than local MQTT.
             # The behavior will definitely be set in the dynamic/custom
             # message handlers implemented in the derived MQTTConnection
-            try:
+            if message.namespace in self.session_handlers:
                 if self.session_handlers[message.namespace](self, message):
                     # session management has already taken care of everything
                     return
-            except Exception as e:
-                if (type(e) is not KeyError) or (e.args[0] != message.namespace):
-                    self.log_exception(
-                        self.DEBUG,
-                        e,
-                        "async_mqtt_message session handler for namespace %s (uuid:%s)",
-                        message.namespace,
-                        uuid=message.uuid,
-                        timeout=14400,
-                    )
-
             # then route to the device if already binded (should be the common case
             # when PUSH messages are broadcasted by the device)
             try:
@@ -327,12 +317,56 @@ class MQTTConnection(AbstractMQTTConnection):
                 if key_error.args[0] != message.uuid:
                     raise
 
+            # message from an unbound device
             uuid = message.uuid
+            if uuid in self.mqttdiscovering:
+                # Avoid overlapping identifications
+                return
             profile = self.parent
             api = profile.parent
-            # device_id is not binded to this MQTTConnection
-            if device := api.devices.get(uuid):
-                # check among current loaded devices if they could be re-binded
+
+            def _try_discovery(*keys: str):
+                for key in keys:
+                    if message.validate_signature(key):
+                        self.create_task(self.async_try_discovery(uuid, key))
+                        return
+                else:
+                    self.log(
+                        self.WARNING,
+                        "Ignoring discovery for uuid:%s (received message signature mismatch)",
+                        uuid=uuid,
+                        timeout=300,
+                    )
+
+            if uuid not in api.devices:
+                # Totally unconfigured device
+                if api.get_config_flow(uuid):
+                    self.log(
+                        self.DEBUG,
+                        "Ignoring discovery for uuid:%s (configuration is in progress)",
+                        uuid=uuid,
+                        timeout=14400,  # type: ignore
+                    )
+                    return
+                if (
+                    (profile is api)
+                    and (not api.get_config_entry(mlc.DOMAIN))
+                    and (not api.get_config_flow(mlc.DOMAIN))
+                ):
+                    # not really needed but we would like to always have the
+                    # MQTT hub entry in case so if the user removed that..retrigger
+                    api.create_task(
+                        api.flow_manager.async_init(
+                            mlc.DOMAIN,
+                            context={"source": "hub"},
+                            data=None,
+                        ),
+                        ".async_init(hub)",
+                    )
+                _try_discovery(profile.key)
+                return
+
+            if device := api.devices[uuid]:
                 if device.configured_transport not in (Transport.AUTO, Transport.MQTT):
                     self.log(
                         self.DEBUG,
@@ -343,62 +377,40 @@ class MQTTConnection(AbstractMQTTConnection):
                     )
                     return
                 if device.profile == profile:
-                    client = self.attach(device)
-                else:
-                    if (device.key != profile.key) or (
-                        device.descriptor.userId != profile.id
-                    ):
-                        # this is not really expected and deserves a warning but is expected
-                        # when you (re)bind a device and it still is connected to the old broker
-                        # until reboot
-                        self.log(
-                            self.WARNING,
-                            "Received MQTT message for device '%s' which cannot be registered for MQTT handling on this profile",
-                            device.display_name,
-                            timeout=14400,
-                        )
-                        return
+                    self.attach(device).on_async_mqtt_message(message)
+                    return
+                if (device.key == profile.key) and (
+                    device.descriptor.userId == profile.id
+                ):
                     profile.link(device)
                     # profile.link will attach to the mqtt broker known to the device cfg..
                     # we'll ensure that (in case device cfg is stale) we're correctly binded here
                     client = device.mqtt
                     if client is None:
-                        client = self.attach(device)
-                    elif client.connection != self:
+                        self.attach(device).on_async_mqtt_message(message)
+                        return
+                    if client.connection != self:
                         device.remove_client(client)
-                        client = self.attach(device)
+                        self.attach(device).on_async_mqtt_message(message)
+                        return
+                    client.on_async_mqtt_message(message)
+                    return
 
-                client.on_async_mqtt_message(message)
-                return
-
-            # the device is not configured: proceed to discovery in case
-            if uuid in self.mqttdiscovering:
-                return
-
-            # lookout for any disabled/ignored entry
-            if (
-                (profile is api)
-                and (not api.get_config_entry(mlc.DOMAIN))
-                and (not api.get_config_flow(mlc.DOMAIN))
-            ):
-                # not really needed but we would like to always have the
-                # MQTT hub entry in case so if the user removed that..retrigger
-                api.create_task(
-                    api.flow_manager.async_init(
-                        mlc.DOMAIN,
-                        context={"source": "hub"},
-                        data=None,
-                    ),
-                    ".async_init(hub)",
-                    eager_start=True,
-                )
-
-            if config_entry := (
-                api.get_config_entry(uuid) or api.get_config_entry(uuid[-12:].lower())
-            ):
-                # entry already present...skip discovery
+                # At this stage we have a loaded device with a 'wrong' (maybe stale) binding configuration.
+                # This can happen when the device is reset/rebinded.
                 self.log(
-                    self.INFO,
+                    self.WARNING,
+                    "Received message for device '%s' which appears to be misconfigured (mqtt broker mismatch). Attempting to fix by re-discovering the device..",
+                    device.display_name,
+                    timeout=14400,
+                )
+                _try_discovery(profile.key, device.key)
+                return
+
+            if config_entry := api.get_config_entry(uuid):
+                # entry already present...but device unloaded
+                self.log(
+                    self.DEBUG,
                     "Ignoring MQTT discovery for %s uuid:%s",
                     (
                         "disabled"
@@ -413,33 +425,6 @@ class MQTTConnection(AbstractMQTTConnection):
                     timeout=28800,  # type: ignore
                 )
                 return
-
-            # also skip discovered integrations waiting in HA queue
-            if api.get_config_flow(uuid):
-                self.log(
-                    self.DEBUG,
-                    "Ignoring MQTT discovery for uuid:%s (ConfigFlow is in progress)",
-                    uuid=uuid,
-                    timeout=14400,  # type: ignore
-                )
-                return
-
-            key = profile.key
-            if get_replykey(message.header, key) is not key:
-                self.log(
-                    self.WARNING,
-                    "Discovery key error for uuid:%s",
-                    uuid=uuid,
-                    timeout=300,
-                )
-                if key is not None:
-                    return
-
-            self.create_task(
-                self.async_try_discovery(uuid),
-                f".async_try_discovery({uuid})",
-                eager_start=True,
-            )
 
     @override
     def on_publish(self, /):
@@ -498,25 +483,23 @@ class MQTTConnection(AbstractMQTTConnection):
                     mlc.CONF_DEVICE_ID: descriptor.uuid,
                     mlc.CONF_PAYLOAD: descriptor.payload,
                     mlc.CONF_KEY: key,
+                    mlc.CONF_HOST: None,
                 }
             ),
             descriptor,
         )
 
-    async def async_try_discovery(self, uuid: str, /):
+    async def async_try_discovery(self, uuid: str, key: str, /):
         """
         Tries device identification and starts a flow if succeded returning
         the FlowResult. Returns None if anything fails for whatever reason.
         """
         self.mqttdiscovering.add(uuid)
         try:
-            device_config, descriptor = await self.async_identify_device(
-                uuid, self.parent.key
-            )
             return await self.parent.parent.flow_manager.async_init(
                 mlc.DOMAIN,
                 context={"source": SOURCE_INTEGRATION_DISCOVERY},
-                data=device_config,
+                data=(await self.async_identify_device(uuid, key))[0],
             )
         except Exception as e:
             self.log_exception(

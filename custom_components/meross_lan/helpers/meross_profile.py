@@ -557,93 +557,76 @@ class MerossProfile(MQTTProfile):
     ):
         api_devices = self.parent.devices
         device_info_dict = self._data[self.KEY_DEVICE_INFO]
-        device_info_removed = {device_id for device_id in device_info_dict.keys()}
-        device_info_unknown: list["DeviceInfoType"] = []
+        device_info_removed = {device_id for device_id in device_info_dict}
         for device_info in device_info_list_new:
             with self.exception_warning("_process_device_info_new"):
-                device_id = device_info[mc.KEY_UUID]
-                if device_id in device_info_dict:
+                uuid = device_info[mc.KEY_UUID]
+                if uuid in device_info_dict:
                     # already known device
-                    device_info_removed.remove(device_id)
-                device_info_dict[device_id] = device_info
-
-                try:
-                    device = api_devices[device_id]
-                except KeyError:
-                    device_info_unknown.append(device_info)
-                    continue
-                if not device:  # device unloaded
-                    continue
-                if device.descriptor.is_hub:
+                    device_info_removed.remove(uuid)
+                device_info_dict[uuid] = device_info
+                device_name = device_info.get(mc.KEY_DEVNAME, "")
+                device_type = device_info.get(mc.KEY_DEVICETYPE, "")
+                if device_type.startswith(mc.TYPE_HUB):
                     async with self._async_credentials_manager(
                         "_async_query_subdevices"
                     ) as credentials:
                         self.log(
                             self.DEBUG,
-                            "Querying hub subdevice list (uuid:%s)",
-                            uuid=device_id,
+                            "Querying '%s' subdevice list (uuid:%s)",
+                            device_name,
+                            uuid=uuid,
                         )
-                        device_info[self.KEY_SUBDEVICE_INFO] = (
-                            await self.apiclient.async_hub_getsubdevices(device_id)
+                        device_info[MerossProfile.KEY_SUBDEVICE_INFO] = (
+                            await self.apiclient.async_hub_getsubdevices(uuid)
                         )
+                try:
+                    device = api_devices[uuid]
+                except KeyError:
+                    # unknown/unconfigured device
+                    self.log(
+                        self.DEBUG,
+                        "Meross cloud api reported new device '%s' (type:%s, uuid:%s): initiating discovery",
+                        device_name,
+                        device_type,
+                        uuid=uuid,
+                    )
+                    if domain := device_info.get(mc.KEY_DOMAIN):
+                        # try first broker in the cloud configuration
+                        if mqttconnection := await self._async_get_mqttconnection(
+                            HostAddress.build(domain)
+                        ):
+                            if await mqttconnection.async_try_discovery(uuid, self.key):
+                                continue  # identification succeded, a flow has been created
+                    if (reserveddomain := device_info.get(mc.KEY_RESERVEDDOMAIN)) and (
+                        reserveddomain != domain
+                    ):
+                        # try the second broker in the cloud configuration
+                        # only if it's different from the previous
+                        if mqttconnection := await self._async_get_mqttconnection(
+                            HostAddress.build(reserveddomain)
+                        ):
+                            if await mqttconnection.async_try_discovery(uuid, self.key):
+                                continue  # identification succeded, a flow has been created
+                    continue
 
-                device.update_device_info(device_info, self)
+                if device:
+                    device.update_device_info(device_info, self)
 
-        for device_id in device_info_removed:
+        for uuid in device_info_removed:
+            device_info = device_info_dict.pop(uuid)
             self.log(
                 self.DEBUG,
-                "The uuid:%s has been removed from the cloud profile",
-                uuid=device_id,
+                "Device '%s' (type:%s, uuid:%s) has been removed from the cloud profile",
+                device_info.get(mc.KEY_DEVNAME, "unknown"),
+                device_info.get(mc.KEY_DEVICETYPE, "unknown"),
+                uuid=uuid,
             )
-            device_info_dict.pop(device_id)
             try:
-                self.linkeddevices.pop(device_id).profile_unlinked()
+                self.linkeddevices.pop(uuid).profile_unlinked()
             except KeyError as ke:
-                if ke.args[0] != device_id:
+                if ke.args[0] != uuid:
                     raise
-
-        if len(device_info_unknown):
-            await self._process_device_info_unknown(device_info_unknown)
-
-    async def _process_device_info_unknown(
-        self, device_info_unknown: list["DeviceInfoType"]
-    ):
-        if not self.allow_mqtt_publish:
-            self.log(
-                self.WARNING,
-                "Meross cloud api reported new devices but MQTT publishing is disabled: skipping automatic discovery",
-                timeout=604800,  # 1 week
-            )
-            return
-
-        for device_info in device_info_unknown:
-            with self.exception_warning("_process_device_info_unknown"):
-                device_id = device_info[mc.KEY_UUID]
-                self.log(
-                    self.DEBUG,
-                    "Trying/Initiating discovery for (new) uuid:%s",
-                    uuid=device_id,
-                )
-                if self.parent.get_config_flow(device_id):
-                    continue  # device configuration already progressing
-                # cloud conf has a new device
-                if domain := device_info.get(mc.KEY_DOMAIN):
-                    # try first broker in the cloud configuration
-                    if mqttconnection := await self._async_get_mqttconnection(
-                        HostAddress.build(domain)
-                    ):
-                        if await mqttconnection.async_try_discovery(device_id):
-                            continue  # identification succeded, a flow has been created
-                if (reserveddomain := device_info.get(mc.KEY_RESERVEDDOMAIN)) and (
-                    reserveddomain != domain
-                ):
-                    # try the second broker in the cloud configuration
-                    # only if it's different than the previous
-                    if mqttconnection := await self._async_get_mqttconnection(
-                        HostAddress.build(reserveddomain)
-                    ):
-                        if await mqttconnection.async_try_discovery(device_id):
-                            continue  # identification succeded, a flow has been created
 
     def _schedule_save_store(self):
         def _data_func():

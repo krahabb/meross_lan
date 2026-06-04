@@ -147,8 +147,17 @@ async def test_meross_profile(
         # check the store has been persisted with cloudapi fresh device list
         profile_storage_data = hass_storage[tc.MOCK_PROFILE_STORE_KEY]["data"]
         expected_storage_device_info_data = {
-            device_info[mc.KEY_UUID]: device_info
-            for device_info in tc.MOCK_CLOUDAPI_DEVICE_DEVLIST.values()
+            uuid: (
+                device_info
+                | {
+                    MerossProfile.KEY_SUBDEVICE_INFO: tc.MOCK_CLOUDAPI_HUB_GETSUBDEVICES[
+                        uuid
+                    ]
+                }
+                if uuid in tc.MOCK_CLOUDAPI_HUB_GETSUBDEVICES
+                else device_info
+            )
+            for uuid, device_info in tc.MOCK_CLOUDAPI_DEVICE_DEVLIST.items()
         }
         assert (
             profile_storage_data[MerossProfile.KEY_DEVICE_INFO]

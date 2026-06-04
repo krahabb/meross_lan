@@ -128,7 +128,7 @@ class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
     """
 
     # deprecated -> cloud_key: NotRequired[str | None]
-    host: NotRequired[str]
+    host: NotRequired[str | None]
     """device host (name or ip address): when empty the device can still use the host address recovered through MQTT payloads"""
     protocol: NotRequired[str]
     """configures the protocol: auto will automatically switch between the available transports"""

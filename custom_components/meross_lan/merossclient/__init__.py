@@ -831,7 +831,7 @@ class DeviceDescriptor(Descriptor):
         else:
             self.mcu = None
 
-    def update(self, payload: "mt.JsonDict"):
+    def update(self, payload: "mt.JsonMapping"):
         self.payload.update(payload)
         self._reset()
 

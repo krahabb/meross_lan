@@ -305,9 +305,8 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         I set the key declaration as vol.Optional() = str
         """
         config.update(user_input)
-        for key in nullable_keys:
-            if key not in user_input:
-                config.pop(key, None)
+        for key in (_key for _key in nullable_keys if _key not in user_input):
+            config.pop(key, None)
         # just in case it was added to the schema.
         # this also fixes 'dirty' configurations already stored.
         config.pop(CONF_ERROR, None)
@@ -878,14 +877,6 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
 class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
     """Handle a config flow for Meross IoT local LAN."""
 
-    if TYPE_CHECKING:
-        # TODO: DHCP_DISCOVERIES is actually an ever growing dict..we could use it to populate a list
-        # of available host when user starts a flow and/or add epoch information to remove stale entries
-        # also we should ensure the discoveries are removed when a device is configured.
-        DHCP_DISCOVERIES: Final[dict[str, Any]]
-
-    DHCP_DISCOVERIES = {}
-
     @staticmethod
     def async_get_options_flow(config_entry):
         return OptionsFlow(config_entry)
@@ -998,15 +989,13 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
         macaddress = discovery_info.macaddress
         macaddress_fmt = fmt_macaddress(macaddress)
         # check if the device is already registered
-        config_entries = self.config_entries
         try:
-            for entry in config_entries.async_entries(mlc.DOMAIN):
+            for entry in self.config_entries.async_entries(mlc.DOMAIN):
                 match ConfigEntryType.get_type_and_id(entry.unique_id):
-                    case (ConfigEntryType.DEVICE, device_id):
-                        if device_id[-12:].lower() != macaddress_fmt:
+                    case (ConfigEntryType.DEVICE, uuid):
+                        if uuid[-12:].lower() != macaddress_fmt:
                             continue
                         if entry.source == ce.SOURCE_IGNORE:
-                            ConfigFlow.DHCP_DISCOVERIES[macaddress_fmt] = discovery_info
                             return self.async_abort(
                                 reason=FlowErrorKey.ALREADY_CONFIGURED
                             )
@@ -1036,7 +1025,9 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
                                     data[mlc.CONF_TIMESTAMP] = (
                                         time()
                                     )  # force ConfigEntry update..
-                                    config_entries.async_update_entry(entry, data=data)
+                                    self.config_entries.async_update_entry(
+                                        entry, data=data
+                                    )
                                     api.log(
                                         api.INFO,
                                         "DHCP updated (ip:%s mac:%s) for uuid:%s",
@@ -1113,7 +1104,6 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
                 pass
 
         await self.async_set_unique_id(macaddress_fmt, raise_on_progress=False)
-        ConfigFlow.DHCP_DISCOVERIES[macaddress_fmt] = discovery_info
         self._set_flow_title(f"{discovery_info.hostname or host} ({macaddress})")
         self.device_config = {  # type: ignore
             mlc.CONF_HOST: host,
@@ -1145,7 +1135,6 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
         return await self.async_step_hub()
 
     async def async_step_finalize(self, user_input=None):
-        ConfigFlow.DHCP_DISCOVERIES.pop(self.device_id[-12:].lower(), None)  # type: ignore
         return self.async_create_entry(
             title=self._title,
             data=self.device_config,
@@ -1344,6 +1333,7 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                         device_config_update = None
                         descriptor_update = None
                         _host = user_input.get(mlc.CONF_HOST)
+                        _host_fallback = device_descriptor.innerIp
                         _key = user_input.get(mlc.CONF_KEY) or ""
                         _conf_transport = (
                             user_input.get(mlc.CONF_PROTOCOL) or Transport.AUTO
@@ -1356,10 +1346,11 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                                 ) = await self._async_mqtt_discovery(
                                     device_id, _key, device_descriptor
                                 )
+                                _host_fallback = descriptor_update.innerIp
                             except Exception as e:
                                 inner_exception = e
                         if _conf_transport != Transport.MQTT:
-                            if _try_host := (_host or device_descriptor.innerIp):
+                            if _try_host := (_host or _host_fallback):
                                 try:
                                     (
                                         device_config_update,

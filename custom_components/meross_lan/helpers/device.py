@@ -607,10 +607,9 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         config = self.config
         # map CONF_PROTOCOL value to a const symbol in order to use 'is' in Device code checks
         try:
-            conf_transport = Transport.from_str(config[mlc.CONF_PROTOCOL])  # type: ignore
+            self.configured_transport = Transport.from_str(config[mlc.CONF_PROTOCOL])  # type: ignore
         except KeyError:
-            conf_transport = Transport.AUTO
-        self.configured_transport = conf_transport
+            self.configured_transport = Transport.AUTO
         self.polling_period = (
             config.get(mlc.CONF_POLLING_PERIOD) or mlc.CONF_POLLING_PERIOD_DEFAULT
         )
@@ -623,7 +622,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         if self.mqtt:  # just to be sure key is sync'd
             self.mqtt.key = self.key
 
-        if conf_transport is Transport.BLUETOOTH:
+        if self.configured_transport is Transport.BLUETOOTH:
             if not self.bluetooth:
                 if _bluetooth := self.parent.get_bt_client(self.id):
                     self.add_client(_bluetooth)
@@ -633,7 +632,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                             (dr.CONNECTION_BLUETOOTH, _bluetooth.address),
                         },
                     )
-
         elif self.bluetooth:
             self.remove_client(self.bluetooth)
             self.update_device_registry(
@@ -778,7 +776,8 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         # removing this feature overall will greatly simplify the whole code base
         # and avoid possible re-entrance issues
         ability_old = self.descriptor.ability
-        ability_new = config_entry.data[mc.KEY_PAYLOAD][mc.KEY_ABILITY]
+        self.descriptor.update(config_entry.data[mc.KEY_PAYLOAD])
+        ability_new = self.descriptor.ability
         if ability_old != ability_new:
             # too hard to keep-up..reinit the device
             ability_old = ability_old.keys()
