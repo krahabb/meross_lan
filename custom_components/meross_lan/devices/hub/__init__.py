@@ -154,7 +154,7 @@ class Hub(mld.Device):
                         _payload=descriptor.digest,
                     )
                     continue
-                descriptor.type = device_entry.model or "unknown"
+                descriptor.type = device_entry.model or mc.TYPE_UNKNOWN
                 for key_digest, _type in SubDeviceDescriptor.DIGEST_TYPE_MAP.items():
                     if _type == descriptor.type:
                         descriptor.key_digest = key_digest
@@ -195,16 +195,23 @@ class Hub(mld.Device):
         super().update_device_info(device_info, profile)
         for subdevice_info in device_info.get("__subDeviceInfo", []):
             try:
-                self.subdevices[subdevice_info["subDeviceId"]].update_subdevice_info(
-                    subdevice_info, profile
-                )
+                self.subdevices[
+                    subdevice_info[mc.KEY_SUBDEVICEID]
+                ].update_subdevice_info(subdevice_info, profile)
             except Exception as e:
-                self.log_exception(
-                    self.DEBUG,
-                    e,
-                    "updating subdevice info for subdevice with id %s",
-                    subdevice_info.get("subDeviceId", "unknown"),
-                )
+                subdevice_id = subdevice_info.get(mc.KEY_SUBDEVICEID)
+                subdevice = self.subdevices.get(subdevice_id)
+                if subdevice:
+                    subdevice.log_exception(
+                        subdevice.DEBUG, e, "updating subdevice cloud info"
+                    )
+                else:
+                    self.log_exception(
+                        self.DEBUG,
+                        e,
+                        "updating subdevice cloud info for subdevice (id:%s)",
+                        subdevice_id,
+                    )
 
     # interface: self
     async def async_pairsubdev(self, /):

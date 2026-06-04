@@ -1276,7 +1276,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 self.update_device_info(device_info, profile)
             except Exception as e:
                 self.log_exception(
-                    self.WARNING, e, "updating device info: %s", _any=device_info
+                    self.WARNING, e, "updating device cloud info: %s", _any=device_info
                 )
 
     def profile_unlinked(self):
