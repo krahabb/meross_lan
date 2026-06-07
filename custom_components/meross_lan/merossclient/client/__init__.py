@@ -93,7 +93,7 @@ class AbstractClient(logging.Loggable):
             host: NotRequired[str]  # doesnt set broker if missing/empty
             port: NotRequired[int]  # default: mc.MQTT_DEFAULT_PORT
             new_key: NotRequired[str]  # default: actually configured key
-            userid: NotRequired[str]  # default: 0
+            userid: NotRequired[str | int]  # default: 0
 
         class ConfigureWifiArgs(RequestArgs):
             ssid: str
@@ -127,6 +127,10 @@ class AbstractClient(logging.Loggable):
         """Instance of device this client is attached to. This is set only by the Device.add_client
         (thorough on_device_add) and Device.remove_client methods, so it should be considered read-only
         for client implementations."""
+        wifilist: mt.config.WifiList
+        """Cached wifi list obtained by async_get_ssid_scan, to avoid multiple scans in a short time frame."""
+        wifilist_epoch: float
+        """Epoch of the last wifi list scan, to implement a cache ttl mechanism."""
 
     Direction = Direction
     Transport = Transport
@@ -153,6 +157,8 @@ class AbstractClient(logging.Loggable):
         "tx_broadcast",
         "rx_broadcast",
         "device",
+        "wifilist",
+        "wifilist_epoch",
     )
 
     def __init__(
@@ -173,6 +179,8 @@ class AbstractClient(logging.Loggable):
         self.disconnect_broadcast = self.Broadcast(self)
         self.tx_broadcast = self.Broadcast(self)
         self.rx_broadcast = self.Broadcast(self)
+        self.wifilist = mn.EMPTY_LIST  # type: ignore[assignment]
+        self.wifilist_epoch = 0
 
     async def async_shutdown(self):
         try:
@@ -260,6 +268,7 @@ class AbstractClient(logging.Loggable):
         except AttributeError:
             pass
         self.device = device  # type: ignore[assignment]
+        self.descriptor = device.descriptor
         self.logtag = self.TRANSPORT.upper()
         self.log(self.DEBUG, "Added client for %s", server=self.id)
 
@@ -269,6 +278,10 @@ class AbstractClient(logging.Loggable):
         del self.device  # type: ignore[assignment]
         self.log(self.DEBUG, "Removed client")
         self.configure_logger()
+
+    @property
+    def host(self):
+        return self.descriptor.innerIp if self.descriptor else None
 
     @logging.abc.abstractmethod
     async def async_request_raw(
@@ -348,21 +361,28 @@ class AbstractClient(logging.Loggable):
         self,
         *,
         sort_key: str | None = mc.KEY_SIGNAL,
-        **kwargs: "Unpack[RequestArgs]",
+        timeout: float = 15,
+        cache_ttl: float = 60,
+        **kwargs: "Unpack[RequestArgs]",  # type: ignore[override]
     ):
         """Returns a 'short-list' of available WiFi SSIDs. The native device scan includes
         multiple bssid(s) while this method only returns unique SSIDs ordered by 'sort-key'.
         sort_key must be a valid dict key available in the native payload
         (see protocol.types.config.Wifi)."""
+        if (self.wifilist_epoch + cache_ttl) < self.time():
+            kwargs["timeout"] = timeout
+            self.wifilist = await self.async_request_ns_payload(
+                mn.Appliance_Config_WifiList, **kwargs
+            )
+            self.wifilist_epoch = self.time()
 
-        p_wifilist: "mt.config.WifiList" = await self.async_request_ns_payload(
-            mn.Appliance_Config_WifiList, **kwargs
-        )
         if sort_key:
-            p_wifilist = sorted(p_wifilist, key=lambda x: x[sort_key], reverse=True)
+            self.wifilist = sorted(
+                self.wifilist, key=lambda x: x[sort_key], reverse=True
+            )
 
         ssid_list: list[str] = []
-        for wifi in p_wifilist:
+        for wifi in self.wifilist:
             try:
                 # It looks like some ssid b64 encodings are 'weird' and we're unable to decode them as UTF-8
                 # strings
@@ -380,7 +400,7 @@ class AbstractClient(logging.Loggable):
         **kwargs: "Unpack[ConfigureMQTTArgs]",
     ):
         new_key = kwargs.pop("new_key", self.key)
-        userid = kwargs.pop("userid", "0")
+        userid = str(int(kwargs.pop("userid", 0)))
         try:
             host = kwargs.pop("host")
             port = kwargs.pop("port", mc.MQTT_DEFAULT_PORT)
@@ -415,8 +435,9 @@ class AbstractClient(logging.Loggable):
                 **kwargs,
             )
 
-    async def async_configure_timezone(self, tzname: str | None):
-
+    async def async_configure_timezone(
+        self, tzname: str | None, /, **kwargs: "Unpack[RequestArgs]"
+    ):
         if tzname:
             # we'll look through the list of transition times for current tz
             # and provide the actual (last past daylight) and the next to the
@@ -485,7 +506,9 @@ class AbstractClient(logging.Loggable):
         else:
             p_time = {mc.KEY_TIMEZONE: "", mc.KEY_TIMERULE: []}
 
-        await self.async_request(*mn.Appliance_System_Time.request_set(p_time))
+        await self.async_request(
+            *mn.Appliance_System_Time.request_set(p_time), **kwargs
+        )
         if self.descriptor:
             self.descriptor.update_time(p_time)
 

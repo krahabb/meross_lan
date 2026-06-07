@@ -487,6 +487,7 @@ class MQTTConnection(AbstractMQTTConnection):
                 }
             ),
             descriptor,
+            self,
         )
 
     async def async_try_discovery(self, uuid: str, key: str, /):

@@ -283,7 +283,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         config_entry: Final[ConfigEntry]  # type: ignore[override]
         config: mlc.DeviceConfigType
 
-        # descriptor: Final[DeviceDescriptor]  # type: ignore[override]
         bluetooth: Final[ComponentApi.BTClient | None]  # type: ignore[override]
         http: Final[Http | None]  # type: ignore[override]
         mqtt: Final[MQTTConnection.Client | None]  # type: ignore[override]
@@ -300,7 +299,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
 
         # these are set from ConfigEntry
         configured_transport: Transport
-        host: str | None
 
         # Device inner timestamp handling for time-sensitive features
         # These are mostly needed to ensure reliable working for metering plugs and
@@ -472,7 +470,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
 
     __slots__ = device.Device._calc_slots(
         "conf_transport",
-        "host",
         "device_entries_info",
         "device_timestamp",
         "device_timedelta",
@@ -645,22 +642,28 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         if host == "0.0.0.0":  # unbinded device reports this in descriptor
             host = None
 
-        self.host = host
         http = self.http
         if host and (self.configured_transport in (Transport.AUTO, Transport.HTTP)):
             if http:
-                http.host = host
                 http.key = self.key
+                if http.host != host:
+                    http.host = host
+                    if not http.is_connected:
+                        self.create_task(
+                            http.async_request(*self.handler_all.polling_request),
+                            ".reconnect",
+                        )
             else:
-                http = Device.Http(
-                    host,
-                    self,
-                    key=self.key,
-                    from_=mlc.DOMAIN,
-                    trigger_src=self.__class__.__name__,
-                    loop=self.loop,
+                self.add_client(
+                    http := Device.Http(
+                        host,
+                        self,
+                        key=self.key,
+                        from_=mlc.DOMAIN,
+                        trigger_src=self.__class__.__name__,
+                        loop=self.loop,
+                    )
                 )
-                self.add_client(http)
             if mn.Appliance_Encrypt_ECDHE in self.descriptor.ability:
                 http.enable_encryption(self.id, self.key, self.descriptor.macAddress)
             else:
@@ -1051,20 +1054,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         self.cancel_callback(self._check_device_time)
 
     @override
-    async def async_request(
-        self,
-        *args: "Unpack[MerossRequestType]",
-        **kwargs: "Unpack[Device.RequestArgs]",
-    ):
-        """Wrapper for common final request method in order to catch MerossErrors and raise
-        HomeAssistantError instead to avoid dumping full stack trace in logs and log a
-        concise error message instead on selected exceptions."""
-        try:
-            return await device.Device.async_request(self, *args, **kwargs)
-        except Exception as e:
-            raise HomeAssistantError(str(e)) from e
-
-    @override
     def on_tx(self, message: "MerossMessage", client: "AbstractClient", /):
         self.last_tx_message = message
         self.last_tx_epoch = client.last_tx_epoch
@@ -1135,6 +1124,25 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 "%s: %s(%s) %s %s",
                 (trans.upper(), dir, msg.messageid, msg.method, msg.namespace),
             )
+
+    @property
+    @override
+    def host(self):
+        return self.config.get(mlc.CONF_HOST) or self.descriptor.innerIp
+
+    @override
+    async def async_request(
+        self,
+        *args: "Unpack[MerossRequestType]",
+        **kwargs: "Unpack[Device.RequestArgs]",
+    ):
+        """Wrapper for common final request method in order to catch MerossErrors and raise
+        HomeAssistantError instead to avoid dumping full stack trace in logs and log a
+        concise error message instead on selected exceptions."""
+        try:
+            return await device.Device.async_request(self, *args, **kwargs)
+        except Exception as e:
+            raise HomeAssistantError(str(e)) from e
 
     @override
     async def async_configure_timezone(self, tzname: str | None):
@@ -1654,7 +1662,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         self.log(
             self.CRITICAL,
             "Wrong device at configured address %s (configured uuid:%s, remote uuid:%s, type:%s)",
-            self.host or "<unknown>",
+            self.host,
             self.id,
             response_uuid,
             _remote_type,

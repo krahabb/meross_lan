@@ -94,8 +94,7 @@ class HttpClient(AbstractClient):
             HttpClient._SESSION = None
 
     __slots__ = AbstractClient._calc_slots(
-        "_host",
-        "_requesturl",
+        "_url",
         "_session",
         "_terminate",
         "_terminate_guard",
@@ -110,11 +109,9 @@ class HttpClient(AbstractClient):
         kwargs:
         key: pass in the (str) device key used for signing or None to attempt 'key-hack'
         session: the shared session to use or None to use the library dedicated one
-        logger: a shared logger to enable logging
         timeout: total request timeout
         """
-        self._host = host
-        self._requesturl = URL(f"http://{host}/config")
+        self._url = URL(f"http://{host}/config")
         self._session = (
             kwargs.pop("session", HttpClient._SESSION)
             or HttpClient._get_or_create_client_session()
@@ -125,15 +122,23 @@ class HttpClient(AbstractClient):
         super().__init__(host, parent, **kwargs)
 
     @property
+    @override
     def host(self):
-        return self._host
+        return self._url.host
 
     @host.setter
     def host(self, value: str):
-        if self._host != value:
-            self.id = value  # type: ignore (BOOM)
-            self._host = value
-            self._requesturl = URL(f"http://{value}/config")
+        self._url = URL(f"http://{value}/config")
+        self.id = value  # type: ignore (BOOM)
+
+    @property
+    def url(self):
+        return self._url
+
+    @url.setter
+    def url(self, value: str | URL):
+        self._url = URL(value)
+        self.id = self._url.host  # type: ignore (BOOM)
 
     def enable_encryption(self, uuid: str, key: str, mac: str, /):
         self._cipher = HttpClient.Cipher(uuid, key, mac)
@@ -186,7 +191,7 @@ class HttpClient(AbstractClient):
             # when this timeout is transient. This will lead to a total timeout
             # (for the caller) exceeding the value(s) actually set in self.timeout
             response = await self._session.post(
-                url=self._requesturl,
+                url=self._url,
                 data=data,
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(

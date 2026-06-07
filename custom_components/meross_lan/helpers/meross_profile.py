@@ -618,8 +618,8 @@ class MerossProfile(MQTTProfile):
             self.log(
                 self.DEBUG,
                 "Device '%s' (type:%s, uuid:%s) has been removed from the cloud profile",
-                device_info.get(mc.KEY_DEVNAME, "unknown"),
-                device_info.get(mc.KEY_DEVICETYPE, "unknown"),
+                device_info.get(mc.KEY_DEVNAME, mc.TYPE_UNKNOWN),
+                device_info.get(mc.KEY_DEVICETYPE, mc.TYPE_UNKNOWN),
                 uuid=uuid,
             )
             try:
