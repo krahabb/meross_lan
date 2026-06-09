@@ -505,7 +505,14 @@ class MQTTConnection(AbstractMQTTConnection):
             ):
                 future = self._connect_future
                 if not future:
-                    assert not self._mqtt_loop_task, "MQTT loop task already running"
+                    # not overlapped connect attempt, start a new one
+                    if self._mqtt_loop_task:
+                        self._mqtt_loop_task.cancel()
+                        try:
+                            await self._mqtt_loop_task
+                        except (asyncio.CancelledError, Exception):
+                            pass
+                        self._mqtt_loop_task = None
                     self._connect_future = future = self.loop.create_future()
                     self.start(**kwargs)
                 await future
@@ -520,7 +527,6 @@ class MQTTConnection(AbstractMQTTConnection):
         super().on_connect()
         if self._connect_future:
             self._connect_future.set_result(True)
-            self._connect_future = None
 
     @override
     async def async_disconnect(self):
@@ -626,10 +632,7 @@ class MQTTConnection(AbstractMQTTConnection):
         if not self._mqtt_loop_task:
             self._mqttc.connect_timeout = kwargs.get("timeout", self.timeout)
             self._mqttc.connect_async(self.id.host, self.id.port)
-            self._mqtt_loop_task = self.create_task(
-                self._async_loop(),
-                ".connection loop",
-            )
+            self._mqtt_loop_task = self.create_task(self._async_loop())
 
     def stop(self):
         if self._mqtt_loop_task:
@@ -716,7 +719,6 @@ class MQTTConnection(AbstractMQTTConnection):
 
     def _mqttc_publish(self, *args):
         self.on_publish()
-
 
 
 class MQTTAppClient(MQTTConnection):
