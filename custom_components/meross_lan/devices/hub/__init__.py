@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, override
 
 from ... import const as mlc
@@ -192,25 +191,33 @@ class Hub(mld.Device):
         self, device_info: "DeviceInfoExtType", profile: "MQTTProfile", /
     ):
         super().update_device_info(device_info, profile)
-        for subdevice_info in device_info.get("__subDeviceInfo", []):
-            try:
-                self.subdevices[
-                    subdevice_info[mc.KEY_SUBDEVICEID]
-                ].update_subdevice_info(subdevice_info, profile)
-            except Exception as e:
-                subdevice_id = subdevice_info.get(mc.KEY_SUBDEVICEID)
-                subdevice = self.subdevices.get(subdevice_id)
-                if subdevice:
-                    subdevice.log_exception(
-                        subdevice.DEBUG, e, "updating subdevice cloud info"
-                    )
-                else:
-                    self.log_exception(
-                        self.DEBUG,
-                        e,
-                        "updating subdevice cloud info for subdevice (id:%s)",
-                        subdevice_id,
-                    )
+        try:
+            for subdevice_info in device_info.get("__subDeviceInfo", []):
+                try:
+                    self.subdevices[
+                        subdevice_info[mc.KEY_SUBDEVICEID]
+                    ].update_subdevice_info(subdevice_info, profile)
+                except Exception as e:
+                    subdevice_id = subdevice_info.get(mc.KEY_SUBDEVICEID)
+                    subdevice = self.subdevices.get(subdevice_id)
+                    if subdevice:
+                        subdevice.log_exception(
+                            subdevice.DEBUG, e, "updating subdevice cloud info"
+                        )
+                    else:
+                        self.log_exception(
+                            self.DEBUG,
+                            e,
+                            "updating subdevice cloud info for subdevice (id:%s)",
+                            subdevice_id,
+                        )
+        except Exception as e:
+            self.log_exception(
+                self.WARNING,
+                e,
+                "updating device cloud info: %s",
+                _any=device_info,
+            )
 
     # interface: self
     async def async_pairsubdev(self, /):

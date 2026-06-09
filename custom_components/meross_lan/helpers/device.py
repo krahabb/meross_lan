@@ -574,11 +574,12 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         if self.profile == profile:
             self._check_protocol()
         else:
-            if self.profile:
-                self.profile.unlink(self)
             if profile:
                 profile.link(self)
                 # _check_protocol already called
+            elif self.profile:
+                self.profile.unlink(self)
+                self._check_protocol()
             else:
                 self._check_protocol()
         self.polling_start()
@@ -1271,29 +1272,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             self._handle(MerossMessage(message))
         return response
 
-    def profile_linked(self, profile: "MQTTProfile", /):
-        assert self.profile is not profile
-        if self.profile:
-            self.profile.unlink(self)
-        self.profile = profile  # type: ignore[assignment]
-        self.log(self.DEBUG, "linked to profile:%s", userid=profile.id)
-        self._check_protocol()
-        if device_info := profile.get_device_info(self.id):
-            try:
-                # protect this since device_info is coming from cloud api and we cannot really trust it..
-                self.update_device_info(device_info, profile)
-            except Exception as e:
-                self.log_exception(
-                    self.WARNING, e, "updating device cloud info: %s", _any=device_info
-                )
-
-    def profile_unlinked(self):
-        assert self.profile
-        if self.mqtt:
-            self.remove_client(self.mqtt)
-        self.log(self.DEBUG, "unlinked from profile:%s", userid=self.profile.id)
-        self.profile = None  # type: ignore[assignment]
-
     def _handle(self, message: MerossMessage, /):
         # This is almost superseeded by direct NamespaceHandler request/dispatching
         # it is left mainly for unsolicited MQTT received messages (mainly PUSH but
@@ -1678,34 +1656,43 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         self, device_info: "DeviceInfoType", profile: "MQTTProfile", /
     ):
         """Called when linked to a (cloud) profile and device info is available or whenever updated."""
-        newname = self.update_device_registry_name(
-            device_info.get(mc.KEY_DEVNAME) or self.descriptor.productname,
-        )
-        if hasattr(self, "device_entries_info"):
-            device_info_channels = device_info.get("channels")
-            if device_info_channels or newname:
-                # need to update our channels device registry names too since
-                # they are based on the main device name
-                for channel, device_entry_info in self.device_entries_info.items():
-                    try:
-                        channel_name = device_info_channels[channel].get(mc.KEY_DEVNAME)
-                    except:
-                        channel_name = None
-                    if not channel_name:
-                        if not newname:
-                            continue
-                        channel_name = f"{newname} Channel {channel}"
-                    device_entry = self.device_registry.async_get_device(
-                        **device_entry_info
-                    )
-                    if device_entry and (channel_name != device_entry.name):
-                        self.device_registry.async_update_device(
-                            device_entry.id, name=channel_name
+        try:
+            newname = self.update_device_registry_name(
+                device_info.get(mc.KEY_DEVNAME) or self.descriptor.productname,
+            )
+            if hasattr(self, "device_entries_info"):
+                device_info_channels = device_info.get("channels")
+                if device_info_channels or newname:
+                    # need to update our channels device registry names too since
+                    # they are based on the main device name
+                    for channel, device_entry_info in self.device_entries_info.items():
+                        try:
+                            channel_name = device_info_channels[channel].get(
+                                mc.KEY_DEVNAME
+                            )
+                        except:
+                            channel_name = None
+                        if not channel_name:
+                            if not newname:
+                                continue
+                            channel_name = f"{newname} Channel {channel}"
+                        device_entry = self.device_registry.async_get_device(
+                            **device_entry_info
                         )
-
-        # check for firmware updates too
-        if latest_version := profile.get_latest_version(self.descriptor):
-            if self.update_firmware:
-                self.update_firmware.update_latest_version(latest_version)
-            else:
-                UpdateEntity(self, self, latest_version)
+                        if device_entry and (channel_name != device_entry.name):
+                            self.device_registry.async_update_device(
+                                device_entry.id, name=channel_name
+                            )
+            # check for firmware updates too
+            if latest_version := profile.get_latest_version(self.descriptor):
+                if self.update_firmware:
+                    self.update_firmware.update_latest_version(latest_version)
+                else:
+                    UpdateEntity(self, self, latest_version)
+        except Exception as e:
+            self.log_exception(
+                self.WARNING,
+                e,
+                "updating device cloud info: %s",
+                _any=device_info,
+            )

@@ -157,15 +157,17 @@ class MerossProfile(MQTTProfile):
         )
         self._store = MerossProfileStore(api.hass, id)
 
-    async def async_init(self):
-        """
-        Performs 'cold' initialization of the profile by checking
-        if we need to update the device_info and eventually start the
-        unknown devices discovery.
-        We'll eventually setup the mqtt listeners in case our
-        configured devices don't match the profile list. This usually means
-        the user has binded a new device and we need to 'discover' it.
-        """
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        await self.apiclient.async_shutdown()
+        del self.apiclient
+        self.parent.profiles[self.id] = None
+
+    # interface: ConfigEntryManager
+    @override
+    async def async_setup_entry(
+        self, hass: "HomeAssistant", config_entry: "ConfigEntry", /
+    ):
         if data := await self._store.async_load():
             self._data = data
             if self.KEY_APP_ID not in data:
@@ -209,10 +211,10 @@ class MerossProfile(MQTTProfile):
             }
 
         if mc.KEY_MQTTDOMAIN in self.config:
-            mqttconnection = MerossMQTTConnection(
+            MerossMQTTConnection(
                 HostAddress.build(self.config[mc.KEY_MQTTDOMAIN]), self
-            )
-            mqttconnection.start()
+            ).start()
+
         # compute the next cloud devlist query and setup the scheduled callback
         next_query_epoch = (
             self._device_info_time + mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
@@ -226,13 +228,8 @@ class MerossProfile(MQTTProfile):
             self._async_query_device_info,
         )
 
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        await self.apiclient.async_shutdown()
-        del self.apiclient
-        self.parent.profiles[self.id] = None
+        await MQTTProfile.async_setup_entry(self, hass, config_entry)
 
-    # interface: ConfigEntryManager
     @override
     async def entry_update_listener(self, hass, config_entry: "ConfigEntry"):
         config: ProfileConfigType = config_entry.data  # type: ignore
@@ -327,6 +324,30 @@ class MerossProfile(MQTTProfile):
     @override
     def get_latest_versions(self, /):
         return self._data[self.KEY_LATEST_VERSION_HISTORY]
+
+    @override
+    def link(self, device: "Device"):
+        MQTTProfile.link(self, device)
+        try:
+            device.update_device_info(self._data[self.KEY_DEVICE_INFO][device.id], self)
+        except KeyError as ke:
+            if ke.args[0] != device.id:
+                raise
+            # missing device info, this is mostly due to a recently added device
+            # appearing on MQTT before we had a chance to refresh the device list from the cloud.
+            # We eventually post-pone the query if it was recently issued
+            self.schedule_async_callback(
+                (
+                    0
+                    if self._device_info_time
+                    < (
+                        self.time()
+                        - mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_RETRIGGER_TIMEOUT
+                    )
+                    else mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_RETRIGGER_TIMEOUT
+                ),
+                self._async_query_device_info,
+            )
 
     @override
     def get_connection(self, device: "Device"):
@@ -623,7 +644,7 @@ class MerossProfile(MQTTProfile):
                 uuid=uuid,
             )
             try:
-                self.linkeddevices.pop(uuid).profile_unlinked()
+                self.unlink(self.linkeddevices[uuid])
             except KeyError as ke:
                 if ke.args[0] != uuid:
                     raise

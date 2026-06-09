@@ -61,7 +61,6 @@ async def async_setup_entry(
                 api.profiles[profile_id] = None
             profile = mlp.MerossProfile(profile_id, api, config_entry)
             try:
-                await profile.async_init()
                 await profile.async_setup_entry(hass, config_entry)
                 api.profiles[profile_id] = profile
                 # 'link' the devices already initialized

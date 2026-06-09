@@ -567,9 +567,8 @@ class MQTTProfile(ConfigEntryManager):
         for mqttconnection in self.mqttconnections.values():
             await mqttconnection.async_shutdown()
         self.mqttconnections.clear()
-        for device in self.linkeddevices.values():
-            device.profile_unlinked()
-        self.linkeddevices.clear()
+        for device in tuple(self.linkeddevices.values()):
+            self.unlink(device)
         await ConfigEntryManager.async_shutdown(self)
 
     async def entry_update_listener(self, hass, config_entry: "ConfigEntry"):
@@ -609,12 +608,20 @@ class MQTTProfile(ConfigEntryManager):
         return None
 
     def link(self, device: "Device"):
-        assert device.id not in self.linkeddevices
-        device.profile_linked(self)
+        assert (device.id not in self.linkeddevices) and (device.profile is not self)
+        if device.profile:
+            device.profile.unlink(device)
+        device.profile = self  # type: ignore[assignment]
+        device.log(device.DEBUG, "linked to profile:%s", userid=self.id)
+        device._check_protocol()
         self.linkeddevices[device.id] = device
 
     def unlink(self, device: "Device"):
-        self.linkeddevices.pop(device.id).profile_unlinked()
+        del self.linkeddevices[device.id]
+        if device.mqtt:
+            device.remove_client(device.mqtt)
+        device.log(device.DEBUG, "unlinked from profile:%s", userid=self.id)
+        device.profile = None  # type: ignore[assignment]
 
     @abstractmethod
     def get_connection(self, device: "Device") -> "MQTTConnection":
