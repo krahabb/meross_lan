@@ -229,7 +229,13 @@
                     "check_firmware_updates": "Check firmware updates",
                     "error": "[%key:config::step::hub::data::error%]",
                     "cloud_region": "Account region",
-                    "mfa_code": "Authenticator code"
+                    "mfa_code": "Authenticator code",
+                    "rl_window_size": "Rate limit window size"
+                },
+                "data_description": {
+                    "allow_mqtt_publish": "Disable to only listen for incoming messages",
+                    "check_firmware_updates": "Issue a periodical query to the Meross cloud api to retrieve the updated fw versions list",
+                    "rl_window_size": "Length of the rate limiting observation window (High values allow higher bursts but increase the time to recover)"
                 }
             },
             "bind": {
@@ -309,7 +315,13 @@
                     "allow_mqtt_publish": "[%key:config::step::profile::data::allow_mqtt_publish%]",
                     "check_firmware_updates": "[%key:config::step::profile::data::check_firmware_updates%]",
                     "error": "[%key:config::step::hub::data::error%]",
-                    "mfa_code": "[%key:config::step::profile::data::mfa_code%]"
+                    "mfa_code": "[%key:config::step::profile::data::mfa_code%]",
+                    "rl_window_size": "[%key:config::step::profile::data::rl_window_size%]"
+                },
+                "data_description": {
+                    "allow_mqtt_publish": "[%key:config::step::profile::data_description::allow_mqtt_publish%]",
+                    "check_firmware_updates": "[%key:config::step::profile::data_description::check_firmware_updates%]",
+                    "rl_window_size": "[%key:config::step::profile::data_description::rl_window_size%]"
                 }
             },
             "menu": {

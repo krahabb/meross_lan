@@ -85,7 +85,7 @@ class ConfigEntryManager(logging.Loggable):
         id: Final[str]  # type: ignore[override]
         parent: Final[ComponentApi]  # type: ignore[override]
         config_entry: Final[ConfigEntry]
-        config: Mapping[str, Any]
+        config: mlc.ManagerConfigType
         key: str
         obfuscate: bool
         platforms: dict[str, EntityPlatform]
@@ -151,7 +151,7 @@ class ConfigEntryManager(logging.Loggable):
         except AttributeError:
             # this is the ComponentApi: ConfigEntry not configured..
             assert id == mlc.CONF_PROFILE_ID_LOCAL
-            self.config = {}
+            self.config = {}  # type: ignore[assignment]
             self.key = mlc.PARAM_DEFAULT_KEY
             self.obfuscate = True
         self.platforms = {}
@@ -317,7 +317,7 @@ class ConfigEntryManager(logging.Loggable):
         self, hass: "HomeAssistant", config_entry: "ConfigEntry", /
     ):
         old_config = self.config
-        config = self.config = config_entry.data
+        config = self.config = config_entry.data  # type: ignore[assignment]
         self.key = config.get(CONF_KEY) or ""
         self.obfuscate = config.get(CONF_OBFUSCATE, True)
         self.configure_logger()

@@ -230,7 +230,13 @@
                     "check_firmware_updates": "Verifica aggiornamenti firmware",
                     "error": "Messaggio di errore",
                     "cloud_region": "Regione dell'account",
-                    "mfa_code": "Codice autenticatore"
+                    "mfa_code": "Codice autenticatore",
+                    "rl_window_size": "Dimensione finestra del Rate-limiter"
+                },
+                "data_description": {
+                    "allow_mqtt_publish": "Quando disabilitato permette solo l'ascolto dei messaggi ricevuti via MQTT",
+                    "check_firmware_updates": "Effettua periodicamente una richiesta ai server Meross per l'elenco dei firmware aggiornati",
+                    "rl_window_size": "Numero messaggi nella finestra di osservazione per la limitazione del rate (Un valore più alto permette tassi di trasmissione più alti per un breve periodo ma allunga il tempo di recupero complessivo)"
                 }
             },
             "finalize": {
@@ -312,7 +318,13 @@
                     "allow_mqtt_publish": "Consenti pubblicazione MQTT",
                     "check_firmware_updates": "Verifica aggiornamenti firmware",
                     "error": "Messaggio di errore",
-                    "mfa_code": "Codice autenticatore"
+                    "mfa_code": "Codice autenticatore",
+                    "rl_window_size": "Dimensione finestra del Rate-limiter"
+                },
+                "data_description": {
+                    "allow_mqtt_publish": "Quando disabilitato permette solo l'ascolto dei messaggi ricevuti via MQTT",
+                    "check_firmware_updates": "Effettua periodicamente una richiesta ai server Meross per l'elenco dei firmware aggiornati",
+                    "rl_window_size": "Numero messaggi nella finestra di osservazione per la limitazione del rate (Un valore più alto permette tassi di trasmissione più alti per un breve periodo ma allunga il tempo di recupero complessivo)"
                 }
             },
             "menu": {

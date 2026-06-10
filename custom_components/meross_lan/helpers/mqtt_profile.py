@@ -236,6 +236,9 @@ class MQTTConnection(AbstractMQTTConnection):
         kwargs["key"] = profile.key
         kwargs["is_cloud"] = profile.is_cloud_profile
         kwargs["allow_publish"] = profile.allow_mqtt_publish
+        kwargs["loop"] = profile.loop
+        kwargs["rl_rate"] = profile.rl_rate
+        kwargs["rl_window_size"] = profile.rl_window_size
         super().__init__(
             broker,
             profile,
@@ -466,6 +469,9 @@ class MQTTConnection(AbstractMQTTConnection):
             self.can_publish = False  # type: ignore[assignment]
             self.async_publish_raw = MQTTConnection._async_publish_raw_disabled
 
+        self.rl_rate = profile.rl_rate  # type: ignore[assignment]
+        self.rl_window_size = profile.rl_window_size  # type: ignore[assignment]
+
     def attach(self, device: "Device", /):
         client = MQTTConnection.Client(self, device, uuid=device.id, key=device.key)
         device.add_client(client)
@@ -542,6 +548,7 @@ class MQTTProfile(ConfigEntryManager):
     """
 
     if TYPE_CHECKING:
+        config: Final[mlc.MQTTProfileConfigType]  # type: ignore[override]
         linkeddevices: Final[dict[str, Device]]
         mqttconnections: Final[dict[str, MQTTConnection]]
 
@@ -588,8 +595,20 @@ class MQTTProfile(ConfigEntryManager):
         pass
 
     @property
-    def allow_mqtt_publish(self) -> bool:
-        return bool(self.config.get(mlc.CONF_ALLOW_MQTT_PUBLISH))
+    def allow_mqtt_publish(self):
+        return self.config.get(
+            mlc.CONF_ALLOW_MQTT_PUBLISH, mlc.CONF_ALLOW_MQTT_PUBLISH_DEFAULT
+        )
+
+    @property
+    def rl_rate(self):
+        return self.config.get(mlc.CONF_RL_RATE, MQTTConnection.init_rl_rate)
+
+    @property
+    def rl_window_size(self):
+        return self.config.get(
+            mlc.CONF_RL_WINDOW_SIZE, MQTTConnection.init_rl_window_size
+        )
 
     @property
     @abstractmethod

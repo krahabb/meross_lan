@@ -77,16 +77,26 @@ class ManagerConfigType(TypedDict):
 # ApiProfile (Hub and MerossProfile) ConfigEntry keys
 #####################################################
 CONF_ALLOW_MQTT_PUBLISH: Final = "allow_mqtt_publish"
+CONF_ALLOW_MQTT_PUBLISH_DEFAULT: Final = True
+CONF_RL_RATE: Final = "rl_rate"
+CONF_RL_WINDOW_SIZE: Final = "rl_window_size"
 
 
-class ApiProfileConfigType(ManagerConfigType):
-    """Common config_entry keys for ApiProfile type"""
+class MQTTProfileConfigType(ManagerConfigType):
+    """Common config_entry keys for MQTTProfile type"""
 
     allow_mqtt_publish: NotRequired[bool]
     """allow meross_lan to publish over local MQTT: actually ignored since it is True in code"""
+    rl_rate: NotRequired[float]
+    """Rate of messages allowed to be sent over the MQTT connection in messages per hour.
+    - If None the default will be used (200 msg/hour over Meross cloud - No RL over local MQTT)
+    - If 0 rate-limiting will be disabled
+    """
+    rl_window_size: NotRequired[int]
+    """Number of samples in the 'sliding window' for rate-limiting."""
 
 
-class HubConfigType(ApiProfileConfigType):
+class HubConfigType(MQTTProfileConfigType):
     """MQTT Hub config_entry keys"""
 
 
@@ -145,11 +155,13 @@ CONF_EMAIL: Final = mc.KEY_EMAIL
 CONF_PASSWORD: Final = hac.CONF_PASSWORD
 CONF_MFA_CODE: Final = "mfa_code"
 CONF_SAVE_PASSWORD: Final = "save_password"
+CONF_SAVE_PASSWORD_DEFAULT: Final = False
 CONF_CHECK_FIRMWARE_UPDATES: Final = "check_firmware_updates"
+CONF_CHECK_FIRMWARE_UPDATES_DEFAULT: Final = True
 
 
 class ProfileConfigType(
-    ApiProfileConfigType, cloudapi.MerossCloudCredentials, total=False
+    MQTTProfileConfigType, cloudapi.MerossCloudCredentials, total=False
 ):
     """
     Meross cloud profile config_entry keys

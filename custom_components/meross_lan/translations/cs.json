@@ -230,7 +230,13 @@
                     "check_firmware_updates": "Zkontrolujte aktualizace firmwaru",
                     "error": "Chybová zpráva",
                     "cloud_region": "Region účtu",
-                    "mfa_code": "Autentizační kód"
+                    "mfa_code": "Autentizační kód",
+                    "rl_window_size": "Rate limit window size"
+                },
+                "data_description": {
+                    "allow_mqtt_publish": "Disable to only listen for incoming messages",
+                    "check_firmware_updates": "Issue a periodical query to the Meross cloud api to retrieve the updated fw versions list",
+                    "rl_window_size": "Length of the rate limiting observation window (High values allow higher bursts but increase the time to recover)"
                 }
             },
             "finalize": {
@@ -312,7 +318,13 @@
                     "allow_mqtt_publish": "Povolit cloudové publikování MQTT",
                     "check_firmware_updates": "Zkontrolujte aktualizace firmwaru",
                     "error": "Chybová zpráva",
-                    "mfa_code": "Autentizační kód"
+                    "mfa_code": "Autentizační kód",
+                    "rl_window_size": "Rate limit window size"
+                },
+                "data_description": {
+                    "allow_mqtt_publish": "Disable to only listen for incoming messages",
+                    "check_firmware_updates": "Issue a periodical query to the Meross cloud api to retrieve the updated fw versions list",
+                    "rl_window_size": "Length of the rate limiting observation window (High values allow higher bursts but increase the time to recover)"
                 }
             },
             "menu": {

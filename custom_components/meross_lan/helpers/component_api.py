@@ -73,7 +73,6 @@ class HAMQTTConnection(mlq.MQTTConnection):
             HostAddress("homeassistant", 0),
             api,
             from_=mc.TOPIC_RESPONSE.format(mlc.DOMAIN),
-            loop=api.loop,
         )
         self._mqtt_subscribe_unsub = None
         self._mqtt_disconnected_unsub = None
@@ -414,6 +413,7 @@ class ComponentApi(mlq.MQTTProfile):
 
     if TYPE_CHECKING:
         hass: Final[HomeAssistant]
+        config: Final[mlc.HubConfigType]  # type: ignore[override]
 
         devices: Final[dict[str, Device | None]]
         """
@@ -712,7 +712,7 @@ class ComponentApi(mlq.MQTTProfile):
         self, hass: "HomeAssistant", config_entry: "ConfigEntry"
     ):
         self.config_entry = config_entry  # type: ignore
-        config = self.config = config_entry.data
+        config = self.config = config_entry.data  # type: ignore
         self.key = config.get(mlc.CONF_KEY) or ""
         self.obfuscate = config.get(mlc.CONF_OBFUSCATE, True)
         self.configure_logger()
@@ -729,6 +729,11 @@ class ComponentApi(mlq.MQTTProfile):
     @override
     def allow_mqtt_publish(self):
         return True  # ComponentApi still doesnt support configuring entry for this
+
+    @property
+    @override
+    def rl_rate(self):
+        return self.config.get(mlc.CONF_RL_RATE, 0)
 
     @property
     @override

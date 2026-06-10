@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from ..const import ProfileConfigType
     from ..merossclient import Descriptor
     from ..merossclient.cloudapi import (
         DeviceInfoType,
@@ -78,7 +77,6 @@ class MerossMQTTConnection(MQTTConnection, MQTTAppClient):
             app_id=profile.app_id,  # type: ignore
             user_id=profile.userid,  # type: ignore
             sslcontext=get_default_ssl_context(),  # type: ignore
-            loop=profile.loop,
         )
 
 
@@ -123,7 +121,7 @@ class MerossProfile(MQTTProfile):
         _data: MerossProfileStoreType
 
         # Overrides
-        config: ProfileConfigType
+        config: Final[mlc.ProfileConfigType]  # type: ignore[override]
         mqttconnections: Final[dict[str, MerossMQTTConnection]]  # type: ignore[override]
 
     KEY_APP_ID = "appId"
@@ -232,7 +230,7 @@ class MerossProfile(MQTTProfile):
 
     @override
     async def entry_update_listener(self, hass, config_entry: "ConfigEntry"):
-        config: ProfileConfigType = config_entry.data  # type: ignore
+        config: mlc.ProfileConfigType = config_entry.data  # type: ignore
         self.remove_issue(mlc.ISSUE_CLOUD_TOKEN_EXPIRED)
         curr_credentials = self.apiclient.credentials
         if not curr_credentials or (
@@ -392,8 +390,15 @@ class MerossProfile(MQTTProfile):
 
     @property
     @override
-    def is_cloud_profile(self) -> bool:
+    def is_cloud_profile(self):
         return True
+
+    @property
+    @override
+    def rl_rate(self):
+        # Ideally we would like to allow customization of the rate limit to allow more customization
+        # but this might prove dangerous unless people really know where they're going
+        return MQTTConnection.init_rl_rate
 
     @property
     @override

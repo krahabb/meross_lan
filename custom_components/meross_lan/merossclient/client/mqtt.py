@@ -53,20 +53,17 @@ class _MQTTRateLimiter:
     """
 
     if TYPE_CHECKING:
-        DURATION: ClassVar
-        MAXQUEUE: ClassVar
-
-    DURATION = 91
-    MAXQUEUE = 5
+        dropped: int
+        tx_queue: deque[float]  # Used to estimate tx rate and enforce tx rate-limiting
 
     __slots__ = (
         "dropped",
-        "t_queue",
+        "tx_queue",
     )
 
     def __init__(self) -> None:
-        self.dropped: int = 0
-        self.t_queue: deque[float] = deque()
+        self.dropped = 0
+        self.tx_queue = deque()
 
 
 class AbstractMQTTConnection(AbstractClient):
@@ -278,15 +275,23 @@ class AbstractMQTTConnection(AbstractClient):
             self.on_rx(message)
 
     if TYPE_CHECKING:
-
         id: Final[HostAddress]  # type: ignore[override]
-        is_cloud: Final[bool]
-        allow_publish: Final[bool]
+        is_cloud: Final[bool]  # type: ignore
+        allow_publish: Final[bool]  # type: ignore
         can_publish: Final[bool]  # connected and allowed to publish
+        # Rate limiter configuration parameters
+        rl_rate: float
+        """Rate of messages allowed to be sent over the MQTT connection in messages per second. If 'falsy' rate-limiting is disabled."""
+        rl_window_size: int
+        """Number of samples in the 'sliding window' for rate-limiting."""
+        _rl_queues: Final[dict[str, _MQTTRateLimiter]]
+        """Internal data structure to keep track of sent messages timings for rate-limiting purposes."""
 
         class Args(AbstractClient.Args):
             is_cloud: NotRequired[bool]
             allow_publish: NotRequired[bool]
+            rl_rate: NotRequired[float]
+            rl_window_size: NotRequired[int]
 
         class ConnectArgs(AbstractClient.ConnectArgs):
             pass
@@ -308,11 +313,22 @@ class AbstractMQTTConnection(AbstractClient):
     TRANSPORT = AbstractClient.Transport.MQTT  # type: ignore[override]
     TIMEOUT = 5
 
-    __SLOTS__ = (
+    init_is_cloud = True
+    init_allow_publish = True
+    init_rl_rate = 200 / 3600  # 200 messages per hour
+    init_rl_window_size = 5  # 5 messages (in 90 seconds for 200 messages/hour) in the sliding window to trigger rate-limiting
+
+    AUTO_INIT = (
         "is_cloud",
         "allow_publish",
+        "rl_rate",
+        "rl_window_size",
+    )
+
+    __SLOTS__ = (
         "can_publish",
         "rl_dropped",
+        "_rl_queues",
         "_client_devices",
         "_transactions",
     )
@@ -324,25 +340,18 @@ class AbstractMQTTConnection(AbstractClient):
         /,
         **kwargs: "Unpack[Args]",
     ):
-        self.is_cloud = kwargs.pop("is_cloud", True)
-        self.allow_publish = kwargs.pop("allow_publish", True)
+        super().__init__(broker, parent, **kwargs)
         self.can_publish = False
         self.rl_dropped = 0
+        self._rl_queues = {}
         self._client_devices = {}
         self._transactions = {}
-        super().__init__(broker, parent, **kwargs)
         if not self.allow_publish:
             # install a method override to forcibly disable MQTT publish
             self.async_publish_raw = AbstractMQTTConnection._async_publish_raw_disabled
 
         if MEROSSDEBUG:
             self.schedule_callback(60, self._random_disconnect)
-
-    def get_rl_safe_delay(self, uuid: str, /):
-        """Returns the 'safe delay' after which we should not incur rate-limiting.
-        This is useful to 'plan' mqtt send when these could/should be delayed
-        and has a rather stochastic connotation."""
-        return 0.0
 
     @abstractmethod
     async def async_publish_raw(
@@ -400,6 +409,59 @@ class AbstractMQTTConnection(AbstractClient):
         """Called when the underlying mqtt.Client drops a message due to rate-limiting."""
         pass
 
+    def get_rl_safe_delay(self, uuid: str, /):
+        """Returns the 'safe delay' after which we should not incur rate-limiting.
+        This is useful to 'plan' mqtt send when these could/should be delayed
+        and has a rather stochastic connotation."""
+        if not self.rl_rate:
+            return 0.0
+
+        try:
+            t_queue = self._rl_queues[uuid].tx_queue
+        except KeyError:
+            # useless maybe but if we're probing this uuid it'll
+            # be likely used again
+            self._rl_queues[uuid] = _MQTTRateLimiter()
+            return 0.0
+
+        rl_window_size = self.rl_window_size
+        rl_window_duration = rl_window_size / self.rl_rate
+        t_now = monotonic()
+        t_duration_back = t_now - rl_window_duration
+        t_queue_len = len(t_queue)
+        while t_queue_len:
+            if t_queue[0] <= t_duration_back:
+                # discard in case
+                t_queue.popleft()
+                t_queue_len -= 1
+                continue
+            if t_queue_len >= rl_window_size:
+                # queue full..any send before expiration
+                # of oldest send would be dropped
+                t_oldest_exp = t_queue[0] + rl_window_duration
+                return t_oldest_exp - t_now  # assert > 0 ?
+            # queue not full but we want to 'weigh-in' the queue length
+            return rl_window_duration / (rl_window_size - t_queue_len)
+        # queue empty
+        return 0.0
+
+    def get_rl_actual_rate(self, uuid: str, /):
+        try:
+            t_queue = self._rl_queues[uuid].tx_queue
+        except KeyError:
+            return 0.0
+
+        rl_window_duration = self.rl_window_size / self.rl_rate
+        t_now = monotonic()
+        t_duration_back = t_now - rl_window_duration
+        t_queue_len = len(t_queue)
+        while t_queue_len:
+            if t_queue[0] > t_duration_back:
+                break
+            t_queue.popleft()
+            t_queue_len -= 1
+        return t_queue_len / rl_window_duration
+
     def _mqtt_transactions_clean(self):
         if self._transactions:
             # check and cleanup stale transactions
@@ -452,7 +514,6 @@ class MQTTConnection(AbstractMQTTConnection):
         _mqttc: mqtt.Client
         _mqtt_loop_task: asyncio.Task | None
         _connect_future: asyncio.Future | None
-        _rl_queues: dict[str, _MQTTRateLimiter]
 
     @staticmethod
     def generate_app_id():
@@ -463,7 +524,6 @@ class MQTTConnection(AbstractMQTTConnection):
         "_mqttc",
         "_mqtt_loop_task",
         "_connect_future",
-        "_rl_queues",
     )
 
     def __init__(
@@ -475,7 +535,6 @@ class MQTTConnection(AbstractMQTTConnection):
         **kwargs: "Unpack[Args]",
     ):
         super().__init__(broker, parent, **kwargs)
-        self._rl_queues: dict[str, _MQTTRateLimiter] = {}
         self._connect_future = None
         self._mqtt_loop_task = None
         try:
@@ -540,35 +599,6 @@ class MQTTConnection(AbstractMQTTConnection):
                 pass
             self._mqtt_loop_task = None
 
-    @override
-    def get_rl_safe_delay(self, uuid: str, /):
-        try:
-            t_queue = self._rl_queues[uuid].t_queue
-        except KeyError:
-            # useless maybe but if we're probing this uuid it'll
-            # be likely used again
-            self._rl_queues[uuid] = _MQTTRateLimiter()
-            return 0.0
-
-        t_now = monotonic()
-        t_duration_back = t_now - _MQTTRateLimiter.DURATION
-        t_queue_len = len(t_queue)
-        while t_queue_len:
-            if t_queue[0] <= t_duration_back:
-                # discard in case
-                t_queue.popleft()
-                t_queue_len -= 1
-                continue
-            if t_queue_len >= _MQTTRateLimiter.MAXQUEUE:
-                # queue full..any send before expiration
-                # of oldest send will be dropped
-                t_oldest_exp = t_queue[0] + _MQTTRateLimiter.DURATION
-                return t_oldest_exp - t_now  # assert > 0 ?
-            # queue not full but we want to 'weigh-in' the queue length
-            return _MQTTRateLimiter.DURATION / (_MQTTRateLimiter.MAXQUEUE - t_queue_len)
-        # queue empty
-        return 0.0
-
     @override  # AbstractMQTTConnection
     async def async_publish_raw(
         self,
@@ -579,31 +609,31 @@ class MQTTConnection(AbstractMQTTConnection):
         uuid = kwargs["uuid"]
         self.on_tx(message)
         try:
-            try:
-                _rl = self._rl_queues[uuid]
-            except KeyError:
-                self._rl_queues[uuid] = _rl = _MQTTRateLimiter()
-                _rl.t_queue.append(monotonic())
-            else:
-                t_now = monotonic()
-                # implementing a rate-limiter trying to keep the send rate to lower than
-                # 1 MQTT publish every 10 seconds (on average x device). This is accomplished
-                # by keeping the count (and times) of sent messages in the last minute
-                t_duration_back = t_now - _MQTTRateLimiter.DURATION
-                t_queue = _rl.t_queue
-                t_queue_len = len(t_queue)
-                while t_queue_len:
-                    if t_queue[0] <= t_duration_back:
-                        t_queue.popleft()
-                        t_queue_len -= 1
-                        continue
-                    if t_queue_len >= _MQTTRateLimiter.MAXQUEUE:
-                        self.rl_dropped += 1  # type: ignore[assignment]
-                        _rl.dropped += 1
-                        self.on_drop()
-                        raise MQTTRateLimitExceeded()
-                    break
-                t_queue.append(t_now)
+            if self.rl_rate:
+                try:
+                    _rl = self._rl_queues[uuid]
+                except KeyError:
+                    self._rl_queues[uuid] = _rl = _MQTTRateLimiter()
+                    _rl.tx_queue.append(monotonic())
+                else:
+                    rl_window_size = self.rl_window_size
+                    rl_window_duration = rl_window_size / self.rl_rate
+                    t_now = monotonic()
+                    t_duration_back = t_now - rl_window_duration
+                    t_queue = _rl.tx_queue
+                    t_queue_len = len(t_queue)
+                    while t_queue_len:
+                        if t_queue[0] <= t_duration_back:
+                            t_queue.popleft()
+                            t_queue_len -= 1
+                            continue
+                        if t_queue_len >= rl_window_size:
+                            self.rl_dropped += 1  # type: ignore[assignment]
+                            _rl.dropped += 1
+                            self.on_drop()
+                            raise MQTTRateLimitExceeded()
+                        break
+                    t_queue.append(t_now)
 
             return self._mqttc.publish(
                 mc.TOPIC_REQUEST.format(uuid),

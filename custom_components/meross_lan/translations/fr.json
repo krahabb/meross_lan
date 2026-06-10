@@ -230,7 +230,13 @@
                     "check_firmware_updates": "Vérifier les mises à jour du firmware",
                     "error": "Message d'erreur",
                     "cloud_region": "Région du compte",
-                    "mfa_code": "Code d'authentification"
+                    "mfa_code": "Code d'authentification",
+                    "rl_window_size": "Rate limit window size"
+                },
+                "data_description": {
+                    "allow_mqtt_publish": "Disable to only listen for incoming messages",
+                    "check_firmware_updates": "Issue a periodical query to the Meross cloud api to retrieve the updated fw versions list",
+                    "rl_window_size": "Length of the rate limiting observation window (High values allow higher bursts but increase the time to recover)"
                 }
             },
             "finalize": {
@@ -312,7 +318,13 @@
                     "allow_mqtt_publish": "Autoriser la publication cloud MQTT",
                     "check_firmware_updates": "Vérifier les mises à jour du firmware",
                     "error": "Message d'erreur",
-                    "mfa_code": "Code d'authentification"
+                    "mfa_code": "Code d'authentification",
+                    "rl_window_size": "Rate limit window size"
+                },
+                "data_description": {
+                    "allow_mqtt_publish": "Disable to only listen for incoming messages",
+                    "check_firmware_updates": "Issue a periodical query to the Meross cloud api to retrieve the updated fw versions list",
+                    "rl_window_size": "Length of the rate limiting observation window (High values allow higher bursts but increase the time to recover)"
                 }
             },
             "menu": {

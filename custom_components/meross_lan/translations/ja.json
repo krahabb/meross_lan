@@ -230,7 +230,13 @@
                     "check_firmware_updates": "ファームウェアのアップデートを確認する",
                     "error": "エラーメッセージ",
                     "cloud_region": "アカウントの地域",
-                    "mfa_code": "認証コード"
+                    "mfa_code": "認証コード",
+                    "rl_window_size": "Rate limit window size"
+                },
+                "data_description": {
+                    "allow_mqtt_publish": "Disable to only listen for incoming messages",
+                    "check_firmware_updates": "Issue a periodical query to the Meross cloud api to retrieve the updated fw versions list",
+                    "rl_window_size": "Length of the rate limiting observation window (High values allow higher bursts but increase the time to recover)"
                 }
             },
             "finalize": {
@@ -312,7 +318,13 @@
                     "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
                     "check_firmware_updates": "ファームウェアのアップデートを確認する",
                     "error": "エラーメッセージ",
-                    "mfa_code": "認証コード"
+                    "mfa_code": "認証コード",
+                    "rl_window_size": "Rate limit window size"
+                },
+                "data_description": {
+                    "allow_mqtt_publish": "Disable to only listen for incoming messages",
+                    "check_firmware_updates": "Issue a periodical query to the Meross cloud api to retrieve the updated fw versions list",
+                    "rl_window_size": "Length of the rate limiting observation window (High values allow higher bursts but increase the time to recover)"
                 }
             },
             "menu": {

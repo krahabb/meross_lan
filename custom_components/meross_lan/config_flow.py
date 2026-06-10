@@ -324,7 +324,6 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
 
         with self.show_form_errorcontext():
             if user_input:
-                hass = self.hass
                 api = self.api
                 # profile_config has both user set keys (updated through user_input)
                 # and MerossCloudCredentials keys (updated when logging into Meross http api)
@@ -501,21 +500,45 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         if require_login:
             # token expired or not a profile OptionFlow: we'd need to login again
             config_schema[_required(mlc.CONF_PASSWORD, profile_config)] = str
-            config_schema[_required(mlc.CONF_SAVE_PASSWORD, profile_config, False)] = (
-                bool
-            )
+            config_schema[
+                _required(
+                    mlc.CONF_SAVE_PASSWORD,
+                    profile_config,
+                    mlc.CONF_SAVE_PASSWORD_DEFAULT,
+                )
+            ] = bool
             if profile_config.get(mlc.CONF_MFA_CODE):
                 # this is when we already have credentials (OptionsFlow then)
                 # and those are stating the login was an MFA
                 config_schema[vol.Optional(mlc.CONF_MFA_CODE)] = str
-        config_schema[_required(mlc.CONF_ALLOW_MQTT_PUBLISH, profile_config, False)] = (
-            bool
-        )
         config_schema[
-            _required(mlc.CONF_CHECK_FIRMWARE_UPDATES, profile_config, False)
+            _required(
+                mlc.CONF_ALLOW_MQTT_PUBLISH,
+                profile_config,
+                mlc.CONF_ALLOW_MQTT_PUBLISH_DEFAULT,
+            )
         ] = bool
+        config_schema[
+            _required(
+                mlc.CONF_CHECK_FIRMWARE_UPDATES,
+                profile_config,
+                mlc.CONF_CHECK_FIRMWARE_UPDATES_DEFAULT,
+            )
+        ] = bool
+
         if self._profile_entry:
+            config_schema[_optional(mlc.CONF_RL_WINDOW_SIZE, profile_config)] = (
+                selector.NumberSelector(
+                    {
+                        "min": 1,
+                        "unit_of_measurement": "messages",
+                        "max": 50,
+                        "mode": selector.NumberSelectorMode.BOX,
+                    }
+                )
+            )
             self._setup_entitymanager_schema(config_schema, profile_config)
+
         return self.async_show_form_with_errors(
             "profile",
             description_placeholders=self.profile_placeholders,
