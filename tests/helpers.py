@@ -1172,8 +1172,9 @@ class MQTTConnectionMocker(contextlib.AbstractContextManager):
 
 
 class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
-    def __init__(self, hass: "HomeAssistant"):
+    def __init__(self, hass: "HomeAssistant", haclient_mock: MqttMockHAClient):
         self.hass = hass
+        self.haclient_mock = haclient_mock
         self.async_publish_patcher = patch(
             "homeassistant.components.mqtt.async_publish"
         )
@@ -1192,6 +1193,10 @@ class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
             await api._mqtt_connection.async_disconnect()
             await asyncio.sleep(UNSUBSCRIBE_COOLDOWN)
 
+        # patch the buggy behavior of the HA mqtt client mock which leaves a dangling timer
+        if self.haclient_mock._misc_timer:
+            self.haclient_mock._misc_timer.cancel()
+            self.haclient_mock._misc_timer = None
         return None
 
     async def _async_publish(

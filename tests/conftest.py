@@ -167,7 +167,7 @@ def cloudapi_mock(aioclient_mock: AiohttpClientMocker):
 
 @pytest.fixture()
 async def hamqtt_mock(hass, mqtt_mock):
-    async with helpers.HAMQTTMocker(hass) as _hamqtt_mock:
+    async with helpers.HAMQTTMocker(hass, mqtt_mock) as _hamqtt_mock:
         yield _hamqtt_mock
 
 
