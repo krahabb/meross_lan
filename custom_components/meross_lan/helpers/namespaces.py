@@ -577,8 +577,9 @@ class NamespaceHandler:
         NS_MULTIPLE, it will likely do more queries though but this is unlikely)
         """
         device = self.device
-        if device._mqtt_active:
-            # on MQTT no need for updates since they're being PUSHed
+        if device.curr_protocol is mlc.CONF_PROTOCOL_MQTT and device._mqtt_active:
+            # When operating on MQTT no need for updates since they're being PUSHed.
+            # An auxiliary MQTT connection must not suppress HTTP reconciliation.
             if not self.polling_epoch_next:
                 # just when onlining...
                 await device.async_request_poll(self)
