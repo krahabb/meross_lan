@@ -1,12 +1,13 @@
 """Test meross_lan config entry setup"""
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from homeassistant import const as hac
 from homeassistant.config_entries import ConfigEntryState
 
 from custom_components.meross_lan import const as mlc
+from custom_components.meross_lan.devices.garagedoor import MLGarage
 from custom_components.meross_lan.helpers.component_api import ComponentApi
 from custom_components.meross_lan.light import MLDNDLightEntity
 from custom_components.meross_lan.merossclient.protocol import (
@@ -19,6 +20,8 @@ from tests import const as tc, helpers
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+
+    from custom_components.meross_lan.helpers.mqtt_profile import MQTTConnection
 
 
 # We can pass fixtures as defined in conftest.py to tell pytest to use the fixture
@@ -111,6 +114,33 @@ async def test_device_entry(request, hass: "HomeAssistant"):
             if sensor_signal_strength:
                 state = hass.states.get(sensor_signal_strength.entity_id)
                 assert state and state.state.isdigit()
+
+
+async def test_device_http_poll_with_mqtt_active(request, hass: "HomeAssistant"):
+    async with helpers.DeviceContext(request, hass, mc.TYPE_MSG200) as context:
+        device = await context.perform_coldstart()
+        garage = device.entities[2]
+        assert isinstance(garage, MLGarage)
+        assert garage.is_closed
+        assert device.curr_protocol is mlc.CONF_PROTOCOL_HTTP
+
+        for channel_state in context.emulator.descriptor.digest[mc.KEY_GARAGEDOOR]:
+            if channel_state[mc.KEY_CHANNEL] == garage.channel:
+                channel_state[mc.KEY_OPEN] = 1
+                break
+        else:
+            raise AssertionError(f"Garage channel {garage.channel} not found")
+
+        ns_all_handler = device.namespace_handlers[mn.Appliance_System_All.name]
+        ns_all_handler.polling_epoch_next = device._polling_epoch
+        device._mqtt_active = cast("MQTTConnection", object())
+        try:
+            await ns_all_handler.async_poll_all()
+            await device._async_multiple_requests_flush()
+        finally:
+            device._mqtt_active = None
+
+        assert garage.is_closed is False
 
 
 async def test_profile_entry(request, hass: "HomeAssistant"):
