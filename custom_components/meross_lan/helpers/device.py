@@ -1,6 +1,7 @@
 import abc
 import asyncio
 import bisect
+import inspect
 from datetime import UTC, tzinfo
 from json import JSONDecodeError
 from time import time
@@ -92,6 +93,32 @@ if TYPE_CHECKING:
 TIMEZONES_SET = None
 
 
+def _device_registry_get_or_create(
+    device_registry: dr.DeviceRegistry,
+    *,
+    config_entry_id: str,
+    via_device: tuple[str, str] | None = None,
+    **kwargs,
+):
+    """Create a device entry across Home Assistant versions.
+
+    Home Assistant has started deprecating the ``via_device`` argument in favor
+    of ``via_device_id``. The old argument still works in current releases, but
+    the new API will be required by Home Assistant 2027.8.0.
+    """
+    create = device_registry.async_get_or_create
+    parameters = inspect.signature(create).parameters
+
+    if via_device is not None:
+        if "via_device_id" in parameters:
+            via = device_registry.async_get_device(identifiers={via_device})
+            kwargs["via_device_id"] = via.id if via else None
+        else:
+            kwargs["via_device"] = via_device
+
+    return create(config_entry_id=config_entry_id, **kwargs)
+
+
 class BaseDevice(EntityManager):
     """
     Abstract base class for Device and SubDevice (from hub)
@@ -128,7 +155,8 @@ class BaseDevice(EntityManager):
             **kwargs,
         )
         self.online = False
-        self.device_registry_entry = self.api.device_registry.async_get_or_create(
+        self.device_registry_entry = _device_registry_get_or_create(
+            self.api.device_registry,
             config_entry_id=self.config_entry.entry_id,
             connections=kwargs.get("connections"),
             manufacturer=mc.MANUFACTURER,
