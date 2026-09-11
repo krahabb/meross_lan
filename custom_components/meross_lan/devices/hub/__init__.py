@@ -1,5 +1,7 @@
 from typing import TYPE_CHECKING, override
 
+from homeassistant.helpers import device_registry as dr
+
 from ... import const as mlc
 from ...button import Button
 from ...helpers import device as mld, entity as mle
@@ -107,10 +109,8 @@ class Hub(mld.Device):
 
         # Check for unbinded subdevices which are 'still' in the device_registry
         registry_subdevices: dict[str, "mld.dr.DeviceEntry"] = {}
-        for (
-            device_entry
-        ) in self.device_registry.devices.get_devices_for_config_entry_id(
-            self.config_entry.entry_id
+        for device_entry in dr.async_entries_for_config_entry(
+            self.device_registry, self.config_entry.entry_id
         ):
             # The caveat here is to detect if a subdev has been re-binded to
             # a different hub (so a different config_entry). We need to be sure
@@ -394,14 +394,24 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         subid = descriptor.id
         self.device_registry = hub.device_registry
         self.device_info = {"identifiers": {(mlc.DOMAIN, subid)}}
-        self.device_entry = hub.device_registry.async_get_or_create(
-            config_entry_id=hub.config_entry.entry_id,
-            manufacturer=mc.MANUFACTURER,
-            name=descriptor.productname,
-            model=descriptor.type,
-            via_device=next(iter(hub.device_entry.identifiers)),
-            **self.device_info,  # type: ignore
-        )
+        if (mlc.hac.MAJOR_VERSION, mlc.hac.MINOR_VERSION) >= (2026, 9):
+            self.device_entry = hub.device_registry.async_get_or_create(
+                config_entry_id=hub.config_entry.entry_id,
+                manufacturer=mc.MANUFACTURER,
+                name=descriptor.productname,
+                model=descriptor.type,
+                via_device_id=hub.device_entry.id,
+                **self.device_info,  # type: ignore
+            )
+        else:
+            self.device_entry = hub.device_registry.async_get_or_create(
+                config_entry_id=hub.config_entry.entry_id,
+                manufacturer=mc.MANUFACTURER,
+                name=descriptor.productname,
+                model=descriptor.type,
+                via_device=next(iter(hub.device_entry.identifiers)),
+                **self.device_info,  # type: ignore
+            )
         self.key_digest = descriptor.key_digest
         kwargs["index"] = mn.IndexType.id.get(subid)
         kwargs["descriptor"] = descriptor

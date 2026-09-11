@@ -761,14 +761,27 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         device_info: "Entity.DeviceInfo" = {
             "identifiers": {(mlc.DOMAIN, f"{self.id}_{index_value}")}
         }
-        self.device_registry.async_get_or_create(
-            config_entry_id=self.config_entry.entry_id,
-            manufacturer=mc.MANUFACTURER,
-            name=f"{self.device_entry.name} Channel {index_value}",
-            model=self.device_entry.model,
-            via_device=next(iter(self.device_entry.identifiers)),
-            **device_info,
-        )
+        if (mlc.hac.MAJOR_VERSION, mlc.hac.MINOR_VERSION) >= (2026, 9):
+            # TODO: migrate to using proper 'child' devices for channels instead of using via_device_id
+            # According to docs, we should be able to just migrate this api and HA core will take care of
+            # migrating any existing entry to a proper child device.
+            self.device_registry.async_get_or_create(
+                config_entry_id=self.config_entry.entry_id,
+                manufacturer=mc.MANUFACTURER,
+                name=f"{self.device_entry.name} Channel {index_value}",
+                model=self.device_entry.model,
+                via_device_id=self.device_entry.id,
+                **device_info,
+            )
+        else:
+            self.device_registry.async_get_or_create(
+                config_entry_id=self.config_entry.entry_id,
+                manufacturer=mc.MANUFACTURER,
+                name=f"{self.device_entry.name} Channel {index_value}",
+                model=self.device_entry.model,
+                via_device=next(iter(self.device_entry.identifiers)),
+                **device_info,
+            )
         self.device_entries_info[index_value] = device_info
         return device_info
 
@@ -1676,9 +1689,19 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                             if not newname:
                                 continue
                             channel_name = f"{newname} Channel {channel}"
-                        device_entry = self.device_registry.async_get_device(
-                            **device_entry_info
-                        )
+                        if (mlc.hac.MAJOR_VERSION, mlc.hac.MINOR_VERSION) >= (2026, 9):
+                            # TODO: this migrated code is temporary until we move our 'device_entries_info' to
+                            # proper 'child' devices (adhering to the new HA core model implemented in 2026.9)
+                            device_entry = (
+                                self.device_registry.async_get_device_by_identifier(
+                                    next(iter(device_entry_info["identifiers"])),
+                                    self.config_entry.entry_id,
+                                )
+                            )
+                        else:
+                            device_entry = self.device_registry.async_get_device(
+                                **device_entry_info
+                            )
                         if device_entry and (channel_name != device_entry.name):
                             self.device_registry.async_update_device(
                                 device_entry.id, name=channel_name

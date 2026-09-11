@@ -1394,7 +1394,16 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                             raise FlowError(FlowErrorKey.DEVICE_ID_MISMATCH)
                         config[mlc.CONF_PAYLOAD] = config_new[mlc.CONF_PAYLOAD]
 
-                        if self.config_entry.state == ce.ConfigEntryState.SETUP_ERROR:
+                        if (
+                            self.config_entry.state == ce.ConfigEntryState.SETUP_ERROR
+                        ) and (
+                            # only apply this repair in Home Assistant Core versions before 2026.9
+                            # since this patch was already dangerous before that..now I'm too lazy to investigate
+                            # this further and the device registry pollution should be anyway prevented
+                            # with the checks in place....
+                            (mlc.hac.MAJOR_VERSION, mlc.hac.MINOR_VERSION)
+                            < (2026, 9)
+                        ):
                             try:  # to fix the device registry in case it was corrupted by #341
                                 dev_reg = api.device_registry
                                 device_identifiers = {(str(mlc.DOMAIN), uuid)}
@@ -1405,11 +1414,10 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
                                     len(device_entry.connections) > 1
                                     or len(device_entry.config_entries) > 1
                                 ):
-                                    _area_id = device_entry.area_id
                                     dev_reg.async_remove_device(device_entry.id)
                                     dev_reg.async_get_or_create(
                                         config_entry_id=self.config_entry.entry_id,
-                                        suggested_area=_area_id,
+                                        suggested_area=device_entry.area_id,
                                         name=descriptor_new.productname,
                                         model=descriptor_new.productmodel,
                                         hw_version=descriptor_new.hw_version,

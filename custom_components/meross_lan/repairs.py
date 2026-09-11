@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
 from homeassistant.components.repairs import ConfirmRepairFlow
-from homeassistant.helpers import selector
+from homeassistant.helpers import device_registry as dr, selector
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
@@ -73,10 +73,8 @@ class HubSubdeviceRemovedFlow(SimpleRepairFlow):
                     logger = api
 
                 _identifier = (mlc.DOMAIN, subdevice_id)
-                for (
-                    device_entry
-                ) in api.device_registry.devices.get_devices_for_config_entry_id(
-                    config_entry.entry_id
+                for device_entry in dr.async_entries_for_config_entry(
+                    api.device_registry, config_entry.entry_id
                 ):
                     if _identifier in device_entry.identifiers:
                         logger.log(
