@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 
     type HandlerFunc = Callable[[MerossMessage], None]
     type ParserFunc = Callable[[JsonMapping], None]
+    type ParsersMap = dict[mn.IndexValue, ParserFunc | NamespaceParser]
     # need to use Any because of covariance issues with NamespaceHandler
     type PollingStrategyFunc = Callable[[Any], Coroutine]
     type PollingConfigType = tuple[int, int, PollingStrategyFunc | None]
@@ -79,7 +80,7 @@ class NamespaceHandler(logging.Loggable):
         index_type: Final[mn.IndexType]  # shortcut to id.index
 
         handler: HandlerFunc
-        parsers: Final[dict[mn.IndexValue, ParserFunc | NamespaceParser]]
+        parsers: Final[ParsersMap]
         parser_class: type[NamespaceParser] | None
         digest: JsonMapping | JsonArray | None
 
@@ -166,7 +167,7 @@ class NamespaceHandler(logging.Loggable):
                     case mn.IndexType.subId:
                         self.handler = self._handle_subid
                     case mn.IndexType.channel:
-                        self.handler = self._handle_channel_list
+                        self.handler = self._handle_channel
                     case _:
                         self.handler = getattr(
                             parent, f"_handle_{id.replace('.', '_')}", self._handle
@@ -190,7 +191,7 @@ class NamespaceHandler(logging.Loggable):
             # optimized register_parser_class and register_parser
             match self.index_type:
                 case mn.IndexType.channel:
-                    self.handler = self._handle_channel_list
+                    self.handler = self._handle_channel
                 case mn.IndexType.subId:
                     self.handler = self._handle_subid
                 case _:
@@ -333,12 +334,7 @@ class NamespaceHandler(logging.Loggable):
     def parse_digest(self, digest: "JsonMapping | JsonArray", /):
         """Used when parsing digest(s) in Appliance.System.All."""
         for payload in extract_dict_payloads(digest):
-            try:
-                self.parsers[payload[KEY_CHANNEL]](payload)
-            except KeyError as ke:
-                self._handle_missing_channel(ke, payload)
-            except Exception as e:
-                self.log_parser_exception(e, payload)
+            self._parse_channel(payload)
 
     def log_handler_exception(self, exception: Exception, payload, /):
         """Logs an error raised inside a handler function. This is typically due
@@ -364,7 +360,7 @@ class NamespaceHandler(logging.Loggable):
             timeout=14400,
         )
 
-    def _handle_subdevice_id(self, message: "MerossMessage"):
+    def _handle_subdevice_id(self, message: "MerossMessage", /):
         """Generalized Hub namespace dispatcher to subdevices."""
         parsers = dict(self.parsers)
         for payload in message.payload[self.id.key]:
@@ -378,7 +374,7 @@ class NamespaceHandler(logging.Loggable):
             except Exception as e:
                 self.log_parser_exception(e, payload)
 
-    def _handle_subid(self, message: "MerossMessage"):
+    def _handle_subid(self, message: "MerossMessage", /):
         """Handler for those ns which might either refer to a subdevice channel or
         to a device channel depending on the payload. These are typically based on the 'subId' key
         establishing a relationship with an hub subdevice or might skip the subid altogether and
@@ -386,7 +382,6 @@ class NamespaceHandler(logging.Loggable):
         Examples are Appliance.Config.DeviceCfg or Appliance.Control.Sensor.LatestX but there are many more.
         Here, self.parsers keys could be either (subdevice ids, channel) tuples or simple channels.
         """
-        parsers = self.parsers
         for payload in message.payload[self.id.key]:
             # maybe we should just use ns.index_type.index(payload) instead of this subid/channel
             # logic but for now this is seems more efficient.
@@ -399,74 +394,53 @@ class NamespaceHandler(logging.Loggable):
                 else:
                     channel = 0
                 try:
-                    parsers[(subid, channel)](payload)  # type: ignore
+                    self.parsers[(subid, channel)](payload)  # type: ignore
                 except KeyError as ke:
                     self._handle_missing_subdevice(ke, payload, subid)
                 except Exception as e:
                     self.log_parser_exception(e, payload)
             else:
                 # message not related to a subdevice. Parse with plain 'channel' mechanics
-                try:
-                    parsers[payload[KEY_CHANNEL]](payload)
-                except KeyError as ke:
-                    self._handle_missing_channel(ke, payload)
-                except Exception as e:
-                    self.log_parser_exception(e, payload)
-
-    def _handle_channel_list(self, message: "MerossMessage", /):
-        """
-        This handler si optimized for list payloads:
-        "payload": { "{self.id.key}": [{"channel":...., ...}] }
-        Under normal conditions the loop is optimized with direct parser lookup
-        and invocation without caching any intermediate variable since this is the 99%
-        expected pattern. The most-likely exceptions are when no parser is registered
-        for the channel (KeyError) or when the payload is not a list (TypeError).
-        These will be managed so that they'll don't recur anymore.
-        """
-        for payload in message.payload[self.id.key]:
-            try:
-                self.parsers[payload[KEY_CHANNEL]](payload)
-            except KeyError as ke:
-                self._handle_missing_channel(ke, payload)
-            except Exception as e:
-                # this might be expected: the key payload is not a list
-                if type(payload) is str:  # enumerating dict keys
-                    self.handler = self._handle_channel_dict
-                    self._handle_channel_dict(message)
-                    return
-                else:
-                    self.log_parser_exception(e, payload)
-
-    def _handle_channel_dict(self, message: "MerossMessage", /):
-        """
-        This handler si optimized for dict payloads:
-        "payload": { "key_namespace": {"channel":...., ...} }
-        """
-        payload = message.payload[self.id.key]
-        try:
-            self.parsers[payload[KEY_CHANNEL]](payload)
-        except KeyError as ke:
-            self._handle_missing_channel(ke, payload)
-        except Exception as e:
-            # this might be expected: the payload is not a dict
-            # final fallback to the safe _handle_generic
-            if type(payload) is not dict:
-                self.handler = self._handle_channel
-                self._handle_channel(message)
-            else:
-                self.log_parser_exception(e, payload)
+                self._parse_channel(payload)
 
     def _handle_channel(self, message: "MerossMessage", /):
         """
         This handler can manage both lists or dicts of 'channel' payloads.
         """
         for payload in extract_dict_payloads(message.payload[self.id.key]):
-            try:
-                self.parsers[payload[KEY_CHANNEL]](payload)
-            except KeyError as ke:
-                self._handle_missing_channel(ke, payload)
-            except Exception as e:
-                self.log_parser_exception(e, payload)
+            self._parse_channel(payload)
+
+    def _parse_channel(self, payload: "JsonMapping", /):
+        try:
+            # Straigth to the point (no intermediate checks or variables) since
+            # this should almost always work for well-formed payloads.
+            self.parsers[payload[KEY_CHANNEL]](payload)
+        except KeyError as ke:
+            # KeyError here might have been raised because:
+            # - key "channel" not in payload -> possibly critical
+            # - no parser registered for this channel -> create parser if possible
+            # - KeyError in parser function
+            if KEY_CHANNEL not in payload:
+                if len(self.parsers) == 1:
+                    # try to default on single channel devices (on single channel devices #675)
+                    try:
+                        next(iter(self.parsers.values()))(payload)
+                    except Exception as e:
+                        self.log_parser_exception(e, payload)
+                else:
+                    # multiple parsers registered and no channel in payload -> critical
+                    self.log_handler_exception(ke, payload)
+                return
+
+            index = mn.IndexType.channel.get(payload[KEY_CHANNEL])
+            if index not in self.parsers:
+                self._handle_missing_parser(index, payload)
+                return
+
+            self.log_parser_exception(ke, payload)
+
+        except Exception as e:
+            self.log_parser_exception(e, payload)
 
     def _handle(self, msg: "MerossMessage", /):
         """Default handler for a namespace message. This implementation works as a stub and is being invoked if no
@@ -503,27 +477,6 @@ class NamespaceHandler(logging.Loggable):
             parser(payload)
         except Exception as e:
             self.log_parser_exception(e, payload)
-
-    def _handle_missing_channel(self, ke: KeyError, payload: "JsonMapping", /):
-        """
-        Smart handler for KeyError raised when dispatching
-        a channel payload to a parser.
-        # KeyError here might have been raised because:
-        # - key_idx not in payload -> critical
-        # - no parser registered for this channel -> create parser if possible
-        # - KeyError in parser function
-        """
-        try:
-            index = mn.IndexType.channel.get(payload[KEY_CHANNEL])
-        except KeyError as ke:
-            self.log_handler_exception(ke, payload)
-            return
-
-        if index in self.parsers:
-            self.log_parser_exception(ke, payload)
-            return
-
-        self._handle_missing_parser(index, payload)
 
     def _handle_missing_subdevice(
         self, ke: KeyError, payload: "JsonMapping", subdevice_id: str, /
