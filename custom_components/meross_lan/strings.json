@@ -39,16 +39,16 @@
             }
         },
         "number": {
-            "appliance_hub_mts100_config__pid_grade": {
+            "appliance_hub_mts100_config-pid_grade": {
                 "name": "PID: Grade"
             },
-            "appliance_hub_mts100_config__pid_p": {
+            "appliance_hub_mts100_config-pid_p": {
                 "name": "PID: Proportional"
             },
-            "appliance_hub_mts100_config__pid_i": {
+            "appliance_hub_mts100_config-pid_i": {
                 "name": "PID: Integral"
             },
-            "appliance_hub_mts100_config__pid_d": {
+            "appliance_hub_mts100_config-pid_d": {
                 "name": "PID: Derivative"
             },
             "calibration_humidity": {
@@ -66,7 +66,7 @@
             "temperature_away": {
                 "name": "Preset away"
             },
-            "deadZone": {
+            "deadzone": {
                 "name": "Differential temperature"
             },
             "frost": {
@@ -77,24 +77,24 @@
             }
         },
         "select": {
-            "appliance_config_devicecfg__timeCfg_am": {
+            "appliance_config_devicecfg-timecfg_am": {
                 "name": "Display: time format",
                 "state": {
                     "12_hours": "12 hours",
                     "24_hours": "24 hours"
                 }
             },
-            "appliance_config_devicecfg__unitCfg_tempUnit": {
+            "appliance_config_devicecfg-unitcfg_tempunit": {
                 "name": "Display: temperature unit"
             },
-            "appliance_config_devicecfg__unitCfg_unitType": {
+            "appliance_config_devicecfg-unitcfg_unittype": {
                 "name": "Display: unit system",
                 "state": {
                     "us_customary": "US customary",
                     "metric": "Metric"
                 }
             },
-            "appliance_hub_mts100_config__pid_grade": {
+            "appliance_hub_mts100_config-pid_grade": {
                 "name": "PID: Preset",
                 "state": {
                     "0": "Default",
@@ -125,7 +125,7 @@
                     "2": "[%key:common::state::disconnected%]"
                 }
             },
-            "overheat_currentTemp": {
+            "overheat_currenttemp": {
                 "name": "External temperature"
             },
             "overheat_warning": {
@@ -157,7 +157,7 @@
             "energy_estimate": {
                 "name": "Estimated daily consumption"
             },
-            "mConsume": {
+            "mconsume": {
                 "name": "Monthly consumption"
             }
         },

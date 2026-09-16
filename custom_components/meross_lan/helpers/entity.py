@@ -234,10 +234,18 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         self.force_update = False
         self.has_entity_name = True
         self.should_poll = False
+        # TODO: try to enforce using entity_key as translation_key removing usage of kwarg and _attr_translation_key.
+        # Also, since translation_key needs to be lowercase and without double underscore/hyphens
+        # we should enforce this at entity_key level. The double underscore by convention is used to separate
+        # the namespace slug from the key_value in entity_key. Right now we just patch the translation_key identifier until we come up with a 'definitive'
+        # entity_key naming scheme which is consistent with translation_key and unique_id semantics (We'll then need to migrate existing unique_ids).
         self.translation_key = (
-            kwargs["translation_key"]
+            kwargs.pop("translation_key")
             if "translation_key" in kwargs
-            else getattr(self, "_attr_translation_key", entity_key)
+            else (
+                getattr(self, "_attr_translation_key", None)
+                or (entity_key and entity_key.lower().replace("__", "-"))
+            )
         )
         # unique_id is by default computed internally so to have a consistent layout.
         # Not all entities should or will adhere to this but since
@@ -266,27 +274,14 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             parent.add_entity(self)
 
     # interface: entity.Entity
+    @override
     def _name_internal(
         self,
         device_class_name: str | None,
         platform_translations: dict[str, str],
     ) -> str | entity.UndefinedType | None:
-        """Return the name of the entity. This is a (dangerous?!) patch overriding
-        the HA core Entity name mechanics in order to provide more flexible naming mechanics.
-        """
-        if hasattr(self, "_attr_name"):
-            return self._attr_name
-
-        translation_key = f"component.{self.platform_data.platform_name}.entity.{self.platform_data.domain}.{self.translation_key}.name"
-        if translation_key in platform_translations:
-            return self._substitute_name_placeholders(
-                platform_translations[translation_key]
-            )
-
-        if self._default_to_device_class_name():
-            return device_class_name
-
-        if entity_key := self.entity_key:
+        name = super()._name_internal(device_class_name, platform_translations)
+        if (name is entity.UNDEFINED) and (entity_key := self.entity_key):
             entity_key_split = entity_key.split("_")
             if len(entity_key_split) > 2:
                 # For 'new style' entity_key(s) in the order of 'ns_slug__key_value' we want to use
@@ -294,7 +289,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
                 return entity_key_split[-1].capitalize()
             else:
                 return entity_key.replace("_", " ").capitalize()
-        return entity.UNDEFINED
+        return name
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()

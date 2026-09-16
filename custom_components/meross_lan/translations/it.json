@@ -72,10 +72,10 @@
             "energy_estimate": {
                 "name": "Consumo giornaliero stimato"
             },
-            "mConsume": {
+            "mconsume": {
                 "name": "Consumo mensile"
             },
-            "overheat_currentTemp": {
+            "overheat_currenttemp": {
                 "name": "Temperatura esterna"
             }
         },
@@ -95,7 +95,7 @@
             "temperature_away": {
                 "name": "Temperatura vacanza"
             },
-            "deadZone": {
+            "deadzone": {
                 "name": "Differenziale temperatura"
             },
             "frost": {
@@ -104,16 +104,16 @@
             "overheat": {
                 "name": "Protezione surriscaldamento"
             },
-            "appliance_hub_mts100_config__pid_grade": {
+            "appliance_hub_mts100_config-pid_grade": {
                 "name": "PID: Grade"
             },
-            "appliance_hub_mts100_config__pid_p": {
+            "appliance_hub_mts100_config-pid_p": {
                 "name": "PID: Proporzionale"
             },
-            "appliance_hub_mts100_config__pid_i": {
+            "appliance_hub_mts100_config-pid_i": {
                 "name": "PID: Integrale"
             },
-            "appliance_hub_mts100_config__pid_d": {
+            "appliance_hub_mts100_config-pid_d": {
                 "name": "PID: Derivativo"
             }
         },
@@ -126,24 +126,24 @@
             }
         },
         "select": {
-            "appliance_config_devicecfg__unitCfg_tempUnit": {
+            "appliance_config_devicecfg-unitcfg_tempunit": {
                 "name": "Display: unità temperatura"
             },
-            "appliance_config_devicecfg__timeCfg_am": {
+            "appliance_config_devicecfg-timecfg_am": {
                 "name": "Display: formato ora",
                 "state": {
                     "12_hours": "12 ore",
                     "24_hours": "24 ore"
                 }
             },
-            "appliance_config_devicecfg__unitCfg_unitType": {
+            "appliance_config_devicecfg-unitcfg_unittype": {
                 "name": "Display: sistema di unità",
                 "state": {
                     "us_customary": "Imperiale\/US",
                     "metric": "Metrico"
                 }
             },
-            "appliance_hub_mts100_config__pid_grade": {
+            "appliance_hub_mts100_config-pid_grade": {
                 "name": "PID: Preset",
                 "state": {
                     "0": "Default",

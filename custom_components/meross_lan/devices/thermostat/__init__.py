@@ -202,7 +202,7 @@ class MtsOverheatNumber(MtsCommonTemperatureExtNumber):
                         "entity_key": "external sensor",
                         "ns_value": current_temp,
                         "device_scale": self.device_scale,
-                        "translation_key": "overheat_currentTemp",
+                        "translation_key": "overheat_currenttemp",
                     }
                 ),
             )
