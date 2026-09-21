@@ -48,37 +48,39 @@ def test_get_latest_version_prefers_hardware_train():
     }
 
     assert (
-        MerossProfile.get_latest_version(profile, descriptor)[mc.KEY_VERSION]
-        == "4.2.14"
-    )
+        latest_version := MerossProfile.get_latest_version(
+            profile, descriptor  # pyright: ignore[reportArgumentType]
+        )
+    ) and latest_version[mc.KEY_VERSION] == "4.2.14"
 
     profile._data[MerossProfile.KEY_LATEST_VERSION_HISTORY]["mss110:us"] = [
         {"2026-05-07T00:00:00+00:00": {mc.KEY_VERSION: "4.2.14"}},
         {"2026-05-07T00:01:00+00:00": {mc.KEY_VERSION: "7.3.46"}},
     ]
     assert (
-        MerossProfile.get_latest_version(profile, descriptor)[mc.KEY_VERSION]
-        == "4.2.14"
-    )
+        latest_version := MerossProfile.get_latest_version(
+            profile, descriptor  # pyright: ignore[reportArgumentType]
+        )
+    ) and latest_version[mc.KEY_VERSION] == "4.2.14"
 
     profile._data[MerossProfile.KEY_LATEST_VERSION_HISTORY]["mss110:us"][-1] = {
         "2026-05-07T00:01:00+00:00": {mc.KEY_VERSION: "4.2.15"}
     }
     assert (
-        MerossProfile.get_latest_version(profile, descriptor)[mc.KEY_VERSION]
-        == "4.2.15"
-    )
+        latest_version := MerossProfile.get_latest_version(
+            profile, descriptor  # pyright: ignore[reportArgumentType]
+        )
+    ) and latest_version[mc.KEY_VERSION] == "4.2.15"
 
     profile._data[MerossProfile.KEY_LATEST_VERSION_HISTORY]["mss110:us"] = [
         {"2026-05-07T00:00:00+00:00": {mc.KEY_VERSION: "7.3.46"}},
     ]
     descriptor.fw_version = "4.2.14"
-    assert MerossProfile.get_latest_version(profile, descriptor) is None
-
-    descriptor.fw_version = "3.2.14"
     assert (
-        MerossProfile.get_latest_version(profile, descriptor)[mc.KEY_VERSION]
-        == "7.3.46"
+        MerossProfile.get_latest_version(
+            profile, descriptor  # pyright: ignore[reportArgumentType]
+        )
+        is None
     )
 
     profile._data[MerossProfile.KEY_LATEST_VERSION_HISTORY]["mss110:us"] = [
@@ -87,9 +89,10 @@ def test_get_latest_version_prefers_hardware_train():
     ]
     descriptor.fw_version = "4.2.14"
     assert (
-        MerossProfile.get_latest_version(profile, descriptor)[mc.KEY_VERSION]
-        == "4.2.15"
-    )
+        latest_version := MerossProfile.get_latest_version(
+            profile, descriptor  # pyright: ignore[reportArgumentType]
+        )
+    ) and latest_version[mc.KEY_VERSION] == "4.2.15"
 
 
 async def test_meross_profile(

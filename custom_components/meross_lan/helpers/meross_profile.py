@@ -290,34 +290,36 @@ class MerossProfile(MQTTProfile):
             ]
         except KeyError:
             return None
-        latest_versions = [
-            latest_version
-            for latest_version_entry in latest_version_history
-            for latest_version in latest_version_entry.values()
-        ]
-        if descriptor.fw_version and descriptor.hw_version:
-            try:
-                _firmware_version = versiontuple(descriptor.fw_version)
-                _hardware_version = versiontuple(descriptor.hw_version)
-                if _firmware_version[0] == _hardware_version[0]:
-                    # Devices on matching hw/fw major versions should stay on that train.
-                    same_train_latest_versions = [
-                        latest_version
-                        for latest_version in latest_versions
-                        if versiontuple(latest_version[mc.KEY_VERSION])[0]
-                        == _firmware_version[0]
-                    ]
-                    return (
-                        same_train_latest_versions[-1]
-                        if same_train_latest_versions
-                        else None
-                    )
-            except (IndexError, KeyError, TypeError, ValueError):
-                pass
         try:
-            return latest_versions[-1]
-        except IndexError:
-            return None
+            _firmware_version = versiontuple(descriptor.fw_version)
+            _hardware_version = versiontuple(descriptor.hw_version)
+            if _firmware_version[0] != _hardware_version[0]:
+                return None  # major version mismatch, no update available
+            # Devices on matching hw/fw major versions should stay on that train.
+            latest_versions = [
+                latest_version
+                for latest_version_entry in latest_version_history
+                for latest_version in latest_version_entry.values()
+            ]
+            same_train_latest_versions = [
+                latest_version
+                for latest_version in latest_versions
+                if (_latest_version_t := versiontuple(latest_version[mc.KEY_VERSION]))
+                and _latest_version_t[0] == _firmware_version[0]
+            ]
+            return max(
+                same_train_latest_versions,
+                key=lambda latest_version: versiontuple(latest_version[mc.KEY_VERSION]),
+                default=None,
+            )
+        except Exception as exception:
+            self.log_exception(
+                self.DEBUG,
+                exception,
+                "get_latest_version(%s)",
+                str(descriptor),
+                timeout=14400,
+            )
 
     @override
     def get_latest_versions(self, /):

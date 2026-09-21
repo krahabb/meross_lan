@@ -595,8 +595,11 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         self.update_device_registry(
             hw_version=descriptor.hw_version, sw_version=descriptor.fw_version
         )
-        if self.update_firmware:
-            self.update_firmware.flush_state()
+        if (profile := self.parent.profile) and (latest_version := profile.get_latest_version(descriptor)):
+            if self.update_firmware:
+                self.update_firmware.update_latest_version(latest_version)
+            else:
+                UpdateEntity(self, self.parent, latest_version)
 
     def _hub_parse(self, key: str, payload: dict, /):
         """Heuristic subdevice parsing system. This will be eventually removed

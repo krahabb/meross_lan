@@ -20,7 +20,6 @@ class UpdateEntity(Entity, update.UpdateEntity):
         """The PhysicalDevice associated with this entity. Could be either a subdevice or a plain device."""
         latest_version_info: LatestVersionType  # latest firmware version available for the device (if any).
         # HA core entity attributes:
-        _attr_device_class: ClassVar[update.UpdateDeviceClass | None]
         in_progress: bool
         installed_version: str | None
         latest_version: str | None
@@ -33,6 +32,11 @@ class UpdateEntity(Entity, update.UpdateEntity):
     DeviceClass = update.UpdateDeviceClass
 
     init_entity_key = "firmware_update"
+
+    _attr_device_class = update.UpdateDeviceClass.FIRMWARE
+    _attr_supported_features = (
+        update.UpdateEntityFeature.INSTALL | update.UpdateEntityFeature.PROGRESS
+    )
 
     __slots__ = (
         "device",
@@ -53,10 +57,6 @@ class UpdateEntity(Entity, update.UpdateEntity):
     ):
         self.device = device
         self.latest_version_info = latest_version_info
-        self.device_class = update.UpdateDeviceClass.FIRMWARE
-        # self.supported_features = (
-        #    update.UpdateEntityFeature.INSTALL | update.UpdateEntityFeature.PROGRESS
-        # )
         self.title = device.display_name
         self.in_progress = False
         self.installed_version, self.latest_version, self.release_summary = (
@@ -84,7 +84,6 @@ class UpdateEntity(Entity, update.UpdateEntity):
         Entity.flush_state(self)
 
     async def async_install(self, *args, **kwargs):
-        raise HomeAssistantError("Temporarily unsupported")
         device = self.device
         if not device.is_connected:
             raise HomeAssistantError("Device is offline")
