@@ -1,0 +1,342 @@
+{
+    "entity": {
+        "climate": {
+            "mts_climate": {
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "off": "Vypnuté",
+                            "custom": "Manuálny",
+                            "comfort": "Komfort (teplo)",
+                            "sleep": "Spánok (chlad)",
+                            "away": "Mimo domu (úsporný)",
+                            "auto": "Automatický",
+                            "heating": "Vykurovanie",
+                            "cooling": "Chladenie",
+                            "schedule_heating": "Plánované vykurovanie",
+                            "schedule_cooling": "Plánované chladenie",
+                            "timer_cycle": "Časovač cyklu",
+                            "timer_countdown_on": "Odpočítavanie zapnutia",
+                            "timer_countdown_off": "Odpočítavanie vypnutia"
+                        }
+                    }
+                }
+            }
+        },
+        "sensor": {
+            "smoke_alarm_status": {
+                "state": {
+                    "error_temperature": "Chyba: Snímač teploty",
+                    "error_smoke": "Chyba: Snímač dymu",
+                    "error_battery": "Chyba: Batéria",
+                    "alarm_test": "Poplach: Test",
+                    "alarm_temperature_high": "Poplach: Vysoká teplota",
+                    "alarm_smoke": "Poplach: Dym",
+                    "ok": "Bez problémov"
+                }
+            },
+            "common": {
+                "state": {
+                    "ok": "V poriadku",
+                    "disconnected": "Odpojené",
+                    "low": "Nízka",
+                    "medium": "Stredná",
+                    "high": "Vysoká",
+                    "idle": "Nečinné"
+                }
+            },
+            "mts_overheat_warning": {
+                "state": {
+                    "1": "Prehrievanie",
+                    "0": "V poriadku",
+                    "2": "Odpojené"
+                }
+            },
+            "mts_frost_warning": {
+                "state": {
+                    "0": "V poriadku",
+                    "1": "Zamŕzanie",
+                    "2": "Odpojené"
+                }
+            },
+            "mts300_status": {
+                "state": {
+                    "0": "Nečinné",
+                    "1": "Nízka",
+                    "2": "Stredná",
+                    "3": "Vysoká"
+                }
+            },
+            "mts300_hdstatus": {
+                "state": {
+                    "1": "Odvlhčovanie",
+                    "2": "Zvlhčovanie",
+                    "0": "Nečinné"
+                }
+            }
+        }
+    },
+    "config": {
+        "flow_title": "{name}",
+        "abort": {
+            "already_configured": "Záznam je už nakonfigurovaný",
+            "no_devices_found": "V sieti sa nenašli žiadne zariadenia",
+            "single_instance_allowed": "Integrácia je už nakonfigurovaná. Je možná iba jedna konfigurácia."
+        },
+        "error": {
+            "already_configured_device": "Zariadenie je už nakonfigurované",
+            "cannot_connect": "Nedá sa pripojiť",
+            "cloud_profile_mismatch": "Cloudový profil nezodpovedá konfigurácii",
+            "invalid_auth": "Chyba overenia",
+            "invalid_key": "Chyba kľúča: výberom možnosti „Načítať z cloudu“ ho získate z účtu Meross",
+            "invalid_nullkey": "Chyba kľúča: výberom možnosti „Režim hackovania“ povolíte prázdny kľúč"
+        },
+        "step": {
+            "user": {
+                "title": "Vyberte možnosť",
+                "menu_options": {
+                    "profile": "Zaregistrovať cloudový profil Meross",
+                    "device": "Manuálne nakonfigurovať zariadenie"
+                }
+            },
+            "hub": {
+                "title": "Centrum MQTT siete Meross LAN",
+                "description": "Nakonfigurujte globálne nastavenia siete Meross LAN",
+                "data": {
+                    "key": "Kľúč zariadenia",
+                    "error": "Chybové hlásenie"
+                }
+            },
+            "device": {
+                "description": "Nastavenie zariadenia Meross\nTyp: {device_type}\nUUID: {device_id}",
+                "data": {
+                    "host": "Sieťová adresa zariadenia",
+                    "key": "Kľúč zariadenia",
+                    "error": "Chybové hlásenie"
+                }
+            },
+            "keyerror": {
+                "title": "Chyba kľúča zariadenia",
+                "description": "Zadaný kľúč je nesprávny. Vyberte možnosť",
+                "menu_options": {
+                    "profile": "Načítať z cloudu Meross",
+                    "device": "Skúsiť znova"
+                }
+            },
+            "profile": {
+                "title": "Cloudový profil Meross",
+                "description": "Zaregistrujte a pripojte účet Meross",
+                "data": {
+                    "email": "Prihlasovacie meno Meross",
+                    "password": "Heslo Meross",
+                    "save_password": "Uložiť heslo",
+                    "allow_mqtt_publish": "Povoliť publikovanie MQTT cez cloud",
+                    "check_firmware_updates": "Kontrolovať aktualizácie firmvéru",
+                    "error": "Chybové hlásenie",
+                    "cloud_region": "Región účtu",
+                    "mfa_code": "Overovací kód"
+                }
+            },
+            "finalize": {
+                "title": "Konfigurácia zariadenia",
+                "description": "Typ: {device_type}\nUUID: {device_id}"
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "diagnostics": {
+                "data": {
+                    "create_diagnostic_entities": "Vytvoriť diagnostické entity",
+                    "trace_timeout": "Trvanie zaznamenávania ladenia (s)",
+                    "error": "Chybové hlásenie",
+                    "logging_level": "Úroveň protokolovania",
+                    "trace": "Spustiť diagnostický záznam",
+                    "obfuscate": "Skryť citlivé údaje v protokoloch"
+                },
+                "title": "Diagnostika",
+                "description": "Nastavte úroveň protokolovania pre toto zariadenie\/profil a voliteľne spustite diagnostický záznam na zadaný čas"
+            },
+            "hub": {
+                "title": "Centrum MQTT siete Meross LAN",
+                "description": "Nakonfigurujte globálne nastavenia siete Meross LAN",
+                "data": {
+                    "key": "Kľúč zariadenia",
+                    "error": "Chybové hlásenie",
+                    "allow_mqtt_publish": "Povoliť lokálne publikovanie MQTT"
+                }
+            },
+            "device": {
+                "title": "Konfigurácia zariadenia",
+                "description": "Typ: {device_type}\nUUID: {device_id}\nHostiteľ: {host}",
+                "data": {
+                    "host": "Sieťová adresa zariadenia",
+                    "key": "Kľúč zariadenia",
+                    "protocol": "Protokol pripojenia",
+                    "polling_period": "Interval dopytovania",
+                    "timezone": "Časové pásmo zariadenia",
+                    "trace_timeout": "Trvanie zaznamenávania ladenia (s)",
+                    "error": "Chybové hlásenie",
+                    "disable_multiple": "Zakázať zoskupovanie viacerých požiadaviek"
+                }
+            },
+            "keyerror": {
+                "title": "Chyba kľúča zariadenia",
+                "description": "Zadaný kľúč je nesprávny. Vyberte možnosť",
+                "menu_options": {
+                    "profile": "Načítať z cloudu Meross",
+                    "device": "Skúsiť znova"
+                }
+            },
+            "profile": {
+                "title": "Cloudový profil Meross",
+                "description": "Nakonfigurujte účet Meross {email}\n{placeholder}",
+                "data": {
+                    "email": "Prihlasovacie meno Meross",
+                    "password": "Heslo Meross",
+                    "save_password": "Uložiť heslo",
+                    "allow_mqtt_publish": "Povoliť publikovanie MQTT cez cloud",
+                    "check_firmware_updates": "Kontrolovať aktualizácie firmvéru",
+                    "error": "Chybové hlásenie",
+                    "mfa_code": "Overovací kód"
+                }
+            },
+            "menu": {
+                "title": "Vyberte možnosť",
+                "menu_options": {
+                    "hub": "Konfigurovať",
+                    "device": "Konfigurovať",
+                    "profile": "Konfigurovať",
+                    "diagnostics": "Diagnostika",
+                    "bind": "Zmeniť konfiguráciu MQTT (lokálne prepojenie)",
+                    "unbind": "Obnovenie hardvéru"
+                }
+            },
+            "bind": {
+                "title": "Zmeniť konfiguráciu MQTT (lokálne prepojenie)",
+                "description": "Pripojte (prepojte) zariadenie s iným brokerom MQTT\nAktuálny broker: {domain}",
+                "data": {
+                    "domain": "Adresa nového brokera MQTT",
+                    "check": "Pred zmenou konfigurácie skontrolovať kompatibilitu brokera",
+                    "key": "Kľúč zariadenia",
+                    "userid": "ID používateľa",
+                    "error": "Chybové hlásenie"
+                },
+                "data_description": {
+                    "domain": "Zadajte adresu vo formáte „hostiteľ(:port)“ alebo ponechajte pole prázdne, ak chcete použiť broker Home Assistant",
+                    "userid": "Ponechajte prázdne pre lepšiu kompatibilitu s integráciou meross_lan",
+                    "key": "Ponechajte prázdne pre lepšiu kompatibilitu s integráciou meross_lan"
+                }
+            },
+            "unbind": {
+                "title": "Obnovenie hardvéru",
+                "description": "UPOZORNENIE! Týmto sa odošle špeciálny príkaz, ktorý odpojí zariadenie od aktuálneho brokera MQTT (cloudu Meross alebo lokálneho brokera) a obnoví jeho výrobné nastavenia.\n Potom bude zariadenie potrebné znova nakonfigurovať, aby sa dalo používať.",
+                "data": {
+                    "post_action": "Po odpojení:",
+                    "error": "Chybové hlásenie"
+                }
+            },
+            "bind_finalize": {
+                "title": "Zmeniť konfiguráciu MQTT (lokálne prepojenie)",
+                "description": "Zariadenie bolo úspešne nakonfigurované s novým brokerom MQTT na adrese {domain}.\nKonfigurácia bola aktualizovaná a znova načítaná, ale na pripojenie k novému brokerovi môže byť potrebné zariadenie reštartovať (vypnúť a znova zapnúť)."
+            }
+        },
+        "error": {
+            "already_configured_device": "Zariadenie je už nakonfigurované",
+            "cannot_connect": "Nedá sa pripojiť",
+            "cloud_profile_mismatch": "Cloudový profil nezodpovedá konfigurácii",
+            "device_id_mismatch": "UUID zariadenia sa nezhoduje: nejde o rovnaké zariadenie",
+            "invalid_auth": "Chyba overenia",
+            "invalid_key": "Chyba kľúča: výberom možnosti „Načítať z cloudu“ ho získate z účtu Meross",
+            "invalid_nullkey": "Chyba kľúča: výberom možnosti „Režim hackovania“ povolíte prázdny kľúč",
+            "habroker_not_connected": "Broker MQTT služby Home Assistant nie je pripojený"
+        }
+    },
+    "issues": {
+        "cloud_token_expired": {
+            "title": "Platnosť cloudového tokenu pre účet {email} vypršala",
+            "fix_flow": {
+                "step": {
+                    "profile": {
+                        "title": "Cloudový profil Meross",
+                        "description": "Nakonfigurujte účet Meross {email}\n{placeholder}",
+                        "data": {
+                            "email": "Prihlasovacie meno Meross",
+                            "password": "Heslo Meross",
+                            "save_password": "Uložiť heslo",
+                            "allow_mqtt_publish": "Povoliť publikovanie MQTT cez cloud",
+                            "check_firmware_updates": "Kontrolovať aktualizácie firmvéru",
+                            "error": "Chybové hlásenie"
+                        }
+                    }
+                }
+            }
+        },
+        "device_identity_mismatch": {
+            "title": "Prijatá identita nezodpovedá zariadeniu {device_name}",
+            "fix_flow": {
+                "step": {
+                    "device": {
+                        "title": "Konfigurácia zariadenia",
+                        "description": "Typ: {device_type}\nUUID: {device_id}\nHostiteľ: {host}",
+                        "data": {
+                            "host": "Sieťová adresa zariadenia",
+                            "key": "Kľúč zariadenia",
+                            "protocol": "Protokol pripojenia",
+                            "polling_period": "Interval dopytovania",
+                            "timezone": "Časové pásmo zariadenia",
+                            "trace_timeout": "Trvanie zaznamenávania ladenia (s)",
+                            "error": "Chybové hlásenie",
+                            "disable_multiple": "Zakázať zoskupovanie viacerých požiadaviek"
+                        }
+                    }
+                }
+            }
+        },
+        "device_timezone": {
+            "title": "Časové pásmo zariadenia {device_name} nie je nastavené alebo sa líši od predvoleného nastavenia služby Home Assistant",
+            "fix_flow": {
+                "abort": {
+                    "cannot_connect": "Nedá sa pripojiť"
+                },
+                "step": {
+                    "confirm": {
+                        "title": "Časové pásmo zariadenia {device_name} nie je nastavené alebo sa líši od predvoleného nastavenia služby Home Assistant"
+                    }
+                }
+            }
+        },
+        "hub_subdevice_removed": {
+            "title": "Zariadenie {device_name} bolo odregistrované z centra",
+            "fix_flow": {
+                "abort": {
+                    "subdevice_still_registered": "Podriadené zariadenie je stále zaregistrované"
+                },
+                "step": {
+                    "confirm": {
+                        "title": "Odstrániť registrácie zariadenia a entít",
+                        "description": "Zariadenie nereaguje a bude odstránené z konfigurácie",
+                        "data": {
+                            "delete": "Natrvalo odstrániť konfiguráciu (podriadeného) zariadenia"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "selector": {
+        "unbind_post_action": {
+            "options": {
+                "disable": "Zakázať záznam konfigurácie",
+                "delete": "Natrvalo odstrániť záznam konfigurácie"
+            }
+        },
+        "cloud_region": {
+            "options": {
+                "ap": "Ázia\/Tichomorie",
+                "eu": "Európa",
+                "us": "USA"
+            }
+        }
+    }
+}
