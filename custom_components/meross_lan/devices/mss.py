@@ -186,10 +186,7 @@ class ElectricitySensor(_ElectricitySensor, EntityNamespaceMixin):
     @classmethod
     @override
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        ns_entity = cls(ns, device, ns=ns)
-        ns_entity.unique_id = f"{device.id}_{ns_entity.entity_key}"
-        ns_entity.handler_ns = ns_entity
-        return ns_entity
+        return cls(ns, device, ns=ns)
 
 
 class ElectricityXSensor(_ElectricitySensor):

@@ -1,3 +1,4 @@
+from functools import cached_property
 from typing import TYPE_CHECKING, override
 
 from . import SubDevice, mc, mlc, mn, mn_h
@@ -101,8 +102,13 @@ class gs559(SensorSubDevice, EnumParser):
     __slots__ = ()
 
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
-        SensorSubDevice.__init__(self, descriptor, hub, **kwargs)
-        self.unique_id = f"{hub.id}_{descriptor.id}_status"  # LEGACY unique_id scheme
+        SensorSubDevice.__init__(
+            self,
+            descriptor,
+            hub,
+            unique_id=f"{hub.id}_{descriptor.id}_status",  # LEGACY
+            **kwargs,
+        )
         for key, entity_def in self.__class__.ENTITY_DEFS.items():
             setattr(self, key, entity_def(self))
         Button(self, async_press=self.async_mute, name="Mute")
@@ -386,13 +392,9 @@ class ms200(SensorSubDevice, BinarySensorParser):
     init_key_value = BinarySensorParser.KeyValue(mc.KEY_STATUS)
     _attr_device_class = BinarySensorParser.DeviceClass.WINDOW
 
-    @property
+    @cached_property
     def unique_id(self) -> str | None:
         return f"{self.parent.id}_{self.id}_window"
-
-    @unique_id.setter
-    def unique_id(self, value):
-        pass
 
 
 class ms400(SensorSubDevice, BinarySensorParser):
@@ -400,10 +402,6 @@ class ms400(SensorSubDevice, BinarySensorParser):
     init_key_value = BinarySensorParser.KeyValue(mc.KEY_LATESTWATERLEAK)
     _attr_device_class = BinarySensorParser.DeviceClass.SAFETY
 
-    @property
+    @cached_property
     def unique_id(self) -> str | None:
         return f"{self.parent.id}_{self.id}_waterleak"
-
-    @unique_id.setter
-    def unique_id(self, value):
-        pass

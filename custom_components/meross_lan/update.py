@@ -66,9 +66,9 @@ class UpdateEntity(Entity, update.UpdateEntity):
             self,
             device.id if device is not parent else None,
             parent,
-            device_info=device.device_info,
+            device_info=None,
+            unique_id=None,
         )
-        self.unique_id = None  # override
         device.update_firmware = self
 
     def update_latest_version(self, latest_version_info: "LatestVersionType"):
@@ -84,7 +84,7 @@ class UpdateEntity(Entity, update.UpdateEntity):
         Entity.flush_state(self)
 
     async def async_install(self, *args, **kwargs):
-        raise HomeAssistantError("Temporarily unsupproted")
+        raise HomeAssistantError("Temporarily unsupported")
         device = self.device
         if not device.is_connected:
             raise HomeAssistantError("Device is offline")

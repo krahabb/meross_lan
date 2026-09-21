@@ -91,8 +91,7 @@ class mst100(mst):
         SubDevice.__init__(self, descriptor, hub, **kwargs)
         subid = descriptor.id
         index = mn.IndexType.subId.get(subid, 0, None)
-        switch = mst.Switch(self, index=index)
-        switch.unique_id = f"{hub.id}_{subid}_onoff"  # LEGACY
+        switch = mst.Switch(self, index=index, unique_id=f"{hub.id}_{subid}_onoff")  # LEGACY
         hub.get_handler(mn_h.Appliance_Control_Water).register_parser(switch)
         hub.ns_handlers[mn.Appliance_Config_DeviceCfg].register_parser(
             DeviceCfgParser(subid, hub, index=index, parser_defs=mst.DEVICE_CFG_DEFS)

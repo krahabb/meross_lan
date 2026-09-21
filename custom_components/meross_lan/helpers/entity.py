@@ -77,6 +77,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             name: NotRequired[str | None]
             translation_key: NotRequired[str | None]
             icon: NotRequired[str]
+            unique_id: NotRequired[str | None]
 
         @classmethod
         def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
@@ -130,6 +131,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         "entity_registry_enabled_default",
         "name",
         "icon",
+        "unique_id",
     )
 
     # This works as a default for all the entities which are not NamespaceParsers.
@@ -144,8 +146,6 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
     __slots__ = (
         "entity_key",
         "hass_connected",
-        # HA core entity attributes
-        "translation_key",
     )
 
     @overload
@@ -200,6 +200,9 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
                 if TYPE_CHECKING:
                     assert isinstance(parent, Device)
                 self.device_info = parent.device_info
+                self.unique_id = f"{parent.id}_{entity_key}"
+                self.handler_ns = self
+
                 assert (
                     "index" not in kwargs and "device_info" not in kwargs
                 ), "index should not be provided for NamespaceHandler entities since it is fixed to None"
@@ -247,20 +250,6 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
                 or (entity_key and entity_key.lower().replace("__", "-"))
             )
         )
-        # unique_id is by default computed internally so to have a consistent layout.
-        # Not all entities should or will adhere to this but since
-        # they should be rare we're using local overrides here and there in descendants.
-        # The unique_id can be either overwritten after this constructor or (maybe better
-        # in terms of design) implemented through a property.
-        # Considerations about unique_id migration:
-        # The unique_id should follow this format (at least for parsers):
-        # "{uuid}_{ns.slug}_{key_value}_{channel}" where channel is optional ofc
-        # but is always related to the KEY_CHANNEL in the payload and not to the subdevice id
-        # For subdevices we should move to a format where we get rid of the parent hub.id
-        # and use instead the subdev id in the unique_id since it is already unique.
-        # "{subdev_id}_{ns.slug}_{key_value}_{channel}" where channel is optional ofc
-        # This way we could maybe get rid of entity_key
-        self.unique_id = f"{parent.id}_{id}"
         # simple setting of HA core attributes if provided in kwargs
         # else fallback to HA core mechanics
         for _attr in tuple(
@@ -274,6 +263,22 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             parent.add_entity(self)
 
     # interface: entity.Entity
+    @cached_property
+    def unique_id(self) -> str | None:
+        # unique_id is by default computed internally so to have a consistent layout.
+        # Not all entities should or will adhere to this but since
+        # they should be rare we're using local overrides here and there in descendants
+        # or initialization of unique_id in the constructor when needed.
+        # Considerations about unique_id migration:
+        # The unique_id should follow this format (at least for parsers):
+        # "{uuid}_{ns.slug}_{key_value}_{channel}" where channel is optional ofc
+        # but is always related to the KEY_CHANNEL in the payload and not to the subdevice id
+        # For subdevices we should move to a format where we get rid of the parent hub.id
+        # and use instead the subdev id in the unique_id since it is already unique.
+        # "{subdev_id}_{ns.slug}_{key_value}_{channel}" where channel is optional ofc
+        # This way we could maybe get rid of entity_key
+        return f"{self.parent.id}_{self.id}"
+
     @override
     def _name_internal(
         self,
@@ -636,8 +641,6 @@ class EntityNamespaceMixin(ParserEntity, handler.ParserHandler):
     @override
     def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
         ns_entity = cls(ns, device, ns=ns)
-        ns_entity.unique_id = f"{device.id}_{ns_entity.entity_key}"
-        ns_entity.handler_ns = ns_entity
         ns_entity.polling_strategy = None
         return ns_entity
 
