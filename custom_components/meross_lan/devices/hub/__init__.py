@@ -1,5 +1,7 @@
 from typing import TYPE_CHECKING, override
 
+from homeassistant.helpers import device_registry as dr
+
 from ... import const as mlc
 from ...binary_sensor import MLBinarySensor
 from ...button import MLButton
@@ -591,7 +593,7 @@ class SubDevice(NamespaceParser, BaseDevice):
             logger=hub,
             name=get_productnameuuid(model, id),
             model=model,
-            via_device=next(iter(hub.deviceentry_id["identifiers"])),
+            via_device_id=hub.device_registry_entry.id,
         )
         self.platforms = hub.platforms
         hub.subdevices[id] = self
@@ -1446,10 +1448,8 @@ def digest_init_hub(device: "HubMixin", digest) -> "DigestInitReturnType":
 
     # Check for unbinded subdevices which are 'still' in the device_registry
     registry_subdevices = {}
-    for (
-        device_entry
-    ) in device.api.device_registry.devices.get_devices_for_config_entry_id(
-        device.config_entry.entry_id
+    for device_entry in dr.async_entries_for_config_entry(
+        device.api.device_registry, device.config_entry.entry_id
     ):
         # The caveat here is to detect if a subdev has been re-binded to
         # a different hub (so a different config_entry). We need to be sure

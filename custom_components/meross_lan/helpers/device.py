@@ -113,7 +113,7 @@ class BaseDevice(EntityManager):
             hw_version: NotRequired[str]
             sw_version: NotRequired[str]
             connections: NotRequired[set[tuple[str, str]]]
-            via_device: NotRequired[tuple[str, str]]
+            via_device_id: NotRequired[str]
 
     __slots__ = (
         "online",
@@ -136,7 +136,7 @@ class BaseDevice(EntityManager):
             model=kwargs.get("model"),
             hw_version=kwargs.get("hw_version"),
             sw_version=kwargs.get("sw_version"),
-            via_device=kwargs.get("via_device"),
+            via_device_id=kwargs.get("via_device_id"),
             identifiers=identifiers,
         )
 
