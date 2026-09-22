@@ -156,19 +156,15 @@
         }
     },
     "common": {
-        "state": {
-            "ok": "Ok",
-            "disconnected": "Disconnesso",
-            "low": "Bassa",
-            "medium": "Media",
-            "high": "Alta",
-            "idle": "Inattivo",
-            "alarm": "Allarme"
-        },
-        "name": {
-            "frost": "Protezione antigelo",
-            "overheat": "Protezione surriscaldamento"
-        }
+        "ok": "Ok",
+        "disconnected": "Disconnesso",
+        "low": "Bassa",
+        "medium": "Media",
+        "high": "Alta",
+        "idle": "Inattivo",
+        "frost": "Protezione antigelo",
+        "overheat": "Protezione surriscaldamento",
+        "alarm": "Allarme"
     },
     "config": {
         "flow_title": "{name}",

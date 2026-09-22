@@ -156,19 +156,15 @@
         }
     },
     "common": {
-        "state": {
-            "ok": "V poriadku",
-            "disconnected": "Odpojené",
-            "low": "Nízka",
-            "medium": "Stredná",
-            "high": "Vysoká",
-            "idle": "Nečinné",
-            "alarm": "Poplach"
-        },
-        "name": {
-            "frost": "Ochrana proti zamrznutiu",
-            "overheat": "Ochrana proti prehrievaniu"
-        }
+        "ok": "V poriadku",
+        "disconnected": "Odpojené",
+        "low": "Nízka",
+        "medium": "Stredná",
+        "high": "Vysoká",
+        "idle": "Nečinné",
+        "frost": "Ochrana proti zamrznutiu",
+        "overheat": "Ochrana proti prehrievaniu",
+        "alarm": "Poplach"
     },
     "config": {
         "flow_title": "{name}",

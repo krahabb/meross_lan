@@ -41,7 +41,7 @@
                     "0": "Ok",
                     "2": "Odpojeno"
                 },
-                "name": "Overheat protection"
+                "name": "Ochrana proti přehřátí"
             },
             "frost_warning": {
                 "state": {
@@ -49,7 +49,7 @@
                     "1": "Freezing",
                     "2": "Odpojeno"
                 },
-                "name": "Frost protection"
+                "name": "Ochrana proti mrazu"
             },
             "mts300_status": {
                 "state": {
@@ -99,10 +99,10 @@
                 "name": "Differential temperature"
             },
             "frost": {
-                "name": "Frost protection"
+                "name": "Ochrana proti mrazu"
             },
             "overheat": {
-                "name": "Overheat protection"
+                "name": "Ochrana proti přehřátí"
             },
             "appliance_hub_mts100_config-pid_grade": {
                 "name": "PID: Grade"
@@ -119,10 +119,10 @@
         },
         "switch": {
             "frost_switch": {
-                "name": "Frost protection"
+                "name": "Ochrana proti mrazu"
             },
             "overheat_switch": {
-                "name": "Overheat protection"
+                "name": "Ochrana proti přehřátí"
             }
         },
         "select": {
@@ -156,19 +156,15 @@
         }
     },
     "common": {
-        "state": {
-            "ok": "Ok",
-            "disconnected": "Odpojeno",
-            "low": "Nízká",
-            "medium": "Střední",
-            "high": "Vysoká",
-            "idle": "Nečinný",
-            "alarm": "Alarm"
-        },
-        "name": {
-            "frost": "Frost protection",
-            "overheat": "Overheat protection"
-        }
+        "ok": "Ok",
+        "disconnected": "Odpojeno",
+        "low": "Nízká",
+        "medium": "Střední",
+        "high": "Vysoká",
+        "idle": "Nečinný",
+        "frost": "Ochrana proti mrazu",
+        "overheat": "Ochrana proti přehřátí",
+        "alarm": "Alarm"
     },
     "config": {
         "flow_title": "{name}",

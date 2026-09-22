@@ -41,7 +41,7 @@
                     "0": "Ok",
                     "2": "Débranché"
                 },
-                "name": "Overheat protection"
+                "name": "Protection contre la surchauffe"
             },
             "frost_warning": {
                 "state": {
@@ -49,7 +49,7 @@
                     "1": "Freezing",
                     "2": "Débranché"
                 },
-                "name": "Frost protection"
+                "name": "Protection contre le gel"
             },
             "mts300_status": {
                 "state": {
@@ -99,10 +99,10 @@
                 "name": "Differential temperature"
             },
             "frost": {
-                "name": "Frost protection"
+                "name": "Protection contre le gel"
             },
             "overheat": {
-                "name": "Overheat protection"
+                "name": "Protection contre la surchauffe"
             },
             "appliance_hub_mts100_config-pid_grade": {
                 "name": "PID: Grade"
@@ -119,10 +119,10 @@
         },
         "switch": {
             "frost_switch": {
-                "name": "Frost protection"
+                "name": "Protection contre le gel"
             },
             "overheat_switch": {
-                "name": "Overheat protection"
+                "name": "Protection contre la surchauffe"
             }
         },
         "select": {
@@ -156,19 +156,15 @@
         }
     },
     "common": {
-        "state": {
-            "ok": "Ok",
-            "disconnected": "Débranché",
-            "low": "Faible",
-            "medium": "Moyen",
-            "high": "Élevé",
-            "idle": "Inactif",
-            "alarm": "Alarm"
-        },
-        "name": {
-            "frost": "Frost protection",
-            "overheat": "Overheat protection"
-        }
+        "ok": "Ok",
+        "disconnected": "Débranché",
+        "low": "Faible",
+        "medium": "Moyen",
+        "high": "Élevé",
+        "idle": "Inactif",
+        "frost": "Protection contre le gel",
+        "overheat": "Protection contre la surchauffe",
+        "alarm": "Alarm"
     },
     "config": {
         "flow_title": "{name}",

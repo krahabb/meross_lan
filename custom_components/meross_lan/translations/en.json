@@ -156,19 +156,15 @@
         }
     },
     "common": {
-        "state": {
-            "ok": "Ok",
-            "disconnected": "Disconnected",
-            "low": "Low",
-            "medium": "Medium",
-            "high": "High",
-            "idle": "Idle",
-            "alarm": "Alarm"
-        },
-        "name": {
-            "frost": "Frost protection",
-            "overheat": "Overheat protection"
-        }
+        "ok": "Ok",
+        "disconnected": "Disconnected",
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "idle": "Idle",
+        "frost": "Frost protection",
+        "overheat": "Overheat protection",
+        "alarm": "Alarm"
     },
     "config": {
         "flow_title": "{name}",

@@ -41,7 +41,7 @@
                     "0": "Ok",
                     "2": "Getrennt"
                 },
-                "name": "Overheat protection"
+                "name": "Überhitzungsschutz"
             },
             "frost_warning": {
                 "state": {
@@ -49,7 +49,7 @@
                     "1": "Freezing",
                     "2": "Getrennt"
                 },
-                "name": "Frost protection"
+                "name": "Frostschutz"
             },
             "mts300_status": {
                 "state": {
@@ -99,10 +99,10 @@
                 "name": "Differential temperature"
             },
             "frost": {
-                "name": "Frost protection"
+                "name": "Frostschutz"
             },
             "overheat": {
-                "name": "Overheat protection"
+                "name": "Überhitzungsschutz"
             },
             "appliance_hub_mts100_config-pid_grade": {
                 "name": "PID: Grade"
@@ -119,10 +119,10 @@
         },
         "switch": {
             "frost_switch": {
-                "name": "Frost protection"
+                "name": "Frostschutz"
             },
             "overheat_switch": {
-                "name": "Overheat protection"
+                "name": "Überhitzungsschutz"
             }
         },
         "select": {
@@ -156,19 +156,15 @@
         }
     },
     "common": {
-        "state": {
-            "ok": "Ok",
-            "disconnected": "Getrennt",
-            "low": "Niedrig",
-            "medium": "Mittel",
-            "high": "Hoch",
-            "idle": "Leerlauf",
-            "alarm": "Alarm"
-        },
-        "name": {
-            "frost": "Frost protection",
-            "overheat": "Overheat protection"
-        }
+        "ok": "Ok",
+        "disconnected": "Getrennt",
+        "low": "Niedrig",
+        "medium": "Mittel",
+        "high": "Hoch",
+        "idle": "Leerlauf",
+        "frost": "Frostschutz",
+        "overheat": "Überhitzungsschutz",
+        "alarm": "Alarm"
     },
     "config": {
         "flow_title": "{name}",

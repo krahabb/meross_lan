@@ -1,18 +1,14 @@
 {
     "common": {
-        "name": {
-            "frost": "Frost protection",
-            "overheat": "Overheat protection"
-        },
-        "state": {
-            "ok": "Ok",
-            "alarm": "Alarm",
-            "disconnected": "Disconnected",
-            "idle": "Idle",
-            "low": "Low",
-            "medium": "Medium",
-            "high": "High"
-        }
+        "ok": "Ok",
+        "disconnected": "Disconnected",
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "idle": "Idle",
+        "frost": "Frost protection",
+        "overheat": "Overheat protection",
+        "alarm": "Alarm"
     },
     "entity": {
         "climate": {
@@ -70,10 +66,10 @@
                 "name": "Differential temperature"
             },
             "frost": {
-                "name": "[%key:common::name::frost%]"
+                "name": "[%key:common::frost%]"
             },
             "overheat": {
-                "name": "[%key:common::name::overheat%]"
+                "name": "[%key:common::overheat%]"
             }
         },
         "select": {
@@ -118,35 +114,35 @@
                 }
             },
             "frost_warning": {
-                "name": "[%key:common::name::frost%]",
+                "name": "[%key:common::frost%]",
                 "state": {
-                    "0": "[%key:common::state::ok%]",
-                    "1": "[%key:common::state::alarm%]",
-                    "2": "[%key:common::state::disconnected%]"
+                    "0": "[%key:common::ok%]",
+                    "1": "[%key:common::alarm%]",
+                    "2": "[%key:common::disconnected%]"
                 }
             },
             "overheat_currenttemp": {
                 "name": "External temperature"
             },
             "overheat_warning": {
-                "name": "[%key:common::name::overheat%]",
+                "name": "[%key:common::overheat%]",
                 "state": {
-                    "0": "[%key:common::state::ok%]",
-                    "1": "[%key:common::state::alarm%]",
-                    "2": "[%key:common::state::disconnected%]"
+                    "0": "[%key:common::ok%]",
+                    "1": "[%key:common::alarm%]",
+                    "2": "[%key:common::disconnected%]"
                 }
             },
             "mts300_status": {
                 "state": {
-                    "0": "[%key:common::state::idle%]",
-                    "1": "[%key:common::state::low%]",
-                    "2": "[%key:common::state::medium%]",
-                    "3": "[%key:common::state::high%]"
+                    "0": "[%key:common::idle%]",
+                    "1": "[%key:common::low%]",
+                    "2": "[%key:common::medium%]",
+                    "3": "[%key:common::high%]"
                 }
             },
             "mts300_hdstatus": {
                 "state": {
-                    "0": "[%key:common::state::idle%]",
+                    "0": "[%key:common::idle%]",
                     "1": "Dehumidification",
                     "2": "Humidifying"
                 }
@@ -163,10 +159,10 @@
         },
         "switch": {
             "frost_switch": {
-                "name": "[%key:common::name::frost%]"
+                "name": "[%key:common::frost%]"
             },
             "overheat_switch": {
-                "name": "[%key:common::name::overheat%]"
+                "name": "[%key:common::overheat%]"
             }
         }
     },
