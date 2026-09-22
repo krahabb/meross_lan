@@ -35,29 +35,21 @@
                     "ok": "Bez problémov"
                 }
             },
-            "common": {
+            "overheat_warning": {
                 "state": {
-                    "ok": "V poriadku",
-                    "disconnected": "Odpojené",
-                    "low": "Nízka",
-                    "medium": "Stredná",
-                    "high": "Vysoká",
-                    "idle": "Nečinné"
-                }
-            },
-            "mts_overheat_warning": {
-                "state": {
-                    "1": "Prehrievanie",
+                    "1": "Poplach",
                     "0": "V poriadku",
                     "2": "Odpojené"
-                }
+                },
+                "name": "Ochrana proti prehrievaniu"
             },
-            "mts_frost_warning": {
+            "frost_warning": {
                 "state": {
                     "0": "V poriadku",
-                    "1": "Zamŕzanie",
+                    "1": "Poplach",
                     "2": "Odpojené"
-                }
+                },
+                "name": "Ochrana proti zamrznutiu"
             },
             "mts300_status": {
                 "state": {
@@ -73,7 +65,109 @@
                     "2": "Zvlhčovanie",
                     "0": "Nečinné"
                 }
+            },
+            "consumption": {
+                "name": "Spotreba"
+            },
+            "energy_estimate": {
+                "name": "Odhad dennej spotreby"
+            },
+            "mconsume": {
+                "name": "Mesačná spotreba"
+            },
+            "overheat_currenttemp": {
+                "name": "Externá teplota"
             }
+        },
+        "number": {
+            "calibration_humidity": {
+                "name": "Kalibrácia (vlhkosť)"
+            },
+            "calibration_temperature": {
+                "name": "Kalibrácia (teplota)"
+            },
+            "temperature_comfort": {
+                "name": "Prednastavenie komfortu"
+            },
+            "temperature_sleep": {
+                "name": "Prednastavenie spánku"
+            },
+            "temperature_away": {
+                "name": "Prednastavenie mimo domu"
+            },
+            "deadzone": {
+                "name": "Rozdielová teplota"
+            },
+            "frost": {
+                "name": "Ochrana proti zamrznutiu"
+            },
+            "overheat": {
+                "name": "Ochrana proti prehrievaniu"
+            },
+            "appliance_hub_mts100_config-pid_grade": {
+                "name": "PID: Stupeň"
+            },
+            "appliance_hub_mts100_config-pid_p": {
+                "name": "PID: Proporcionálne"
+            },
+            "appliance_hub_mts100_config-pid_i": {
+                "name": "PID: Integrálne"
+            },
+            "appliance_hub_mts100_config-pid_d": {
+                "name": "PID: Derivačné"
+            }
+        },
+        "switch": {
+            "frost_switch": {
+                "name": "Ochrana proti zamrznutiu"
+            },
+            "overheat_switch": {
+                "name": "Ochrana proti prehrievaniu"
+            }
+        },
+        "select": {
+            "appliance_config_devicecfg-unitcfg_tempunit": {
+                "name": "Displej: jednotka teploty"
+            },
+            "appliance_config_devicecfg-timecfg_am": {
+                "name": "Displej: formát času",
+                "state": {
+                    "12_hours": "12 hodín",
+                    "24_hours": "24 hodín"
+                }
+            },
+            "appliance_config_devicecfg-unitcfg_unittype": {
+                "name": "Displej: jednotkový systém",
+                "state": {
+                    "us_customary": "US customary",
+                    "metric": "Metrický"
+                }
+            },
+            "appliance_hub_mts100_config-pid_grade": {
+                "name": "PID: Predvoľba",
+                "state": {
+                    "0": "Predvolené",
+                    "1": "Nízka",
+                    "2": "Mierna",
+                    "3": "Stredná",
+                    "4": "Silná"
+                }
+            }
+        }
+    },
+    "common": {
+        "state": {
+            "ok": "V poriadku",
+            "disconnected": "Odpojené",
+            "low": "Nízka",
+            "medium": "Stredná",
+            "high": "Vysoká",
+            "idle": "Nečinné",
+            "alarm": "Poplach"
+        },
+        "name": {
+            "frost": "Ochrana proti zamrznutiu",
+            "overheat": "Ochrana proti prehrievaniu"
         }
     },
     "config": {
@@ -89,7 +183,9 @@
             "cloud_profile_mismatch": "Cloudový profil nezodpovedá konfigurácii",
             "invalid_auth": "Chyba overenia",
             "invalid_key": "Chyba kľúča: výberom možnosti „Načítať z cloudu“ ho získate z účtu Meross",
-            "invalid_nullkey": "Chyba kľúča: výberom možnosti „Režim hackovania“ povolíte prázdny kľúč"
+            "invalid_nullkey": "Chyba kľúča: výberom možnosti „Režim hackovania“ povolíte prázdny kľúč",
+            "broker_address_invalid": "Adresa brokera MQTT nebola rozpoznaná",
+            "broker_connection_error": "Chyba pripojenia brokera MQTT"
         },
         "step": {
             "user": {
@@ -134,12 +230,36 @@
                     "check_firmware_updates": "Kontrolovať aktualizácie firmvéru",
                     "error": "Chybové hlásenie",
                     "cloud_region": "Región účtu",
-                    "mfa_code": "Overovací kód"
+                    "mfa_code": "Overovací kód",
+                    "rl_window_size": "Veľkosť okna rýchlostného limitu"
+                },
+                "data_description": {
+                    "allow_mqtt_publish": "Zakázanie povolí len prijímať prichádzajúce správy",
+                    "check_firmware_updates": "Vypisuje pravidelný dopyt do cloudového API Meross, aby sa získal aktualizovaný zoznam verzií firmvéru",
+                    "rl_window_size": "Dĺžka okna sledovania rýchlostného limitu (vyššie hodnoty umožňujú vyššie výkyvy, ale zvýšia čas potrebný na zotavenie)"
                 }
             },
             "finalize": {
                 "title": "Konfigurácia zariadenia",
                 "description": "Typ: {device_type}\nUUID: {device_id}"
+            },
+            "bind": {
+                "title": "Väzba Wi‑Fi\/MQTT",
+                "description": "Pripojte zariadenie k inej sieti Wi‑Fi a\/alebo brokeru MQTT\nAktuálne Wi‑Fi: {ssid}\nAktuálny broker: {server}\nPrázdne polia sa preskočia alebo automaticky nastaví.",
+                "data": {
+                    "ssid": "Wi‑Fi SSID",
+                    "password": "Heslo Wi‑Fi",
+                    "server": "Adresa nového brokera MQTT",
+                    "check": "Pred prekonfiguráciou skontrolovať kompatibilitu brokera",
+                    "key": "Kľúč zariadenia",
+                    "userid": "ID používateľa",
+                    "error": "Chybové hlásenie"
+                },
+                "data_description": {
+                    "server": "Zadajte adresu vo formáte „host(:port)“ (ponechajte prázdne, ak chcete preskočiť)",
+                    "key": "Zadajte kľúč použitý na podpisovanie protokolových správ (prázdne ponecháva aktuálnu hodnotu)",
+                    "userid": "Zadajte ID používateľa (prázdne ponecháva aktuálnu hodnotu)"
+                }
             }
         }
     },
@@ -148,11 +268,11 @@
             "diagnostics": {
                 "data": {
                     "create_diagnostic_entities": "Vytvoriť diagnostické entity",
-                    "trace_timeout": "Trvanie zaznamenávania ladenia (s)",
+                    "trace_timeout": "Trvanie ladenia (s)",
                     "error": "Chybové hlásenie",
                     "logging_level": "Úroveň protokolovania",
                     "trace": "Spustiť diagnostický záznam",
-                    "obfuscate": "Skryť citlivé údaje v protokoloch"
+                    "obfuscate": "Skryť citlivé údaje v záznamoch"
                 },
                 "title": "Diagnostika",
                 "description": "Nastavte úroveň protokolovania pre toto zariadenie\/profil a voliteľne spustite diagnostický záznam na zadaný čas"
@@ -168,14 +288,14 @@
             },
             "device": {
                 "title": "Konfigurácia zariadenia",
-                "description": "Typ: {device_type}\nUUID: {device_id}\nHostiteľ: {host}",
+                "description": "Typ: {device_type}\nUUID: {device_id}\nHost: {host}",
                 "data": {
                     "host": "Sieťová adresa zariadenia",
                     "key": "Kľúč zariadenia",
                     "protocol": "Protokol pripojenia",
                     "polling_period": "Interval dopytovania",
                     "timezone": "Časové pásmo zariadenia",
-                    "trace_timeout": "Trvanie zaznamenávania ladenia (s)",
+                    "trace_timeout": "Trvanie ladenia (s)",
                     "error": "Chybové hlásenie",
                     "disable_multiple": "Zakázať zoskupovanie viacerých požiadaviek"
                 }
@@ -198,7 +318,13 @@
                     "allow_mqtt_publish": "Povoliť publikovanie MQTT cez cloud",
                     "check_firmware_updates": "Kontrolovať aktualizácie firmvéru",
                     "error": "Chybové hlásenie",
-                    "mfa_code": "Overovací kód"
+                    "mfa_code": "Overovací kód",
+                    "rl_window_size": "Veľkosť okna rýchlostného limitu"
+                },
+                "data_description": {
+                    "allow_mqtt_publish": "Zakázanie povolí len prijímať prichádzajúce správy",
+                    "check_firmware_updates": "Vypisuje pravidelný dopyt do cloudového API Meross, aby sa získal aktualizovaný zoznam verzií firmvéru",
+                    "rl_window_size": "Dĺžka okna sledovania rýchlostného limitu (vyššie hodnoty umožňujú vyššie výkyvy, ale zvýšia čas potrebný na zotavenie)"
                 }
             },
             "menu": {
@@ -208,48 +334,48 @@
                     "device": "Konfigurovať",
                     "profile": "Konfigurovať",
                     "diagnostics": "Diagnostika",
-                    "bind": "Zmeniť konfiguráciu MQTT (lokálne prepojenie)",
+                    "bind": "Väzba Wi‑Fi\/MQTT",
                     "unbind": "Obnovenie hardvéru"
                 }
             },
             "bind": {
-                "title": "Zmeniť konfiguráciu MQTT (lokálne prepojenie)",
-                "description": "Pripojte (prepojte) zariadenie s iným brokerom MQTT\nAktuálny broker: {domain}",
+                "title": "Väzba Wi‑Fi\/MQTT",
+                "description": "Pripojte zariadenie k inej sieti Wi‑Fi a\/alebo brokeru MQTT\nAktuálne Wi‑Fi: {ssid}\nAktuálny broker: {server}\nPrázdne polia sa preskočia alebo automaticky nastaví.",
                 "data": {
-                    "domain": "Adresa nového brokera MQTT",
-                    "check": "Pred zmenou konfigurácie skontrolovať kompatibilitu brokera",
+                    "check": "Pred prekonfiguráciou skontrolovať kompatibilitu brokera",
                     "key": "Kľúč zariadenia",
                     "userid": "ID používateľa",
-                    "error": "Chybové hlásenie"
+                    "error": "Chybové hlásenie",
+                    "ssid": "Wi‑Fi SSID",
+                    "password": "Heslo Wi‑Fi",
+                    "server": "Adresa nového brokera MQTT"
                 },
                 "data_description": {
-                    "domain": "Zadajte adresu vo formáte „hostiteľ(:port)“ alebo ponechajte pole prázdne, ak chcete použiť broker Home Assistant",
-                    "userid": "Ponechajte prázdne pre lepšiu kompatibilitu s integráciou meross_lan",
-                    "key": "Ponechajte prázdne pre lepšiu kompatibilitu s integráciou meross_lan"
+                    "userid": "Zadajte ID používateľa (prázdne ponecháva aktuálnu hodnotu)",
+                    "key": "Zadajte kľúč použitý na podpisovanie protokolových správ (prázdne ponecháva aktuálnu hodnotu)",
+                    "server": "Zadajte adresu vo formáte „host(:port)“ (ponechajte prázdne, ak chcete preskočiť)"
                 }
             },
             "unbind": {
                 "title": "Obnovenie hardvéru",
-                "description": "UPOZORNENIE! Týmto sa odošle špeciálny príkaz, ktorý odpojí zariadenie od aktuálneho brokera MQTT (cloudu Meross alebo lokálneho brokera) a obnoví jeho výrobné nastavenia.\n Potom bude zariadenie potrebné znova nakonfigurovať, aby sa dalo používať.",
+                "description": "UPOZORNENIE! Týmto sa odošle špeciálny príkaz, ktorý odpojí zariadenie od aktuálneho brokera MQTT (buď z cloudu Meross alebo lokálneho brokera) a resetuje ho na továrenské nastavenia.\n Potom bude zariadenie potrebné znova nakonfigurovať, aby sa dalo používať",
                 "data": {
                     "post_action": "Po odpojení:",
                     "error": "Chybové hlásenie"
                 }
-            },
-            "bind_finalize": {
-                "title": "Zmeniť konfiguráciu MQTT (lokálne prepojenie)",
-                "description": "Zariadenie bolo úspešne nakonfigurované s novým brokerom MQTT na adrese {domain}.\nKonfigurácia bola aktualizovaná a znova načítaná, ale na pripojenie k novému brokerovi môže byť potrebné zariadenie reštartovať (vypnúť a znova zapnúť)."
             }
         },
         "error": {
             "already_configured_device": "Zariadenie je už nakonfigurované",
             "cannot_connect": "Nedá sa pripojiť",
             "cloud_profile_mismatch": "Cloudový profil nezodpovedá konfigurácii",
-            "device_id_mismatch": "UUID zariadenia sa nezhoduje: nejde o rovnaké zariadenie",
+            "device_id_mismatch": "UUID zariadenia sa nezhoduje: zariadenie nie je rovnaké",
             "invalid_auth": "Chyba overenia",
             "invalid_key": "Chyba kľúča: výberom možnosti „Načítať z cloudu“ ho získate z účtu Meross",
             "invalid_nullkey": "Chyba kľúča: výberom možnosti „Režim hackovania“ povolíte prázdny kľúč",
-            "habroker_not_connected": "Broker MQTT služby Home Assistant nie je pripojený"
+            "habroker_not_connected": "Broker MQTT služby Home Assistant nie je pripojený",
+            "broker_address_invalid": "Adresa brokera MQTT nebola rozpoznaná",
+            "broker_connection_error": "Chyba pripojenia brokera MQTT"
         }
     },
     "issues": {
@@ -278,14 +404,14 @@
                 "step": {
                     "device": {
                         "title": "Konfigurácia zariadenia",
-                        "description": "Typ: {device_type}\nUUID: {device_id}\nHostiteľ: {host}",
+                        "description": "Typ: {device_type}\nUUID: {device_id}\nHost: {host}",
                         "data": {
                             "host": "Sieťová adresa zariadenia",
                             "key": "Kľúč zariadenia",
                             "protocol": "Protokol pripojenia",
                             "polling_period": "Interval dopytovania",
                             "timezone": "Časové pásmo zariadenia",
-                            "trace_timeout": "Trvanie zaznamenávania ladenia (s)",
+                            "trace_timeout": "Trvanie ladenia (s)",
                             "error": "Chybové hlásenie",
                             "disable_multiple": "Zakázať zoskupovanie viacerých požiadaviek"
                         }
