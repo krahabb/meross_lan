@@ -918,7 +918,7 @@ Appliance_Control_Diffuser_Spray = ns(
     "Appliance.Control.Diffuser.Spray", mc.KEY_SPRAY, 55, G_E, S_LI, PSH, IDX_C, DIG
 )
 Appliance_Control_Electricity = ns(
-    "Appliance.Control.Electricity", mc.KEY_ELECTRICITY, 130, G_E, PSH
+    "Appliance.Control.Electricity", mc.KEY_ELECTRICITY, 130, G_E
 )
 Appliance_Control_ElectricityX = ns(
     "Appliance.Control.ElectricityX",
