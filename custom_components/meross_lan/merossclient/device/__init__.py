@@ -1,4 +1,3 @@
-from abc import abstractmethod
 import asyncio
 from datetime import UTC, tzinfo
 from typing import TYPE_CHECKING, override
@@ -11,7 +10,6 @@ from .. import (
     async_import_module,
     datetime_from_epoch,
     is_device_online,
-    versiontuple,
 )
 from ..client import AbstractClient
 from ..exceptions import MerossTransportError
@@ -156,7 +154,6 @@ class Device(PhysicalDevice):
         _polling_task: Task | None
         polling_lock: asyncio.Lock
         polling_epoch: Final[float]
-        """Time of current/last polling cycle epoch."""
         _lazypoll_requests: list[NamespaceHandler]
 
     HEARTBEAT_TIMEOUT = 300
@@ -217,7 +214,7 @@ class Device(PhysicalDevice):
             config=(
                 self.HEARTBEAT_TIMEOUT,
                 0,
-                self._async_poll_all,
+                NamespaceHandler.async_polling_strategy_ns_all,
             ),
         )
         self.tz = UTC
@@ -329,7 +326,7 @@ class Device(PhysicalDevice):
                 response = await earliest_connect
                 if not self.is_connected:
                     self.on_connect()
-                self.handler_all.handle_response(response)
+                self.handler_all.handle(response)
                 self.handler_all.polling_response_size = len(response.json)
                 return response
             except Exception as e:
@@ -358,6 +355,8 @@ class Device(PhysicalDevice):
     def on_connect(self, /):
         super().on_connect()
         self._polling_delay = self.polling_period
+        for nh in self.ns_handlers.values():
+            nh.last_rx_epoch = nh.last_poll_epoch = nh.next_poll_epoch = 0.0
 
     @override
     def on_disconnect(self, /):
@@ -368,8 +367,6 @@ class Device(PhysicalDevice):
         self.client = None  # type: ignore[assignment]
         self.transport = self.TRANSPORT  # type: ignore[assignment]
         self.mqtt_active = False  # type: ignore[assignment]
-        for handler in self.ns_handlers.values():
-            handler.next_poll_epoch = 0.0
 
     @override
     async def async_request(
@@ -596,7 +593,7 @@ class Device(PhysicalDevice):
                         and ((epoch - http.last_tx_epoch) > self.HEARTBEAT_TIMEOUT)
                     ):
                         try:
-                            self.handler_all.handle_response(
+                            self.handler_all.handle(
                                 await http.async_request(
                                     *self.handler_all.polling_request
                                 )
@@ -611,7 +608,7 @@ class Device(PhysicalDevice):
                         and ((epoch - mqtt.last_tx_epoch) > self.HEARTBEAT_TIMEOUT)
                     ):
                         try:
-                            self.handler_all.handle_response(
+                            self.handler_all.handle(
                                 await mqtt.async_request(
                                     *self.handler_all.polling_request
                                 )
@@ -637,14 +634,10 @@ class Device(PhysicalDevice):
                 # message parsing (handlers might be dynamically created by then)
                 # Also, we skip ns polling for data wich might be carried in ns_all digest
                 # since self._async_poll_all is already automatically taking care of this.
-                for handler in [
-                    handler
-                    for handler in self.ns_handlers.values()
-                    if not handler.digest
-                ]:
-                    if handler.polling_strategy:
+                for nh in self.ns_handlers.values():
+                    if nh.polling_strategy and not nh.digest:
                         try:
-                            await handler.polling_strategy(handler)
+                            await nh.polling_strategy(nh)
                         except asyncio.TimeoutError:
                             raise
                         except Exception as e:
@@ -652,8 +645,8 @@ class Device(PhysicalDevice):
                                 self.WARNING,
                                 e,
                                 "%s for %s",
-                                handler.polling_strategy.__name__,
-                                handler.id,
+                                nh.polling_strategy.__name__,
+                                nh.id,
                             )
                             continue
 
@@ -687,8 +680,8 @@ class Device(PhysicalDevice):
             self.schedule_callback(self._polling_delay, self._polling)
         except (AttributeError, KeyError):
             pass  # do not (re)schedule if we're not polling already
-        for handler in self.ns_handlers.values():
-            handler.next_poll_epoch = 0.0
+        for nh in self.ns_handlers.values():
+            nh.last_rx_epoch = nh.last_poll_epoch = nh.next_poll_epoch = 0.0
         await self.async_poll()
 
     async def async_poll_flush(self):
@@ -702,20 +695,17 @@ class Device(PhysicalDevice):
             lazypoll_requests = self._lazypoll_requests
             while (requests_len < self.multiple_max) and lazypoll_requests:
                 # we have space available in current ns_multiple and lazy pollers are waiting
-                for handler in lazypoll_requests:
+                for nh in lazypoll_requests:
                     # lazy pollers are ordered by 'oldest polled first' so
                     # the first is the one which hasn't been polled since longer
                     # we then decide to add to the current ns_multiple the first that would fit in
                     if (
-                        handler.polling_response_size + multiple_response_size
+                        nh.polling_response_size + multiple_response_size
                     ) < self.device_response_size_max:
-                        handler.last_poll_epoch = self.polling_epoch
-                        handler.next_poll_epoch = (
-                            handler.last_poll_epoch + handler.polling_period
-                        )
-                        multiple_requests.append(handler)
-                        lazypoll_requests.remove(handler)
-                        multiple_response_size += handler.polling_response_size
+                        nh.next_poll_epoch = self.polling_epoch + nh.polling_period
+                        multiple_requests.append(nh)
+                        lazypoll_requests.remove(nh)
+                        multiple_response_size += nh.polling_response_size
                         requests_len += 1
                         # check if we can add more
                         break  # for
@@ -724,12 +714,13 @@ class Device(PhysicalDevice):
                     break  # while
 
             if requests_len == 1:
-                await multiple_requests[0].async_get()
+                nh = multiple_requests[0]
+                nh.handle(await self.async_request(*nh.polling_request))
                 return
 
             try:
                 response = await self.async_request_multiple(
-                    (handler.polling_request for handler in multiple_requests),
+                    (nh.polling_request for nh in multiple_requests),
                 )
             except (aiohttp.ServerDisconnectedError, asyncio.TimeoutError) as e:
                 if not self.is_connected:
@@ -760,8 +751,8 @@ class Device(PhysicalDevice):
                     "Updating device_response_size_max:%d",
                     self.device_response_size_max,
                 )
-                for handler in multiple_requests:
-                    await handler.async_get()
+                for nh in multiple_requests:
+                    nh.handle(await self.async_request(*nh.polling_request))
                 return
 
             multiple_responses = response[mc.KEY_PAYLOAD][mc.KEY_MULTIPLE]
@@ -775,8 +766,8 @@ class Device(PhysicalDevice):
                     multiple_response_size,
                     timeout=14400,
                 )
-                for handler in multiple_requests:
-                    await handler.async_get()
+                for nh in multiple_requests:
+                    nh.handle(await self.async_request(*nh.polling_request))
                 return
 
             responses_len = len(multiple_responses)
@@ -793,11 +784,11 @@ class Device(PhysicalDevice):
             message: "MerossMessageType"
             for message in multiple_responses:
                 _response = MerossMessage(message)
-                for handler in multiple_requests:
-                    if handler.id != _response.namespace:
+                for nh in multiple_requests:
+                    if nh.id != _response.namespace:
                         continue
-                    multiple_requests.remove(handler)
-                    handler.handle_response(_response)
+                    multiple_requests.remove(nh)
+                    nh.handle(_response)
                     break
                 else:
                     # not found..something is wrong!! TODO: log a DEBUG/WARNING here?
@@ -806,53 +797,6 @@ class Device(PhysicalDevice):
             # and re-issue the missing ones
             requests_len = len(multiple_requests)
             multiple_response_size = -1  # logging purpose
-
-    async def async_poll_request(self, handler: NamespaceHandler, /):
-        handler.last_poll_epoch = self.polling_epoch
-        handler.next_poll_epoch = handler.last_poll_epoch + handler.polling_period
-        if (not self.multiple_max) or (
-            handler.polling_response_size >= self.device_response_size_max
-        ):
-            # multiple requests are disabled
-            # or this request alone would overflow the device response size limit
-            await handler.async_get()
-            return
-        # estimate the size of the multiple response
-        multiple_response_size = (
-            self._multiple_response_size + handler.polling_response_size
-        )
-        if multiple_response_size >= self.device_response_size_max:
-            # this request (together with already previously packed)
-            # would overflow the device response size limit
-            if not self._multiple_requests:
-                # again this request alone would overflow the device response size limit
-                await handler.async_get()
-                return
-            # flush the pending multiple requests
-            await self.async_poll_flush()
-            multiple_response_size = (
-                self._multiple_response_size + handler.polling_response_size
-            )
-        self._multiple_requests.append(handler)
-        self._multiple_response_size = multiple_response_size
-        if len(self._multiple_requests) >= self.multiple_max:
-            await self.async_poll_flush()
-
-    async def async_poll_request_rl(self, handler: NamespaceHandler, /):
-        if self.should_limit_cloud_polling and (
-            (self.polling_epoch - handler.last_poll_epoch)
-            < handler.polling_period_cloud
-        ):
-            assert self.mqtt
-            self.log(
-                self.DEBUG,
-                "Skipping poll for %s to avoid mqtt rate-limiting (queue delay=%d s)",
-                handler.id,
-                self.mqtt.connection.get_rl_safe_delay(self.id),
-            )
-            return False
-        await self.async_poll_request(handler)
-        return True
 
     async def async_unbind(self):
         """
@@ -872,7 +816,6 @@ class Device(PhysicalDevice):
         return await self.async_request(*mn.Appliance_Control_Unbind.request_default)
 
     def _handle_Appliance_System_All(self, message: MerossMessage, /):
-
         descr = self.descriptor
         descr.update(message.payload)
 
@@ -891,57 +834,12 @@ class Device(PhysicalDevice):
                         self._switch_client(mqtt)
 
         digest = descr.digest or descr.control
-        for handler in (
-            _handler for _handler in self.ns_handlers.values() if _handler.digest
-        ):
-            handler.next_poll_epoch = self.last_rx_epoch + handler.polling_period
-            handler.digest = handler.id.get_digest(digest)
-            handler.parse_digest(handler.digest)
-
-    async def _async_poll_all(self, handler_all: NamespaceHandler, /):
-        """
-        This is a special policy for NS_ALL.
-        It is basically an 'async_poll_default' policy so it kicks-in whenever we poll
-        the state in 'device._async_request_updates' but contrary to 'legacy' behavior
-        where NS_ALL was always polled (unless mqtt active).
-        This will alternate polling NS_ALL to the group of namespaces responsible for
-        the state carried in 'digest'. This is an improvement since NS_ALL, even if carrying
-        the whole state in one query, might be huge (because of the 'time' key) but also because
-        most of its data are pretty static (never or seldom changing) info of the device.
-        This new policy will interleave querying NS_ALL once in a while with smaller direct
-        equivalent queries for the state carried in digest. (If the device doesn't support
-        NS_MULTIPLE, it will likely do more queries though but this is unlikely)
-        """
-        if self.mqtt_active:
-            # on MQTT no need for updates since they're being PUSHed
-            if not handler_all.next_poll_epoch:
-                # just when onlining...
-                await self.async_poll_request(handler_all)
-            return
-
-        # here we're missing PUSHed updates so we have to poll...
-        if self.polling_epoch >= handler_all.next_poll_epoch:
-            # at start or periodically ask for NS_ALL..plain
-            await self.async_poll_request(handler_all)
-            return
-
-        # query specific namespaces instead of NS_ALL since we hope this is
-        # better (less overhead/http sessions) together with ns_multiple packing.
-        # Here, we don't query if digest key/namespace hasn't any entity registered
-        # this also prevents querying a somewhat 'malformed' ToggleX reply
-        # appearing in an mrs100 (#447)
-        # TODO: consider refining this one
-        # possible issues are:
-        # Appliance.Control.ToggleX for covers (data maybe provided but useless since the
-        # ToggleX doesn't look like providing any info)
-        # - resulting request being bulkier than using ns_all
-        for handler in [
-            _handler
-            for _handler in self.ns_handlers.values()
-            if _handler.digest and _handler.parsers
-        ]:
-            if handler.polling_strategy:
-                await handler.polling_strategy(handler)
+        for nh in self.ns_handlers.values():
+            if nh.digest:
+                nh.last_poll_epoch = self.last_rx_epoch
+                nh.next_poll_epoch = self.last_rx_epoch + nh.polling_period
+                nh.digest = nh.id.get_digest(digest)
+                nh.parse_digest(nh.digest)
 
 
 class SubDevice(PhysicalDevice, NamespaceParser):

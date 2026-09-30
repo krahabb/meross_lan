@@ -595,7 +595,9 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         self.update_device_registry(
             hw_version=descriptor.hw_version, sw_version=descriptor.fw_version
         )
-        if (profile := self.parent.profile) and (latest_version := profile.get_latest_version(descriptor)):
+        if (profile := self.parent.profile) and (
+            latest_version := profile.get_latest_version(descriptor)
+        ):
             if self.update_firmware:
                 self.update_firmware.update_latest_version(latest_version)
             else:
@@ -637,8 +639,8 @@ NamespaceHandler.POLLING_CONFIG_MAP.update(
         mn_h.Appliance_Control_Water: NamespaceHandler.POLLING_CONFIG_DEFAULT,
         mn_h.Appliance_Hub_Battery: (
             3600,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_smart,
+            86400,
+            NamespaceHandler.async_polling_strategy_smart,
         ),
         mn_h.Appliance_Hub_Exception: NamespaceHandler.POLLING_CONFIG_NONE,
         mn_h.Appliance_Hub_Online: NamespaceHandler.POLLING_CONFIG_NONE,
@@ -650,21 +652,21 @@ NamespaceHandler.POLLING_CONFIG_MAP.update(
         mn_h.Appliance_Hub_Mts100_All: (
             0,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_chunked,
+            NamespaceHandler.async_polling_strategy_chunked,
         ),
         mn_h.Appliance_Hub_Mts100_Config: mlc.POLLING_CONFIG_CONFIGURATION,
         mn_h.Appliance_Hub_Mts100_Mode: NamespaceHandler.POLLING_CONFIG_NONE,
         mn_h.Appliance_Hub_Mts100_ScheduleB: (
             mlc.PARAM_CONFIG_UPDATE_PERIOD,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_chunked,
+            NamespaceHandler.async_polling_strategy_chunked,
         ),
         mn_h.Appliance_Hub_Mts100_Temperature: NamespaceHandler.POLLING_CONFIG_NONE,
         mn_h.Appliance_Hub_Sensor_Adjust: mlc.POLLING_CONFIG_CONFIGURATION,
         mn_h.Appliance_Hub_Sensor_All: (
             0,
             mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_poll_chunked,
+            NamespaceHandler.async_polling_strategy_chunked,
         ),
         mn_h.Appliance_Hub_Sensor_DoorWindow: NamespaceHandler.POLLING_CONFIG_NONE,
         mn_h.Appliance_Hub_Sensor_Smoke: NamespaceHandler.POLLING_CONFIG_NONE,

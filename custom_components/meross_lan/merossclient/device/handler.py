@@ -67,7 +67,7 @@ class NamespaceHandler(logging.Loggable):
         POLLING_CONFIG_DEFAULT: ClassVar[PollingConfigType]
         """Default polling configuration. This is used if no config is being passed
         at NamespaceHandler initialization time and no entry is found in POLLING_CONFIG_MAP."""
-        POLLING_CONFIG_NONE: ClassVar[PollingConfigType]
+        POLLING_CONFIG_NONE: Final[PollingConfigType]
         """Polling configuration representing no polling. This is used to disable polling for a namespace."""
         POLLING_CONFIG_ONCE: Final[PollingConfigType]
         """Common polling configuration for namespaces carrying fixed info."""
@@ -84,7 +84,17 @@ class NamespaceHandler(logging.Loggable):
         parser_class: type[NamespaceParser] | None
         digest: JsonMapping | JsonArray | None
 
+        last_rx_epoch: float
+        """Timestamp of last received message (either async/pushed or explicitly requested)."""
+        last_poll_epoch: float
+        """Timestamp of last succesfull poll."""
+        next_poll_epoch: float
+        """Timestamp of next scheduled poll."""
         polling_strategy: PollingStrategyFunc | None
+        polling_period: int
+        polling_period_cloud: int
+        polling_response_size: int
+
         polling_request: MerossRequestType
         polling_request_payload: JsonList  # on demand instance
 
@@ -235,7 +245,7 @@ class NamespaceHandler(logging.Loggable):
         super().__init__(id, parent, **kwargs)
         self.polling_request_configure(
             mn.PayloadType.LIST_IDX_STRICT
-            if self.polling_strategy is NamespaceHandler.async_poll_chunked
+            if self.polling_strategy is NamespaceHandler.async_polling_strategy_chunked
             else None
         )
         parent.ns_handlers[id] = self
@@ -311,26 +321,6 @@ class NamespaceHandler(logging.Loggable):
             self.parsers[index] = getattr(new, f"_parse_{self.id.slug_end}", new)
             new._namespace_registered(handler_registration)
 
-    def handle_response(self, response: "MerossMessage", /):
-        """Entry point for handling a received message for this namespace.
-        This is invoked by Device whenever a message for this ns is received.
-        This method acts as a wrapper for the actual handler to catch and
-        log any exception that might occur and to do some house-keeping.
-        """
-        # TODO: save all of the last sent/received payloads for a ns_handler
-        # for diagnostics (GET/ACK/SET/PUSH/DEL)
-        self.last_rx_epoch = self.parent.last_rx_epoch
-        self.next_poll_epoch = self.last_rx_epoch + self.polling_period
-        try:
-            self.handler(response)
-        except Exception as exception:
-            self.log_exception(
-                self.WARNING,
-                exception,
-                "handle_response (payload: %s)",
-                _payload=response.payload,
-            )
-
     def parse_digest(self, digest: "JsonMapping | JsonArray", /):
         """Used when parsing digest(s) in Appliance.System.All."""
         for payload in extract_dict_payloads(digest):
@@ -359,6 +349,28 @@ class NamespaceHandler(logging.Loggable):
             _any=payload,
             timeout=14400,
         )
+
+    def handle(self, response: "MerossMessage", is_poll: bool = True, /):
+        """Entry point for handling a received message for this namespace.
+        This is invoked by Device whenever a message for this ns is received.
+        This method acts as a wrapper for the actual handler to catch and
+        log any exception that might occur and to do some house-keeping.
+        """
+        # TODO: save all of the last sent/received payloads for a ns_handler
+        # for diagnostics (GET/ACK/SET/PUSH/DEL)
+        self.last_rx_epoch = self.parent.last_rx_epoch
+        if is_poll:
+            self.last_poll_epoch = self.last_rx_epoch
+            self.next_poll_epoch = self.last_rx_epoch + self.polling_period
+        try:
+            self.handler(response)
+        except Exception as exception:
+            self.log_exception(
+                self.WARNING,
+                exception,
+                "handle_response (payload: %s)",
+                _payload=response.payload,
+            )
 
     def _handle_subdevice_id(self, message: "MerossMessage", /):
         """Generalized Hub namespace dispatcher to subdevices."""
@@ -422,7 +434,7 @@ class NamespaceHandler(logging.Loggable):
             # - KeyError in parser function
             if KEY_CHANNEL not in payload:
                 if len(self.parsers) == 1:
-                    # try to default on single channel devices (on single channel devices #675)
+                    # try to default on single channel devices (#675)
                     try:
                         next(iter(self.parsers.values()))(payload)
                     except Exception as e:
@@ -500,43 +512,22 @@ class NamespaceHandler(logging.Loggable):
             self.parent.handler_all.next_poll_epoch = 0.0
 
     async def async_get(self, *indexes: mn.IndexValue):
-        """
-        Helper to execute a straigth query to get the whole namespace payload
-        or a single item/channel and dispatch the response to the internal
-        handler bypassing the Device message routing.
-        if channel is None the whole namespace is requested.
-        """
-        response = await self.parent.async_request(
-            *(
-                self.id.payload_get.build_get(self.id, *indexes)
-                if indexes
-                else self.polling_request
-            )
+        """Helper to request method GET. This will also process
+        the response and dispatch it to the appropriate handler."""
+        self.handle(
+            # TODO: (maybe) migrate class Namespace to implement a request_get much like request_set
+            await self.parent.async_request(
+                *(self.id.payload_get.build_get(self.id, *indexes))
+            ),
+            False,
         )
-        self.handle_response(response)
-        return response
-
-    async def async_get_safe(self, *indexes: mn.IndexValue):
-        """
-        Helper to execute a straigth query to get the whole namespace payload
-        or a single item/channel and dispatch the response to the internal
-        handler bypassing the Device message routing.
-        if channel is None the whole namespace is requested.
-        """
-        try:
-            return await self.async_get(*indexes)
-        except Exception as e:
-            self.log_exception(self.WARNING, e, "async_get_safe")
 
     def schedule_get(
         self,
         *indexes: mn.IndexValue,
         task_name: str = "",
     ):
-        """
-        Helper to schedule a straigth query to get the whole namespace payload.
-        This shouldnt be used for namespaces that don't support GET.
-        """
+        """Helper to schedule a GET request."""
         self.create_task(
             self.async_get(*indexes), task_name or self.id, eager_start=True
         )
@@ -674,71 +665,70 @@ class NamespaceHandler(logging.Loggable):
 
     # Polling Strategies:
     # These are configured at initialization time by setting the 'polling_strategy' attribute
-    # and invoked by the polling cycle.
-    async def async_poll_default(self):
+    # and invoked by the polling cycle. These methods work in close cooperation with the device
+    # internal polling state and might be regarded as both Handler and Device internal features.
+    async def async_polling_strategy_default(self, /):
         """
         This is a basic 'default' policy:
-        - avoid the request when MQTT available (this is for general 'state' namespaces like NS_ALL) and
+        - avoid the request when MQTT available (this is for general 'state/config' namespaces like ToggleX) and
         we expect this namespace to be updated by PUSH(es)
         - unless the 'next_poll_epoch' is 0 which means we're re-onlining the device and so
         we like to re-query the full state (even on MQTT)
         """
-        device = self.parent
-        if (device.mqtt_active and self.next_poll_epoch) or (
-            device.polling_epoch < self.next_poll_epoch
-        ):
-            return
-        await device.async_poll_request_rl(self)
-
-    async def async_poll_smart(self):
-        """
-        This strategy is for those namespaces which might be skipped now and then
-        if they don't fit in the current ns_multiple request. Their delaying
-        would be no harm since they typically carry rather unchanging values
-        or data which are not 'critical'. For those namespaces, polling_period
-        is considered the maximum amount of time after which the poll 'has' to
-        be done. If it hasn't elapsed then they're eventually packed
-        with the outgoing ns_multiple (lazy polling).
-        This strategy should also avoid polling when MQTT is active if the namespace
-        supports PUSH or we have received at least one PUSH for it (last_rx_push).
-        """
-        device = self.parent
-        """ TODO: re-enable this optimization after testing. It looks like our 'knowledge' of
-        PUSHed namespaces is not perfect yet and we're skipping needed polls (#607 #609).
         if (
-            device._mqtt_active
-            and self.next_poll_epoch
+            self.parent.mqtt_active
+            and self.last_poll_epoch
             and (self.id.payload_psh or self.last_rx_push)
         ):
             # on MQTT no need for updates since they're being PUSHed
             return
-        """
-        if device.polling_epoch >= self.next_poll_epoch:
-            if await device.async_poll_request_rl(self):
+        await self.async_polling_strategy_smart()
+
+    async def async_polling_strategy_smart(self, /):
+        """This is a policy for those ns which need to be queried at a regular interval even on MQTT."""
+        device = self.parent
+        epoch = device.polling_epoch
+        if epoch >= self.next_poll_epoch:
+            if (not device.should_limit_cloud_polling) or (
+                (epoch - self.last_poll_epoch) > self.polling_period_cloud
+            ):
+                await self.async_poll_queue()
                 return
+            # mqtt rate-limiting is in effect..we'll eventually skip this poll
+            assert device.mqtt
+            self.log(
+                self.DEBUG,
+                "Skipping poll to avoid mqtt rate-limiting (queue delay=%d s)",
+                device.mqtt.connection.get_rl_safe_delay(device.id),
+            )
+        # This happens when polling is not needed at this time or when mqtt rate-limiting is in effect.
+        # We'll eventually try to leverage any available space in current outgoing NS_MULTIPLE keeping an
+        # ordered queue of 'wish to be polled' handlers (see async_poll_flush).
+        # Insert into the lazypoll_requests ordering by next_poll_epoch so that priority goes to the most urgent
+        # (even if in the future).
+        if device.multiple_max:
+            insort_right(
+                device._lazypoll_requests,
+                self,
+                key=lambda h: h.next_poll_epoch - epoch,
+            )
 
-        # Insert into the lazypoll_requests ordering by least recently polled
-        def _lazypoll_key(_handler: NamespaceHandler):
-            return _handler.last_poll_epoch - device.polling_epoch
-
-        insort_right(device._lazypoll_requests, self, key=_lazypoll_key)
-
-    async def async_poll_once(self):
+    async def async_polling_strategy_once(self, /):
         """
         This strategy is for 'constant' namespace data which do not change and only
         need to be requested once (after onlining that is). When polling use
-        same queueing policy as async_poll_smart to don't overwhelm the cloud mqtt
+        same queueing policy as async_polling_strategy_smart to don't overwhelm the cloud mqtt
         """
-        if not self.next_poll_epoch:
-            await self.parent.async_poll_request_rl(self)
+        if not self.last_poll_epoch:
+            await self.async_polling_strategy_smart()
 
-    async def async_poll_chunked(self):
+    async def async_polling_strategy_chunked(self, /):
         """
         This strategy allows splitting the request (which might lead to a huge response payload)
         into smaller chunks in order to fit into the device response buffer.
         This was historically developed for Hub devices where the number of subdevices might grow huge
         and the response to a full GET request might exceed the device capabilities (see #244 for insights).
-        TODO: we might want to dynamically 'swap' this strategy with async_poll_default
+        TODO: we might want to dynamically 'swap' this strategy with async_polling_strategy_default
         whenever the number of registered parsers is small enough to fit into the device
         response buffer in one go and avoid all of this mess.
         """
@@ -789,13 +779,13 @@ class NamespaceHandler(logging.Loggable):
                     continue
                 except StopIteration:
                     if polling_request_payload:
-                        await device.async_poll_request(self)
+                        await self.async_poll_queue()
                     # no need to flush multiple since the polling loop
                     # will continue with standard handling
                     break
 
             if polling_request_payload:
-                await device.async_poll_request(self)
+                await self.async_poll_queue()
             if device._multiple_requests:
                 # ensure we (eventually) flush multiple requests
                 await device.async_poll_flush()
@@ -818,20 +808,82 @@ class NamespaceHandler(logging.Loggable):
                 )
                 break
 
-    async def async_poll_diagnostic(self):
+    async def async_polling_strategy_ns_all(self, /):
         """
-        This strategy is for namespace polling when diagnostics sensors are detected and
-        installed due to any unknown namespace parsing (see self._parse_undefined_dict).
-        This in turn needs to be removed from polling when diagnostic sensors are disabled.
-        The strategy itself is the same as async_poll_smart.
+        This is a special policy for NS_ALL.
+        It is basically an 'async_poll_default' policy so it kicks-in whenever we poll
+        the state in 'device._async_request_updates' but contrary to 'legacy' behavior
+        where NS_ALL was always polled (unless mqtt active).
+        This will alternate polling NS_ALL to the group of namespaces responsible for
+        the state carried in 'digest'. This is an improvement since NS_ALL, even if carrying
+        the whole state in one query, might be huge (because of the 'time' key) but also because
+        most of its data are pretty static (never or seldom changing) info of the device.
+        This new policy will interleave querying NS_ALL once in a while with smaller direct
+        equivalent queries for the state carried in digest. (If the device doesn't support
+        NS_MULTIPLE, it will likely do more queries though but this is unlikely)
         """
         device = self.parent
-        if device.mqtt_active and self.next_poll_epoch and self.id.has_psh:
+        if device.mqtt_active:
             # on MQTT no need for updates since they're being PUSHed
+            if not self.last_poll_epoch:
+                # just when onlining...
+                await self.async_poll_queue()
             return
 
+        # here we're missing PUSHed updates so we have to poll...
         if device.polling_epoch >= self.next_poll_epoch:
-            await device.async_poll_request_rl(self)
+            # at start or periodically ask for NS_ALL..plain
+            await self.async_poll_queue()
+            return
+
+        # query specific namespaces instead of NS_ALL since we hope this is
+        # better (less overhead/http sessions) together with ns_multiple packing.
+        # Here, we don't query if digest key/namespace hasn't any entity registered
+        # this also prevents querying a somewhat 'malformed' ToggleX reply
+        # appearing in an mrs100 (#447)
+        # TODO: consider refining this one
+        # possible issues are:
+        # Appliance.Control.ToggleX for covers (data maybe provided but useless since the
+        # ToggleX doesn't look like providing any info)
+        # - resulting request being bulkier than using ns_all
+        for nh in device.ns_handlers.values():
+            if nh.digest and nh.polling_strategy and nh.parsers:
+                await nh.polling_strategy(nh)
+
+    async def async_poll_queue(self, /):
+        """Forwards the polling request to the device. This is invoked by the device polling loop
+        through any of the polling strategies. This method will either queue the request for a NS_MULTIPLE query
+        (inside the device polling loop) or directly dispatch the request and handle the response.
+        """
+        device = self.parent
+        self.next_poll_epoch = device.polling_epoch + self.polling_period
+        if (not device.multiple_max) or (
+            self.polling_response_size >= device.device_response_size_max
+        ):
+            # multiple requests are disabled
+            # or this request alone would overflow the device response size limit
+            self.handle(await device.async_request(*self.polling_request))
+            return
+        # estimate the size of the multiple response
+        multiple_response_size = (
+            device._multiple_response_size + self.polling_response_size
+        )
+        if multiple_response_size >= device.device_response_size_max:
+            # this request (together with already previously packed)
+            # would overflow the device response size limit
+            if not device._multiple_requests:
+                # again this request alone would overflow the device response size limit
+                self.handle(await device.async_request(*self.polling_request))
+                return
+            # flush the pending multiple requests
+            await device.async_poll_flush()
+            multiple_response_size = (
+                device._multiple_response_size + self.polling_response_size
+            )
+        device._multiple_requests.append(self)
+        device._multiple_response_size = multiple_response_size
+        if len(device._multiple_requests) >= device.multiple_max:
+            await device.async_poll_flush()
 
     async def async_trace(self, async_request_func: "Device.AsyncRequestFunc", /):
         """
@@ -1033,9 +1085,9 @@ class NamespaceHandler(logging.Loggable):
                         )
 
     HEADER_AVG_SIZE = 300
-    POLLING_CONFIG_DEFAULT = (0, 0, async_poll_default)
+    POLLING_CONFIG_DEFAULT = (0, 0, async_polling_strategy_default)
     POLLING_CONFIG_NONE = (0, 0, None)
-    POLLING_CONFIG_ONCE = (0, 0, async_poll_once)
+    POLLING_CONFIG_ONCE = (0, 0, async_polling_strategy_once)
     POLLING_CONFIG_MAP = {}
 
 

@@ -647,7 +647,7 @@ class EffectLight(Light):
     @override
     def flush_state(self):
         self.handler_light_effect.polling_strategy = (
-            self.handler_light_effect.__class__.async_poll_smart
+            self.handler_light_effect.__class__.async_polling_strategy_smart
             if self.is_on and self.effect
             else None
         )

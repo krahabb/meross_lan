@@ -204,10 +204,10 @@ class ElectricityXSensor(_ElectricitySensor):
             SensorParser.__init__(self, *args, **kwargs)
             # TODO: in 6.x.x we should generalize this mechanism to any ns/device
             try:
-                handler_ch: "ConsumptionHNamespaceHandler" = self.parent.ns_handlers[
+                nh: "ConsumptionHNamespaceHandler" = self.parent.ns_handlers[
                     mn.Appliance_Control_ConsumptionH
                 ]  # type: ignore
-                handler_ch.need_polling(self.index)
+                nh.need_polling(self.index)
             except KeyError:
                 pass
 
@@ -219,12 +219,10 @@ class ElectricityXSensor(_ElectricitySensor):
                 # are effectively instantiated since their list cannot be inferred
                 # by any other means for these devices.
                 try:
-                    handler_ch: (
-                        "ConsumptionHNamespaceHandler"
-                    ) = self.parent.ns_handlers[
+                    nh: "ConsumptionHNamespaceHandler" = self.parent.ns_handlers[
                         mn.Appliance_Control_ConsumptionH
                     ]  # type: ignore
-                    handler_ch.need_polling(self.index)
+                    nh.need_polling(self.index)
                 except KeyError:
                     # we expect ConsumptionH ns handler to be registered when ElextricityX
                     # is used since they go hand in hand. However, better be safe than sorry
@@ -310,7 +308,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
     """
 
     if TYPE_CHECKING:
-        indexToPollType = tuple[float, mn.IndexValue]
+        type indexToPollType = tuple[float, mn.IndexValue]
         """(last_request_epoch, NamespaceParser.index)"""
         _indexes_to_poll: list[indexToPollType]
 
@@ -320,7 +318,9 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         self._indexes_to_poll = []
         NamespaceHandler.__init__(self, ns, device, parser_class=ConsumptionHSensor)
         if len(device.descriptor.channels) == 6:
-            self.polling_strategy = ConsumptionHNamespaceHandler.async_poll_probe
+            self.polling_strategy = (
+                ConsumptionHNamespaceHandler.async_polling_strategy_probe
+            )
         device.enable_check_device_time()
 
     def channel_polling_add(self, index: mn.IndexValue, delay: float = 0, /):
@@ -353,7 +353,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
                     )
                 return
 
-    async def async_poll_probe(self):
+    async def async_polling_strategy_probe(self, /):
         # This poller is mainly used to discover the multiple_response available buffer size
         # since em06 looks like having a way more than our default estimated 2400 (3 * 800) bytes
         # We're then going to try a full poll and see what happens. Also, we're expecting the device
@@ -362,33 +362,27 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
             NamespaceHandler.HEADER_AVG_SIZE + 3 * self.id.payload_item_size
         )
         self.polling_request_payload.clear()
-        await self.parent.async_poll_request(self)
+        await self.async_poll_queue()
         self.polling_request_payload.append({})
         self.polling_response_size = (
             NamespaceHandler.HEADER_AVG_SIZE + self.id.payload_item_size
         )
-        self.polling_strategy = ConsumptionHNamespaceHandler.async_poll_smartchunk
+        self.polling_strategy = (
+            ConsumptionHNamespaceHandler.async_polling_strategy_smartchunk
+        )
 
-    async def async_poll_smartchunk(self):
+    async def async_polling_strategy_smartchunk(self, /):
         """This has a huge ns response payload so we need to optimize polling.
         We're going to just query a single channel per polling cycle."""
         if not self._indexes_to_poll:
             return
-        _poll_epoch, self.polling_request_payload[0] = self._indexes_to_poll[0]
-        device = self.parent
-        epoch = device.polling_epoch
-        if _poll_epoch > epoch:
-            # Insert into the lazypoll_requests ordering by least recently polled
-            insort_right(
-                device._lazypoll_requests, self, key=lambda h: h.last_poll_epoch - epoch
-            )
-        else:
-            await device.async_poll_request_rl(self)
+        self.next_poll_epoch, self.polling_request_payload[0] = self._indexes_to_poll[0]
+        await self.async_polling_strategy_smart()
 
     POLLING_CONFIG_DEFAULT = (
         mlc.PARAM_ENERGY_UPDATE_PERIOD,
         mlc.PARAM_ENERGY_CLOUD_UPDATE_PERIOD,
-        async_poll_smartchunk,
+        async_polling_strategy_smartchunk,
     )
 
 
@@ -409,7 +403,7 @@ class ConsumptionXSensor(
     POLLING_CONFIG_DEFAULT = (
         mlc.PARAM_ENERGY_UPDATE_PERIOD,
         mlc.PARAM_ENERGY_CLOUD_UPDATE_PERIOD,
-        EntityNamespaceMixin.async_poll_smart,
+        EntityNamespaceMixin.async_polling_strategy_smart,
     )
     init_entity_key = "energy"
     _attr_device_class = SensorParser.DeviceClass.ENERGY

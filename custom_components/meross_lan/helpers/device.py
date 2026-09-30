@@ -67,6 +67,15 @@ class DiagnosticHandler(handler.NamespaceHandler):
         if not issubclass(cls, handler.NamespaceParser):
             cls.__slots__ = cls._calc_slots()
 
+    """
+    This strategy is for namespace polling when diagnostics sensors are detected and
+    installed due to any unknown namespace parsing (see self._parse_undefined_dict).
+    This in turn needs to be removed from polling when diagnostic sensors are disabled.
+    """
+    async_polling_strategy_diagnostic = (
+        handler.NamespaceHandler.async_polling_strategy_smart
+    )
+
     @override
     def _handle(self, message: MerossMessage, /):
         device = self.parent
@@ -75,7 +84,9 @@ class DiagnosticHandler(handler.NamespaceHandler):
             # the key_namespace might be wrong so we use another euristic
             ns = self.id
             if not self.polling_strategy:
-                self.polling_strategy = DiagnosticHandler.async_poll_diagnostic
+                self.polling_strategy = (
+                    DiagnosticHandler.async_polling_strategy_diagnostic
+                )
             for _key, _payload in message.payload.items():
                 # since the ns_key might be often the same across different namespaces
                 # we add the last split of the namespace to the extracted payload key
@@ -108,7 +119,9 @@ class DiagnosticHandler(handler.NamespaceHandler):
             # since we're parsing an unknown namespace, our euristic about
             # the key_namespace might be wrong so we use another euristic
             if not self.polling_strategy:
-                self.polling_strategy = DiagnosticHandler.async_poll_diagnostic
+                self.polling_strategy = (
+                    DiagnosticHandler.async_polling_strategy_diagnostic
+                )
             self.parent.parse_undefined_dict(
                 f"{self.id.slug_end}_{self.id.key}",
                 payload,
@@ -823,12 +836,12 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         except AttributeError:
             pass
 
-        for namespace_handler in self.ns_handlers.values():
+        for nh in self.ns_handlers.values():
             if (
-                namespace_handler.polling_strategy
-                is DiagnosticHandler.async_poll_diagnostic
+                nh.polling_strategy
+                is DiagnosticHandler.async_polling_strategy_diagnostic
             ):
-                namespace_handler.polling_strategy = None
+                nh.polling_strategy = None
         await ConfigEntryManager.async_destroy_diagnostic_entities(self)
 
     async def _async_create_diagnostic_entities(self):
@@ -840,19 +853,28 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             abilities = iter(self.descriptor.ability)
             while True:
                 if (
-                    ns_handler := self._trace_ability_next(abilities)
-                ) and not ns_handler.polling_strategy:
+                    nh := self._trace_ability_next(abilities)
+                ) and not nh.polling_strategy:
                     async with self.polling_lock:
                         if not self.is_connected:
                             raise Exception("Device disconnected")
-                        await ns_handler.async_get_safe()
+                        try:
+                            nh.handle(await self.async_request(*nh.polling_request))
+                        except Exception as e:
+                            self.log_exception(
+                                self.WARNING,
+                                e,
+                                "Diagnostic entities %s scan",
+                                nh.id,
+                            )
+
         except asyncio.CancelledError:
             self.log(self.DEBUG, "Diagnostic entities scan cancelled")
             raise
         except StopIteration:
             self.log(self.DEBUG, "Diagnostic entities scan end")
         except Exception as e:
-            self.log_exception(self.WARNING, e, "diagnostic entities scan")
+            self.log_exception(self.WARNING, e, "Diagnostic entities scan")
             raise
 
     @override
@@ -892,10 +914,10 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             # at least until the device fully initialize through
             # self.start()
             if self.is_connected:
-                while not (ns_handler := self._trace_ability_next(abilities)):
+                while not (nh := self._trace_ability_next(abilities)):
                     continue
                 async with self.polling_lock:
-                    await ns_handler.async_trace(self.async_request)
+                    await nh.async_trace(self.async_request)
         except StopIteration:
             self.log(self.DEBUG, "Tracing abilities end")
             return
@@ -942,8 +964,8 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 abilities = iter(self.descriptor.ability)
                 async with self.polling_lock:
                     while http.is_connected and self.is_tracing:
-                        if ns_handler := self._trace_ability_next(abilities):
-                            await ns_handler.async_trace(http.async_request)
+                        if nh := self._trace_ability_next(abilities):
+                            await nh.async_trace(http.async_request)
                 self._trace_data = None
                 return trace_data  # might be truncated because offlining or async shutting trace
             except StopIteration:
@@ -1001,23 +1023,21 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 "mqtt_active": self.mqtt_active,
             },
             "namespace_handlers": {
-                ns_handler.id: {
-                    "last_rx_epoch": ns_handler.last_rx_epoch,
-                    "last_poll_epoch": ns_handler.last_poll_epoch,
-                    "next_poll_epoch": ns_handler.next_poll_epoch,
+                nh.id: {
+                    "last_rx_epoch": nh.last_rx_epoch,
+                    "last_poll_epoch": nh.last_poll_epoch,
+                    "next_poll_epoch": nh.next_poll_epoch,
                     "polling_strategy": (
-                        ns_handler.polling_strategy.__name__
-                        if ns_handler.polling_strategy
-                        else None
+                        nh.polling_strategy and nh.polling_strategy.__name__
                     ),
                     "lastpush": (
-                        OBFUSCATE_DICT(ns_handler.last_rx_push)
-                        if (ns_handler.last_rx_push and self.obfuscate)
-                        else ns_handler.last_rx_push
+                        OBFUSCATE_DICT(nh.last_rx_push)
+                        if self.obfuscate and nh.last_rx_push
+                        else nh.last_rx_push
                     ),
-                    "digest": ns_handler.digest,
+                    "digest": nh.digest,
                 }
-                for ns_handler in self.ns_handlers.values()
+                for nh in self.ns_handlers.values()
             },
             "device_info": (
                 OBFUSCATE_DICT(device_info)
@@ -1319,7 +1339,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             # more 'smart' since we can eventually add a grammar (mn.Namespace)
             # on the fly by inspecting the received message in case the ns is
             # not yet normalized.
-            ns_handler = self.ns_handlers[message.namespace]  # type: ignore
+            nh = self.ns_handlers[message.namespace]  # type: ignore
         except KeyError:
             # we don't have an handler in place and this is typically due to
             # PUSHES of unknown/unmanaged namespaces
@@ -1337,13 +1357,13 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             # here the namespace might be unknown to our definitions (mn.Namespace)
             # so we try, in case, to build a new one with good presets
             if namespace in self.NAMESPACE_IGNORE:
-                ns_handler = handler.VoidHandler(
+                nh = handler.VoidHandler(
                     mn.NAMESPACES[namespace],
                     self,
                     config=mlc.POLLING_CONFIG_DIAGNOSTIC,
                 )
             else:
-                ns_handler = DiagnosticHandler(
+                nh = DiagnosticHandler(
                     mn.NAMESPACES.get(namespace)
                     or mn.Namespace.from_message(namespace, method, message.payload),
                     self,
@@ -1353,9 +1373,9 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         if method == mc.METHOD_PUSH:
             # we're saving for diagnostic purposes so we have knowledge of
             # which data the device pushes asynchronously
-            ns_handler.last_rx_push = message.payload
+            nh.last_rx_push = message.payload
 
-        ns_handler.handle_response(message)
+        nh.handle(message, False)
 
     def _handle_Appliance_Control_Upgrade(self, message: MerossMessage, /):
         try:
