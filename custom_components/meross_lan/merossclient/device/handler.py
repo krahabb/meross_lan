@@ -462,18 +462,6 @@ class NamespaceHandler(logging.Loggable):
             self.DEBUG, "Handler undefined (message:%s)", _message=msg, timeout=14400
         )
 
-    def _parse(self, payload, /):
-        """Default ParserFunc automatically installed when parsing a message for which no indexed parser is registered.
-        The payload is typically an 'indexed' item payload scanned by handlers like _handle_channel_list or _handle_subid.
-        This is a fallback for unexpected channels/subdevices and is useful for logging purposes.
-        """
-        self.log(
-            self.DEBUG,
-            "Parser undefined (payload: %s)",
-            _payload=payload,
-            timeout=14400,
-        )
-
     def _handle_missing_parser(self, index: mn.IndexValue, payload: "JsonMapping", /):
         if self.parser_class:
             parser = self.parser_class(
@@ -483,12 +471,22 @@ class NamespaceHandler(logging.Loggable):
                 index=index,
             )
             self.register_parser(parser)
-        else:
-            parser = self.parent._handle_missing_parser(self, index, payload)
-        try:
-            parser(payload)
-        except Exception as e:
-            self.log_parser_exception(e, payload)
+            try:
+                parser(payload)
+            except Exception as e:
+                self.log_parser_exception(e, payload)
+            return
+
+        if self.parent._handle_missing_parser(self, index, payload):
+            return
+
+        self.log(
+            self.DEBUG,
+            "Parser undefined (index: %s, payload: %s)",
+            index,
+            _payload=payload,
+            timeout=14400,
+        )
 
     def _handle_missing_subdevice(
         self, ke: KeyError, payload: "JsonMapping", subdevice_id: str, /
@@ -780,6 +778,13 @@ class NamespaceHandler(logging.Loggable):
                 except StopIteration:
                     if polling_request_payload:
                         await self.async_poll_queue()
+                    else:
+                        # exit path when no indexes to poll: ensure the nh state
+                        # is as if it were polled
+                        self.last_poll_epoch = device.polling_epoch
+                        self.next_poll_epoch = (
+                            device.polling_epoch + self.polling_period
+                        )
                     # no need to flush multiple since the polling loop
                     # will continue with standard handling
                     break
@@ -1092,10 +1097,12 @@ class NamespaceHandler(logging.Loggable):
 
 
 class VoidHandler(NamespaceHandler):
-    """Utility class to manage namespaces which should be 'ignored' i.e. we're aware
-    of their existence but we don't process them at the device level. This class in turn
-    just provides an empty handler and so suppresses any log too (for unknown namespaces)
-    done by the base default handling."""
+    """Utility class to manage namespaces which should be 'ignored' i.e. we're aware of their
+    existence but we don't process them at the device level. This class in turn just
+    provides an empty handler and so suppresses any log done by the base default handling.
+    """
+
+    POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_NONE
 
     @override
     def _handle(self, message: "MerossMessage", /):

@@ -80,15 +80,11 @@ class PhysicalDevice(AbstractClient):
 
     def _handle_missing_parser(
         self, nh: NamespaceHandler, index: mn.IndexValue, payload: "mt.JsonMapping", /
-    ):
+    ) -> bool:
         """This is called by a NamespaceHandler when it receives a message
         addressed to this device but no parser has been registered.
-        The default here is to install a placeholder parser so that the next time the routing
-        pipe will not except but we can refine this in more funny ways depending on context.
         """
-        nh.parsers[index] = nh._parse
-        nh.polling_request_add_index(index)
-        return nh._parse
+        return False
 
 
 class Device(PhysicalDevice):
@@ -511,12 +507,6 @@ class Device(PhysicalDevice):
             return self.ns_handlers[ns]
         except KeyError:
             return NamespaceHandler(ns, self)
-
-    def get_handler_by_name(self, namespace: str, /):
-        try:
-            return self.ns_handlers[namespace]  # type: ignore
-        except KeyError:
-            return NamespaceHandler(mn.NAMESPACES[namespace], self)
 
     def register_parser_ex(self, parser: NamespaceParser, *nss: "mn.Namespace"):
         """Register a parser for multiple namespaces. Abilities are checked for namespaces availability."""

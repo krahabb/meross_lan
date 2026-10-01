@@ -17,7 +17,7 @@ from ..merossclient import (
 )
 from ..merossclient.client import AbstractClient, Direction, Transport
 from ..merossclient.client.http import HttpClient
-from ..merossclient.device import handler
+from ..merossclient.device.handler import NamespaceHandler, NamespaceParser, VoidHandler
 from ..merossclient.exceptions import MerossError
 from ..merossclient.obfuscate import OBFUSCATE_DICT
 from ..merossclient.protocol import const as mc, namespaces as mn
@@ -50,85 +50,6 @@ if TYPE_CHECKING:
     from .entity import Entity, ParserEntity
     from .meross_profile import DeviceInfoType
     from .mqtt_profile import MQTTConnection, MQTTProfile
-
-
-class DiagnosticHandler(handler.NamespaceHandler):
-
-    if TYPE_CHECKING:
-        """Configuration to be used for unknown/unmanaged namespaces."""
-        parent: Final[Device]  # type: ignore[override]
-        parser_class: type[ParserEntity] | None  # type: ignore[override]
-
-    def __init_subclass__(cls):
-        super().__init_subclass__()
-        # Since NamespaceHandler cannot be slotted itself because of mixin-ing with ParserEntity
-        # in EntityNamespaceMixin we try this trick to provide automatic slotting for all the subclasses
-        # which are not mixed with parsers and which don't define their own __slots__.
-        if not issubclass(cls, handler.NamespaceParser):
-            cls.__slots__ = cls._calc_slots()
-
-    """
-    This strategy is for namespace polling when diagnostics sensors are detected and
-    installed due to any unknown namespace parsing (see self._parse_undefined_dict).
-    This in turn needs to be removed from polling when diagnostic sensors are disabled.
-    """
-    async_polling_strategy_diagnostic = (
-        handler.NamespaceHandler.async_polling_strategy_smart
-    )
-
-    @override
-    def _handle(self, message: MerossMessage, /):
-        device = self.parent
-        if device.create_diagnostic_entities:
-            # since we're parsing an unknown namespace, our euristic about
-            # the key_namespace might be wrong so we use another euristic
-            ns = self.id
-            if not self.polling_strategy:
-                self.polling_strategy = (
-                    DiagnosticHandler.async_polling_strategy_diagnostic
-                )
-            for _key, _payload in message.payload.items():
-                # since the ns_key might be often the same across different namespaces
-                # we add the last split of the namespace to the extracted payload key
-                if type(_payload) is dict:
-                    device.parse_undefined_dict(
-                        f"{ns.slug_end}_{_key}",
-                        _payload,
-                        self.index_type.index(_payload),
-                    )
-                elif type(_payload) is list:
-                    _key = f"{ns.slug_end}_{_key}"
-                    for __payload in _payload:
-                        device.parse_undefined_dict(
-                            _key, __payload, self.index_type.index(__payload)
-                        )
-                else:
-                    # should we diagnostic scalar values in root payload ?
-                    pass
-
-        else:
-            super()._handle(message)
-
-    @override
-    def _parse(self, payload, /):
-        """Default ParserFunc automatically installed when parsing a message for which no indexed parser is registered.
-        The payload is typically an 'indexed' item payload scanned by handlers like _handle_channel_list or _handle_subid.
-        This is a fallback for unexpected channels/subdevices and is useful for logging purposes.
-        """
-        if self.parent.create_diagnostic_entities:
-            # since we're parsing an unknown namespace, our euristic about
-            # the key_namespace might be wrong so we use another euristic
-            if not self.polling_strategy:
-                self.polling_strategy = (
-                    DiagnosticHandler.async_polling_strategy_diagnostic
-                )
-            self.parent.parse_undefined_dict(
-                f"{self.id.slug_end}_{self.id.key}",
-                payload,
-                self.index_type.index(payload),
-            )
-        else:
-            super()._parse(payload)
 
 
 class BaseDevice(device.PhysicalDevice):
@@ -300,11 +221,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         http: Final[Http | None]  # type: ignore[override]
         mqtt: Final[MQTTConnection.Client | None]  # type: ignore[override]
 
-        NAMESPACE_IGNORE: ClassVar[tuple[str, ...]]
-        """ This is a set of namespaces we don't use and for which we don't want to have any diagnostic
-        entity/log as well. These might be published by devices and enter our MQTT async processing
-        generating 'default' handlers which will in turn partecipate in logging/diagnostics.
-        That's why we use a 'void' handler for these namespaces, which will just ignore the messages."""
         TRACE_ABILITY_EXCLUDE: ClassVar[tuple[str, ...]]
         """ When tracing we enumerate appliance abilities to get insights on payload structures
         this list will be excluded from enumeration since it's redundant/exposing sensitive info
@@ -326,8 +242,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         device_entries_info: dict[int, Entity.DeviceInfo]  # dynamic
         profile: Final[MQTTProfile | None]
 
-        _async_create_diagnostic_entities_task: Task  # dynamic
-
         # entities
         sensor_protocol: ProtocolSensor
 
@@ -348,9 +262,9 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
     # For example ms600/ms130 need to post-configure Sensor.LatestX handler
     # that need to be in place in order to be correctly configured.
     NAMESPACE_INIT = {
-        mn.Appliance_Control_Upgrade: handler.NamespaceHandler,
-        mn.Appliance_Mcu_Firmware: handler.NamespaceHandler,
-        mn.Appliance_Mcu_Hp110_Firmware: handler.NamespaceHandler,
+        mn.Appliance_Control_Upgrade: NamespaceHandler,
+        mn.Appliance_Mcu_Firmware: NamespaceHandler,
+        mn.Appliance_Mcu_Hp110_Firmware: NamespaceHandler,
         mn.Appliance_Control_Sensor_Latest: (".devices.misc", "SensorLatestParser"),
         mn.Appliance_Control_Sensor_LatestX: (".devices.misc", "SensorLatestXParser"),
         mn.Appliance_Control_Toggle: (".switch", "Toggle"),
@@ -358,11 +272,13 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         # like .Light or .Fan
         mn.Appliance_Control_ToggleX: (".switch", "ToggleX"),
         mn.Appliance_Config_DeviceCfg: (".devices.misc", "DeviceCfgParser"),
+        mn.Appliance_Config_Info: VoidHandler,
         mn.Appliance_Config_OverTemp: (".devices.mss", "OverTempEnableSwitch"),
         mn.Appliance_Config_Alarm: (".siren", "ConfigAlarm"),
         mn.Appliance_Control_Alarm: (".siren", "ControlAlarm"),
         mn.Appliance_Control_Electricity: (".devices.mss", "ElectricitySensor"),
         mn.Appliance_Control_ElectricityX: (".devices.mss", "ElectricityXSensor"),
+        mn.Appliance_Control_ConsumptionConfig: VoidHandler,
         mn.Appliance_Control_ConsumptionH: (
             ".devices.mss",
             "ConsumptionHNamespaceHandler",
@@ -389,6 +305,10 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         ),
         mn.Appliance_Control_Spray: (".devices.spray", "Spray"),
         mn.Appliance_Control_TempUnit: (".devices.thermostat", "MtsTempUnit"),
+        mn.Appliance_Control_Timer: VoidHandler,
+        mn.Appliance_Control_TimerX: VoidHandler,
+        mn.Appliance_Control_Trigger: VoidHandler,
+        mn.Appliance_Control_TriggerX: VoidHandler,
         mn.thermostat.Appliance_Control_Thermostat_Mode: (
             ".devices.thermostat.mts200",
             "Mts200Climate",
@@ -446,21 +366,12 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             ".devices.rollershutter",
             "RollerShutterAdjustSwitch",
         ),
+        mn.Appliance_System_Clock: VoidHandler,
         mn.Appliance_System_DNDMode: (".light", "DNDLight"),
+        mn.Appliance_System_Online: VoidHandler,
+        mn.Appliance_System_Report: VoidHandler,
         mn.Appliance_System_Runtime: (".sensor", "SignalStrengthSensor"),
     }
-    NAMESPACE_IGNORE = (
-        mn.Appliance_Config_Info,
-        mn.Appliance_Control_Bind,
-        mn.Appliance_Control_ConsumptionConfig,
-        mn.Appliance_Control_Timer,
-        mn.Appliance_Control_TimerX,
-        mn.Appliance_Control_Trigger,
-        mn.Appliance_Control_TriggerX,
-        mn.Appliance_System_Clock,
-        mn.Appliance_System_Online,
-        mn.Appliance_System_Report,
-    )
     TRACE_ABILITY_EXCLUDE = (
         mn.Appliance_System_Ability,
         mn.Appliance_System_All,
@@ -479,6 +390,13 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         mn.Appliance_Control_Unbind,
     )
 
+    """
+    This strategy is for namespace polling when diagnostics sensors are detected and
+    installed due to any unknown namespace parsing (see self._parse_undefined_dict).
+    This in turn needs to be removed from polling when diagnostic sensors are disabled.
+    """
+    async_polling_strategy_diagnostic = NamespaceHandler.async_polling_strategy_smart
+
     init_is_connected = False
 
     __slots__ = device.Device._calc_slots(
@@ -490,7 +408,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         "device_timedelta_log_epoch",
         "device_timedelta_config_epoch",
         "_profile",
-        "_async_create_diagnostic_entities_task",
         "sensor_protocol",
     )
 
@@ -825,57 +742,53 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         self._update_config()
         self.start()
 
-    async def async_destroy_diagnostic_entities(self, /):
+    async def async_create_diagnostic_entities(self, /):
+        abilities = iter(self.descriptor.ability)
         try:
-            if self._async_create_diagnostic_entities_task.cancel():
-                try:
-                    await self._async_create_diagnostic_entities_task
-                except (asyncio.CancelledError, Exception):
-                    pass
-            del self._async_create_diagnostic_entities_task
-        except AttributeError:
+            # This is expected to run when polling is not in place
+            while True:
+                if not (nh := self._trace_ability_next(abilities)):
+                    continue
+                if nh.handler.__func__ is NamespaceHandler._handle:
+                    nh.handler = self._handle_diagnostic_handler
+                    if not nh.polling_strategy:
+                        nh.polling_strategy = Device.async_polling_strategy_diagnostic
+        except StopIteration:
             pass
 
+        await ConfigEntryManager.async_create_diagnostic_entities(self)
+
+    async def async_destroy_diagnostic_entities(self, /):
         for nh in self.ns_handlers.values():
-            if (
-                nh.polling_strategy
-                is DiagnosticHandler.async_polling_strategy_diagnostic
-            ):
-                nh.polling_strategy = None
+            if nh.handler is self._handle_diagnostic_handler:
+                nh.handler = nh._handle
+                if nh.polling_strategy is Device.async_polling_strategy_diagnostic:
+                    nh.polling_strategy = None
         await ConfigEntryManager.async_destroy_diagnostic_entities(self)
 
-    async def _async_create_diagnostic_entities(self):
-        # when create_diagnostic_entities is True, we'll schedule this task
-        # that will try at its best to stay alive and finish the abilities scan
-        # pausing now and then when offline and/or to not interleave with polling.
-        self.log(self.DEBUG, "Diagnostic entities scan begin")
-        try:
-            abilities = iter(self.descriptor.ability)
-            while True:
-                if (
-                    nh := self._trace_ability_next(abilities)
-                ) and not nh.polling_strategy:
-                    async with self.polling_lock:
-                        if not self.is_connected:
-                            raise Exception("Device disconnected")
-                        try:
-                            nh.handle(await self.async_request(*nh.polling_request))
-                        except Exception as e:
-                            self.log_exception(
-                                self.WARNING,
-                                e,
-                                "Diagnostic entities %s scan",
-                                nh.id,
-                            )
-
-        except asyncio.CancelledError:
-            self.log(self.DEBUG, "Diagnostic entities scan cancelled")
-            raise
-        except StopIteration:
-            self.log(self.DEBUG, "Diagnostic entities scan end")
-        except Exception as e:
-            self.log_exception(self.WARNING, e, "Diagnostic entities scan")
-            raise
+    def _handle_diagnostic_handler(self, message: "MerossMessage", /):
+        # since we're parsing an unknown namespace, our euristic about
+        # the key_namespace might be wrong so we use another euristic
+        ns = mn.NAMESPACES[message.namespace]
+        nh = self.ns_handlers[ns]
+        for _key, _payload in message.payload.items():
+            # since the ns_key might be often the same across different namespaces
+            # we add the last split of the namespace to the extracted payload key
+            if type(_payload) is dict:
+                self.parse_undefined_dict(
+                    f"{ns.slug_end}_{_key}",
+                    _payload,
+                    nh.index_type.index(_payload),
+                )
+            elif type(_payload) is list:
+                _key = f"{ns.slug_end}_{_key}"
+                for __payload in _payload:
+                    self.parse_undefined_dict(
+                        _key, __payload, nh.index_type.index(__payload)
+                    )
+            else:
+                # should we diagnostic scalar values in root payload ?
+                pass
 
     @override
     def get_logger_name(self) -> str:
@@ -899,12 +812,13 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         ability = next(abilities)
         if ability in self.TRACE_ABILITY_EXCLUDE:
             return None
-        ns = mn.NAMESPACES.get(ability)
-        if not ns:  # unknown namespace..setup generic handler
-            return self.get_handler_by_name(ability)
-        if ns.can_query:
-            return self.get_handler(ns)
-        return None
+        try:
+            nh = self.ns_handlers[ability]  # type: ignore
+            return nh.id.can_query and nh
+        except KeyError:
+            # unmanaged/unknown ability
+            ns = mn.NAMESPACES[ability]
+            return ns.can_query and NamespaceHandler(ns, self)
 
     async def _async_trace_ability(self, abilities: "Iterator[str]"):
         try:
@@ -1065,22 +979,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             self.schedule_callback(
                 self.PARAM_CHECK_DEVICE_TIME_START_DELAY, self._check_device_time
             )
-        if self.config.get(mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES):
-            try:
-                self._async_create_diagnostic_entities_task.result()
-                # no exception..it was correctly finished..nothing to do
-            except (
-                AttributeError,
-                asyncio.CancelledError,
-                Exception,
-                asyncio.InvalidStateError,
-            ) as e:
-                if type(e) is asyncio.InvalidStateError:
-                    self._async_create_diagnostic_entities_task.cancel()
-                self._async_create_diagnostic_entities_task = self.create_task(
-                    self._async_create_diagnostic_entities(),
-                    "async_create_diagnostic_entities",
-                )
 
     @override
     def on_disconnect(self, /):
@@ -1188,7 +1086,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
     @override
     def _handle_missing_parser(
         self,
-        nh: handler.NamespaceHandler,
+        nh: NamespaceHandler,
         index: mn.IndexValue,
         payload: "mt.JsonMapping",
         /,
@@ -1197,6 +1095,8 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         # diagnostic_parser_class so that the handler itself knows how to manage this
         # without the indirection to the device.
         if self.create_diagnostic_entities:
+            """
+            This code would be a concept for DiagnosticParser generalization
             from ..sensor import DiagnosticParser
 
             parser = DiagnosticParser(
@@ -1206,11 +1106,15 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 index=index,
             )
             nh.register_parser(parser)
-            return parser
-        else:
-            nh.parsers[index] = nh._parse
-            nh.polling_request_add_index(index)
-            return nh._parse
+            parser(payload)
+            """
+            self.parse_undefined_dict(
+                f"{nh.id.slug_end}_{nh.id.key}",
+                payload,
+                index,
+            )
+            return True
+        return False
 
     # interface: device.Device
     @override
@@ -1356,19 +1260,12 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 return
             # here the namespace might be unknown to our definitions (mn.Namespace)
             # so we try, in case, to build a new one with good presets
-            if namespace in self.NAMESPACE_IGNORE:
-                nh = handler.VoidHandler(
-                    mn.NAMESPACES[namespace],
-                    self,
-                    config=mlc.POLLING_CONFIG_DIAGNOSTIC,
-                )
-            else:
-                nh = DiagnosticHandler(
-                    mn.NAMESPACES.get(namespace)
-                    or mn.Namespace.from_message(namespace, method, message.payload),
-                    self,
-                    config=mlc.POLLING_CONFIG_DIAGNOSTIC,
-                )
+            nh = NamespaceHandler(
+                mn.NAMESPACES.get(namespace)
+                or mn.Namespace.from_message(namespace, method, message.payload),
+                self,
+                config=mlc.POLLING_CONFIG_DIAGNOSTIC,
+            )
 
         if method == mc.METHOD_PUSH:
             # we're saving for diagnostic purposes so we have knowledge of
@@ -1605,7 +1502,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             )
 
     def parse_undefined_dict(
-        self, key_parent: str, payload: dict, index: mn.IndexValue, /
+        self, key_parent: str, payload: "mt.JsonMapping", index: mn.IndexValue, /
     ):
         device_entities = self.entities
         excluded = (

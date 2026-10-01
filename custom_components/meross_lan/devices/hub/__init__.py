@@ -6,7 +6,7 @@ from ... import const as mlc
 from ...button import Button
 from ...helpers import device as mld, entity as mle
 from ...merossclient import SubDeviceDescriptor, async_import_module, device
-from ...merossclient.device.handler import NamespaceHandler
+from ...merossclient.device.handler import NamespaceHandler, VoidHandler
 from ...merossclient.protocol import const as mc, namespaces as mn
 from ...merossclient.protocol.namespaces import hub as mn_h
 from ...sensor import SensorParser
@@ -76,12 +76,10 @@ class Hub(mld.Device):
     mld.Device.NAMESPACE_INIT.update(
         {
             mn_h.Appliance_Digest_Hub: ApplianceDigestHubHandler,
+            mn_h.Appliance_Hub_ExtraInfo: VoidHandler,
+            mn_h.Appliance_Hub_SubdeviceList: VoidHandler,
             mn_h.Appliance_Hub_PairSubDev: namespace_init_appliance_hub_pairsubdev,
         }
-    )
-    mld.Device.NAMESPACE_IGNORE = mld.Device.NAMESPACE_IGNORE + (
-        mn_h.Appliance_Hub_ExtraInfo,
-        mn_h.Appliance_Hub_SubdeviceList,
     )
     mld.Device.TRACE_ABILITY_EXCLUDE = mld.Device.TRACE_ABILITY_EXCLUDE + (
         mn_h.Appliance_Hub_Exception,
