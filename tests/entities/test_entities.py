@@ -127,9 +127,6 @@ async def test_entities(
             EntityComponentTest.digest = digest = descriptor.digest
             ishub = mc.KEY_HUB in digest
 
-            if False and not ishub:
-                continue
-
             unexpected: list[str] = []
             unavailable: list[str] = []
             EntityComponentTest.expected_entity_types = expected = (
@@ -194,6 +191,7 @@ async def test_entities(
                         print(
                             f"Expected entities: {[_entity_type.__name__ for _entity_type in expected]}"
                         )
+                    device_context.dump_ns_handlers()
                     device = device_context.device
                     await _async_test_entities(
                         device.entities_iterable, expected, unexpected, unavailable

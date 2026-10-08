@@ -2,7 +2,7 @@ from bisect import insort_right
 from functools import cached_property
 from typing import TYPE_CHECKING, final, override
 
-from .. import extract_dict_payloads, logging, merge_dicts
+from .. import async_import_module, extract_dict_payloads, logging, merge_dicts
 from ..protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
@@ -15,6 +15,7 @@ if TYPE_CHECKING:
         Iterable,
         Mapping,
         NotRequired,
+        Protocol,
         Self,
         Unpack,
     )
@@ -69,11 +70,6 @@ class NamespaceHandler(logging.Loggable):
         at NamespaceHandler initialization time and no entry is found in POLLING_CONFIG_MAP."""
         POLLING_CONFIG_NONE: Final[PollingConfigType]
         """Polling configuration representing no polling. This is used to disable polling for a namespace."""
-        POLLING_CONFIG_ONCE: Final[PollingConfigType]
-        """Common polling configuration for namespaces carrying fixed info."""
-        POLLING_CONFIG_MAP: Final[dict[mn.Namespace, PollingConfigType]]
-        """Centralized polling config parameters for namespaces. This is used if no config is being passed
-        at NamespaceHandler initialization time."""
 
         id: Final[mn.Namespace]  # type: ignore[override]
         parent: Final[Device]  # type: ignore[override]
@@ -162,6 +158,9 @@ class NamespaceHandler(logging.Loggable):
         try:
             self.parser_class = parser_class = kwargs.pop("parser_class")
         except KeyError:
+            assert (
+                "channels" not in kwargs
+            ), "Cannot specify channels without parser_class"
             self.parser_class = None
             # by default we calculate 1 item/channel per payload but we should
             # refine this whenever needed
@@ -182,18 +181,6 @@ class NamespaceHandler(logging.Loggable):
                         self.handler = getattr(
                             parent, f"_handle_{id.replace('.', '_')}", self._handle
                         )
-            try:
-                (
-                    self.polling_period,
-                    self.polling_period_cloud,
-                    self.polling_strategy,
-                ) = kwargs.pop("config")
-            except KeyError:
-                (
-                    self.polling_period,
-                    self.polling_period_cloud,
-                    self.polling_strategy,
-                ) = self.POLLING_CONFIG_MAP.get(id, self.POLLING_CONFIG_DEFAULT)
         else:
             assert (
                 "handler" not in kwargs
@@ -216,32 +203,20 @@ class NamespaceHandler(logging.Loggable):
                 parser._namespace_registered((self, index))
                 # polling_request_payload will be eventually setup
                 # by polling_request_configure later on
-            try:
-                (
-                    self.polling_period,
-                    self.polling_period_cloud,
-                    self.polling_strategy,
-                ) = kwargs.pop("config")
-            except KeyError:
-                try:
-                    (
-                        self.polling_period,
-                        self.polling_period_cloud,
-                        self.polling_strategy,
-                    ) = parser_class.POLLING_CONFIG_DEFAULT
-                except AttributeError:
-                    (
-                        self.polling_period,
-                        self.polling_period_cloud,
-                        self.polling_strategy,
-                    ) = self.POLLING_CONFIG_MAP.get(id, self.POLLING_CONFIG_DEFAULT)
             self.polling_response_size = (
                 NamespaceHandler.HEADER_AVG_SIZE
                 + len(self.parsers) * id.payload_item_size
             )
+
+        (
+            self.polling_period,
+            self.polling_period_cloud,
+            self.polling_strategy,
+        ) = (
+            kwargs.pop("config", None) or self.NS_CONTENT_POLLING_CONFIG_MAP[id.content]
+        )
         self.last_rx_epoch = self.last_poll_epoch = self.next_poll_epoch = 0.0
         self.last_rx_push = None
-
         super().__init__(id, parent, **kwargs)
         self.polling_request_configure(
             mn.PayloadType.LIST_IDX_STRICT
@@ -454,12 +429,15 @@ class NamespaceHandler(logging.Loggable):
         except Exception as e:
             self.log_parser_exception(e, payload)
 
-    def _handle(self, msg: "MerossMessage", /):
+    def _handle(self, message: "MerossMessage", /):
         """Default handler for a namespace message. This implementation works as a stub and is being invoked if no
         better handler has been installed. Handler functions can be installed per instance at construction or
         by overriding this method definition in custom NamespaceHandlers."""
         self.log(
-            self.DEBUG, "Handler undefined (message:%s)", _message=msg, timeout=14400
+            self.DEBUG,
+            "Handler undefined (message:%s)",
+            _message=message,
+            timeout=14400,
         )
 
     def _handle_missing_parser(self, index: mn.IndexValue, payload: "JsonMapping", /):
@@ -1091,22 +1069,111 @@ class NamespaceHandler(logging.Loggable):
 
     HEADER_AVG_SIZE = 300
     POLLING_CONFIG_DEFAULT = (0, 0, async_polling_strategy_default)
-    POLLING_CONFIG_NONE = (0, 0, None)
-    POLLING_CONFIG_ONCE = (0, 0, async_polling_strategy_once)
-    POLLING_CONFIG_MAP = {}
+    POLLING_CONFIG_NONE = (300, 1200, None)
+    # TODO: rename all these global *MAP* symbols to xxxx_MAP_yyyy ?
+    NS_CONTENT_POLLING_CONFIG_MAP = {
+        mn.Content.UNKNOWN: POLLING_CONFIG_NONE,
+        mn.Content.CONSTANT: (0, 0, async_polling_strategy_once),
+        mn.Content.INFO: (600, 1800, async_polling_strategy_smart),
+        mn.Content.CONFIG: (300, 1200, async_polling_strategy_smart),
+        mn.Content.CONTROL: POLLING_CONFIG_DEFAULT,
+        mn.Content.STATE: POLLING_CONFIG_DEFAULT,
+        mn.Content.SENSOR_FAST: (0, 180, async_polling_strategy_smart),
+        mn.Content.SENSOR_SLOW: (300, 600, async_polling_strategy_smart),
+        mn.Content.HISTORY: (300, 1800, async_polling_strategy_smart),
+    }
 
+    class Factory:
+        """NamespaceHandler factory class. This is used to configure the initialization of a namespace handler
+        in a reusable way and installed in the Device.NAMESPACE_INIT map as a way to configure namespaces.
+        """
 
-class VoidHandler(NamespaceHandler):
-    """Utility class to manage namespaces which should be 'ignored' i.e. we're aware of their
-    existence but we don't process them at the device level. This class in turn just
-    provides an empty handler and so suppresses any log done by the base default handling.
-    """
+        if TYPE_CHECKING:
 
-    POLLING_CONFIG_DEFAULT = NamespaceHandler.POLLING_CONFIG_NONE
+            class InitFunc[D: Device](Protocol):
+                def __call__(
+                    self,
+                    ns: mn.Namespace,
+                    device: D,
+                    /,
+                    **kwargs: Unpack[NamespaceHandler.Args],
+                ) -> Any: ...
 
-    @override
-    def _handle(self, message: "MerossMessage", /):
-        pass
+            initializer: Final[str]
+            """Function used as factory to initialize a NamespaceHandler instance for a given namespace.
+            This could either be a NamespaceHandler class (or derived) or a plain function which will be
+            invoked when the device needs to build the NamespaceHandler for a given namespace in its abilities.
+            At definition time we could pass a string with the module path and function name which will be
+            resolved at runtime when the async_init is called."""
+            auto: Final[bool]
+            """If True, the Device.async_init method will automatically register the NamespaceHandler for the given namespace
+            on initial loading (if the namespace is listed in device abilities).
+            If False, the handler will only be initialized later when eventually needed."""
+            kwargs: Final[NamespaceHandler.Args]
+
+            build: InitFunc
+
+        __slots__ = (
+            "initializer",
+            "auto",
+            "kwargs",
+            "build",
+        )
+
+        def __init__(
+            self,
+            initializer: "InitFunc | str",
+            auto: bool = True,
+            kwargs: "NamespaceHandler.Args" = {},  # type: ignore
+            /,
+        ):
+            self.auto = auto
+            self.kwargs = kwargs
+            if type(initializer) is str:
+                self.initializer = initializer
+            else:
+                self.initializer = initializer.__name__  # type: ignore
+                self._init_build(initializer, kwargs)  # type: ignore
+
+        def _init_build(self, init_func: "InitFunc", kwargs: "NamespaceHandler.Args"):
+            if kwargs:
+                self.build = lambda ns, device, **extra: init_func(
+                    ns, device, **(kwargs | extra)  # type: ignore
+                )
+            else:
+                self.build = init_func
+
+        async def async_build(self, ns: mn.Namespace, device: "Device", /):
+            try:
+                self.build(ns, device)
+            except AttributeError:
+                if hasattr(self, "build"):
+                    raise
+                try:
+                    module, functor = self.initializer.rsplit(".", 1)
+                    init_func = getattr(
+                        await async_import_module(
+                            module, device.NAMESPACE_INIT_PACKAGE
+                        ),
+                        functor,
+                    )
+                except Exception as exception:
+                    device.log_exception(
+                        device.WARNING,
+                        exception,
+                        "loading namespace initializer for %s",
+                        ns,
+                    )
+                    init_func = NamespaceHandler
+                else:
+                    try:
+                        # Check if we're looking up a Parser class instead of a function
+                        # and get the namespace_init static method
+                        init_func = init_func.namespace_init
+                    except AttributeError:
+                        pass
+                self._init_build(init_func, self.kwargs)
+                init_func(ns, device, **self.kwargs)
 
 
 class NamespaceParser(logging.Loggable):
@@ -1148,9 +1215,10 @@ class NamespaceParser(logging.Loggable):
                 parser(payload)
 
     if TYPE_CHECKING:
-        POLLING_CONFIG_DEFAULT: ClassVar[PollingConfigType]
-        """Optional class attribute used when this class is registered as 'parser_class' in a NamespaceHandler or
-        when mixed-in with NamespaceHandler like in ParserHandler specializations."""
+        HANDLER_CHANNELS: ClassVar[tuple]
+        """Optional class attribute providing a static pre-defined set of channels to be used when initializing
+        the NamespaceHandler parser(s). When not specified, the code will default to all those as
+        computed by the device Descriptor."""
         parent: Final[Device]  # type: ignore[override]
         init_ns: ClassVar[mn.Namespace]
         """Class default used to initialize the 'ns' instance attribute."""
@@ -1257,11 +1325,22 @@ class NamespaceParser(logging.Loggable):
         )
 
     @classmethod
-    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        """Helper to register a specialized entity class to the proper namespace.
-        This is going to be used on Device initialization for various entities sharing
-        common semantics in namespace parsing/handling."""
-        NamespaceHandler(ns, device, parser_class=cls)
+    def namespace_init(
+        cls,
+        ns: mn.Namespace,
+        device: "Device",
+        /,
+        **kwargs: "Unpack[NamespaceHandler.Args]",
+    ):
+        """Helper to register a specialized entity class to the proper namespace handler providing the class itself
+        as the 'parser_class'."""
+        kwargs["parser_class"] = cls
+        if "channels" not in kwargs:
+            try:
+                kwargs["channels"] = cls.HANDLER_CHANNELS
+            except AttributeError:
+                pass
+        return NamespaceHandler(ns, device, **kwargs)
 
 
 class ValueParser(NamespaceParser):
@@ -1596,6 +1675,7 @@ class ParserHandler(NamespaceParser, NamespaceHandler):
     carrying just one data-point so that the whole handling/parsing is just a matter of processing a single key value.
     In case of multiple keys, we can mixin a MappingParser (see MappingParserHandler)
     so that multiple keys could be automatically parsed.
+    TODO: remove this design concept (handler+parser) since it is rather ugly
     """
 
     if TYPE_CHECKING:
@@ -1610,9 +1690,15 @@ class ParserHandler(NamespaceParser, NamespaceHandler):
 
     @classmethod
     @override
-    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
+    def namespace_init(
+        cls,
+        ns: mn.Namespace,
+        device: "Device",
+        /,
+        **kwargs: "Unpack[NamespaceHandler.Args]",
+    ):
         """The factory method will create the Handler/Parser combo as a single mixed-in object."""
-        return cls(ns, device, ns=ns)
+        return cls(ns, device, **kwargs, ns=ns)
 
     @override
     def _handle(self, message: "MerossMessage", /):
@@ -1626,6 +1712,7 @@ class ParserHandler(NamespaceParser, NamespaceHandler):
 class MappingParserHandler(MappingParser, ParserHandler):
     """A more specialized ParserHandler which is also a MappingParser. This is intended to be used where
     the namespace is not indexed but carries multiple data-points which can be easily parsed through a MappingParser.
+    TODO: remove this design concept (handler+parser) since it is rather ugly
     """
 
     if TYPE_CHECKING:

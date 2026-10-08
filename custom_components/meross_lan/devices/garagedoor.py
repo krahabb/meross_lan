@@ -8,7 +8,11 @@ from ..binary_sensor import BinarySensorEntity
 from ..cover import Cover
 from ..helpers import clamp
 from ..merossclient.client import Transport
-from ..merossclient.device import handler
+from ..merossclient.device.handler import (
+    MappingParser,
+    MappingParserHandler,
+    NamespaceHandler,
+)
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..number import EmulatedNumber, NumberParser
 from ..switch import SwitchParser
@@ -218,9 +222,7 @@ class _DurationHelper:
         return number.native_value
 
 
-class GarageDoorMultipleConfig(handler.MappingParser):
-
-    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
+class GarageDoorMultipleConfig(MappingParser):
 
     init_parser_defs = {
         mc.KEY_BUZZERENABLE: GarageConfigSwitch.DEF(),
@@ -236,9 +238,7 @@ class GarageDoorMultipleConfig(handler.MappingParser):
     }
 
 
-class GarageDoorConfig(handler.MappingParserHandler):
-
-    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
+class GarageDoorConfig(MappingParserHandler):
 
     init_parser_defs = {
         key: GarageDoorMultipleConfig.init_parser_defs[key]
@@ -483,7 +483,13 @@ class GarageDoor(Cover.RestoreEntity, Cover):
 
     @classmethod
     @override
-    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
+    def namespace_init(
+        cls,
+        ns: mn.Namespace,
+        device: "Device",
+        /,
+        **kwargs: "Unpack[NamespaceHandler.Args]",
+    ):
         descriptor = device.descriptor
         if descriptor.type.startswith(mc.TYPE_MSG200) and (
             descriptor.fw_version_t <= (4, 2, 1)
@@ -503,11 +509,12 @@ class GarageDoor(Cover.RestoreEntity, Cover):
 
         # do not register_parser_class since we don't want to create spurious
         # GarageDoor at channel 0 (msg200)
-        _handler = handler.NamespaceHandler(ns, device)
+        nh = NamespaceHandler(ns, device, **kwargs)
         for channel_digest in ns.get_digest(descriptor.digest):
             channel = channel_digest[mc.KEY_CHANNEL]
-            _handler.register_parser(
+            nh.register_parser(
                 GarageDoor(
                     channel, device, ns=ns, index=mn.IndexType.channel.get(channel)
                 )
             )
+        return nh

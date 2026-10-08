@@ -33,7 +33,11 @@ from custom_components.meross_lan.helpers import (
 )
 from custom_components.meross_lan.merossclient import cloudapi, logging
 from custom_components.meross_lan.merossclient.client import Transport
-from custom_components.meross_lan.merossclient.protocol import const as mc, md5hexdigest
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    md5hexdigest,
+    namespaces as mn,
+)
 from custom_components.meross_lan.merossclient.protocol.message import json_loads
 import emulator
 
@@ -929,6 +933,9 @@ class DeviceContext(ConfigEntryMocker):
                 timedelta(seconds=mlc.PARAM_COLDSTARTPOLL_DELAY)
             )
             assert device.is_connected
+        for nh in device.ns_handlers.values():
+            if not nh.last_poll_epoch:
+                assert not nh.polling_strategy, f"{nh} was not polled"
         return device
 
     async def async_setup(self):
@@ -986,6 +993,83 @@ class DeviceContext(ConfigEntryMocker):
         while dt_now < timeout:
             await self.async_poll_single()
             dt_now = self.time_mock()
+
+    def dump_ns_handlers(self):
+        if capsys := self.capsys:
+
+            def _print_row(*values):
+                widths = [30, 12, 5, 5, 20, 5, 3, 3, 20, 40]
+                row = ""
+                i = 0
+                for value in values:
+                    width = widths[i]
+                    row += f"| {str(value):<{width}.{width}} "
+                    i += 1
+                print(row)
+
+            device = self.device
+            with capsys.disabled():
+                print(f"\nTesting {self.logtag}")
+                _print_row(
+                    "Ability",
+                    "Content",
+                    "R/W",
+                    "Indexed",
+                    "InitFunc",
+                    "Auto",
+                    "Trace",
+                    "Diagnostic",
+                    "Handler",
+                    "Strategy",
+                )
+                for _ability in device.descriptor.ability:
+                    _ns = mn.NAMESPACES.get(_ability)
+                    _rw = ""
+                    _indexed = ""
+                    _init_func = None
+                    _auto = None
+                    _trace = "No" if _ability in device.TRACE_ABILITY_EXCLUDE else ""
+                    _diagnostic = ""
+                    _nh_class = None
+                    _polling_strategy = None
+                    if _ns:
+                        if _ns.can_query:
+                            _rw += "R"
+                        if _ns.has_set:
+                            _rw += "W"
+                        _indexed = _ns.index_type
+                        if nh_factory := device.NAMESPACE_INIT.get(_ns):
+                            if nh_factory is device.FACTORY_DEFAULT:
+                                _init_func = "DEFAULT"
+                            elif nh_factory is device.FACTORY_IGNORE:
+                                _init_func = "IGNORE"
+                            elif nh_factory is device.FACTORY_DEFAULT_LAZY:
+                                _init_func = "LAZY"
+                            elif nh_factory is device.FACTORY_DEFAULT_NOPOLL:
+                                _init_func = "NOPOLL"
+                            else:
+                                _init_func = nh_factory.initializer
+                            _auto = nh_factory.auto
+                        if nh := device.ns_handlers.get(_ns):
+                            _nh_class = type(nh).__name__
+                            _polling_strategy = (
+                                nh.polling_strategy and nh.polling_strategy.__name__
+                            )
+                            if nh.handler == device._handle_diagnostic_handler:
+                                _diagnostic = "Yes"
+
+                    _print_row(
+                        _ability.removeprefix("Appliance"),
+                        _ns and _ns.content,
+                        _rw,
+                        _indexed,
+                        _init_func,
+                        _auto,
+                        _trace,
+                        _diagnostic,
+                        _nh_class,
+                        _polling_strategy,
+                    )
 
 
 class CloudApiMocker(contextlib.AbstractContextManager):

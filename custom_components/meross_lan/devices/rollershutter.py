@@ -87,6 +87,9 @@ class RollerShutter(Cover.RestoreEntity, Cover):
         Cover.__init__(self, id, device, **kwargs)
         device.register_parser_ex(self, mn.Appliance_RollerShutter_State)
 
+        # Config ns is usually available, nevertheless, we always create
+        # number_signalOpen and number_signalClose so that they'll eventually work as a
+        # an 'emulated' entity with only HA state should the ns be missing
         ns_config = mn.Appliance_RollerShutter_Config
         for _key_value in (mc.KEY_SIGNALOPEN, mc.KEY_SIGNALCLOSE):
             setattr(
@@ -100,10 +103,13 @@ class RollerShutter(Cover.RestoreEntity, Cover):
                     name=_key_value,
                 ),
             )
-        if ns_config in descriptor.ability:
-            device.get_handler(ns_config).register_parsers(
+        try:
+            # ns_config should be initialized already in Device.async_init
+            device.ns_handlers[ns_config].register_parsers(
                 self.number_signalOpen, self.number_signalClose
             )
+        except KeyError:
+            pass
 
         # ToggleX behavior in cover (garage/rollershutter) is not very clear
         # most devices expose the ns in abilities and maybe also channel indexes in digest
@@ -363,11 +369,3 @@ class RollerShutterAdjustSwitch(SwitchParser):
             self.update_device_value(payload[mc.KEY_VALUE])  # type: ignore
         except KeyError:
             self.update_boolean_value(payload[mc.KEY_STATUS] != 0)
-
-
-NamespaceHandler.POLLING_CONFIG_MAP.update(
-    {
-        mn.Appliance_RollerShutter_Adjust: mlc.POLLING_CONFIG_CONFIGURATION,
-        mn.Appliance_RollerShutter_Config: mlc.POLLING_CONFIG_CONFIGURATION,
-    }
-)

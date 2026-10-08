@@ -17,7 +17,7 @@ from ..merossclient import (
 )
 from ..merossclient.client import AbstractClient, Direction, Transport
 from ..merossclient.client.http import HttpClient
-from ..merossclient.device.handler import NamespaceHandler, NamespaceParser, VoidHandler
+from ..merossclient.device.handler import NamespaceHandler
 from ..merossclient.exceptions import MerossError
 from ..merossclient.obfuscate import OBFUSCATE_DICT
 from ..merossclient.protocol import const as mc, namespaces as mn
@@ -261,116 +261,178 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
     # configured here and there depending on ns combinations.
     # For example ms600/ms130 need to post-configure Sensor.LatestX handler
     # that need to be in place in order to be correctly configured.
+
+    FACTORY_DEFAULT = NamespaceHandler.Factory(NamespaceHandler, True)
+    """NamespaceHandler factory definition that builds a standard handler with common defaults.
+    These defaults provide polling and message handling depending on ns grammar."""
+    FACTORY_DEFAULT_LAZY = NamespaceHandler.Factory(NamespaceHandler, False)
+    """Same as default but only initialized when actually needed. This is especially useful to
+    avoid wasting resources for namespaces that require standard handling but are not always
+    used even if exposed by the device. This typically happens in hub devices where the exposed
+    abilities might cover subdevices not actually binded."""
+    FACTORY_DEFAULT_NOPOLL = NamespaceHandler.Factory(
+        NamespaceHandler, False, {"config": NamespaceHandler.POLLING_CONFIG_NONE}
+    )
+    """The namespace might be used in code but it mostly provides redundant informations already
+    found in other namespaces so we don't explicitly poll for these. Again, this is typically useful for
+    hub (sensor) subdevices where most of the data are already carried in *.Hub.Sensor.All."""
+    FACTORY_IGNORE = NamespaceHandler.Factory(
+        NamespaceHandler,
+        False,
+        {
+            "config": NamespaceHandler.POLLING_CONFIG_NONE,
+            "handler": lambda message: None,
+        },
+    )
+    """NamespaceHandler that does 'nothing' i.e. no polling, no parsing, i.e. no mechanics or so, completely ignored.
+    It just provides a 'low cost' stub in the Device handling mechanism. NamespaceHandler could still be 'manually' used
+    as in tracing/diagnostics (no auto parsing though, so no diagnostic entities whatsoever)."""
     NAMESPACE_INIT = {
-        mn.Appliance_Control_Upgrade: NamespaceHandler,
-        mn.Appliance_Mcu_Firmware: NamespaceHandler,
-        mn.Appliance_Mcu_Hp110_Firmware: NamespaceHandler,
-        mn.Appliance_Control_Sensor_Latest: (".devices.misc", "SensorLatestParser"),
-        mn.Appliance_Control_Sensor_LatestX: (".devices.misc", "SensorLatestXParser"),
-        mn.Appliance_Control_Toggle: (".switch", "Toggle"),
+        mn.Appliance_Control_Upgrade: FACTORY_DEFAULT_LAZY,
+        mn.Appliance_Mcu_Firmware: FACTORY_DEFAULT,
+        mn.Appliance_Mcu_Hp110_Firmware: FACTORY_DEFAULT,
+        mn.Appliance_Control_Sensor_Latest: NamespaceHandler.Factory(
+            ".devices.misc.SensorLatestParser"
+        ),
+        mn.Appliance_Control_Sensor_LatestX: NamespaceHandler.Factory(
+            ".devices.misc.SensorLatestXParser"
+        ),
+        mn.Appliance_Control_Toggle: NamespaceHandler.Factory(".switch.Toggle"),
         # ToggleX need to be created before any other possible 'conflicting' ns
         # like .Light or .Fan
-        mn.Appliance_Control_ToggleX: (".switch", "ToggleX"),
-        mn.Appliance_Config_DeviceCfg: (".devices.misc", "DeviceCfgParser"),
-        mn.Appliance_Config_Info: VoidHandler,
-        mn.Appliance_Config_OverTemp: (".devices.mss", "OverTempEnableSwitch"),
-        mn.Appliance_Config_Alarm: (".siren", "ConfigAlarm"),
-        mn.Appliance_Control_Alarm: (".siren", "ControlAlarm"),
-        mn.Appliance_Control_Electricity: (".devices.mss", "ElectricitySensor"),
-        mn.Appliance_Control_ElectricityX: (".devices.mss", "ElectricityXSensor"),
-        mn.Appliance_Control_ConsumptionConfig: VoidHandler,
-        mn.Appliance_Control_ConsumptionH: (
-            ".devices.mss",
-            "ConsumptionHNamespaceHandler",
+        mn.Appliance_Control_ToggleX: NamespaceHandler.Factory(".switch.ToggleX"),
+        mn.Appliance_Config_DeviceCfg: NamespaceHandler.Factory(
+            ".devices.misc.DeviceCfgParser"
         ),
-        mn.Appliance_Control_ConsumptionX: (".devices.mss", "ConsumptionXSensor"),
-        mn.Appliance_Control_Diffuser_Light: (".devices.diffuser", "DiffuserLight"),
-        mn.Appliance_Control_Diffuser_Sensor: (".devices.diffuser", "DiffuserSensor"),
-        mn.Appliance_Control_Diffuser_Spray: (".devices.diffuser", "DiffuserSpray"),
-        mn.Appliance_Control_Fan: (".fan", "Fan"),
-        mn.Appliance_Control_FilterMaintenance: (
-            ".sensor",
-            "FilterMaintenanceSensor",
+        mn.Appliance_Config_Info: FACTORY_IGNORE,
+        mn.Appliance_Config_OverTemp: NamespaceHandler.Factory(
+            ".devices.mss.OverTempEnableSwitch"
         ),
-        mn.Appliance_Control_Light: (".light", "Light"),
-        mn.Appliance_Control_Mp3: (".media_player", "Mp3Player"),
-        mn.Appliance_Control_PhysicalLock: (".switch", "PhysicalLockSwitch"),
-        mn.Appliance_Control_Presence_Config: (
-            ".devices.ms600",
-            "PresenceConfigParser",
+        mn.Appliance_Config_Alarm: NamespaceHandler.Factory(".siren.ConfigAlarm"),
+        mn.Appliance_Control_Alarm: NamespaceHandler.Factory(".siren.ControlAlarm"),
+        mn.Appliance_Control_Electricity: NamespaceHandler.Factory(
+            ".devices.mss.ElectricitySensor"
         ),
-        mn.Appliance_Control_Screen_Brightness: (
-            ".devices.thermostat",
-            "ScreenBrightnessNamespaceHandler",
+        mn.Appliance_Control_ElectricityX: NamespaceHandler.Factory(
+            ".devices.mss.ElectricityXSensor"
         ),
-        mn.Appliance_Control_Spray: (".devices.spray", "Spray"),
-        mn.Appliance_Control_TempUnit: (".devices.thermostat", "MtsTempUnit"),
-        mn.Appliance_Control_Timer: VoidHandler,
-        mn.Appliance_Control_TimerX: VoidHandler,
-        mn.Appliance_Control_Trigger: VoidHandler,
-        mn.Appliance_Control_TriggerX: VoidHandler,
-        mn.thermostat.Appliance_Control_Thermostat_Mode: (
-            ".devices.thermostat.mts200",
-            "Mts200Climate",
+        mn.Appliance_Control_ConsumptionConfig: FACTORY_IGNORE,
+        mn.Appliance_Control_ConsumptionH: NamespaceHandler.Factory(
+            ".devices.mss.ConsumptionHNamespaceHandler"
         ),
-        mn.thermostat.Appliance_Control_Thermostat_ModeB: (
-            ".devices.thermostat.mts960",
-            "Mts960Climate",
+        mn.Appliance_Control_ConsumptionX: NamespaceHandler.Factory(
+            ".devices.mss.ConsumptionXSensor",
+            True,
+            {
+                "config": (
+                    mlc.PARAM_ENERGY_UPDATE_PERIOD,
+                    mlc.PARAM_ENERGY_CLOUD_UPDATE_PERIOD,
+                    NamespaceHandler.async_polling_strategy_smart,
+                )
+            },
         ),
-        mn.thermostat.Appliance_Control_Thermostat_ModeC: (
-            ".devices.thermostat.mts300",
-            "Mts300Climate",
+        mn.Appliance_Control_Diffuser_Light: NamespaceHandler.Factory(
+            ".devices.diffuser.DiffuserLight"
         ),
-        mn.thermostat.Appliance_Control_Thermostat_DeadZone: (
-            ".devices.thermostat",
-            "MtsDeadZoneNumber",
+        mn.Appliance_Control_Diffuser_Sensor: NamespaceHandler.Factory(
+            ".devices.diffuser.DiffuserSensor"
         ),
-        mn.thermostat.Appliance_Control_Thermostat_Frost: (
-            ".devices.thermostat",
-            "MtsFrostNumber",
+        mn.Appliance_Control_Diffuser_Spray: NamespaceHandler.Factory(
+            ".devices.diffuser.DiffuserSpray"
         ),
-        mn.thermostat.Appliance_Control_Thermostat_HoldAction: (
-            ".devices.thermostat",
-            "MtsHoldAction",
+        mn.Appliance_Control_Fan: NamespaceHandler.Factory(".fan.Fan"),
+        mn.Appliance_Control_FilterMaintenance: NamespaceHandler.Factory(
+            ".sensor.FilterMaintenanceSensor"
         ),
-        mn.thermostat.Appliance_Control_Thermostat_Overheat: (
-            ".devices.thermostat",
-            "MtsOverheatNumber",
+        mn.Appliance_Control_Light: NamespaceHandler.Factory(".light.Light"),
+        mn.Appliance_Control_Mp3: NamespaceHandler.Factory(".media_player.Mp3Player"),
+        mn.Appliance_Control_PhysicalLock: NamespaceHandler.Factory(
+            ".switch.PhysicalLockSwitch"
         ),
-        mn.thermostat.Appliance_Control_Thermostat_Sensor: (
-            ".devices.thermostat",
-            "MtsExternalSensorSwitch",
+        mn.Appliance_Control_Presence_Config: NamespaceHandler.Factory(
+            ".devices.ms600.PresenceConfigParser"
         ),
-        mn.thermostat.Appliance_Control_Thermostat_SummerMode: (
-            ".devices.thermostat",
-            "MtsSummerMode",
+        mn.Appliance_Control_Screen_Brightness: NamespaceHandler.Factory(
+            ".devices.thermostat.ScreenBrightnessNamespaceHandler"
         ),
-        mn.thermostat.Appliance_Control_Thermostat_WindowOpened: (
-            ".devices.thermostat",
-            "MtsWindowOpened",
+        mn.Appliance_Control_Spray: NamespaceHandler.Factory(".devices.spray.Spray"),
+        mn.Appliance_Control_TempUnit: NamespaceHandler.Factory(
+            ".devices.thermostat.MtsTempUnit"
         ),
-        mn.Appliance_GarageDoor_MultipleConfig: (
-            ".devices.garagedoor",
-            "GarageDoorMultipleConfig",
+        mn.Appliance_Control_Timer: FACTORY_IGNORE,
+        mn.Appliance_Control_TimerX: FACTORY_IGNORE,
+        mn.Appliance_Digest_TimerX: FACTORY_IGNORE,
+        mn.Appliance_Control_Trigger: FACTORY_IGNORE,
+        mn.Appliance_Control_TriggerX: FACTORY_IGNORE,
+        mn.Appliance_Digest_TriggerX: FACTORY_IGNORE,
+        # for Thermostat ns(s) we build first those that are eventually needed while
+        # initializing the core 'climate' entities so that they'll be in place when needed.
+        # Core climate classes are initialized through the *_Mode* namespaces.
+        # Other Thermostat ns(s) are initialized after the climates since their underlying
+        # parsers/entities need to lookup the climate entity during initialization.
+        mn.thermostat.Appliance_Control_Thermostat_Calibration: FACTORY_DEFAULT,  # mts200/300/960 related
+        mn.thermostat.Appliance_Control_Thermostat_Schedule: FACTORY_DEFAULT_LAZY,  # mts200 related
+        mn.thermostat.Appliance_Control_Thermostat_ScheduleB: FACTORY_DEFAULT_LAZY,  # mts300/960 related
+        mn.thermostat.Appliance_Control_Thermostat_CtlRange: FACTORY_DEFAULT,  # mts960 related
+        mn.thermostat.Appliance_Control_Thermostat_Timer: FACTORY_DEFAULT,  # mts960 related
+        mn.Appliance_Config_Sensor_Association: FACTORY_DEFAULT,  # mts300 related
+        mn.thermostat.Appliance_Control_Thermostat_System: FACTORY_DEFAULT,  # mts300 related
+        mn.thermostat.Appliance_Control_Thermostat_Mode: NamespaceHandler.Factory(
+            ".devices.thermostat.mts200.Mts200Climate"
         ),
-        mn.Appliance_GarageDoor_Config: (
-            ".devices.garagedoor",
-            "GarageDoorConfig",
-        ),  # install this after MultipleConfig since it could apply some fallbacks for missing MultipleConfig entities
-        mn.Appliance_GarageDoor_State: (".devices.garagedoor", "GarageDoor"),
-        mn.Appliance_RollerShutter_Position: (
-            ".devices.rollershutter",
-            "RollerShutter",
+        mn.thermostat.Appliance_Control_Thermostat_ModeB: NamespaceHandler.Factory(
+            ".devices.thermostat.mts960.Mts960Climate"
         ),
-        mn.Appliance_RollerShutter_Adjust: (
-            ".devices.rollershutter",
-            "RollerShutterAdjustSwitch",
+        mn.thermostat.Appliance_Control_Thermostat_ModeC: NamespaceHandler.Factory(
+            ".devices.thermostat.mts300.Mts300Climate"
         ),
-        mn.Appliance_System_Clock: VoidHandler,
-        mn.Appliance_System_DNDMode: (".light", "DNDLight"),
-        mn.Appliance_System_Online: VoidHandler,
-        mn.Appliance_System_Report: VoidHandler,
-        mn.Appliance_System_Runtime: (".sensor", "SignalStrengthSensor"),
+        mn.thermostat.Appliance_Control_Thermostat_DeadZone: NamespaceHandler.Factory(
+            ".devices.thermostat.MtsDeadZoneNumber"
+        ),
+        mn.thermostat.Appliance_Control_Thermostat_Frost: NamespaceHandler.Factory(
+            ".devices.thermostat.MtsFrostNumber"
+        ),
+        mn.thermostat.Appliance_Control_Thermostat_HoldAction: NamespaceHandler.Factory(
+            ".devices.thermostat.MtsHoldAction"
+        ),
+        mn.thermostat.Appliance_Control_Thermostat_Overheat: NamespaceHandler.Factory(
+            ".devices.thermostat.MtsOverheatNumber"
+        ),
+        mn.thermostat.Appliance_Control_Thermostat_Sensor: NamespaceHandler.Factory(
+            ".devices.thermostat.MtsExternalSensorSwitch"
+        ),
+        mn.thermostat.Appliance_Control_Thermostat_SummerMode: NamespaceHandler.Factory(
+            ".devices.thermostat.MtsSummerMode"
+        ),
+        mn.thermostat.Appliance_Control_Thermostat_WindowOpened: NamespaceHandler.Factory(
+            ".devices.thermostat.MtsWindowOpened"
+        ),
+        # GarageDoor ns order mattters: MultipleConfig needs to be before Config and State (as last) will definitely use them
+        mn.Appliance_GarageDoor_MultipleConfig: NamespaceHandler.Factory(
+            ".devices.garagedoor.GarageDoorMultipleConfig"
+        ),
+        mn.Appliance_GarageDoor_Config: NamespaceHandler.Factory(
+            ".devices.garagedoor.GarageDoorConfig",
+        ),
+        mn.Appliance_GarageDoor_State: NamespaceHandler.Factory(
+            ".devices.garagedoor.GarageDoor"
+        ),
+        mn.Appliance_RollerShutter_Config: FACTORY_DEFAULT,
+        mn.Appliance_RollerShutter_State: FACTORY_DEFAULT,
+        mn.Appliance_RollerShutter_Position: NamespaceHandler.Factory(
+            ".devices.rollershutter.RollerShutter"
+        ),
+        mn.Appliance_RollerShutter_Adjust: NamespaceHandler.Factory(
+            ".devices.rollershutter.RollerShutterAdjustSwitch"
+        ),
+        mn.Appliance_System_Clock: FACTORY_IGNORE,
+        mn.Appliance_System_Debug: FACTORY_IGNORE,
+        mn.Appliance_System_DNDMode: NamespaceHandler.Factory(".light.DNDLight"),
+        mn.Appliance_System_Online: FACTORY_IGNORE,
+        mn.Appliance_System_Report: FACTORY_IGNORE,
+        mn.Appliance_System_Runtime: NamespaceHandler.Factory(
+            ".sensor.SignalStrengthSensor"
+        ),
     }
     TRACE_ABILITY_EXCLUDE = (
         mn.Appliance_System_Ability,
@@ -749,7 +811,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             while True:
                 if not (nh := self._trace_ability_next(abilities)):
                     continue
-                if nh.handler.__func__ is NamespaceHandler._handle:
+                if getattr(nh.handler, "__func__", None) is NamespaceHandler._handle:
                     nh.handler = self._handle_diagnostic_handler
                     if not nh.polling_strategy:
                         nh.polling_strategy = Device.async_polling_strategy_diagnostic
@@ -760,7 +822,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
 
     async def async_destroy_diagnostic_entities(self, /):
         for nh in self.ns_handlers.values():
-            if nh.handler is self._handle_diagnostic_handler:
+            if nh.handler == self._handle_diagnostic_handler:
                 nh.handler = nh._handle
                 if nh.polling_strategy is Device.async_polling_strategy_diagnostic:
                     nh.polling_strategy = None
@@ -818,7 +880,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         except KeyError:
             # unmanaged/unknown ability
             ns = mn.NAMESPACES[ability]
-            return ns.can_query and NamespaceHandler(ns, self)
+            return ns.can_query and self.build_handler(ns)
 
     async def _async_trace_ability(self, abilities: "Iterator[str]"):
         try:
@@ -1260,11 +1322,9 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 return
             # here the namespace might be unknown to our definitions (mn.Namespace)
             # so we try, in case, to build a new one with good presets
-            nh = NamespaceHandler(
+            nh = self.build_handler(
                 mn.NAMESPACES.get(namespace)
-                or mn.Namespace.from_message(namespace, method, message.payload),
-                self,
-                config=mlc.POLLING_CONFIG_DIAGNOSTIC,
+                or mn.Namespace.from_message(namespace, method, message.payload)
             )
 
         if method == mc.METHOD_PUSH:

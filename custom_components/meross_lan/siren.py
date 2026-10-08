@@ -11,7 +11,7 @@ from .select import SelectParser
 from .switch import SwitchParser
 
 if TYPE_CHECKING:
-    from typing import Final
+    from typing import Final, Unpack
 
     from .helpers.device import Device
 
@@ -62,7 +62,7 @@ class Siren(mle.BinaryParser, siren.SirenEntity):
 
 class ConfigAlarm(MappingParser):
 
-    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
+    HANDLER_CHANNELS = (0,)
 
     init_parser_defs = {
         mc.KEY_ENABLE: SwitchParser.DEF(
@@ -79,14 +79,10 @@ class ConfigAlarm(MappingParser):
         ),
     }
 
-    @classmethod
-    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        NamespaceHandler(ns, device, parser_class=cls, channels=(0,))
-
 
 class ControlAlarm(MappingParser):
 
-    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
+    HANDLER_CHANNELS = (0,)
 
     init_excluded_keys = MappingParser.init_excluded_keys + ("source",)
     init_parser_defs = {
@@ -105,10 +101,6 @@ class ControlAlarm(MappingParser):
             )
         },
     }
-
-    @classmethod
-    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        NamespaceHandler(ns, device, parser_class=cls, channels=(0,))
 
 
 async_setup_entry = Siren.platform_setup_entry

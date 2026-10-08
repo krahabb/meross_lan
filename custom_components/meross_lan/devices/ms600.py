@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from typing import Final, Self, Unpack
 
     from ..helpers.device import Device
+    from ..merossclient.device.handler import NamespaceHandler
 
 
 class PresenceConfigMode(SelectParser):
@@ -79,8 +80,6 @@ class PresenceSensor(SensorParser):
 
 
 class PresenceConfigParser(MappingParser):
-
-    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
 
     init_parser_defs = {
         mc.KEY_MODE: {
@@ -153,8 +152,14 @@ class PresenceConfigParser(MappingParser):
 
     @classmethod
     @override
-    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        super().namespace_init(ns, device)
+    def namespace_init(
+        cls,
+        ns: mn.Namespace,
+        device: "Device",
+        /,
+        **kwargs: "Unpack[NamespaceHandler.Args]",
+    ):
+        nh = MappingParser.namespace_init(ns, device, **kwargs)
 
         index = mn.IndexType.channel.get(0)
         sensor_presence = PresenceSensor(
@@ -182,3 +187,5 @@ class PresenceConfigParser(MappingParser):
                 },
             )
         )
+
+        return nh

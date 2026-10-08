@@ -13,25 +13,29 @@ Appliance_Control_Thermostat_Alarm = mn.ns(
     "Appliance.Control.Thermostat.Alarm", mc.KEY_ALARM, -1, GETPSH
 )
 Appliance_Control_Thermostat_AlarmConfig = mn.ns(
-    "Appliance.Control.Thermostat.AlarmConfig", mc.KEY_ALARMCONFIG, -1, GETSET
+    "Appliance.Control.Thermostat.AlarmConfig", mc.KEY_ALARMCONFIG, -1, GETSET, mn.C_CFG
 )
 Appliance_Control_Thermostat_Calibration = mn.ns(
-    "Appliance.Control.Thermostat.Calibration", mc.KEY_CALIBRATION, 80, GETSET
+    "Appliance.Control.Thermostat.Calibration", mc.KEY_CALIBRATION, 80, GETSET, mn.C_CFG
 )
 Appliance_Control_Thermostat_CompressorDelay = mn.ns(
     "Appliance.Control.Thermostat.CompressorDelay", mc.KEY_DELAY, -1, GETSET
 )
 Appliance_Control_Thermostat_CtlRange = mn.ns(
-    "Appliance.Control.Thermostat.CtlRange", mc.KEY_CTLRANGE, 80, GETSET
+    "Appliance.Control.Thermostat.CtlRange", mc.KEY_CTLRANGE, 80, GETSET, mn.C_CON
 )
 Appliance_Control_Thermostat_DeadZone = mn.ns(
-    "Appliance.Control.Thermostat.DeadZone", mc.KEY_DEADZONE, 80, GETSET
+    "Appliance.Control.Thermostat.DeadZone", mc.KEY_DEADZONE, 80, GETSET, mn.C_CFG
 )
 Appliance_Control_Thermostat_Frost = mn.ns(
-    "Appliance.Control.Thermostat.Frost", mc.KEY_FROST, 80, GETSET
+    "Appliance.Control.Thermostat.Frost", mc.KEY_FROST, 80, GETSET, mn.C_SNS_S
 )
 Appliance_Control_Thermostat_HoldAction = mn.ns(
-    "Appliance.Control.Thermostat.HoldAction", mc.KEY_HOLDACTION, 30, GETSETPSH
+    "Appliance.Control.Thermostat.HoldAction",
+    mc.KEY_HOLDACTION,
+    30,
+    GETSETPSH,
+    mn.C_CFG,
 )
 Appliance_Control_Thermostat_Mode = mn.ns(
     "Appliance.Control.Thermostat.Mode", mc.KEY_MODE, -1, GETSETPSH, mn.DIG
@@ -43,25 +47,30 @@ Appliance_Control_Thermostat_ModeC = mn.ns(
     "Appliance.Control.Thermostat.ModeC", mc.KEY_CONTROL, 120, GETSETPSH
 )
 Appliance_Control_Thermostat_Overheat = mn.ns(
-    "Appliance.Control.Thermostat.Overheat", mc.KEY_OVERHEAT, 140, GETSETPSH
+    "Appliance.Control.Thermostat.Overheat", mc.KEY_OVERHEAT, 140, GETSETPSH, mn.C_SNS_S
 )
 Appliance_Control_Thermostat_Schedule = mn.ns(
-    "Appliance.Control.Thermostat.Schedule", mc.KEY_SCHEDULE, 550, GETSETPSH
+    "Appliance.Control.Thermostat.Schedule", mc.KEY_SCHEDULE, 550, GETSETPSH, mn.C_CFG
 )
 Appliance_Control_Thermostat_ScheduleB = mn.ns(
-    "Appliance.Control.Thermostat.ScheduleB", mc.KEY_SCHEDULEB, 550, GETSETPSH
+    "Appliance.Control.Thermostat.ScheduleB", mc.KEY_SCHEDULEB, 550, GETSETPSH, mn.C_CFG
 )
 Appliance_Control_Thermostat_Sensor = mn.ns(
-    "Appliance.Control.Thermostat.Sensor", mc.KEY_SENSOR, 40, GETSETPSH
+    "Appliance.Control.Thermostat.Sensor", mc.KEY_SENSOR, 40, GETSETPSH, mn.C_SNS_S
 )
 Appliance_Control_Thermostat_SummerMode = mn.ns(
-    "Appliance.Control.Thermostat.SummerMode", mc.KEY_SUMMERMODE, 22, GETSETPSH, mn.DIG
+    "Appliance.Control.Thermostat.SummerMode",
+    mc.KEY_SUMMERMODE,
+    22,
+    GETSETPSH,
+    mn.DIG,
+    mn.C_CFG,
 )
 Appliance_Control_Thermostat_System = mn.ns(
-    "Appliance.Control.Thermostat.System", mc.KEY_CONTROL, 580, GETSETPSQ
+    "Appliance.Control.Thermostat.System", mc.KEY_CONTROL, 580, GETSETPSQ, mn.C_CFG
 )
 Appliance_Control_Thermostat_Timer = mn.ns(
-    "Appliance.Control.Thermostat.Timer", mc.KEY_TIMER, 550, GETSETPSH
+    "Appliance.Control.Thermostat.Timer", mc.KEY_TIMER, 550, GETSETPSH, mn.C_CFG
 )
 Appliance_Control_Thermostat_WindowOpened = mn.ns(
     "Appliance.Control.Thermostat.WindowOpened",
@@ -69,4 +78,5 @@ Appliance_Control_Thermostat_WindowOpened = mn.ns(
     132,
     GETPSH,
     mn.DIG,
+    mn.C_SNS_S,
 )

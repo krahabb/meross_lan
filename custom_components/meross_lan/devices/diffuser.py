@@ -106,8 +106,6 @@ class DiffuserSensor(MappingParserHandler):
     if TYPE_CHECKING:
         parser_defs: Mapping[str, MappingParserHandler.ParserType]  # type: ignore[override]
 
-    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_SLOWSENSOR
-
     init_parser_defs = {
         mc.KEY_HUMIDITY: SensorParser.DEF(**SensorParser.HUMIDITY_ARGS),
         mc.KEY_TEMPERATURE: SensorParser.DEF(

@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from .helpers.device import Device
     from .helpers.mqtt_profile import MQTTConnection
     from .merossclient.client import AbstractClient
+    from .merossclient.protocol.types import JsonMapping
 
 
 class SensorEntity(mle.NumericEntity, sensor.SensorEntity):
@@ -234,7 +235,7 @@ class DiagnosticParser(mle.ValueParser, DiagnosticSensor):
     """
 
     @override
-    def __call__(self, payload: dict, /):
+    def __call__(self, payload: "JsonMapping", /):
         """
         This implementation aims at diagnostic sensors installed in 'well-known'
         namespace handlers to manage 'unexpected' channels when they eventually
@@ -343,8 +344,6 @@ class ProtocolSensor(EnumSensorEntity):
 
 class SignalStrengthSensor(SensorParser, mle.EntityNamespaceMixin):
 
-    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_SLOWSENSOR
-
     init_entity_key = "signal_strength"
     init_key_value = SensorParser.KeyValue(mc.KEY_SIGNAL)
     # HA core entity attributes:
@@ -355,8 +354,6 @@ class SignalStrengthSensor(SensorParser, mle.EntityNamespaceMixin):
 
 
 class FilterMaintenanceSensor(SensorParser):
-
-    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_SLOWSENSOR
 
     init_entity_key = mc.KEY_FILTER
     init_key_value = SensorParser.KeyValue(mc.KEY_LIFE)

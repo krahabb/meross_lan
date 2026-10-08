@@ -7,7 +7,6 @@ import aiohttp
 from .. import (
     Descriptor,
     DeviceDescriptor,
-    async_import_module,
     datetime_from_epoch,
     is_device_online,
 )
@@ -95,7 +94,6 @@ class Device(PhysicalDevice):
     if TYPE_CHECKING:
 
         type DigestParseFunc = Callable[[JsonDict], None] | Callable[[JsonList], None]
-        type NamespaceInitFunc = Callable[[mn.Namespace, Self], Any]
 
         class Args(PhysicalDevice.Args):
             descriptor: DeviceDescriptor
@@ -105,7 +103,7 @@ class Device(PhysicalDevice):
 
         NAMESPACE_INIT_PACKAGE: ClassVar[str]
         """Package/module path where to look for namespace initialization functions."""
-        NAMESPACE_INIT: ClassVar[dict[mn.Namespace, Any]]
+        NAMESPACE_INIT: ClassVar[dict[mn.Namespace, NamespaceHandler.Factory]]
         """Static dict of namespace initialization functions. This will be looked up
         and matched against the current device abilities (at device init time) and
         usually setups a dedicated namespace handler and/or a dedicated entity.
@@ -154,10 +152,6 @@ class Device(PhysicalDevice):
 
     HEARTBEAT_TIMEOUT = 300
     TRANSPORT = Transport.AUTO  # type: ignore[override]
-
-    @staticmethod
-    def namespace_init_empty(ns: mn.Namespace, device: "Device", /):
-        pass
 
     # TODO: define global symbol for merossclient package/library
     NAMESPACE_INIT_PACKAGE = "merossclient"
@@ -232,47 +226,15 @@ class Device(PhysicalDevice):
         self.polling_epoch = self.time()
 
     async def async_init(self):
-        ns_init_func: "Device.NamespaceInitFunc"
-
         await self._async_init_zoneinfo()
-
-        namespace_init = self.__class__.NAMESPACE_INIT
-        for ns, ns_init_func in {
-            _ns: _ns_init_conf
-            for _ns, _ns_init_conf in namespace_init.items()
-            if _ns in self.descriptor.ability
-        }.items():
-            try:
+        for ns, nh_factory in self.NAMESPACE_INIT.items():
+            if nh_factory.auto and (ns in self.descriptor.ability):
                 try:
-                    ns_init_func(ns, self)
-                except TypeError:
-                    try:
-                        ns_init_func = getattr(
-                            await async_import_module(
-                                ns_init_func[0], self.NAMESPACE_INIT_PACKAGE  # type: ignore
-                            ),
-                            ns_init_func[1],  # type: ignore
-                        )
-                    except Exception as exception:
-                        self.log_exception(
-                            self.WARNING,
-                            exception,
-                            "loading namespace initializer for %s",
-                            ns,
-                        )
-                        namespace_init[ns] = Device.namespace_init_empty
-                    else:
-                        try:
-                            ns_init_func = ns_init_func.namespace_init
-                        except AttributeError:
-                            pass
-                        namespace_init[ns] = ns_init_func
-                        ns_init_func(ns, self)
-
-            except Exception as exception:
-                self.log_exception(
-                    self.WARNING, exception, "initializing namespace %s", ns
-                )
+                    await nh_factory.async_build(ns, self)
+                except Exception as exception:
+                    self.log_exception(
+                        self.WARNING, exception, "initializing namespace %s", ns
+                    )
 
     async def _async_init_zoneinfo(self, /):
         if tzname := self.descriptor.timezone:
@@ -502,17 +464,39 @@ class Device(PhysicalDevice):
         self.transport = client.TRANSPORT  # type: ignore[assignment]
         self.log(self.DEBUG, "Switching transport to %s", self.transport)
 
+    def build_handler(self, ns: "mn.Namespace", /) -> NamespaceHandler:
+        """Creates an actual NamespaceHandler by building a proper one using configuration in NAMESPACE_INIT or,
+        as last resort, instantiating a plain default handler. Any namespace not explicitly configured will be
+        created with a policy to not be polled."""
+        try:
+            return self.NAMESPACE_INIT[ns].build(ns, self)
+        except KeyError:
+            # We consider any namespace not explicitly configured in NAMESPACE_INIT as not
+            # needing polling whatever the ns content semantics.
+            return NamespaceHandler(
+                ns, self, config=NamespaceHandler.POLLING_CONFIG_NONE
+            )
+
     def get_handler(self, ns: "mn.Namespace", /):
+        """Returns an actual NamespaceHandler by looking up those already installed in the device
+        or building a proper one through 'build_handler'."""
         try:
             return self.ns_handlers[ns]
         except KeyError:
-            return NamespaceHandler(ns, self)
+            return self.build_handler(ns)
 
     def register_parser_ex(self, parser: NamespaceParser, *nss: "mn.Namespace"):
         """Register a parser for multiple namespaces. Abilities are checked for namespaces availability."""
-        ability = self.descriptor.ability
-        for ns in (_ns for _ns in nss if _ns in ability):
-            self.get_handler(ns).register_parser(parser)
+        for ns in nss:
+            try:
+                # fast path here since likely to suceed
+                self.ns_handlers[ns].register_parser(parser)
+            except KeyError:
+                if ns not in self.descriptor.ability:
+                    continue
+                if ns in self.ns_handlers:
+                    raise
+                self.build_handler(ns).register_parser(parser)
 
     @property
     def polling_response_size_available(self):

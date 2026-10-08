@@ -46,10 +46,14 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
         for key in (mc.KEY_OPERATION, mc.KEY_STANDBY)
     }
 
-    def __init__(self, ns: "mn.Namespace", device: "Device", /):
-        NamespaceHandler.__init__(
-            self, ns, device, config=mlc.POLLING_CONFIG_CONFIGURATION
-        )
+    def __init__(
+        self,
+        ns: "mn.Namespace",
+        device: "Device",
+        /,
+        **kwargs: "Unpack[NamespaceHandler.Args]",
+    ):
+        NamespaceHandler.__init__(self, ns, device, **kwargs)
         index = mn.IndexType.channel.get(0)
         device_info = device.get_device_entry_info(0)
         self.register_parsers(
@@ -347,19 +351,3 @@ class MtsThermostatClimate(MtsClimate):
         _attr_native_max_value = 8
         _attr_native_min_value = -8
         _attr_native_step = 0.1
-
-
-NamespaceHandler.POLLING_CONFIG_MAP.update(
-    {
-        mn.Appliance_Control_TempUnit: mlc.POLLING_CONFIG_CONFIGURATION,
-        mn_t.Appliance_Control_Thermostat_Calibration: mlc.POLLING_CONFIG_CONFIGURATION,
-        mn_t.Appliance_Control_Thermostat_CtlRange: NamespaceHandler.POLLING_CONFIG_ONCE,
-        mn_t.Appliance_Control_Thermostat_DeadZone: mlc.POLLING_CONFIG_CONFIGURATION,
-        mn_t.Appliance_Control_Thermostat_Frost: mlc.POLLING_CONFIG_SLOWSENSOR,
-        mn_t.Appliance_Control_Thermostat_HoldAction: mlc.POLLING_CONFIG_CONFIGURATION,
-        mn_t.Appliance_Control_Thermostat_Overheat: mlc.POLLING_CONFIG_SLOWSENSOR,
-        mn_t.Appliance_Control_Thermostat_Schedule: mlc.POLLING_CONFIG_CONFIGURATION,
-        mn_t.Appliance_Control_Thermostat_ScheduleB: mlc.POLLING_CONFIG_CONFIGURATION,
-        mn_t.Appliance_Control_Thermostat_Sensor: mlc.POLLING_CONFIG_SLOWSENSOR,
-    }
-)

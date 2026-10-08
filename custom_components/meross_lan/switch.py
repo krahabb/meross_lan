@@ -65,7 +65,6 @@ class SwitchParser(mle.BinaryParser, SwitchEntity):
 
 class PhysicalLockSwitch(SwitchParser):
 
-    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
     init_entity_key = mc.KEY_LOCK
 
 
@@ -85,7 +84,13 @@ class ToggleX(SwitchParser):
 
     @classmethod
     @override
-    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
+    def namespace_init(
+        cls,
+        ns: mn.Namespace,
+        device: "Device",
+        /,
+        **kwargs: "Unpack[NamespaceHandler.Args]",
+    ):
         # We don't initialize every channel here since the digest reported channels
         # might be mapped to more specialized entities:
         # this is true for lights, garageDoor and fan though.
@@ -112,11 +117,12 @@ class ToggleX(SwitchParser):
             except KeyError:
                 pass
 
-        handler = NamespaceHandler(ns, device, parser_class=ToggleX, channels=channels)
+        kwargs["parser_class"] = ToggleX
+        kwargs["channels"] = channels
+        nh = NamespaceHandler(ns, device, **kwargs)
         if device.descriptor.is_refoss:
-            handler.polling_request = mn.PayloadType.DICT_IDX_65535.build_get(
-                handler.id
-            )
+            nh.polling_request = mn.PayloadType.DICT_IDX_65535.build_get(nh.id)
+        return nh
 
 
 async_setup_entry = SwitchEntity.platform_setup_entry

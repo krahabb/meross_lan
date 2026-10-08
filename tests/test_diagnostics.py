@@ -97,6 +97,7 @@ async def test_device_diagnostics(request, hass: "HomeAssistant"):
             request, hass, emulator, auto_poll=True, data=CONFIG_ENTRY_DATA
         ) as context:
 
+            context.dump_ns_handlers()
             context.time_mock.warp(
                 tick=context.device.PARAM_TRACING_ABILITY_POLL_TIMEOUT
             )

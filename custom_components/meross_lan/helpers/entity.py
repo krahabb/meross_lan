@@ -615,9 +615,7 @@ class ToggleXParser(BinaryEntity, ParserEntity):
 
 class EntityNamespaceMixin(ParserEntity, handler.ParserHandler):
     """
-    Special 'polling enabler/disabler' mixin used with entities which are
-    'single instance' for a namespace handler and so they'll disable polling
-    should they're disabled in HA.
+    TODO: remove this design concept (handler+parser) since it is rather ugly
     """
 
     if TYPE_CHECKING:
@@ -637,23 +635,8 @@ class EntityNamespaceMixin(ParserEntity, handler.ParserHandler):
         # which are not mixed with parsers and which don't define their own __slots__.
         cls.__slots__ = cls._calc_slots()
 
-    @classmethod
-    @override
-    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        ns_entity = cls(ns, device, ns=ns)
-        ns_entity.polling_strategy = None
-        return ns_entity
-
     def shutdown(self):
         # Because of the mixin nature of this class the shutdown sequence could be invoked by
         # both Entity and NamespaceHandler shutdown mechanics so we need filter out the duplicate.
         super().shutdown()
         del self.parent.ns_handlers[self.id]
-
-    async def async_added_to_hass(self):
-        self.polling_strategy = self.POLLING_CONFIG_DEFAULT[-1]
-        await ParserEntity.async_added_to_hass(self)
-
-    async def async_will_remove_from_hass(self):
-        self.polling_strategy = None
-        await ParserEntity.async_will_remove_from_hass(self)

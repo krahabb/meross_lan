@@ -24,8 +24,17 @@ if TYPE_CHECKING:
 
 
 class DeviceCfgParser(MappingParser):
+    # This ns is actually globally configured by Device.async_init with
+    # this 'generic' parser config but specialized devices will likely
+    # install their own instances of parsers/configs. This is especially needed because
+    # this ns requires polling with actual indexes and this might vary.
+    # The default here is just a 'placeholder' (still it could provide some
+    # basic entities for some devices)
 
-    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
+    # prevent auto-creation of parsers since this ns is pretty peculiar being
+    # sometimes indexed by subId (for hub subdevices)
+    HANDLER_CHANNELS = ()
+
     init_ns = mn.Appliance_Config_DeviceCfg
 
     # These are extracted from ms130 payload but they look like generic enough
@@ -73,16 +82,6 @@ class DeviceCfgParser(MappingParser):
         },
     }
 
-    @classmethod
-    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        # This ns is actually globally configured by Device.async_init with
-        # this 'generic' parser config but specialized devices will likely
-        # install their own instances of parsers/configs. This is especially needed because
-        # this ns requires polling with actual indexes and this might vary.
-        # The default here is just a 'placeholder' (still it could provide some
-        # basic entities for some devices)
-        NamespaceHandler(ns, device, parser_class=cls, channels=())
-
 
 class Mts200HumiSensor(SensorParser):
 
@@ -114,8 +113,6 @@ class SensorLatestParser(MappingParser):
         parent: Final[Device]  # type: ignore[override]
         init_parser_defs: ClassVar[Mapping[str, type[SensorParser]]]
         parser_defs: Mapping[str, type[SensorParser]]
-
-    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_FASTSENSOR
 
     init_parser_defs = {
         mc.KEY_HUMI: Mts200HumiSensor.DEF(
@@ -161,7 +158,8 @@ class SensorLatestXParser(MappingParser):
 
         def __init__(self, *args, **kwargs: Unpack[Args]): ...  # pragma: no cover
 
-    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_FASTSENSOR
+    HANDLER_CHANNELS = ()
+
     init_ns = mn.Appliance_Control_Sensor_LatestX
 
     # many of these defs are guesses and the actual composition
@@ -172,13 +170,6 @@ class SensorLatestXParser(MappingParser):
         mc.KEY_LIGHT: SensorParser.DEF(**SensorParser.LIGHT_ARGS),
         mc.KEY_TEMP: SensorParser.DEF(**SensorParser.TEMPERATURE_ARGS),
     }
-
-    @classmethod
-    @override
-    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        # TODO: move config default to either the parser class or to the ns grammar
-        # so we can remove this override
-        return NamespaceHandler(ns, device, parser_class=cls, channels=())
 
     @override
     def _namespace_registered(self, handler_registration):

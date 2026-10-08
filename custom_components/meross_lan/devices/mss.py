@@ -45,10 +45,6 @@ class _ElectricitySensor(SensorParser.RestoreEntity, SensorParser):
         # HA core entity attributes:
         native_value: int
 
-    # This is good for both when used as Electiricity and ElectricityX since
-    # ns registration will in both cases reach to this ;)
-    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_FASTSENSOR
-
     init_entity_key = "energy_estimate"
     ENTITY_DEFS = {
         mc.KEY_POWER: SensorParser.DEF(
@@ -121,8 +117,6 @@ class _ElectricitySensor(SensorParser.RestoreEntity, SensorParser):
 
         await SensorParser.async_added_to_hass(self)
 
-    async_will_remove_from_hass = SensorParser.async_will_remove_from_hass  # type: ignore[assignment]
-
     @override
     def set_available(self):
         self.available = True
@@ -179,14 +173,7 @@ class _ElectricitySensor(SensorParser.RestoreEntity, SensorParser):
 
 
 class ElectricitySensor(_ElectricitySensor, EntityNamespaceMixin):
-
-    # skip EntityNamespaceMixin async_added_to_hass and async_will_remove_from_hass since
-    # we want to keep polling this ns even when _ElectricitySensor is disabled
-    # (we have to since it carries critical data for the energy estimate and ConsumptionXSensor)
-    @classmethod
-    @override
-    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        return cls(ns, device, ns=ns)
+    pass
 
 
 class ElectricityXSensor(_ElectricitySensor):
@@ -314,13 +301,27 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
 
     __SLOTS__ = ("_indexes_to_poll",)
 
-    def __init__(self, ns: mn.Namespace, device: "Device", /):
+    def __init__(
+        self,
+        ns: mn.Namespace,
+        device: "Device",
+        /,
+        **kwargs: "Unpack[NamespaceHandler.Args]",
+    ):
         self._indexes_to_poll = []
-        NamespaceHandler.__init__(self, ns, device, parser_class=ConsumptionHSensor)
-        if len(device.descriptor.channels) == 6:
-            self.polling_strategy = (
+        kwargs["parser_class"] = ConsumptionHSensor
+        # TODO: avoid overriding 'config' argument here (not that it makes any difference at this time
+        # but still it is a deviation from design concept)
+        kwargs["config"] = (
+            mlc.PARAM_ENERGY_UPDATE_PERIOD,
+            mlc.PARAM_ENERGY_CLOUD_UPDATE_PERIOD,
+            (
                 ConsumptionHNamespaceHandler.async_polling_strategy_probe
-            )
+                if len(device.descriptor.channels) == 6
+                else ConsumptionHNamespaceHandler.async_polling_strategy_smartchunk
+            ),
+        )
+        NamespaceHandler.__init__(self, ns, device, **kwargs)
         device.enable_check_device_time()
 
     def channel_polling_add(self, index: mn.IndexValue, delay: float = 0, /):
@@ -379,12 +380,6 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         self.next_poll_epoch, self.polling_request_payload[0] = self._indexes_to_poll[0]
         await self.async_polling_strategy_smart()
 
-    POLLING_CONFIG_DEFAULT = (
-        mlc.PARAM_ENERGY_UPDATE_PERIOD,
-        mlc.PARAM_ENERGY_CLOUD_UPDATE_PERIOD,
-        async_polling_strategy_smartchunk,
-    )
-
 
 class ConsumptionXSensor(
     SensorParser.RestoreEntity, SensorParser, EntityNamespaceMixin
@@ -400,11 +395,6 @@ class ConsumptionXSensor(
         _consumption_last_value: int | None
         _consumption_last_time: int | None
 
-    POLLING_CONFIG_DEFAULT = (
-        mlc.PARAM_ENERGY_UPDATE_PERIOD,
-        mlc.PARAM_ENERGY_CLOUD_UPDATE_PERIOD,
-        EntityNamespaceMixin.async_polling_strategy_smart,
-    )
     init_entity_key = "energy"
     _attr_device_class = SensorParser.DeviceClass.ENERGY
     _attr_translation_key = "consumption"
@@ -624,7 +614,6 @@ class ConsumptionXSensor(
 
 class OverTempEnableSwitch(SwitchParser, EntityNamespaceMixin):
 
-    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
     init_entity_key = "config_overtemp_enable"
     init_key_value = SwitchParser.KeyValue(mc.KEY_ENABLE)
 

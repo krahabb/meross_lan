@@ -576,11 +576,17 @@ class Light(LightBase):
 
     @classmethod
     @override
-    def namespace_init(cls, ns: mn.Namespace, device: "Device", /):
-        handler = NamespaceHandler(ns, device)
+    def namespace_init(
+        cls,
+        ns: mn.Namespace,
+        device: "Device",
+        /,
+        **kwargs: "Unpack[NamespaceHandler.Args]",
+    ):
+        nh = NamespaceHandler(ns, device, **kwargs)
         descriptor = device.descriptor
         channel = ns.get_digest(descriptor.digest)[mc.KEY_CHANNEL]
-        kwargs = {
+        light_kwargs = {
             "ns": ns,
             "index": mn.IndexType.channel.get(channel),
         }
@@ -588,10 +594,11 @@ class Light(LightBase):
             light_class = EffectLight
         elif mn.Appliance_Control_Mp3 in descriptor.ability:
             light_class = Light
-            kwargs["effect_list"] = mc.HP110A_LIGHT_EFFECT_LIST
+            light_kwargs["effect_list"] = mc.HP110A_LIGHT_EFFECT_LIST
         else:
             light_class = Light
-        handler.register_parser(light_class(channel, device, **kwargs))
+        nh.register_parser(light_class(channel, device, **light_kwargs))
+        return nh
 
 
 class EffectLight(Light):
@@ -618,7 +625,6 @@ class EffectLight(Light):
             mn.Appliance_Control_Light_Effect,
             device,
             handler=self._handle_Appliance_Control_Light_Effect,
-            config=mlc.POLLING_CONFIG_CONFIGURATION,
         )
         # This is a 'new' (2025-06-17) key appearing in msl320cpr digest.
         # The key itself is 'light.entity' and carries the effect list
@@ -766,7 +772,6 @@ class DNDLight(mle.BinaryParser, mle.EntityNamespaceMixin, light.LightEntity):
     through a light feature (presence light or so)
     """
 
-    POLLING_CONFIG_DEFAULT = mlc.POLLING_CONFIG_CONFIGURATION
     PLATFORM = light.DOMAIN
     init_entity_key = "dnd"
     init_key_value = mle.BinaryParser.KeyValue(mc.KEY_MODE)

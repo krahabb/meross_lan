@@ -6,7 +6,7 @@ from ... import const as mlc
 from ...button import Button
 from ...helpers import device as mld, entity as mle
 from ...merossclient import SubDeviceDescriptor, async_import_module, device
-from ...merossclient.device.handler import NamespaceHandler, VoidHandler
+from ...merossclient.device.handler import NamespaceHandler
 from ...merossclient.protocol import const as mc, namespaces as mn
 from ...merossclient.protocol.namespaces import hub as mn_h
 from ...sensor import SensorParser
@@ -15,7 +15,7 @@ from ...update import UpdateEntity
 from ..misc import DeviceCfgParser
 
 if TYPE_CHECKING:
-    from typing import ClassVar, Final, Iterable, Mapping
+    from typing import ClassVar, Final, Iterable, Mapping, Unpack
 
     from ...helpers.device import MerossMessage
     from ...helpers.meross_profile import DeviceInfoExtType
@@ -37,8 +37,14 @@ class ApplianceDigestHubHandler(NamespaceHandler):
         parent: "Hub"  # type: ignore[override]
         digest: "mt.hub.Digest"
 
-    def __init__(self, ns: "Namespace", device: "Hub", /):
-        NamespaceHandler.__init__(self, ns, device)
+    def __init__(
+        self,
+        ns: mn.Namespace,
+        device: mld.Device,
+        /,
+        **kwargs: "Unpack[NamespaceHandler.Args]",
+    ):
+        NamespaceHandler.__init__(self, ns, device, **kwargs)
         # We need to make the 'parsers' attribute evaluate to True else
         # the mechanics for digest parsing/polling in base classes will not dispatch to this.
         self.parsers = device.subdevices  # type: ignore
@@ -52,7 +58,9 @@ class ApplianceDigestHubHandler(NamespaceHandler):
         self.parent.parse_digest(digest)
 
 
-def namespace_init_appliance_hub_pairsubdev(ns: "Namespace", device: "Hub", /):
+def namespace_init_appliance_hub_pairsubdev(
+    ns: "Namespace", device: "Hub", /, **kwargs
+):
     Button(
         None,
         device,
@@ -75,10 +83,74 @@ class Hub(mld.Device):
     # since, once configured, these are no harm when used by a generic non-hub device.
     mld.Device.NAMESPACE_INIT.update(
         {
-            mn_h.Appliance_Digest_Hub: ApplianceDigestHubHandler,
-            mn_h.Appliance_Hub_ExtraInfo: VoidHandler,
-            mn_h.Appliance_Hub_SubdeviceList: VoidHandler,
-            mn_h.Appliance_Hub_PairSubDev: namespace_init_appliance_hub_pairsubdev,
+            mn_h.Appliance_Control_Water: mld.Device.FACTORY_DEFAULT_LAZY,
+            mn_h.Appliance_Digest_Hub: NamespaceHandler.Factory(
+                ApplianceDigestHubHandler
+            ),
+            mn_h.Appliance_Hub_Battery: NamespaceHandler.Factory(
+                NamespaceHandler,
+                True,
+                {
+                    "config": (
+                        3600,
+                        86400,
+                        NamespaceHandler.async_polling_strategy_smart,
+                    )
+                },
+            ),
+            mn_h.Appliance_Hub_Exception: mld.Device.FACTORY_DEFAULT_NOPOLL,
+            mn_h.Appliance_Hub_ExtraInfo: mld.Device.FACTORY_IGNORE,
+            mn_h.Appliance_Hub_Online: mld.Device.FACTORY_DEFAULT_NOPOLL,
+            mn_h.Appliance_Hub_PairSubDev: NamespaceHandler.Factory(
+                namespace_init_appliance_hub_pairsubdev
+            ),
+            mn_h.Appliance_Hub_ToggleX: mld.Device.FACTORY_DEFAULT_NOPOLL,
+            mn_h.Appliance_Hub_SubdeviceList: mld.Device.FACTORY_IGNORE,
+            mn_h.Appliance_Hub_SubDevice_Beep: mld.Device.FACTORY_DEFAULT_LAZY,
+            mn_h.Appliance_Hub_SubDevice_Lock: mld.Device.FACTORY_DEFAULT_LAZY,
+            mn_h.Appliance_Hub_SubDevice_Version: mld.Device.FACTORY_DEFAULT_LAZY,
+            mn_h.Appliance_Hub_Mts100_Adjust: mld.Device.FACTORY_DEFAULT_LAZY,
+            mn_h.Appliance_Hub_Mts100_All: NamespaceHandler.Factory(
+                NamespaceHandler,
+                False,
+                {
+                    "config": (
+                        0,
+                        mlc.PARAM_CLOUD_UPDATE_PERIOD,
+                        NamespaceHandler.async_polling_strategy_chunked,
+                    )
+                },
+            ),
+            mn_h.Appliance_Hub_Mts100_Config: mld.Device.FACTORY_DEFAULT_LAZY,
+            mn_h.Appliance_Hub_Mts100_Mode: mld.Device.FACTORY_DEFAULT_NOPOLL,
+            mn_h.Appliance_Hub_Mts100_ScheduleB: NamespaceHandler.Factory(
+                NamespaceHandler,
+                False,
+                {
+                    "config": (
+                        mlc.PARAM_CONFIG_UPDATE_PERIOD,
+                        mlc.PARAM_CLOUD_UPDATE_PERIOD,
+                        NamespaceHandler.async_polling_strategy_chunked,
+                    )
+                },
+            ),
+            mn_h.Appliance_Hub_Mts100_Temperature: mld.Device.FACTORY_DEFAULT_NOPOLL,
+            mn_h.Appliance_Hub_Sensor_Adjust: mld.Device.FACTORY_DEFAULT_LAZY,
+            mn_h.Appliance_Hub_Sensor_All: NamespaceHandler.Factory(
+                NamespaceHandler,
+                False,
+                {
+                    "config": (
+                        0,
+                        mlc.PARAM_CLOUD_UPDATE_PERIOD,
+                        NamespaceHandler.async_polling_strategy_chunked,
+                    ),
+                },
+            ),
+            mn_h.Appliance_Hub_Sensor_DoorWindow: mld.Device.FACTORY_DEFAULT_NOPOLL,
+            mn_h.Appliance_Hub_Sensor_Smoke: mld.Device.FACTORY_DEFAULT_NOPOLL,
+            mn_h.Appliance_Hub_Sensor_TempHum: mld.Device.FACTORY_DEFAULT_NOPOLL,
+            mn_h.Appliance_Hub_Sensor_WaterLeak: mld.Device.FACTORY_DEFAULT_NOPOLL,
         }
     )
     mld.Device.TRACE_ABILITY_EXCLUDE = mld.Device.TRACE_ABILITY_EXCLUDE + (
@@ -423,7 +495,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
             if _cls is SubDevice:
                 break
         hub.register_parser_ex(self, *_ns_hub)
-        hub.get_handler(mn_h.Appliance_Hub_Battery).register_parser(
+        hub.ns_handlers[mn_h.Appliance_Hub_Battery].register_parser(
             SensorParser(
                 subid,
                 hub,
@@ -629,46 +701,3 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
                 str(payload),
                 timeout=14400,
             )
-
-
-# Here we need to disable polling for ns which are already carried in hub 'digest' or 'sensor_all'
-NamespaceHandler.POLLING_CONFIG_MAP.update(
-    {
-        mn_h.Appliance_Control_Water: NamespaceHandler.POLLING_CONFIG_DEFAULT,
-        mn_h.Appliance_Hub_Battery: (
-            3600,
-            86400,
-            NamespaceHandler.async_polling_strategy_smart,
-        ),
-        mn_h.Appliance_Hub_Exception: NamespaceHandler.POLLING_CONFIG_NONE,
-        mn_h.Appliance_Hub_Online: NamespaceHandler.POLLING_CONFIG_NONE,
-        mn_h.Appliance_Hub_ToggleX: NamespaceHandler.POLLING_CONFIG_NONE,
-        mn_h.Appliance_Hub_SubDevice_Beep: mlc.POLLING_CONFIG_CONFIGURATION,
-        mn_h.Appliance_Hub_SubDevice_Lock: mlc.POLLING_CONFIG_CONFIGURATION,
-        mn_h.Appliance_Hub_SubDevice_Version: NamespaceHandler.POLLING_CONFIG_ONCE,
-        mn_h.Appliance_Hub_Mts100_Adjust: mlc.POLLING_CONFIG_CONFIGURATION,
-        mn_h.Appliance_Hub_Mts100_All: (
-            0,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_polling_strategy_chunked,
-        ),
-        mn_h.Appliance_Hub_Mts100_Config: mlc.POLLING_CONFIG_CONFIGURATION,
-        mn_h.Appliance_Hub_Mts100_Mode: NamespaceHandler.POLLING_CONFIG_NONE,
-        mn_h.Appliance_Hub_Mts100_ScheduleB: (
-            mlc.PARAM_CONFIG_UPDATE_PERIOD,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_polling_strategy_chunked,
-        ),
-        mn_h.Appliance_Hub_Mts100_Temperature: NamespaceHandler.POLLING_CONFIG_NONE,
-        mn_h.Appliance_Hub_Sensor_Adjust: mlc.POLLING_CONFIG_CONFIGURATION,
-        mn_h.Appliance_Hub_Sensor_All: (
-            0,
-            mlc.PARAM_CLOUD_UPDATE_PERIOD,
-            NamespaceHandler.async_polling_strategy_chunked,
-        ),
-        mn_h.Appliance_Hub_Sensor_DoorWindow: NamespaceHandler.POLLING_CONFIG_NONE,
-        mn_h.Appliance_Hub_Sensor_Smoke: NamespaceHandler.POLLING_CONFIG_NONE,
-        mn_h.Appliance_Hub_Sensor_TempHum: NamespaceHandler.POLLING_CONFIG_NONE,
-        mn_h.Appliance_Hub_Sensor_WaterLeak: NamespaceHandler.POLLING_CONFIG_NONE,
-    }
-)
