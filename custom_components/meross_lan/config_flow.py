@@ -185,7 +185,6 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
             self.api,
             from_=mlc.DOMAIN,
             trigger_src=self.__class__.__name__,
-            loop=self.hass.loop,
         )
 
     async def async_get_device_client(self, uuid: str) -> "AbstractClient | None":
@@ -728,7 +727,6 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                                 key=key,
                                 uuid=device_id,
                                 user_id=user_id,
-                                loop=hass.loop,
                                 sslcontext=get_default_no_verify_ssl_context(),
                             )
                             try:

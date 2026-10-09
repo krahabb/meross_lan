@@ -654,7 +654,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                         key=self.key,
                         from_=mlc.DOMAIN,
                         trigger_src=self.__class__.__name__,
-                        loop=self.loop,
                     )
                 )
             if mn.Appliance_Encrypt_ECDHE in self.descriptor.ability:

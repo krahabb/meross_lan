@@ -236,7 +236,6 @@ class MQTTConnection(AbstractMQTTConnection):
         kwargs["key"] = profile.key
         kwargs["is_cloud"] = profile.is_cloud_profile
         kwargs["allow_publish"] = profile.allow_mqtt_publish
-        kwargs["loop"] = profile.loop
         kwargs["rl_rate"] = profile.rl_rate
         kwargs["rl_window_size"] = profile.rl_window_size
         super().__init__(

@@ -835,7 +835,6 @@ class SubDevice(PhysicalDevice, NamespaceParser):
         kwargs["from_"] = parent.from_
         kwargs["trigger_src"] = parent.trigger_src
         kwargs["timeout"] = parent.timeout
-        kwargs["loop"] = parent.loop
         parent.subdevices[subid] = self
         super().__init__(subid, parent, **kwargs)
 

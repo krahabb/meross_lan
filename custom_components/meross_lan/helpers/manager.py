@@ -162,7 +162,6 @@ class ConfigEntryManager(logging.Loggable):
         self._trace_file = None
         self._trace_future = None
         self._trace_data = None
-        kwargs.setdefault("loop", parent.hass.loop)
         super().__init__(id, parent, **kwargs)
 
     async def async_shutdown(self):

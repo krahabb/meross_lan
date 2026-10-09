@@ -312,9 +312,7 @@ class ComponentApi(mlq.MQTTProfile):
             self.api = api
             self.address = address
             self._flow_id = flow_id
-            m_bt.BluetoothClient.__init__(
-                self, address, api, from_=mlc.DOMAIN, loop=api.loop
-            )
+            m_bt.BluetoothClient.__init__(self, address, api, from_=mlc.DOMAIN)
             self._bt_unavailable_unsub = ha_bt.async_track_unavailable(
                 api.hass, self._bt_unavailable, address, connectable=True
             )
@@ -514,6 +512,7 @@ class ComponentApi(mlq.MQTTProfile):
             self.config_entries.async_entry_for_domain_unique_id(
                 mlc.DOMAIN, mlc.DOMAIN
             ),
+            loop=hass.loop,
         )
 
         async def _async_service_request(
@@ -651,7 +650,6 @@ class ComponentApi(mlq.MQTTProfile):
                             self,
                             from_=mlc.DOMAIN,
                             trigger_src=trigger_src,
-                            loop=hass.loop,
                         ).async_request_raw,
                     )
 
