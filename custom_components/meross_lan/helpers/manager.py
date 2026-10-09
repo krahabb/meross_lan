@@ -179,7 +179,6 @@ class ConfigEntryManager(logging.Loggable):
         await super().async_shutdown()
         if self.is_tracing:
             self.trace_close()
-        del self.config_entry
 
     # interface: Loggable
     def configure_logger(self, /):
