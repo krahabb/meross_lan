@@ -19,7 +19,7 @@ def md5hexdigest(*args: "Unpack[tuple[str, ...]]"):
 
 
 def compute_wifix_password(password: str, type: str, uuid: str, mac: str, /):
-    return AESCipher(md5hexdigest(type, uuid, mac).encode()).encript_text(password)
+    return AESCipher(md5hexdigest(type, uuid, mac).encode()).encrypt_text(password)
 
 
 class AESCipher(Cipher):
@@ -27,22 +27,22 @@ class AESCipher(Cipher):
     if TYPE_CHECKING:
         IV: Final[bytes]
 
-    IV = "0000000000000000".encode()
+    IV = b"0000000000000000"
 
     def __init__(self, encryption_key: bytes):
         super().__init__(algorithms.AES(encryption_key), modes.CBC(self.IV))
 
-    def encript_text(self, text: str):
+    def encrypt_text(self, text: str):
         buffer = text.encode()
         buffer += bytes(16 - (len(buffer) % 16))
         encryptor = self.encryptor()
         return b2a_base64(encryptor.update(buffer) + encryptor.finalize()).decode()
 
-    def decript(self, data: bytes | bytearray):
+    def decrypt(self, data: bytes | bytearray):
         decryptor = self.decryptor()
         return (decryptor.update(a2b_base64(data)) + decryptor.finalize()).rstrip(
             bytes(1)
         )
 
-    def decript_text(self, text: str):
-        return self.decript(text.encode()).decode()
+    def decrypt_text(self, text: str):
+        return self.decrypt(text.encode()).decode()

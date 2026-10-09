@@ -163,7 +163,7 @@ class HttpClient(AbstractClient):
     ):
         """Internal wrapper to perform the request."""
         if _cipher := self._cipher:
-            data = _cipher.encript_text(request.json)
+            data = _cipher.encrypt_text(request.json)
             headers = HttpClient._HEADERS_ENCRYPTED
         else:
             # no encryption: session defaults to json
@@ -176,7 +176,7 @@ class HttpClient(AbstractClient):
             timeout=timeout,
         )
         return (
-            _cipher.decript(await response.read())
+            _cipher.decrypt(await response.read())
             if _cipher
             else (await response.read())
         )

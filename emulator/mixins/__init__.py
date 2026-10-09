@@ -447,7 +447,7 @@ class Emulator:
                 request = MerossMessage.decode(request)
             except JSONDecodeError:
                 if cipher := self._cipher:
-                    request = MerossMessage.decode(cipher.decript_text(request))
+                    request = MerossMessage.decode(cipher.decrypt_text(request))
                 else:
                     raise
             else:
@@ -483,7 +483,7 @@ class Emulator:
                 # - mss310:  2.9k
                 response_json = response_json[: self.MAXIMUM_RESPONSE_SIZE]
             self._log_message("TX", response_json)
-            return cipher.encript_text(response_json) if cipher else response_json
+            return cipher.encrypt_text(response_json) if cipher else response_json
 
         return None
 
