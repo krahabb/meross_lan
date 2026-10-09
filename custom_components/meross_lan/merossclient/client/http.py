@@ -24,10 +24,6 @@ if TYPE_CHECKING:
     from ..protocol.types import MerossHeaderType, MerossRequestType
 
 
-class TerminatedException(Exception):
-    pass
-
-
 class HttpClient(AbstractClient):
 
     class Cipher(AESCipher):
@@ -52,6 +48,7 @@ class HttpClient(AbstractClient):
         SESSION_TIMEOUT: ClassVar
         _SESSION: ClassVar[aiohttp.ClientSession | None]
 
+        _requests: set[asyncio.Task]
         _cipher: Cipher | None
 
     TRANSPORT = AbstractClient.Transport.HTTP  # type: ignore[override]
@@ -59,6 +56,9 @@ class HttpClient(AbstractClient):
     SESSION_MAXIMUM_CONNECTIONS = 50
     SESSION_MAXIMUM_CONNECTIONS_PER_HOST = 1
     SESSION_TIMEOUT = aiohttp.ClientTimeout(total=10, connect=5)
+
+    _HEADERS_PLAINTEXT = {aiohttp.hdrs.CONTENT_TYPE: "application/json"}
+    _HEADERS_ENCRYPTED = {aiohttp.hdrs.CONTENT_TYPE: "application/octet-stream"}
 
     # Use an 'isolated' and dedicated client session to better manage
     # Meross http specifics following concern from @garysargentpersonal
@@ -96,8 +96,7 @@ class HttpClient(AbstractClient):
     __slots__ = AbstractClient._calc_slots(
         "_url",
         "_session",
-        "_terminate",
-        "_terminate_guard",
+        "_requests",
         "_cipher",
     )
 
@@ -116,8 +115,7 @@ class HttpClient(AbstractClient):
             kwargs.pop("session", HttpClient._SESSION)
             or HttpClient._get_or_create_client_session()
         )
-        self._terminate = False
-        self._terminate_guard = 0
+        self._requests = set()
         self._cipher = None
         super().__init__(host, parent, **kwargs)
 
@@ -146,85 +144,72 @@ class HttpClient(AbstractClient):
     def disable_encryption(self):
         self._cipher = None
 
-    def _check_terminated(self):
-        if self._terminate:
-            raise TerminatedException
-
     @override
     async def async_connect(self, /, **kwargs):
         pass
 
     @override
     async def async_disconnect(self, /):
-        self._terminate = True
-        while self._terminate_guard:
-            await asyncio.sleep(0.5)
+        for request in tuple(self._requests):
+            request.cancel()
         if self.is_connected:
             self.on_disconnect()
-        self._terminate = False
+
+    async def _perform_request(
+        self,
+        request: MerossMessage,
+        timeout: aiohttp.ClientTimeout,
+        /,
+    ):
+        """Internal wrapper to perform the request."""
+        if _cipher := self._cipher:
+            data = _cipher.encript_text(request.json)
+            headers = HttpClient._HEADERS_ENCRYPTED
+        else:
+            # no encryption: session defaults to json
+            data = request.json
+            headers = HttpClient._HEADERS_PLAINTEXT
+        response = await self._session.post(
+            url=self._url,
+            data=data,
+            headers=headers,
+            timeout=timeout,
+        )
+        return (
+            _cipher.decript(await response.read())
+            if _cipher
+            else (await response.read())
+        )
 
     @override
     async def async_request_raw(
         self, request: MerossMessage, /, **kwargs: "Unpack[RequestRawArgs]"
     ):
-        self._check_terminated()
-        self._terminate_guard += 1
+        self.on_tx(request)
         try:
-            self.on_tx(request)
-
             if MEROSSDEBUG:
                 MEROSSDEBUG.http_random_timeout()
-
-            if _cipher := self._cipher:
-                data = _cipher.encript_text(request.json)
-                headers = {
-                    aiohttp.hdrs.CONTENT_TYPE: "application/octet-stream",
-                }
-            else:
-                # no encryption: session defaults to json
-                data = request.json
-                headers = {
-                    aiohttp.hdrs.CONTENT_TYPE: "application/json",
-                }
-            # since device HTTP service sometimes timeouts with no apparent
-            # reason we're using an increasing timeout loop to try recover
-            # when this timeout is transient. This will lead to a total timeout
-            # (for the caller) exceeding the value(s) actually set in self.timeout
-            response = await self._session.post(
-                url=self._url,
-                data=data,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(
-                    total=kwargs.get("timeout", self.timeout)
-                ),
-            )
-            self._check_terminated()
-            if response.status < 400:
-                if not self.is_connected:
-                    self.on_connect()
-                return self.on_rx_raw(
-                    (
-                        _cipher.decript(await response.read())
-                        if _cipher
-                        else (await response.read())
-                    )
+            request_task = self.create_task(
+                self._perform_request(
+                    request,
+                    aiohttp.ClientTimeout(total=kwargs.get("timeout", self.timeout)),
                 )
-            if self.is_connected:
-                self.on_disconnect()
-            response.raise_for_status()
-            # we should never get here since raise_for_status raises for 4xx and 5xx
-            raise MerossTransportError(
-                self, f"Unexpected response status {response.status}"
             )
-        except asyncio.TimeoutError:
+            requests = self._requests
+            requests.add(request_task)
+            request_task.add_done_callback(lambda task: requests.remove(request_task))
+            response = await request_task
+            if not self.is_connected:
+                self.on_connect()
+            return self.on_rx_raw(response)
+
+        except (asyncio.TimeoutError, asyncio.CancelledError):
             if self.is_connected:
                 self.on_disconnect()
             raise
         except Exception as e:
             self.log_exception(self.WARNING, e, "async_request_raw")
             raise
-        finally:
-            self._terminate_guard -= 1
 
     @override
     async def async_request(
@@ -256,8 +241,6 @@ class HttpClient(AbstractClient):
                 del request.json  # force re-compute of json
                 try:
                     response = await self.async_request_raw(request, **kwargs)
-                except TerminatedException:
-                    raise
                 except Exception:
                     # any error here is likely consequence of key-reply hack
                     # so we'll rethrow that (see #83 lacking invalid key message when configuring)
