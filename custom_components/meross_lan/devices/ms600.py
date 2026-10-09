@@ -159,7 +159,7 @@ class PresenceConfigParser(MappingParser):
         /,
         **kwargs: "Unpack[NamespaceHandler.Args]",
     ):
-        nh = MappingParser.namespace_init(ns, device, **kwargs)
+        nh = super().namespace_init(ns, device, **kwargs)
 
         index = mn.IndexType.channel.get(0)
         sensor_presence = PresenceSensor(
