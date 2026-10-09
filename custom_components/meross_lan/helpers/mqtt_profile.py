@@ -216,8 +216,8 @@ class MQTTConnection(AbstractMQTTConnection):
         session_handlers: SessionHandlersType
         sensor_connection: ConnectionSensor | None
 
-    AUTO_DESTROY = ("sensor_connection",)
-    __SLOTS__ = (
+    _AUTO_DESTROY = ("sensor_connection",)
+    _SLOTS = (
         "mqttdiscovering",
         "session_handlers",
         "sensor_connection",
@@ -602,12 +602,12 @@ class MQTTProfile(ConfigEntryManager):
 
     @property
     def rl_rate(self):
-        return self.config.get(mlc.CONF_RL_RATE, MQTTConnection.init_rl_rate)
+        return self.config.get(mlc.CONF_RL_RATE, MQTTConnection._INIT_rl_rate)
 
     @property
     def rl_window_size(self):
         return self.config.get(
-            mlc.CONF_RL_WINDOW_SIZE, MQTTConnection.init_rl_window_size
+            mlc.CONF_RL_WINDOW_SIZE, MQTTConnection._INIT_rl_window_size
         )
 
     @property

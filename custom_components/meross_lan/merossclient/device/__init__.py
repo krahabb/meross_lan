@@ -157,7 +157,7 @@ class Device(PhysicalDevice):
     NAMESPACE_INIT_PACKAGE = "merossclient"
     NAMESPACE_INIT = {}
 
-    __SLOTS__ = (
+    _SLOTS = (
         "preferred_transport",
         "polling_period",
         "transport",
@@ -826,7 +826,7 @@ class SubDevice(PhysicalDevice, NamespaceParser):
         class Args(PhysicalDevice.Args):
             descriptor: SubDeviceDescriptor
 
-    AUTO_DESTROY = ("async_request",)
+    _AUTO_DESTROY = ("async_request",)
     __slots__ = ()
 
     def __init__(self, subid: str, parent: "Device", **kwargs: "Unpack[Args]"):

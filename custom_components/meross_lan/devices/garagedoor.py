@@ -28,8 +28,8 @@ if TYPE_CHECKING:
 
 class GarageTimeoutBinarySensor(BinarySensorEntity):
 
-    init_entity_key = "problem"
-    init_is_on = False
+    _INIT_entity_key = "problem"
+    _INIT_is_on = False
     # the time at which the transition timeout occurred
     ATTR_TRANSITION_TIMEOUT = "transition_timeout"
     # the target state which was not reached
@@ -76,7 +76,7 @@ class GarageConfigMixin(ValueParser if TYPE_CHECKING else object):
 
     # Assuming by default we're parsing MultipleConfig
     # This will be overriden in kwargs when creating entities for Appliance.GarageDoor.Config
-    init_ns = mn.Appliance_GarageDoor_MultipleConfig
+    _INIT_ns = mn.Appliance_GarageDoor_MultipleConfig
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         key_value_str = str(kwargs["key_value"])  # type: ignore
@@ -154,7 +154,7 @@ class GarageConfigNumber(GarageConfigMixin, NumberParser):
     # these are ok for almost all config entities (they're mostly durations with
     # milliseconds device_value)
     # customize those when needed...
-    init_device_scale = 1000
+    _INIT_device_scale = 1000
     # HA core entity attributes:
     _attr_device_class = NumberParser.DEVICE_CLASS_DURATION
     _attr_native_max_value = 60
@@ -224,7 +224,7 @@ class _DurationHelper:
 
 class GarageDoorMultipleConfig(MappingParser):
 
-    init_parser_defs = {
+    _INIT_parser_defs = {
         mc.KEY_BUZZERENABLE: GarageConfigSwitch.DEF(),
         mc.KEY_DOORENABLE: GarageEnableSwitch.DEF(),
         mc.KEY_SIGNALDURATION: GarageConfigNumber.DEF(
@@ -240,8 +240,8 @@ class GarageDoorMultipleConfig(MappingParser):
 
 class GarageDoorConfig(MappingParserHandler):
 
-    init_parser_defs = {
-        key: GarageDoorMultipleConfig.init_parser_defs[key]
+    _INIT_parser_defs = {
+        key: GarageDoorMultipleConfig._INIT_parser_defs[key]
         for key in (
             mc.KEY_BUZZERENABLE,
             mc.KEY_SIGNALDURATION,
@@ -294,7 +294,7 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         "_transition_duration",
         "_transition_start",
         "binary_sensor_timeout",
-        *GarageDoorMultipleConfig.init_parser_defs.keys(),
+        *GarageDoorMultipleConfig._INIT_parser_defs.keys(),
     )
 
     def __init__(self, id, device: "Device", /, **kwargs: "Unpack[Cover.Args]"):

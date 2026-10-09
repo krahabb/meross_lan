@@ -115,7 +115,7 @@ class ConfigEntryManager(logging.Loggable):
 
     IssueSeverity = IssueSeverity
 
-    init_is_connected: bool = True
+    _INIT_is_connected: bool = True
 
     __slots__ = logging.Loggable._calc_slots(
         "config_entry",
@@ -158,7 +158,7 @@ class ConfigEntryManager(logging.Loggable):
         self.entities = {}
         self.entities_iterable = self.entities.values()
         self.added_entities = None
-        self.is_connected = self.init_is_connected
+        self.is_connected = self._INIT_is_connected
         self._trace_file = None
         self._trace_future = None
         self._trace_data = None
@@ -180,6 +180,7 @@ class ConfigEntryManager(logging.Loggable):
         await super().async_shutdown()
         if self.is_tracing:
             self.trace_close()
+        del self.config_entry
 
     # interface: Loggable
     def configure_logger(self, /):

@@ -400,7 +400,7 @@ class MerossProfile(MQTTProfile):
     def rl_rate(self):
         # Ideally we would like to allow customization of the rate limit to allow more customization
         # but this might prove dangerous unless people really know where they're going
-        return MQTTConnection.init_rl_rate
+        return MQTTConnection._INIT_rl_rate
 
     @property
     @override

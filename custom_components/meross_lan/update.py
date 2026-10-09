@@ -31,7 +31,7 @@ class UpdateEntity(Entity, update.UpdateEntity):
     PLATFORM = update.DOMAIN
     DeviceClass = update.UpdateDeviceClass
 
-    init_entity_key = "firmware_update"
+    _INIT_entity_key = "firmware_update"
 
     _attr_device_class = update.UpdateDeviceClass.FIRMWARE
     _attr_supported_features = (

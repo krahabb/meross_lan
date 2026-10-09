@@ -64,8 +64,8 @@ class gs559(SensorSubDevice, EnumParser):
         binary_sensor_muted: BinarySensorEntity
         sensor_interConn: EnumSensorEntity
 
-    init_ns = mn_h.Appliance_Hub_Sensor_Smoke
-    init_key_value = EnumParser.KeyValue(mc.KEY_STATUS)
+    _INIT_ns = mn_h.Appliance_Hub_Sensor_Smoke
+    _INIT_key_value = EnumParser.KeyValue(mc.KEY_STATUS)
     _attr_translation_key = "smoke_alarm_status"
 
     STATUS_MAP = {
@@ -98,7 +98,7 @@ class gs559(SensorSubDevice, EnumParser):
         "sensor_interConn": EnumParser.DEF(entity_key=mc.KEY_INTERCONN),
     }
 
-    AUTO_DESTROY = ENTITY_DEFS.keys()
+    _AUTO_DESTROY = ENTITY_DEFS.keys()
     __slots__ = ()
 
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
@@ -180,7 +180,7 @@ class ms100(SensorSubDevice):
     # These class cfgs are needed to dynamically customize entities in ms130
     TEMPERATURE_ARGS = SensorParser.TEMPERATURE_ARGS | {"device_scale": 10}
 
-    AUTO_DESTROY = ("sensor_temperature", "sensor_humidity")
+    _AUTO_DESTROY = ("sensor_temperature", "sensor_humidity")
     __slots__ = ()
 
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
@@ -335,7 +335,7 @@ class ms130(ms100):
                 ),
             },
         },
-    } | DeviceCfgParser.init_parser_defs  # type: ignore[assignment]
+    } | DeviceCfgParser._INIT_parser_defs  # type: ignore[assignment]
 
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
         ms100.__init__(self, descriptor, hub, **kwargs)
@@ -389,7 +389,7 @@ class ms130(ms100):
 
 class ms200(SensorSubDevice, BinarySensorParser):
     NS_HUB = (mn_h.Appliance_Hub_Sensor_DoorWindow,)
-    init_key_value = BinarySensorParser.KeyValue(mc.KEY_STATUS)
+    _INIT_key_value = BinarySensorParser.KeyValue(mc.KEY_STATUS)
     _attr_device_class = BinarySensorParser.DeviceClass.WINDOW
 
     @cached_property
@@ -399,7 +399,7 @@ class ms200(SensorSubDevice, BinarySensorParser):
 
 class ms400(SensorSubDevice, BinarySensorParser):
     NS_HUB = (mn_h.Appliance_Hub_Sensor_WaterLeak,)
-    init_key_value = BinarySensorParser.KeyValue(mc.KEY_LATESTWATERLEAK)
+    _INIT_key_value = BinarySensorParser.KeyValue(mc.KEY_LATESTWATERLEAK)
     _attr_device_class = BinarySensorParser.DeviceClass.SAFETY
 
     @cached_property

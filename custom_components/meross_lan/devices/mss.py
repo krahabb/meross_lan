@@ -45,7 +45,7 @@ class _ElectricitySensor(SensorParser.RestoreEntity, SensorParser):
         # HA core entity attributes:
         native_value: int
 
-    init_entity_key = "energy_estimate"
+    _INIT_entity_key = "energy_estimate"
     ENTITY_DEFS = {
         mc.KEY_POWER: SensorParser.DEF(
             device_class=SensorParser.DeviceClass.POWER,
@@ -247,8 +247,8 @@ class ConsumptionHSensor(SensorParser):
 
         handler_ns: "ConsumptionHNamespaceHandler"
 
-    init_entity_key = mc.KEY_CONSUMPTIONH
-    init_key_value = SensorParser.KeyValue(mc.KEY_TOTAL)
+    _INIT_entity_key = mc.KEY_CONSUMPTIONH
+    _INIT_key_value = SensorParser.KeyValue(mc.KEY_TOTAL)
 
     _attr_device_class = SensorParser.DeviceClass.ENERGY
     _attr_suggested_display_precision = 0
@@ -299,7 +299,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         """(last_request_epoch, NamespaceParser.index)"""
         _indexes_to_poll: list[indexToPollType]
 
-    __SLOTS__ = ("_indexes_to_poll",)
+    _SLOTS = ("_indexes_to_poll",)
 
     def __init__(
         self,
@@ -395,14 +395,14 @@ class ConsumptionXSensor(
         _consumption_last_value: int | None
         _consumption_last_time: int | None
 
-    init_entity_key = "energy"
+    _INIT_entity_key = "energy"
     _attr_device_class = SensorParser.DeviceClass.ENERGY
     _attr_translation_key = "consumption"
 
     ATTR_OFFSET = "offset"
     ATTR_RESET_TS = "reset_ts"
 
-    __SLOTS__ = (
+    _SLOTS = (
         "offset",
         "reset_ts",
         "energy_estimate",
@@ -614,10 +614,10 @@ class ConsumptionXSensor(
 
 class OverTempEnableSwitch(SwitchParser, EntityNamespaceMixin):
 
-    init_entity_key = "config_overtemp_enable"
-    init_key_value = SwitchParser.KeyValue(mc.KEY_ENABLE)
+    _INIT_entity_key = "config_overtemp_enable"
+    _INIT_key_value = SwitchParser.KeyValue(mc.KEY_ENABLE)
 
-    __SLOTS__ = ("sensor_overtemp_type",)
+    _SLOTS = ("sensor_overtemp_type",)
 
     @override
     def _handle(self, message: "MerossMessage", /):

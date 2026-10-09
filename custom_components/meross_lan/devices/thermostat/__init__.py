@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 class ScreenBrightnessNumber(NumberParser):
 
-    init_device_scale = 1.0
+    _INIT_device_scale = 1.0
     # HA core entity attributes:
     _attr_icon = "mdi:brightness-percent"
     _attr_native_unit_of_measurement = mlc.hac.PERCENTAGE
@@ -225,11 +225,11 @@ class MtsSummerMode(SwitchParser):
     if TYPE_CHECKING:
         SUMMER_MODE_HVAC_MODES: ClassVar[dict[mt.JsonType, list[MtsClimate.HVACMode]]]
 
-    init_key_value = SwitchParser.KeyValue(mc.KEY_MODE)
-    init_value_on = mc.MTS200_SUMMERMODE_COOL
-    init_value_off = mc.MTS200_SUMMERMODE_HEAT
-    init_entity_key = (
-        f"{mn_t.Appliance_Control_Thermostat_SummerMode.slug}__{init_key_value}"
+    _INIT_key_value = SwitchParser.KeyValue(mc.KEY_MODE)
+    _INIT_value_on = mc.MTS200_SUMMERMODE_COOL
+    _INIT_value_off = mc.MTS200_SUMMERMODE_HEAT
+    _INIT_entity_key = (
+        f"{mn_t.Appliance_Control_Thermostat_SummerMode.slug}__{_INIT_key_value}"
     )
 
     SUMMER_MODE_HVAC_MODES = {
@@ -259,8 +259,8 @@ class MtsSummerMode(SwitchParser):
 class MtsWindowOpened(BinarySensorParser):
     # Specialized binary sensor for Thermostat.WindowOpened entity used in Mts200-Mts960(maybe).
 
-    init_entity_key = mc.KEY_WINDOWOPENED
-    init_key_value = BinarySensorParser.KeyValue(mc.KEY_STATUS)
+    _INIT_entity_key = mc.KEY_WINDOWOPENED
+    _INIT_key_value = BinarySensorParser.KeyValue(mc.KEY_STATUS)
 
     _attr_device_class = BinarySensorParser.DeviceClass.WINDOW
 
@@ -268,8 +268,8 @@ class MtsWindowOpened(BinarySensorParser):
 class MtsExternalSensorSwitch(SwitchParser):
     # External sensor mode: use internal(0) vs external(1) sensor as temperature loopback.
 
-    init_entity_key = "external sensor mode"
-    init_key_value = SwitchParser.KeyValue(mc.KEY_MODE)
+    _INIT_entity_key = "external sensor mode"
+    _INIT_key_value = SwitchParser.KeyValue(mc.KEY_MODE)
 
     # TODO: use a SelectParser instead with options "internal" and "external"
 
@@ -279,9 +279,9 @@ class MtsHoldAction(SelectParser):
     if TYPE_CHECKING:
         number_time: NumberParser
 
-    init_entity_key = "hold action"
-    init_key_value = SelectParser.KeyValue(mc.KEY_MODE)
-    init_options_map = {
+    _INIT_entity_key = "hold action"
+    _INIT_key_value = SelectParser.KeyValue(mc.KEY_MODE)
+    _INIT_options_map = {
         mc.MTS_HOLDACTION_PERMANENT: "permanent",
         mc.MTS_HOLDACTION_NEXT_SCHEDULE: "next_schedule",
         mc.MTS_HOLDACTION_TIMER: "timer",
@@ -320,11 +320,11 @@ class MtsHoldAction(SelectParser):
 
 class MtsTempUnit(SelectParser):
 
-    _tempunit_cfg: "mt.JsonMapping" = DeviceCfgParser.init_parser_defs[mc.KEY_UNITCFG][mc.KEY_TEMPUNIT]  # type: ignore
+    _tempunit_cfg: "mt.JsonMapping" = DeviceCfgParser._INIT_parser_defs[mc.KEY_UNITCFG][mc.KEY_TEMPUNIT]  # type: ignore
 
-    init_entity_key = "display_temperature_unit"
-    init_key_value = SelectParser.KeyValue(mc.KEY_TEMPUNIT)
-    init_options_map = _tempunit_cfg["options_map"]
+    _INIT_entity_key = "display_temperature_unit"
+    _INIT_key_value = SelectParser.KeyValue(mc.KEY_TEMPUNIT)
+    _INIT_options_map = _tempunit_cfg["options_map"]
 
     _attr_translation_key = _tempunit_cfg["entity_key"]
 
@@ -344,7 +344,7 @@ class MtsThermostatClimate(MtsClimate):
         {"channel":0,"value":-270,"min":-2000,"max":2000} - mts960
         """
 
-        init_ns = mn_t.Appliance_Control_Thermostat_Calibration
+        _INIT_ns = mn_t.Appliance_Control_Thermostat_Calibration
 
         _attr_device_class = NumberParser.DEVICE_CLASS_TEMPERATURE_DELTA
         _attr_translation_key = "calibration_temperature"

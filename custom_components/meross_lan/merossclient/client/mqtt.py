@@ -313,19 +313,19 @@ class AbstractMQTTConnection(AbstractClient):
     TRANSPORT = AbstractClient.Transport.MQTT  # type: ignore[override]
     TIMEOUT = 5
 
-    init_is_cloud = True
-    init_allow_publish = True
-    init_rl_rate = 200 / 3600  # 200 messages per hour
-    init_rl_window_size = 5  # 5 messages (in 90 seconds for 200 messages/hour) in the sliding window to trigger rate-limiting
+    _INIT_is_cloud = True
+    _INIT_allow_publish = True
+    _INIT_rl_rate = 200 / 3600  # 200 messages per hour
+    _INIT_rl_window_size = 5  # 5 messages (in 90 seconds for 200 messages/hour) in the sliding window to trigger rate-limiting
 
-    AUTO_INIT = (
+    _AUTO_INIT = (
         "is_cloud",
         "allow_publish",
         "rl_rate",
         "rl_window_size",
     )
 
-    __SLOTS__ = (
+    _SLOTS = (
         "can_publish",
         "rl_dropped",
         "_rl_queues",
@@ -519,8 +519,8 @@ class MQTTConnection(AbstractMQTTConnection):
     def generate_app_id():
         return md5hexdigest(uuid4().hex)
 
-    AUTO_DESTROY = ("_mqttc",)
-    __SLOTS__ = (
+    _AUTO_DESTROY = ("_mqttc",)
+    _SLOTS = (
         "_mqttc",
         "_mqtt_loop_task",
         "_connect_future",
@@ -766,7 +766,7 @@ class MQTTAppClient(MQTTConnection):
         class Args(MQTTConnection.Args):
             sslcontext: NotRequired[ssl.SSLContext]
 
-    __SLOTS__ = (
+    _SLOTS = (
         "app_id",
         "user_id",
     )

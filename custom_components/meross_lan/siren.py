@@ -29,8 +29,8 @@ class Siren(mle.BinaryParser, siren.SirenEntity):
 
     PLATFORM = siren.DOMAIN
 
-    init_value_on = 1  # TAKE in Meross app
-    init_value_off = 2  # NORMAL in Meross app
+    _INIT_value_on = 1  # TAKE in Meross app
+    _INIT_value_off = 2  # NORMAL in Meross app
 
     # Assuming Appliance.Config.Alarm is available with these presets
     # This might not be always the case.
@@ -64,7 +64,7 @@ class ConfigAlarm(MappingParser):
 
     HANDLER_CHANNELS = (0,)
 
-    init_parser_defs = {
+    _INIT_parser_defs = {
         mc.KEY_ENABLE: SwitchParser.DEF(
             entity_key=f"{mn.Appliance_Config_Alarm.slug}__{mc.KEY_ENABLE}",
         ),
@@ -84,8 +84,8 @@ class ControlAlarm(MappingParser):
 
     HANDLER_CHANNELS = (0,)
 
-    init_excluded_keys = MappingParser.init_excluded_keys + ("source",)
-    init_parser_defs = {
+    _INIT_excluded_keys = MappingParser._INIT_excluded_keys + ("source",)
+    _INIT_parser_defs = {
         mc.KEY_EVENT: {
             _key: {
                 mc.KEY_VALUE: Siren.DEF(

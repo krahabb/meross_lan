@@ -21,10 +21,10 @@ class mts100(SubDevice, MtsClimate):
 
     class AdjustNumber(MtsClimate.AdjustNumber):
 
-        init_ns = mn_h.Appliance_Hub_Mts100_Adjust
-        init_key_value = MtsClimate.AdjustNumber.KeyValue(mc.KEY_TEMPERATURE)
-        init_entity_key = f"config_{init_ns.key}_{init_key_value}"
-        init_device_scale = 100
+        _INIT_ns = mn_h.Appliance_Hub_Mts100_Adjust
+        _INIT_key_value = MtsClimate.AdjustNumber.KeyValue(mc.KEY_TEMPERATURE)
+        _INIT_entity_key = f"config_{_INIT_ns.key}_{_INIT_key_value}"
+        _INIT_device_scale = 100
         _attr_native_max_value = 5
         _attr_native_min_value = -5
         _attr_native_step = 0.5
@@ -40,7 +40,7 @@ class mts100(SubDevice, MtsClimate):
         mn_h.Appliance_Hub_SubDevice_Lock,
         mn_h.Appliance_Hub_ToggleX,
     )
-    init_ns = mn_h.Appliance_Hub_Mts100_Temperature
+    _INIT_ns = mn_h.Appliance_Hub_Mts100_Temperature
 
     # MtsClimate class attributes
     temperature_scale = mc.MTS100_TEMP_SCALE
@@ -70,7 +70,7 @@ class mts100(SubDevice, MtsClimate):
         }
     )
 
-    AUTO_DESTROY = ("binary_sensor_window", "switch_patch_hvacaction")
+    _AUTO_DESTROY = ("binary_sensor_window", "switch_patch_hvacaction")
 
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
         SubDevice.__init__(self, descriptor, hub, **kwargs)
@@ -301,10 +301,10 @@ class mts150(mts100):
             MTS150P_PID_GRADE_MAP: dict[str, mt.hub.Mts100_Config_pid]
             _pid_grade_map: dict[str, mt.hub.Mts100_Config_pid]
 
-        init_ns = mn_h.Appliance_Hub_Mts100_Config
-        init_key_value = SelectParser.KeyValue(mc.KEY_PID, mc.KEY_GRADE)
-        init_entity_key = f"{init_ns.slug}__{init_key_value}"
-        init_options_map = {
+        _INIT_ns = mn_h.Appliance_Hub_Mts100_Config
+        _INIT_key_value = SelectParser.KeyValue(mc.KEY_PID, mc.KEY_GRADE)
+        _INIT_entity_key = f"{_INIT_ns.slug}__{_INIT_key_value}"
+        _INIT_options_map = {
             0: Option.DEFAULT,
             1: Option.LOW,
             2: Option.MILD,
@@ -327,9 +327,9 @@ class mts150(mts100):
             Option.MIDDLE: {mc.KEY_GRADE: 3, mc.KEY_P: 25, mc.KEY_I: 8, mc.KEY_D: 4},
             Option.STRONG: {mc.KEY_GRADE: 4, mc.KEY_P: 30, mc.KEY_I: 11, mc.KEY_D: 5},
         }
-        init__pid_grade_map = MTS150P_PID_GRADE_MAP
+        _INIT__pid_grade_map = MTS150P_PID_GRADE_MAP
 
-        AUTO_INIT = ("_pid_grade_map",)
+        _AUTO_INIT = ("_pid_grade_map",)
         __slots__ = ("p", "i", "d")
 
         @override
@@ -374,8 +374,8 @@ class mts150(mts100):
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
         mts100.__init__(self, descriptor, hub, **kwargs)
         PidGradeSelect = mts150.PidGradeSelect
-        if PidGradeSelect.init_ns in hub.descriptor.ability:
-            hub.get_handler(PidGradeSelect.init_ns).register_parser(
+        if PidGradeSelect._INIT_ns in hub.descriptor.ability:
+            hub.get_handler(PidGradeSelect._INIT_ns).register_parser(
                 PidGradeSelect(self)
             )
 

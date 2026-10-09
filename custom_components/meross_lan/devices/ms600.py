@@ -21,7 +21,7 @@ class PresenceConfigMode(SelectParser):
 
     # TODO: configure real labels
     # This map would actually be shared between workMode and testMode though
-    init_options_map = {
+    _INIT_options_map = {
         0: "0",
         1: "1",
         2: "2",
@@ -31,7 +31,7 @@ class PresenceConfigMode(SelectParser):
 class PresenceSensor(SensorParser):
     """ms600 presence sensor."""
 
-    init_entity_key = f"sensor_{mc.KEY_PRESENCE}"  # backward compatibility
+    _INIT_entity_key = f"sensor_{mc.KEY_PRESENCE}"  # backward compatibility
     _attr_name = "Presence"
 
     __slots__ = (
@@ -81,7 +81,7 @@ class PresenceSensor(SensorParser):
 
 class PresenceConfigParser(MappingParser):
 
-    init_parser_defs = {
+    _INIT_parser_defs = {
         mc.KEY_MODE: {
             mc.KEY_WORKMODE: PresenceConfigMode.DEF(
                 entity_key=f"presence_config_{mc.KEY_MODE}_{mc.KEY_WORKMODE}",

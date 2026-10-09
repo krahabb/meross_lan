@@ -349,11 +349,11 @@ class RollerShutterAdjustSwitch(SwitchParser):
     which seems to start some kind of adjustment operation.
     """
 
-    init_key_value = SwitchParser.KeyValue(mc.KEY_VALUE)
-    init_value_on = 1
-    init_value_off = 2
+    _INIT_key_value = SwitchParser.KeyValue(mc.KEY_VALUE)
+    _INIT_value_on = 1
+    _INIT_value_off = 2
 
-    init_entity_key = f"{mn.Appliance_RollerShutter_Adjust.slug}__{init_key_value}"
+    _INIT_entity_key = f"{mn.Appliance_RollerShutter_Adjust.slug}__{_INIT_key_value}"
 
     _attr_name = "Auto Calibration"
 

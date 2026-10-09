@@ -102,7 +102,7 @@ class NamespaceHandler(logging.Loggable):
             parser_class: NotRequired[type[NamespaceParser]]
             channels: NotRequired[Iterable[int]]
 
-    __SLOTS__ = (
+    _SLOTS = (
         "index_type",
         "handler",
         "parsers",
@@ -607,22 +607,15 @@ class NamespaceHandler(logging.Loggable):
                 self.polling_request = _payload_type.build_get(ns)
 
     def polling_request_add_index(self, index: mn.IndexValue, /):
-        """Ensures the channel is set in polling request payload should the ns need it.
+        """Ensures the channel/index is set in polling request payload should the ns need it.
         Also adjusts the estimated polling_response_size.
-        Returns the channel payload dict to be used for further updates if needed.
-        Some ns grammar might not have a so called 'channel_payload'. For those ns
-        the return value has no meaning and is an immutable empty dict.
         """
         try:
             polling_request_payload = self.polling_request_payload
             for payload in polling_request_payload:
                 if index.matches(payload):
-                    break
-            else:
-                # this is just a shurtcut since 'subId' namespaces do not
-                # still expose a channel different than 0. When that changes
-                # it'll be a mess.
-                polling_request_payload.append(index)
+                    return
+            polling_request_payload.append(index)
             self.polling_response_size = (
                 NamespaceHandler.HEADER_AVG_SIZE
                 + len(polling_request_payload) * self.id.payload_item_size
@@ -1135,13 +1128,13 @@ class NamespaceHandler(logging.Loggable):
                 self.initializer = initializer.__name__  # type: ignore
                 self._init_build(initializer, kwargs)  # type: ignore
 
-        def _init_build(self, init_func: "InitFunc", kwargs: "NamespaceHandler.Args"):
+        def _init_build(self, initializer: "InitFunc", kwargs: "NamespaceHandler.Args"):
             if kwargs:
-                self.build = lambda ns, device, **extra: init_func(
+                self.build = lambda ns, device, **extra: initializer(
                     ns, device, **(kwargs | extra)  # type: ignore
                 )
             else:
-                self.build = init_func
+                self.build = initializer
 
         async def async_build(self, ns: mn.Namespace, device: "Device", /):
             try:
@@ -1151,7 +1144,7 @@ class NamespaceHandler(logging.Loggable):
                     raise
                 try:
                     module, functor = self.initializer.rsplit(".", 1)
-                    init_func = getattr(
+                    initializer = getattr(
                         await async_import_module(
                             module, device.NAMESPACE_INIT_PACKAGE
                         ),
@@ -1164,16 +1157,16 @@ class NamespaceHandler(logging.Loggable):
                         "loading namespace initializer for %s",
                         ns,
                     )
-                    init_func = NamespaceHandler
+                    initializer = NamespaceHandler
                 else:
                     try:
                         # Check if we're looking up a Parser class instead of a function
                         # and get the namespace_init static method
-                        init_func = init_func.namespace_init
+                        initializer = initializer.namespace_init
                     except AttributeError:
                         pass
-                self._init_build(init_func, self.kwargs)
-                init_func(ns, device, **self.kwargs)
+                self._init_build(initializer, self.kwargs)
+                initializer(ns, device, **self.kwargs)
 
 
 class NamespaceParser(logging.Loggable):
@@ -1220,7 +1213,7 @@ class NamespaceParser(logging.Loggable):
         the NamespaceHandler parser(s). When not specified, the code will default to all those as
         computed by the device Descriptor."""
         parent: Final[Device]  # type: ignore[override]
-        init_ns: ClassVar[mn.Namespace]
+        _INIT_ns: ClassVar[mn.Namespace]
         """Class default used to initialize the 'ns' instance attribute."""
         ns: mn.Namespace
         """The (primary) namespace this parser is associated with. This is used to issue requests."""
@@ -1240,14 +1233,14 @@ class NamespaceParser(logging.Loggable):
 
         def __init__(self, id, parent: Device, /, **kwargs: Unpack[Args]): ...
 
-    init_ns_value = mn.EMPTY_DICT
-    init_index = mn.IndexType.none.get()
-    AUTO_INIT = (
+    _INIT_ns_value = mn.EMPTY_DICT
+    _INIT_index = mn.IndexType.none.get()
+    _AUTO_INIT = (
         "ns",
         "ns_value",
         "index",
     )
-    __SLOTS__ = ("_handler_registrations",)
+    _SLOTS = ("_handler_registrations",)
 
     def shutdown(self):
         super().shutdown()
@@ -1428,7 +1421,7 @@ class ValueParser(NamespaceParser):
 
         def __new__(cls, *key: str):
             # In general we'll use KeyValue generic constructor which tries using the cache first.
-            # This 'explicit' constructor is needed just to initialize the default init_key_value for
+            # This 'explicit' constructor is needed just to initialize the default _INIT_key_value for
             # ValueParser since the default KeyValue constructor will only work once we leave the
             # ValueParser class definition
             key_value = object.__new__(cls)
@@ -1445,7 +1438,7 @@ class ValueParser(NamespaceParser):
 
     if TYPE_CHECKING:
 
-        init_key_value: ClassVar[KeyValue]
+        _INIT_key_value: ClassVar[KeyValue]
         key_value: KeyValue
 
         class Args(NamespaceParser.Args):
@@ -1456,10 +1449,10 @@ class ValueParser(NamespaceParser):
         @classmethod
         def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
-    init_ns_value = None
-    init_key_value = SimpleKeyValue(mc.KEY_VALUE)
+    _INIT_ns_value = None
+    _INIT_key_value = SimpleKeyValue(mc.KEY_VALUE)
 
-    AUTO_INIT = ("key_value",)
+    _AUTO_INIT = ("key_value",)
 
     def update_device_value(self, device_value, /) -> bool | None:
         # Called when the device value is being updated, either by parsing a new payload or by issuing a request.
@@ -1501,11 +1494,11 @@ class BooleanParser(ValueParser):
             value_off: NotRequired[int]
             is_on: NotRequired[bool]
 
-    init_key_value = ValueParser.KeyValue(mc.KEY_ONOFF)
-    init_value_on = 1
-    init_value_off = 0
+    _INIT_key_value = ValueParser.KeyValue(mc.KEY_ONOFF)
+    _INIT_value_on = 1
+    _INIT_value_off = 0
 
-    AUTO_INIT = ("value_on", "value_off", "is_on")
+    _AUTO_INIT = ("value_on", "value_off", "is_on")
 
     @override
     def update_device_value(self, device_value, /) -> bool | None:
@@ -1538,7 +1531,7 @@ class MappingParser(ValueParser):
 
     if TYPE_CHECKING:
         parsers: Final[dict[str, ValueParser]]
-        init_excluded_keys: ClassVar[tuple[str, ...]]
+        _INIT_excluded_keys: ClassVar[tuple[str, ...]]
         excluded_keys: tuple[str, ...]
         """List of well-known keys which are to be excluded from mapping since they're generally
         'structural' keys and/or not carrying meaningful data."""
@@ -1547,7 +1540,7 @@ class MappingParser(ValueParser):
         type NestedParserDefs = Mapping[str, ParserType | SimpleParserDefs]
         type ParserDefs = Mapping[str, ParserType | SimpleParserDefs | NestedParserDefs]
         """This typedef supports 2 levels of nesting."""
-        init_parser_defs: ClassVar[ParserDefs]
+        _INIT_parser_defs: ClassVar[ParserDefs]
         parser_defs: ParserDefs
         """Mapping between payload keys and a specialized ValueParser class to be used to parse the
         value associated with that key. This is used to automatically create the proper ValueParser
@@ -1555,7 +1548,7 @@ class MappingParser(ValueParser):
         The actual parser_defs syntax, allows to define nested levels of parsing by simply nesting
         the parser definitions in a dict. When this happens, the MappingParser will automatically
         create a nested MappingParser to handle the inner level(s) of the payload."""
-        init_parser_def: ClassVar[ParserType]
+        _INIT_parser_def: ClassVar[ParserType]
         parser_def: ParserType
         """This is a fallback parser definition to be used when no specific parser_def is found
         for a key in the payload. This is useful for debugging/dumping purposes."""
@@ -1572,7 +1565,7 @@ class MappingParser(ValueParser):
         @classmethod
         def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
-    init_excluded_keys = (
+    _INIT_excluded_keys = (
         mc.KEY_ID,
         mc.KEY_SUBID,
         mc.KEY_CHANNEL,
@@ -1582,16 +1575,16 @@ class MappingParser(ValueParser):
         mc.KEY_TIMESTAMPMS,
     )
 
-    init_parser_def = ValueParser
+    _INIT_parser_def = ValueParser
 
-    init_key_value = ValueParser.KeyValue()
+    _INIT_key_value = ValueParser.KeyValue()
 
-    AUTO_INIT = (
+    _AUTO_INIT = (
         "excluded_keys",
         "parser_defs",
         "parser_def",
     )
-    __SLOTS__ = ("parsers",)
+    _SLOTS = ("parsers",)
 
     def __init__(self, *args, **kwargs: "Unpack[Args]"):
         # TODO: define a mechanism for 'auto-initializing' (empty) dicts

@@ -250,7 +250,7 @@ class ProtocolSensor(EnumSensorEntity):
         parent: Final[Device]  # type: ignore[override]
         native_value: str
 
-    init_entity_key = "sensor_protocol"
+    _INIT_entity_key = "sensor_protocol"
 
     STATE_DISCONNECTED = "disconnected"
     STATE_ACTIVE = "active"
@@ -344,8 +344,8 @@ class ProtocolSensor(EnumSensorEntity):
 
 class SignalStrengthSensor(SensorParser, mle.EntityNamespaceMixin):
 
-    init_entity_key = "signal_strength"
-    init_key_value = SensorParser.KeyValue(mc.KEY_SIGNAL)
+    _INIT_entity_key = "signal_strength"
+    _INIT_key_value = SensorParser.KeyValue(mc.KEY_SIGNAL)
     # HA core entity attributes:
     _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:wifi"
@@ -355,8 +355,8 @@ class SignalStrengthSensor(SensorParser, mle.EntityNamespaceMixin):
 
 class FilterMaintenanceSensor(SensorParser):
 
-    init_entity_key = mc.KEY_FILTER
-    init_key_value = SensorParser.KeyValue(mc.KEY_LIFE)
+    _INIT_entity_key = mc.KEY_FILTER
+    _INIT_key_value = SensorParser.KeyValue(mc.KEY_LIFE)
 
     # HA core entity attributes:
     _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC

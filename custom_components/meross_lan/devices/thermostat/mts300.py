@@ -29,9 +29,9 @@ class Mts300Climate(MtsThermostatClimate):
     class AdjustNumber(MtsThermostatClimate.AdjustNumber):
 
         class AdjustHumidityNumber(NumberParser):
-            init_entity_key = "calibration_humidity"
-            init_key_value = NumberParser.KeyValue(mc.KEY_HUMIVALUE)
-            init_device_scale = 10
+            _INIT_entity_key = "calibration_humidity"
+            _INIT_key_value = NumberParser.KeyValue(mc.KEY_HUMIVALUE)
+            _INIT_device_scale = 10
 
             _attr_device_class = NumberParser.DeviceClass.HUMIDITY
             _attr_native_max_value = 5
@@ -65,9 +65,9 @@ class Mts300Climate(MtsThermostatClimate):
         Configures internal/external sensor association for temperature readings in mts300.
         """
 
-        init_ns = mn.Appliance_Config_Sensor_Association
-        init_key_value = SelectParser.KeyValue(mc.KEY_TEMP, init_ns.slug_end)
-        init_entity_key = f"{init_ns.slug}__{init_key_value}"
+        _INIT_ns = mn.Appliance_Config_Sensor_Association
+        _INIT_key_value = SelectParser.KeyValue(mc.KEY_TEMP, _INIT_ns.slug_end)
+        _INIT_entity_key = f"{_INIT_ns.slug}__{_INIT_key_value}"
 
         _attr_entity_category = SelectParser.EntityCategory.DIAGNOSTIC
         _attr_name = "Sensor Association"
@@ -75,7 +75,7 @@ class Mts300Climate(MtsThermostatClimate):
         """ TODO: get a description of possible options and implement either translations or constant symbols
         so that we can change also the entity category to CONFIG
         """
-        init_options_map = {
+        _INIT_options_map = {
             2: "Internal sensor",  # almost sure
         }
 
@@ -173,7 +173,7 @@ class Mts300Climate(MtsThermostatClimate):
         | MtsThermostatClimate.ClimateEntityFeature.FAN_MODE
     )
 
-    AUTO_DESTROY = (
+    _AUTO_DESTROY = (
         "number_fan_hold",
         "switch_fan_hold",
         *(f"sensor_{_key}" for _key in ENTITY_ARGS),

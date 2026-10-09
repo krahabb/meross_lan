@@ -72,15 +72,15 @@ class mst(SubDevice):
                 name="Water flow measurement",
             ),
         },
-    } | DeviceCfgParser.init_parser_defs  # type: ignore[assignment]
+    } | DeviceCfgParser._INIT_parser_defs  # type: ignore[assignment]
 
     class Switch(SwitchParser):
         """Switch to turn on/off the MST valve."""
 
-        init_ns = mn_h.Appliance_Control_Water
-        init_entity_key = f"{init_ns.slug}__{SwitchParser.init_key_value}"
-        init_value_on = 1
-        init_value_off = 2
+        _INIT_ns = mn_h.Appliance_Control_Water
+        _INIT_entity_key = f"{_INIT_ns.slug}__{SwitchParser._INIT_key_value}"
+        _INIT_value_on = 1
+        _INIT_value_off = 2
 
         _attr_name = "Watering"
 
@@ -91,7 +91,9 @@ class mst100(mst):
         SubDevice.__init__(self, descriptor, hub, **kwargs)
         subid = descriptor.id
         index = mn.IndexType.subId.get(subid, 0, None)
-        switch = mst.Switch(self, index=index, unique_id=f"{hub.id}_{subid}_onoff")  # LEGACY
+        switch = mst.Switch(
+            self, index=index, unique_id=f"{hub.id}_{subid}_onoff"
+        )  # LEGACY
         hub.get_handler(mn_h.Appliance_Control_Water).register_parser(switch)
         hub.ns_handlers[mn.Appliance_Config_DeviceCfg].register_parser(
             DeviceCfgParser(subid, hub, index=index, parser_defs=mst.DEVICE_CFG_DEFS)

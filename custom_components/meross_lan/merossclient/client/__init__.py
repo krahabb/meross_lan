@@ -141,7 +141,7 @@ class AbstractClient(logging.Loggable):
 
     # Using a 'placeholder' definition to ease including in diamond pattern hierarchies:
     # just add a __slots__ = cls._calc_slots(...) in actual classes to actually implement.
-    __SLOTS__ = (
+    _SLOTS = (
         "key",
         "from_",
         "trigger_src",

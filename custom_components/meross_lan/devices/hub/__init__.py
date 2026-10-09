@@ -436,7 +436,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         NS_HUB: ClassVar[Iterable[Namespace]]
         """Namespaces to be registered for this subdevice. Every (sub)class can declare
         its own needs and SubDevice.__init__ will automatically add (self) parser registration
-        for the ns iterable. If this subdevice/entity also defines self.ns (through init_ns) it will also
+        for the ns iterable. If this subdevice/entity also defines self.ns (through _INIT_ns) it will also
         be automatically added to the list of registrations."""
         DEVICE_CFG_DEFS: ClassVar[DeviceCfgParser.ParserDefs]
         """Parsing configuration map for devices supporting Appliance.Config.DeviceCfg."""
@@ -449,7 +449,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         mn_h.Appliance_Hub_SubDevice_Version,
     )
 
-    __SLOTS__ = ("key_digest",)
+    _SLOTS = ("key_digest",)
 
     def __init_subclass__(cls):
         super().__init_subclass__()
@@ -650,7 +650,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
             SwitchParser(
                 self,
                 entity_key=(
-                    f"{mn_h.Appliance_Hub_SubDevice_Beep.slug}__{SwitchParser.init_key_value}"
+                    f"{mn_h.Appliance_Hub_SubDevice_Beep.slug}__{SwitchParser._INIT_key_value}"
                 ),
                 ns=mn_h.Appliance_Hub_SubDevice_Beep,
                 name="Beep alarm",

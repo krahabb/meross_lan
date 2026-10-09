@@ -55,7 +55,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
         _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
 
-        AUTO_INIT = ("icon",)
+        _AUTO_INIT = ("icon",)
         __slots__ = ()
 
         async def async_request_value(self, device_value, /):
@@ -86,7 +86,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             TRACKING_DEADTIME: Final[int]
             """minimum delay (dead-time) between trying to adjust the climate entity."""
 
-        init_entity_key = "tracked_sensor"
+        _INIT_entity_key = "tracked_sensor"
         TRACKING_DELAY = 5
         TRACKING_DEADTIME = 60
 
@@ -94,8 +94,8 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         _attr_available = True
         _attr_entity_registry_enabled_default = False
 
-        init__track_last_epoch = 0
-        AUTO_INIT = (
+        _INIT__track_last_epoch = 0
+        _AUTO_INIT = (
             "_tracking_state",
             "_tracking_state_change_unsub",
             "_track_last_epoch",
@@ -417,7 +417,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
     _attr_translation_key = "mts_climate"
 
-    AUTO_DESTROY = (
+    _AUTO_DESTROY = (
         "number_adjust_temperature",
         "schedule",
         "select_track_sensor",
@@ -464,7 +464,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
         cls = self.__class__
         self.number_adjust_temperature = cls.AdjustNumber(
-            self, ns=cls.AdjustNumber.init_ns
+            self, ns=cls.AdjustNumber._INIT_ns
         )
 
         if cls.MTS_MODE_TO_TEMPERATUREKEY_MAP:

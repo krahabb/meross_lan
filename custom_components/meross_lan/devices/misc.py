@@ -35,11 +35,11 @@ class DeviceCfgParser(MappingParser):
     # sometimes indexed by subId (for hub subdevices)
     HANDLER_CHANNELS = ()
 
-    init_ns = mn.Appliance_Config_DeviceCfg
+    _INIT_ns = mn.Appliance_Config_DeviceCfg
 
     # These are extracted from ms130 payload but they look like generic enough
     # to be available through a wide set of devices.
-    init_parser_defs = {
+    _INIT_parser_defs = {
         mc.KEY_CALIBRATECFG: {
             mc.KEY_HUMI: NumberParser.DEF(
                 entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{mc.KEY_CALIBRATECFG}_{mc.KEY_HUMI}",
@@ -111,10 +111,10 @@ class SensorLatestParser(MappingParser):
 
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
-        init_parser_defs: ClassVar[Mapping[str, type[SensorParser]]]
+        _INIT_parser_defs: ClassVar[Mapping[str, type[SensorParser]]]
         parser_defs: Mapping[str, type[SensorParser]]
 
-    init_parser_defs = {
+    _INIT_parser_defs = {
         mc.KEY_HUMI: Mts200HumiSensor.DEF(
             **SensorParser.HUMIDITY_ARGS
             | {
@@ -149,7 +149,7 @@ class SensorLatestXParser(MappingParser):
 
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
-        init_parser_defs: ClassVar[Mapping[str, type[SensorParser]]]
+        _INIT_parser_defs: ClassVar[Mapping[str, type[SensorParser]]]
         parser_defs: Mapping[str, type[SensorParser]]
         parsers: Final[dict[str, ValueParser]]  # type: ignore[override]
 
@@ -160,12 +160,12 @@ class SensorLatestXParser(MappingParser):
 
     HANDLER_CHANNELS = ()
 
-    init_ns = mn.Appliance_Control_Sensor_LatestX
+    _INIT_ns = mn.Appliance_Control_Sensor_LatestX
 
     # many of these defs are guesses and the actual composition
     # of parsers is explicitly preset when constructing a 'known' device SensorLatestXParser
     # See ms130 and ms600.
-    init_parser_defs = {
+    _INIT_parser_defs = {
         mc.KEY_HUMI: SensorParser.DEF(**SensorParser.HUMIDITY_ARGS),
         mc.KEY_LIGHT: SensorParser.DEF(**SensorParser.LIGHT_ARGS),
         mc.KEY_TEMP: SensorParser.DEF(**SensorParser.TEMPERATURE_ARGS),

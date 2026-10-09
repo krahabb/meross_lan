@@ -95,7 +95,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
 
         id: Final[str | int | mn.Namespace]  # type: ignore[override]
         parent: Final[ConfigEntryManager]  # type: ignore[override]
-        init_entity_key: ClassVar[str | None]
+        _INIT_entity_key: ClassVar[str | None]
         entity_key: Final[str | None]
         # used to speed-up checks if entity is enabled and loaded
         hass_connected: Final[bool]  # public ReadOnly attribute
@@ -142,7 +142,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
     # HA core entity attributes:
     _attr_available = False  # TODO: review the availability mechanics
 
-    init_entity_key = None
+    _INIT_entity_key = None
     __slots__ = (
         "entity_key",
         "hass_connected",
@@ -169,7 +169,7 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         # FIXME: generalize automatic entity_key generation for this pattern:
         # entity_key=f"{ns.slug}__{key_value}",
 
-        entity_key = kwargs.pop("entity_key", self.__class__.init_entity_key)
+        entity_key = kwargs.pop("entity_key", self.__class__._INIT_entity_key)
         if len(args) == 1:
             sibling: "Entity.Sibling" = args[0]
             parent = sibling.parent
@@ -403,7 +403,7 @@ class ParserEntity(handler.NamespaceParser, Entity):
     @override
     def set_unavailable(self):
         self.available = False
-        self.ns_value = self.__class__.init_ns_value
+        self.ns_value = self.__class__._INIT_ns_value
         self.flush_state()
 
 
@@ -454,7 +454,7 @@ class NumericEntity(Entity):
     # device classes which are nevertheless shared between sensor and number entities. Tha mapping should
     # be done by str value despite the fact numbers and sensors each defines their own enums.
     HA_ENTITY_ATTRIBUTES = Entity.HA_ENTITY_ATTRIBUTES + ("native_unit_of_measurement",)
-    AUTO_INIT = ("native_value",)
+    _AUTO_INIT = ("native_value",)
     __slots__ = ("native_value",)
 
     def update_native_value(self, native_value: int | float | None, /):
@@ -479,7 +479,7 @@ class NumericParser(ValueParser, NumericEntity):
 
     if TYPE_CHECKING:
 
-        init_device_scale: ClassVar[int | float]
+        _INIT_device_scale: ClassVar[int | float]
         device_scale: int | float
         """device_scale type need to follow the type supported for ns_value.
         This is used in Number entity to do the correct roundings when converting between
@@ -491,12 +491,12 @@ class NumericParser(ValueParser, NumericEntity):
         class Args(ValueParser.Args, NumericEntity.Args):
             device_scale: NotRequired[int | float]
 
-    init_device_scale = 1
-    AUTO_INIT = ("device_scale",)
+    _INIT_device_scale = 1
+    _AUTO_INIT = ("device_scale",)
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         try:
-            kwargs["native_value"] = kwargs["ns_value"] / kwargs.get("device_scale", self.init_device_scale)  # type: ignore
+            kwargs["native_value"] = kwargs["ns_value"] / kwargs.get("device_scale", self._INIT_device_scale)  # type: ignore
         except KeyError:
             pass
         super().__init__(*args, **kwargs)
@@ -524,9 +524,9 @@ class BinaryEntity(Entity):
 
         def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
-    AUTO_INIT = ("is_on",)
+    _AUTO_INIT = ("is_on",)
     __slots__ = ("is_on",)
-    # TODO: fix _calc_slots in descendants by maybe adding an init_subclass in BinaryParser.
+    # TODO: fix _calc_slots in descendants by maybe adding an _INIT_subclass in BinaryParser.
 
     def update_boolean_value(self, is_on: "Any", /) -> bool | None:
         if self.is_on != is_on:
@@ -560,8 +560,8 @@ class BinaryParser(handler.BooleanParser, ValueParser, BinaryEntity):
             # if ns_value is not provided this code is unnecessary and
             # the eventual other arguments will be managed by bases.
             self.ns_value = kwargs.pop("ns_value")
-            self.value_on = kwargs.pop("value_on", self.init_value_on)
-            self.value_off = kwargs.pop("value_off", self.init_value_off)
+            self.value_on = kwargs.pop("value_on", self._INIT_value_on)
+            self.value_off = kwargs.pop("value_off", self._INIT_value_off)
             match self.ns_value:
                 case self.value_on:
                     kwargs["is_on"] = True

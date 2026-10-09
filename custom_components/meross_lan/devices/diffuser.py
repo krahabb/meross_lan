@@ -36,7 +36,7 @@ class DiffuserLight(LightBase):
         ns_value: mt.diffuser.Light
         effect_list: list[str]
 
-    init_effect_list = mc.DIFFUSER_LIGHT_MODE_LIST
+    _INIT_effect_list = mc.DIFFUSER_LIGHT_MODE_LIST
     _attr_supported_color_modes = {ColorMode.RGB}
 
     @override
@@ -94,10 +94,10 @@ class DiffuserLight(LightBase):
 
 class DiffuserSpray(Spray):
 
-    init_options_map = {
-        mc.DIFFUSER_SPRAY_MODE_OFF: Spray.init_options_map[mc.SPRAY_MODE_OFF],
-        mc.DIFFUSER_SPRAY_MODE_ECO: Spray.init_options_map[mc.SPRAY_MODE_INTERMITTENT],
-        mc.DIFFUSER_SPRAY_MODE_FULL: Spray.init_options_map[mc.SPRAY_MODE_CONTINUOUS],
+    _INIT_options_map = {
+        mc.DIFFUSER_SPRAY_MODE_OFF: Spray._INIT_options_map[mc.SPRAY_MODE_OFF],
+        mc.DIFFUSER_SPRAY_MODE_ECO: Spray._INIT_options_map[mc.SPRAY_MODE_INTERMITTENT],
+        mc.DIFFUSER_SPRAY_MODE_FULL: Spray._INIT_options_map[mc.SPRAY_MODE_CONTINUOUS],
     }
 
 
@@ -106,7 +106,7 @@ class DiffuserSensor(MappingParserHandler):
     if TYPE_CHECKING:
         parser_defs: Mapping[str, MappingParserHandler.ParserType]  # type: ignore[override]
 
-    init_parser_defs = {
+    _INIT_parser_defs = {
         mc.KEY_HUMIDITY: SensorParser.DEF(**SensorParser.HUMIDITY_ARGS),
         mc.KEY_TEMPERATURE: SensorParser.DEF(
             **(SensorParser.TEMPERATURE_ARGS | {"device_scale": 10})

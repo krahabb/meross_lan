@@ -39,9 +39,9 @@ class Fan(ToggleXParser, fan.FanEntity):
 
     _enable_turn_on_off_backwards_compatibility = False
 
-    init_speed_count = 1
-    init__saved_speed = 1
-    AUTO_INIT = ("percentage", "speed_count", "_saved_speed")
+    _INIT_speed_count = 1
+    _INIT__saved_speed = 1
+    _AUTO_INIT = ("percentage", "speed_count", "_saved_speed")
     __slots__ = ()
 
     # interface: fan.FanEntity

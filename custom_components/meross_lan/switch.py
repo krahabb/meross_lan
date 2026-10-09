@@ -65,12 +65,12 @@ class SwitchParser(mle.BinaryParser, SwitchEntity):
 
 class PhysicalLockSwitch(SwitchParser):
 
-    init_entity_key = mc.KEY_LOCK
+    _INIT_entity_key = mc.KEY_LOCK
 
 
 class Toggle(SwitchParser, mle.EntityNamespaceMixin):
 
-    init_entity_key = "0"  # used to keep unique_id compatibility with legacy versions
+    _INIT_entity_key = "0"  # used to keep unique_id compatibility with legacy versions
     # HA core entity attributes:
     _attr_device_class = SwitchEntity.DeviceClass.OUTLET
     _attr_entity_category = None

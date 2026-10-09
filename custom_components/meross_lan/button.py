@@ -28,7 +28,7 @@ class Button(Entity, button.ButtonEntity):
     PLATFORM = button.DOMAIN
     DeviceClass = button.ButtonDeviceClass
 
-    AUTO_DESTROY = ("async_press",)
+    _AUTO_DESTROY = ("async_press",)
     __slots__ = ()
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):

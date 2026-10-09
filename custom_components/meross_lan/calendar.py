@@ -130,12 +130,12 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
         | calendar.CalendarEntityFeature.UPDATE_EVENT
     )
 
-    init_flatten = True
-    init__schedule = mn.EMPTY_DICT
-    init__schedule_unit_time = 15
-    init__schedule_entry_count_max = 0
-    init__schedule_entry_count_min = 0
-    AUTO_INIT = (
+    _INIT_flatten = True
+    _INIT__schedule = mn.EMPTY_DICT
+    _INIT__schedule_unit_time = 15
+    _INIT__schedule_entry_count_max = 0
+    _INIT__schedule_entry_count_min = 0
+    _AUTO_INIT = (
         "climate",
         "flatten",
         "_schedule",
@@ -143,7 +143,7 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
         "_schedule_entry_count_max",
         "_schedule_entry_count_min",
     )
-    AUTO_DESTROY = ("climate",)
+    _AUTO_DESTROY = ("climate",)
     __slots__ = ()
 
     def set_unavailable(self):

@@ -34,8 +34,8 @@ class SelectEntity(mle.Entity, select.SelectEntity):
 
     _attr_entity_category = mle.Entity.EntityCategory.CONFIG
 
-    init_options = []
-    AUTO_INIT = ("current_option", "options")
+    _INIT_options = []
+    _AUTO_INIT = ("current_option", "options")
     __slots__ = ()
 
     def set_unavailable(self):
@@ -58,7 +58,7 @@ class SelectParser(mle.ValueParser, SelectEntity):
 
     if TYPE_CHECKING:
 
-        init_options_map: ClassVar[dict[Any, str]]
+        _INIT_options_map: ClassVar[dict[Any, str]]
         options_map: dict[Any, str]
 
         type InitArgs = mle.ValueParser.InitArgs
@@ -71,11 +71,11 @@ class SelectParser(mle.ValueParser, SelectEntity):
         def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
     # configure initial options(map) through a class default
-    init_options_map = {}
+    _INIT_options_map = {}
     __slots__ = ("options_map",)
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
-        self.options_map = kwargs.pop("options_map", self.init_options_map)
+        self.options_map = kwargs.pop("options_map", self._INIT_options_map)
         try:
             # if ns_value is not provided this code is unnecessary and
             # the eventual other arguments will be managed by bases.
@@ -97,9 +97,9 @@ class SelectParser(mle.ValueParser, SelectEntity):
             try:
                 self.current_option = self.options_map[device_value]
             except KeyError:
-                if self.options_map is self.init_options_map:
+                if self.options_map is self._INIT_options_map:
                     # first time we see a new value - create an instance map
-                    self.options_map = dict(self.init_options_map)
+                    self.options_map = dict(self._INIT_options_map)
                 self.options_map[device_value] = option = str(device_value)
                 self.options.append(option)
                 self.current_option = option

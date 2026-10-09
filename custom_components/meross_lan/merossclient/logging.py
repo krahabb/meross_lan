@@ -216,23 +216,23 @@ class Loggable(metaclass=abc.ABCMeta):
             loggable.shutdown_broadcast.add(self.clear)
 
     if TYPE_CHECKING:
-        __SLOTS__: ClassVar[tuple[str, ...]]
-        AUTO_INIT: ClassVar[Iterable[str]]
-        """Provides a list of slotted attributes which need to be initialized during construction.
-        Some of these attributes might be retrieved from kwargs. If not available these need to be retrieved from
-        class instance defaults or set to None as last resort.
-        This attribute will be read during class construction in order to update the internal cache (__AUTO_INIT)
+        _SLOTS: ClassVar[tuple[str, ...]]
+        _AUTO_INIT: ClassVar[Iterable[str]]
+        """Provides a list of slotted attributes which will be automatically initialized during construction.
+        Some of these attributes might be retrieved from kwargs. If not available will to be retrieved from
+        class instance defaults ('_INIT_xxx' attributes) or set to None as last resort.
+        This attribute will be read during class construction in order to update the internal cache (_AUTO_INIT_)
         of all the inherited 'auto init slots' (See __init_subclass__).
-        Attributes listed here will also be automatically added to the class __SLOTS__ so they'd not need to be defined twice."""
-        __AUTO_INIT: Final[frozenset[str]]
-        """Auto-built cache of all the 'AUTO_INIT' defined for the full class hierarchy so that
+        Attributes listed here will also be automatically added to the class _SLOTS so they'd not need to be defined twice."""
+        _AUTO_INIT_: Final[frozenset[str]]
+        """Auto-built cache of all the '_AUTO_INIT' defined for the full class hierarchy so that
         the constructor doesn't have to traverse the mro every time in order to apply initialization."""
-        AUTO_DESTROY: ClassVar[Iterable[str]]
+        _AUTO_DESTROY: ClassVar[Iterable[str]]
         """Provides a list of attributes which need to be destroyed during shutdown. These will eventually be added
         to __slots__ if not already there.
         This will ease removing circular references without needing to override the shutdown() method."""
-        __AUTO_DESTROY: Final[frozenset[str]]
-        """Same as __AUTO_INIT but for AUTO_DESTROY."""
+        _AUTO_DESTROY_: Final[frozenset[str]]
+        """Same as _AUTO_INIT_ but for _AUTO_DESTROY."""
 
         id: Final[Any]
         parent: Final[LoggerType]
@@ -266,9 +266,9 @@ class Loggable(metaclass=abc.ABCMeta):
         "_timers",
         "__dict__",
     )
-    __SLOTS__ = ()
-    __AUTO_INIT = frozenset()
-    __AUTO_DESTROY = frozenset()
+    _SLOTS = ()
+    _AUTO_INIT_ = frozenset()
+    _AUTO_DESTROY_ = frozenset()
 
     def __init_subclass__(cls, *args, **kwargs):
         auto_init = set()
@@ -276,11 +276,11 @@ class Loggable(metaclass=abc.ABCMeta):
 
         for _base in cls.__bases__:
             try:
-                auto_init.update(_base.__AUTO_INIT)
+                auto_init.update(_base._AUTO_INIT_)
             except AttributeError:
                 pass
             try:
-                auto_destroy.update(_base.__AUTO_DESTROY)
+                auto_destroy.update(_base._AUTO_DESTROY_)
             except AttributeError:
                 pass
 
@@ -291,23 +291,22 @@ class Loggable(metaclass=abc.ABCMeta):
         else:
             cls_slots = None
 
-        if "AUTO_INIT" in cls_dict:
-            # no AUTO_INIT defined in this class, just inherit from parents
-            _slots_auto_init = cls_dict["AUTO_INIT"]
+        if "_AUTO_INIT" in cls_dict:
+            _slots_auto_init = cls_dict["_AUTO_INIT"]
             auto_init.update(_slots_auto_init)
             if cls_slots:
                 cls_slots.update(_slots_auto_init)
 
-        if "AUTO_DESTROY" in cls_dict:
-            _slots_auto_destroy = cls_dict["AUTO_DESTROY"]
+        if "_AUTO_DESTROY" in cls_dict:
+            _slots_auto_destroy = cls_dict["_AUTO_DESTROY"]
             auto_destroy.update(_slots_auto_destroy)
             if cls_slots:
                 cls_slots.update(_slots_auto_destroy)
 
-        if len(auto_init) > len(cls.__AUTO_INIT):
-            cls.__AUTO_INIT = auto_init  # type: ignore
-        if len(auto_destroy) > len(cls.__AUTO_DESTROY):
-            cls.__AUTO_DESTROY = auto_destroy  # type: ignore
+        if len(auto_init) > len(cls._AUTO_INIT_):
+            cls._AUTO_INIT_ = auto_init  # type: ignore
+        if len(auto_destroy) > len(cls._AUTO_DESTROY_):
+            cls._AUTO_DESTROY_ = auto_destroy  # type: ignore
 
         if cls_slots:
             cls.__slots__ = tuple(cls_slots)
@@ -321,11 +320,11 @@ class Loggable(metaclass=abc.ABCMeta):
         # mro could be highly repetitive and this method is called on every subclass
         for _base in cls.__mro__:
             try:
-                _added_slots.update(_base.__dict__["__SLOTS__"])
+                _added_slots.update(_base.__dict__["_SLOTS"])
             except KeyError:
                 pass
             try:
-                _added_slots.update(_base.__dict__["AUTO_INIT"])
+                _added_slots.update(_base.__dict__["_AUTO_INIT"])
             except KeyError:
                 pass
             try:
@@ -357,22 +356,20 @@ class Loggable(metaclass=abc.ABCMeta):
         self, id, parent: "LoggerType | None" = None, /, **kwargs: "Unpack[Args]"
     ):
         self.id = id
-        self.parent = parent or getLogger(
-            self.__class__.__module__ + "." + self.__class__.__name__
-        )
+        cls = self.__class__
+        self.parent = parent or getLogger(cls.__module__ + "." + cls.__name__)
         self.loop = (
             kwargs.pop("loop", None)
             or getattr(parent, "loop", None)
             or asyncio.get_event_loop()
         )
-        _cls = self.__class__
-        for _attr in _cls.__AUTO_INIT:
+        for _attr in cls._AUTO_INIT_:
             try:
                 # extract from kwargs
                 setattr(self, _attr, kwargs.pop(_attr))
             except KeyError:
                 # else retrieve from class attr or just 'None'
-                setattr(self, _attr, getattr(_cls, f"init_{_attr}", None))
+                setattr(self, _attr, getattr(cls, f"_INIT_{_attr}", None))
 
         self.shutdown_broadcast = broadcast.Broadcast()
         self.async_shutdown_broadcast = broadcast.Broadcast()
@@ -396,7 +393,7 @@ class Loggable(metaclass=abc.ABCMeta):
             for _timer in self._timers.values():
                 self.log(self.DEBUG, "Cancelling pending timer %r", _timer)
                 _timer.cancel()
-            self._timers.clear()
+            del self._timers
         except AttributeError:
             pass  # might be not initialized ...
 
@@ -416,14 +413,13 @@ class Loggable(metaclass=abc.ABCMeta):
                             "cancelling task %r during shutdown",
                             task,
                         )
-
             if self._tasks:
                 self.log(
                     self.WARNING,
                     "Some tasks were not properly shutdown (%r)",
                     self._tasks,
                 )
-
+            del self._tasks
         except AttributeError:
             pass  # might be not initialized ...
 
@@ -432,7 +428,7 @@ class Loggable(metaclass=abc.ABCMeta):
             # remove themselves from the broadcast
             for _listener in tuple(self.async_shutdown_broadcast):
                 await _listener()
-            self.async_shutdown_broadcast.clear()
+            del self.async_shutdown_broadcast
 
         self.shutdown()
 
@@ -441,8 +437,8 @@ class Loggable(metaclass=abc.ABCMeta):
         if self.shutdown_broadcast:
             for _listener in self.shutdown_broadcast:
                 _listener()
-            self.shutdown_broadcast.clear()
-        for _attr in self.__class__.__AUTO_DESTROY:
+            del self.shutdown_broadcast
+        for _attr in self.__class__._AUTO_DESTROY_:
             delattr(self, _attr)
 
     def __repr__(self):

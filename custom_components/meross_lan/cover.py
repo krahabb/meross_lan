@@ -39,7 +39,7 @@ class Cover(ParserEntity, cover.CoverEntity):
     DeviceClass = cover.CoverDeviceClass
     EntityFeature = cover.CoverEntityFeature
 
-    AUTO_INIT = (
+    _AUTO_INIT = (
         "is_closed",
         "is_closing",
         "is_opening",

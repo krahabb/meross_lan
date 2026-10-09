@@ -27,7 +27,7 @@ class Mts960Climate(MtsThermostatClimate):
 
     class PlugState(BinarySensorEntity):
 
-        init_entity_key = "plug_state"
+        _INIT_entity_key = "plug_state"
 
         # HA core entity attributes:
         _attr_entity_registry_enabled_default = False
@@ -94,7 +94,7 @@ class Mts960Climate(MtsThermostatClimate):
     ]
     _attr_preset_modes = list(Preset)
 
-    AUTO_DESTROY = ENTITY_DEFS.keys()
+    _AUTO_DESTROY = ENTITY_DEFS.keys()
     __slots__ = (
         "_mts_working",
         "_mts_timer_payload",

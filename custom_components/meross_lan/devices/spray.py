@@ -9,9 +9,9 @@ class Spray(SelectParser):
     message formatting.
     """
 
-    init_entity_key = mc.KEY_SPRAY
-    init_key_value = SelectParser.KeyValue(mc.KEY_MODE)
-    init_options_map = {
+    _INIT_entity_key = mc.KEY_SPRAY
+    _INIT_key_value = SelectParser.KeyValue(mc.KEY_MODE)
+    _INIT_options_map = {
         mc.SPRAY_MODE_OFF: "off",
         mc.SPRAY_MODE_CONTINUOUS: "on",
         mc.SPRAY_MODE_INTERMITTENT: "eco",

@@ -30,7 +30,7 @@ class Mp3Player(ParserEntity, media_player.MediaPlayerEntity):
         volume_level: float | None
 
     PLATFORM = media_player.DOMAIN
-    init_entity_key = mc.KEY_MP3
+    _INIT_entity_key = mc.KEY_MP3
 
     # HA core entity attributes:
     _attr_device_class = media_player.MediaPlayerDeviceClass.SPEAKER
@@ -46,7 +46,7 @@ class Mp3Player(ParserEntity, media_player.MediaPlayerEntity):
     )
     _attr_volume_step = 1 / mc.HP110A_MP3_VOLUME_MAX
 
-    AUTO_INIT = (
+    _AUTO_INIT = (
         "is_volume_muted",
         "media_title",
         "media_track",

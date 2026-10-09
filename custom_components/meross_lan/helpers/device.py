@@ -78,14 +78,14 @@ class BaseDevice(device.PhysicalDevice):
             self, id, parent: ConfigEntryManager, /, **kwargs: Unpack[Args]
         ): ...
 
-    __SLOTS__ = (
+    _SLOTS = (
         "device_registry",
         "device_info",
         "device_entry",
     )
 
-    AUTO_INIT = ("update_firmware",)
-    AUTO_DESTROY = ("update_firmware",)
+    _AUTO_INIT = ("update_firmware",)
+    _AUTO_DESTROY = ("update_firmware",)
 
     @property
     @override
@@ -459,7 +459,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
     """
     async_polling_strategy_diagnostic = NamespaceHandler.async_polling_strategy_smart
 
-    init_is_connected = False
+    _INIT_is_connected = False
 
     __slots__ = device.Device._calc_slots(
         "conf_transport",

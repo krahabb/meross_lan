@@ -196,7 +196,7 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
         supported_features: LightEntityFeature
 
         parent: Final[Device]  # type: ignore[override]
-        init_effect_list: ClassVar[list[str] | None]
+        _INIT_effect_list: ClassVar[list[str] | None]
 
         class Args(mle.ToggleXParser.Args):
             effect_list: NotRequired[list[str]]
@@ -205,7 +205,7 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
     PLATFORM = light.DOMAIN
 
     T_RESOLUTION_MIN = 0.2
-    init_effect_list = None
+    _INIT_effect_list = None
 
     # HA core entity attributes:
     _attr_max_color_temp_kelvin = MSL_KELVIN_MAX
@@ -244,7 +244,7 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
         self.color_mode = ColorMode.UNKNOWN
         self.color_temp_kelvin = None
         self.effect = None
-        self.effect_list = kwargs.pop("effect_list", self.init_effect_list)
+        self.effect_list = kwargs.pop("effect_list", self._INIT_effect_list)
         self.supported_features = (
             (LightEntityFeature.EFFECT | LightEntityFeature.TRANSITION)
             if self.effect_list
@@ -610,10 +610,10 @@ class EffectLight(Light):
     if TYPE_CHECKING:
         _light_effects: list[mt.control.Light_Effect]
         # HA core entity attributes:
-        init_effect_list: Final[list[str]]
+        _INIT_effect_list: Final[list[str]]
         effect_list: list[str]
 
-    init_effect_list = [light.EFFECT_OFF]
+    _INIT_effect_list = [light.EFFECT_OFF]
 
     __slots__ = (
         "_light_effects",
@@ -634,7 +634,7 @@ class EffectLight(Light):
             kwargs["effect_list"] = [
                 _light_effect[mc.KEY_EFFECTNAME]
                 for _light_effect in self._light_effects
-            ] + EffectLight.init_effect_list
+            ] + EffectLight._INIT_effect_list
             handler_light_effect.parse_digest = self._update_effects  # type: ignore
 
             def _shutdown():
@@ -763,7 +763,7 @@ class EffectLight(Light):
         self._light_effects = light_effects
         self.effect_list = [
             _light_effect[mc.KEY_EFFECTNAME] for _light_effect in light_effects
-        ] + EffectLight.init_effect_list
+        ] + EffectLight._INIT_effect_list
 
 
 class DNDLight(mle.BinaryParser, mle.EntityNamespaceMixin, light.LightEntity):
@@ -773,10 +773,10 @@ class DNDLight(mle.BinaryParser, mle.EntityNamespaceMixin, light.LightEntity):
     """
 
     PLATFORM = light.DOMAIN
-    init_entity_key = "dnd"
-    init_key_value = mle.BinaryParser.KeyValue(mc.KEY_MODE)
-    init_value_on = 0
-    init_value_off = 1
+    _INIT_entity_key = "dnd"
+    _INIT_key_value = mle.BinaryParser.KeyValue(mc.KEY_MODE)
+    _INIT_value_on = 0
+    _INIT_value_off = 1
     # HA core entity attributes:
     _attr_color_mode = ColorMode.ONOFF
     _attr_entity_category = mle.BinaryParser.EntityCategory.CONFIG
