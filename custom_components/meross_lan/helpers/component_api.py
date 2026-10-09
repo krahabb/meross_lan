@@ -18,6 +18,7 @@ from .. import const as mlc
 from ..merossclient import HostAddress
 from ..merossclient.client import Transport, bluetooth as m_bt
 from ..merossclient.client.http import HttpClient
+from ..merossclient.logging import Loggable
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..merossclient.protocol.message import (
     MerossAckReply,
@@ -29,7 +30,7 @@ from .manager import ConfigEntryManager
 
 if TYPE_CHECKING:
 
-    from typing import Callable, Final, Literal, Unpack
+    from typing import Any, Callable, Coroutine, Final, Literal, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import (
@@ -505,6 +506,29 @@ class ComponentApi(mlq.MQTTProfile):
                     self.profiles[profile_id] = None
         self._bt_devices = {}
         self.api = self  # type: ignore
+
+        # Patch our merossclient Loggable api to always create async tasks through hass
+        # This override is needed to let HA be aware of the tasks we create (especially for testing)
+        def _create_task[_T](
+            loggable: Loggable,
+            target: "Coroutine[Any, Any, _T]",
+            name: str = "",
+            eager_start: bool = False,
+        ):
+            task = hass.async_create_task(
+                target, f"{loggable.logtag}{name}", eager_start=eager_start
+            )
+            if eager_start and task.done():
+                return task
+            try:
+                loggable._tasks.add(task)
+            except AttributeError:
+                loggable._tasks = {task}
+            task.add_done_callback(loggable._done_task_callback)
+            return task
+
+        Loggable.create_task = _create_task
+
         mlq.MQTTProfile.__init__(
             self,
             mlc.CONF_PROFILE_ID_LOCAL,

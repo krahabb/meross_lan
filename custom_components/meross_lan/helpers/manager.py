@@ -2,7 +2,7 @@ from abc import abstractmethod
 import asyncio
 import os
 from time import localtime, strftime
-from typing import TYPE_CHECKING, final, override
+from typing import TYPE_CHECKING, final
 
 from homeassistant.components import persistent_notification as pn
 from homeassistant.helpers.issue_registry import IssueSeverity
@@ -215,26 +215,6 @@ class ConfigEntryManager(logging.Loggable):
                 msg
                 % (args + logging.extract_obfuscated_kwargs(self.obfuscate, kwargs)),
             )
-
-    @override
-    def create_task[_T](
-        self,
-        target: "Coroutine[Any, Any, _T]",
-        name: str = "",
-        eager_start: bool = False,
-    ):
-        # This override is needed to let HA be aware of the tasks we create (especially for testing)
-        task = self.parent.hass.async_create_task(
-            target, f"{self.logtag}{name}", eager_start=eager_start
-        )
-        if eager_start and task.done():
-            return task
-        try:
-            self._tasks.add(task)
-        except AttributeError:
-            self._tasks = {task}
-        task.add_done_callback(self._done_task_callback)
-        return task
 
     # interface: self
     @property
