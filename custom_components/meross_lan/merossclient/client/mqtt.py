@@ -662,7 +662,16 @@ class MQTTConnection(AbstractMQTTConnection):
         if not self._mqtt_loop_task:
             self._mqttc.connect_timeout = kwargs.get("timeout", self.timeout)
             self._mqttc.connect_async(self.id.host, self.id.port)
-            self._mqtt_loop_task = self.create_task(self._async_loop())
+            # This is a 'long lived' background task with special handling.
+            # We don't follow standard self.create_task semantics....
+            # This is particularly needed to avoid our meross_lan create_task patching
+            # send this task to HA core as a 'normal' task and thus block indefinitely
+            # when we want HA core wait for all tasks to be finished (async_block_till_done)
+            # We should maybe setup a new create_background_task api too in our class model
+            # but that's too much at the moment.
+            self._mqtt_loop_task = self.loop.create_task(
+                self._async_loop(), name=self.logtag
+            )
 
     def stop(self):
         if self._mqtt_loop_task:
