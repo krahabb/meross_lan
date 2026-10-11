@@ -419,7 +419,6 @@ class Loggable(metaclass=abc.ABCMeta):
                     "Some tasks were not properly shutdown (%r)",
                     self._tasks,
                 )
-            del self._tasks
         except AttributeError:
             pass  # might be not initialized ...
 
