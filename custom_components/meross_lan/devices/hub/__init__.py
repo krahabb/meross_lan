@@ -79,85 +79,6 @@ class Hub(mld.Device):
     if TYPE_CHECKING:
         subdevices: dict[str, "SubDevice"]
 
-    # we can safely rewrite base class __dict__ here
-    # since, once configured, these are no harm when used by a generic non-hub device.
-    mld.Device.NAMESPACE_INIT.update(
-        {
-            mn_h.Appliance_Control_Water: mld.Device.FACTORY_DEFAULT_LAZY,
-            mn_h.Appliance_Digest_Hub: NamespaceHandler.Factory(
-                ApplianceDigestHubHandler
-            ),
-            mn_h.Appliance_Hub_Battery: NamespaceHandler.Factory(
-                NamespaceHandler,
-                True,
-                {
-                    "config": (
-                        3600,
-                        86400,
-                        NamespaceHandler.async_polling_strategy_smart,
-                    )
-                },
-            ),
-            mn_h.Appliance_Hub_Exception: mld.Device.FACTORY_DEFAULT_NOPOLL,
-            mn_h.Appliance_Hub_ExtraInfo: mld.Device.FACTORY_IGNORE,
-            mn_h.Appliance_Hub_Online: mld.Device.FACTORY_DEFAULT_NOPOLL,
-            mn_h.Appliance_Hub_PairSubDev: NamespaceHandler.Factory(
-                namespace_init_appliance_hub_pairsubdev
-            ),
-            mn_h.Appliance_Hub_ToggleX: mld.Device.FACTORY_DEFAULT_NOPOLL,
-            mn_h.Appliance_Hub_SubdeviceList: mld.Device.FACTORY_IGNORE,
-            mn_h.Appliance_Hub_SubDevice_Beep: mld.Device.FACTORY_DEFAULT_LAZY,
-            mn_h.Appliance_Hub_SubDevice_Lock: mld.Device.FACTORY_DEFAULT_LAZY,
-            mn_h.Appliance_Hub_SubDevice_Version: mld.Device.FACTORY_DEFAULT_LAZY,
-            mn_h.Appliance_Hub_Mts100_Adjust: mld.Device.FACTORY_DEFAULT_LAZY,
-            mn_h.Appliance_Hub_Mts100_All: NamespaceHandler.Factory(
-                NamespaceHandler,
-                False,
-                {
-                    "config": (
-                        0,
-                        mlc.PARAM_CLOUD_UPDATE_PERIOD,
-                        NamespaceHandler.async_polling_strategy_chunked,
-                    )
-                },
-            ),
-            mn_h.Appliance_Hub_Mts100_Config: mld.Device.FACTORY_DEFAULT_LAZY,
-            mn_h.Appliance_Hub_Mts100_Mode: mld.Device.FACTORY_DEFAULT_NOPOLL,
-            mn_h.Appliance_Hub_Mts100_ScheduleB: NamespaceHandler.Factory(
-                NamespaceHandler,
-                False,
-                {
-                    "config": (
-                        mlc.PARAM_CONFIG_UPDATE_PERIOD,
-                        mlc.PARAM_CLOUD_UPDATE_PERIOD,
-                        NamespaceHandler.async_polling_strategy_chunked,
-                    )
-                },
-            ),
-            mn_h.Appliance_Hub_Mts100_Temperature: mld.Device.FACTORY_DEFAULT_NOPOLL,
-            mn_h.Appliance_Hub_Sensor_Adjust: mld.Device.FACTORY_DEFAULT_LAZY,
-            mn_h.Appliance_Hub_Sensor_All: NamespaceHandler.Factory(
-                NamespaceHandler,
-                False,
-                {
-                    "config": (
-                        0,
-                        mlc.PARAM_CLOUD_UPDATE_PERIOD,
-                        NamespaceHandler.async_polling_strategy_chunked,
-                    ),
-                },
-            ),
-            mn_h.Appliance_Hub_Sensor_DoorWindow: mld.Device.FACTORY_DEFAULT_NOPOLL,
-            mn_h.Appliance_Hub_Sensor_Smoke: mld.Device.FACTORY_DEFAULT_NOPOLL,
-            mn_h.Appliance_Hub_Sensor_TempHum: mld.Device.FACTORY_DEFAULT_NOPOLL,
-            mn_h.Appliance_Hub_Sensor_WaterLeak: mld.Device.FACTORY_DEFAULT_NOPOLL,
-        }
-    )
-    mld.Device.TRACE_ABILITY_EXCLUDE = mld.Device.TRACE_ABILITY_EXCLUDE + (
-        mn_h.Appliance_Hub_Exception,
-        mn_h.Appliance_Hub_Report,
-    )
-
     # We cannot define slots in this subclass because of how we install
     # this at runtime over a standard Device class instance (already created)
     # Any slot should then be declared in Device.
@@ -464,7 +385,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         subid = descriptor.id
         self.device_registry = hub.device_registry
         self.device_info = {"identifiers": {(mlc.DOMAIN, subid)}}
-        if (mlc.hac.MAJOR_VERSION, mlc.hac.MINOR_VERSION) >= (2026, 9):
+        if (mlc.hac.MAJOR_VERSION, mlc.hac.MINOR_VERSION) >= (2026, 9):  # type: ignore
             self.device_entry = hub.device_registry.async_get_or_create(
                 config_entry_id=hub.config_entry.entry_id,
                 manufacturer=mc.MANUFACTURER,

@@ -433,6 +433,74 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         mn.Appliance_System_Runtime: NamespaceHandler.Factory(
             ".sensor.SignalStrengthSensor"
         ),
+        mn.hub.Appliance_Control_Water: FACTORY_DEFAULT_LAZY,
+        mn.hub.Appliance_Digest_Hub: NamespaceHandler.Factory(
+            ".devices.hub.ApplianceDigestHubHandler"
+        ),
+        mn.hub.Appliance_Hub_Battery: NamespaceHandler.Factory(
+            NamespaceHandler,
+            True,
+            {
+                "config": (
+                    3600,
+                    86400,
+                    NamespaceHandler.async_polling_strategy_smart,
+                )
+            },
+        ),
+        mn.hub.Appliance_Hub_Exception: FACTORY_DEFAULT_NOPOLL,
+        mn.hub.Appliance_Hub_ExtraInfo: FACTORY_IGNORE,
+        mn.hub.Appliance_Hub_Online: FACTORY_DEFAULT_NOPOLL,
+        mn.hub.Appliance_Hub_PairSubDev: NamespaceHandler.Factory(
+            ".devices.hub.namespace_init_appliance_hub_pairsubdev"
+        ),
+        mn.hub.Appliance_Hub_ToggleX: FACTORY_DEFAULT_NOPOLL,
+        mn.hub.Appliance_Hub_SubdeviceList: FACTORY_IGNORE,
+        mn.hub.Appliance_Hub_SubDevice_Beep: FACTORY_DEFAULT_LAZY,
+        mn.hub.Appliance_Hub_SubDevice_Lock: FACTORY_DEFAULT_LAZY,
+        mn.hub.Appliance_Hub_SubDevice_Version: FACTORY_DEFAULT_LAZY,
+        mn.hub.Appliance_Hub_Mts100_Adjust: FACTORY_DEFAULT_LAZY,
+        mn.hub.Appliance_Hub_Mts100_All: NamespaceHandler.Factory(
+            NamespaceHandler,
+            False,
+            {
+                "config": (
+                    0,
+                    mlc.PARAM_CLOUD_UPDATE_PERIOD,
+                    NamespaceHandler.async_polling_strategy_chunked,
+                )
+            },
+        ),
+        mn.hub.Appliance_Hub_Mts100_Config: FACTORY_DEFAULT_LAZY,
+        mn.hub.Appliance_Hub_Mts100_Mode: FACTORY_DEFAULT_NOPOLL,
+        mn.hub.Appliance_Hub_Mts100_ScheduleB: NamespaceHandler.Factory(
+            NamespaceHandler,
+            False,
+            {
+                "config": (
+                    mlc.PARAM_CONFIG_UPDATE_PERIOD,
+                    mlc.PARAM_CLOUD_UPDATE_PERIOD,
+                    NamespaceHandler.async_polling_strategy_chunked,
+                )
+            },
+        ),
+        mn.hub.Appliance_Hub_Mts100_Temperature: FACTORY_DEFAULT_NOPOLL,
+        mn.hub.Appliance_Hub_Sensor_Adjust: FACTORY_DEFAULT_LAZY,
+        mn.hub.Appliance_Hub_Sensor_All: NamespaceHandler.Factory(
+            NamespaceHandler,
+            False,
+            {
+                "config": (
+                    0,
+                    mlc.PARAM_CLOUD_UPDATE_PERIOD,
+                    NamespaceHandler.async_polling_strategy_chunked,
+                ),
+            },
+        ),
+        mn.hub.Appliance_Hub_Sensor_DoorWindow: FACTORY_DEFAULT_NOPOLL,
+        mn.hub.Appliance_Hub_Sensor_Smoke: FACTORY_DEFAULT_NOPOLL,
+        mn.hub.Appliance_Hub_Sensor_TempHum: FACTORY_DEFAULT_NOPOLL,
+        mn.hub.Appliance_Hub_Sensor_WaterLeak: FACTORY_DEFAULT_NOPOLL,
     }
     TRACE_ABILITY_EXCLUDE = (
         mn.Appliance_System_Ability,
@@ -450,6 +518,8 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         mn.Appliance_Config_WifiX,
         mn.Appliance_Control_Bind,
         mn.Appliance_Control_Unbind,
+        mn.hub.Appliance_Hub_Exception,
+        mn.hub.Appliance_Hub_Report,
     )
 
     """
@@ -751,7 +821,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         device_info: "Entity.DeviceInfo" = {
             "identifiers": {(mlc.DOMAIN, f"{self.id}_{index_value}")}
         }
-        if (mlc.hac.MAJOR_VERSION, mlc.hac.MINOR_VERSION) >= (2026, 9):
+        if (mlc.hac.MAJOR_VERSION, mlc.hac.MINOR_VERSION) >= (2026, 9):  # type: ignore
             # TODO: migrate to using proper 'child' devices for channels instead of using via_device_id
             # According to docs, we should be able to just migrate this api and HA core will take care of
             # migrating any existing entry to a proper child device.
@@ -1664,7 +1734,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                             if not newname:
                                 continue
                             channel_name = f"{newname} Channel {channel}"
-                        if (mlc.hac.MAJOR_VERSION, mlc.hac.MINOR_VERSION) >= (2026, 9):
+                        if (mlc.hac.MAJOR_VERSION, mlc.hac.MINOR_VERSION) >= (2026, 9):  # type: ignore
                             # TODO: this migrated code is temporary until we move our 'device_entries_info' to
                             # proper 'child' devices (adhering to the new HA core model implemented in 2026.9)
                             device_entry = (
