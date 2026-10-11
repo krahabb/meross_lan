@@ -2,10 +2,8 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.exceptions import InvalidStateError
 
-from .. import const as mlc
 from ..cover import Cover, cover
 from ..merossclient.client import Transport
-from ..merossclient.device.handler import NamespaceHandler
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..number import NumberParser
 from ..switch import SwitchParser
@@ -185,7 +183,7 @@ class RollerShutter(Cover.RestoreEntity, Cover):
             else:
                 return  # No-Op
             await self.async_request_position(position)
-            self.schedule_async_callback(timeout, self._async_transition_end_callback)
+            self.schedule_callback(timeout, self._async_transition_end_callback)
 
     async def async_stop_cover(self, **kwargs):
         await self.async_request_position(mc.ROLLERSHUTTER_POSITION_STOP)

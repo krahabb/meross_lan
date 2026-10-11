@@ -856,7 +856,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
 
     @override
     def _trace_opened(self, epoch: float):
-        self.schedule_async_callback(
+        self.schedule_callback(
             self.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
             self._async_trace_ability,
             iter(self.descriptor.ability),
@@ -911,7 +911,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             )
         else:
             timeout = self.PARAM_TRACING_ABILITY_POLL_TIMEOUT
-        self.schedule_async_callback(
+        self.schedule_callback(
             timeout,
             self._async_trace_ability,
             abilities,
@@ -1220,7 +1220,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         """
         Schedule the ConfigEntry update (in 5 sec) due to self.descriptor changing.
         """
-        self.schedule_async_callback(
+        self.schedule_callback(
             5,
             self._async_entry_update,
             query_abilities,

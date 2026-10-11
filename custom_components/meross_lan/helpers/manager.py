@@ -335,7 +335,7 @@ class ConfigEntryManager(logging.Loggable):
     def add_entity[_T: "Entity"](self, entity: _T):  # type: ignore
         if not self.added_entities:
             self.added_entities = {entity.PLATFORM: [entity]}
-            self.schedule_async_callback(0, self._async_check_add_entities)
+            self.schedule_callback(0, self._async_check_add_entities)
         else:
             try:
                 self.added_entities[entity.PLATFORM].append(entity)

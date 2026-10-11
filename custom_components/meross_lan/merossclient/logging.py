@@ -533,29 +533,14 @@ class Loggable(metaclass=abc.ABCMeta):
                 task,
             )
 
-    def schedule_async_callback(
-        self, delay: float, target: "Callable[..., Coroutine]", *args
-    ):
-        """Schedules an async callback to be called after a delay by calling loop.call_later.
+    def schedule_callback(self, delay: float, target: "Callable", *args):
+        """Schedules a target callback to be called after a delay by calling loop.call_later.
+        If target is a coroutine function a task will be (eagerly) created to manage the async execution.
         TimerHandles (and Tasks) are cached and automatically cancelled on async_shutdown.
         The 'target' argument is used as a key to ensure that only one timer per target is
         active at a time, so that if the same callback is already scheduled it'll be rescheduled
         with the new delay. Also, scheduled timers can be cancelled by using the 'cancel_callback' method
         with the same target."""
-        timer = self.loop.call_later(delay, self._async_callback_wrapper, target, *args)
-        try:
-            # drop if already scheduled (re-schedule)
-            self._timers[target].cancel()
-            self._timers[target] = timer
-        except AttributeError:
-            self._timers = {target: timer}
-        except KeyError:
-            self._timers[target] = timer
-        return timer
-
-    def schedule_callback(self, delay: float, target: "Callable", *args):
-        """Schedules a sync callback to be called after a delay by calling loop.call_later.
-        See schedule_async_callback for more details."""
         timer = self.loop.call_later(delay, self._callback_wrapper, target, *args)
         try:
             # drop if already scheduled (re-schedule)
@@ -577,19 +562,17 @@ class Loggable(metaclass=abc.ABCMeta):
     def _callback_wrapper(self, target: "Callable", *args):
         del self._timers[target]
         try:
-            target(*args)
+            result = target(*args)
+            if asyncio.iscoroutine(result):
+                self.create_task(result, "._callback_wrapper", eager_start=True)
         except Exception as e:
             self.log_exception(
                 self.WARNING,
                 e,
-                "running callback %r with args %r",
+                "in _callback_wrapper running callback %r with args %r",
                 target,
                 args,
             )
-
-    def _async_callback_wrapper(self, target: "Callable[..., Coroutine]", *args):
-        del self._timers[target]
-        self.create_task(target(*args), "._callback_async_wrapper", eager_start=True)
 
     async def async_load_zoneinfo(self, tzname: str, /):
         try:

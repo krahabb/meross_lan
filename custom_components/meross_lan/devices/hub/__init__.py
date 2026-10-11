@@ -323,7 +323,7 @@ class Hub(mld.Device):
                             timeout=14400,
                         )
                         continue
-                    self.schedule_async_callback(
+                    self.schedule_callback(
                         2, self._async_build_subdevice, descriptor, None
                     )
                     # schedule_entry_update will also check abilities

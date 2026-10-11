@@ -221,7 +221,7 @@ class MerossProfile(MQTTProfile):
         if next_query_delay < mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT:
             # we'll give some breath to the init process
             next_query_delay = mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT
-        self.schedule_async_callback(
+        self.schedule_callback(
             next_query_delay,
             self._async_query_device_info,
         )
@@ -336,7 +336,7 @@ class MerossProfile(MQTTProfile):
             # missing device info, this is mostly due to a recently added device
             # appearing on MQTT before we had a chance to refresh the device list from the cloud.
             # We eventually post-pone the query if it was recently issued
-            self.schedule_async_callback(
+            self.schedule_callback(
                 (
                     0
                     if self._device_info_time
@@ -542,7 +542,7 @@ class MerossProfile(MQTTProfile):
         ) > mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
 
     async def _async_query_device_info(self):
-        self.schedule_async_callback(
+        self.schedule_callback(
             mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
             self._async_query_device_info,
         )

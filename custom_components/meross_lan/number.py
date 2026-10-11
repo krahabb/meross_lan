@@ -106,12 +106,12 @@ class NumberParser(mle.NumericParser, NumberEntity):
             device_step = round(self.native_step * device_scale)
             device_value = round(device_value / device_step) * device_step
             self.update_native_value(device_value / device_scale)
-            self.schedule_async_callback(
+            self.schedule_callback(
                 self.DEBOUNCE_DELAY, self._async_request_debounce, device_value
             )
         else:
             self.update_native_value(value)
-            self.schedule_async_callback(
+            self.schedule_callback(
                 self.DEBOUNCE_DELAY, self._async_request_debounce, value * device_scale
             )
 

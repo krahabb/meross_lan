@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING, override
 from homeassistant.helpers.entity_registry import RegistryEntryDisabler
 from homeassistant.util.dt import now
 
-from .. import const as mlc
 from ..binary_sensor import BinarySensorEntity
 from ..cover import Cover
 from ..helpers import clamp
@@ -379,7 +378,7 @@ class GarageDoor(Cover.RestoreEntity, Cover):
             self.schedule_callback(0.9, self._transition_callback)
             # check the timeout after expected to account
             # for delays in communication
-            self.schedule_async_callback(
+            self.schedule_callback(
                 (timeout or self._transition_duration),  # type: ignore
                 self._async_transition_end_callback,
             )
