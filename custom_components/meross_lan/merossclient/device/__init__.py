@@ -144,7 +144,6 @@ class Device(PhysicalDevice):
         _multiple_requests: list[NamespaceHandler]
         _multiple_response_size: int
 
-        _polling_delay: int
         _polling_task: Task | None
         polling_lock: asyncio.Lock
         polling_epoch: Final[float]
@@ -177,7 +176,6 @@ class Device(PhysicalDevice):
         "multiple_max",
         "_multiple_requests",
         "_multiple_response_size",
-        "_polling_delay",
         "_polling_task",
         "_polling_lock",
         "polling_epoch",
@@ -247,7 +245,7 @@ class Device(PhysicalDevice):
 
     @override
     async def async_shutdown(self):
-        self.polling_stop()
+        await self.async_polling_stop()
         for client in tuple(self._clients.values()):
             await client.async_shutdown()
         for subdevice in self.subdevices.values():
@@ -312,7 +310,6 @@ class Device(PhysicalDevice):
     @override
     def on_connect(self, /):
         super().on_connect()
-        self._polling_delay = self.polling_period
         for nh in self.ns_handlers.values():
             nh.last_rx_epoch = nh.last_poll_epoch = nh.next_poll_epoch = 0.0
 
@@ -538,26 +535,31 @@ class Device(PhysicalDevice):
         and any ongoing polling task.
         When called while a schedule is already in place, it'll be cancelled and re-started immediately.
         """
-        self._polling_delay = self.polling_period
-        self._polling()
+        if not self._polling_task:
+            self.cancel_callback(self._async_polling_schedule)
+            self._async_polling_schedule()
 
-    def polling_stop(self):
+    async def async_polling_stop(self):
         """Stops the polling schedule and cancels any ongoing polling task."""
-        self.cancel_callback(self._polling)
-        if self._polling_task:
-            self._polling_task.cancel("polling_stop")
-
-    def _polling(self, /):
-        self.schedule_callback(self._polling_delay, self._polling)
-        self._polling_task = self.create_task(
-            self.async_poll(), f"._polling", eager_start=False
-        )
-
-    async def async_poll(self, /):
-        async with self.polling_lock:
-            self.polling_epoch = epoch = self.time()  # type: ignore[assignment]
-            self.log(self.DEBUG, "Polling begin")
+        if self._polling_task and self._polling_task.cancel("polling_stop"):
             try:
+                await self._polling_task
+            except asyncio.CancelledError:
+                pass
+        self.cancel_callback(self._async_polling_schedule)
+
+    def _async_polling_schedule(self, /):
+        assert not self._polling_task
+        self._polling_task = self.create_task(
+            self._async_poll(), f"._polling", eager_start=False
+        )
+        return self._polling_task
+
+    async def _async_poll(self, /):
+        self.log(self.DEBUG, "Polling begin")
+        try:
+            async with self.polling_lock:
+                self.polling_epoch = epoch = self.time()  # type: ignore[assignment]
                 if self.is_connected:
                     # perform some heartbeats in case
                     if (
@@ -627,36 +629,34 @@ class Device(PhysicalDevice):
                 if self._multiple_requests:
                     await self.async_poll_flush()
 
-            except asyncio.CancelledError:
-                self.log(self.DEBUG, "Polling cancelled")
-                raise
-            except asyncio.TimeoutError:
-                if self.is_connected:
-                    self.on_disconnect()
-                elif self._polling_delay < self.HEARTBEAT_TIMEOUT:
-                    self._polling_delay += self.polling_period
-                else:
-                    self._polling_delay = self.HEARTBEAT_TIMEOUT
-            except Exception as e:
-                self.log_exception(self.WARNING, e, "async_poll")
-            finally:
-                self._multiple_requests.clear()
-                self._multiple_response_size = NamespaceHandler.HEADER_AVG_SIZE
-                self._lazypoll_requests.clear()
-                self._polling_task = None
-            self.log(self.DEBUG, "Polling end")
+        except asyncio.CancelledError:
+            self.log(self.DEBUG, "Polling cancelled")
+            raise
+        except asyncio.TimeoutError:
+            if self.is_connected:
+                self.on_disconnect()
+        except Exception as e:
+            self.log_exception(self.WARNING, e, "async_poll")
+        finally:
+            self._multiple_requests.clear()
+            self._multiple_response_size = NamespaceHandler.HEADER_AVG_SIZE
+            self._lazypoll_requests.clear()
+            self._polling_task = None
+        # When cancelling all this stuff will be skipped meaning we're not rescheduling
+        # until async_poll_start again
+        if self.polling_period:
+            # We'll schedule the next callback only at the end thus leading to an overall irregular
+            # effective polling period but this avoids having overlapping polls when some timeouts
+            # make the polling cycle last too much
+            self.schedule_callback(self.polling_period, self._async_polling_schedule)
+        self.log(self.DEBUG, "Polling end")
 
     async def async_poll_full(self):
         """Perform a 'full' namespaces poll like when onlining i.e. without any lazy optimization."""
-        try:
-            # eventually reschedule from now on
-            self._timers[self._polling].cancel()
-            self.schedule_callback(self._polling_delay, self._polling)
-        except (AttributeError, KeyError):
-            pass  # do not (re)schedule if we're not polling already
+        await self.async_polling_stop()
         for nh in self.ns_handlers.values():
             nh.last_rx_epoch = nh.last_poll_epoch = nh.next_poll_epoch = 0.0
-        await self.async_poll()
+        await self._async_polling_schedule()
 
     async def async_poll_flush(self):
         multiple_requests = self._multiple_requests

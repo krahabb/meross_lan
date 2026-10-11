@@ -605,7 +605,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         )
         if self.polling_period < mlc.CONF_POLLING_PERIOD_MIN:
             self.polling_period = mlc.CONF_POLLING_PERIOD_MIN
-        self._polling_delay = self.polling_period
 
         self.enable_multiple(not config.get(mlc.CONF_DISABLE_MULTIPLE))
         self._update_host(config.get(mlc.CONF_HOST) or self.descriptor.innerIp)
