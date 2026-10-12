@@ -821,7 +821,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         device_info: "Entity.DeviceInfo" = {
             "identifiers": {(mlc.DOMAIN, f"{self.id}_{index_value}")}
         }
-        if (mlc.hac.MAJOR_VERSION, mlc.hac.MINOR_VERSION) >= (2026, 9):  # type: ignore
+        if mlc.HA_VERSION >= (2026, 9):
             # TODO: migrate to using proper 'child' devices for channels instead of using via_device_id
             # According to docs, we should be able to just migrate this api and HA core will take care of
             # migrating any existing entry to a proper child device.
@@ -1734,7 +1734,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                             if not newname:
                                 continue
                             channel_name = f"{newname} Channel {channel}"
-                        if (mlc.hac.MAJOR_VERSION, mlc.hac.MINOR_VERSION) >= (2026, 9):  # type: ignore
+                        if mlc.HA_VERSION >= (2026, 9):
                             # TODO: this migrated code is temporary until we move our 'device_entries_info' to
                             # proper 'child' devices (adhering to the new HA core model implemented in 2026.9)
                             device_entry = (

@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 
 DOMAIN: Final = "meross_lan"
 
+HA_VERSION: Final[tuple[int, int]] = (hac.MAJOR_VERSION, hac.MINOR_VERSION)
+
 #########################
 # common ConfigEntry keys
 #########################

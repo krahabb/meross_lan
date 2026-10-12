@@ -385,7 +385,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         subid = descriptor.id
         self.device_registry = hub.device_registry
         self.device_info = {"identifiers": {(mlc.DOMAIN, subid)}}
-        if (mlc.hac.MAJOR_VERSION, mlc.hac.MINOR_VERSION) >= (2026, 9):  # type: ignore
+        if mlc.HA_VERSION >= (2026, 9):
             self.device_entry = hub.device_registry.async_get_or_create(
                 config_entry_id=hub.config_entry.entry_id,
                 manufacturer=mc.MANUFACTURER,

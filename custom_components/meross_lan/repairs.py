@@ -3,9 +3,9 @@ from typing import TYPE_CHECKING
 from homeassistant.components.repairs import ConfirmRepairFlow
 from homeassistant.helpers import device_registry as dr, selector
 from homeassistant.util import dt as dt_util
-import voluptuous as vol
 
 from . import const as mlc
+from .config_flow import vol
 from .helpers.component_api import ComponentApi
 
 if TYPE_CHECKING:

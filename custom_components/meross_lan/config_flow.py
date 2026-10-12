@@ -20,7 +20,12 @@ from homeassistant.helpers import (
     selector,
 )
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-import voluptuous as vol
+
+try:
+    # HA core 2026.9 introduced probatio in place of voluptuous
+    import probatio as vol
+except:
+    import voluptuous as vol
 
 from . import const as mlc
 from .helpers import (
@@ -50,6 +55,12 @@ if TYPE_CHECKING:
     from homeassistant.helpers.service_info.bluetooth import BluetoothServiceInfo
     from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
     from homeassistant.helpers.service_info.mqtt import MqttServiceInfo
+
+    # re-import voluptuous in typing
+    if mlc.HA_VERSION > (2026, 9):
+        import probatio as vol
+    else:
+        import voluptuous as vol
 
     from .helpers.device import Device
     from .helpers.manager import ConfigEntryManager
@@ -435,7 +446,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                                 unique_id=unique_id,
                                 subentries_data=(),  # required since 2025.3
                             )
-                            if (mlc.hac.MAJOR_VERSION, mlc.hac.MINOR_VERSION) >= (2025, 3)  # type: ignore
+                            if (mlc.HA_VERSION) >= (2025, 3)
                             else (
                                 ce.ConfigEntry(  # type: ignore
                                     version=self.VERSION,
@@ -1394,14 +1405,11 @@ class OptionsFlow(BaseFlow, ce.OptionsFlow):
 
                         if (
                             self.config_entry.state == ce.ConfigEntryState.SETUP_ERROR
-                        ) and (
+                        ) and (mlc.HA_VERSION < (2026, 9)):
                             # only apply this repair in Home Assistant Core versions before 2026.9
                             # since this patch was already dangerous before that..now I'm too lazy to investigate
                             # this further and the device registry pollution should be anyway prevented
                             # with the checks in place....
-                            (mlc.hac.MAJOR_VERSION, mlc.hac.MINOR_VERSION)
-                            < (2026, 9)
-                        ):
                             try:  # to fix the device registry in case it was corrupted by #341
                                 dev_reg = api.device_registry
                                 device_identifiers = {(str(mlc.DOMAIN), uuid)}
