@@ -93,3 +93,37 @@ async def test_profile_entry(request, hass: "HomeAssistant"):
     """
     async with helpers.ProfileEntryMocker(request, hass) as profile_mock:
         assert profile_mock.api.profiles[tc.MOCK_PROFILE_ID] is not None
+
+
+async def test_setup_concurrency(request, hass: "HomeAssistant"):
+
+    contexts: list[helpers.ConfigEntryMocker] = [
+        helpers.DeviceContext(
+            request, hass, emulator, auto_setup=False, auto_poll=False
+        )
+        for emulator in helpers.build_emulators()
+    ]
+    contexts.append(helpers.ProfileEntryMocker(request, hass, auto_setup=False))
+
+    # initialize contexts (they'll not auto_load config_entry though)
+    for context in contexts:
+        await context.__aenter__()
+
+    # Load all of them concurrently trying to emulate HA boot sequence
+    await asyncio.gather(
+        *[
+            hass.config_entries.async_setup(context.config_entry_id)
+            for context in contexts
+        ]
+    )
+
+    # ensure all setup in place
+    for context in contexts:
+        assert context.config_entry.state is ConfigEntryState.LOADED, (
+            context.logtag,
+            context.config_entry.reason,
+        )
+
+    # Try to cleanup ;)
+    for context in contexts:
+        await context.__aexit__(None, None, None)
