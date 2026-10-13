@@ -1067,8 +1067,8 @@ class NamespaceHandler(logging.Loggable):
     NS_CONTENT_POLLING_CONFIG_MAP = {
         mn.Content.UNKNOWN: POLLING_CONFIG_NONE,
         mn.Content.CONSTANT: (0, 0, async_polling_strategy_once),
-        mn.Content.INFO: (600, 1800, async_polling_strategy_smart),
-        mn.Content.CONFIG: (300, 1200, async_polling_strategy_smart),
+        mn.Content.INFO: (600, 1800, async_polling_strategy_default),
+        mn.Content.CONFIG: (300, 1200, async_polling_strategy_default),
         mn.Content.CONTROL: POLLING_CONFIG_DEFAULT,
         mn.Content.STATE: POLLING_CONFIG_DEFAULT,
         mn.Content.SENSOR_FAST: (0, 180, async_polling_strategy_smart),
