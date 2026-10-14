@@ -10,33 +10,28 @@ PSH_ID = mn.IDX_ID | mn.PSH
 GETSET_ID = mn.IDX_ID | mn.G_LI | mn.S_LI
 GETPSH_ID = GET_ID | mn.PSH
 
-GET_SUBID = mn.IDX_SUB | mn.G_LIS
-GETSET_SUBID = GET_SUBID | mn.S_LI
-GETSETPSH_SUBID = GETSET_SUBID | mn.PSH
-GETSETPSQ_SUBID = GETSET_SUBID | mn.PSQ
-
 
 Appliance_Config_WaterPlan = mn.ns(
-    "Appliance.Config.WaterPlan", mc.KEY_CONFIG, -1, GETSET_SUBID, mn.EXP
+    "Appliance.Config.WaterPlan", mc.KEY_CONFIG, -1, mn.GS_LIS_SUB, mn.EXP
 )  # mst100 (used to read/write watering schedules)
 Appliance_Control_Water = mn.ns(
-    "Appliance.Control.Water", mc.KEY_CONTROL, 50, GETSETPSH_SUBID
+    "Appliance.Control.Water", mc.KEY_CONTROL, 50, mn.GSP_LIS_SUB
 )  # mst100
 Appliance_Control_WaterEvent = mn.ns(
     "Appliance.Control.WaterEvent", mc.KEY_CONTROL, -1, mn.IDX_SUB, mn.PSH, mn.EXP
 )  # mst100 (used to report events after each watering cycle is completed)
 Appliance_Control_WaterEvent_Skip = mn.ns(
-    "Appliance.Control.WaterEvent.Skip", mc.KEY_CONTROL, -1, GETSET_SUBID, mn.EXP
+    "Appliance.Control.WaterEvent.Skip", mc.KEY_CONTROL, -1, mn.GS_LIS_SUB, mn.EXP
 )  # mst100 (used in the app to skip watering on specific days according to the schedule)
 Appliance_Control_WaterPlan_Skip = mn.ns(
-    "Appliance.Control.WaterPlan.Skip", mc.KEY_CONTROL, -1, GETSET_SUBID, mn.EXP
+    "Appliance.Control.WaterPlan.Skip", mc.KEY_CONTROL, -1, mn.GS_LIS_SUB, mn.EXP
 )  # mst100 (allows the device to query cloud server about whether to skip execution on a specific day based on weather conditions)
 
 Appliance_Digest_Hub = mn.ns(
     "Appliance.Digest.Hub", mc.KEY_HUB, -1, mn.G_D, mn.DIG, mn.C_STA
 )
 Appliance_Digest_WaterPlan = mn.ns(
-    "Appliance.Digest.WaterPlan", mc.KEY_DIGEST, -1, GETSET_SUBID, mn.EXP
+    "Appliance.Digest.WaterPlan", mc.KEY_DIGEST, -1, mn.GS_LIS_SUB, mn.EXP
 )  # mst100 (used to read/write watering schedules)
 Appliance_Hub_Battery = mn.ns(
     "Appliance.Hub.Battery", mc.KEY_BATTERY, 40, GETPSH_ID, mn.C_STA

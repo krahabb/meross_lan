@@ -905,6 +905,31 @@ IDX_ID_: ns.Args = {"index_type": IndexType.Id}  # Item (effect) Id
 IDX_ID: ns.Args = {"index_type": IndexType.id}  # Hub subdevice id
 IDX_SUB: ns.Args = {"index_type": IndexType.subId}  # Hub subdevice id
 
+# 'composed' payload verbs configurations
+GS_LI = G_LI | S_LI  # GET and SET by LIST IDX
+GP_LI = G_LI | PSH  # GET by LIST IDX + PUSH
+GSP_LI = GS_LI | PSH  # GET and SET by LIST IDX + PUSH
+GSPQ_LI = GS_LI | PSQ  # GET and SET by LIST IDX + PUSH_QUERY
+GS_LIS = G_LIS | S_LI  # GET (strict) and SET by LIST IDX
+GP_LIS = G_LIS | PSH  # GET (strict) by LIST IDX + PUSH
+GSP_LIS = GS_LIS | PSH  # GET (strict) and SET by LIST IDX + PUSH
+GSPQ_LIS = GS_LIS | PSQ  # GET (strict) and SET by LIST IDX + PUSH_QUERY
+
+# more 'composed' by adding indexing configuration
+GS_LI_C = GS_LI | IDX_C
+GP_LI_C = GP_LI | IDX_C
+GSP_LI_C = GSP_LI | IDX_C
+GS_LIS_C = GS_LIS | IDX_C
+GP_LIS_C = GP_LIS | IDX_C
+GSP_LIS_C = GSP_LIS | IDX_C
+GSPQ_LIS_C = GSPQ_LIS | IDX_C
+
+GS_LI_SUB = GS_LI | IDX_SUB
+GSP_LI_SUB = GSP_LI | IDX_SUB
+GS_LIS_SUB = GS_LIS | IDX_SUB
+GSP_LIS_SUB = GSP_LIS | IDX_SUB
+GSPQ_LIS_SUB = GSPQ_LIS | IDX_SUB
+
 DIG: ns.Args = {"key_digest": True}  # type: ignore[sentinel]
 
 C_UNK: ns.Args = {"content": Content.UNKNOWN}
@@ -925,10 +950,10 @@ EXP: ns.Args = {"grammar": Grammar.EXPERIMENTAL}
 # Moreover, for some namespaces, the euristics about 'namespace key' and payload structure are not
 # good so we must fix those beforehand.
 Appliance_Config_Alarm = ns(
-    "Appliance.Config.Alarm", mc.KEY_CONFIG, 44, G_LI, S_LI, PSQ, IDX_SUB, C_CFG
+    "Appliance.Config.Alarm", mc.KEY_CONFIG, 44, GS_LI_SUB, PSQ, C_CFG
 )
 Appliance_Config_DeviceCfg = ns(
-    "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, 100, G_LIS, S_LI, PSH, IDX_SUB, C_CFG
+    "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, 100, GSP_LIS_SUB, C_CFG
 )
 Appliance_Config_Info = ns(
     "Appliance.Config.Info", mc.KEY_INFO, -1, G_E, S_D, PSQ, C_CON
@@ -940,7 +965,7 @@ Appliance_Config_OverTemp = ns(
     "Appliance.Config.OverTemp", mc.KEY_OVERTEMP, 40, G_E, S_D, C_CFG
 )
 Appliance_Config_StandbyKiller = ns(
-    "Appliance.Config.StandbyKiller", mc.KEY_CONFIG, -1, G_LIS, S_LI, PSQ, IDX_SUB
+    "Appliance.Config.StandbyKiller", mc.KEY_CONFIG, -1, GS_LIS_SUB, PSQ
 )
 Appliance_Config_Trace = ns(
     "Appliance.Config.Trace", "trace", -1, G_D, C_INF
@@ -953,25 +978,21 @@ Appliance_Config_Sensor_Association = ns(
     "Appliance.Config.Sensor.Association",
     mc.KEY_CONFIG,
     30,
-    G_LIS,
-    S_LI,
+    GS_LIS_SUB,
     PSQ,
-    IDX_SUB,
     C_CFG,
 )
 
 Appliance_Control_Alarm = ns(
-    "Appliance.Control.Alarm", mc.KEY_ALARM, 40, G_LI, S_LI, IDX_SUB
+    "Appliance.Control.Alarm", mc.KEY_ALARM, 40, GS_LI_SUB
 )  # mst100/ms130 actually only seen in hub
 Appliance_Control_AlertConfig = ns(
-    "Appliance.Control.AlertConfig", mc.KEY_CONFIG, 70, G_LIS, S_LI, PSH, IDX_SUB
+    "Appliance.Control.AlertConfig", mc.KEY_CONFIG, 70, GSP_LIS_SUB
 )  # mts300 support the full set of verbs - em06 also exposes it but that's likely different
 Appliance_Control_AlertReport = ns(
-    "Appliance.Control.AlertReport", mc.KEY_ALERT, -1, G_LIS, S_LI, IDX_SUB
+    "Appliance.Control.AlertReport", mc.KEY_ALERT, -1, GS_LIS_SUB
 )  # no trace of handlingthis ns in Meross App
-Appliance_Control_Beep = ns(
-    "Appliance.Control.Beep", mc.KEY_ALARM, -1, G_LIS, S_LI, IDX_C
-)
+Appliance_Control_Beep = ns("Appliance.Control.Beep", mc.KEY_ALARM, -1, GS_LIS_C)
 Appliance_Control_Bind = ns("Appliance.Control.Bind", mc.KEY_BIND, -1)
 Appliance_Control_ChangeWifi = ns(
     "Appliance.Control.ChangeWiFi", mc.KEY_, -1
@@ -1015,23 +1036,19 @@ Appliance_Control_ElectricityX = ns(
     IDX_C | EXP,
     C_SNS_F,
 )
-Appliance_Control_Fan = ns(
-    "Appliance.Control.Fan", mc.KEY_FAN, 20, G_LIS, S_LI, IDX_C, DIG
-)
+Appliance_Control_Fan = ns("Appliance.Control.Fan", mc.KEY_FAN, 20, GS_LIS_C, DIG)
 Appliance_Control_Fan_BtnConfig = ns(
-    "Appliance.Control.Fan.BtnConfig", mc.KEY_CONFIG, -1, G_LIS, S_LI, PSQ, IDX_C, C_CFG
+    "Appliance.Control.Fan.BtnConfig", mc.KEY_CONFIG, -1, GS_LIS_C, PSQ, C_CFG
 )
 Appliance_Control_Fan_Config = ns(
-    "Appliance.Control.Fan.Config", mc.KEY_CONFIG, -1, G_LIS, S_LI, PSQ, IDX_C, C_CFG
+    "Appliance.Control.Fan.Config", mc.KEY_CONFIG, -1, GS_LIS_C, PSQ, C_CFG
 )
 Appliance_Control_FilterMaintenance = ns(
     "Appliance.Control.FilterMaintenance",
     mc.KEY_FILTER,
     35,
-    G_LIS,
-    S_LI,
+    GS_LIS_C,
     PSQ,
-    IDX_C,
     C_SNS_S,
 )
 Appliance_Control_Light = ns(
@@ -1053,29 +1070,23 @@ Appliance_Control_McuUpgrade = ns("Appliance.Control.McuUpgrade", mc.KEY_, -1)
 Appliance_Control_Multiple = ns("Appliance.Control.Multiple", mc.KEY_MULTIPLE, -1, S_D)
 Appliance_Control_OverTemp = ns("Appliance.Control.OverTemp", mc.KEY_OVERTEMP, -1, PSH)
 Appliance_Control_PhysicalLock = ns(
-    "Appliance.Control.PhysicalLock", mc.KEY_LOCK, 35, G_LIS, S_LI, PSQ, IDX_C, C_CFG
+    "Appliance.Control.PhysicalLock", mc.KEY_LOCK, 35, GS_LIS_C, PSQ, C_CFG
 )
 Appliance_Control_Presence_Config = ns(
-    "Appliance.Control.Presence.Config", mc.KEY_CONFIG, 260, G_LIS, S_LI, IDX_C, C_CFG
+    "Appliance.Control.Presence.Config", mc.KEY_CONFIG, 260, GS_LIS_C, C_CFG
 )
 Appliance_Control_Presence_Study = ns(
     "Appliance.Control.Presence.Study",
     mc.KEY_CONFIG,
     -1,
-    G_LIS,
-    S_LI,
-    PSQ,
-    IDX_C,
+    GSPQ_LIS_C,
     C_CFG,
 )
 Appliance_Control_Screen_Brightness = ns(
     "Appliance.Control.Screen.Brightness",
     mc.KEY_BRIGHTNESS,
     70,
-    G_LIS,
-    S_LI,
-    PSH,
-    IDX_C,
+    GSP_LIS_C,
     C_CFG,
 )
 # Appliance.Control.Sensor.* appear on both regular devices (ms600) and hub/subdevices (ms130)
@@ -1114,8 +1125,8 @@ Appliance_Control_Spray = ns(
     "Appliance.Control.Spray", mc.KEY_SPRAY, 90, G_D, S_DI, PSH, IDX_C, DIG
 )
 Appliance_Control_TempUnit = ns(
-    "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, 30, G_LIS, S_LI, IDX_C, C_CFG
-)
+    "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, 30, GS_LIS_C, C_CFG
+)  # TODO: move to thermostat.py
 Appliance_Control_Timer = ns(
     "Appliance.Control.Timer", mc.KEY_TIMER, -1, G_E, S_DI, D_DI, IDX_ID, DIG, C_CFG
 )  # digest key likely referring to 'control' key (like Appliance.Control.Toggle)
@@ -1168,7 +1179,7 @@ Appliance_GarageDoor_Config = ns(
     "Appliance.GarageDoor.Config", mc.KEY_CONFIG, 110, G_E, S_D, C_CFG
 )
 Appliance_GarageDoor_MultipleConfig = ns(
-    "Appliance.GarageDoor.MultipleConfig", mc.KEY_CONFIG, 140, G_LIS, S_LI, IDX_C, C_CFG
+    "Appliance.GarageDoor.MultipleConfig", mc.KEY_CONFIG, 140, GS_LIS_C, C_CFG
 )
 Appliance_GarageDoor_State = ns(
     "Appliance.GarageDoor.State", mc.KEY_STATE, -1, G_DIS, S_DI, IDX_C, DIG, EXP, C_CTL
@@ -1207,7 +1218,7 @@ Appliance_RollerShutter_Position = ns(
     C_CTL,
 )
 Appliance_RollerShutter_State = ns(
-    "Appliance.RollerShutter.State", mc.KEY_STATE, 40, G_LI, PSH, IDX_C, C_STA
+    "Appliance.RollerShutter.State", mc.KEY_STATE, 40, GP_LI_C, C_STA
 )
 
 Appliance_System_Ability = ns(
