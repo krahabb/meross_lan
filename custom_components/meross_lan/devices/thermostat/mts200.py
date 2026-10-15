@@ -13,7 +13,6 @@ class Mts200Climate(MtsThermostatClimate):
         ns_value: mt.thermostat.Mode_C
 
     # MtsClimate class attributes
-    temperature_scale = mc.MTS200_TEMP_SCALE
     SCHEDULE_NS = mn_t.Appliance_Control_Thermostat_Schedule
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS200_MODE_MANUAL: MtsThermostatClimate.Preset.CUSTOM,
@@ -81,7 +80,9 @@ class Mts200Climate(MtsThermostatClimate):
         if mc.KEY_STATE in payload:
             self._mts_active = payload[mc.KEY_STATE]
         if mc.KEY_CURRENTTEMP in payload:
-            self._update_current_temperature(payload[mc.KEY_CURRENTTEMP])
+            self._update_current_temperature(
+                payload[mc.KEY_CURRENTTEMP] / self.temperature_scale
+            )
         if mc.KEY_TARGETTEMP in payload:
             self.target_temperature = (
                 payload[mc.KEY_TARGETTEMP] / self.temperature_scale

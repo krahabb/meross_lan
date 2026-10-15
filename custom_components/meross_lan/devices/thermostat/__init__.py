@@ -85,20 +85,8 @@ class MtsCommonTemperatureNumber(NumberParser):
                 assert isinstance(args[0], MtsClimate)
             kwargs["device_scale"] = args[0].temperature_scale
         else:
-            handlers = args[1].ns_handlers
-            handler = next(
-                iter(
-                    handlers[ns]
-                    for ns in handlers
-                    if ns
-                    in (
-                        mn_t.Appliance_Control_Thermostat_Mode,
-                        mn_t.Appliance_Control_Thermostat_ModeB,
-                        mn_t.Appliance_Control_Thermostat_ModeC,
-                    )
-                )
-            )
-            kwargs["device_scale"] = handler.parsers[args[0]].temperature_scale  # type: ignore
+            kwargs["device_scale"] = args[1].descriptor.parameters["temperature_scale"]
+
         kwargs["entity_key"] = kwargs["ns"].slug_end
         NumberParser.__init__(self, *args, **kwargs)  # type: ignore
 

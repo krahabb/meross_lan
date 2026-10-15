@@ -55,7 +55,6 @@ class Mts960Climate(MtsThermostatClimate):
         number_timer_cycle_off_duration: TimerConfigNumber
         number_timer_cycle_on_duration: TimerConfigNumber
 
-    temperature_scale = mc.MTS960_TEMP_SCALE
     SCHEDULE_NS = mn_t.Appliance_Control_Thermostat_ScheduleB
     MTS_MODE_TO_PRESET_MAP = {}
 
@@ -371,7 +370,9 @@ class Mts960Climate(MtsThermostatClimate):
         if mc.KEY_WORKING in payload:
             self._mts_working = payload[mc.KEY_WORKING]
         if mc.KEY_CURRENTTEMP in payload:
-            self._update_current_temperature(payload[mc.KEY_CURRENTTEMP])
+            self._update_current_temperature(
+                payload[mc.KEY_CURRENTTEMP] / self.temperature_scale
+            )
         if mc.KEY_TARGETTEMP in payload:
             self.target_temperature = (
                 (payload[mc.KEY_TARGETTEMP] / self.temperature_scale)

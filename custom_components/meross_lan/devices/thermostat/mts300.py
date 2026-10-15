@@ -98,7 +98,6 @@ class Mts300Climate(MtsThermostatClimate):
         select_temp_association: SensorAssociationSelect
 
     # MtsClimate class attributes
-    temperature_scale = mc.MTS300_TEMP_SCALE
     SCHEDULE_NS = mn_t.Appliance_Control_Thermostat_ScheduleB
     # TODO: customize parsing of native payload since we have 2 temperatures
     MTS_MODE_TO_PRESET_MAP = {
@@ -326,9 +325,9 @@ class Mts300Climate(MtsThermostatClimate):
             # It looks like currentTemp is rounded up to 1°C while sensorTemp should be at least 0.5°C resolution.
             # and this should explain https://github.com/krahabb/meross_lan/issues/592
             self._update_current_temperature(
-                payload["currentTemp"]
+                payload["currentTemp"] / self.temperature_scale
                 if temp_association != 2
-                else payload["sensorTemp"]
+                else payload["sensorTemp"] / self.temperature_scale
             )
 
             targetTemp = payload["targetTemp"]

@@ -121,7 +121,7 @@
             "mts2"
         ],
         "name": "Thermostat",
-        "temperature_scale": 100
+        "temperature_scale": 10
     },
     {
         "types": [

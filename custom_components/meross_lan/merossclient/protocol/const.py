@@ -344,7 +344,6 @@ ROLLERSHUTTER_POSITION_CLOSED = 0
 
 
 # mts100 (and the likes..) valves mode
-MTS100_TEMP_SCALE = 10  # native mts temperatures expressed in tenths of °C
 MTS100_MODE_CUSTOM = 0
 MTS100_MODE_HEAT = 1  # preset heat/comfort
 MTS100_MODE_COOL = 2  # preset cool/night
@@ -364,7 +363,6 @@ MTS_HOLDACTION_NEXT_SCHEDULE = 1
 MTS_HOLDACTION_TIMER = 2
 
 # I don't have an MTS200 to test so these are inferred from a user trace
-MTS200_TEMP_SCALE = 10  # native mts temperatures expressed in tenths of °C
 MTS200_MODE_HEAT = 0  # preset heat/comfort
 MTS200_MODE_COOL = 1  # preset cool/night
 MTS200_MODE_ECO = 2  # preset away/eco
@@ -391,7 +389,6 @@ MTS200_OVERHEAT_WARNING_MAP = {
     MTS200_OVERHEAT_WARNING_NOTCONNECTED: "disconnected",
 }
 
-MTS300_TEMP_SCALE = 100  # 1°C == 100 device value
 MTS300_MODE_OFF = 0
 MTS300_MODE_HEAT = 1
 MTS300_MODE_COOL = 2
@@ -413,7 +410,6 @@ MTS300_FAN_SPEED_MEDIUM = 2
 MTS300_FAN_SPEED_HIGH = 3
 MTS300_FAN_HOLD_DISABLED = 99999
 
-MTS960_TEMP_SCALE = 100  # 1°C == 100 device value
 # inferring the mts960 modes from the manual
 MTS960_MODE_HEAT_COOL = 1
 MTS960_MODE_SCHEDULE = 2

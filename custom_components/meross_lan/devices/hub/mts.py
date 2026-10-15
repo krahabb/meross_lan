@@ -43,7 +43,6 @@ class mts100(SubDevice, MtsClimate):
     _INIT_ns = mn_h.Appliance_Hub_Mts100_Temperature
 
     # MtsClimate class attributes
-    temperature_scale = mc.MTS100_TEMP_SCALE
     SCHEDULE_NS = mn_h.Appliance_Hub_Mts100_ScheduleB
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS100_MODE_CUSTOM: MtsClimate.Preset.CUSTOM,
@@ -75,12 +74,15 @@ class mts100(SubDevice, MtsClimate):
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
         SubDevice.__init__(self, descriptor, hub, **kwargs)
         self.extra_state_attributes = {}
-        self.schedule._schedule_unit_time = hub.descriptor.ability.get(
-            mn_h.Appliance_Hub_Mts100_ScheduleB, {}
-        ).get(mc.KEY_SCHEDULEUNITTIME, 15)
+        try:
+            self.schedule._schedule_unit_time = hub.descriptor.ability[
+                mn_h.Appliance_Hub_Mts100_ScheduleB
+            ][mc.KEY_SCHEDULEUNITTIME]
+        except KeyError:
+            self.schedule._schedule_unit_time = 15
         self.binary_sensor_window = BinarySensorEntity(
             self,
-            entity_key=str(BinarySensorEntity.DeviceClass.WINDOW),
+            entity_key=BinarySensorEntity.DeviceClass.WINDOW.value,
             device_class=BinarySensorEntity.DeviceClass.WINDOW,
         )
         self.switch_patch_hvacaction = EmulatedSwitch(
@@ -186,7 +188,9 @@ class mts100(SubDevice, MtsClimate):
             return
         self.ns_value = payload
         if mc.KEY_ROOM in payload:
-            self._update_current_temperature(payload[mc.KEY_ROOM])
+            self._update_current_temperature(
+                payload[mc.KEY_ROOM] / self.temperature_scale
+            )
         if mc.KEY_CURRENTSET in payload:
             self.target_temperature = (
                 payload[mc.KEY_CURRENTSET] / self.temperature_scale

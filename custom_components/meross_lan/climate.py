@@ -335,8 +335,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         ATTR_TARGET_TEMP_HIGH: Final
         ATTR_TARGET_TEMP_LOW: Final
 
-        temperature_scale: ClassVar[int]
-
         SCHEDULE_NS: ClassVar[mn.Namespace]
         Schedule: ClassVar[type[MtsSchedule]]
         TARGET_TEMPERATURE_STEP: ClassVar[float]
@@ -353,6 +351,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         """Determines the behavior of async_set_temperature."""
 
         index: Final[mn.IndexValue]  # type: ignore[override]
+        temperature_scale: Final[int]
         number_adjust_temperature: Final[NumberParser]
         number_preset_temperature: Final[tuple[SetPointNumber, ...]]
         schedule: Final[MtsSchedule]
@@ -392,8 +391,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
     ClimateEntityFeature = climate.ClimateEntityFeature
     HVACAction = climate.HVACAction
     HVACMode = climate.HVACMode
-
-    temperature_scale = 1
 
     TARGET_TEMPERATURE_STEP = 0.5
     MTS_MODE_TO_TEMPERATUREKEY_MAP = {}
@@ -437,6 +434,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         "target_temperature",
         "target_temperature_step",
         "temperature_unit",
+        "temperature_scale",
         "_mts_active",
         "_mts_mode",
         "_mts_onoff",
@@ -461,7 +459,9 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         self._mts_mode = 0
         self._mts_onoff = 0
         super().__init__(*args, **kwargs)
-
+        self.temperature_scale = getattr(
+            self, "descriptor", self.parent.descriptor
+        ).parameters["temperature_scale"]
         cls = self.__class__
         self.number_adjust_temperature = cls.AdjustNumber(
             self, ns=cls.AdjustNumber._INIT_ns
@@ -558,7 +558,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         """
         Common handler for incoming room temperature value
         """
-        current_temperature = current_temperature / self.temperature_scale
         if self.current_temperature != current_temperature:
             self.current_temperature = current_temperature
             self.sensor_current_temperature.update_native_value(current_temperature)
