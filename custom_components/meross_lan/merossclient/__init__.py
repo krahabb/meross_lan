@@ -10,6 +10,7 @@ from time import gmtime, time
 from typing import TYPE_CHECKING, override
 import zoneinfo
 
+from .library import DEVICES_LIBRARY
 from .protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
 
     from cloudapi import LatestVersionType
 
+    from .library import DeviceParameters
     from .protocol import types as mt
 
     _ASYNC_LOCK: Final[asyncio.Lock]
@@ -496,54 +498,53 @@ def get_active_broker(p_debug: "mt.JsonMapping"):
         )
 
 
-def get_productname(producttype: str) -> str:
-    for _type, _name in mc.TYPE_NAME_MAP.items():
-        if producttype.startswith(_type):
-            return _name
-    return producttype
-
-
-def get_productnameuuid(producttype: str, uuid: str) -> str:
-    return f"{get_productname(producttype)} ({uuid})"
-
-
-def get_productnametype(producttype: str) -> str:
-    name = get_productname(producttype)
-    return f"{name} ({producttype})" if name is not producttype else producttype
-
-
 class Descriptor:
     """
-    Base class for device descriptors. This implements a standard interface common to both Devices
-    and SubDevices.
+    Base class for device descriptors. This works much like a 'wrapper' to help extract rather static informations from the
+    device description exposed in some dedicated payloads. See the descendants for more clues about information extraction.
+    In terms of 'data stability' this is meant to be associated with a physical device or subdevice instance and updated, eventually
+    with payloads from the same device. There is no check in place to avoid this but the class is designed so.
     """
 
     if TYPE_CHECKING:
-        _DYNAMIC_ATTRS: ClassVar[Mapping[str, Callable[[Self], Any]]]
+        _DYNAMIC_ATTRS: ClassVar[Mapping[str, tuple[bool, Callable[[Self], Any]]]]
         type: str
         subType: str
+        parameters: DeviceParameters
         hw_version: str | None
         fw_version: str | None
         productname: str
         productnametype: str
         productmodel: str
         type_class: str  # The 'prefix' of the device type
-        is_mts: bool
         is_refoss: bool
 
+    # _DYNAMIC_ATTRS describes attributes behaving more or less like cached_properties
+    # with the trick they got reset (conditionally) every time we update the descriptor
+    # with a fresh payload so they would be recalculated.
     _DYNAMIC_ATTRS = {
-        mc.KEY_TYPE: lambda _self: mc.TYPE_UNKNOWN,
-        mc.KEY_SUBTYPE: lambda _self: mc.TYPE_UNKNOWN,
-        "hw_version": lambda _self: None,
-        "fw_version": lambda _self: None,
-        "productname": lambda _self: get_productname(_self.type),
-        "productnametype": lambda _self: get_productnametype(_self.type),
-        "productmodel": lambda _self: f"{_self.type}-{_self.subType}",
-        "type_class": lambda _self: (
-            re.match(r"^[a-z]*", _self.type).group(0)  # type: ignore # This will always match
+        mc.KEY_TYPE: (False, lambda _self: mc.TYPE_UNKNOWN),
+        mc.KEY_SUBTYPE: (False, lambda _self: mc.TYPE_UNKNOWN),
+        "parameters": (False, lambda _self: DEVICES_LIBRARY[_self.type]),
+        "hw_version": (True, lambda _self: None),
+        "fw_version": (True, lambda _self: None),
+        "productname": (False, lambda _self: _self.parameters["name"]),
+        "productnametype": (
+            False,
+            lambda _self: (
+                f"{_self.productname} ({_self.type})"
+                if _self.productname != _self.type
+                else _self.type
+            ),
         ),
-        "is_mts": lambda _self: _self.type_class == mc.TYPE_MTS,
-        "is_refoss": lambda _self: mc.RefossModel.match(_self.type),
+        "productmodel": (False, lambda _self: f"{_self.type}-{_self.subType}"),
+        "type_class": (
+            False,
+            lambda _self: (
+                re.match(r"^[a-z]*", _self.type).group(0)  # type: ignore # This will always match
+            ),
+        ),
+        "is_refoss": (False, lambda _self: mc.RefossModel.match(_self.type)),
     }
 
     __slots__ = (*_DYNAMIC_ATTRS.keys(),)
@@ -551,7 +552,7 @@ class Descriptor:
     def __getattr__(self, name):
         for cls in type(self).mro():
             try:
-                value = cls._DYNAMIC_ATTRS[name](self)
+                value = cls._DYNAMIC_ATTRS[name][1](self)
                 setattr(self, name, value)
                 return value
             except KeyError:
@@ -565,7 +566,11 @@ class Descriptor:
 
     def _reset(self):
         for cls in type(self).mro():
-            for attr in cls._DYNAMIC_ATTRS.keys():
+            for attr in (
+                attr
+                for attr, dyn_attr_def in cls._DYNAMIC_ATTRS.items()
+                if dyn_attr_def[0]
+            ):
                 try:
                     delattr(self, attr)
                 except AttributeError:
@@ -609,7 +614,7 @@ class SubDeviceDescriptor(Descriptor):
         digest: mt.hub.Digest_SubDevice
         id: Final[str]
 
-        _DYNAMIC_ATTRS: ClassVar[Mapping[str, Callable[["SubDeviceDescriptor"], Any]]]
+        _DYNAMIC_ATTRS: ClassVar[Mapping[str, tuple[bool, Callable[[Self], Any]]]]
         key_digest: str
         """Parses the subdevice dict from the hub digest to identify it's 'type'.
         Raises StopIteration if unable to find a valid digest key."""
@@ -647,8 +652,14 @@ class SubDeviceDescriptor(Descriptor):
             return _self.key_digest
 
     _DYNAMIC_ATTRS = {
-        mc.KEY_TYPE: lambda _self: SubDeviceDescriptor._infer_type_from_digest(_self),
-        "key_digest": lambda _self: SubDeviceDescriptor.get_key_digest(_self.digest),
+        mc.KEY_TYPE: (
+            False,
+            lambda _self: SubDeviceDescriptor._infer_type_from_digest(_self),
+        ),
+        "key_digest": (
+            False,
+            lambda _self: SubDeviceDescriptor.get_key_digest(_self.digest),
+        ),
     }
 
     __slots__ = (
@@ -693,13 +704,12 @@ class SubDeviceDescriptor(Descriptor):
 
 class DeviceDescriptor(Descriptor):
     """
-    Utility class to extract various info from Appliance.System.All/Ability
-    device descriptor
+    Describes general device properties/configuration as extracted from Appliance.System.All/Ability.
     """
 
     if TYPE_CHECKING:
 
-        _DYNAMIC_ATTRS: ClassVar[Mapping[str, Callable[["DeviceDescriptor"], Any]]]
+        _DYNAMIC_ATTRS: ClassVar[Mapping[str, tuple[bool, Callable[[Self], Any]]]]
 
         payload: mt.JsonDict
         channels: Final[Sequence[int]]
@@ -744,38 +754,78 @@ class DeviceDescriptor(Descriptor):
     }
 
     _DYNAMIC_ATTRS = {
-        mc.KEY_ALL: lambda _self: _self.payload.get(mc.KEY_ALL, mn.EMPTY_DICT),
-        mc.KEY_ABILITY: lambda _self: _self.payload.get(mc.KEY_ABILITY, mn.EMPTY_DICT),
-        mc.KEY_DIGEST: lambda _self: _self.all.get(mc.KEY_DIGEST, mn.EMPTY_DICT),
-        mc.KEY_CONTROL: lambda _self: _self.all.get(mc.KEY_CONTROL, mn.EMPTY_DICT),
-        mc.KEY_SYSTEM: lambda _self: _self.all.get(mc.KEY_SYSTEM, mn.EMPTY_DICT),
-        mc.KEY_HARDWARE: lambda _self: _self.system.get(mc.KEY_HARDWARE, mn.EMPTY_DICT),
-        mc.KEY_FIRMWARE: lambda _self: _self.system.get(mc.KEY_FIRMWARE, mn.EMPTY_DICT),
-        mc.KEY_ONLINE: lambda _self: _self.system.get(mc.KEY_ONLINE, mn.EMPTY_DICT),
-        mc.KEY_TYPE: lambda _self: _self.hardware.get(mc.KEY_TYPE, mc.MANUFACTURER),
-        mc.KEY_SUBTYPE: lambda _self: _self.hardware.get(mc.KEY_SUBTYPE, mc.KEY_),
-        "hw_version": lambda _self: _self.hardware.get(mc.KEY_VERSION),
-        mc.KEY_UUID: lambda _self: _self.hardware.get(mc.KEY_UUID),
-        mc.KEY_MACADDRESS: lambda _self: _self.hardware.get(mc.KEY_MACADDRESS, mc.KEY_),
-        "macAddress_fmt": lambda _self: fmt_macaddress(_self.macAddress),
-        mc.KEY_INNERIP: lambda _self: _self.firmware.get(mc.KEY_INNERIP),
-        mc.KEY_USERID: lambda _self: str(_self.firmware.get(mc.KEY_USERID)),
-        "fw_version": lambda _self: _self.firmware.get(mc.KEY_VERSION),
-        mc.KEY_TIME: lambda _self: _self.system.get(mc.KEY_TIME, mn.EMPTY_DICT),
-        mc.KEY_TIMEZONE: lambda _self: _self.time.get(mc.KEY_TIMEZONE),
-        "is_hub": lambda _self: mc.KEY_HUB in _self.digest,
-        "subdevices": lambda _self: (
-            [
-                SubDeviceDescriptor(_self, sd)
-                for sd in _self.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE]
-            ]
+        mc.KEY_ALL: (True, lambda _self: _self.payload.get(mc.KEY_ALL, mn.EMPTY_DICT)),
+        mc.KEY_ABILITY: (
+            True,
+            lambda _self: _self.payload.get(mc.KEY_ABILITY, mn.EMPTY_DICT),
         ),
-        "server": lambda _self: HostAddress(
-            _self.firmware[mc.KEY_SERVER], get_port_safe(_self.firmware, mc.KEY_PORT)
+        mc.KEY_DIGEST: (
+            True,
+            lambda _self: _self.all.get(mc.KEY_DIGEST, mn.EMPTY_DICT),
         ),
-        "secondServer": lambda _self: HostAddress(
-            _self.firmware[mc.KEY_SECONDSERVER],
-            get_port_safe(_self.firmware, mc.KEY_SECONDPORT),
+        mc.KEY_CONTROL: (
+            True,
+            lambda _self: _self.all.get(mc.KEY_CONTROL, mn.EMPTY_DICT),
+        ),
+        mc.KEY_SYSTEM: (
+            True,
+            lambda _self: _self.all.get(mc.KEY_SYSTEM, mn.EMPTY_DICT),
+        ),
+        mc.KEY_HARDWARE: (
+            True,
+            lambda _self: _self.system.get(mc.KEY_HARDWARE, mn.EMPTY_DICT),
+        ),
+        mc.KEY_FIRMWARE: (
+            True,
+            lambda _self: _self.system.get(mc.KEY_FIRMWARE, mn.EMPTY_DICT),
+        ),
+        mc.KEY_ONLINE: (
+            True,
+            lambda _self: _self.system.get(mc.KEY_ONLINE, mn.EMPTY_DICT),
+        ),
+        mc.KEY_TYPE: (
+            False,
+            lambda _self: _self.hardware.get(mc.KEY_TYPE, mc.MANUFACTURER),
+        ),
+        mc.KEY_SUBTYPE: (
+            False,
+            lambda _self: _self.hardware.get(mc.KEY_SUBTYPE, mc.KEY_),
+        ),
+        "hw_version": (False, lambda _self: _self.hardware.get(mc.KEY_VERSION)),
+        mc.KEY_UUID: (False, lambda _self: _self.hardware.get(mc.KEY_UUID)),
+        mc.KEY_MACADDRESS: (
+            False,
+            lambda _self: _self.hardware.get(mc.KEY_MACADDRESS, mc.KEY_),
+        ),
+        "macAddress_fmt": (False, lambda _self: fmt_macaddress(_self.macAddress)),
+        mc.KEY_INNERIP: (True, lambda _self: _self.firmware.get(mc.KEY_INNERIP)),
+        mc.KEY_USERID: (True, lambda _self: str(_self.firmware.get(mc.KEY_USERID))),
+        "fw_version": (True, lambda _self: _self.firmware.get(mc.KEY_VERSION)),
+        mc.KEY_TIME: (True, lambda _self: _self.system.get(mc.KEY_TIME, mn.EMPTY_DICT)),
+        mc.KEY_TIMEZONE: (True, lambda _self: _self.time.get(mc.KEY_TIMEZONE)),
+        "is_hub": (False, lambda _self: mc.KEY_HUB in _self.digest),
+        "subdevices": (
+            True,
+            lambda _self: (
+                [
+                    SubDeviceDescriptor(_self, sd)
+                    for sd in _self.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE]
+                ]
+            ),
+        ),
+        "server": (
+            True,
+            lambda _self: HostAddress(
+                _self.firmware[mc.KEY_SERVER],
+                get_port_safe(_self.firmware, mc.KEY_PORT),
+            ),
+        ),
+        "secondServer": (
+            True,
+            lambda _self: HostAddress(
+                _self.firmware[mc.KEY_SECONDSERVER],
+                get_port_safe(_self.firmware, mc.KEY_SECONDPORT),
+            ),
         ),
     }
 

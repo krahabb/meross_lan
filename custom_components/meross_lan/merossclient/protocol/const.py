@@ -483,19 +483,16 @@ HP110A_MP3_VOLUME_MAX = 16
 TYPE_UNKNOWN = "unknown"
 TYPE_NAME_MAP = collections.OrderedDict()
 
-TYPE_MAP100 = "map100"
 TYPE_NAME_MAP["map"] = "Air Purifier"
+TYPE_NAME_MAP["msxh0"] = "Air Purifier"
 
 TYPE_MFC100 = "mfc100"
 TYPE_NAME_MAP["mfc"] = "Fan"
 
-TYPE_MOD100 = "mod100"  # smart humidifier
-TYPE_MOD150 = "mod150"  # smart humidifier
 TYPE_NAME_MAP["mod"] = "Humidifier"
 
 TYPE_NAME_MAP["mrs"] = "Roller Shutter"
 
-TYPE_MSG100 = "msg100"  # smart garage door (1 channel)
 TYPE_MSG200 = "msg200"  # smart garage door (3 channels)
 TYPE_NAME_MAP["msg"] = "Garage Door"
 
@@ -503,20 +500,17 @@ TYPE_HUB = "msh"
 TYPE_MSH300 = "msh300"  # WiFi Hub
 TYPE_NAME_MAP[TYPE_HUB] = "Smart Hub"
 
-TYPE_MSL100 = "msl100"  # smart bulb
-TYPE_NAME_MAP[TYPE_MSL100] = "Smart Bulb"
-TYPE_MSL120 = "msl120"  # smart bulb with color/temp
-TYPE_NAME_MAP[TYPE_MSL120] = "RGB Bulb"
+TYPE_NAME_MAP["msl100"] = "Smart Bulb"
+TYPE_NAME_MAP["msl120"] = "RGB Bulb"
 TYPE_MSL320_PRO = "msl320cp"  # smart led strip pro
 TYPE_NAME_MAP[TYPE_MSL320_PRO] = "RGB Pro Led Strip"
-TYPE_MSL320 = "msl320"  # smart led strip
-TYPE_NAME_MAP[TYPE_MSL320] = "RGB Led Strip"
+TYPE_NAME_MAP["msl320"] = "RGB Led Strip"
 TYPE_NAME_MAP["msl"] = "Smart Light"
 
 TYPE_MSS310 = "mss310"  # smart plug with energy meter
-TYPE_NAME_MAP[TYPE_MSS310] = "Smart Plug"
-TYPE_NAME_MAP["mss560"] = "Dimmer Switch"
-TYPE_NAME_MAP["mss570"] = TYPE_NAME_MAP["mss560"]
+TYPE_NAME_MAP["mss2"] = "Smart Plug"
+TYPE_NAME_MAP["mss3"] = TYPE_NAME_MAP["mss2"]
+TYPE_NAME_MAP["mss5"] = "Dimmer Switch"
 TYPE_NAME_MAP["mss"] = "Smart Switch"
 TYPE_NAME_MAP["mop320"] = "Outdoor Plug"
 
@@ -527,8 +521,7 @@ TYPE_MTS150 = "mts150"  # Smart thermostat over hub
 TYPE_MTS150P = "mts150p"  # Smart thermostat over hub
 TYPE_NAME_MAP["mts1"] = "Thermostat Valve"
 TYPE_MTS200 = "mts200"  # Smart thermostat over wifi
-TYPE_MTS960 = "mts960"  # Smart thermostat over wifi
-TYPE_NAME_MAP[TYPE_MTS960] = "Socket Thermostat"
+TYPE_NAME_MAP["mts9"] = "Socket Thermostat"
 TYPE_NAME_MAP[TYPE_MTS] = "Thermostat"
 # do not register class 'ms' since it is rather
 # unusual naming and could issue collissions with mss or msl
@@ -567,7 +560,7 @@ class RefossModel(enum.Enum):
     em06 = _SMART_ENERGY_MONITOR
     em16 = _SMART_ENERGY_MONITOR
     em = _SMART_ENERGY_MONITOR
-    p11 = TYPE_NAME_MAP[TYPE_MSS310]  # Smart Plug
+    p11 = TYPE_NAME_MAP["mss3"]  # Smart Plug
     r10 = TYPE_NAME_MAP["mss"]  # Smart Switch
     r11 = TYPE_NAME_MAP["mss"]  # Smart Switch
     r21 = TYPE_NAME_MAP["mss"]  # Smart Switch

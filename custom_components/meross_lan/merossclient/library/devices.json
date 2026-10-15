@@ -1,0 +1,190 @@
+[
+    {
+        "types": [
+            "hp110"
+        ],
+        "name": "Cherub Baby Machine"
+    },
+    {
+        "types": [
+            "map",
+            "msxh0"
+        ],
+        "name": "Air Purifier"
+    },
+    {
+        "types": [
+            "mfc"
+        ],
+        "name": "Fan"
+    },
+    {
+        "types": [
+            "mod"
+        ],
+        "name": "Humidifier"
+    },
+    {
+        "types": [
+            "mrs"
+        ],
+        "name": "Roller Shutter"
+    },
+    {
+        "types": [
+            "msg",
+            "rsg"
+        ],
+        "name": "Garage Door"
+    },
+    {
+        "types": [
+            "msh"
+        ],
+        "name": "Smart Hub"
+    },
+    {
+        "types": [
+            "msl100"
+        ],
+        "name": "Smart Bulb"
+    },
+    {
+        "types": [
+            "msl120"
+        ],
+        "name": "RGB Bulb"
+    },
+    {
+        "types": [
+            "msl320cp"
+        ],
+        "name": "RGB Pro Led Strip"
+    },
+    {
+        "types": [
+            "msl320"
+        ],
+        "name": "RGB Led Strip"
+    },
+    {
+        "types": [
+            "msl"
+        ],
+        "name": "Smart Light"
+    },
+    {
+        "types": [
+            "mss2",
+            "mss3",
+            "p11"
+        ],
+        "name": "Smart Plug"
+    },
+    {
+        "types": [
+            "mss425",
+            "msp844"
+        ],
+        "name": "Power strip"
+    },
+    {
+        "types": [
+            "mss5"
+        ],
+        "name": "Dimmer Switch"
+    },
+    {
+        "types": [
+            "mss",
+            "r10",
+            "r11",
+            "r21"
+        ],
+        "name": "Smart Switch"
+    },
+    {
+        "types": [
+            "mop320"
+        ],
+        "name": "Outdoor Plug"
+    },
+    {
+        "types": [
+            "mts1"
+        ],
+        "name": "Thermostat Valve",
+        "temperature_scale": 10
+    },
+    {
+        "types": [
+            "mts2"
+        ],
+        "name": "Thermostat",
+        "temperature_scale": 100
+    },
+    {
+        "types": [
+            "mts3"
+        ],
+        "name": "Thermostat",
+        "temperature_scale": 100
+    },
+    {
+        "types": [
+            "mts9"
+        ],
+        "name": "Socket Thermostat",
+        "temperature_scale": 100
+    },
+    {
+        "types": [
+            "mts"
+        ],
+        "name": "Thermostat",
+        "temperature_scale": 100
+    },
+    {
+        "types": [
+            "gs559",
+            "ma151"
+        ],
+        "name": "Smoke Alarm"
+    },
+    {
+        "types": [
+            "ms1"
+        ],
+        "name": "Temp/Humidity Sensor"
+    },
+    {
+        "types": [
+            "ms200"
+        ],
+        "name": "Door/Window Sensor"
+    },
+    {
+        "types": [
+            "ms400"
+        ],
+        "name": "Water Leak Sensor"
+    },
+    {
+        "types": [
+            "ms600"
+        ],
+        "name": "Presence Sensor"
+    },
+    {
+        "types": [
+            "mst"
+        ],
+        "name": "Sprinkler Timer"
+    },
+    {
+        "types": [
+            "em"
+        ],
+        "name": "Energy Monitor"
+    }
+]

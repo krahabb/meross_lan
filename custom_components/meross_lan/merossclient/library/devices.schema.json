@@ -1,0 +1,47 @@
+{
+    "title": "Merossclient library devices properties database",
+    "description": "Contains configuration parameters associated with every known Meross device used in the library",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "required": [
+            "types",
+            "name"
+        ],
+        "properties": {
+            "types": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "name": {
+                "type": "string"
+            }
+        },
+        "allOf": [
+            {
+                "comment": "Apply constraint for Thermostat parameters (mts)",
+                "if": {
+                    "properties": {
+                        "types": {
+                            "contains": {
+                                "pattern": "^mts"
+                            }
+                        }
+                    }
+                },
+                "then": {
+                    "required": [
+                        "temperature_scale"
+                    ],
+                    "properties": {
+                        "temperature_scale": {
+                            "type": "number"
+                        }
+                    }
+                }
+            }
+        ]
+    }
+}
