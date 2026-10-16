@@ -1,6 +1,7 @@
 from time import time
 import typing
 
+from homeassistant.components import logbook
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util.dt import now
 
@@ -335,9 +336,9 @@ class MLGarage(MLCover):
     TRIGGER_SOURCE_MAP = {
         "iOS": "App",
         "Android": "App",
-        "WallButton": "Wall panel",
-        "DevicePysical": "Home Garage Controller",
-        "DevicePhysical": "Home Garage Controller",
+        "WallButton": "Wall Panel",
+        "DevicePysical": "Remote",
+        "DevicePhysical": "Remote",
     }
 
     # these keys in Appliance.GarageDoor.MultipleConfig are to be ignored
@@ -623,8 +624,29 @@ class MLGarage(MLCover):
                 self._transition_cancel()
             self.binary_sensor_timeout.update_ok(is_closed)
 
+        if source := payload.get(mc.KEY_TRIGGERSRC):
+            self._log_trigger_source(source, is_closed)
+
         self.is_closed = is_closed
         self.flush_state()
+
+    def _log_trigger_source(self, source: str, is_closed: bool):
+        """Add source details to the Activity panel for a physical state change."""
+        source_name = self.TRIGGER_SOURCE_MAP.get(source)
+        if not self.hass_connected or source_name is None:
+            return
+        action = "closed" if is_closed else "opened"
+        logbook.async_log_entry(
+            self.hass,
+            f"{self.name} {action} ({source_name})",
+            (
+                f"{self.manager.descriptor.type} garage door channel "
+                f"{self.channel} is now {'closed' if is_closed else 'open'} "
+                f"after a {source_name} trigger (Meross triggerSrc: {source})."
+            ),
+            domain="cover",
+            entity_id=self.entity_id,
+        )
 
     def _parse_multipleConfig(self, payload: dict):
         """
