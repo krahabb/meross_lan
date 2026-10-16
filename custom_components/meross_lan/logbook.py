@@ -19,8 +19,7 @@ def async_describe_events(
     def async_describe_garagedoor_trigger(event: Any) -> dict[str, str]:
         source = event.data["source"]
         return {
-            "name": "Garage Door",
-            "message": f"triggered by {source}",
+            "name": f"Garage Door triggered by {source}",
         }
 
     async_describe_event(
