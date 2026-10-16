@@ -662,21 +662,16 @@ class MLGarage(MLCover):
             and getattr(self, "hass_connected", False)
         ):
             parent_context = self._ha_command_context if ha_command else None
-            trigger_context = Context(
+            context = Context(
                 user_id=parent_context.user_id if parent_context else None,
                 parent_id=parent_context.id if parent_context else None,
             )
             self.hass.bus.async_fire(
                 EVENT_GARAGEDOOR_TRIGGER,
                 {"source": source_label},
-                context=trigger_context,
+                context=context,
             )
-            self.async_set_context(
-                Context(
-                    user_id=trigger_context.user_id,
-                    parent_id=trigger_context.id,
-                )
-            )
+            self.async_set_context(context)
         if ha_command:
             self._ha_command_context = None
             self._ha_command_user = None
