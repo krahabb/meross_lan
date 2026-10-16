@@ -1,7 +1,6 @@
 from time import time
 import typing
 
-from homeassistant.components import logbook
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util.dt import now
 
@@ -367,6 +366,10 @@ class MLGarage(MLCover):
         "_state_request",
         "_transition_duration",
         "_transition_start",
+        "_ha_command_context",
+        "_ha_command_target",
+        "_ha_command_time",
+        "_ha_command_user",
         "binary_sensor_timeout",
         "binary_sensor_obstruction",
         "number_close_timeout",
@@ -380,6 +383,10 @@ class MLGarage(MLCover):
             + PARAM_GARAGEDOOR_TRANSITION_MINDURATION
         ) / 2
         self._transition_start = 0.0
+        self._ha_command_context = None
+        self._ha_command_target = None
+        self._ha_command_time = 0.0
+        self._ha_command_user = None
         self.extra_state_attributes = {
             self.ATTR_TRANSITION_DURATION: self._transition_duration
         }
@@ -449,10 +456,28 @@ class MLGarage(MLCover):
 
     # interface: cover.CoverEntity
     async def async_open_cover(self, **kwargs):
+        await self._async_capture_command_user()
         await self.async_request_position(1)
 
     async def async_close_cover(self, **kwargs):
+        await self._async_capture_command_user()
         await self.async_request_position(0)
+
+    async def _async_capture_command_user(self):
+        """Capture the HA service context and its user for the next transition."""
+        self._ha_command_context = self._context
+        self._ha_command_user = None
+        if (
+            self._context is not None
+            and self._context.user_id
+            and self.hass is not None
+        ):
+            try:
+                if user := await self.hass.auth.async_get_user(self._context.user_id):
+                    self._ha_command_user = user.name
+            except Exception:
+                # User attribution is optional and must not block the door command.
+                pass
 
     # interface: self
     async def async_request_position(self, open_request: int):
@@ -494,6 +519,8 @@ class MLGarage(MLCover):
                     _open = p_state[mc.KEY_OPEN]
                     self.is_closed = not _open
                 if p_state.get(mc.KEY_EXECUTE) and open_request != _open:
+                    self._ha_command_target = bool(open_request)
+                    self._ha_command_time = time()
                     self._transition_start = manager.lastresponse
                     if open_request:
                         self.is_closing = False
@@ -570,18 +597,37 @@ class MLGarage(MLCover):
                 payload[mc.KEY_OBSTRUCTION]
             )
 
+        is_closed = not payload[mc.KEY_OPEN]
+        ha_command = (
+            self._ha_command_target is not None
+            and self._ha_command_target == (not is_closed)
+            and time() - self._ha_command_time < 60
+        )
         attributes_changed = False
-        if source := payload.get(mc.KEY_TRIGGERSRC):
+        if source := (
+            "Home Assistant" if ha_command else payload.get(mc.KEY_TRIGGERSRC)
+        ):
+            source_label = (
+                f"Home Assistant ({self._ha_command_user})"
+                if ha_command and self._ha_command_user
+                else (
+                    "Home Assistant"
+                    if ha_command
+                    else self.TRIGGER_SOURCE_MAP.get(source, "Unknown")
+                )
+            )
             # This key is forwarded from PUSH headers by the state handler.
             # GET responses can echo the polling client's source, so they must
             # not replace the last source reported by a device notification.
             if (
                 self.extra_state_attributes.get(self.ATTR_LAST_TRIGGER_SOURCE_RAW)
                 != source
+                or self.extra_state_attributes.get(self.ATTR_LAST_TRIGGER_SOURCE)
+                != source_label
             ):
                 self.extra_state_attributes[self.ATTR_LAST_TRIGGER_SOURCE_RAW] = source
                 self.extra_state_attributes[self.ATTR_LAST_TRIGGER_SOURCE] = (
-                    self.TRIGGER_SOURCE_MAP.get(source, "Unknown")
+                    source_label
                 )
                 attributes_changed = True
         for key in (mc.KEY_OBSTRUCTION, mc.KEY_OBLMTIME, mc.KEY_SIGNALVALID):
@@ -589,7 +635,6 @@ class MLGarage(MLCover):
                 self.extra_state_attributes[key] = payload[key]
                 attributes_changed = True
 
-        is_closed = not payload[mc.KEY_OPEN]
         if self.is_closed == is_closed:
             if attributes_changed:
                 self.flush_state()
@@ -601,6 +646,12 @@ class MLGarage(MLCover):
             return
 
         # door open state changed
+        if ha_command:
+            if self._ha_command_context is not None:
+                self.async_set_context(self._ha_command_context)
+            self._ha_command_target = None
+            self._ha_command_context = None
+            self._ha_command_user = None
         if self._transition_start:
             # We're "in transition" and the physical contact has reached the target.
             # we can monitor the (sampled) exact time when the garage closes to
@@ -624,29 +675,8 @@ class MLGarage(MLCover):
                 self._transition_cancel()
             self.binary_sensor_timeout.update_ok(is_closed)
 
-        if source := payload.get(mc.KEY_TRIGGERSRC):
-            self._log_trigger_source(source, is_closed)
-
         self.is_closed = is_closed
         self.flush_state()
-
-    def _log_trigger_source(self, source: str, is_closed: bool):
-        """Add source details to the Activity panel for a physical state change."""
-        source_name = self.TRIGGER_SOURCE_MAP.get(source)
-        if not self.hass_connected or source_name is None:
-            return
-        action = "closed" if is_closed else "opened"
-        logbook.async_log_entry(
-            self.hass,
-            f"{self.name} {action} ({source_name})",
-            (
-                f"{self.manager.descriptor.type} garage door channel "
-                f"{self.channel} is now {'closed' if is_closed else 'open'} "
-                f"after a {source_name} trigger (Meross triggerSrc: {source})."
-            ),
-            domain="cover",
-            entity_id=self.entity_id,
-        )
 
     def _parse_multipleConfig(self, payload: dict):
         """
