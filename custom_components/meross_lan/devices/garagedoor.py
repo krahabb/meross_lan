@@ -1,6 +1,7 @@
 from time import time
 import typing
 
+from homeassistant.core import Context
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util.dt import now
 
@@ -14,6 +15,7 @@ from ..const import (
 from ..cover import MLCover
 from ..helpers import clamp, entity as me, versiontuple
 from ..helpers.namespaces import NamespaceHandler, mc, mn
+from ..logbook import EVENT_GARAGEDOOR_TRIGGER
 from ..number import MLConfigNumber, MLEmulatedNumber, MLNumber
 from ..switch import MLSwitch
 
@@ -366,6 +368,7 @@ class MLGarage(MLCover):
         "_state_request",
         "_transition_duration",
         "_transition_start",
+        "_transition_timeout_retry",
         "_ha_command_context",
         "_ha_command_target",
         "_ha_command_time",
@@ -383,6 +386,7 @@ class MLGarage(MLCover):
             + PARAM_GARAGEDOOR_TRANSITION_MINDURATION
         ) / 2
         self._transition_start = 0.0
+        self._transition_timeout_retry = False
         self._ha_command_context = None
         self._ha_command_target = None
         self._ha_command_time = 0.0
@@ -519,6 +523,7 @@ class MLGarage(MLCover):
                     _open = p_state[mc.KEY_OPEN]
                     self.is_closed = not _open
                 if p_state.get(mc.KEY_EXECUTE) and open_request != _open:
+                    self._transition_timeout_retry = False
                     self._ha_command_target = bool(open_request)
                     self._ha_command_time = time()
                     self._transition_start = manager.lastresponse
@@ -598,12 +603,14 @@ class MLGarage(MLCover):
             )
 
         is_closed = not payload[mc.KEY_OPEN]
+        ha_command_target = getattr(self, "_ha_command_target", None)
         ha_command = (
-            self._ha_command_target is not None
-            and self._ha_command_target == (not is_closed)
+            ha_command_target is not None
+            and ha_command_target == (not is_closed)
             and time() - self._ha_command_time < 60
         )
         attributes_changed = False
+        source_label = None
         if source := (
             "Home Assistant" if ha_command else payload.get(mc.KEY_TRIGGERSRC)
         ):
@@ -647,9 +654,25 @@ class MLGarage(MLCover):
 
         # door open state changed
         if ha_command:
-            if self._ha_command_context is not None:
-                self.async_set_context(self._ha_command_context)
             self._ha_command_target = None
+        if (
+            source_label
+            and source_label != "Unknown"
+            and self.manager.descriptor.type.startswith(mc.TYPE_MSG150)
+            and getattr(self, "hass_connected", False)
+        ):
+            parent_context = self._ha_command_context if ha_command else None
+            context = Context(
+                user_id=parent_context.user_id if parent_context else None,
+                parent_id=parent_context.id if parent_context else None,
+            )
+            self.hass.bus.async_fire(
+                EVENT_GARAGEDOOR_TRIGGER,
+                {"source": source_label},
+                context=context,
+            )
+            self.async_set_context(context)
+        if ha_command:
             self._ha_command_context = None
             self._ha_command_user = None
         if self._transition_start:
@@ -735,6 +758,7 @@ class MLGarage(MLCover):
         self.is_closing = False
         self.is_opening = False
         self._transition_start = 0.0
+        self._transition_timeout_retry = False
         super()._transition_cancel()
 
     async def _async_transition_callback(self):
@@ -756,7 +780,9 @@ class MLGarage(MLCover):
             # If we're here, we still havent received a proper 'physical close'
             # because our configured closeduration is too short
             # or the garage didnt close at all
-            if self._transition_duration < (time() - self._transition_start):
+            if not self._transition_timeout_retry and self._transition_duration < (
+                time() - self._transition_start
+            ):
                 self._update_transition_duration(self._transition_duration + 1)
 
         self.is_closing = False
@@ -770,8 +796,34 @@ class MLGarage(MLCover):
                 if was_closing == self.is_closed:
                     self.binary_sensor_timeout.update_ok(was_closing)
                 else:
+                    if (
+                        self.manager.descriptor.type.startswith(mc.TYPE_MSG150)
+                        and not self._transition_timeout_retry
+                    ):
+                        self._transition_timeout_retry = True
+                        self._transition_start = time()
+                        self.is_closing = was_closing
+                        self.is_opening = not was_closing
+                        self._transition_end_unsub = (
+                            self.manager.schedule_async_callback(
+                                5, self._async_transition_end_callback
+                            )
+                        )
+                        return
                     self.binary_sensor_timeout.update_timeout(was_closing)
             else:
+                if (
+                    self.manager.descriptor.type.startswith(mc.TYPE_MSG150)
+                    and not self._transition_timeout_retry
+                ):
+                    self._transition_timeout_retry = True
+                    self._transition_start = time()
+                    self.is_closing = was_closing
+                    self.is_opening = not was_closing
+                    self._transition_end_unsub = self.manager.schedule_async_callback(
+                        5, self._async_transition_end_callback
+                    )
+                    return
                 self.flush_state()
                 self.binary_sensor_timeout.update_timeout(was_closing)
         else:
