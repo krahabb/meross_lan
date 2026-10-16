@@ -8,9 +8,9 @@ from homeassistant.util.dt import now
 from ..binary_sensor import MLBinarySensor
 from ..const import (
     CONF_PROTOCOL_HTTP,
+    PARAM_GARAGEDOOR_LIGHT_UPDATE_PERIOD,
     PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
-    PARAM_SENSOR_MEDIUM_UPDATE_PERIOD,
 )
 from ..cover import MLCover
 from ..helpers import clamp, entity as me, versiontuple
@@ -877,7 +877,7 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
         )
         if device.descriptor.type.startswith(mc.TYPE_MSG150):
             # Config also carries the live opener light state on this model.
-            self.polling_period = PARAM_SENSOR_MEDIUM_UPDATE_PERIOD
+            self.polling_period = PARAM_GARAGEDOOR_LIGHT_UPDATE_PERIOD
 
     def _handle_Appliance_GarageDoor_Config(
         self, header, payload: "mt.MerossPayloadType"

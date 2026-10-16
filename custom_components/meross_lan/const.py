@@ -230,6 +230,8 @@ PARAM_SENSOR_FAST_UPDATE_CLOUD_PERIOD = 180
 """fast varying sensors polling period over cloud mqtt"""
 PARAM_SENSOR_MEDIUM_UPDATE_PERIOD = 55
 """medium speed varying sensors polling period (not as critical as FAST_UPDATEs that need to be queried asap)"""
+PARAM_GARAGEDOOR_LIGHT_UPDATE_PERIOD = 10
+"""MSG150 opener light status polling period (the device does not push config updates)"""
 PARAM_SENSOR_SLOW_UPDATE_PERIOD = 300
 """slowly varying sensors polling period"""
 PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD = 600
