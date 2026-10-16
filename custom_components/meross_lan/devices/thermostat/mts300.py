@@ -250,8 +250,8 @@ class Mts300Climate(MtsThermostatClimate):
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.switch_fan_hold = None  # type:ignore
-        self.number_fan_hold = None  # type:ignore
+        self.switch_fan_hold = None  # type: ignore
+        self.number_fan_hold = None  # type: ignore
 
     # interface: MtsClimate
     def set_unavailable(self):

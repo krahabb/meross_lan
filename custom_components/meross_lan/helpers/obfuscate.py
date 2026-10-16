@@ -1,13 +1,13 @@
 """
-    Obfuscation:
+Obfuscation:
 
-    working on a set of well-known keys to hide values from a structure
-    when logging/tracing.
-    The 'OBFUSCATE_KEYS' dict mandates which key values are patched and
-    how (ObfuscateRule). It generally mantains a set of obfuscated values stored in
-    the ObfuscateMap instance so that every time we obfuscate a key value,
-    we return the same (stable) obfuscation in order to correlate data in
-    traces and logs. Some keys are not cached/mapped and just 'redacted'
+working on a set of well-known keys to hide values from a structure
+when logging/tracing.
+The 'OBFUSCATE_KEYS' dict mandates which key values are patched and
+how (ObfuscateRule). It generally mantains a set of obfuscated values stored in
+the ObfuscateMap instance so that every time we obfuscate a key value,
+we return the same (stable) obfuscation in order to correlate data in
+traces and logs. Some keys are not cached/mapped and just 'redacted'
 """
 
 import re

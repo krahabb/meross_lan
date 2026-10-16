@@ -84,7 +84,9 @@ Appliance_Control_Thermostat_SummerMode = ns(
     ARGS_GETSETPUSH | IS_THERMOSTAT,
 )
 Appliance_Control_Thermostat_System = ns(
-    "Appliance.Control.Thermostat.System", mc.KEY_CONTROL, ARGS_GETSETPUSHQ | IS_THERMOSTAT
+    "Appliance.Control.Thermostat.System",
+    mc.KEY_CONTROL,
+    ARGS_GETSETPUSHQ | IS_THERMOSTAT,
 )
 Appliance_Control_Thermostat_Timer = ns(
     "Appliance.Control.Thermostat.Timer", mc.KEY_TIMER, ARGS_GETSETPUSH | IS_THERMOSTAT

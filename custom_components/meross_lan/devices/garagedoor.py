@@ -329,6 +329,16 @@ class MLGarage(MLCover):
 
     # garagedoor extra attributes
     ATTR_TRANSITION_DURATION = "transition_duration"
+    ATTR_LAST_TRIGGER_SOURCE = "last_trigger_source"
+    ATTR_LAST_TRIGGER_SOURCE_RAW = "last_trigger_source_raw"
+
+    TRIGGER_SOURCE_MAP = {
+        "iOS": "App",
+        "Android": "App",
+        "WallButton": "Wall panel",
+        "DevicePysical": "Home Garage Controller",
+        "DevicePhysical": "Home Garage Controller",
+    }
 
     # these keys in Appliance.GarageDoor.MultipleConfig are to be ignored
     CONFIG_KEY_EXCLUDED = (mc.KEY_CHANNEL, mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
@@ -560,6 +570,19 @@ class MLGarage(MLCover):
             )
 
         attributes_changed = False
+        if source := payload.get(mc.KEY_TRIGGERSRC):
+            # This key is forwarded from PUSH headers by the state handler.
+            # GET responses can echo the polling client's source, so they must
+            # not replace the last source reported by a device notification.
+            if (
+                self.extra_state_attributes.get(self.ATTR_LAST_TRIGGER_SOURCE_RAW)
+                != source
+            ):
+                self.extra_state_attributes[self.ATTR_LAST_TRIGGER_SOURCE_RAW] = source
+                self.extra_state_attributes[self.ATTR_LAST_TRIGGER_SOURCE] = (
+                    self.TRIGGER_SOURCE_MAP.get(source, "Unknown")
+                )
+                attributes_changed = True
         for key in (mc.KEY_OBSTRUCTION, mc.KEY_OBLMTIME, mc.KEY_SIGNALVALID):
             if key in payload and self.extra_state_attributes.get(key) != payload[key]:
                 self.extra_state_attributes[key] = payload[key]
@@ -881,6 +904,20 @@ class GarageDoorStateNamespaceHandler(NamespaceHandler):
             # - all channels in a DICT (only confirmed in 4.0.0+ fw)
             # TODO: we might check if DICT_C with {"channel": -1 or 65535} works too...(like refoss queries)
             device.namespace_handlers[mn.Appliance_System_All.name].polling_period = 0
+
+    # interface: NamespaceHandler
+    def _handle_list(self, header, payload, /):
+        """Preserve PUSH sources while accepting both dict and list states."""
+        state = payload[self.ns.key]
+        if header[mc.KEY_METHOD] == mc.METHOD_PUSH and (
+            source := header.get(mc.KEY_TRIGGERSRC)
+        ):
+            # Copy rather than modifying the response used by tracing/diagnostics.
+            if isinstance(state, dict):
+                state = {**state, mc.KEY_TRIGGERSRC: source}
+            else:
+                state = [{**item, mc.KEY_TRIGGERSRC: source} for item in state]
+        self.parse_generic(state)
 
 
 def digest_init_garagedoor(device: "Device", digest: list) -> "DigestInitReturnType":
