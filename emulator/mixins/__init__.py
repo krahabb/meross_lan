@@ -129,7 +129,7 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
             if row[2] == "auto":
                 continue
             row[-1] = json_loads(row[-1])
-            self._import_tracerow(*row)  # type:ignore
+            self._import_tracerow(*row)  # type: ignore
 
     def _import_json(self, f: "TextIOWrapper"):
         """

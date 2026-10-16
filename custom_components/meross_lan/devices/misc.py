@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from ..merossclient.protocol import types as mt
     from ..merossclient.protocol.types import sensor as mt_s
 
+
 class SensorLatestNamespaceHandler(NamespaceHandler):
     """
     Specialized handler for Appliance.Control.Sensor.Latest actually carried in thermostats
@@ -129,7 +130,9 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
         if device.descriptor.type.startswith(mc.TYPE_MS600):
             MLPresenceSensor(device, 0, "sensor_presence")
             MLLightSensor(device, 0, "sensor_light")
-            self.polling_request_add_channel(0, {mc.KEY_DATA: [mc.KEY_PRESENCE, mc.KEY_LIGHT]})
+            self.polling_request_add_channel(
+                0, {mc.KEY_DATA: [mc.KEY_PRESENCE, mc.KEY_LIGHT]}
+            )
         else:
             self.polling_request_add_channel(0, {mc.KEY_DATA: []})
 
@@ -164,10 +167,13 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
                             channel_payload[mc.KEY_DATA].append(data_key)
                             break
                     else:
-                        polling_request_channels.append({key_channel: channel, mc.KEY_DATA: [data_key]})
+                        polling_request_channels.append(
+                            {key_channel: channel, mc.KEY_DATA: [data_key]}
+                        )
                         self.polling_response_size = (
                             self.polling_response_base_size
-                            + len(polling_request_channels) * self.polling_response_item_size
+                            + len(polling_request_channels)
+                            * self.polling_response_item_size
                         )
                 entity._parse(data_value[0])
 

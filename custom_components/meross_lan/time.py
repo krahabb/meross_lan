@@ -35,7 +35,6 @@ class MLTime(me.MLEntity, time.TimeEntity):
         device_value_disabled: int
         device_value: int | None
 
-
         # HA core entity attributes:
         native_value: dt.time | None
 
@@ -52,7 +51,13 @@ class MLTime(me.MLEntity, time.TimeEntity):
         "native_value",
     )
 
-    def __init__(self, manager: "EntityManager", channel: "Any | None" = None, entitykey: str | None = None, **kwargs: "Unpack[Args]"):
+    def __init__(
+        self,
+        manager: "EntityManager",
+        channel: "Any | None" = None,
+        entitykey: str | None = None,
+        **kwargs: "Unpack[Args]",
+    ):
         self.native_value = kwargs.pop("native_value", None)
         self.device_scale = kwargs.pop("device_scale", 1)
         self.device_value_disabled = kwargs.pop("device_value_disabled", 0)
