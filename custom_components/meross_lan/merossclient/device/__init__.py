@@ -267,32 +267,37 @@ class Device(PhysicalDevice):
     # interface: AbstractClient
     @override
     async def async_connect(self, /, **kwargs: "Unpack[ConnectArgs]"):
-        async for earliest_connect in asyncio.as_completed(
-            [
-                _client.create_task(
-                    _client.async_request(*self.handler_all.polling_request),
-                    f".async_connect_{_client.TRANSPORT}_task",
-                    eager_start=False,
-                )
-                for _client in self._clients.values()
-            ],
-            timeout=kwargs.get("timeout", self.timeout),
-        ):
+        connect_tasks = [
+            _client.create_task(
+                _client.async_request(*self.handler_all.polling_request),
+                f".async_connect_{_client.TRANSPORT}_task",
+                eager_start=False,
+            )
+            for _client in self._clients.values()
+        ]
+        if connect_tasks:
             try:
-                response = await earliest_connect
-                if not self.is_connected:
-                    self.on_connect()
-                self.handler_all.handle(response)
-                self.handler_all.polling_response_size = len(response.json)
-                return response
+                async for earliest_connect in asyncio.as_completed(
+                    connect_tasks,
+                    timeout=kwargs.get("timeout", self.timeout),
+                ):
+                    try:
+                        response = await earliest_connect
+                        if not self.is_connected:
+                            self.on_connect()
+                        self.handler_all.handle(response)
+                        self.handler_all.polling_response_size = len(response.json)
+                        return response
+                    except MerossTransportError as e:
+                        e.log(self.WARNING, "async_connect", timeout=14400)
+                    except Exception as e:
+                        self.log_exception(
+                            self.WARNING, e, "async_connect", timeout=14400
+                        )
             except Exception as e:
-                self.log_exception(
-                    self.DEBUG,
-                    e,
-                    "async_connect request: proceeding with next transport",
-                )
-        else:
-            raise asyncio.TimeoutError("No transport available")
+                raise MerossTransportError(self) from e
+
+        raise MerossTransportError(self, "No transport available")
 
     @override
     async def async_disconnect(self, /):
@@ -345,19 +350,19 @@ class Device(PhysicalDevice):
                 if len(self._clients) < 2:
                     raise
                 tryed_clients = {_client}
+                self.log_exception(
+                    self.DEBUG,
+                    e,
+                    "%s request (client:%s): trying fall-back",
+                    _client.TRANSPORT,
+                    _client,
+                )
             else:
                 if not self._clients:
                     raise MerossTransportError(
                         self, "No transport available to send the request"
                     )
                 tryed_clients = set()
-            self.log_exception(
-                self.DEBUG,
-                e,
-                "%s request (client:%s): trying fall-back",
-                _client.TRANSPORT,  # type: ignore
-                _client,
-            )
 
         while True:
             for _client in self._clients_connected.values():
@@ -614,17 +619,17 @@ class Device(PhysicalDevice):
                     if nh.polling_strategy and not nh.digest:
                         try:
                             await nh.polling_strategy(nh)
-                        except asyncio.TimeoutError:
-                            raise
                         except Exception as e:
-                            self.log_exception(
-                                self.WARNING,
-                                e,
-                                "%s for %s",
-                                nh.polling_strategy.__name__,
-                                nh.id,
-                            )
-                            continue
+                            if self.is_connected:
+                                self.log_exception(
+                                    self.WARNING,
+                                    e,
+                                    "%s for %s",
+                                    nh.polling_strategy.__name__,
+                                    nh.id,
+                                )
+                            else:
+                                raise
 
                 if self._multiple_requests:
                     await self.async_poll_flush()
@@ -632,11 +637,10 @@ class Device(PhysicalDevice):
         except asyncio.CancelledError:
             self.log(self.DEBUG, "Polling cancelled")
             raise
-        except asyncio.TimeoutError:
-            if self.is_connected:
-                self.on_disconnect()
+        except MerossTransportError as e:
+            e.log(self.WARNING, "async_poll", timeout=14400)
         except Exception as e:
-            self.log_exception(self.WARNING, e, "async_poll")
+            self.log_exception(self.WARNING, e, "async_poll", timeout=14400)
         finally:
             self._multiple_requests.clear()
             self._multiple_response_size = NamespaceHandler.HEADER_AVG_SIZE
@@ -696,7 +700,7 @@ class Device(PhysicalDevice):
                 response = await self.async_request_multiple(
                     (nh.polling_request for nh in multiple_requests),
                 )
-            except (aiohttp.ServerDisconnectedError, asyncio.TimeoutError) as e:
+            except MerossTransportError as e:
                 if not self.is_connected:
                     raise
                 # The ns_multiple failed but the reason could be the device
@@ -710,21 +714,22 @@ class Device(PhysicalDevice):
                 self.log(
                     self.DEBUG,
                     "Appliance.Control.Multiple failed with '%s' (requests=%d expected size=%d)",
-                    str(e) or e.__class__.__name__,
+                    str(e),
                     requests_len,
                     multiple_response_size,
                 )
                 # Here we reduce the device_response_size_max so that
                 # next ns_multiple will be less demanding. device_response_size_min
                 # is another dynamic param representing the biggest payload ever received
-                self.device_response_size_max = (
-                    self.device_response_size_max + self.device_response_size_min
-                ) / 2  # type: ignore
-                self.log(
-                    self.DEBUG,
-                    "Updating device_response_size_max:%d",
-                    self.device_response_size_max,
-                )
+                if e.likely_remote_overflow:
+                    self.device_response_size_max = (
+                        self.device_response_size_max + self.device_response_size_min
+                    ) / 2  # type: ignore
+                    self.log(
+                        self.DEBUG,
+                        "Updating device_response_size_max:%d",
+                        self.device_response_size_max,
+                    )
                 for nh in multiple_requests:
                     nh.handle(await self.async_request(*nh.polling_request))
                 return

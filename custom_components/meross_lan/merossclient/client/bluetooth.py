@@ -269,8 +269,7 @@ class BluetoothClient(AbstractClient, BleakClient):
                 return self.on_rx_raw(await self._rx_future)
 
         except Exception as e:
-            self.log_exception(self.WARNING, e, "async_request_raw")
-            raise
+            raise MerossTransportError(self, request=request) from e
         finally:
             self._rx_future = None
             try:

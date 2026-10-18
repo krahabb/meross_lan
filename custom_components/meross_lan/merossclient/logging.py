@@ -39,7 +39,10 @@ if TYPE_CHECKING:
 
     class LoggerArgs(TypedDict):
         timeout: NotRequired[int]
+        """The log message is cached and effectively logged only if timeout isnt expired since last logging with
+        the same (msg, args)."""
         obfuscate: NotRequired[bool]
+        """Applies arguments (kwargs) obfuscation based off rules and maps in obfuscate.py."""
         uuid: NotRequired[str | None]
         server: NotRequired[str | None]
         userid: NotRequired[str | int | None]
@@ -158,9 +161,12 @@ class _Logger(logging.Logger if TYPE_CHECKING else object):
 
         try:
             timeout = kwargs.pop("timeout")
+        except KeyError:
+            pass
+        else:
             epoch = time()
             trap_key = (msg, args)
-            if trap_key in _Logger._LOGGER_TIMEOUTS:
+            try:
                 if (epoch - _Logger._LOGGER_TIMEOUTS[trap_key]) < timeout:
                     if self.isEnabledFor(VERBOSE):
                         super()._log(
@@ -169,9 +175,9 @@ class _Logger(logging.Logger if TYPE_CHECKING else object):
                             args + extract_obfuscated_kwargs(obfuscate, kwargs),
                         )
                     return
+            except KeyError:
+                pass
             _Logger._LOGGER_TIMEOUTS[trap_key] = epoch
-        except KeyError:
-            pass
 
         super()._log(
             level,
@@ -240,7 +246,7 @@ class Loggable(metaclass=abc.ABCMeta):
         shutdown_broadcast: broadcast.Broadcast[None]
         async_shutdown_broadcast: broadcast.Broadcast[Coroutine[Any, Any, None]]
 
-        _tasks: set[asyncio.Future]  # dynamic
+        _tasks: set[asyncio.Task]  # dynamic
         _timers: dict[Callable, asyncio.TimerHandle]  # dynamic
 
         @staticmethod
@@ -521,13 +527,13 @@ class Loggable(metaclass=abc.ABCMeta):
             task.add_done_callback(self._done_task_callback)
             return task
 
-    def _done_task_callback(self, task: asyncio.Future):
+    def _done_task_callback(self, task: asyncio.Task):
         self._tasks.remove(task)
         try:
             task.result()
-        except (asyncio.CancelledError, Exception) as e:
+        except BaseException as e:
             self.log_exception(
-                self.DEBUG,
+                self.VERBOSE,
                 e,
                 "Task %r",
                 task,

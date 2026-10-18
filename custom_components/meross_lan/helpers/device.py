@@ -1193,20 +1193,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         return self.config.get(mlc.CONF_HOST) or self.descriptor.innerIp
 
     @override
-    async def async_request(
-        self,
-        *args: "Unpack[MerossRequestType]",
-        **kwargs: "Unpack[Device.RequestArgs]",
-    ):
-        """Wrapper for common final request method in order to catch MerossErrors and raise
-        HomeAssistantError instead to avoid dumping full stack trace in logs and log a
-        concise error message instead on selected exceptions."""
-        try:
-            return await device.Device.async_request(self, *args, **kwargs)
-        except Exception as e:
-            raise HomeAssistantError(str(e)) from e
-
-    @override
     async def async_configure_timezone(self, tzname: str | None):
         await super().async_configure_timezone(tzname)
         self.schedule_entry_update(False)

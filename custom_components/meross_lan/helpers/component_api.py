@@ -18,6 +18,7 @@ from .. import const as mlc
 from ..merossclient import HostAddress
 from ..merossclient.client import Transport, bluetooth as m_bt
 from ..merossclient.client.http import HttpClient
+from ..merossclient.exceptions import MerossTransportError
 from ..merossclient.logging import Loggable
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..merossclient.protocol.message import (
@@ -156,19 +157,11 @@ class HAMQTTConnection(mlq.MQTTConnection):
                 mc.TOPIC_REQUEST.format(kwargs["uuid"]),
                 message.json,
             )
-            self.on_publish()
         except Exception as e:
-            self.log_exception(
-                self.WARNING,
-                e,
-                "async_publish_raw %s %s (messageId:%s uuid:%s)",
-                message.method,
-                message.namespace,
-                message.messageid,
-                uuid=kwargs["uuid"],
-                timeout=14400,
-            )
-            raise
+            raise MerossTransportError(
+                self, request=message, uuid=kwargs["uuid"]
+            ) from e
+        self.on_publish()
 
     # interface: self
     @property
@@ -527,7 +520,7 @@ class ComponentApi(mlq.MQTTProfile):
             task.add_done_callback(loggable._done_task_callback)
             return task
 
-        Loggable.create_task = _create_task
+        Loggable.create_task = _create_task  # type: ignore
 
         mlq.MQTTProfile.__init__(
             self,

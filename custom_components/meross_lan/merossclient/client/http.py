@@ -48,7 +48,6 @@ class HttpClient(AbstractClient):
         SESSION_TIMEOUT: ClassVar
         _SESSION: ClassVar[aiohttp.ClientSession | None]
 
-        _requests: set[asyncio.Task]
         _cipher: Cipher | None
 
     TRANSPORT = AbstractClient.Transport.HTTP  # type: ignore[override]
@@ -115,7 +114,6 @@ class HttpClient(AbstractClient):
             kwargs.pop("session", HttpClient._SESSION)
             or HttpClient._get_or_create_client_session()
         )
-        self._requests = set()
         self._cipher = None
         super().__init__(host, parent, **kwargs)
 
@@ -150,8 +148,18 @@ class HttpClient(AbstractClient):
 
     @override
     async def async_disconnect(self, /):
-        for request in tuple(self._requests):
-            request.cancel()
+        try:
+            for task in [
+                t for t in self._tasks if t.get_name().endswith("_perform_request")
+            ]:
+                if task.cancel():
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+        except AttributeError:
+            # _tasks might be uninitialized if async_connect was never called
+            pass
         if self.is_connected:
             self.on_disconnect()
 
@@ -159,27 +167,27 @@ class HttpClient(AbstractClient):
         self,
         request: MerossMessage,
         timeout: aiohttp.ClientTimeout,
+        cipher: AESCipher | None = None,
         /,
     ):
         """Internal wrapper to perform the request."""
-        if _cipher := self._cipher:
-            data = _cipher.encrypt_text(request.json)
-            headers = HttpClient._HEADERS_ENCRYPTED
+        if cipher:
+            response = await self._session.post(
+                url=self._url,
+                data=cipher.encrypt_text(request.json),
+                headers=HttpClient._HEADERS_ENCRYPTED,
+                timeout=timeout,
+            )
+            return cipher.decrypt(await response.read())
         else:
             # no encryption: session defaults to json
-            data = request.json
-            headers = HttpClient._HEADERS_PLAINTEXT
-        response = await self._session.post(
-            url=self._url,
-            data=data,
-            headers=headers,
-            timeout=timeout,
-        )
-        return (
-            _cipher.decrypt(await response.read())
-            if _cipher
-            else (await response.read())
-        )
+            response = await self._session.post(
+                url=self._url,
+                data=request.json,
+                headers=HttpClient._HEADERS_PLAINTEXT,
+                timeout=timeout,
+            )
+            return await response.read()
 
     @override
     async def async_request_raw(
@@ -189,27 +197,37 @@ class HttpClient(AbstractClient):
         try:
             if MEROSSDEBUG:
                 MEROSSDEBUG.http_random_timeout()
-            request_task = self.create_task(
+
+            # wrap the request so that it would be easily cancellable
+            response = await self.create_task(
                 self._perform_request(
                     request,
                     aiohttp.ClientTimeout(total=kwargs.get("timeout", self.timeout)),
-                )
+                    self._cipher,
+                ),
+                "_perform_request",
             )
-            requests = self._requests
-            requests.add(request_task)
-            request_task.add_done_callback(lambda task: requests.remove(request_task))
-            response = await request_task
-            if not self.is_connected:
-                self.on_connect()
-            return self.on_rx_raw(response)
 
-        except (asyncio.TimeoutError, asyncio.CancelledError):
+        except aiohttp.ServerDisconnectedError as e:
+            # This specific error usually means the connection is ok
+            # but the remote unexpectedly crashed/disconnected. This
+            # is usually due to a malformed message or whatever that crashes the remote stack.
+            # We consider this to not be a real cause of disconnection by itself since the device
+            # could likely be recoverable.
+            raise MerossTransportError(self, request=request) from e
+        except (aiohttp.ClientError, TimeoutError) as e:
+            # General sink for any aiohttp exception including the connector errors raised when
+            # the address is unresolvable or host unreachable for any reason
             if self.is_connected:
                 self.on_disconnect()
-            raise
+            raise MerossTransportError(self, request=request) from e
         except Exception as e:
-            self.log_exception(self.WARNING, e, "async_request_raw")
-            raise
+            # Any exception here should be regarded as not really expected
+            raise MerossTransportError(self, request=request) from e
+
+        if not self.is_connected:
+            self.on_connect()
+        return self.on_rx_raw(response)
 
     @override
     async def async_request(

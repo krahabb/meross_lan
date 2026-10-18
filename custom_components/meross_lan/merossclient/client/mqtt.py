@@ -13,6 +13,7 @@ import paho.mqtt.client as mqtt
 
 from . import AbstractClient
 from .. import MEROSSDEBUG, HostAddress, get_macaddress_from_uuid
+from ..exceptions import MerossTransportError
 from ..protocol import const as mc, md5hexdigest
 
 if TYPE_CHECKING:
@@ -249,10 +250,12 @@ class AbstractMQTTConnection(AbstractClient):
             kwargs["uuid"] = self.uuid
             try:
                 response = await self.connection.async_request_raw(request, **kwargs)
-            except asyncio.TimeoutError:
+            except MerossTransportError as e:
+                # we consider a timeout a disconnection of the remote even if
+                # the MQTTConnection is alive (connected to broker)
                 if self.is_connected:
                     self.on_disconnect()
-                raise
+                raise MerossTransportError(self, request=request, uuid=self.uuid) from e
             if not self.is_connected:
                 self.on_connect()
             return self.on_rx(response)
@@ -361,6 +364,7 @@ class AbstractMQTTConnection(AbstractClient):
         Publish a message to the broker. This is the lowest level interface used to actually
         send messages to the broker. This method doesn't perform application level transaction mgmt.
         To actually request a reply message use the async_request... path.
+        As for exceptions behaviour check AbstractClient.async_request_raw docs.
         """
         raise NotImplementedError()
 
@@ -373,15 +377,21 @@ class AbstractMQTTConnection(AbstractClient):
         This method performs application level transaction mgmt (matching request-reply, timeouts, etc).
         To actually just publish a message without waiting for the reply use the async_publish... path.
         """
-
-        async with asyncio.Timeout(
-            self.loop.time() + kwargs.get("timeout", self.timeout)
-        ):
-            with AbstractMQTTConnection.Transaction(
-                self, request, kwargs["uuid"]
-            ) as transaction:
-                await self.async_publish_raw(request, **kwargs)
-                return await transaction.future
+        try:
+            # Todo: wrap asyncio.Timeout behavior into AbstractMQTTConnection.Transaction
+            # so we have a single context. Also, exceptions might be embedded.
+            async with asyncio.Timeout(
+                self.loop.time() + kwargs.get("timeout", self.timeout)
+            ):
+                with AbstractMQTTConnection.Transaction(
+                    self, request, kwargs["uuid"]
+                ) as transaction:
+                    await self.async_publish_raw(request, **kwargs)
+                    return await transaction.future
+        except Exception as e:
+            raise MerossTransportError(
+                self, request=request, uuid=kwargs["uuid"]
+            ) from e
 
     @override
     def on_connect(self, /):
@@ -608,50 +618,45 @@ class MQTTConnection(AbstractMQTTConnection):
     ):
         uuid = kwargs["uuid"]
         self.on_tx(message)
-        try:
-            if self.rl_rate:
-                try:
-                    _rl = self._rl_queues[uuid]
-                except KeyError:
-                    self._rl_queues[uuid] = _rl = _MQTTRateLimiter()
-                    _rl.tx_queue.append(monotonic())
-                else:
-                    rl_window_size = self.rl_window_size
-                    rl_window_duration = rl_window_size / self.rl_rate
-                    t_now = monotonic()
-                    t_duration_back = t_now - rl_window_duration
-                    t_queue = _rl.tx_queue
-                    t_queue_len = len(t_queue)
-                    while t_queue_len:
-                        if t_queue[0] <= t_duration_back:
-                            t_queue.popleft()
-                            t_queue_len -= 1
-                            continue
-                        if t_queue_len >= rl_window_size:
-                            self.rl_dropped += 1  # type: ignore[assignment]
-                            _rl.dropped += 1
-                            self.on_drop()
-                            raise MQTTRateLimitExceeded()
-                        break
-                    t_queue.append(t_now)
 
-            return self._mqttc.publish(
+        if self.rl_rate:
+            try:
+                _rl = self._rl_queues[uuid]
+            except KeyError:
+                self._rl_queues[uuid] = _rl = _MQTTRateLimiter()
+                _rl.tx_queue.append(monotonic())
+            else:
+                rl_window_size = self.rl_window_size
+                rl_window_duration = rl_window_size / self.rl_rate
+                t_now = monotonic()
+                t_duration_back = t_now - rl_window_duration
+                t_queue = _rl.tx_queue
+                t_queue_len = len(t_queue)
+                while t_queue_len:
+                    if t_queue[0] <= t_duration_back:
+                        t_queue.popleft()
+                        t_queue_len -= 1
+                        continue
+                    if t_queue_len >= rl_window_size:
+                        self.rl_dropped += 1  # type: ignore[assignment]
+                        _rl.dropped += 1
+                        self.on_drop()
+                        raise MQTTRateLimitExceeded()
+                    break
+                t_queue.append(t_now)
+
+        try:
+            info = self._mqttc.publish(
                 mc.TOPIC_REQUEST.format(uuid),
                 message.json,
             )
-
         except Exception as e:
-            self.log_exception(
-                self.WARNING,
-                e,
-                "async_publish_raw %s %s (messageId:%s uuid:%s)",
-                message.method,
-                message.namespace,
-                message.messageid,
-                uuid=uuid,
-                timeout=14400,
-            )
-            raise
+            raise MerossTransportError(self, request=message, uuid=uuid) from e
+        else:
+            if info.rc != mqtt.MQTT_ERR_SUCCESS:
+                raise MerossTransportError(
+                    self, mqtt.error_string(info.rc), request=message, uuid=uuid
+                )
 
     # interface: self
     @property
