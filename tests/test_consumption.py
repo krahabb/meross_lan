@@ -76,10 +76,9 @@ class DeviceConsumptionContext(helpers.DeviceContext):
         self.tomorrow = tomorrow.replace(tzinfo=None)
         self.todayseconds = (self.tomorrow - self.today).total_seconds()
 
-        emulator = helpers.build_emulator(mc.TYPE_MSS310)
+        emulator = helpers.build_emulator(mc.TYPE_MSS310, timezone=str(tz))
         assert isinstance(emulator, EmulatorConsumptionMixin)
         assert isinstance(emulator, EmulatorElectricityMixin)
-        emulator.set_timezone(str(tz))
         emulator.set_power(TEST_POWER * 1000)
 
         super().__init__(

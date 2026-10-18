@@ -3,12 +3,7 @@
 from random import randint
 from typing import TYPE_CHECKING
 
-from custom_components.meross_lan.merossclient.protocol import (
-    const as mc,
-    namespaces as mn,
-)
-
-from . import Emulator
+from . import Emulator, mc, mn
 
 
 class PhysicalLockMixin(Emulator if TYPE_CHECKING else object):

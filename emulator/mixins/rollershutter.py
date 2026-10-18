@@ -6,12 +6,8 @@ from typing import TYPE_CHECKING
 
 from custom_components.meross_lan.helpers import clamp
 from custom_components.meross_lan.merossclient import extract_dict_payloads
-from custom_components.meross_lan.merossclient.protocol import (
-    const as mc,
-    namespaces as mn,
-)
 
-from . import Emulator
+from . import Emulator, mc, mn
 
 if TYPE_CHECKING:
     from typing import Final
@@ -148,8 +144,8 @@ class RollerShutterMixin(Emulator if TYPE_CHECKING else object):
     # the internal sampling of the 'Transition'
     SIGNAL_TRANSITION_PERIOD = 1  # sec
 
-    def __init__(self, descriptor: "EmulatorDescriptor", key: str):
-        super().__init__(descriptor, key)
+    def __init__(self, descriptor: "EmulatorDescriptor", **kwargs):
+        super().__init__(descriptor, **kwargs)
         self._transitions: dict[int, _Transition] = {}
         self.has_native_position = descriptor.fw_version_t >= (6, 6, 6)
 

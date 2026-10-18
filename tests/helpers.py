@@ -92,7 +92,7 @@ if TYPE_CHECKING:
         MerossMessage,
         MerossResponse,
     )
-    from emulator import Emulator
+    from emulator import Emulator, EmulatorDescriptor, build_emulator_kwargs
 
 LOGGER = logging.getLogger("meross_lan.tests")
 
@@ -268,6 +268,13 @@ class TimeMocker(contextlib.AbstractContextManager):
         It is preferable tu use the 'tick' version since that's in the end the underlying freezeapi engine called.
         """
         return await self.async_tick(target_datetime - self.time())
+
+    async def async_move_to_timer(self, timer: asyncio.TimerHandle):
+        """
+        Moves the time mocker to the target_datetime.
+        It is preferable tu use the 'tick' version since that's in the end the underlying freezeapi engine called.
+        """
+        return await self.async_tick(timer.when() - self.hass.loop.time())
 
     async def async_warp(
         self,
@@ -678,22 +685,13 @@ class ProfileEntryMocker(ConfigEntryMocker):
         )
 
 
-def build_emulator(
-    model: str,
-    *,
-    key: str = tc.MOCK_KEY,
-    uuid: str = tc.MOCK_DEVICE_UUID,
-    broker: str | None = None,
-    userId: int | None = None,
-) -> "Emulator":
+def build_emulator(model: str, **kwargs: Unpack[build_emulator_kwargs]) -> "Emulator":
     # Watchout: this call will not use the uuid and key set
     # in the filename, just DEFAULT_UUID and DEFAULT_KEY
+    kwargs.setdefault("key", tc.MOCK_KEY)
+    kwargs.setdefault("uuid", tc.MOCK_DEVICE_UUID)
     return emulator.build_emulator(
-        tc.EMULATOR_TRACES_PATH + tc.EMULATOR_TRACES_MAP[model],
-        key=key,
-        uuid=uuid,
-        broker=broker,
-        userId=userId,
+        tc.EMULATOR_TRACES_PATH + tc.EMULATOR_TRACES_MAP[model], **kwargs
     )
 
 
@@ -709,10 +707,12 @@ def build_emulator_for_profile(
     Specifying a 'model' will try to match a suitable deviceType
     in the stored profile else it will just default
     """
-    domain = None
-    reservedDomain = None
     userid = profile_config[mc.KEY_USERID_]
-    key = profile_config[mc.KEY_KEY]
+    emulator_kwargs: build_emulator_kwargs = {
+        "key": profile_config[mc.KEY_KEY],
+        "uuid": device_id,
+        "userId": int(userid),
+    }
 
     cloudprofiledata = tc.MOCK_PROFILE_STORAGE.get(f"{mlc.DOMAIN}.profile.{userid}")
     if cloudprofiledata:
@@ -725,9 +725,9 @@ def build_emulator_for_profile(
                     # we asked for a specific model
                     continue
                 model = device_type
-                device_id = device_info[mc.KEY_UUID]  # type: ignore
-                domain = device_info.get(mc.KEY_DOMAIN)
-                reservedDomain = device_info.get(mc.KEY_RESERVEDDOMAIN)
+                emulator_kwargs["uuid"] = device_info[mc.KEY_UUID]  # type: ignore
+                if mc.KEY_DOMAIN in device_info:
+                    emulator_kwargs["broker"] = device_info[mc.KEY_DOMAIN]
                 break
             else:
                 # no matching device found in profile
@@ -738,9 +738,7 @@ def build_emulator_for_profile(
         # just provide a default
         model = mc.TYPE_MSS310
 
-    return build_emulator(
-        model, key=key, uuid=device_id, broker=domain, userId=int(userid)
-    )
+    return build_emulator(model, **emulator_kwargs)
 
 
 def build_emulator_config_entry(

@@ -32,7 +32,7 @@ from custom_components.meross_lan.merossclient.protocol.message import (
 
 if TYPE_CHECKING:
     from io import TextIOWrapper
-    from typing import Any, ClassVar, Mapping
+    from typing import Any, ClassVar, Mapping, NotRequired, TypedDict, Unpack
 
     import paho.mqtt.client as mqtt
 
@@ -44,17 +44,23 @@ if TYPE_CHECKING:
 
 
 class EmulatorDescriptor(DeviceDescriptor):
-    namespaces: "dict[str, MerossPayloadType]"
+
+    if TYPE_CHECKING:
+
+        class Args(TypedDict):
+            uuid: NotRequired[str]
+            broker: NotRequired[str]
+            userId: NotRequired[int]
+            timezone: NotRequired[str]
+
+        namespaces: "dict[str, MerossPayloadType]"
 
     __slots__ = ("namespaces",)
 
     def __init__(
         self,
         tracefile: str,
-        *,
-        uuid: str | None = None,
-        broker: str | None = None,
-        userId: int | None = None,
+        **kwargs: "Unpack[Args]",
     ):
         self.namespaces = {}
         with open(tracefile, "r", encoding="utf8") as f:
@@ -69,19 +75,23 @@ class EmulatorDescriptor(DeviceDescriptor):
             | self.namespaces[mn.Appliance_System_Ability]
         )
         # patch system payload with fake ids
-        if uuid:
+        if "uuid" in kwargs:
             hardware = self.hardware
-            hardware[mc.KEY_UUID] = uuid
-            hardware[mc.KEY_MACADDRESS] = get_macaddress_from_uuid(uuid)
-        if broker:
-            broker_address = HostAddress.build(broker)
+            hardware[mc.KEY_UUID] = kwargs["uuid"]
+            hardware[mc.KEY_MACADDRESS] = get_macaddress_from_uuid(kwargs["uuid"])
+        if "broker" in kwargs:
+            broker_address = HostAddress.build(kwargs["broker"])
             firmware = self.firmware
             firmware[mc.KEY_SERVER] = broker_address.host
             firmware[mc.KEY_PORT] = broker_address.port
             firmware.pop(mc.KEY_SECONDSERVER, None)
             firmware.pop(mc.KEY_SECONDPORT, None)
-        if userId:
-            self.firmware[mc.KEY_USERID] = userId
+        if "userId" in kwargs:
+            self.firmware[mc.KEY_USERID] = kwargs["userId"]
+        if "timezone" in kwargs:
+            # only 'soft' updating here: we're not ensuring the rules are correct though...
+            self.time[mc.KEY_TIMEZONE] = kwargs["timezone"]
+            self.timezone = kwargs["timezone"]
 
     def _import_tsv(self, f: "TextIOWrapper"):
         """
@@ -251,6 +261,10 @@ class Emulator:
         """Keys in existing state are preserved (only non-existing keys are added)."""
 
     if typing.TYPE_CHECKING:
+
+        class Args(TypedDict):
+            key: NotRequired[str | None]
+
         MAXIMUM_RESPONSE_SIZE: ClassVar
 
         type NSDefaultArgs = tuple[NSDefaultMode, dict | list]
@@ -264,6 +278,9 @@ class Emulator:
         relevant for the features they're implementing. The complete class defaults
         will be 'explored' in MerossEmulator.__init__."""
         NAMESPACES_DEFAULT_IGNORE: ClassVar[tuple[mn.Namespace, ...]]
+
+    DEFAULT_KEY = mlc.PARAM_DEFAULT_KEY
+    DEFAULT_UUID = "00000000000000000000000000000000"
 
     MAXIMUM_RESPONSE_SIZE = 3000
 
@@ -297,9 +314,9 @@ class Emulator:
         "__dict__",
     )
 
-    def __init__(self, descriptor: EmulatorDescriptor, key: str, /):
+    def __init__(self, descriptor: EmulatorDescriptor, /, **kwargs: Unpack[Args]):
         self.loop: asyncio.AbstractEventLoop = None  # type: ignore
-        self.key = key
+        self.key = kwargs.get("key") or Emulator.DEFAULT_KEY
         self.descriptor = descriptor
         self.namespaces = namespaces = descriptor.namespaces
 
@@ -375,7 +392,7 @@ class Emulator:
         self._scheduler_unsub = None
         self._tzinfo: ZoneInfo | None = None
         self._cipher = (
-            HttpClient.Cipher(descriptor.uuid, key, descriptor.macAddress)
+            HttpClient.Cipher(descriptor.uuid, self.key, descriptor.macAddress)
             if mn.Appliance_Encrypt_ECDHE in descriptor.ability
             else None
         )

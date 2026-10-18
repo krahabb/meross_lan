@@ -5,12 +5,7 @@ from random import randint
 from time import gmtime
 from typing import TYPE_CHECKING
 
-from custom_components.meross_lan.merossclient.protocol import (
-    const as mc,
-    namespaces as mn,
-)
-
-from . import Emulator
+from . import Emulator, mc, mn
 
 if TYPE_CHECKING:
     from custom_components.meross_lan.merossclient.protocol import types as mt
@@ -28,8 +23,8 @@ class ElectricityMixin(Emulator if TYPE_CHECKING else object):
     # this is 'shared' with ConsumptionXMixin to control tests output
     power: int
 
-    def __init__(self, descriptor: "EmulatorDescriptor", key):
-        super().__init__(descriptor, key)
+    def __init__(self, descriptor: "EmulatorDescriptor", **kwargs):
+        super().__init__(descriptor, **kwargs)
         self.payload_electricity = descriptor.namespaces[
             mn.Appliance_Control_Electricity
         ]
@@ -83,8 +78,8 @@ class ElectricityXMixin(Emulator if TYPE_CHECKING else object):
 
     VOLTAGEX_AVERAGE = 228000  # in millivolts
 
-    def __init__(self, descriptor: "EmulatorDescriptor", key):
-        super().__init__(descriptor, key)
+    def __init__(self, descriptor: "EmulatorDescriptor", **kwargs):
+        super().__init__(descriptor, **kwargs)
 
         self.payload_electricityx = self.update_namespace_state(
             mn.Appliance_Control_ElectricityX,
@@ -144,8 +139,8 @@ class ConsumptionHMixin(Emulator if TYPE_CHECKING else object):
         False: [{"channel": channel} for channel in range(4, 7)],
     }
 
-    def __init__(self, descriptor: "EmulatorDescriptor", key):
-        super().__init__(descriptor, key)
+    def __init__(self, descriptor: "EmulatorDescriptor", **kwargs):
+        super().__init__(descriptor, **kwargs)
 
         self.update_namespace_state(
             mn.Appliance_Control_ConsumptionH,
@@ -183,8 +178,8 @@ class ConsumptionXMixin(Emulator if TYPE_CHECKING else object):
 
     BUG_RESET = True
 
-    def __init__(self, descriptor: "EmulatorDescriptor", key):
-        super().__init__(descriptor, key)
+    def __init__(self, descriptor: "EmulatorDescriptor", **kwargs):
+        super().__init__(descriptor, **kwargs)
         self.payload_consumptionx = descriptor.namespaces[
             mn.Appliance_Control_ConsumptionX
         ]
@@ -209,10 +204,6 @@ class ConsumptionXMixin(Emulator if TYPE_CHECKING else object):
         self._consumptionx_epoch = 0
         self._consumptionx_power = None
         self._consumptionx_energy = 0.0  # in Wh
-        # REMOVE
-        # "Asia/Bangkok" GMT + 7
-        # "Asia/Baku" GMT + 4
-        self.set_timezone("Asia/Baku")
 
     def _mqtt_connect(self, *args):
         super()._mqtt_connect(*args)

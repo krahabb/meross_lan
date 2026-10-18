@@ -9,15 +9,11 @@ from custom_components.meross_lan.merossclient import (
     get_element_by_key,
     update_dict_strict_by_index,
 )
-from custom_components.meross_lan.merossclient.protocol import (
-    const as mc,
-    namespaces as mn,
-)
 from custom_components.meross_lan.merossclient.protocol.namespaces import (
     thermostat as mn_t,
 )
 
-from . import Emulator
+from . import Emulator, mc, mn
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar, Mapping
@@ -109,7 +105,7 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
     CURRENT_TEMPERATURE_DELTA = 5  # amplitude (half)
     CURRENT_TEMPERATURE_PERIOD = 300  # period of full cycle (seconds)
 
-    def __init__(self, descriptor: "EmulatorDescriptor", key):
+    def __init__(self, descriptor: "EmulatorDescriptor", **kwargs):
         for _type in self.MAP_DEVICE:
             if descriptor.type.startswith(_type):
                 break
@@ -117,7 +113,7 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
             raise RuntimeError("Unsupported thermostat type " + descriptor.type)
         self.temperature_scale = self.MAP_DEVICE[_type][0]
 
-        super().__init__(descriptor, key)
+        super().__init__(descriptor, **kwargs)
 
         # sanityze
         ability = descriptor.ability

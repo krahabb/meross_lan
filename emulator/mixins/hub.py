@@ -8,13 +8,9 @@ from custom_components.meross_lan.merossclient import (
     get_element_by_key,
     update_dict_strict,
 )
-from custom_components.meross_lan.merossclient.protocol import (
-    const as mc,
-    namespaces as mn,
-)
 from custom_components.meross_lan.merossclient.protocol.namespaces import hub as mn_h
 
-from . import Emulator
+from . import Emulator, mc, mn
 
 if TYPE_CHECKING:
     from typing import Any
@@ -108,8 +104,8 @@ class HubMixin(Emulator if TYPE_CHECKING else object):
         mc.KEY_WATERLEAK: (mn_h.Appliance_Hub_SubDevice_Beep,),
     }
 
-    def __init__(self, descriptor: "EmulatorDescriptor", key):
-        super().__init__(descriptor, key)
+    def __init__(self, descriptor: "EmulatorDescriptor", **kwargs):
+        super().__init__(descriptor, **kwargs)
         # we have to sanitize our structures since it might happen some traces
         # have broken payloads due to errors while tracing but some of these
         # need to be consistently in place in order for the emulator to behave correctly

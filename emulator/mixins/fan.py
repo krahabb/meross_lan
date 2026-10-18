@@ -1,12 +1,7 @@
 from random import randint
 from typing import TYPE_CHECKING
 
-from custom_components.meross_lan.merossclient.protocol import (
-    const as mc,
-    namespaces as mn,
-)
-
-from . import Emulator
+from . import Emulator, mc, mn
 
 if TYPE_CHECKING:
     from . import EmulatorDescriptor
@@ -21,8 +16,8 @@ class FanMixin(Emulator if TYPE_CHECKING else object):
         ),
     }
 
-    def __init__(self, descriptor: "EmulatorDescriptor", key):
-        super().__init__(descriptor, key)
+    def __init__(self, descriptor: "EmulatorDescriptor", **kwargs):
+        super().__init__(descriptor, **kwargs)
 
         if mc.KEY_FAN not in descriptor.digest:
             # map100

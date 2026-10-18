@@ -17,8 +17,8 @@ if TYPE_CHECKING:
 
 
 class LightMixin(Emulator if TYPE_CHECKING else object):
-    def __init__(self, descriptor: "EmulatorDescriptor", key):
-        super().__init__(descriptor, key)
+    def __init__(self, descriptor: "EmulatorDescriptor", **kwargs):
+        super().__init__(descriptor, **kwargs)
 
         try:
             get_element_by_key(
