@@ -13,6 +13,7 @@ from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
 
 from custom_components.meross_lan import const as mlc
+from custom_components.meross_lan.config_flow import ConfigFlow
 from custom_components.meross_lan.merossclient import cloudapi, fmt_macaddress
 from custom_components.meross_lan.merossclient.client import Transport
 from custom_components.meross_lan.merossclient.protocol import (
@@ -463,6 +464,80 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
                     r"the configured one \(uuid:\S*\)"
                 ),
             )
+
+
+async def test_dhcp_renewal_retry_config_flow(
+    request, hass: "HomeAssistant", aioclient_mock, monkeypatch
+):
+    """
+    A device that has just joined the network is often not answering http yet when
+    its DHCP request is seen: the check of the new address must be retried instead of
+    leaving the entry on its old (stale) host.
+    """
+    device_type = mc.TYPE_MTS200
+    flow = hass.config_entries.flow
+    monkeypatch.setattr(
+        ConfigFlow, "DHCP_VERIFY_RETRY_DELAYS", (0, 0, 0), raising=False
+    )
+    _async_http_discovery = ConfigFlow._async_http_discovery
+    attempts = 0
+    unreachable_attempts = 0
+
+    async def _async_http_discovery_flaky(self, host, key):
+        nonlocal attempts
+        attempts += 1
+        if attempts <= unreachable_attempts:
+            raise OSError(f"Connect call failed ('{host}', 80)")
+        return await _async_http_discovery(self, host, key)
+
+    monkeypatch.setattr(
+        ConfigFlow, "_async_http_discovery", _async_http_discovery_flaky
+    )
+
+    async with helpers.DeviceContext(
+        request, hass, device_type, auto_poll=True
+    ) as device_context:
+
+        device = device_context.device
+        device_macaddress = device.descriptor.macAddress
+        original_host = device.host
+        emulator_dhcp = helpers.build_emulator(
+            device_type, key=device.key, uuid=device.id
+        )
+
+        # never answering: every attempt is used, then the entry keeps its host
+        DHCP_DEAD_HOST = "77.77.77.77"
+        attempts = 0
+        unreachable_attempts = 99
+        result = await flow.async_init(
+            mlc.DOMAIN,
+            context={"source": config_entries.SOURCE_DHCP},
+            data=DhcpServiceInfo(DHCP_DEAD_HOST, "", fmt_macaddress(device_macaddress)),
+        )
+        assert result["type"] == FlowResultType.ABORT  # type: ignore
+        await hass.async_block_till_done()
+        assert attempts == len(ConfigFlow.DHCP_VERIFY_RETRY_DELAYS) + 1
+        assert device.host == original_host, "device host was wrongly updated"
+
+        # answering on the third attempt: the entry follows the device
+        DHCP_GOOD_HOST = "88.88.88.88"
+        async with helpers.EmulatorContext(
+            emulator_dhcp, aioclient_mock, host=DHCP_GOOD_HOST
+        ):
+            attempts = 0
+            unreachable_attempts = 2
+            result = await flow.async_init(
+                mlc.DOMAIN,
+                context={"source": config_entries.SOURCE_DHCP},
+                data=DhcpServiceInfo(
+                    DHCP_GOOD_HOST, "", fmt_macaddress(device_macaddress)
+                ),
+            )
+            assert result["type"] == FlowResultType.ABORT  # type: ignore
+            assert result["reason"] == "already_configured"  # type: ignore
+            await hass.async_block_till_done()
+            assert attempts == 3
+            assert device.host == DHCP_GOOD_HOST, "device host was not updated"
 
 
 async def test_device_options_flow(request, hass: "HomeAssistant"):
