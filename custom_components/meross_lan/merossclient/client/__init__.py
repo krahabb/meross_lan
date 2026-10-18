@@ -482,7 +482,7 @@ class AbstractClient(logging.Loggable):
                             timerules += [_timerule_from_pytz(_idx) for _idx in range(min(19, len(tz_pytz._transition_info)))]  # type: ignore
                             return timerules
                         else:
-                            return [_timerule_from_pytz(_idx) for _idx in range(idx - 1, max(idx + 19, len(tz_pytz._transition_info)))]  # type: ignore
+                            return [_timerule_from_pytz(_idx) for _idx in range(idx - 1, min(idx + 19, len(tz_pytz._transition_info)))]  # type: ignore
 
                     elif isinstance(tz_pytz, pytz.tzinfo.StaticTzInfo):
                         utcoffset = tz_pytz.utcoffset(None)
@@ -498,10 +498,11 @@ class AbstractClient(logging.Loggable):
                     ),
                 }
 
-            except Exception as exception:
-                raise Exception(
-                    "Error building timezone rules for timezone '%s'" % tzname
-                ) from exception
+            except Exception as e:
+                self.log_exception(
+                    self.WARNING, e, "async_configure_timezone(%s)", tzname
+                )
+                raise
 
         else:
             p_time = {mc.KEY_TIMEZONE: "", mc.KEY_TIMERULE: []}

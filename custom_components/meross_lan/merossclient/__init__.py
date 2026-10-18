@@ -352,6 +352,13 @@ _AVAILABLE_TIMEZONES = []
 
 
 async def async_available_timezones():
+    """
+    Returns a sorted list of tznames as found on the system.
+    This is an async friendly version of zoneinfo.available_timezones
+    which also removes 'pathological' tznames which are likely no use for the scope.
+    The main purpose for this api is to have a list of tznames to be used for Meross
+    devices time zone configuration.
+    """
     if _AVAILABLE_TIMEZONES:
         return _AVAILABLE_TIMEZONES
 
@@ -359,9 +366,27 @@ async def async_available_timezones():
         """
         These functions will use low levels imports and HA core 2024.5
         complains about executing it in the main loop thread. We'll
-        so run these in an executor
+        so run these in an executor.
+        The remove pattern here has been suggested by Gemini as a comprehensive rule to
+        filter out unwanted zone names
         """
-        return sorted(zoneinfo.available_timezones())
+        # Comprehensive regex to catch:
+        # 1. Single-word legacy/placeholders (e.g., 'localtime', 'Factory', 'GMT', 'Cuba')
+        # 2. Administrative zones (e.g., 'Etc/GMT+5')
+        # 3. Legacy fixed-offset zones (e.g., 'EST5EDT', 'W-SU')
+        UNWANTED_TZ_PATTERN = re.compile(
+            r"^[^/]+$|"  # No slash (e.g., Factory, localtime, GMT, Egypt)
+            r"^Etc/|"  # Starts with Etc/
+            r"^[A-Z]{3,4}\d[A-Z]{3,4}$"  # Legacy standard/daylight patterns (e.g., EST5EDT)
+        )
+
+        return sorted(
+            [
+                tzname
+                for tzname in zoneinfo.available_timezones()
+                if not UNWANTED_TZ_PATTERN.match(tzname)
+            ]
+        )
 
     async with _ASYNC_LOCK:
         if not _AVAILABLE_TIMEZONES:
