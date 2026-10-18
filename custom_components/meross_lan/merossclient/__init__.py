@@ -81,13 +81,13 @@ try:
         def http_random_timeout():
             if MEROSSDEBUG.http_disc_end:
                 if time() < MEROSSDEBUG.http_disc_end:
-                    raise asyncio.TimeoutError()
+                    raise TimeoutError()
                 MEROSSDEBUG.http_disc_end = 0
                 return
 
             if randint(0, 99) < MEROSSDEBUG.http_disc_probability:
                 MEROSSDEBUG.http_disc_end = time() + MEROSSDEBUG.http_disc_duration
-                raise asyncio.TimeoutError()
+                raise TimeoutError()
 
 except Exception:
     MEROSSDEBUG = None  # type: ignore

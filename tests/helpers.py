@@ -1218,7 +1218,7 @@ class MQTTConnectionMocker(contextlib.AbstractContextManager):
     async def async_request_raw(
         self, mqttconnection: mlq.MQTTConnection, request: "MerossMessage", /, **kwargs
     ):
-        raise asyncio.TimeoutError()
+        raise TimeoutError()
 
     async def async_publish_raw(
         self, mqttconnection: mlq.MQTTConnection, request: "MerossMessage", /, **kwargs
