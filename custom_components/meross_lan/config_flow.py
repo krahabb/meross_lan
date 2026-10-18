@@ -1017,6 +1017,31 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
             api.log_exception(api.DEBUG, e, "async_step_bluetooth")
             return self.async_abort(reason=FlowErrorKey.CANNOT_CONNECT)
 
+    # A device that has just (re)joined the network is often not answering http yet when
+    # its DHCP request is seen, and later lease renewals are unicast (HA never sees them), so a
+    # single failed check would leave the entry on a stale address for good. Keep trying for a
+    # few minutes before giving up. A key error is a definite answer and is not retried.
+    DHCP_VERIFY_RETRY_DELAYS = (5, 10, 15, 30, 30, 60, 60)
+
+    async def _async_http_discovery_retry(self, host: str, key: str | None):
+        for delay in (*self.DHCP_VERIFY_RETRY_DELAYS, None):
+            try:
+                return await self._async_http_discovery(host, key)
+            except MerossKeyError:
+                raise
+            except Exception as e:
+                if delay is None:
+                    raise
+                api = self.api
+                api.log(
+                    api.DEBUG,
+                    "DHCP verify of %s failed (%s): retrying in %s s",
+                    host,
+                    str(e),
+                    delay,
+                )
+                await asyncio.sleep(delay)
+
     async def async_step_dhcp(self, discovery_info: "DhcpServiceInfo"):
         api = self.api
         api.log(api.DEBUG, "received dhcp discovery: %s", str(discovery_info))
@@ -1047,7 +1072,7 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
                             # before updating, check the host ip is 'really' valid
                             try:
                                 _device_config, _descriptor = (
-                                    await self._async_http_discovery(
+                                    await self._async_http_discovery_retry(
                                         host, entry_data.get(mlc.CONF_KEY)
                                     )
                                 )
