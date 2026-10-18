@@ -217,7 +217,7 @@ OBFUSCATE_KEYS: dict[str, ObfuscateRule] = {
     #
     # These keys are typically used in logging._Logger to match keyvalue arguments that need to be obfuscated when
     # sent to the underlying Logger. Due to the hierarchical nature of logging.Loggable, this allows
-    # to control the effective obfuscation at an higher level in the Loggavles runtime instance tree.
+    # to control the effective obfuscation at an higher level in the Loggables runtime instance tree.
     # The logging code actually matches any key in OBFUSCATE_KEYS and applies the obfuscation rule to
     # the value before sending it to the underlying Logger.
     #
