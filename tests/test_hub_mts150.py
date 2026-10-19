@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.helpers import entity_registry as er
 
+from custom_components.meross_lan.climate import MtsClimate
 from custom_components.meross_lan.devices.hub.mts import mts150
 from custom_components.meross_lan.merossclient.protocol import const as mc
 from custom_components.meross_lan.sensor import SensorEntity
@@ -50,6 +51,8 @@ async def test_mts150_motor_sensors(request, hass: "HomeAssistant"):
             assert position.native_value == p_digest[mc.KEY_MOTORCURLOCATION]
             assert start_count.native_value == p_digest[mc.KEY_MOTORSTARTCTR]
             assert start_count.state_class is SensorEntity.StateClass.TOTAL_INCREASING
+            # the valves in the trace are on and open while reporting 'heating': 0
+            assert valve.hvac_action is MtsClimate.HVACAction.HEATING
             for sensor in (position, start_count):
                 assert sensor.entity_id
                 registry_entry = entity_registry.async_get(sensor.entity_id)
@@ -77,6 +80,21 @@ async def test_mts150_motor_sensors(request, hass: "HomeAssistant"):
             valve.sensor_motor_start_count.native_value  # type: ignore
             == p_digest[mc.KEY_MOTORSTARTCTR]
         )
+        assert valve.hvac_action is MtsClimate.HVACAction.HEATING
+        # a temperature update carrying 'heating': 0 doesn't override the motor state
+        p_temperature = dict(valve.ns_value)
+        p_temperature[mc.KEY_ROOM] += 5
+        p_temperature[mc.KEY_HEATING] = 0
+        valve(p_temperature)  # type: ignore
+        assert valve.hvac_action is MtsClimate.HVACAction.HEATING
+
+        # the valve closes
+        p_digest[mc.KEY_MOTORCURLOCATION] = 0
+        p_digest[mc.KEY_MOTORSTARTCTR] += 1
+        p_digest[mc.KEY_MOTORTOTALPATH] += 1504
+        await _async_poll_digest()
+        assert valve.sensor_motor_position.native_value == 0  # type: ignore
+        assert valve.hvac_action is MtsClimate.HVACAction.IDLE
 
         # after a hub reboot the digest reports 0 for every motor key
         p_digest[mc.KEY_MOTORCURLOCATION] = 0
@@ -85,3 +103,4 @@ async def test_mts150_motor_sensors(request, hass: "HomeAssistant"):
         await _async_poll_digest()
         assert valve.sensor_motor_position.native_value is None  # type: ignore
         assert valve.sensor_motor_start_count.native_value is None  # type: ignore
+        assert valve.hvac_action is MtsClimate.HVACAction.IDLE

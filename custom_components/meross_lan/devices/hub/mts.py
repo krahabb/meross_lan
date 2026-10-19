@@ -391,6 +391,17 @@ class mts150(mts100):
                 PidGradeSelect(self)
             )
 
+    # interface: MtsClimate
+    @override
+    def flush_state(self, /):
+        # The mts150 always reports 'heating': 0 so, when the digest carries the
+        # valve motor position, we use it to tell if the valve is open (heating).
+        if self.sensor_motor_position and (
+            (position := self.sensor_motor_position.native_value) is not None
+        ):
+            self._mts_active = position > 0
+        mts100.flush_state(self)
+
     @override
     def _parse_digest_(self, payload: "mt.hub._mts150", /):
         """parse digest key for mts150/mts150p subdevice"""
@@ -437,3 +448,5 @@ class mts150(mts100):
                 state_class=SensorEntity.StateClass.TOTAL_INCREASING,
                 native_value=start_count,
             )
+        if (position is not None) and ((position > 0) != bool(self._mts_active)):
+            self.flush_state()
