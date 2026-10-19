@@ -13,6 +13,7 @@ from custom_components.meross_lan.sensor import (
     EnumParser,
     FilterMaintenanceSensor,
     ProtocolSensor,
+    SensorEntity,
     SensorParser,
     SignalStrengthSensor,
 )
@@ -106,8 +107,10 @@ class EntityTest(EntityComponentTest):
             SensorParser
         ],  # additional (disabled) current temperature sensor
         mc.TYPE_MTS150: [
-            SensorParser
-        ],  # additional (disabled) current temperature sensor
+            SensorParser,  # additional (disabled) current temperature sensor
+            SensorEntity,  # (disabled) motor position
+            SensorEntity,  # (disabled) motor start count
+        ],
         mc.KEY_SMOKEALARM: [
             ms.gs559,
             EnumParser,

@@ -6,6 +6,7 @@ from ...binary_sensor import BinarySensorEntity
 from ...climate import MtsClimate
 from ...number import NumberParser
 from ...select import SelectParser
+from ...sensor import SensorEntity
 from ...switch import EmulatedSwitch, SwitchParser
 
 if TYPE_CHECKING:
@@ -291,6 +292,13 @@ mts100v3 = mts100
 class mts150(mts100):
     """Climate entity for hub paired devices MTS150, MTS150P"""
 
+    if TYPE_CHECKING:
+        sensor_motor_position: SensorEntity | None
+        sensor_motor_start_count: SensorEntity | None
+
+    _AUTO_INIT = ("sensor_motor_position", "sensor_motor_start_count")
+    _AUTO_DESTROY = ("sensor_motor_position", "sensor_motor_start_count")
+
     class PidGradeSelect(SelectParser):
 
         class Option(StrEnum):
@@ -391,3 +399,41 @@ class mts150(mts100):
             self._mts_mode = mode
             # TODO: parse more keys?
             self.flush_state()
+        if mc.KEY_MOTORCURLOCATION in payload:
+            self._parse_motor(payload)
+
+    # interface: self
+    def _parse_motor(self, payload: "mt.hub._mts150", /):
+        """Valve motor state carried in the digest: 'motorCurLocation' is the motor position
+        in pulses (0 = fully closed) and 'motorStartCtr' counts the motor starts."""
+        # After a hub reboot all the motor keys read 0 until the valve reports again
+        # so we're not trusting them until 'motorTotalPath' is set.
+        if payload.get(mc.KEY_MOTORTOTALPATH) == 0:
+            position = start_count = None
+        else:
+            position = payload[mc.KEY_MOTORCURLOCATION]
+            start_count = payload.get(mc.KEY_MOTORSTARTCTR)
+        if self.sensor_motor_position:
+            self.sensor_motor_position.update_native_value(position)
+        else:
+            self.sensor_motor_position = SensorEntity(
+                self,
+                entity_key=mc.KEY_MOTORCURLOCATION,
+                name="Motor position",
+                icon="mdi:valve",
+                entity_registry_enabled_default=False,
+                state_class=SensorEntity.StateClass.MEASUREMENT,
+                native_value=position,
+            )
+        if self.sensor_motor_start_count:
+            self.sensor_motor_start_count.update_native_value(start_count)
+        elif mc.KEY_MOTORSTARTCTR in payload:
+            self.sensor_motor_start_count = SensorEntity(
+                self,
+                entity_key=mc.KEY_MOTORSTARTCTR,
+                name="Motor start count",
+                icon="mdi:counter",
+                entity_registry_enabled_default=False,
+                state_class=SensorEntity.StateClass.TOTAL_INCREASING,
+                native_value=start_count,
+            )
