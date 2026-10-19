@@ -7,7 +7,8 @@ a dedicated unit for each of them would increase the number of small modules.
 from typing import TYPE_CHECKING, override
 
 from .. import const as mlc
-from ..merossclient.device.handler import MappingParser, NamespaceHandler
+from ..helpers import entity as mle
+from ..merossclient.device.handler import MappingParser
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..merossclient.protocol.namespaces import thermostat as mn_t
 from ..number import NumberParser
@@ -105,6 +106,22 @@ class Mts200HumiSensor(SensorParser):
         except KeyError:
             # not an mts200?
             pass
+
+
+class LedMode(SelectParser, mle.EntityNamespaceMixin):
+    """
+    SelectEntity class for Appliance.System.LedMode namespace.
+    """
+
+    _INIT_ns = mn.Appliance_System_LedMode
+    _INIT_key_value = SelectParser.KeyValue(mc.KEY_MODE)
+    _INIT_entity_key = f"{_INIT_ns.slug}__{_INIT_key_value}"
+
+    _INIT_options_map = {
+        0: "off",
+        1: "power",
+        2: "night",
+    }
 
 
 class SensorLatestParser(MappingParser):

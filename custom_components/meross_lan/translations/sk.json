@@ -152,6 +152,14 @@
                     "3": "Stredná",
                     "4": "Silná"
                 }
+            },
+            "appliance_system_ledmode-mode": {
+                "name": "Led mode",
+                "state": {
+                    "off": "Off",
+                    "power": "Power",
+                    "night": "Night"
+                }
             }
         }
     },
@@ -418,13 +426,13 @@
         "device_timezone": {
             "title": "Časové pásmo zariadenia {device_name} nie je nastavené alebo sa líši od predvoleného nastavenia služby Home Assistant",
             "fix_flow": {
-                "abort": {
-                    "repair_failed": "Opravu sa nepodarilo dokončiť: {error}"
-                },
                 "step": {
                     "confirm": {
                         "title": "Časové pásmo zariadenia {device_name} nie je nastavené alebo sa líši od predvoleného nastavenia služby Home Assistant"
                     }
+                },
+                "abort": {
+                    "repair_failed": "Opravu sa nepodarilo dokončiť: {error}"
                 }
             }
         },

@@ -82,6 +82,10 @@ class Debug(TypedDict):
     hub: NotRequired[Debug_Hub]
 
 
+class LedMode(TypedDict):
+    mode: int  # 0: Off - 1: Power mode - 2: Night mode
+
+
 class Hardware(TypedDict):
     """Appliance.System.Hardware"""
 

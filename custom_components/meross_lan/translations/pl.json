@@ -152,6 +152,14 @@
                     "3": "Middle",
                     "4": "Strong"
                 }
+            },
+            "appliance_system_ledmode-mode": {
+                "name": "Led mode",
+                "state": {
+                    "off": "Off",
+                    "power": "Power",
+                    "night": "Night"
+                }
             }
         }
     },
@@ -418,13 +426,13 @@
         "device_timezone": {
             "title": "Strefa czasowa dla {device_name} nie jest ustawiona lub różni się od domyślnej strefy Home Assistant'a",
             "fix_flow": {
-                "abort": {
-                    "repair_failed": "Nie udało się ukończyć naprawy: {error}"
-                },
                 "step": {
                     "confirm": {
                         "title": "Strefa czasowa dla {device_name} nie jest ustawiona lub różni się od domyślnej strefy Home Assistant'a"
                     }
+                },
+                "abort": {
+                    "repair_failed": "Nie udało się ukończyć naprawy: {error}"
                 }
             }
         },

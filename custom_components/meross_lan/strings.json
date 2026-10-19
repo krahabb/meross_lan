@@ -99,6 +99,14 @@
                     "3": "Middle",
                     "4": "Strong"
                 }
+            },
+            "appliance_system_ledmode-mode": {
+                "name": "Led mode",
+                "state": {
+                    "off": "Off",
+                    "power": "Power",
+                    "night": "Night"
+                }
             }
         },
         "sensor": {

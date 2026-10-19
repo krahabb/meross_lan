@@ -152,6 +152,14 @@
                     "3": "Middle",
                     "4": "Strong"
                 }
+            },
+            "appliance_system_ledmode-mode": {
+                "name": "Led mode",
+                "state": {
+                    "off": "Off",
+                    "power": "Power",
+                    "night": "Night"
+                }
             }
         }
     },
@@ -418,13 +426,13 @@
         "device_timezone": {
             "title": "Le fuseau horaire pour {device_name} n'est pas défini ou diffère de celui par défaut de HomeAssistant",
             "fix_flow": {
-                "abort": {
-                    "repair_failed": "Impossible de terminer la réparation : {error}"
-                },
                 "step": {
                     "confirm": {
                         "title": "Le fuseau horaire pour {device_name} n'est pas défini ou diffère de celui par défaut de HomeAssistant"
                     }
+                },
+                "abort": {
+                    "repair_failed": "Impossible de terminer la réparation : {error}"
                 }
             }
         },

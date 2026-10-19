@@ -152,6 +152,14 @@
                     "3": "Middle",
                     "4": "Strong"
                 }
+            },
+            "appliance_system_ledmode-mode": {
+                "name": "Led mode",
+                "state": {
+                    "off": "Off",
+                    "power": "Power",
+                    "night": "Night"
+                }
             }
         }
     },
@@ -418,13 +426,13 @@
         "device_timezone": {
             "title": "Time zone for {device_name} is not set or different from HomeAssistant default",
             "fix_flow": {
-                "abort": {
-                    "repair_failed": "Could not complete the repair: {error}"
-                },
                 "step": {
                     "confirm": {
                         "title": "Time zone for {device_name} is not set or different from HomeAssistant default"
                     }
+                },
+                "abort": {
+                    "repair_failed": "Could not complete the repair: {error}"
                 }
             }
         },

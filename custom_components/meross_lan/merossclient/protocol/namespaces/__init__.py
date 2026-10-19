@@ -1237,6 +1237,9 @@ Appliance_System_Firmware = ns(
 Appliance_System_Hardware = ns(
     "Appliance.System.Hardware", mc.KEY_HARDWARE, -1, G_E, C_CON
 )
+Appliance_System_LedMode = ns(
+    "Appliance.System.LedMode", mc.KEY_LEDMODE, 24, G_E, S_D, C_CFG
+)
 Appliance_System_Log = ns("Appliance.System.Log", mc.KEY_, -1)  # unknown payload
 Appliance_System_Online = ns(
     "Appliance.System.Online", mc.KEY_ONLINE, -1, G_E, PSH, C_INF

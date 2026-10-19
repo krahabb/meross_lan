@@ -428,6 +428,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         mn.Appliance_System_Clock: FACTORY_IGNORE,
         mn.Appliance_System_Debug: FACTORY_IGNORE,
         mn.Appliance_System_DNDMode: NamespaceHandler.Factory(".light.DNDLight"),
+        mn.Appliance_System_LedMode: NamespaceHandler.Factory(".devices.misc.LedMode"),
         mn.Appliance_System_Online: FACTORY_IGNORE,
         mn.Appliance_System_Report: FACTORY_IGNORE,
         mn.Appliance_System_Runtime: NamespaceHandler.Factory(

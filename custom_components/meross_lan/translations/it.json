@@ -152,6 +152,14 @@
                     "3": "Medio",
                     "4": "Forte"
                 }
+            },
+            "appliance_system_ledmode-mode": {
+                "name": "Led mode",
+                "state": {
+                    "off": "Off",
+                    "power": "Giorno",
+                    "night": "Notte"
+                }
             }
         }
     },
@@ -418,13 +426,13 @@
         "device_timezone": {
             "title": "Il fuso orario per {device_name} non è impostato o è diverso dal predefinito di HomeAssistant",
             "fix_flow": {
-                "abort": {
-                    "repair_failed": "Impossibile completare la riparazione: {error}"
-                },
                 "step": {
                     "confirm": {
                         "title": "Il fuso orario per {device_name} non è impostato o è diverso dal predefinito di HomeAssistant"
                     }
+                },
+                "abort": {
+                    "repair_failed": "Impossibile completare la riparazione: {error}"
                 }
             }
         },

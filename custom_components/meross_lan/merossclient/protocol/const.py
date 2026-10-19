@@ -267,6 +267,7 @@ KEY_UPGRADE = "upgrade"
 KEY_URL = "url"
 KEY_MD5 = "md5"
 KEY_MCU = "mcu"
+KEY_LEDMODE = "LedMode"
 # Appliance.Config.DeviceCfg keys
 KEY_CALIBRATECFG = "calibrateCfg"
 KEY_TIMECFG = "timeCfg"
