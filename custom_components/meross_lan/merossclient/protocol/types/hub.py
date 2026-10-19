@@ -262,6 +262,9 @@ class Digest_mts100v3(Digest_SubDevice):
 
 class _mts150(TypedDict):
     mode: int
+    motorCurLocation: NotRequired[int]
+    motorStartCtr: NotRequired[int]
+    motorTotalPath: NotRequired[int]
     # TODO: more keys
 
 
