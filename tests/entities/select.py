@@ -1,17 +1,17 @@
 from homeassistant.components import select as haec
 
 from custom_components.meross_lan import climate, select
-from custom_components.meross_lan.devices import ms600
-from custom_components.meross_lan.devices.diffuser import DiffuserSpray
-from custom_components.meross_lan.devices.spray import Spray
+from custom_components.meross_lan.devices import diffuser, misc, ms600, spray
 from custom_components.meross_lan.devices.thermostat import (
     MtsHoldAction,
     MtsTempUnit,
-    mn,
     mn_t,
 )
 from custom_components.meross_lan.devices.thermostat.mts300 import Mts300Climate
-from custom_components.meross_lan.merossclient.protocol import const as mc
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 
 from tests.entities import EntityComponentTest
 
@@ -25,8 +25,8 @@ class EntityTest(EntityComponentTest):
             mc.KEY_MODE: [climate.MtsClimate.TrackSensorSelect],
             mc.KEY_MODEB: [climate.MtsClimate.TrackSensorSelect],
         },
-        mc.KEY_SPRAY: [Spray],
-        mc.KEY_DIFFUSER: {mc.KEY_SPRAY: [DiffuserSpray]},
+        mc.KEY_SPRAY: [spray.Spray],
+        mc.KEY_DIFFUSER: {mc.KEY_SPRAY: [diffuser.DiffuserSpray]},
     }
     NAMESPACES_ENTITIES = {
         mn.Appliance_Config_Alarm: [select.SelectParser],
@@ -39,6 +39,7 @@ class EntityTest(EntityComponentTest):
         ],
         mn_t.Appliance_Control_Thermostat_HoldAction: [MtsHoldAction],
         mn_t.Appliance_Control_Thermostat_ModeC: [climate.MtsClimate.TrackSensorSelect],
+        mn.Appliance_System_LedMode: [misc.LedMode],
     }
     HUB_SUBDEVICES_ENTITIES = {
         mc.TYPE_MTS100: [climate.MtsClimate.TrackSensorSelect],
