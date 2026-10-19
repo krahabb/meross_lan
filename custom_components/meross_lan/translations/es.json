@@ -419,7 +419,7 @@
             "title": "La zona horaria para {device_name} no está establecida o es diferente de la predeterminada de HomeAssistant",
             "fix_flow": {
                 "abort": {
-                    "cannot_connect": "No es posible conectarse"
+                    "repair_failed": "No se pudo completar la reparación: {error}"
                 },
                 "step": {
                     "confirm": {

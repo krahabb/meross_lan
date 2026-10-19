@@ -43,12 +43,13 @@ class DeviceTimeZoneRepairFlow(SimpleRepairFlow):
             )
             try:
                 device: "Device" = getattr(config_entry, "runtime_data")
-                await device.async_configure_timezone(
-                    getattr(dt_util.DEFAULT_TIME_ZONE, "key")
-                )
+                await device.async_configure_timezone(str(dt_util.DEFAULT_TIME_ZONE))
                 return self.async_create_entry(data={})
-            except Exception:
-                return self.async_abort(reason="cannot_connect")
+            except Exception as e:
+                return self.async_abort(
+                    reason="repair_failed",
+                    description_placeholders={"error": str(e) or e.__class__.__name__},
+                )
 
         return await super().async_step_confirm(user_input)
 

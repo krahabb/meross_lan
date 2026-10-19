@@ -419,7 +419,7 @@
             "title": "Časové pásmo zariadenia {device_name} nie je nastavené alebo sa líši od predvoleného nastavenia služby Home Assistant",
             "fix_flow": {
                 "abort": {
-                    "cannot_connect": "Nedá sa pripojiť"
+                    "repair_failed": "Opravu sa nepodarilo dokončiť: {error}"
                 },
                 "step": {
                     "confirm": {

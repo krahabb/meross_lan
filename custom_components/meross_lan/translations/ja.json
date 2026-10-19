@@ -419,7 +419,7 @@
             "title": "{device_name}のタイムゾーンが設定されていないか、HomeAssistantのデフォルトと異なります",
             "fix_flow": {
                 "abort": {
-                    "cannot_connect": "接続できません"
+                    "repair_failed": "修復を完了できませんでした: {error}"
                 },
                 "step": {
                     "confirm": {

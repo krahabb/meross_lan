@@ -419,7 +419,7 @@
             "title": "Le fuseau horaire pour {device_name} n'est pas défini ou diffère de celui par défaut de HomeAssistant",
             "fix_flow": {
                 "abort": {
-                    "cannot_connect": "Pas de connect"
+                    "repair_failed": "Impossible de terminer la réparation : {error}"
                 },
                 "step": {
                     "confirm": {

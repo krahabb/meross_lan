@@ -419,7 +419,7 @@
             "title": "Die Zeitzone für {device_name} ist nicht eingestellt oder unterscheidet sich von der HomeAssistant-Standard",
             "fix_flow": {
                 "abort": {
-                    "cannot_connect": "Verbindung nicht möglich"
+                    "repair_failed": "Die Reparatur konnte nicht abgeschlossen werden: {error}"
                 },
                 "step": {
                     "confirm": {

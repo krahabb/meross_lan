@@ -419,7 +419,7 @@
             "title": "Strefa czasowa dla {device_name} nie jest ustawiona lub różni się od domyślnej strefy Home Assistant'a",
             "fix_flow": {
                 "abort": {
-                    "cannot_connect": "Nie można się połączyć"
+                    "repair_failed": "Nie udało się ukończyć naprawy: {error}"
                 },
                 "step": {
                     "confirm": {
