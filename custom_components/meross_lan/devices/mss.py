@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, override
 from homeassistant.util import dt as dt_util
 
 from .. import const as mlc
-from ..helpers.entity import EntityNamespaceMixin
 from ..merossclient.device.handler import NamespaceHandler
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..sensor import EnumParser, SensorParser
@@ -18,16 +17,13 @@ if TYPE_CHECKING:
     from ..merossclient.protocol import types as mt
 
 
-class _ElectricitySensor(SensorParser.RestoreEntity, SensorParser):
+class ElectricitySensor(SensorParser.RestoreEntity, SensorParser):
     """
     This sensor acts as the main parser for 'Electricity' and 'ElectricityX' namespaces
     taking care of power, current, voltage, etc, sensors for the same channel.
     It also implements a trapezoidal estimator for energy consumption. Based on observations
     this estimate is falling a bit behind the consumption reported from the device at least
     when the power is very low (likely due to power readings being a bit off).
-    BEWARE: even though this could be a candidate for mixing with EntityNamespaceMixin when
-    handling *.Electricity ns, it would instead be wrong when managing *.ElectricityX ns
-    since it gets instanced once for every channel.
     """
 
     if TYPE_CHECKING:
@@ -172,15 +168,11 @@ class _ElectricitySensor(SensorParser.RestoreEntity, SensorParser):
         self.update_native_value(0)
 
 
-class ElectricitySensor(_ElectricitySensor, EntityNamespaceMixin):
-    pass
-
-
-class ElectricityXSensor(_ElectricitySensor):
+class ElectricityXSensor(ElectricitySensor):
 
     if TYPE_CHECKING:
 
-        class Args(_ElectricitySensor.Args):
+        class Args(ElectricitySensor.Args):
             pass
 
     class MConsumeSensor(SensorParser):
@@ -216,7 +208,7 @@ class ElectricityXSensor(_ElectricitySensor):
                     pass
                 return True
 
-    ENTITY_DEFS = _ElectricitySensor.ENTITY_DEFS | {
+    ENTITY_DEFS = ElectricitySensor.ENTITY_DEFS | {
         mc.KEY_VOLTAGE: SensorParser.DEF(
             device_class=SensorParser.DeviceClass.VOLTAGE,
             state_class=SensorParser.StateClass.MEASUREMENT,
@@ -381,9 +373,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         await self.async_polling_strategy_smart()
 
 
-class ConsumptionXSensor(
-    SensorParser.RestoreEntity, SensorParser, EntityNamespaceMixin
-):
+class ConsumptionXSensor(SensorParser.RestoreEntity, SensorParser):
 
     if TYPE_CHECKING:
         ATTR_OFFSET: Final
@@ -428,7 +418,6 @@ class ConsumptionXSensor(
         self._tomorrow_midnight_epoch = 0  # 12:00 am tomorrow
         self.extra_state_attributes = {}
         SensorParser.__init__(self, *args, **kwargs)
-        self.polling_response_size_adj(30)  # maximum item count for payload
         self.parent.enable_check_device_time()
 
     def set_unavailable(self):
@@ -451,6 +440,7 @@ class ConsumptionXSensor(
         # device reading data). If an entity is disabled on startup of course our state
         # will start resetted and our sums will restart (disabled means not interesting
         # anyway)
+        self.handler_ns.polling_response_size_adj(30)  # maximum item count for payload
         if (self.native_value is None) and not self.extra_state_attributes:
             with self.exception_warning("restoring previous state"):
                 if restored_state := self._async_get_restored_data():
@@ -479,15 +469,14 @@ class ConsumptionXSensor(
         await super().async_added_to_hass()
 
     @override
-    def _handle(self, message: "MerossMessage", /):
+    def __call__(self, days: "list[mt.control.ConsumptionX]", /):
         device = self.parent
-        days = message.payload[mc.KEY_CONSUMPTIONX]
         if device.device_timestamp > self._tomorrow_midnight_epoch:
             # we're optimizing the payload response_size calculation
             # so our multiple requests are more reliable. If anything
             # goes wrong, the Device multiple payload managment
             # is smart enough to adapt to wrong estimates
-            self.polling_response_size_adj(len(days))
+            self.handler_ns.polling_response_size_adj(len(days))
             # catch the device starting a new day since our last update (yesterday)
             devtime = device.get_device_datetime(device.device_timestamp)
             devtime_today_midnight = datetime(
@@ -534,7 +523,7 @@ class ConsumptionXSensor(
             self.reset_consumption()
             return
 
-        day_last: dict = days[-1]
+        day_last = days[-1]
         day_last_time: int = day_last[mc.KEY_TIME]
 
         if day_last_time < self._today_midnight_epoch:
@@ -602,7 +591,7 @@ class ConsumptionXSensor(
         self.log(self.DEBUG, "updating consumption=%d", day_last_value)
 
     # interface: self
-    def reset_consumption(self):
+    def reset_consumption(self, /):
         if self.native_value != 0:
             self.native_value = 0
             self.extra_state_attributes = {}
@@ -612,7 +601,7 @@ class ConsumptionXSensor(
             self.log(self.DEBUG, "no readings available for new day - resetting")
 
 
-class OverTempEnableSwitch(SwitchParser, EntityNamespaceMixin):
+class OverTempEnableSwitch(SwitchParser):
 
     _INIT_entity_key = "config_overtemp_enable"
     _INIT_key_value = SwitchParser.KeyValue(mc.KEY_ENABLE)
@@ -620,9 +609,8 @@ class OverTempEnableSwitch(SwitchParser, EntityNamespaceMixin):
     _SLOTS = ("sensor_overtemp_type",)
 
     @override
-    def _handle(self, message: "MerossMessage", /):
+    def __call__(self, payload: "mt.config.OverTemp", /):
         """{"overTemp": {"enable": 1,"type": 1}}"""
-        payload = message.payload[mc.KEY_OVERTEMP]
         self.update_device_value(payload[mc.KEY_ENABLE])
         try:
             type = payload[mc.KEY_TYPE]

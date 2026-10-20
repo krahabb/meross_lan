@@ -342,7 +342,7 @@ class ProtocolSensor(EnumSensorEntity):
         self.schedule_flush_state()
 
 
-class SignalStrengthSensor(SensorParser, mle.EntityNamespaceMixin):
+class SignalStrengthSensor(SensorParser):
 
     _INIT_entity_key = "signal_strength"
     _INIT_key_value = SensorParser.KeyValue(mc.KEY_SIGNAL)

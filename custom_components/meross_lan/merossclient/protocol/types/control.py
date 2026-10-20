@@ -47,6 +47,22 @@ class Beep(mt.ChannelOnOff):
     """Appliance.Control.Beep"""
 
 
+class ConsumptionX(mt.TypedDict):
+    """Appliance.Control.ConsumptionX
+    Full message payload is as:
+    {
+        "consumptionx":[
+            {"date": "2023-02-10", "time": 1676020378, "value": 0},
+            ...
+        ]
+    }
+    """
+
+    date: str
+    time: int  # Epoch of last measurement of the day (i.e. last update)
+    value: int  # Wh measured for day in date
+
+
 class ConsumptionH(mt.ChannelPayload):
     """Appliance.Control.ConsumptionH"""
 

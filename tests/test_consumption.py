@@ -50,14 +50,6 @@ if TEST_DURATION < 5 * mlc.PARAM_ENERGY_UPDATE_PERIOD:
 DEVICE_TIMEZONE = "Asia/Baku"
 
 
-def _get_sensors(device: "Device"):
-    sensor_consumption = device.ns_handlers[mn.Appliance_Control_ConsumptionX]
-    assert isinstance(sensor_consumption, ConsumptionXSensor)
-    sensor_electricity = device.ns_handlers[mn.Appliance_Control_Electricity]
-    assert isinstance(sensor_electricity, ElectricitySensor)
-    return sensor_consumption, sensor_electricity
-
-
 class DeviceConsumptionContext(helpers.DeviceContext):
 
     def __init__(self, request, hass: "HomeAssistant", tz: dt.tzinfo):
@@ -112,11 +104,9 @@ class DeviceConsumptionContext(helpers.DeviceContext):
 
     async def async_setup(self):
         assert await super().async_setup()
-        self.sensor_consumption: ConsumptionXSensor = self.device.ns_handlers[
-            mn.Appliance_Control_ConsumptionX
-        ]  # type: ignore
+        self.sensor_consumption: ConsumptionXSensor = self.device.entities[ConsumptionXSensor._INIT_entity_key]  # type: ignore
         assert isinstance(self.sensor_consumption, ConsumptionXSensor)
-        self.sensor_electricity: ElectricitySensor = self.device.ns_handlers[mn.Appliance_Control_Electricity]  # type: ignore
+        self.sensor_electricity: ElectricitySensor = self.device.entities[ElectricitySensor._INIT_entity_key]  # type: ignore
         assert isinstance(self.sensor_electricity, ElectricitySensor)
         await self.async_poll_single()
 

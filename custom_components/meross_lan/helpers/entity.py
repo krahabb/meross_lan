@@ -175,56 +175,26 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
             parent = sibling.parent
             self.device_info = sibling.device_info
             # intercept 'index' kwarg used by NamespaceParser mixin
-            # BEWARE: we're relying on the fact that NamespaceParser is effectively initialized only
-            # in Loggable.__init__ since it has no constructor defined.
-            # Also, actually, index is managed by default auto init Loggable mechanics..
+            # eventually provide that by forwarding the sibling one
             index = kwargs.setdefault("index", sibling.index)
-            if index:
-                id = f"{index.slug}_{entity_key}" if entity_key else index.slug
-            else:
-                id = entity_key
         else:
-            parent: "ConfigEntryManager"
             id, parent = args
-            # FIXME/REMOVE:
-            # Setting up a bunch of '_legacy' attributes to check that the new 'id' and 'entity_key'
-            # semantics are consistent with the old ones. This is especially needed to
-            # mantain unique_id compatibility with previous meross_lan versions.
-            if type(id) is mn.Namespace:
-                # TODO: ugly trick...let's see if this can be 'linearized' through some future refactoring.
-                # this is a special case for 'EntityNamespaceMixin' entities which are also NamespaceHandlers
-                # and so they get initialized with the namespace as channel because of constructor layout
-                # and general coding in our inheritance scheme.
-                # In this case we set the channel to None and store the namespace in a dedicated
-                # variable for later use in parsing and so on.
-                if TYPE_CHECKING:
-                    assert isinstance(parent, Device)
-                self.device_info = parent.device_info
-                self.unique_id = f"{parent.id}_{entity_key}"
-                self.handler_ns = self
+            # We're receiving either the channel or the subdevice id in this 'id' variable and
+            # we use it to get the correct device entry for this entity.
+            try:
+                self.device_info = kwargs.pop("device_info")
+            except KeyError:
+                self.device_info = parent.get_device_entry_info(id)
+            try:
+                # don't pop...NamespaceParser (when mixed-in) will use it
+                index = kwargs["index"]  # type: ignore
+            except KeyError:
+                index = Entity.index  # should be 'none' though
 
-                assert (
-                    "index" not in kwargs and "device_info" not in kwargs
-                ), "index should not be provided for NamespaceHandler entities since it is fixed to None"
-            else:
-                # We're receiving either the channel or the subdevice id in this 'id' variable and
-                # we use it to get the correct device entry for this entity.
-                try:
-                    self.device_info = kwargs.pop("device_info")  # type: ignore
-                except KeyError:
-                    self.device_info = parent.get_device_entry_info(id)
-                try:
-                    # REMOVE
-                    # intercept 'index' arg targeting NamespaceParser mixin
-                    # BEWARE: we're relying on the fact that NamespaceParser is effectively initialized only
-                    # in Loggable.__init__ since it has no constructor defined.
-                    index = kwargs["index"]  # type: ignore
-                    if index:
-                        id = f"{index.slug}_{entity_key}" if entity_key else index.slug
-                    else:
-                        id = entity_key
-                except KeyError:
-                    id = entity_key
+        if index:
+            id = f"{index.slug}_{entity_key}" if entity_key else index.slug
+        else:
+            id = entity_key
 
         assert (
             id not in parent.entities
@@ -611,32 +581,3 @@ class ToggleXParser(BinaryEntity, ParserEntity):
         if self.is_on != is_on:
             self.is_on = is_on
             self.flush_state()
-
-
-class EntityNamespaceMixin(ParserEntity, handler.ParserHandler):
-    """
-    TODO: remove this design concept (handler+parser) since it is rather ugly
-    """
-
-    if TYPE_CHECKING:
-        id: Final[mn.Namespace]  # type: ignore[override]
-
-        type InitArgs = tuple[mn.Namespace, Device]
-
-        class Args(ParserEntity.Args):
-            pass
-
-        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
-
-    def __init_subclass__(cls):
-        super().__init_subclass__()
-        # Since NamespaceHandler cannot be slotted itself because of mixin-ing with ParserEntity
-        # in EntityNamespaceMixin we try this trick to provide automatic slotting for all the subclasses
-        # which are not mixed with parsers and which don't define their own __slots__.
-        cls.__slots__ = cls._calc_slots()
-
-    def shutdown(self):
-        # Because of the mixin nature of this class the shutdown sequence could be invoked by
-        # both Entity and NamespaceHandler shutdown mechanics so we need filter out the duplicate.
-        super().shutdown()
-        del self.parent.ns_handlers[self.id]

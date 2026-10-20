@@ -108,7 +108,7 @@ class Mts200HumiSensor(SensorParser):
             pass
 
 
-class LedMode(SelectParser, mle.EntityNamespaceMixin):
+class LedMode(SelectParser):
     """
     SelectEntity class for Appliance.System.LedMode namespace.
     """

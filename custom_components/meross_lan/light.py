@@ -766,7 +766,7 @@ class EffectLight(Light):
         ] + EffectLight._INIT_effect_list
 
 
-class DNDLight(mle.BinaryParser, mle.EntityNamespaceMixin, light.LightEntity):
+class DNDLight(mle.BinaryParser, light.LightEntity):
     """
     light entity representing the device DND feature usually implemented
     through a light feature (presence light or so)

@@ -172,11 +172,11 @@ class NamespaceHandler(logging.Loggable):
             except KeyError:
                 match self.index_type:
                     case mn.IndexType.id:
-                        self.handler = self._handle_subdevice_id
+                        self.handler = self._handle_index_id
                     case mn.IndexType.subId:
-                        self.handler = self._handle_subid
+                        self.handler = self._handle_index_subid
                     case mn.IndexType.channel:
-                        self.handler = self._handle_channel
+                        self.handler = self._handle_index_channel
                     case _:
                         self.handler = getattr(
                             parent, f"_handle_{id.replace('.', '_')}", self._handle
@@ -188,17 +188,32 @@ class NamespaceHandler(logging.Loggable):
             # optimized register_parser_class and register_parser
             match self.index_type:
                 case mn.IndexType.channel:
-                    self.handler = self._handle_channel
+                    self.handler = self._handle_index_channel
+                    indexes = (
+                        mn.IndexType.channel.get(channel)
+                        for channel in kwargs.pop(
+                            "channels", parent.descriptor.channels
+                        )
+                    )
                 case mn.IndexType.subId:
-                    self.handler = self._handle_subid
+                    self.handler = self._handle_index_subid
+                    indexes = (
+                        mn.IndexType.channel.get(channel)
+                        for channel in kwargs.pop(
+                            "channels", parent.descriptor.channels
+                        )
+                    )
+                case mn.IndexType.none:
+                    self.handler = self._handle_index_none
+                    indexes = (mn.IndexType.none.get(),)
                 case _:
                     assert (
                         False
-                    ), "parser_class only supported for 'channel' indexed namespaces"
-            for channel in kwargs.pop("channels", parent.descriptor.channels):
-                index = mn.IndexType.channel.get(channel)
+                    ), f"parser_class only supported for {self.index_type} index types"
+
+            for index in indexes:
                 self.parsers[index] = parser = parser_class(
-                    channel, parent, ns=id, index=index
+                    index.value, parent, ns=id, index=index
                 )
                 parser._namespace_registered((self, index))
                 # polling_request_payload will be eventually setup
@@ -298,8 +313,11 @@ class NamespaceHandler(logging.Loggable):
 
     def parse_digest(self, digest: "JsonMapping | JsonArray", /):
         """Used when parsing digest(s) in Appliance.System.All."""
-        for payload in extract_dict_payloads(digest):
-            self._parse_channel(payload)
+        if self.index_type is mn.IndexType.none:
+            self.parsers[None](digest)  # type: ignore
+        else:
+            for payload in extract_dict_payloads(digest):
+                self._parse_channel(payload)
 
     def log_handler_exception(self, exception: Exception, payload, /):
         """Logs an error raised inside a handler function. This is typically due
@@ -347,7 +365,14 @@ class NamespaceHandler(logging.Loggable):
                 _payload=response.payload,
             )
 
-    def _handle_subdevice_id(self, message: "MerossMessage", /):
+    def _handle_index_none(self, message: "MerossMessage", /):
+        """
+        Handler for 'None' index types i.e. namespaces not indexed. In this scenario this
+        is just a forwarding to the default single parser registered.
+        """
+        self.parsers[None](message.payload[self.id.key])  # type: ignore
+
+    def _handle_index_id(self, message: "MerossMessage", /):
         """Generalized Hub namespace dispatcher to subdevices."""
         parsers = dict(self.parsers)
         for payload in message.payload[self.id.key]:
@@ -361,7 +386,7 @@ class NamespaceHandler(logging.Loggable):
             except Exception as e:
                 self.log_parser_exception(e, payload)
 
-    def _handle_subid(self, message: "MerossMessage", /):
+    def _handle_index_subid(self, message: "MerossMessage", /):
         """Handler for those ns which might either refer to a subdevice channel or
         to a device channel depending on the payload. These are typically based on the 'subId' key
         establishing a relationship with an hub subdevice or might skip the subid altogether and
@@ -390,7 +415,7 @@ class NamespaceHandler(logging.Loggable):
                 # message not related to a subdevice. Parse with plain 'channel' mechanics
                 self._parse_channel(payload)
 
-    def _handle_channel(self, message: "MerossMessage", /):
+    def _handle_index_channel(self, message: "MerossMessage", /):
         """
         This handler can manage both lists or dicts of 'channel' payloads.
         """
