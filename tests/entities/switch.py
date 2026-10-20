@@ -3,7 +3,6 @@ from homeassistant.components import switch as haec
 from custom_components.meross_lan import switch
 from custom_components.meross_lan.devices import (
     garagedoor as gd,
-    mss,
     rollershutter as rs,
     thermostat as mts,
 )
@@ -30,14 +29,7 @@ class EntityTest(ToggleEntityComponentTest):
     }
     NAMESPACES_ENTITIES = {
         mn.Appliance_Config_Alarm: [switch.SwitchParser],
-        mn.Appliance_GarageDoor_Config: [
-            gd.GarageConfigSwitch,  # buzzerEnable
-        ],
-        mn.Appliance_GarageDoor_MultipleConfig: [
-            gd.GarageEnableSwitch,
-            gd.GarageConfigSwitch,
-        ],
-        mn.Appliance_Config_OverTemp: [mss.OverTempEnableSwitch],
+        mn.Appliance_Config_OverTemp: [switch.SwitchParser],
         mn.Appliance_Control_PhysicalLock: [switch.PhysicalLockSwitch],
         mn_t.Appliance_Control_Thermostat_ModeC: [
             switch.EmulatedSwitch,  # fan_hold_enable
@@ -51,6 +43,13 @@ class EntityTest(ToggleEntityComponentTest):
         ],  # optional enabler
         mn_t.Appliance_Control_Thermostat_SummerMode: [mts.MtsSummerMode],
         mn.Appliance_Control_Toggle: [switch.Toggle],
+        mn.Appliance_GarageDoor_Config: [
+            gd.GarageConfigSwitch,  # buzzerEnable
+        ],
+        mn.Appliance_GarageDoor_MultipleConfig: [
+            gd.GarageEnableSwitch,
+            gd.GarageConfigSwitch,
+        ],
         mn.Appliance_RollerShutter_Adjust: [rs.RollerShutterAdjustSwitch],
     }
     HUB_SUBDEVICES_ENTITIES = {

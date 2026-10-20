@@ -107,6 +107,13 @@
                     "power": "Power",
                     "night": "Night"
                 }
+            },
+            "config_overtemp_type": {
+                "name": "Overheat alert action",
+                "state": {
+                    "alert": "Alert only",
+                    "turn_off": "Alert and turn off"
+                }
             }
         },
         "sensor": {
@@ -171,6 +178,9 @@
             },
             "overheat_switch": {
                 "name": "[%key:common::overheat%]"
+            },
+            "config_overtemp_enable": {
+                "name": "Overheat alert"
             }
         }
     },

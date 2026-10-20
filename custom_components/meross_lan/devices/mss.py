@@ -7,13 +7,12 @@ from homeassistant.util import dt as dt_util
 from .. import const as mlc
 from ..merossclient.device.handler import NamespaceHandler
 from ..merossclient.protocol import const as mc, namespaces as mn
-from ..sensor import EnumParser, SensorParser
-from ..switch import SwitchParser
+from ..sensor import SensorParser
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final, Unpack
 
-    from ..helpers.device import Device, MerossMessage
+    from ..helpers.device import Device
     from ..merossclient.protocol import types as mt
 
 
@@ -599,25 +598,3 @@ class ConsumptionXSensor(SensorParser.RestoreEntity, SensorParser):
             self.reset_ts = 0
             self.flush_state()
             self.log(self.DEBUG, "no readings available for new day - resetting")
-
-
-class OverTempEnableSwitch(SwitchParser):
-
-    _INIT_entity_key = "config_overtemp_enable"
-    _INIT_key_value = SwitchParser.KeyValue(mc.KEY_ENABLE)
-
-    _SLOTS = ("sensor_overtemp_type",)
-
-    @override
-    def __call__(self, payload: "mt.config.OverTemp", /):
-        """{"overTemp": {"enable": 1,"type": 1}}"""
-        self.update_device_value(payload[mc.KEY_ENABLE])
-        try:
-            type = payload[mc.KEY_TYPE]
-            self.sensor_overtemp_type.update_device_value(type)
-        except AttributeError:
-            self.sensor_overtemp_type = EnumParser(
-                self, entity_key="config_overtemp_type", native_value=type
-            )
-        except KeyError:
-            pass

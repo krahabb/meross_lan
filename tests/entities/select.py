@@ -30,6 +30,7 @@ class EntityTest(EntityComponentTest):
     }
     NAMESPACES_ENTITIES = {
         mn.Appliance_Config_Alarm: [select.SelectParser],
+        mn.Appliance_Config_OverTemp: [select.SelectParser],
         mn.Appliance_Config_Sensor_Association: [Mts300Climate.SensorAssociationSelect],
         mn.Appliance_Control_TempUnit: [MtsTempUnit],
         mn.Appliance_Control_Presence_Config: [

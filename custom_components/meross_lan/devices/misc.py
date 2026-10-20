@@ -7,13 +7,13 @@ a dedicated unit for each of them would increase the number of small modules.
 from typing import TYPE_CHECKING, override
 
 from .. import const as mlc
-from ..helpers import entity as mle
 from ..merossclient.device.handler import MappingParser
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..merossclient.protocol.namespaces import thermostat as mn_t
 from ..number import NumberParser
 from ..select import SelectParser
 from ..sensor import SensorParser
+from ..switch import SwitchParser
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final, Mapping, NotRequired, Unpack
@@ -22,6 +22,18 @@ if TYPE_CHECKING:
     from ..merossclient.device.handler import ValueParser
     from ..merossclient.protocol import types as mt
     from .thermostat.mts200 import Mts200Climate
+
+
+class ConfigOverTemp(MappingParser):
+
+    _INIT_parser_defs = {
+        mc.KEY_ENABLE: SwitchParser.DEF(
+            entity_key="config_overtemp_enable", value_on=1, value_off=2
+        ),
+        mc.KEY_TYPE: SelectParser.DEF(
+            entity_key="config_overtemp_type", options_map={1: "alert", 2: "turn_off"}
+        ),
+    }
 
 
 class DeviceCfgParser(MappingParser):

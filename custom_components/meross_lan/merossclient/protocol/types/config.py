@@ -98,3 +98,8 @@ class Wifi(TypedDict):
 
 
 type WifiList = list[Wifi]
+
+
+class OverTemp(TypedDict):
+    enable: int  # 1: enable - 2: disable
+    type: int  # 1: alert - 2: turn_off

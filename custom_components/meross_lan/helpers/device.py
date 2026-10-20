@@ -306,7 +306,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         ),
         mn.Appliance_Config_Info: FACTORY_IGNORE,
         mn.Appliance_Config_OverTemp: NamespaceHandler.Factory(
-            ".devices.mss.OverTempEnableSwitch"
+            ".devices.misc.ConfigOverTemp"
         ),
         mn.Appliance_Config_Alarm: NamespaceHandler.Factory(".siren.ConfigAlarm"),
         mn.Appliance_Control_Alarm: NamespaceHandler.Factory(".siren.ControlAlarm"),

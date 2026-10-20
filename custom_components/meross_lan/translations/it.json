@@ -123,6 +123,9 @@
             },
             "overheat_switch": {
                 "name": "Protezione surriscaldamento"
+            },
+            "config_overtemp_enable": {
+                "name": "Allarme sovratemperatura"
             }
         },
         "select": {
@@ -159,6 +162,13 @@
                     "off": "Off",
                     "power": "Giorno",
                     "night": "Notte"
+                }
+            },
+            "config_overtemp_type": {
+                "name": "Allarme sovratemperatura: azione",
+                "state": {
+                    "alert": "Avviso",
+                    "turn_off": "Avviso e spegnimento"
                 }
             }
         }
