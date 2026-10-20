@@ -240,7 +240,9 @@ def run(argv):
 
     async def _on_startup(app: web.Application):
         for emulator in emulators.values():
-            await emulator.async_startup(enable_scheduler=True, enable_mqtt=True)
+            await emulator.async_startup(
+                enable_scheduler=True, enable_mqtt="broker" in emulator_kwargs
+            )
 
     async def _on_shutdown(app: web.Application):
         for emulator in emulators.values():
