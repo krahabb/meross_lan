@@ -1199,6 +1199,11 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         self.schedule_entry_update(False)
         self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
 
+    @override
+    async def _async_poll(self, /):
+        await super()._async_poll()
+        self.sensor_protocol.report_full_state()
+
     # interface: device.PhysicalDevice
     @override
     def _handle_missing_parser(

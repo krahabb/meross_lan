@@ -256,8 +256,11 @@ class ProtocolSensor(EnumSensorEntity):
     STATE_ACTIVE = "active"
     STATE_INACTIVE = "inactive"
     ATTR_MQTT_BROKER = "mqtt_broker"
+    ATTR_NAMESPACES = "namespaces"
 
     # HA core entity attributes:
+    _unrecorded_attributes = frozenset((ATTR_NAMESPACES,))
+
     _attr_available = True
     _attr_entity_category = SensorEntity.EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
@@ -287,6 +290,12 @@ class ProtocolSensor(EnumSensorEntity):
     @override
     def set_unavailable(self):
         self.native_value = self.STATE_DISCONNECTED
+        self.schedule_flush_state()
+
+    def report_full_state(self, /):
+        self.extra_state_attributes[self.ATTR_NAMESPACES] = {
+            str(nh.id): nh.payload for nh in self.parent.ns_handlers.values()
+        }
         self.schedule_flush_state()
 
     # callbacks from Device._clients connect/disconnect events

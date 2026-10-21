@@ -79,7 +79,7 @@ class NamespaceHandler(logging.Loggable):
         parsers: Final[ParsersMap]
         parser_class: type[NamespaceParser] | None
         digest: JsonMapping | JsonArray | None
-
+        payload: JsonType | None
         last_rx_epoch: float
         """Timestamp of last received message (either async/pushed or explicitly requested)."""
         last_poll_epoch: float
@@ -108,6 +108,7 @@ class NamespaceHandler(logging.Loggable):
         "parsers",
         "parser_class",
         "digest",
+        "payload",
         "last_rx_epoch",
         "last_poll_epoch",
         "next_poll_epoch",
@@ -230,6 +231,7 @@ class NamespaceHandler(logging.Loggable):
         ) = (
             kwargs.pop("config", None) or self.NS_CONTENT_POLLING_CONFIG_MAP[id.content]
         )
+        self.payload = None
         self.last_rx_epoch = self.last_poll_epoch = self.next_poll_epoch = 0.0
         self.last_rx_push = None
         super().__init__(id, parent, **kwargs)
@@ -246,6 +248,10 @@ class NamespaceHandler(logging.Loggable):
         for index in tuple(self.parsers):
             self.log(self.DEBUG, "Cleaning up dangling parser for index %s", index)
             del self.parsers[index]
+
+    def reset_state(self, /):
+        self.payload = None
+        self.last_rx_epoch = self.last_poll_epoch = self.next_poll_epoch = 0.0
 
     def register_parser(self, parser: "NamespaceParser", /):
         # TODO: add an index to the call to make it more flexible
@@ -343,7 +349,7 @@ class NamespaceHandler(logging.Loggable):
             timeout=14400,
         )
 
-    def handle(self, response: "MerossMessage", is_poll: bool = True, /):
+    def handle(self, message: "MerossMessage", is_poll: bool = True, /):
         """Entry point for handling a received message for this namespace.
         This is invoked by Device whenever a message for this ns is received.
         This method acts as a wrapper for the actual handler to catch and
@@ -355,14 +361,15 @@ class NamespaceHandler(logging.Loggable):
         if is_poll:
             self.last_poll_epoch = self.last_rx_epoch
             self.next_poll_epoch = self.last_rx_epoch + self.polling_period
+        self.payload = message.payload
         try:
-            self.handler(response)
+            self.handler(message)
         except Exception as exception:
             self.log_exception(
                 self.WARNING,
                 exception,
                 "handle_response (payload: %s)",
-                _payload=response.payload,
+                _payload=message.payload,
             )
 
     def _handle_index_none(self, message: "MerossMessage", /):

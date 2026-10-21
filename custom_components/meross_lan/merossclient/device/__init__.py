@@ -316,7 +316,7 @@ class Device(PhysicalDevice):
     def on_connect(self, /):
         super().on_connect()
         for nh in self.ns_handlers.values():
-            nh.last_rx_epoch = nh.last_poll_epoch = nh.next_poll_epoch = 0.0
+            nh.reset_state()
 
     @override
     def on_disconnect(self, /):
@@ -659,7 +659,7 @@ class Device(PhysicalDevice):
         """Perform a 'full' namespaces poll like when onlining i.e. without any lazy optimization."""
         await self.async_polling_stop()
         for nh in self.ns_handlers.values():
-            nh.last_rx_epoch = nh.last_poll_epoch = nh.next_poll_epoch = 0.0
+            nh.reset_state()
         await self._async_polling_schedule()
 
     async def async_poll_flush(self):
