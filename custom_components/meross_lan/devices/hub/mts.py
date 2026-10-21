@@ -63,12 +63,7 @@ class mts100(SubDevice, MtsClimate):
     }
 
     # HA core entity attributes:
-    _unrecorded_attributes = frozenset(
-        {
-            mc.KEY_SCHEDULEBMODE,
-            *MtsClimate._unrecorded_attributes,
-        }
-    )
+    _unrecorded_attributes = frozenset((mc.KEY_SCHEDULEBMODE,))
 
     _AUTO_DESTROY = ("binary_sensor_window", "switch_patch_hvacaction")
 
