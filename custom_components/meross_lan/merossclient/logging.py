@@ -277,6 +277,7 @@ class Loggable(metaclass=abc.ABCMeta):
     _AUTO_DESTROY_ = frozenset()
 
     def __init_subclass__(cls, *args, **kwargs):
+        super().__init_subclass__(*args, **kwargs)
         auto_init = set()
         auto_destroy = set()
 
