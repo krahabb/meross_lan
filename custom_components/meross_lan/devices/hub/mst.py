@@ -1,44 +1,29 @@
 from typing import TYPE_CHECKING, override
 
 from . import DeviceCfgParser, SubDevice, mc, mlc, mn, mn_h
+from ...binary_sensor import BinarySensorParser
 from ...number import NumberParser
 from ...switch import SwitchParser
 
 if TYPE_CHECKING:
-    from typing import TypedDict, Unpack
+    from typing import Final, TypedDict, Unpack
 
     from . import Hub
     from ...merossclient import SubDeviceDescriptor
     from ...merossclient.protocol import types as mt
 
 
+KEY_MSTCFG = "mstCfg"
+KEY_WACON = "waCon"
+KEY_DURA = "dura"
+KEY_WFM = "wfm"
+KEY_WADET = "waDet"
+KEY_WFLOW = "wflow"
+
+
 class mst(SubDevice):
     """Smart Water Sprinkler."""
 
-    """
-    calibrationConfig.setWaCon((int)
-        (
-            MSMSTUtils.m59095i0(this.f31278l) ?
-                MSMSTRepository.m31088w().f18821c * 1000.0f :
-                (MSMSTRepository.m31088w().f18821c * 1000.0f) / 0.26417f)
-    );
-
-    return (
-        !(originDevice instanceof SprinklerDevice) ||
-        (deviceConfigM59073V = m59073V((SprinklerDevice) originDevice)) == null ||
-        (unitCfg = deviceConfigM59073V.getUnitCfg()) == null ||
-        unitCfg.getUnitType() == null
-        )
-        ?
-        m59070S()
-        :
-        unitCfg.getUnitType().intValue() == DeviceCommonConfig.UnitCfg.UNIT_PUB;
-
-    """
-    KEY_MSTCFG = "mstCfg"
-    KEY_WACON = "waCon"
-    KEY_DURA = "dura"
-    KEY_WFM = "wfm"
     DEVICE_CFG_DEFS = {
         KEY_MSTCFG: {
             mc.KEY_CALIBRATION: {
@@ -84,17 +69,29 @@ class mst(SubDevice):
 
         _attr_name = "Watering"
 
+    class WaterFlowSensor(BinarySensorParser):
+        _INIT_ns = mn_h.Appliance_Control_WaterEvent
+        _INIT_key_value = BinarySensorParser.KeyValue(KEY_WFLOW)
+        _INIT_entity_key = f"{_INIT_ns.slug}__{_INIT_key_value}"
+        _INIT_value_on = 2
+        _INIT_value_off = 1
+        _attr_device_class = BinarySensorParser.DeviceClass.PROBLEM
+
+    __slots__ = ("sensor_wflow",)
+
 
 class mst100(mst):
+
+    if TYPE_CHECKING:
+        sensor_wflow: Final[mst.WaterFlowSensor]
 
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
         SubDevice.__init__(self, descriptor, hub, **kwargs)
         subid = descriptor.id
         index = mn.IndexType.subId.get(subid, 0, None)
-        switch = mst.Switch(
-            self, index=index, unique_id=f"{hub.id}_{subid}_onoff"
-        )  # LEGACY
+        switch = mst.Switch(self, index=index, unique_id=f"{hub.id}_{subid}_onoff")
         hub.get_handler(mn_h.Appliance_Control_Water).register_parser(switch)
+        self.sensor_wflow = mst.WaterFlowSensor(switch)
         hub.ns_handlers[mn.Appliance_Config_DeviceCfg].register_parser(
             DeviceCfgParser(subid, hub, index=index, parser_defs=mst.DEVICE_CFG_DEFS)
         )
@@ -102,21 +99,27 @@ class mst100(mst):
     @override
     def _parse_digest_(self, payload: "mt.hub._mst100", /):
         # unknown payload semantic
-        pass
+        self.sensor_wflow.update_device_value(payload[KEY_WFLOW])
 
 
 class mst200(mst):
+
+    if TYPE_CHECKING:
+        sensor_wflow: Final[list[mst.WaterFlowSensor]]
 
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
         SubDevice.__init__(self, descriptor, hub, **kwargs)
         handler_water = hub.get_handler(mn_h.Appliance_Control_Water)
         handler_devicecfg = hub.ns_handlers[mn.Appliance_Config_DeviceCfg]
         subid = descriptor.id
+        self.sensor_wflow = []
         for channel in range(1, 3):
             # indexed by subId, channels
-            handler_water.register_parser(
-                mst.Switch(self, index=mn.IndexType.subId.get(subid, None, channel))
+            switch = mst.Switch(
+                self, index=mn.IndexType.subId.get(subid, None, channel)
             )
+            handler_water.register_parser(switch)
+            self.sensor_wflow.append(mst.WaterFlowSensor(switch))
             # indexed by subId, channel
             handler_devicecfg.register_parser(
                 DeviceCfgParser(
@@ -128,6 +131,11 @@ class mst200(mst):
             )
 
     @override
-    def _parse_digest_(self, payload: "mt.hub._mst100", /):
-        # unknown payload semantic
-        pass
+    def _parse_digest_(self, payload: "mt.hub._mst200", /):
+        for waDet in payload["waDet"]:
+            try:
+                self.sensor_wflow[waDet[mc.KEY_CHANNEL] - 1].update_device_value(
+                    waDet[KEY_WFLOW]
+                )
+            except Exception as e:
+                self.log_exception(self.WARNING, e, "_parse_digest")
