@@ -38,11 +38,7 @@ class GarageTimeoutBinarySensor(BinarySensorEntity):
     _attr_device_class = BinarySensorEntity.DeviceClass.PROBLEM
     _attr_entity_category = BinarySensorEntity.EntityCategory.DIAGNOSTIC
     _unrecorded_attributes = frozenset(
-        {
-            ATTR_TRANSITION_TARGET,
-            ATTR_TRANSITION_TIMEOUT,
-            *BinarySensorEntity._unrecorded_attributes,
-        }
+        (ATTR_TRANSITION_TARGET, ATTR_TRANSITION_TIMEOUT)
     )
 
     def __init__(self, *args, **kwargs):

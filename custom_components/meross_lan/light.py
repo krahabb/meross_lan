@@ -399,12 +399,7 @@ class Light(LightBase):
     ATTR_TOGGLEX_AUTO = "togglex_auto"
 
     # HA core entity attributes:
-    _unrecorded_attributes = frozenset(
-        {
-            ATTR_TOGGLEX_AUTO,
-            *LightBase._unrecorded_attributes,
-        }
-    )
+    _unrecorded_attributes = frozenset((ATTR_TOGGLEX_AUTO,))
 
     __slots__ = (
         "_togglex_auto",

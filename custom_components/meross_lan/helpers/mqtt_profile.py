@@ -80,13 +80,7 @@ class ConnectionSensor(DiagnosticSensor):
     _attr_available = True
     _attr_device_class = DiagnosticSensor.DeviceClass.ENUM
     _unrecorded_attributes = frozenset(
-        {
-            ATTR_DEVICES,
-            ATTR_RECEIVED,
-            ATTR_PUBLISHED,
-            ATTR_DROPPED,
-            *DiagnosticSensor._unrecorded_attributes,
-        }
+        (ATTR_DEVICES, ATTR_RECEIVED, ATTR_PUBLISHED, ATTR_DROPPED)
     )
 
     options = [
