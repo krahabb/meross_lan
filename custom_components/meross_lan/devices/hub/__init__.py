@@ -166,7 +166,7 @@ class Hub(mld.Device):
             )
 
     @override
-    def get_device_entry_info(self, index_value: str, /) -> "mle.Entity.DeviceInfo":
+    def get_device_entry_info(self, index_value: str, /):
         if not index_value:
             # Either a non parser entity or a parser entity with no indexing (i.e. unique for the device)
             return self.device_info
@@ -384,7 +384,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: Hub, /, **kwargs):
         subid = descriptor.id
         self.device_registry = hub.device_registry
-        self.device_info = {"identifiers": {(mlc.DOMAIN, subid)}}
         if mlc.HA_VERSION >= (2026, 9):
             self.device_entry = hub.device_registry.async_get_or_create(
                 config_entry_id=hub.config_entry.entry_id,
@@ -392,7 +391,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
                 name=descriptor.productname,
                 model=descriptor.type,
                 via_device_id=hub.device_entry.id,
-                **self.device_info,  # type: ignore
+                identifiers={(mlc.DOMAIN, subid)},
             )
         else:
             self.device_entry = hub.device_registry.async_get_or_create(
@@ -401,8 +400,12 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
                 name=descriptor.productname,
                 model=descriptor.type,
                 via_device=next(iter(hub.device_entry.identifiers)),
-                **self.device_info,  # type: ignore
+                identifiers={(mlc.DOMAIN, subid)},
             )
+        if mlc.HA_VERSION >= (2026, 11):
+            self.device_info = dr.DeviceInfo(identifiers=self.device_entry.identifiers)
+        else:
+            self.device_info: "dr.DeviceInfo" = {"identifiers": self.device_entry.identifiers}  # type: ignore
         self.key_digest = descriptor.key_digest
         kwargs["index"] = mn.IndexType.id.get(subid)
         kwargs["descriptor"] = descriptor

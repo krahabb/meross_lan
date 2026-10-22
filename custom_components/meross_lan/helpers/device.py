@@ -3,7 +3,6 @@ from bisect import bisect_right
 from json import JSONDecodeError
 from typing import TYPE_CHECKING, override
 
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
 
@@ -65,8 +64,8 @@ class BaseDevice(device.PhysicalDevice):
 
         # to be implemented in derived classes
         device_registry: dr.DeviceRegistry
-        device_info: Entity.DeviceInfo
         device_entry: dr.DeviceEntry
+        device_info: dr.DeviceInfo
         entities_iterable: Iterable[Entity]
 
         update_firmware: UpdateEntity | None
@@ -80,8 +79,8 @@ class BaseDevice(device.PhysicalDevice):
 
     _SLOTS = (
         "device_registry",
-        "device_info",
         "device_entry",
+        "device_info",
     )
 
     _AUTO_INIT = ("update_firmware",)
@@ -239,7 +238,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         _check_device_time_enabled: bool
         """Scheduled 'on-demand' device time check. This is only created when enable_device_time_check is called."""
 
-        device_entries_info: dict[int, Entity.DeviceInfo]  # dynamic
+        device_entries_info: dict[int, dr.DeviceInfo]  # dynamic
         profile: Final[MQTTProfile | None]
 
         # entities
@@ -580,7 +579,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             descriptor=descriptor,  # type: ignore[argument],
         )
         self.device_registry = api.device_registry
-        self.device_info = {"identifiers": {(mlc.DOMAIN, device_id)}}
         self.device_entry = api.device_registry.async_get_or_create(
             config_entry_id=config_entry.entry_id,
             connections={(dr.CONNECTION_NETWORK_MAC, descriptor.macAddress)},
@@ -589,8 +587,12 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             model=descriptor.productmodel,
             hw_version=descriptor.hw_version,
             sw_version=descriptor.fw_version,
-            **self.device_info,  # type: ignore
+            identifiers={(mlc.DOMAIN, device_id)},
         )
+        if mlc.HA_VERSION >= (2026, 11):
+            self.device_info = dr.DeviceInfo(identifiers=self.device_entry.identifiers)
+        else:
+            self.device_info: "dr.DeviceInfo" = {"identifiers": self.device_entry.identifiers}  # type: ignore
         if descriptor.type.startswith(mc.TYPE_MFC100):
             # This device presents various features on different channels
             # but we prefer to show them as a single device and
@@ -801,7 +803,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         await ConfigEntryManager.async_setup_entry(self, hass, config_entry)
 
     @override
-    def get_device_entry_info(self, index_value: int, /) -> "Entity.DeviceInfo":
+    def get_device_entry_info(self, index_value: int, /):
         if not index_value:
             # Either a non parser entity or a parser entity with no indexing (i.e. unique for the device)
             # or an entity for channel == 0
@@ -819,9 +821,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         ), "index_value is expected to be an int representing the channel number (got {})".format(
             type(index_value)
         )
-        device_info: "Entity.DeviceInfo" = {
-            "identifiers": {(mlc.DOMAIN, f"{self.id}_{index_value}")}
-        }
+        identifiers = {(mlc.DOMAIN, f"{self.id}_{index_value}")}
         if mlc.HA_VERSION >= (2026, 9):
             # TODO: migrate to using proper 'child' devices for channels instead of using via_device_id
             # According to docs, we should be able to just migrate this api and HA core will take care of
@@ -832,7 +832,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 name=f"{self.device_entry.name} Channel {index_value}",
                 model=self.device_entry.model,
                 via_device_id=self.device_entry.id,
-                **device_info,
+                identifiers=identifiers,
             )
         else:
             self.device_registry.async_get_or_create(
@@ -841,8 +841,12 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 name=f"{self.device_entry.name} Channel {index_value}",
                 model=self.device_entry.model,
                 via_device=next(iter(self.device_entry.identifiers)),
-                **device_info,
+                identifiers=identifiers,
             )
+        if mlc.HA_VERSION >= (2026, 11):
+            device_info = dr.DeviceInfo(identifiers=identifiers)
+        else:
+            device_info: "dr.DeviceInfo" = {"identifiers": identifiers}  # type: ignore
         self.device_entries_info[index_value] = device_info
         return device_info
 
@@ -1726,18 +1730,21 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                             if not newname:
                                 continue
                             channel_name = f"{newname} Channel {channel}"
-                        if mlc.HA_VERSION >= (2026, 9):
-                            # TODO: this migrated code is temporary until we move our 'device_entries_info' to
-                            # proper 'child' devices (adhering to the new HA core model implemented in 2026.9)
+                        if mlc.HA_VERSION >= (2026, 11):
                             device_entry = (
                                 self.device_registry.async_get_device_by_identifier(
-                                    next(iter(device_entry_info["identifiers"])),
+                                    next(iter(device_entry_info.identifiers)),
                                     self.config_entry.entry_id,
                                 )
                             )
+                        elif mlc.HA_VERSION >= (2026, 9):
+                            device_entry = self.device_registry.async_get_device_by_identifier(
+                                next(iter(device_entry_info["identifiers"])),  # type: ignore
+                                self.config_entry.entry_id,
+                            )
                         else:
                             device_entry = self.device_registry.async_get_device(
-                                **device_entry_info
+                                **device_entry_info  # type: ignore
                             )
                         if device_entry and (channel_name != device_entry.name):
                             self.device_registry.async_update_device(
