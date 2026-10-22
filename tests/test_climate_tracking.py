@@ -57,7 +57,7 @@ async def test_climate_tracking(request, hass: "HomeAssistant"):
                     climate.id, mn_h.Appliance_Hub_Mts100_Temperature
                 )[mc.KEY_ROOM] = round(temperature * climate.temperature_scale)
 
-            reading = climate.current_temperature
+            reading = climate.native_current_temperature
             adjust = number.native_value
             assert reading is not None and adjust is not None
 
@@ -76,14 +76,14 @@ async def test_climate_tracking(request, hass: "HomeAssistant"):
             # must not be applied again (windup)
             _set_tracked(reading + 1.1)
             await context.async_poll_timeout(2 * select.TRACKING_PERIOD)
-            assert climate.current_temperature == reading
+            assert climate.native_current_temperature == reading
             assert number.native_value == adjust + 1.0
 
             # the device reports a reading including the calibration: the residual
             # error (+0.1) is below half calibration step so nothing changes
             _emulator_report(reading + 1.0)
             await context.async_poll_timeout(select.TRACKING_PERIOD)
-            assert climate.current_temperature == reading + 1.0
+            assert climate.native_current_temperature == reading + 1.0
             assert number.native_value == adjust + 1.0
 
             # the tracked sensor rises: corrected at the next sample

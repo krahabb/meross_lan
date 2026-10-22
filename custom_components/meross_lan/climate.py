@@ -6,7 +6,7 @@ from homeassistant.core import CoreState, callback
 from homeassistant.util.unit_conversion import TemperatureConverter
 
 from .calendar import MtsSchedule
-from .const import hac
+from .const import hac, HA_VERSION
 from .helpers import reverse_lookup
 from .helpers.entity import ParserEntity
 from .number import NumberParser
@@ -188,7 +188,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             climate = self.climate
             if self._track_pending:
                 # The climate didn't report a new reading since our last calibration
-                # so its current_temperature doesn't include it yet: applying the
+                # so its native_current_temperature doesn't include it yet: applying the
                 # same error again would wind up the calibration (see #684).
                 self.log(
                     self.DEBUG,
@@ -213,8 +213,8 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             ):
                 # might be transient so we don't take any action or log
                 return
-            current_temperature = climate.current_temperature
-            if not current_temperature:
+            native_current_temperature = climate.native_current_temperature
+            if not native_current_temperature:
                 # should be transitory - just a safety check
                 return
             number_adjust_temperature = climate.number_adjust_temperature
@@ -230,13 +230,13 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
                 )
                 if not tracked_temperature_unit:
                     raise ValueError("tracked entity has no unit of measure")
-                if tracked_temperature_unit != climate.temperature_unit:
+                if tracked_temperature_unit != climate.native_temperature_unit:
                     tracked_temperature = TemperatureConverter.convert(
                         tracked_temperature,
                         tracked_temperature_unit,
-                        climate.temperature_unit,
+                        climate.native_temperature_unit,
                     )
-                error_temperature = tracked_temperature - current_temperature
+                error_temperature = tracked_temperature - native_current_temperature
                 # correct by whole calibration steps so that errors within the
                 # calibration resolution don't send (useless) adjust commands
                 adjust_step = number_adjust_temperature.native_step
@@ -264,7 +264,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
                             "Skipping %s calibration (%s [%s] beyond %s limit)",
                             climate.entity_id,
                             current_adjust_temperature,
-                            climate.temperature_unit,
+                            climate.native_temperature_unit,
                             number_adjust_temperature.native_max_value,
                         )
                         return
@@ -279,7 +279,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
                             "Skipping %s calibration (%s [%s] below %s limit)",
                             climate.entity_id,
                             current_adjust_temperature,
-                            climate.temperature_unit,
+                            climate.native_temperature_unit,
                             number_adjust_temperature.native_min_value,
                         )
                         return
@@ -289,7 +289,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
                     number_adjust_temperature.async_set_native_value(
                         adjust_temperature
                     ),
-                    f"TrackSensorSelect._track(adjust_temperature={adjust_temperature} [{climate.temperature_unit}])",
+                    f"TrackSensorSelect._track(adjust_temperature={adjust_temperature} [{climate.native_temperature_unit}])",
                     eager_start=True,
                 )
                 self.log(
@@ -297,7 +297,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
                     "Applying %s calibration (%s [%s])",
                     climate.entity_id,
                     adjust_temperature,
-                    climate.temperature_unit,
+                    climate.native_temperature_unit,
                 )
 
     if TYPE_CHECKING:
@@ -338,7 +338,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         _attr_supported_features: ClassVar[climate.ClimateEntityFeature]
 
         current_humidity: float | None
-        current_temperature: float | None
+        native_current_temperature: float | None
         hvac_action: climate.HVACAction | None
         hvac_mode: climate.HVACMode | None
         max_temp: float
@@ -346,9 +346,9 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         preset_mode: str | None
         preset_modes: list[str]
         supported_features: climate.ClimateEntityFeature
-        target_temperature: float | None
+        native_target_temperature: float | None
         target_temperature_step: float
-        temperature_unit: Final[str]
+        native_temperature_unit: Final[str]
 
         type InitArgs = ParserEntity.InitArgs
         type Args = ParserEntity.Args
@@ -394,7 +394,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
     )
     __slots__ = (
         "current_humidity",
-        "current_temperature",
+        "native_current_temperature",
         "hvac_action",
         "hvac_mode",
         "hvac_modes",
@@ -403,9 +403,9 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         "preset_mode",
         "preset_modes",
         "supported_features",
-        "target_temperature",
+        "native_target_temperature",
         "target_temperature_step",
-        "temperature_unit",
+        "native_temperature_unit",
         "temperature_scale",
         "_mts_active",
         "_mts_mode",
@@ -415,7 +415,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         self.current_humidity = None
-        self.current_temperature = None
+        self.native_current_temperature = None
         self.hvac_action = None
         self.hvac_mode = None
         self.hvac_modes = self._attr_hvac_modes
@@ -424,9 +424,9 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         self.preset_mode = None
         self.preset_modes = self._attr_preset_modes
         self.supported_features = self._attr_supported_features
-        self.target_temperature = None
+        self.native_target_temperature = None
         self.target_temperature_step = self.TARGET_TEMPERATURE_STEP
-        self.temperature_unit = hac.UnitOfTemperature.CELSIUS
+        self.native_temperature_unit = hac.UnitOfTemperature.CELSIUS
         self._mts_active = False
         self._mts_mode = 0
         self._mts_onoff = 0
@@ -483,7 +483,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
     def set_unavailable(self):
         self.current_humidity = None
-        self.current_temperature = None
+        self.native_current_temperature = None
         self.preset_mode = None
         self.hvac_action = None
         self.hvac_mode = None
@@ -494,6 +494,24 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         self.schedule.flush_state()
 
     # interface: ClimateEntity
+    if HA_VERSION < (2026, 11):
+        # patch pre 2026.11 ClimateEntity properties
+        # The idea is to implement the renamed attributes with the new re-names (as mandatory in 2026.11 and later)
+        # and just provide the following properties to establish a compatibility layer with HA core when running on previous versions.
+        # Our code will use the new attributes anyway (pre and post 2026.11) since they're totally interchangeable in semantics
+        # and we don't really care if they were named differently before...
+        @property
+        def current_temperature(self):  # type: ignore
+            return self.native_current_temperature
+
+        @property
+        def target_temperature(self):  # type: ignore
+            return self.native_target_temperature
+
+        @property
+        def temperature_unit(self):  # type: ignore
+            return self.native_temperature_unit
+
     async def async_turn_on(self):
         await self.async_request_onoff(1)
 
@@ -526,13 +544,15 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
     def is_mts_scheduled(self, /):
         raise NotImplementedError()
 
-    def _update_current_temperature(self, current_temperature: float | int, /):
+    def _update_current_temperature(self, native_current_temperature: float | int, /):
         """
         Common handler for incoming room temperature value
         """
-        if self.current_temperature != current_temperature:
-            self.current_temperature = current_temperature
-            self.sensor_current_temperature.update_native_value(current_temperature)
+        if self.native_current_temperature != native_current_temperature:
+            self.native_current_temperature = native_current_temperature
+            self.sensor_current_temperature.update_native_value(
+                native_current_temperature
+            )
             self.select_track_sensor.check_tracking()
             # temp change might be an indication of a calibration so
             # we'll speed up polling for the adjust/calibration ns

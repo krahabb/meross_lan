@@ -84,7 +84,7 @@ class Mts200Climate(MtsThermostatClimate):
                 payload[mc.KEY_CURRENTTEMP] / self.temperature_scale
             )
         if mc.KEY_TARGETTEMP in payload:
-            self.target_temperature = (
+            self.native_target_temperature = (
                 payload[mc.KEY_TARGETTEMP] / self.temperature_scale
             )
         if mc.KEY_MIN in payload:

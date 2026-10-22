@@ -77,7 +77,7 @@ class MtsScheduleEntry:
         return calendar.CalendarEvent(
             start=dt.as_utc(event_begin),
             end=dt.as_utc(event_end),
-            summary=f"{self.data[1] / climate.temperature_scale} {climate.temperature_unit}",
+            summary=f"{self.data[1] / climate.temperature_scale} {climate.native_temperature_unit}",
             description="",
             uid=f"{MTS_SCHEDULE_WEEKDAY[self.weekday_index]}#{self.index}",
             rrule=MTS_SCHEDULE_RRULE,

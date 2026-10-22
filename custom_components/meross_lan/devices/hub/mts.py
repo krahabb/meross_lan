@@ -101,7 +101,8 @@ class mts100(SubDevice, MtsClimate):
                 self.hvac_action = (
                     MtsClimate.HVACAction.HEATING
                     if (
-                        (self.target_temperature or 0) > (self.current_temperature or 0)
+                        (self.native_target_temperature or 0)
+                        > (self.native_current_temperature or 0)
                     )
                     else MtsClimate.HVACAction.IDLE
                 )
@@ -159,9 +160,13 @@ class mts100(SubDevice, MtsClimate):
             )
             self._mts_onoff = 1
         try:
-            target_temperature = self.ns_value[mc.MTS100_MODE_TO_CURRENTSET_MAP[mode]]
-            self.ns_value[mc.KEY_CURRENTSET] = target_temperature
-            self.target_temperature = target_temperature / self.temperature_scale
+            native_target_temperature = self.ns_value[
+                mc.MTS100_MODE_TO_CURRENTSET_MAP[mode]
+            ]
+            self.ns_value[mc.KEY_CURRENTSET] = native_target_temperature
+            self.native_target_temperature = (
+                native_target_temperature / self.temperature_scale
+            )
         except KeyError:
             pass
         self.flush_state()
@@ -188,7 +193,7 @@ class mts100(SubDevice, MtsClimate):
                 payload[mc.KEY_ROOM] / self.temperature_scale
             )
         if mc.KEY_CURRENTSET in payload:
-            self.target_temperature = (
+            self.native_target_temperature = (
                 payload[mc.KEY_CURRENTSET] / self.temperature_scale
             )
             if (

@@ -88,8 +88,8 @@ class Mts300Climate(MtsThermostatClimate):
         _mts_work: int | None
 
         # HA core entity attributes:
-        target_temperature_high: float | None
-        target_temperature_low: float | None
+        native_target_temperature_high: float | None
+        native_target_temperature_low: float | None
 
         # entities
         sensor_current_humidity: SensorParser
@@ -180,8 +180,8 @@ class Mts300Climate(MtsThermostatClimate):
     __slots__ = (
         "fan_mode",
         "fan_modes",
-        "target_temperature_high",
-        "target_temperature_low",
+        "native_target_temperature_high",
+        "native_target_temperature_low",
         "_mts_work",
         "sensor_current_humidity",
         "select_temp_association",
@@ -196,8 +196,8 @@ class Mts300Climate(MtsThermostatClimate):
         )
         self.fan_mode = None
         self.fan_modes = self._attr_fan_modes
-        self.target_temperature_high = None
-        self.target_temperature_low = None
+        self.native_target_temperature_high = None
+        self.native_target_temperature_low = None
         self._mts_work = None
         for _key, _args in Mts300Climate.ENTITY_ARGS.items():
             setattr(self, f"sensor_{_key}", EnumParser(self, **_args))
@@ -225,10 +225,24 @@ class Mts300Climate(MtsThermostatClimate):
     # interface: MtsClimate
     def set_unavailable(self):
         self.fan_mode = None
-        self.target_temperature_high = None
-        self.target_temperature_low = None
+        self.native_target_temperature_high = None
+        self.native_target_temperature_low = None
         self._mts_work = None
         return MtsThermostatClimate.set_unavailable(self)
+
+    if mlc.HA_VERSION < (2026, 11):
+        # patch pre 2026.11 ClimateEntity properties
+        # The idea is to implement the renamed attributes with the new re-names (as mandatory in 2026.11 and later)
+        # and just provide the following properties to establish a compatibility layer with HA core when running on previous versions.
+        # Our code will use the new attributes anyway (pre and post 2026.11) since they're totally interchangeable in semantics
+        # and we don't really care if they were named differently before...
+        @property
+        def target_temperature_high(self):  # type: ignore
+            return self.native_target_temperature_high
+
+        @property
+        def target_temperature_low(self):  # type: ignore
+            return self.native_target_temperature_low
 
     async def async_set_hvac_mode(self, hvac_mode: MtsThermostatClimate.HVACMode):
         await self.async_request_parse_ex(
@@ -331,8 +345,12 @@ class Mts300Climate(MtsThermostatClimate):
             )
 
             targetTemp = payload["targetTemp"]
-            self.target_temperature_high = targetTemp["cold"] / self.temperature_scale
-            self.target_temperature_low = targetTemp["heat"] / self.temperature_scale
+            self.native_target_temperature_high = (
+                targetTemp["cold"] / self.temperature_scale
+            )
+            self.native_target_temperature_low = (
+                targetTemp["heat"] / self.temperature_scale
+            )
             more = payload["more"]
             self.sensor_current_humidity.update_device_value(more["humi"])
             self.current_humidity = self.sensor_current_humidity.native_value
@@ -359,7 +377,7 @@ class Mts300Climate(MtsThermostatClimate):
                     # don't set _mts_mode so we remember last one
                     self.hvac_mode = MtsThermostatClimate.HVACMode.OFF
                     self.hvac_action = MtsThermostatClimate.HVACAction.OFF
-                    self.target_temperature = None
+                    self.native_target_temperature = None
                 case mc.MTS300_MODE_HEAT:
                     self._mts_onoff = 1
                     self._mts_mode = mode
@@ -371,7 +389,7 @@ class Mts300Climate(MtsThermostatClimate):
                             bool(more["fStatus"]),
                         )
                     ]
-                    self.target_temperature = self.target_temperature_low
+                    self.native_target_temperature = self.native_target_temperature_low
                 case mc.MTS300_MODE_COOL:
                     self._mts_onoff = 1
                     self._mts_mode = mode
@@ -383,7 +401,7 @@ class Mts300Climate(MtsThermostatClimate):
                             bool(more["fStatus"]),
                         )
                     ]
-                    self.target_temperature = self.target_temperature_high
+                    self.native_target_temperature = self.native_target_temperature_high
                 case mc.MTS300_MODE_AUTO:
                     self._mts_onoff = 1
                     self._mts_mode = mode
@@ -395,7 +413,7 @@ class Mts300Climate(MtsThermostatClimate):
                             bool(more["fStatus"]),
                         )
                     ]
-                    self.target_temperature = None
+                    self.native_target_temperature = None
 
             self.flush_state()
         except Exception as e:
