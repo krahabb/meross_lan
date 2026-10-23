@@ -1,5 +1,6 @@
 from homeassistant.components import calendar as haec
-from homeassistant.components.calendar import CalendarEntity
+from homeassistant.components.calendar import CalendarEntity, CalendarEntityFeature
+from homeassistant.exceptions import ServiceNotSupported
 from homeassistant.util import dt as dt_util
 
 from custom_components.meross_lan.calendar import MtsSchedule
@@ -62,8 +63,13 @@ class EntityTest(EntityComponentTest):
                         + dt_util.dt.timedelta(hours=1),
                     },
                 )
+            except ServiceNotSupported:
+                # read-only schedule (mts300)
+                assert not (
+                    entity.supported_features & CalendarEntityFeature.CREATE_EVENT
+                )
             except Exception as ex:
-                if str(ex) != "Exception Too many elements in the schedule":
+                if str(ex) != "Too many elements in the schedule":
                     # this is acceptable since the schedule may be full
                     raise ex
 
