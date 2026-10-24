@@ -311,7 +311,7 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         # ToggleX behavior in cover (garage/rollershutter) is not very clear
         # most devices expose the ns in abilities and maybe also channel indexes in digest
         # but the effect of toggling is unknown. We just silence any incoming message here.
-        device.register_togglex_channel(self, False)
+        device.register_togglex_channel(self)
 
     async def async_added_to_hass(self):
         with self.exception_warning("restoring previous state"):

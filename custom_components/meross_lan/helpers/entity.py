@@ -572,7 +572,7 @@ class ToggleXParser(BinaryEntity, ParserEntity):
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         super().__init__(*args, **kwargs)
-        self.handler_togglex = self.parent.register_togglex_channel(self, True)  # type: ignore
+        self.handler_togglex = self.parent.register_togglex_channel(self)
 
     def _parse_togglex(self, payload: dict, /):
         is_on = bool(payload[mc.KEY_ONOFF])

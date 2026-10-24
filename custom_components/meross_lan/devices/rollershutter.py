@@ -112,7 +112,7 @@ class RollerShutter(Cover.RestoreEntity, Cover):
         # ToggleX behavior in cover (garage/rollershutter) is not very clear
         # most devices expose the ns in abilities and maybe also channel indexes in digest
         # but the effect of toggling is unknown. We just silence any incoming message here.
-        device.register_togglex_channel(self, False)
+        device.register_togglex_channel(self)
 
     def set_unavailable(self):
         self._mrs_state = None

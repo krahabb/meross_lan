@@ -1260,7 +1260,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             self.sensor_protocol.set_available()
 
     # interface: self
-    def register_togglex_channel(self, entity: "ParserEntity", active: bool, /):
+    def register_togglex_channel(self, entity: "ParserEntity", /):
         """
         Checks if entity has an associated ToggleX behavior and eventually
         registers it
@@ -1268,11 +1268,10 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         try:
             for togglex_digest in self.descriptor.digest[mc.KEY_TOGGLEX]:
                 if togglex_digest[mc.KEY_CHANNEL] == entity.index.value:
-                    if active:
-                        # by design this should be an ToggleXParser
-                        # but we have enough of _parse_togglex
-                        assert hasattr(entity, "_parse_togglex")
-                    else:
+                    if not hasattr(entity, "_parse_togglex"):
+                        # This means we're not actually interested in parsing
+                        # but our framework would like to have a sink anyway
+                        # just to shut down diagnostic warnings or so
                         entity._parse_togglex = lambda payload: None
                     ns_handler = self.get_handler(mn.Appliance_Control_ToggleX)
                     ns_handler.register_parser(entity)
