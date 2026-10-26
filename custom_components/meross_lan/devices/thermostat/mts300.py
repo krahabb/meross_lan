@@ -118,19 +118,6 @@ class Mts300Climate(MtsThermostatClimate):
         hacc.FAN_MEDIUM: mc.MTS300_FAN_SPEED_MEDIUM,
         hacc.FAN_HIGH: mc.MTS300_FAN_SPEED_HIGH,
     }
-    STATUS_TO_HVAC_ACTION_MAP = {
-        (False, False, False): MtsThermostatClimate.HVACAction.IDLE,
-        # heating flag active (whatever the rest...)
-        (True, False, False): MtsThermostatClimate.HVACAction.HEATING,
-        (True, False, True): MtsThermostatClimate.HVACAction.HEATING,
-        (True, True, False): MtsThermostatClimate.HVACAction.HEATING,
-        (True, True, True): MtsThermostatClimate.HVACAction.HEATING,
-        # cooling flag active (when not heating of course)
-        (False, True, False): MtsThermostatClimate.HVACAction.COOLING,
-        (False, True, True): MtsThermostatClimate.HVACAction.COOLING,
-        # only fan active
-        (False, False, True): MtsThermostatClimate.HVACAction.FAN,
-    }
     """Status flags in "more" dict mapped as: (bool(hStatus), bool(cStatus), bool(fStatus))."""
     ENTITY_ARGS = {
         "hdStatus": {
@@ -382,37 +369,38 @@ class Mts300Climate(MtsThermostatClimate):
                     self._mts_onoff = 1
                     self._mts_mode = mode
                     self.hvac_mode = MtsThermostatClimate.HVACMode.HEAT
-                    self.hvac_action = Mts300Climate.STATUS_TO_HVAC_ACTION_MAP[
+                    self.hvac_action = (
                         (
-                            bool(more["hStatus"]),
-                            False,
-                            bool(more["fStatus"]),
+                            (more["hStatus"] or more["aStatus"])
+                            and MtsThermostatClimate.HVACAction.HEATING
                         )
-                    ]
+                        or (more["fStatus"] and MtsThermostatClimate.HVACAction.FAN)
+                        or MtsThermostatClimate.HVACAction.IDLE
+                    )
                     self.native_target_temperature = self.native_target_temperature_low
                 case mc.MTS300_MODE_COOL:
                     self._mts_onoff = 1
                     self._mts_mode = mode
                     self.hvac_mode = MtsThermostatClimate.HVACMode.COOL
-                    self.hvac_action = Mts300Climate.STATUS_TO_HVAC_ACTION_MAP[
-                        (
-                            False,
-                            bool(more["cStatus"]),
-                            bool(more["fStatus"]),
-                        )
-                    ]
+                    self.hvac_action = (
+                        (more["cStatus"] and MtsThermostatClimate.HVACAction.COOLING)
+                        or (more["fStatus"] and MtsThermostatClimate.HVACAction.FAN)
+                        or MtsThermostatClimate.HVACAction.IDLE
+                    )
                     self.native_target_temperature = self.native_target_temperature_high
                 case mc.MTS300_MODE_AUTO:
                     self._mts_onoff = 1
                     self._mts_mode = mode
                     self.hvac_mode = MtsThermostatClimate.HVACMode.HEAT_COOL
-                    self.hvac_action = Mts300Climate.STATUS_TO_HVAC_ACTION_MAP[
+                    self.hvac_action = (
                         (
-                            bool(more["hStatus"]),
-                            bool(more["cStatus"]),
-                            bool(more["fStatus"]),
+                            (more["hStatus"] or more["aStatus"])
+                            and MtsThermostatClimate.HVACAction.HEATING
                         )
-                    ]
+                        or (more["cStatus"] and MtsThermostatClimate.HVACAction.COOLING)
+                        or (more["fStatus"] and MtsThermostatClimate.HVACAction.FAN)
+                        or MtsThermostatClimate.HVACAction.IDLE
+                    )
                     self.native_target_temperature = None
 
             self.flush_state()

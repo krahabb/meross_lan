@@ -195,7 +195,7 @@ class ModeC_more(TypedDict):
     cStatus: int  # [0..2] cooling level
     hStatus: int  # [0..3] heating level
     fStatus: int  # [0..3] fan level (speed)
-    aStatus: int  # [0..3] auxilliary control level
+    aStatus: int  # [0..3] auxiliary control level
 
 
 class ModeC_targetTemp(TypedDict):
