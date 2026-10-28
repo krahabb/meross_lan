@@ -15,7 +15,6 @@ except ImportError:
     import voluptuous as vol
 
 from custom_components.meross_lan import const as mlc, schedule_sync
-from custom_components.meross_lan.calendar import MtsSchedule
 from custom_components.meross_lan.helpers.schedule import (
     HA_SCHEDULE_WEEKDAY,
     MTS_SCHEDULE_WEEKDAY,
@@ -23,6 +22,7 @@ from custom_components.meross_lan.helpers.schedule import (
 )
 from custom_components.meross_lan.merossclient.protocol import const as mc
 from custom_components.meross_lan.schedule_sync import (
+    MtsSchedule,
     ScheduleHelperSelect as Select,
     ScheduleSyncSensor as Sensor,
 )

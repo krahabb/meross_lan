@@ -22,7 +22,7 @@ from custom_components.meross_lan.helpers.schedule import (
 
 from tests.schedule_helpers import MTS100_TRACE, MTS100_TRACE_MONDAY, B, week
 
-# device limits as set up by the calendar entity for the different families
+# device limits as set up by the climate schedule for the different families
 MTS100 = dict(
     scale=10,
     unit_time=15,

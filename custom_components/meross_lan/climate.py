@@ -5,13 +5,13 @@ from homeassistant.components import climate, sensor
 from homeassistant.core import CoreState, callback
 from homeassistant.util.unit_conversion import TemperatureConverter
 
-from .calendar import MtsSchedule
 from .const import HA_VERSION, hac
 from .helpers import reverse_lookup
 from .helpers.entity import ParserEntity
 from .helpers.schedule import KEY_COOL, KEY_TEMPERATURE
 from .number import NumberParser
 from .schedule_sync import (
+    MtsSchedule,
     ScheduleHelperSelect,
     SchedulePullButton,
     SchedulePushButton,
@@ -72,9 +72,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             return await climate.async_request_parse_ex(
                 self.key_value.payload(device_value)
             )
-
-    Schedule = MtsSchedule
-    """Overriden in derived to provide specific behavior."""
 
     class TrackSensorSelect(SelectEntity.RestoreEntity, SelectEntity):
         """
@@ -316,7 +313,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         ATTR_TARGET_TEMP_LOW: Final
 
         SCHEDULE_NS: ClassVar[mn.Namespace]
-        Schedule: ClassVar[type[MtsSchedule]]
         SCHEDULE_KEYS: ClassVar[tuple[str, ...]]
         """Schedule helper block data keys carried (in order) by the device
         schedule entries ([minutes, *values])."""
@@ -477,14 +473,9 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
                 }.items()
             )
 
-        schedule_ns = cls.SCHEDULE_NS
-        self.schedule = cls.Schedule(
-            self,
-            climate=self,
-            entity_key=schedule_ns.key,
-            ns=schedule_ns,
-        )
-        self.parent.enable_check_device_time()  # useful for schedule entity times
+        self.schedule = MtsSchedule(self)
+        # the device runs its schedule on its local time
+        self.parent.enable_check_device_time()
 
         self.select_track_sensor = cls.TrackSensorSelect(self)
         # sensor first: the select references it
@@ -509,6 +500,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         self.hvac_action = None
         self.hvac_mode = None
         super().set_unavailable()
+        self.schedule.set_unavailable()
 
     def flush_state(self):
         super().flush_state()

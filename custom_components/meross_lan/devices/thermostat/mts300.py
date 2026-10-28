@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING, override
 
-from homeassistant.components import calendar
 from homeassistant.components.climate import const as hacc
 
 from . import (
@@ -14,7 +13,6 @@ from . import (
     mn,
     mn_t,
 )
-from ...calendar import MtsSchedule
 from ...helpers import reverse_lookup
 from ...helpers.schedule import KEY_COOL, KEY_HEAT
 from ...switch import EmulatedSwitch
@@ -81,12 +79,6 @@ class Mts300Climate(MtsThermostatClimate):
         _INIT_options_map = {
             2: "Internal sensor",  # almost sure
         }
-
-    class Schedule(MtsSchedule):
-        # read-only: editing [minutes, heat, cool] entries is not supported yet
-        _attr_supported_features = calendar.CalendarEntityFeature(0)
-
-        __slots__ = ()
 
     if TYPE_CHECKING:
         # overrides
