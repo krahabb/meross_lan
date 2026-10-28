@@ -4,14 +4,19 @@ and its status sensor (ScheduleSyncSensor) on the msh300 hub mts100 valves.
 """
 
 import asyncio
+from copy import deepcopy
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
 from homeassistant import const as hac
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.auth.const import GROUP_ID_USER
+from homeassistant.core import Context
+from homeassistant.exceptions import HomeAssistantError, Unauthorized, UnknownUser
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util.unit_system import METRIC_SYSTEM, US_CUSTOMARY_SYSTEM
 import pytest
+from pytest_homeassistant.common import MockUser
 
 from custom_components.meross_lan import const as mlc, schedule_sync
 from custom_components.meross_lan.calendar import MtsSchedule
@@ -29,6 +34,7 @@ from custom_components.meross_lan.merossclient.protocol.namespaces import (
 from custom_components.meross_lan.schedule_sync import (
     ScheduleHelperSelect as Select,
     ScheduleSyncSensor as Sensor,
+    _helper_storage,
 )
 import emulator as emulator_module
 
@@ -38,6 +44,8 @@ from tests.schedule_helpers import (
     HELPER_BLOCKS,
     HELPER_BLOCKS_MTS300,
     HELPER_ENTITY_ID,
+    MTS100_TRACE,
+    MTS100_TRACE_MONDAY,
     MTS300_TRACE_PRE,
     OTHER_DEVICE_UUID,
     OTHER_SCHEDULE,
@@ -59,6 +67,7 @@ if TYPE_CHECKING:
     from tests.schedule_helpers import ScheduleContext
 
 SYNCED = (Sensor.STATE_SYNCED, None)
+PULL = "schedule_pull"
 
 
 async def _async_link(ctx: "ScheduleContext", select: Select | None = None):
@@ -798,12 +807,186 @@ async def test_schedule_sync_mts300_fahrenheit(request, hass: "HomeAssistant"):
         assert not ctx.set_payloads
 
 
-async def test_schedule_sync_races(request, hass: "HomeAssistant"):
-    """A push superseded by a link change fails. The select removed (e.g.
-    disabled): the status is off, get_schedule reports no linked helper and a push
-    fails."""
+def _storage_item(hass: "HomeAssistant", entity_id: str) -> "dict[str, Any]":
+    """The (UI) helper as stored by HA."""
+    entry = er.async_get(hass).async_get(entity_id)
+    assert entry
+    return _helper_storage(hass).data[entry.unique_id]
+
+
+def _stored(blocks: "list[dict[str, Any]]"):
+    """Helper blocks in the HA storage format ("HH:MM:SS")."""
+    return [b | {"from": f"{b['from']}:00", "to": f"{b['to']}:00"} for b in blocks]
+
+
+async def test_schedule_pull(request, hass: "HomeAssistant", hass_admin_user):
+    """'Sync schedule from device': with no helper linked a helper is created from
+    the device schedule and linked, then a linked one is overwritten keeping its
+    name and icon (off slots as gaps). The device is not written."""
     async with async_schedule_context(request, hass) as ctx:
         select = ctx.select
+        await ctx.async_set_device_schedule(MTS100_TRACE)
+
+        # (a) not linked: created and linked
+        await ctx.async_press(PULL, context=Context(user_id=hass_admin_user.id))
+        entity_id = select.linked_helper
+        assert entity_id and entity_id != HELPER_ENTITY_ID
+        assert entity_id in select.options
+        item = _storage_item(hass, entity_id)
+        name = f"{select.device_entry.name} schedule"  # type: ignore
+        assert item[hac.CONF_NAME] == name
+        assert hass.states.get(entity_id).name == name  # type: ignore
+        assert item["monday"] == _stored(MTS100_TRACE_MONDAY)
+        await ctx.async_tick(Select.SYNC_DELAY)
+        assert not ctx.set_payloads
+        assert ctx.sensor_state().state == Sensor.STATE_SYNCED
+
+        # the helper is edited (and given an icon): written
+        storage = _helper_storage(hass)
+        await storage.async_update_item(
+            item[hac.CONF_ID],
+            {hac.CONF_NAME: name, hac.CONF_ICON: "mdi:radiator", **OTHER_SCHEDULE},
+        )
+        await ctx.async_tick(Select.SYNC_DELAY)
+        assert len(ctx.set_payloads) == 1
+        assert ctx.emulator_schedule() == ctx.compile(OTHER_SCHEDULE)
+
+        # (b) linked: the device schedule changed elsewhere is pulled (no user:
+        # automation) into the helper and not written back
+        await ctx.async_drift()
+        assert ctx.sensor_state().state == Sensor.STATE_DRIFT
+        await ctx.async_press(PULL)
+        assert select.linked_helper == entity_id
+        item = _storage_item(hass, entity_id)
+        assert item[hac.CONF_NAME] == name
+        assert item[hac.CONF_ICON] == "mdi:radiator"
+        assert item["monday"] == _stored(
+            [B("00:00", "12:00", 20), B("12:00", "24:00", 22)]
+        )
+        assert item["tuesday"] == _stored(OTHER_SCHEDULE["tuesday"])
+        await ctx.async_tick(Select.SYNC_DELAY)
+        assert len(ctx.set_payloads) == 1
+        assert ctx.sensor_state().state == Sensor.STATE_SYNCED
+
+        # (c) a device value off the valve grid (0.5 °C) is pulled exactly: no
+        # write (it is kept since the device holds it)
+        await ctx.async_set_device_schedule(
+            ctx.emulator_schedule() | {"mon": [[720, 213]] + DRIFTED_DAY[1:]}
+        )
+        await ctx.async_press(PULL)
+        assert (
+            _storage_item(hass, entity_id)["monday"][0]["data"]["temperature"] == 21.3
+        )
+        await ctx.async_tick(Select.SYNC_DELAY)
+        assert len(ctx.set_payloads) == 1
+        assert ctx.sensor_state().state == Sensor.STATE_SYNCED
+        # changed in the app: drift, not enforced (the reference keeps 21.3)
+        await ctx.async_set_device_schedule(
+            ctx.emulator_schedule() | {"mon": DRIFTED_DAY}
+        )
+        assert await select.async_sync() == (Sensor.STATE_DRIFT, Select.REASON_DRIFT)
+        assert len(ctx.set_payloads) == 1
+
+        # (d) slots at the off value (the valve min_temp) are pulled as gaps
+        off = round(ctx.climate.min_temp * 10)
+        monday = [[390, off], [90, 180], [300, off], [300, off], [210, 210], [150, off]]
+        await ctx.async_set_device_schedule(MTS100_TRACE | {"mon": monday})
+        await ctx.async_press(PULL)
+        assert _storage_item(hass, entity_id)["monday"] == _stored(
+            # an off slot right after another one stays a block (gaps would merge)
+            [B("06:30", "08:00", 18), B("13:00", "18:00", 5), B("18:00", "21:30", 21)]
+        )
+        await ctx.async_tick(Select.SYNC_DELAY)
+        assert len(ctx.set_payloads) == 1
+        assert ctx.sensor_state().state == Sensor.STATE_SYNCED
+
+
+async def test_schedule_pull_refused(request, hass: "HomeAssistant"):
+    """The pull fails, creating or changing nothing, for: non admin users, a
+    disabled select, a missing HA internal (helper storage), a YAML helper."""
+    user = MockUser(groups=[await hass.auth.async_get_group(GROUP_ID_USER)])
+    user.add_to_hass(hass)
+    async with async_schedule_context(request, hass) as ctx:
+        select = ctx.select
+        # the press context reaches the pull
+        with pytest.raises(Unauthorized):
+            await ctx.async_press(PULL, context=Context(user_id=user.id))
+        with pytest.raises(UnknownUser):
+            await select.async_pull(Context(user_id="unknown"))
+        with patch.object(select, "hass_connected", False):
+            with pytest.raises(HomeAssistantError, match="select is disabled"):
+                await ctx.async_press(PULL)
+        with patch.dict(hass.data["websocket_api"]):
+            hass.data["websocket_api"].pop("schedule/create")
+            with pytest.raises(
+                HomeAssistantError, match="unsupported Home Assistant version"
+            ):
+                await ctx.async_press(PULL)
+        assert hass.states.async_entity_ids("schedule") == [HELPER_ENTITY_ID]
+        assert select.linked_helper is None
+
+        await _async_link(ctx)
+        helper = await select._async_read_helper(HELPER_ENTITY_ID)
+        with pytest.raises(HomeAssistantError, match="not a helper created in the UI"):
+            await ctx.async_press(PULL)
+        assert await select._async_read_helper(HELPER_ENTITY_ID) == helper
+        assert hass.states.async_entity_ids("schedule") == [HELPER_ENTITY_ID]
+        assert len(ctx.set_payloads) == 1
+
+
+async def test_schedule_pull_group(request, hass: "HomeAssistant"):
+    """A pull into a shared helper is refused (helper unchanged) when another
+    thermostat linked to it can't take the device schedule."""
+    async with (
+        async_schedule_context(request, hass) as ctx,
+        async_schedule_device(
+            request, hass, build_mts200_emulator(OTHER_DEVICE_UUID)
+        ) as ctx_mts200,
+    ):
+        valve, mts200 = ctx.climate, ctx_mts200.climate
+        # a helper pulled from the valve, shared with the mts200
+        await ctx.async_set_device_schedule(MTS100_TRACE, valve)
+        await ctx.async_press(PULL, valve)
+        entity_id = valve.select_schedule_helper.linked_helper
+        assert entity_id
+        await mts200.select_schedule_helper.async_select_option(entity_id)
+        await ctx.async_tick(Select.SYNC_DELAY)
+        assert not ctx.set_payloads
+        assert len(ctx_mts200.set_payloads) == 1
+        for climate in (valve, mts200):
+            assert ctx.sensor_state(climate).state == Sensor.STATE_SYNCED
+        # a pull from the mts200 is written to the valve
+        await ctx_mts200.async_drift()
+        await ctx.async_press(PULL, mts200)
+        await ctx.async_tick(Select.SYNC_DELAY)
+        assert len(ctx.set_payloads) == 1
+        assert ctx.emulator_schedule(valve)["mon"][:2] == DRIFTED_DAY[:2]
+        assert len(ctx_mts200.set_payloads) == 1
+        for climate in (valve, mts200):
+            assert ctx.sensor_state(climate).state == Sensor.STATE_SYNCED
+        item = deepcopy(_storage_item(hass, entity_id))
+
+        # 7 slots on the mts200 (the valve takes 6)
+        seven_slots = [[180, 160 + i * 10] for i in range(6)] + [[360, 220], [0, 220]]
+        await ctx_mts200.async_set_device_schedule(
+            ctx_mts200.emulator_schedule() | {"mon": seven_slots}
+        )
+        with pytest.raises(HomeAssistantError, match=f"does not fit {valve.entity_id}"):
+            await ctx.async_press(PULL, mts200)
+        assert _storage_item(hass, entity_id) == item
+        await ctx.async_tick(Select.SYNC_DELAY)
+        assert ctx.sensor_state(valve).state == Sensor.STATE_SYNCED
+        assert ctx.sensor_state(mts200).state == Sensor.STATE_DRIFT
+        assert len(ctx.set_payloads) == 1
+        assert len(ctx_mts200.set_payloads) == 1
+
+
+async def test_schedule_sync_races(request, hass: "HomeAssistant"):
+    """A push superseded by a link change fails and a pull completing after the
+    select removal (e.g. disabled) doesn't link the created helper. The removed
+    select: status off, no linked helper in get_schedule, a push fails."""
+    async with async_schedule_context(request, hass) as ctx:
+        select, other = (climate.select_schedule_helper for climate in ctx.climates)
         await _async_link(ctx)
         async with ctx.async_hold_writes() as async_write_started:
             push = hass.async_create_task(select.async_push())
@@ -811,6 +994,20 @@ async def test_schedule_sync_races(request, hass: "HomeAssistant"):
             await select.async_select_option(HELPER_ENTITY_ID)
         with pytest.raises(HomeAssistantError, match="superseded"):
             await push
+
+        # (the trace schedule of the other valve is incomplete)
+        await ctx.async_set_device_schedule(MTS100_TRACE, other.climate)
+        storage = _helper_storage(hass)
+        async_create_item = storage.async_create_item
+
+        async def _async_create_item(data):
+            await other.async_remove()
+            return await async_create_item(data)
+
+        with patch.object(storage, "async_create_item", _async_create_item):
+            await other.async_pull()
+        assert len(hass.states.async_entity_ids("schedule")) == 2
+        assert other.linked_helper is None
 
         await select.async_remove()
         state = ctx.sensor_state()
