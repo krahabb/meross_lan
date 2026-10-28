@@ -1016,6 +1016,20 @@
       }),
       'unique_id': '0123456789012345678901234567890C_0_schedule_helper',
     }),
+    '0_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567890C_0_schedule_pull',
+    }),
+    '0_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567890C_0_schedule_push',
+    }),
     '0_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -1409,6 +1423,20 @@
       }),
       'unique_id': '0123456789012345678901234567890F_0100783A_schedule_helper',
     }),
+    '0100783A_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567890F_0100783A_schedule_pull',
+    }),
+    '0100783A_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567890F_0100783A_schedule_push',
+    }),
     '0100783A_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -1541,6 +1569,20 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '0123456789012345678901234567890F_01008C11_schedule_helper',
+    }),
+    '01008C11_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567890F_01008C11_schedule_pull',
+    }),
+    '01008C11_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567890F_01008C11_schedule_push',
     }),
     '01008C11_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
@@ -1946,6 +1988,20 @@
       }),
       'unique_id': '01234567890123456789012345678911_0300DF01_schedule_helper',
     }),
+    '0300DF01_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678911_0300DF01_schedule_pull',
+    }),
+    '0300DF01_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678911_0300DF01_schedule_push',
+    }),
     '0300DF01_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -2300,6 +2356,20 @@
       }),
       'unique_id': '01234567890123456789012345678912_03002B0E_schedule_helper',
     }),
+    '03002B0E_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678912_03002B0E_schedule_pull',
+    }),
+    '03002B0E_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678912_03002B0E_schedule_push',
+    }),
     '03002B0E_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -2478,6 +2548,20 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678912_03004B5A_schedule_helper',
+    }),
+    '03004B5A_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678912_03004B5A_schedule_pull',
+    }),
+    '03004B5A_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678912_03004B5A_schedule_push',
     }),
     '03004B5A_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
@@ -3044,6 +3128,20 @@
       }),
       'unique_id': '01234567890123456789012345678914_0_schedule_helper',
     }),
+    '0_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678914_0_schedule_pull',
+    }),
+    '0_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678914_0_schedule_push',
+    }),
     '0_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -3275,6 +3373,20 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678915_0_schedule_helper',
+    }),
+    '0_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678915_0_schedule_pull',
+    }),
+    '0_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678915_0_schedule_push',
     }),
     '0_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
@@ -3534,6 +3646,20 @@
       }),
       'unique_id': '01234567890123456789012345678916_01000671_schedule_helper',
     }),
+    '01000671_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01000671_schedule_pull',
+    }),
+    '01000671_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01000671_schedule_push',
+    }),
     '01000671_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -3666,6 +3792,20 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678916_0100093F_schedule_helper',
+    }),
+    '0100093F_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100093F_schedule_pull',
+    }),
+    '0100093F_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100093F_schedule_push',
     }),
     '0100093F_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
@@ -3800,6 +3940,20 @@
       }),
       'unique_id': '01234567890123456789012345678916_01003166_schedule_helper',
     }),
+    '01003166_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01003166_schedule_pull',
+    }),
+    '01003166_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01003166_schedule_push',
+    }),
     '01003166_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -3932,6 +4086,20 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678916_01003524_schedule_helper',
+    }),
+    '01003524_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01003524_schedule_pull',
+    }),
+    '01003524_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01003524_schedule_push',
     }),
     '01003524_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
@@ -4066,6 +4234,20 @@
       }),
       'unique_id': '01234567890123456789012345678916_01005C75_schedule_helper',
     }),
+    '01005C75_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01005C75_schedule_pull',
+    }),
+    '01005C75_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01005C75_schedule_push',
+    }),
     '01005C75_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -4198,6 +4380,20 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678916_0100813A_schedule_helper',
+    }),
+    '0100813A_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100813A_schedule_pull',
+    }),
+    '0100813A_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100813A_schedule_push',
     }),
     '0100813A_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
@@ -4332,6 +4528,20 @@
       }),
       'unique_id': '01234567890123456789012345678916_0100DEE3_schedule_helper',
     }),
+    '0100DEE3_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100DEE3_schedule_pull',
+    }),
+    '0100DEE3_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100DEE3_schedule_push',
+    }),
     '0100DEE3_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -4464,6 +4674,20 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678916_0100FAC0_schedule_helper',
+    }),
+    '0100FAC0_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100FAC0_schedule_pull',
+    }),
+    '0100FAC0_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100FAC0_schedule_push',
     }),
     '0100FAC0_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
@@ -4678,6 +4902,20 @@
       }),
       'unique_id': '01234567890123456789012345678916_030004B4_schedule_helper',
     }),
+    '030004B4_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_030004B4_schedule_pull',
+    }),
+    '030004B4_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_030004B4_schedule_push',
+    }),
     '030004B4_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -4890,6 +5128,20 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678916_030011B6_schedule_helper',
+    }),
+    '030011B6_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_030011B6_schedule_pull',
+    }),
+    '030011B6_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_030011B6_schedule_push',
     }),
     '030011B6_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
@@ -5104,6 +5356,20 @@
       }),
       'unique_id': '01234567890123456789012345678916_03003F30_schedule_helper',
     }),
+    '03003F30_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_03003F30_schedule_pull',
+    }),
+    '03003F30_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_03003F30_schedule_push',
+    }),
     '03003F30_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -5316,6 +5582,20 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678916_03004404_schedule_helper',
+    }),
+    '03004404_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_03004404_schedule_pull',
+    }),
+    '03004404_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_03004404_schedule_push',
     }),
     '03004404_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
@@ -5530,6 +5810,20 @@
       }),
       'unique_id': '01234567890123456789012345678916_03004586_schedule_helper',
     }),
+    '03004586_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_03004586_schedule_pull',
+    }),
+    '03004586_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_03004586_schedule_push',
+    }),
     '03004586_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -5743,6 +6037,20 @@
       }),
       'unique_id': '01234567890123456789012345678916_0300DAB1_schedule_helper',
     }),
+    '0300DAB1_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0300DAB1_schedule_pull',
+    }),
+    '0300DAB1_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0300DAB1_schedule_push',
+    }),
     '0300DAB1_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -5955,6 +6263,20 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678916_0300F670_schedule_helper',
+    }),
+    '0300F670_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0300F670_schedule_pull',
+    }),
+    '0300F670_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0300F670_schedule_push',
     }),
     '0300F670_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
@@ -7159,6 +7481,20 @@
       }),
       'unique_id': '0123456789012345678901234567891E_0_schedule_helper',
     }),
+    '0_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567891E_0_schedule_pull',
+    }),
+    '0_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567891E_0_schedule_push',
+    }),
     '0_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -7457,6 +7793,20 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '0123456789012345678901234567891F_0_schedule_helper',
+    }),
+    '0_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567891F_0_schedule_pull',
+    }),
+    '0_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567891F_0_schedule_push',
     }),
     '0_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
@@ -9004,6 +9354,20 @@
       }),
       'unique_id': '01234567890123456789012345678925_0_schedule_helper',
     }),
+    '0_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678925_0_schedule_pull',
+    }),
+    '0_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678925_0_schedule_push',
+    }),
     '0_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -9563,6 +9927,20 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678928_0_schedule_helper',
+    }),
+    '0_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678928_0_schedule_pull',
+    }),
+    '0_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678928_0_schedule_push',
     }),
     '0_schedule_sync': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,

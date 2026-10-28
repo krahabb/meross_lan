@@ -11,6 +11,14 @@
         "alarm": "Alarm"
     },
     "entity": {
+        "button": {
+            "schedule_pull": {
+                "name": "Sync schedule from device"
+            },
+            "schedule_push": {
+                "name": "Sync schedule to device"
+            }
+        },
         "climate": {
             "mts_climate": {
                 "state_attributes": {

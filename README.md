@@ -124,7 +124,7 @@ Thermostats with an on-board weekly schedule (MTS100/MTS150 via the MSH300 hub, 
 - time not covered by any block is off (device minimum, maximum when cooling) and takes a slot like every block: at most 6 slots per day on MTS100/MTS150, 8 on MTS200, 12 on MTS960/MTS300
 - block boundaries are rounded to 15 minutes, temperatures to 0.5 °C (whole °F on thermostats displaying °F)
 
-The `meross_lan.get_schedule`, `set_schedule` and `sync_schedule` services (HA 2025.10+) read, write and resync the device schedule from automations.
+'Sync schedule from device' (admin only, UI-created helpers only) copies the device schedule into the linked helper, or into a new one it links; 'Sync schedule to device' writes the helper now. The `meross_lan.get_schedule`, `set_schedule` and `sync_schedule` services (HA 2025.10+) do the same from automations.
 
 ## Service
 

@@ -37,9 +37,10 @@ from tests import const as tc, helpers
 if TYPE_CHECKING:
     from typing import Any
 
-    from homeassistant.core import HomeAssistant
+    from homeassistant.core import Context, HomeAssistant
     from pytest import FixtureRequest
 
+    from custom_components.meross_lan.button import Button
     from custom_components.meross_lan.merossclient.protocol.namespaces import (
         Namespace,
     )
@@ -298,6 +299,30 @@ class ScheduleContext:
             finally:
                 gate.set()
             await self.hass.async_block_till_done()
+
+    def button(self, entity_key: str, climate: MtsClimate | None = None) -> "Button":
+        """The schedule_pull/schedule_push button of the climate."""
+        climate = climate or self.climate
+        return next(
+            entity
+            for entity in climate.parent.entities.values()
+            if entity.entity_key == entity_key
+            and entity.device_info == climate.device_info
+        )  # type: ignore
+
+    async def async_press(
+        self,
+        entity_key: str,
+        climate: MtsClimate | None = None,
+        context: "Context | None" = None,
+    ):
+        await self.hass.services.async_call(
+            "button",
+            "press",
+            {"entity_id": self.button(entity_key, climate).entity_id},
+            blocking=True,
+            context=context,
+        )
 
     def fire_helper_event(self):
         """Re-writes the helper state unchanged (a state_reported event)."""
