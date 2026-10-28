@@ -1,14 +1,22 @@
 """
 One-way sync of a HomeAssistant Schedule helper to the weekly schedule of Meross
-thermostats (MtsClimate): the helper select (sync controller) and its status sensor.
+thermostats (MtsClimate): the helper select (sync controller), its status sensor
+and the pull/push buttons.
 """
 
 import asyncio
+import inspect
 from typing import TYPE_CHECKING, override
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import callback
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.exceptions import (
+    HomeAssistantError,
+    ServiceValidationError,
+    Unauthorized,
+    UnknownUser,
+)
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import (
     async_track_state_added_domain,
     async_track_state_change_event,
@@ -17,8 +25,11 @@ from homeassistant.helpers.event import (
 from homeassistant.helpers.restore_state import RestoredExtraData
 from homeassistant.helpers.start import async_at_started
 
+from .button import Button
 from .const import hac
 from .helpers.schedule import (
+    KEY_FROM,
+    KEY_TO,
     MTS_SCHEDULE_WEEKDAY,
     ScheduleValidationError,
     compile_schedule,
@@ -33,7 +44,8 @@ from .sensor import EnumSensorEntity
 if TYPE_CHECKING:
     from typing import Any, Callable, Iterable, Mapping
 
-    from homeassistant.core import Event, HomeAssistant
+    from homeassistant.core import Context, Event, HomeAssistant
+    from homeassistant.helpers.collection import DictStorageCollection
 
     from .climate import MtsClimate
 
@@ -157,8 +169,8 @@ class ScheduleHelperSelect(SelectEntity.RestoreEntity, SelectEntity):
     REASON_CONFIRM = "waiting for device confirmation"
     REASON_DRIFT = "device schedule differs from the linked helper"
     REASON_HA_UNIT = (
-        "Home Assistant unit system changed: edit the helper temperatures, or call "
-        "meross_lan.sync_schedule to write them as they are"
+        "Home Assistant unit system changed: edit the helper temperatures, or press "
+        "'Sync schedule to device' to write them as they are"
     )
 
     # HA core entity attributes:
@@ -312,8 +324,9 @@ class ScheduleHelperSelect(SelectEntity.RestoreEntity, SelectEntity):
                 self.schedule_callback(0, self.async_sync)
 
     async def async_push(self):
-        """sync_schedule: writes the linked helper now, even when unchanged. Raises
-        when not linked, not written (a deferred run is retried) or not kept."""
+        """'Sync schedule to device' (button, sync_schedule): writes the linked helper
+        now, even when unchanged. Raises when not linked, not written (a deferred run
+        is retried) or not kept."""
         if not self.hass_connected:
             raise HomeAssistantError("The schedule helper select is disabled")
         if not self.linked_helper:
@@ -331,6 +344,70 @@ class ScheduleHelperSelect(SelectEntity.RestoreEntity, SelectEntity):
             raise HomeAssistantError(
                 f"{reason or 'Schedule sync superseded'}, sync will be retried"
             )
+
+    async def async_pull(self, context: "Context | None" = None, /):
+        """'Sync schedule from device' (button): copies the device schedule into the
+        linked helper (keeping its name and icon) or into a new one, then linked. Like
+        helper editing in HA, reserved to admin users (or no user, e.g. automations).
+        Raises HomeAssistantError."""
+        if not self.hass_connected:
+            raise HomeAssistantError("The schedule helper select is disabled")
+        hass = self.hass
+        if context and context.user_id:
+            user = await hass.auth.async_get_user(context.user_id)
+            if user is None:
+                raise UnknownUser(context=context)
+            if not user.is_admin:
+                raise Unauthorized(context=context)
+        storage = _helper_storage(hass)
+        climate = self.climate
+        schedule = climate.schedule
+        async with self._sync_lock:
+            if not climate.is_device_connected():
+                raise HomeAssistantError("Device offline")
+            try:
+                await schedule.handler_ns.async_get(schedule.index)
+            except Exception as error:
+                raise HomeAssistantError(
+                    f"unable to read the device schedule: {error}"
+                ) from error
+            # the helper storage format ("HH:MM:SS")
+            days = {
+                day: [
+                    block
+                    | {KEY_FROM: f"{block[KEY_FROM]}:00", KEY_TO: f"{block[KEY_TO]}:00"}
+                    for block in blocks
+                ]
+                for day, blocks in helper_schedule(
+                    climate, schedule_compile_kwargs(climate, hass)
+                ).items()
+            }
+            if entity_id := self.linked_helper:
+                entry = er.async_get(hass).async_get(entity_id)
+                if not (entry and (item := storage.data.get(entry.unique_id))):
+                    raise HomeAssistantError(
+                        f"{entity_id} is not a helper created in the UI: "
+                        "it can't be written"
+                    )
+                try:
+                    self._check_group(entity_id, days)
+                except ScheduleValidationError as error:
+                    raise HomeAssistantError(str(error)) from error
+                # the update replaces the whole item
+                keep = {k: item[k] for k in (hac.CONF_NAME, hac.CONF_ICON) if k in item}
+                await storage.async_update_item(item[hac.CONF_ID], keep | days)
+                return
+            device = self.device_entry
+            name = f"{device.name_by_user or device.name} schedule"  # type: ignore
+            item = await storage.async_create_item({hac.CONF_NAME: name, **days})
+        # the helper entity is registered by now (the collection awaits its listeners)
+        entity_id = er.async_get(hass).async_get_entity_id(
+            SCHEDULE_DOMAIN, SCHEDULE_DOMAIN, item[hac.CONF_ID]
+        )
+        if not entity_id:
+            raise HomeAssistantError(f"helper {item[hac.CONF_NAME]} not found")
+        if self.hass_connected:  # not removed (e.g. disabled) meanwhile
+            await self.async_select_option(entity_id)
 
     async def _async_read_helper(self, entity_id: str, /) -> "Mapping[str, Any]":
         """The helper schedule (schedule.get_schedule). Raises HomeAssistantError."""
@@ -593,6 +670,38 @@ class ScheduleHelperSelect(SelectEntity.RestoreEntity, SelectEntity):
         self.schedule_callback(self.SYNC_DELAY, self.async_sync)
 
 
+class SchedulePullButton(Button):
+    """'Sync schedule from device' (see ScheduleHelperSelect.async_pull)."""
+
+    _attr_entity_category = Button.EntityCategory.CONFIG
+    _attr_icon = "mdi:calendar-import"
+
+    __slots__ = ()
+
+    def __init__(self, select: ScheduleHelperSelect, /):
+        async def _async_press():
+            # the press context (who pressed it) for the admin check
+            await select.async_pull(self._context)
+
+        super().__init__(
+            select.climate, entity_key="schedule_pull", async_press=_async_press
+        )
+
+
+class SchedulePushButton(Button):
+    """'Sync schedule to device' (see ScheduleHelperSelect.async_push)."""
+
+    _attr_entity_category = Button.EntityCategory.CONFIG
+    _attr_icon = "mdi:calendar-export"
+
+    __slots__ = ()
+
+    def __init__(self, select: ScheduleHelperSelect, /):
+        super().__init__(
+            select.climate, entity_key="schedule_push", async_press=select.async_push
+        )
+
+
 def schedule_device_fahrenheit(climate: "MtsClimate", /) -> bool | None:
     """True when the thermostat displays °F (Appliance.Control.TempUnit), None
     while not known. Devices without it (e.g. hub valves) are °C only."""
@@ -662,6 +771,19 @@ def helper_schedule(
     except ScheduleValidationError as error:
         # device data, not user input
         raise HomeAssistantError(f"Unsupported device schedule: {error}") from error
+
+
+def _helper_storage(hass: "HomeAssistant", /) -> "DictStorageCollection":
+    """The storage collection of the UI schedule helpers. HA has no public API to
+    write helpers: it is reached through the schedule/create websocket command."""
+    try:
+        handler = hass.data["websocket_api"]["schedule/create"][0]
+        return inspect.unwrap(handler).__self__.storage_collection
+    except (KeyError, AttributeError, TypeError) as error:
+        raise HomeAssistantError(
+            "schedule helpers can't be written (schedule integration not loaded "
+            "or unsupported Home Assistant version)"
+        ) from error
 
 
 async def async_write_schedule(

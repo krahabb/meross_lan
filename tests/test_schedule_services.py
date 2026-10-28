@@ -192,13 +192,17 @@ async def test_set_schedule_invalid(
         assert ctx.emulator_schedule() == initial_state
 
 
-async def test_sync_schedule(request, hass: "HomeAssistant"):
-    """meross_lan.sync_schedule."""
+@pytest.mark.parametrize("button", [False, True], ids=["service", "button"])
+async def test_sync_schedule(request, hass: "HomeAssistant", button: bool):
+    """meross_lan.sync_schedule and the 'Sync schedule to device' button."""
     async with async_schedule_context(request, hass) as ctx:
         climate = ctx.climate
 
         async def _async_sync_schedule():
-            await ctx.async_call(mlc.SERVICE_SYNC_SCHEDULE, climate.entity_id)
+            if button:
+                await ctx.async_press("schedule_push")
+            else:
+                await ctx.async_call(mlc.SERVICE_SYNC_SCHEDULE, climate.entity_id)
 
         with pytest.raises(ServiceValidationError, match="No schedule helper linked"):
             await _async_sync_schedule()
