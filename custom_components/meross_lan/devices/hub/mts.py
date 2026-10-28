@@ -239,6 +239,10 @@ class mts100(SubDevice, MtsClimate):
         if self._parse_online(payload[mc.KEY_ONLINE]):
             if mc.KEY_SCHEDULEBMODE in payload:
                 self.update_scheduleb_mode(payload[mc.KEY_SCHEDULEBMODE])
+            elif not self.schedule._schedule_entry_count_max:
+                # not reported: the MTS100/MTS150 default (6 slots per day)
+                self.schedule._schedule_entry_count_max = 6
+                self.schedule._schedule_entry_count_min = 6
             if p_mode := payload.get(mc.KEY_MODE):
                 self._mts_mode = p_mode[mc.KEY_STATE]
             if p_togglex := payload.get(mc.KEY_TOGGLEX):
@@ -278,6 +282,18 @@ class mts100(SubDevice, MtsClimate):
         if self._mts_onoff != onoff:
             self._mts_onoff = onoff
             self.flush_state()
+
+    @override
+    def is_device_connected(self, /):
+        # the valve itself: it can be offline while the hub is online
+        return self.is_connected
+
+    @override
+    def schedule_limits_known(self, /):
+        # the slots per day come with Hub.Mts100.All (see _parse_all)
+        return super().schedule_limits_known() and bool(
+            self.schedule.limits["entry_count_max"]
+        )
 
     def update_scheduleb_mode(self, mode, /):
         self.extra_state_attributes[mc.KEY_SCHEDULEBMODE] = mode
