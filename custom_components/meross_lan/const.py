@@ -182,6 +182,12 @@ class ProfileConfigType(
 
 SERVICE_REQUEST = "request"
 """name of the general purpose device send request service exposed by meross_lan"""
+SERVICE_GET_SCHEDULE = "get_schedule"
+"""name of the climate entity service returning the device weekly schedule"""
+SERVICE_SET_SCHEDULE = "set_schedule"
+"""name of the climate entity service writing a weekly schedule to the device"""
+SERVICE_SYNC_SCHEDULE = "sync_schedule"
+"""name of the climate entity service forcing a sync from the linked schedule helper"""
 CONF_NOTIFYRESPONSE = "notifyresponse"
 """key used in service 'request' call"""
 CONF_PROFILE_ID_LOCAL: Final = "api"

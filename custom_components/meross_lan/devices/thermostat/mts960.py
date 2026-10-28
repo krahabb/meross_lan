@@ -98,6 +98,7 @@ class Mts960Climate(MtsThermostatClimate):
         "_mts_working",
         "_mts_timer_payload",
         "_mts_timer_mode",
+        "_mts_ctlrange",
         *DIAGNOSTIC_SENSOR_KEYS,
     )
 
@@ -105,6 +106,9 @@ class Mts960Climate(MtsThermostatClimate):
         self._mts_working = None
         self._mts_timer_payload = None
         self._mts_timer_mode = None
+        # (ctlMin, ctlMax) as last received (None until then): device constants,
+        # kept while offline
+        self._mts_ctlrange = None
         MtsThermostatClimate.__init__(self, id, device, **kwargs)
         device.register_parser_ex(
             self,
@@ -336,6 +340,21 @@ class Mts960Climate(MtsThermostatClimate):
     def is_mts_scheduled(self):
         return self._mts_onoff and (self._mts_mode == mc.MTS960_MODE_SCHEDULE)
 
+    @override
+    def schedule_limits_known(self, /):
+        # the off values depend on the working mode and the device bounds (see
+        # schedule_off_values)
+        return (
+            super().schedule_limits_known()
+            and self._mts_working is not None
+            and self._mts_ctlrange is not None
+        )
+
+    @override
+    def _schedule_cooling(self, /):
+        # one schedule for both directions
+        return self._mts_working == mc.MTS960_WORKING_COOL
+
     # interface: self
     async def _async_request_timer(self, timer_type: int, payload: dict, /):
         await self.parent.ns_handlers[
@@ -407,8 +426,13 @@ class Mts960Climate(MtsThermostatClimate):
             "ctlMin": 300,
         }
         """
-        self.max_temp = payload[mc.KEY_CTLMAX] / self.temperature_scale
-        self.min_temp = payload[mc.KEY_CTLMIN] / self.temperature_scale
+        ctlrange = (payload[mc.KEY_CTLMIN], payload[mc.KEY_CTLMAX])
+        if self._mts_ctlrange != ctlrange:
+            self._mts_ctlrange = ctlrange
+            self.min_temp = ctlrange[0] / self.temperature_scale
+            self.max_temp = ctlrange[1] / self.temperature_scale
+            # the schedule sync (compile bounds) is notified by the flush
+            self.flush_state()
 
     def _parse_timer(self, payload: "mt.thermostat.Timer_C", /):
         """

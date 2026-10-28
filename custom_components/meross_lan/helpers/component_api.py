@@ -14,7 +14,7 @@ from homeassistant.helpers import (
 
 # import core modules instead of symbols to ease patching in a single place
 from . import ConfigEntryType, mqtt_profile as mlq
-from .. import const as mlc
+from .. import const as mlc, schedule_services
 from ..merossclient import HostAddress
 from ..merossclient.client import Transport, bluetooth as m_bt
 from ..merossclient.client.http import HttpClient
@@ -680,10 +680,12 @@ class ComponentApi(mlq.MQTTProfile):
             _async_service_request,
             supports_response=SupportsResponse.OPTIONAL,
         )
+        schedule_services.async_register(self)
 
         async def _async_terminate(*args):
             """complete shutdown when HA exits. See self.async_shutdown for differences"""
             hass.services.async_remove(mlc.DOMAIN, mlc.SERVICE_REQUEST)
+            schedule_services.async_unregister(hass)
             for device in self.active_devices():
                 await device.async_shutdown()
             for profile in self.active_profiles():
