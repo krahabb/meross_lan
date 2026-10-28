@@ -1,7 +1,7 @@
 """
 One-way sync of a HomeAssistant Schedule helper to the weekly schedule of Meross
-thermostats (MtsClimate): the helper select (sync controller), its status sensor
-and the pull/push buttons.
+thermostats (MtsClimate): the device schedule parser, the helper select (sync
+controller), its status sensor and the pull/push buttons.
 """
 
 import asyncio
@@ -37,6 +37,7 @@ from .helpers.schedule import (
     native_equal,
     native_same,
 )
+from .merossclient.device.handler import NamespaceParser
 from .merossclient.protocol import const as mc, namespaces as mn
 from .select import SelectEntity
 from .sensor import EnumSensorEntity
@@ -48,6 +49,7 @@ if TYPE_CHECKING:
     from homeassistant.helpers.collection import DictStorageCollection
 
     from .climate import MtsClimate
+    from .merossclient.protocol import types as mt
 
 SCHEDULE_DOMAIN = "schedule"
 SCHEDULE_SERVICE_GET = "get_schedule"
@@ -60,6 +62,77 @@ _controllers: "set[ScheduleHelperSelect]" = set()
 
 class ScheduleWriteError(HomeAssistantError):
     """The schedule write request failed (not a device rejection): retried."""
+
+
+class MtsSchedule(NamespaceParser):
+    """The device weekly schedule (climate.SCHEDULE_NS) and its limits. Not an
+    entity: shut down with its climate."""
+
+    if TYPE_CHECKING:
+        ns_value: Mapping[str, Any]
+        """Empty while not known (e.g. device offline)."""
+        _schedule_unit_time: int
+        _schedule_entry_count_max: int
+        _schedule_entry_count_min: int
+        """Entries per day (0: no check)."""
+        state_callback: Callable[[], Any] | None
+        """Invoked on every schedule update or loss and on every climate flush."""
+
+    _INIT__schedule_unit_time = 15
+    _INIT__schedule_entry_count_max = 0
+    _INIT__schedule_entry_count_min = 0
+    _AUTO_INIT = (
+        "_schedule_unit_time",
+        "_schedule_entry_count_max",
+        "_schedule_entry_count_min",
+        "state_callback",
+    )
+    _AUTO_DESTROY = ("state_callback",)
+    # Final (never mixed-in) so we fix the slots
+    __slots__ = NamespaceParser._calc_slots(*_AUTO_INIT, *_AUTO_DESTROY)
+
+    def __init__(self, climate: "MtsClimate", /):
+        super().__init__(
+            climate.id, climate.parent, ns=climate.SCHEDULE_NS, index=climate.index
+        )
+        climate.shutdown_broadcast.add(self.shutdown)
+
+    @property
+    def limits(self) -> "dict[str, int]":
+        """The device schedule limits (named as the compile_schedule kwargs)."""
+        return {
+            "unit_time": self._schedule_unit_time,
+            "entry_count_max": self._schedule_entry_count_max,
+            "entry_count_min": self._schedule_entry_count_min,
+        }
+
+    def flush_state(self):
+        if self.state_callback:
+            self.state_callback()
+
+    def set_unavailable(self):
+        """Device offline: the schedule is unknown, its limits are kept."""
+        self.ns_value = self._INIT_ns_value
+        self.flush_state()
+
+    @override
+    def __call__(self, payload: "mt.JsonMapping", /):
+        if len(payload) < len(self.ns_value):
+            # partial update: the device PUSH only carries the updated day
+            payload = self.ns_value | payload  # type: ignore
+            if payload == self.ns_value:
+                return
+        elif not self.ns_value and any(d not in payload for d in MTS_SCHEDULE_WEEKDAY):
+            # partial update while the schedule is not known: query it instead
+            self.handler_ns.schedule_get(self.index)
+            return
+        self.ns_value = payload
+        if mc.KEY_SECTION in payload:
+            # mts200/mts960 entries per day (TODO: check if they accept fewer)
+            self._schedule_entry_count_min = self._schedule_entry_count_max = payload[
+                mc.KEY_SECTION
+            ]
+        self.flush_state()
 
 
 class ScheduleSyncSensor(EnumSensorEntity):
@@ -210,7 +283,7 @@ class ScheduleHelperSelect(SelectEntity.RestoreEntity, SelectEntity):
         self._helper_unsubs = []
         super().__init__(climate)
         # cleaned up on the schedule shutdown: _on_schedule_state guards itself
-        climate.schedule.register_state_callback(self._on_schedule_state)
+        climate.schedule.state_callback = self._on_schedule_state
 
     @override
     async def async_shutdown(self):
