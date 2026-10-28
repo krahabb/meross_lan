@@ -5,6 +5,7 @@ from time import localtime, strftime
 from typing import TYPE_CHECKING, final
 
 from homeassistant.components import persistent_notification as pn
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.issue_registry import IssueSeverity
 
 from .. import const as mlc
@@ -251,6 +252,7 @@ class ConfigEntryManager(logging.Loggable):
             # no CONF_TRACE key and/or no config_entry.entry_id...no tracing configured
             pass
 
+        self._remove_calendar_entities(config_entry)
         await hass.config_entries.async_forward_entry_setups(
             config_entry, set(entity.PLATFORM for entity in self.entities_iterable)
         )
@@ -262,6 +264,14 @@ class ConfigEntryManager(logging.Loggable):
         # dynamically registering themselves
         if self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES):
             await self.async_create_diagnostic_entities()
+
+    def _remove_calendar_entities(self, config_entry: "ConfigEntry", /):
+        """The thermostat calendar entity was removed (see the schedule helper
+        sync): drop its orphaned registry entries."""
+        ent_reg = self.parent.entity_registry
+        for entry in er.async_entries_for_config_entry(ent_reg, config_entry.entry_id):
+            if entry.domain == "calendar" and entry.platform == DOMAIN:
+                ent_reg.async_remove(entry.entity_id)
 
     async def async_unload_entry(
         self, hass: "HomeAssistant", config_entry: "ConfigEntry", /

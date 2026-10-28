@@ -75,6 +75,13 @@ class EntityTest(EntityComponentTest):
 
     async def async_test_each_callback(self, entity: MtsClimate):
         await super().async_test_each_callback(entity)
+        if isinstance(entity, mts100):
+            # not set in stone but always like these in our traces
+            assert entity.schedule.limits == {
+                "unit_time": 15,
+                "entry_count_max": 6,
+                "entry_count_min": 6,
+            }, "hub valve schedule limits"
         entity_hvac_modes = set(entity.hvac_modes)
         expected_hvac_modes = HVAC_MODES[entity.__class__]
         assert expected_hvac_modes.issubset(entity_hvac_modes)

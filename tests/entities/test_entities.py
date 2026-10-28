@@ -46,7 +46,6 @@ HUB_SUBDEVICES_ENTITIES = {None: []}
 for entity_domain in (
     "binary_sensor",
     "button",
-    "calendar",
     "climate",
     "cover",
     "fan",

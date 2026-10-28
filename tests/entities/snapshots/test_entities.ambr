@@ -1000,15 +1000,6 @@
       'ns': None,
       'unique_id': '0123456789012345678901234567890C_0_overheat_warning',
     }),
-    '0_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'channel': 0,
-      }),
-      'ns': Namespace(Appliance.Control.Thermostat.Schedule, key=schedule, index=channel),
-      'unique_id': '0123456789012345678901234567890C_0_schedule',
-    }),
     '0_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
@@ -1407,15 +1398,6 @@
       }),
       'unique_id': '0123456789012345678901234567890F_0100783A_patch_hvacaction',
     }),
-    '0100783A_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '0100783A',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '0123456789012345678901234567890F_0100783A_schedule',
-    }),
     '0100783A_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
@@ -1553,15 +1535,6 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '0123456789012345678901234567890F_01008C11_patch_hvacaction',
-    }),
-    '01008C11_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '01008C11',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '0123456789012345678901234567890F_01008C11_schedule',
     }),
     '01008C11_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
@@ -1972,15 +1945,6 @@
       }),
       'unique_id': '01234567890123456789012345678911_0300DF01_patch_hvacaction',
     }),
-    '0300DF01_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '0300DF01',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678911_0300DF01_schedule',
-    }),
     '0300DF01_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
@@ -2340,15 +2304,6 @@
       }),
       'unique_id': '01234567890123456789012345678912_03002B0E_patch_hvacaction',
     }),
-    '03002B0E_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '03002B0E',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678912_03002B0E_schedule',
-    }),
     '03002B0E_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
@@ -2532,15 +2487,6 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678912_03004B5A_patch_hvacaction',
-    }),
-    '03004B5A_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '03004B5A',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678912_03004B5A_schedule',
     }),
     '03004B5A_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
@@ -3112,15 +3058,6 @@
       'ns': None,
       'unique_id': '01234567890123456789012345678914_0_overheat_warning',
     }),
-    '0_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'channel': 0,
-      }),
-      'ns': Namespace(Appliance.Control.Thermostat.Schedule, key=schedule, index=channel),
-      'unique_id': '01234567890123456789012345678914_0_schedule',
-    }),
     '0_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
@@ -3357,15 +3294,6 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678915_0_plug_state',
-    }),
-    '0_scheduleB': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'channel': 0,
-      }),
-      'ns': Namespace(Appliance.Control.Thermostat.ScheduleB, key=scheduleB, index=channel),
-      'unique_id': '01234567890123456789012345678915_0_scheduleB',
     }),
     '0_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
@@ -3630,15 +3558,6 @@
       }),
       'unique_id': '01234567890123456789012345678916_01000671_patch_hvacaction',
     }),
-    '01000671_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '01000671',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_01000671_schedule',
-    }),
     '01000671_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
@@ -3776,15 +3695,6 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678916_0100093F_patch_hvacaction',
-    }),
-    '0100093F_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '0100093F',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_0100093F_schedule',
     }),
     '0100093F_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
@@ -3924,15 +3834,6 @@
       }),
       'unique_id': '01234567890123456789012345678916_01003166_patch_hvacaction',
     }),
-    '01003166_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '01003166',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_01003166_schedule',
-    }),
     '01003166_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
@@ -4070,15 +3971,6 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678916_01003524_patch_hvacaction',
-    }),
-    '01003524_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '01003524',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_01003524_schedule',
     }),
     '01003524_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
@@ -4218,15 +4110,6 @@
       }),
       'unique_id': '01234567890123456789012345678916_01005C75_patch_hvacaction',
     }),
-    '01005C75_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '01005C75',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_01005C75_schedule',
-    }),
     '01005C75_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
@@ -4364,15 +4247,6 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678916_0100813A_patch_hvacaction',
-    }),
-    '0100813A_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '0100813A',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_0100813A_schedule',
     }),
     '0100813A_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
@@ -4512,15 +4386,6 @@
       }),
       'unique_id': '01234567890123456789012345678916_0100DEE3_patch_hvacaction',
     }),
-    '0100DEE3_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '0100DEE3',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_0100DEE3_schedule',
-    }),
     '0100DEE3_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
@@ -4658,15 +4523,6 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678916_0100FAC0_patch_hvacaction',
-    }),
-    '0100FAC0_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '0100FAC0',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_0100FAC0_schedule',
     }),
     '0100FAC0_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
@@ -4886,15 +4742,6 @@
       }),
       'unique_id': '01234567890123456789012345678916_030004B4_patch_hvacaction',
     }),
-    '030004B4_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '030004B4',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_030004B4_schedule',
-    }),
     '030004B4_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
@@ -5112,15 +4959,6 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678916_030011B6_patch_hvacaction',
-    }),
-    '030011B6_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '030011B6',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_030011B6_schedule',
     }),
     '030011B6_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
@@ -5340,15 +5178,6 @@
       }),
       'unique_id': '01234567890123456789012345678916_03003F30_patch_hvacaction',
     }),
-    '03003F30_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '03003F30',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_03003F30_schedule',
-    }),
     '03003F30_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
@@ -5566,15 +5395,6 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678916_03004404_patch_hvacaction',
-    }),
-    '03004404_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '03004404',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_03004404_schedule',
     }),
     '03004404_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
@@ -5794,15 +5614,6 @@
       }),
       'unique_id': '01234567890123456789012345678916_03004586_patch_hvacaction',
     }),
-    '03004586_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '03004586',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_03004586_schedule',
-    }),
     '03004586_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
@@ -6021,15 +5832,6 @@
       }),
       'unique_id': '01234567890123456789012345678916_0300DAB1_patch_hvacaction',
     }),
-    '0300DAB1_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '0300DAB1',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_0300DAB1_schedule',
-    }),
     '0300DAB1_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
@@ -6247,15 +6049,6 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678916_0300F670_patch_hvacaction',
-    }),
-    '0300F670_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '0300F670',
-      }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_0300F670_schedule',
     }),
     '0300F670_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
@@ -7465,15 +7258,6 @@
       'ns': Namespace(Appliance.Control.PhysicalLock, key=lock, index=channel),
       'unique_id': '0123456789012345678901234567891E_0_lock',
     }),
-    '0_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'channel': 0,
-      }),
-      'ns': Namespace(Appliance.Control.Thermostat.Schedule, key=schedule, index=channel),
-      'unique_id': '0123456789012345678901234567891E_0_schedule',
-    }),
     '0_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
@@ -7777,15 +7561,6 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '0123456789012345678901234567891F_0_plug_state',
-    }),
-    '0_scheduleB': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'channel': 0,
-      }),
-      'ns': Namespace(Appliance.Control.Thermostat.ScheduleB, key=scheduleB, index=channel),
-      'unique_id': '0123456789012345678901234567891F_0_scheduleB',
     }),
     '0_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
@@ -9338,15 +9113,6 @@
       'ns': Namespace(Appliance.Control.PhysicalLock, key=lock, index=channel),
       'unique_id': '01234567890123456789012345678925_0_lock',
     }),
-    '0_scheduleB': dict({
-      'class': <class 'custom_components.meross_lan.devices.thermostat.mts300.Mts300Climate.Schedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'channel': 0,
-      }),
-      'ns': Namespace(Appliance.Control.Thermostat.ScheduleB, key=scheduleB, index=channel),
-      'unique_id': '01234567890123456789012345678925_0_scheduleB',
-    }),
     '0_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
@@ -9911,15 +9677,6 @@
       'key_value': ('onoff',),
       'ns': Namespace(Appliance.Control.PhysicalLock, key=lock, index=channel),
       'unique_id': '01234567890123456789012345678928_0_lock',
-    }),
-    '0_scheduleB': dict({
-      'class': <class 'custom_components.meross_lan.devices.thermostat.mts300.Mts300Climate.Schedule'>,
-      'device_class': None,
-      'index': SimpleIndexValue({
-        'channel': 0,
-      }),
-      'ns': Namespace(Appliance.Control.Thermostat.ScheduleB, key=scheduleB, index=channel),
-      'unique_id': '01234567890123456789012345678928_0_scheduleB',
     }),
     '0_schedule_helper': dict({
       'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
