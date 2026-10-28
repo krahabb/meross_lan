@@ -114,6 +114,12 @@
                     "alert": "Alert only",
                     "turn_off": "Alert and turn off"
                 }
+            },
+            "schedule_helper": {
+                "name": "Schedule helper",
+                "state": {
+                    "off": "Off"
+                }
             }
         },
         "sensor": {
@@ -170,6 +176,16 @@
             },
             "mconsume": {
                 "name": "Monthly consumption"
+            },
+            "schedule_sync": {
+                "name": "Schedule sync",
+                "state": {
+                    "off": "Off",
+                    "pending": "Pending",
+                    "synced": "Synced",
+                    "drift": "Device differs",
+                    "error": "Error"
+                }
             }
         },
         "switch": {

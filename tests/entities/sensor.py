@@ -9,6 +9,7 @@ from custom_components.meross_lan.merossclient.protocol import (
 from custom_components.meross_lan.merossclient.protocol.namespaces import (
     thermostat as mn_t,
 )
+from custom_components.meross_lan.schedule_sync import ScheduleSyncSensor
 from custom_components.meross_lan.sensor import (
     EnumParser,
     FilterMaintenanceSensor,
@@ -30,11 +31,13 @@ class EntityTest(EntityComponentTest):
     DIGEST_ENTITIES = {
         mc.KEY_THERMOSTAT: {
             mc.KEY_MODE: [
-                SensorParser
-            ],  # additional (disabled) current temperature sensor
+                SensorParser,  # additional (disabled) current temperature sensor
+                ScheduleSyncSensor,  # schedule helper sync
+            ],
             mc.KEY_MODEB: [
-                SensorParser
-            ],  # additional (disabled) current temperature sensor
+                SensorParser,  # additional (disabled) current temperature sensor
+                ScheduleSyncSensor,  # schedule helper sync
+            ],
         },
     }
 
@@ -79,6 +82,7 @@ class EntityTest(EntityComponentTest):
             EnumParser,
             SensorParser,  # additional (disabled) current temperature sensor
             SensorParser,  # additional (disabled) current humidity sensor
+            ScheduleSyncSensor,  # schedule helper sync
         ],
         mn_t.Appliance_Control_Thermostat_Frost: [EnumParser],  # warning sensor
         mn_t.Appliance_Control_Thermostat_Overheat: [
@@ -100,13 +104,16 @@ class EntityTest(EntityComponentTest):
             SensorParser,
         ],  # temp/humi/light sensors
         mc.TYPE_MTS100: [
-            SensorParser
-        ],  # additional (disabled) current temperature sensor
+            SensorParser,  # additional (disabled) current temperature sensor
+            ScheduleSyncSensor,  # schedule helper sync
+        ],
         mc.TYPE_MTS100V3: [
-            SensorParser
-        ],  # additional (disabled) current temperature sensor
+            SensorParser,  # additional (disabled) current temperature sensor
+            ScheduleSyncSensor,  # schedule helper sync
+        ],
         mc.TYPE_MTS150: [
             SensorParser,  # additional (disabled) current temperature sensor
+            ScheduleSyncSensor,  # schedule helper sync
             SensorEntity,  # (disabled) motor position
             SensorEntity,  # (disabled) motor start count
         ],

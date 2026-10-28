@@ -15,6 +15,7 @@ from homeassistant.util import dt
 
 from .helpers import clamp
 from .helpers.entity import ParserEntity
+from .helpers.schedule import MTS_SCHEDULE_WEEKDAY
 from .merossclient.exceptions import MerossError, MerossProtocolError
 from .merossclient.protocol import const as mc, namespaces as mn
 
@@ -31,7 +32,6 @@ if TYPE_CHECKING:
     MtsScheduleNativeMappingType = Mapping[str, Sequence[Sequence[int]]]
 
 
-MTS_SCHEDULE_WEEKDAY = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 MTS_SCHEDULE_RRULE = "FREQ=WEEKLY"
 
 
@@ -204,6 +204,15 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
     def set_unavailable(self):
         self._schedule = mn.EMPTY_DICT
         ParserEntity.set_unavailable(self)
+
+    @property
+    def limits(self) -> "dict[str, int]":
+        """The device schedule limits (named as the compile_schedule kwargs)."""
+        return {
+            "unit_time": self._schedule_unit_time,
+            "entry_count_max": self._schedule_entry_count_max,
+            "entry_count_min": self._schedule_entry_count_min,
+        }
 
     # interface: Calendar
     @property
@@ -585,6 +594,10 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
             payload = self.ns_value | payload  # type: ignore
             if payload == self.ns_value:
                 return
+        elif not self.ns_value and any(d not in payload for d in MTS_SCHEDULE_WEEKDAY):
+            # partial update while the schedule is not known: query it instead
+            self.handler_ns.schedule_get(self.index)
+            return
 
         self.ns_value = payload
         if mc.KEY_SECTION in payload:

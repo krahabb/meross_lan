@@ -1009,6 +1009,21 @@
       'ns': Namespace(Appliance.Control.Thermostat.Schedule, key=schedule, index=channel),
       'unique_id': '0123456789012345678901234567890C_0_schedule',
     }),
+    '0_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567890C_0_schedule_helper',
+    }),
+    '0_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '0123456789012345678901234567890C_0_schedule_sync',
+    }),
     '0_screenbrightness_operation': dict({
       'class': <class 'custom_components.meross_lan.devices.thermostat.ScreenBrightnessNumber'>,
       'device_class': None,
@@ -1387,6 +1402,21 @@
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '0123456789012345678901234567890F_0100783A_schedule',
     }),
+    '0100783A_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567890F_0100783A_schedule_helper',
+    }),
+    '0100783A_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '0123456789012345678901234567890F_0100783A_schedule_sync',
+    }),
     '0100783A_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': <SensorDeviceClass.TEMPERATURE: 'temperature'>,
@@ -1504,6 +1534,21 @@
       }),
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '0123456789012345678901234567890F_01008C11_schedule',
+    }),
+    '01008C11_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567890F_01008C11_schedule_helper',
+    }),
+    '01008C11_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '0123456789012345678901234567890F_01008C11_schedule_sync',
     }),
     '01008C11_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -1894,6 +1939,21 @@
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '01234567890123456789012345678911_0300DF01_schedule',
     }),
+    '0300DF01_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678911_0300DF01_schedule_helper',
+    }),
+    '0300DF01_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678911_0300DF01_schedule_sync',
+    }),
     '0300DF01_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': <SensorDeviceClass.TEMPERATURE: 'temperature'>,
@@ -2233,6 +2293,21 @@
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '01234567890123456789012345678912_03002B0E_schedule',
     }),
+    '03002B0E_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678912_03002B0E_schedule_helper',
+    }),
+    '03002B0E_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678912_03002B0E_schedule_sync',
+    }),
     '03002B0E_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': <SensorDeviceClass.TEMPERATURE: 'temperature'>,
@@ -2396,6 +2471,21 @@
       }),
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '01234567890123456789012345678912_03004B5A_schedule',
+    }),
+    '03004B5A_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678912_03004B5A_schedule_helper',
+    }),
+    '03004B5A_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678912_03004B5A_schedule_sync',
     }),
     '03004B5A_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -2947,6 +3037,21 @@
       'ns': Namespace(Appliance.Control.Thermostat.Schedule, key=schedule, index=channel),
       'unique_id': '01234567890123456789012345678914_0_schedule',
     }),
+    '0_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678914_0_schedule_helper',
+    }),
+    '0_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678914_0_schedule_sync',
+    }),
     '0_screenbrightness_operation': dict({
       'class': <class 'custom_components.meross_lan.devices.thermostat.ScreenBrightnessNumber'>,
       'device_class': None,
@@ -3163,6 +3268,21 @@
       }),
       'ns': Namespace(Appliance.Control.Thermostat.ScheduleB, key=scheduleB, index=channel),
       'unique_id': '01234567890123456789012345678915_0_scheduleB',
+    }),
+    '0_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678915_0_schedule_helper',
+    }),
+    '0_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678915_0_schedule_sync',
     }),
     '0_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -3407,6 +3527,21 @@
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '01234567890123456789012345678916_01000671_schedule',
     }),
+    '01000671_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01000671_schedule_helper',
+    }),
+    '01000671_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_01000671_schedule_sync',
+    }),
     '01000671_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': <SensorDeviceClass.TEMPERATURE: 'temperature'>,
@@ -3524,6 +3659,21 @@
       }),
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '01234567890123456789012345678916_0100093F_schedule',
+    }),
+    '0100093F_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100093F_schedule_helper',
+    }),
+    '0100093F_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_0100093F_schedule_sync',
     }),
     '0100093F_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -3643,6 +3793,21 @@
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '01234567890123456789012345678916_01003166_schedule',
     }),
+    '01003166_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01003166_schedule_helper',
+    }),
+    '01003166_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_01003166_schedule_sync',
+    }),
     '01003166_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': <SensorDeviceClass.TEMPERATURE: 'temperature'>,
@@ -3760,6 +3925,21 @@
       }),
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '01234567890123456789012345678916_01003524_schedule',
+    }),
+    '01003524_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01003524_schedule_helper',
+    }),
+    '01003524_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_01003524_schedule_sync',
     }),
     '01003524_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -3879,6 +4059,21 @@
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '01234567890123456789012345678916_01005C75_schedule',
     }),
+    '01005C75_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01005C75_schedule_helper',
+    }),
+    '01005C75_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_01005C75_schedule_sync',
+    }),
     '01005C75_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': <SensorDeviceClass.TEMPERATURE: 'temperature'>,
@@ -3996,6 +4191,21 @@
       }),
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '01234567890123456789012345678916_0100813A_schedule',
+    }),
+    '0100813A_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100813A_schedule_helper',
+    }),
+    '0100813A_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_0100813A_schedule_sync',
     }),
     '0100813A_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -4115,6 +4325,21 @@
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '01234567890123456789012345678916_0100DEE3_schedule',
     }),
+    '0100DEE3_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100DEE3_schedule_helper',
+    }),
+    '0100DEE3_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_0100DEE3_schedule_sync',
+    }),
     '0100DEE3_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': <SensorDeviceClass.TEMPERATURE: 'temperature'>,
@@ -4232,6 +4457,21 @@
       }),
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '01234567890123456789012345678916_0100FAC0_schedule',
+    }),
+    '0100FAC0_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100FAC0_schedule_helper',
+    }),
+    '0100FAC0_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_0100FAC0_schedule_sync',
     }),
     '0100FAC0_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -4431,6 +4671,21 @@
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '01234567890123456789012345678916_030004B4_schedule',
     }),
+    '030004B4_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_030004B4_schedule_helper',
+    }),
+    '030004B4_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_030004B4_schedule_sync',
+    }),
     '030004B4_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': <SensorDeviceClass.TEMPERATURE: 'temperature'>,
@@ -4628,6 +4883,21 @@
       }),
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '01234567890123456789012345678916_030011B6_schedule',
+    }),
+    '030011B6_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_030011B6_schedule_helper',
+    }),
+    '030011B6_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_030011B6_schedule_sync',
     }),
     '030011B6_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -4827,6 +5097,21 @@
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '01234567890123456789012345678916_03003F30_schedule',
     }),
+    '03003F30_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_03003F30_schedule_helper',
+    }),
+    '03003F30_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_03003F30_schedule_sync',
+    }),
     '03003F30_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': <SensorDeviceClass.TEMPERATURE: 'temperature'>,
@@ -5024,6 +5309,21 @@
       }),
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '01234567890123456789012345678916_03004404_schedule',
+    }),
+    '03004404_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_03004404_schedule_helper',
+    }),
+    '03004404_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_03004404_schedule_sync',
     }),
     '03004404_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -5223,6 +5523,21 @@
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '01234567890123456789012345678916_03004586_schedule',
     }),
+    '03004586_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_03004586_schedule_helper',
+    }),
+    '03004586_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_03004586_schedule_sync',
+    }),
     '03004586_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': <SensorDeviceClass.TEMPERATURE: 'temperature'>,
@@ -5421,6 +5736,21 @@
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '01234567890123456789012345678916_0300DAB1_schedule',
     }),
+    '0300DAB1_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0300DAB1_schedule_helper',
+    }),
+    '0300DAB1_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_0300DAB1_schedule_sync',
+    }),
     '0300DAB1_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': <SensorDeviceClass.TEMPERATURE: 'temperature'>,
@@ -5618,6 +5948,21 @@
       }),
       'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
       'unique_id': '01234567890123456789012345678916_0300F670_schedule',
+    }),
+    '0300F670_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0300F670_schedule_helper',
+    }),
+    '0300F670_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_0300F670_schedule_sync',
     }),
     '0300F670_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -6807,6 +7152,21 @@
       'ns': Namespace(Appliance.Control.Thermostat.Schedule, key=schedule, index=channel),
       'unique_id': '0123456789012345678901234567891E_0_schedule',
     }),
+    '0_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567891E_0_schedule_helper',
+    }),
+    '0_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '0123456789012345678901234567891E_0_schedule_sync',
+    }),
     '0_screenbrightness_operation': dict({
       'class': <class 'custom_components.meross_lan.devices.thermostat.ScreenBrightnessNumber'>,
       'device_class': None,
@@ -7090,6 +7450,21 @@
       }),
       'ns': Namespace(Appliance.Control.Thermostat.ScheduleB, key=scheduleB, index=channel),
       'unique_id': '0123456789012345678901234567891F_0_scheduleB',
+    }),
+    '0_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567891F_0_schedule_helper',
+    }),
+    '0_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '0123456789012345678901234567891F_0_schedule_sync',
     }),
     '0_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -8622,6 +8997,21 @@
       'ns': Namespace(Appliance.Control.Thermostat.ScheduleB, key=scheduleB, index=channel),
       'unique_id': '01234567890123456789012345678925_0_scheduleB',
     }),
+    '0_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678925_0_schedule_helper',
+    }),
+    '0_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678925_0_schedule_sync',
+    }),
     '0_screenbrightness_operation': dict({
       'class': <class 'custom_components.meross_lan.devices.thermostat.ScreenBrightnessNumber'>,
       'device_class': None,
@@ -9166,6 +9556,21 @@
       }),
       'ns': Namespace(Appliance.Control.Thermostat.ScheduleB, key=scheduleB, index=channel),
       'unique_id': '01234567890123456789012345678928_0_scheduleB',
+    }),
+    '0_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678928_0_schedule_helper',
+    }),
+    '0_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678928_0_schedule_sync',
     }),
     '0_screenbrightness_operation': dict({
       'class': <class 'custom_components.meross_lan.devices.thermostat.ScreenBrightnessNumber'>,
