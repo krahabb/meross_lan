@@ -1562,7 +1562,8 @@ class MappingParser(ValueParser):
     """
 
     if TYPE_CHECKING:
-        parsers: Final[dict[str, ValueParser]]
+        _INIT_parsers: ClassVar[Callable[[], dict]]
+        parsers: dict[str, ValueParser]
         _INIT_excluded_keys: ClassVar[tuple[str, ...]]
         excluded_keys: tuple[str, ...]
         """List of well-known keys which are to be excluded from mapping since they're generally
@@ -1580,7 +1581,7 @@ class MappingParser(ValueParser):
         The actual parser_defs syntax, allows to define nested levels of parsing by simply nesting
         the parser definitions in a dict. When this happens, the MappingParser will automatically
         create a nested MappingParser to handle the inner level(s) of the payload."""
-        _INIT_parser_def: ClassVar[ParserType]
+        _INIT_parser_def: ClassVar[Callable[[], ParserType]]
         parser_def: ParserType
         """This is a fallback parser definition to be used when no specific parser_def is found
         for a key in the payload. This is useful for debugging/dumping purposes."""
@@ -1594,9 +1595,12 @@ class MappingParser(ValueParser):
             parser_defs: NotRequired[MappingParser.ParserDefs]
             parser_def: NotRequired[MappingParser.ParserType]
 
+        def __init__(self, *args, **kwargs: Unpack[Args]): ...
+
         @classmethod
         def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
+    _INIT_parsers = dict
     _INIT_excluded_keys = (
         mc.KEY_ID,
         mc.KEY_SUBID,
@@ -1606,23 +1610,15 @@ class MappingParser(ValueParser):
         mc.KEY_TIMESTAMP,
         mc.KEY_TIMESTAMPMS,
     )
-
-    _INIT_parser_def = ValueParser
-
+    _INIT_parser_def = lambda *args: ValueParser
     _INIT_key_value = ValueParser.KeyValue()
 
     _AUTO_INIT = (
+        "parsers",
         "excluded_keys",
         "parser_defs",
         "parser_def",
     )
-    _SLOTS = ("parsers",)
-
-    def __init__(self, *args, **kwargs: "Unpack[Args]"):
-        # TODO: define a mechanism for 'auto-initializing' (empty) dicts
-        # so we can skip this constructor. This would be beneficial to extra_state_attributes
-        self.parsers = kwargs.pop("parsers", {})
-        super().__init__(*args, **kwargs)
 
     def shutdown(self):
         self.parsers.clear()

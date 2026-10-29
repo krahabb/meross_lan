@@ -224,10 +224,13 @@ class Loggable(metaclass=abc.ABCMeta):
     if TYPE_CHECKING:
         _SLOTS: ClassVar[tuple[str, ...]]
         _AUTO_INIT: ClassVar[Iterable[str]]
-        """Provides a list of slotted attributes which will be automatically initialized during construction.
-        Some of these attributes might be retrieved from kwargs. If not available will to be retrieved from
-        class instance defaults ('_INIT_xxx' attributes) or set to None as last resort.
-        This attribute will be read during class construction in order to update the internal cache (_AUTO_INIT_)
+        """Provides a list of slotted attributes which will be automatically initialized during initialization.
+        Automatic initialization tries to recover the actual value from kwargs if present, else it will
+        lookup the 'static' initializer defined as class attribute via _INIT_{attribute_name}. This could either be
+        a plain value/object or a callable (the result of the call will be used to initialize self.{attribute_name}).
+        If nothing is provided it will be intiialized with None.
+        If a callable have to be set for the attribute the _INIT_{attribute_name} will need to wrap it (lambda might be useful).
+        This class attribute (_AUTO_INIT) will be read during class construction in order to update the internal cache (_AUTO_INIT_)
         of all the inherited 'auto init slots' (See __init_subclass__).
         Attributes listed here will also be automatically added to the class _SLOTS so they'd not need to be defined twice."""
         _AUTO_INIT_: Final[frozenset[str]]
@@ -376,7 +379,10 @@ class Loggable(metaclass=abc.ABCMeta):
                 setattr(self, _attr, kwargs.pop(_attr))
             except KeyError:
                 # else retrieve from class attr or just 'None'
-                setattr(self, _attr, getattr(cls, f"_INIT_{_attr}", None))
+                _init_attr = getattr(cls, f"_INIT_{_attr}", None)
+                setattr(
+                    self, _attr, _init_attr() if callable(_init_attr) else _init_attr
+                )
 
         self.shutdown_broadcast = broadcast.Broadcast()
         self.async_shutdown_broadcast = broadcast.Broadcast()
