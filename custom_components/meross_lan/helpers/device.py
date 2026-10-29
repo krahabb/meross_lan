@@ -606,7 +606,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         self.device_timedelta_log_epoch = 0
         self.device_timedelta_config_epoch = 0
         self.profile = None
-        self.sensor_protocol = ProtocolSensor(self)
+        self.sensor_protocol = ProtocolSensor(None, self)
         PersistentButton(
             None,
             self,

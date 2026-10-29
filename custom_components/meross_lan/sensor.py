@@ -250,17 +250,18 @@ class ProtocolSensor(EnumSensorEntity):
         parent: Final[Device]  # type: ignore[override]
         native_value: str
 
-    _INIT_entity_key = "sensor_protocol"
-
     STATE_DISCONNECTED = "disconnected"
     STATE_ACTIVE = "active"
     STATE_INACTIVE = "inactive"
     ATTR_MQTT_BROKER = "mqtt_broker"
     ATTR_NAMESPACES = "namespaces"
 
+    _INIT_entity_key = "sensor_protocol"
+    _INIT_native_value = STATE_DISCONNECTED
+    _INIT_extra_state_attributes = dict
+
     # HA core entity attributes:
     _unrecorded_attributes = frozenset((ATTR_NAMESPACES,))
-
     _attr_available = True
     _attr_entity_category = SensorEntity.EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
@@ -273,11 +274,7 @@ class ProtocolSensor(EnumSensorEntity):
         Transport.MQTT,
     ]
 
-    def __init__(self, parent: "Device"):
-        self.extra_state_attributes = {}
-        EnumSensorEntity.__init__(
-            self, None, parent, native_value=ProtocolSensor.STATE_DISCONNECTED
-        )
+    _AUTO_INIT = ("extra_state_attributes",)
 
     @override
     def set_available(self):

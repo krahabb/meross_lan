@@ -27,12 +27,14 @@ if TYPE_CHECKING:
 
 class GarageTimeoutBinarySensor(BinarySensorEntity):
 
-    _INIT_entity_key = "problem"
-    _INIT_is_on = False
     # the time at which the transition timeout occurred
     ATTR_TRANSITION_TIMEOUT = "transition_timeout"
     # the target state which was not reached
     ATTR_TRANSITION_TARGET = "transition_target"
+
+    _INIT_entity_key = "problem"
+    _INIT_is_on = False
+    _INIT_extra_state_attributes = dict
 
     # HA core entity attributes:
     _attr_device_class = BinarySensorEntity.DeviceClass.PROBLEM
@@ -41,9 +43,7 @@ class GarageTimeoutBinarySensor(BinarySensorEntity):
         (ATTR_TRANSITION_TARGET, ATTR_TRANSITION_TIMEOUT)
     )
 
-    def __init__(self, *args, **kwargs):
-        self.extra_state_attributes = {}
-        super().__init__(*args, **kwargs)
+    _AUTO_INIT = ("extra_state_attributes",)
 
     def update_ok(self, was_closing, /):
         extra_state_attributes = self.extra_state_attributes
