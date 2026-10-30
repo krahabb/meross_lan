@@ -210,8 +210,8 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
     # HA core entity attributes:
     _attr_max_color_temp_kelvin = MSL_KELVIN_MAX
     _attr_min_color_temp_kelvin = MSL_KELVIN_MIN
-
-    __slots__ = (
+    # Never mixed-in with NamespaceParser so we fix the slots
+    __slots__ = mle.ToggleXParser._calc_slots(
         "_rgb_to_native",
         "_native_to_rgb",
         "_t_begin",

@@ -6,7 +6,7 @@ from homeassistant.core import CoreState, callback
 from homeassistant.util.unit_conversion import TemperatureConverter
 
 from .calendar import MtsSchedule
-from .const import hac, HA_VERSION
+from .const import HA_VERSION, hac
 from .helpers import reverse_lookup
 from .helpers.entity import ParserEntity
 from .number import NumberParser
@@ -392,7 +392,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         "select_track_sensor",
         "sensor_current_temperature",
     )
-    __slots__ = (
+    __slots__ = ParserEntity._calc_slots(
         "current_humidity",
         "native_current_temperature",
         "hvac_action",

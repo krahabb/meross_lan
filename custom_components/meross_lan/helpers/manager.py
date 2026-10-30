@@ -118,7 +118,7 @@ class ConfigEntryManager(logging.Loggable):
 
     _INIT_is_connected: bool = True
 
-    __slots__ = logging.Loggable._calc_slots(
+    __slots__ = (
         "config_entry",
         "config",
         "key",

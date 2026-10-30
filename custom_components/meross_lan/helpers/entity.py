@@ -494,7 +494,6 @@ class BinaryEntity(Entity):
 
     _AUTO_INIT = ("is_on",)
     __slots__ = ("is_on",)
-    # TODO: fix _calc_slots in descendants by maybe adding an _INIT_subclass in BinaryParser.
 
     def update_boolean_value(self, is_on: "Any", /) -> bool | None:
         if self.is_on != is_on:
@@ -515,10 +514,6 @@ class BinaryParser(handler.BooleanParser, ValueParser, BinaryEntity):
 
         @classmethod
         def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
-
-    def __init_subclass__(cls):
-        super().__init_subclass__()
-        cls.__slots__ = cls._calc_slots()
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         # This is due for entities which are created after entry setup when device is already loaded

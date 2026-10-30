@@ -89,6 +89,9 @@ class NumberParser(mle.NumericParser, NumberEntity):
 
     DEBOUNCE_DELAY = 1
 
+    # Never mixed-in with NamespaceParser so we fix the slots
+    __slots__ = mle.NumericParser._calc_slots()
+
     def set_unavailable(self):
         self.cancel_callback(self._async_request_debounce)
         super().set_unavailable()

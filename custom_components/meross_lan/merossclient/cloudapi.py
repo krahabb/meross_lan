@@ -398,7 +398,10 @@ class CloudApiClient(logging.Loggable):
     Object-like interface to ease mantaining cloud api connection state
     """
 
-    __slots__ = logging.Loggable._calc_slots("credentials", "_api_kwargs")
+    __slots__ = (
+        "credentials",
+        "_api_kwargs",
+    )
 
     def __init__(
         self,

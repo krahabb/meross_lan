@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, override
 from homeassistant import const as hac
 from homeassistant.components import sensor
 
-from . import const as mlc
 from .helpers import entity as mle
 from .merossclient.client import Transport
 from .merossclient.protocol import const as mc
@@ -196,6 +195,8 @@ class SensorParser(mle.NumericParser, SensorEntity):
         "suggested_display_precision": 1,
     }
 
+    __slots__ = mle.NumericParser._calc_slots()
+
 
 class DiagnosticSensor(SensorEntity):
     """These are entities always added later (when config entry is already setup) on demand
@@ -275,6 +276,7 @@ class ProtocolSensor(EnumSensorEntity):
     ]
 
     _AUTO_INIT = ("extra_state_attributes",)
+    __slots__ = ()
 
     @override
     def set_available(self):

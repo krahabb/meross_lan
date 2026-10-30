@@ -99,7 +99,6 @@ class gs559(SensorSubDevice, EnumParser):
     }
 
     _AUTO_DESTROY = ENTITY_DEFS.keys()
-    __slots__ = ()
 
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
         SensorSubDevice.__init__(
@@ -181,7 +180,6 @@ class ms100(SensorSubDevice):
     TEMPERATURE_ARGS = SensorParser.TEMPERATURE_ARGS | {"device_scale": 10}
 
     _AUTO_DESTROY = ("sensor_temperature", "sensor_humidity")
-    __slots__ = ()
 
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
         SensorSubDevice.__init__(self, descriptor, hub, **kwargs)

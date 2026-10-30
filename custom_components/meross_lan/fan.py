@@ -7,6 +7,7 @@ from .merossclient.protocol import const as mc
 
 if TYPE_CHECKING:
     from typing import Final
+
     from .merossclient.protocol import types as mt
 
 
@@ -52,7 +53,7 @@ class Fan(ToggleXParser, fan.FanEntity):
     _INIT_speed_count = 1
     _INIT__saved_speed = 1
     _AUTO_INIT = ("percentage", "speed_count", "_saved_speed")
-    __slots__ = ()
+    __slots__ = ToggleXParser._calc_slots()
 
     @override
     def set_unavailable(self):

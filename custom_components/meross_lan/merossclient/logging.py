@@ -304,13 +304,13 @@ class Loggable(metaclass=abc.ABCMeta):
         if "_AUTO_INIT" in cls_dict:
             _slots_auto_init = cls_dict["_AUTO_INIT"]
             auto_init.update(_slots_auto_init)
-            if cls_slots:
+            if cls_slots is not None:
                 cls_slots.update(_slots_auto_init)
 
         if "_AUTO_DESTROY" in cls_dict:
             _slots_auto_destroy = cls_dict["_AUTO_DESTROY"]
             auto_destroy.update(_slots_auto_destroy)
-            if cls_slots:
+            if cls_slots is not None:
                 cls_slots.update(_slots_auto_destroy)
 
         if len(auto_init) > len(cls._AUTO_INIT_):
@@ -323,6 +323,17 @@ class Loggable(metaclass=abc.ABCMeta):
 
     @classmethod
     def _calc_slots(cls, *slots: "Unpack[tuple[str, ...]]"):
+        """
+        Helper to calculate the (missing) slots from mro(s) when some of the base hierarchies
+        could not be slotted themselves because of mixin requirements. This method, even though powerful and reliable,
+        is prone to misunderstandings and the whole mechanic should be removed in favor of a cleaner approach with
+        slotting/mixin. This is to be used (generally) on final classes or any hierarchy which is known to not
+        be mixed-in with some other colliding bases slots. When used, it calculates all the needed slots as declared
+        in every base and not yet implemented in the mro path.
+        Beside factoring in _AUTO_INIT and _AUTO_DESTROY collections from the mro this also includes those 'fake' slots
+        as declared in _SLOTS throughout the hierarchy wherever the class declaring those, could be used as a mixin and
+        so cannot declare its own slots itself.
+        """
         _added_slots = set(slots)
         _existing_slots = set()
         # TODO: we need to see if it's feasible to cache results in
@@ -335,6 +346,10 @@ class Loggable(metaclass=abc.ABCMeta):
                 pass
             try:
                 _added_slots.update(_base.__dict__["_AUTO_INIT"])
+            except KeyError:
+                pass
+            try:
+                _added_slots.update(_base.__dict__["_AUTO_DESTROY"])
             except KeyError:
                 pass
             try:

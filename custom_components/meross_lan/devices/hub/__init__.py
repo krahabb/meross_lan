@@ -373,9 +373,15 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
     _SLOTS = ("key_digest",)
 
     def __init_subclass__(cls):
+        # We don't want to explicitly declare __slots__ in any descendant, rather use _SLOTS for that, so
+        # that the following '_calc_slots' will consistently fix everything. This lame trick is needed
+        # because we're mixing the SubDevice hierarchy with NamespaceParser(s) implementations from
+        # various specializations and we cannot mismatch slots between these hierarchies.
+        assert "__slots__" not in cls.__dict__
+        # Compute the whole mro slots here before super().__init_subclass__() since it will also 'patch'
+        # the __slots__ but it'd need a consistent preset to not add/remove unwanted/needed slots
+        cls.__slots__ = cls._calc_slots()
         super().__init_subclass__()
-        if slots := cls._calc_slots():
-            cls.__slots__ = slots
         # By default, the digest key (key_digest) has the same payload as the default
         # parser (i.e. __call__) so we can just point the digest parsing to the default one.
         if "_parse_digest_" not in cls.__dict__:

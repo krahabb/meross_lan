@@ -198,7 +198,8 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
         "_schedule_entry_count_min",
     )
     _AUTO_DESTROY = ("climate",)
-    __slots__ = ()
+    # Never mixed-in with NamespaceParser so we fix the slots
+    __slots__ = ParserEntity._calc_slots()
 
     def set_unavailable(self):
         self._schedule = mn.EMPTY_DICT

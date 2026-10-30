@@ -72,7 +72,10 @@ class SelectParser(mle.ValueParser, SelectEntity):
 
     # configure initial options(map) through a class default
     _INIT_options_map = {}
-    __slots__ = ("options_map",)
+    # Never mixed-in with NamespaceParser so we fix the slots
+    __slots__ = mle.ValueParser._calc_slots(
+        "options_map",
+    )
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         self.options_map = kwargs.pop("options_map", self._INIT_options_map)

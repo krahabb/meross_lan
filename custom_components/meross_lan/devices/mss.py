@@ -290,7 +290,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         """(last_request_epoch, NamespaceParser.index)"""
         _indexes_to_poll: list[indexToPollType]
 
-    _SLOTS = ("_indexes_to_poll",)
+    __slots__ = ("_indexes_to_poll",)
 
     def __init__(
         self,
@@ -391,7 +391,7 @@ class ConsumptionXSensor(SensorParser.RestoreEntity, SensorParser):
     ATTR_OFFSET = "offset"
     ATTR_RESET_TS = "reset_ts"
 
-    _SLOTS = (
+    __slots__ = (
         "offset",
         "reset_ts",
         "energy_estimate",
@@ -400,6 +400,7 @@ class ConsumptionXSensor(SensorParser.RestoreEntity, SensorParser):
         "_yesterday_midnight_epoch",
         "_today_midnight_epoch",
         "_tomorrow_midnight_epoch",
+        "extra_state_attributes",
     )
 
     def __init__(self, *args, **kwargs):

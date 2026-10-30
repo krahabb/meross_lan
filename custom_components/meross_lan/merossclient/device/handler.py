@@ -102,7 +102,7 @@ class NamespaceHandler(logging.Loggable):
             parser_class: NotRequired[type[NamespaceParser]]
             channels: NotRequired[Iterable[int]]
 
-    _SLOTS = (
+    __slots__ = (
         "index_type",
         "handler",
         "parsers",

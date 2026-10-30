@@ -53,7 +53,7 @@ class Mp3Player(ParserEntity, media_player.MediaPlayerEntity):
         "state",
         "volume_level",
     )
-    __slots__ = ()
+    __slots__ = ParserEntity._calc_slots()
 
     def set_unavailable(self):
         self.is_volume_muted = None

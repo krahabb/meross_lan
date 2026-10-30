@@ -44,7 +44,8 @@ class Cover(ParserEntity, cover.CoverEntity):
         "is_closing",
         "is_opening",
     )
-    __slots__ = ()
+    # Never mixed-in with NamespaceParser so we fix the slots
+    __slots__ = ParserEntity._calc_slots()
 
     async def async_will_remove_from_hass(self):
         self._transition_cancel()
