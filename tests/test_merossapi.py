@@ -3,7 +3,7 @@
 from time import time
 import typing
 
-from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
+from pytest_homeassistant.common import async_fire_mqtt_message
 
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,

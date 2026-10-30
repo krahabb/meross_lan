@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigEntry, ConfigEntryState, ConfigFl
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import discovery_flow
 from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
-from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
+from pytest_homeassistant.common import async_fire_mqtt_message
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.config_flow import ConfigFlow
@@ -26,9 +26,6 @@ from tests import const as tc, helpers
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
-    from pytest_homeassistant_custom_component.test_util.aiohttp import (
-        AiohttpClientMocker,
-    )
 
 
 async def _cleanup_config_entry(hass: "HomeAssistant", result: ConfigFlowResult):
@@ -155,7 +152,7 @@ async def test_profile_config_flow(
 
 async def test_device_config_flow_with_profile(
     hass: "HomeAssistant",
-    aioclient_mock: "AiohttpClientMocker",
+    aioclient_mock: "helpers.AiohttpClientMocker",
     cloudapi_mock: helpers.CloudApiMocker,
     merossmqtt_mock: helpers.MerossMQTTMocker,
 ):

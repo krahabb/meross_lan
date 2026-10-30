@@ -6,7 +6,7 @@ from unittest import mock
 
 from homeassistant.helpers import device_registry as dr
 import paho.mqtt.client as paho_mqtt
-from pytest_homeassistant_custom_component.common import flush_store
+from pytest_homeassistant.common import flush_store
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.helpers.meross_profile import MerossProfile

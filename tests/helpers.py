@@ -14,11 +14,11 @@ from freezegun.api import freeze_time
 from homeassistant import config_entries as ce, const as hac
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import entity_registry as er
-from pytest_homeassistant_custom_component.common import (
+from pytest_homeassistant.common import (
     MockConfigEntry,
     async_fire_time_changed_exact,
 )
-from pytest_homeassistant_custom_component.test_util.aiohttp import (
+from pytest_homeassistant.test_util.aiohttp import (
     AiohttpClientMockResponse,
 )
 
@@ -81,7 +81,7 @@ if TYPE_CHECKING:
     MqttMockHAClientGenerator = Callable[..., Coroutine[Any, Any, MqttMockHAClient]]
 
     from pytest import CaptureFixture, FixtureRequest, LogCaptureFixture
-    from pytest_homeassistant_custom_component.test_util.aiohttp import (
+    from pytest_homeassistant.test_util.aiohttp import (
         AiohttpClientMocker,
     )
 

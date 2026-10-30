@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from homeassistant.const import STATE_UNAVAILABLE
 import homeassistant.util.dt as dt_util
 import pytest
-from pytest_homeassistant_custom_component.components.recorder.common import (
+from pytest_homeassistant.components.recorder.common import (
     async_wait_recording_done,
 )
 

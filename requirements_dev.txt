@@ -1,6 +1,7 @@
 aiodiscover
 aiodhcpwatcher
 aioesphomeapi
+aiohasupervisor
 aiohttp-cors
 aiousbwatcher
 async_upnp_client
