@@ -2,18 +2,15 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.components import siren
 
-from . import const as mlc
 from .helpers import entity as mle
-from .merossclient.device.handler import MappingParser, NamespaceHandler
+from .merossclient.device.handler import MappingParser
 from .merossclient.protocol import const as mc, namespaces as mn
 from .number import NumberParser
 from .select import SelectParser
 from .switch import SwitchParser
 
 if TYPE_CHECKING:
-    from typing import Final, Unpack
-
-    from .helpers.device import Device
+    from typing import Final
 
 
 class Siren(mle.BinaryParser, siren.SirenEntity):

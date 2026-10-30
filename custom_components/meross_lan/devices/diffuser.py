@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING, override
 
-from .. import const as mlc
 from ..light import (
     ATTR_BRIGHTNESS,
     ATTR_EFFECT,
@@ -20,11 +19,10 @@ from ..sensor import SensorParser
 from .spray import Spray
 
 if TYPE_CHECKING:
-    from typing import ClassVar, Final, Mapping, Unpack
+    from typing import Mapping
 
-    from ..helpers.device import Device, MerossMessage
+    from ..helpers.device import MerossMessage
     from ..merossclient.protocol import types as mt
-    from ..merossclient.protocol.types import JsonDict
 
 
 class DiffuserLight(LightBase):

@@ -2,7 +2,6 @@ from typing import TYPE_CHECKING, override
 
 from .. import const as mlc
 from ..binary_sensor import BinarySensorEntity
-from ..helpers.entity import ValueParser
 from ..merossclient.device.handler import MappingParser
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..number import NumberParser
@@ -11,7 +10,7 @@ from ..sensor import SensorParser
 from .misc import SensorLatestXParser
 
 if TYPE_CHECKING:
-    from typing import Final, Self, Unpack
+    from typing import Unpack
 
     from ..helpers.device import Device
     from ..merossclient.device.handler import NamespaceHandler
