@@ -311,6 +311,7 @@ class GarageDoorConfig(MappingParserHandler):
                     name="Obstruction reporting"
                 ),
                 mc.KEY_LOCKREMOTE: GarageConfigSwitchMSG150.DEF(name="Remote lock"),
+                mc.KEY_BUZZERDELAYTIME: GarageConfigNumber.DEF(),
             }
             # FW 7.1.8 does not PUSH Config updates for light changes made by
             # motion or the wall panel. Cloud polling keeps the config default.
@@ -457,11 +458,14 @@ class GarageDoor(Cover.RestoreEntity, Cover):
                 self.is_closing = True
                 self.is_opening = False
                 timeout = self.doorCloseDuration.native_value
+            timeout = timeout or self._transition_duration
+            if not open_request:
+                timeout += self._get_close_delay()
             self.schedule_callback(0.9, self._transition_callback)
             # check the timeout after expected to account
             # for delays in communication
             self.schedule_callback(
-                (timeout or self._transition_duration),  # type: ignore
+                timeout,
                 self._async_transition_end_callback,
             )
 
@@ -515,7 +519,11 @@ class GarageDoor(Cover.RestoreEntity, Cover):
             # Also to note: if we're on HTTP this sampled time could happen anyway after the 'real'
             # state switched to 'closed' so we're likely going to measure in exceed of real transition duration
             if is_closed:
-                transition_duration = self.parent.last_rx_epoch - self._transition_start
+                transition_duration = (
+                    self.parent.last_rx_epoch
+                    - self._transition_start
+                    - self._get_close_delay()
+                )
                 # autoregression filtering applying 20% of last updated sample
                 self._update_transition_duration(
                     int((4 * self._transition_duration + transition_duration) / 5)
@@ -594,6 +602,16 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         if flush:
             self.flush_state()
         self.binary_sensor_timeout.update_timeout(was_closing)
+
+    def _get_close_delay(self) -> float:
+        if self.parent.descriptor.type.startswith(mc.TYPE_MSG150):
+            try:
+                config = self.parent.ns_handlers[mn.Appliance_GarageDoor_Config].parsers
+                if config[mc.KEY_BUZZERENABLE].is_on:
+                    return config[mc.KEY_BUZZERDELAYTIME].native_value or 0
+            except KeyError:
+                pass
+        return 0
 
     def _update_transition_duration(self, transition_duration, /):
         self._transition_duration = clamp(

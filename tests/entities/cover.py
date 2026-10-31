@@ -59,6 +59,9 @@ class EntityTest(EntityComponentTest):
                 self.expected_entity_types.append(
                     type(entity.binary_sensor_obstruction)
                 )
+                self.expected_entity_types.append(
+                    type(config.parsers[mc.KEY_BUZZERDELAYTIME])
+                )
 
         elif isinstance(entity, RollerShutter):
             assert (
@@ -79,6 +82,13 @@ class EntityTest(EntityComponentTest):
                 await self._async_test_msg150_recheck(entity)
                 await self._async_test_msg150_light(entity)
                 await self._async_test_msg150_obstruction(entity)
+                buzzer = entity.parent.ns_handlers[
+                    mn.Appliance_GarageDoor_Config
+                ].parsers[mc.KEY_BUZZERENABLE]
+                await buzzer.async_turn_off()
+                await self._async_test_cover_transition(entity)
+                await self._async_test_cover_transition(entity)
+                await buzzer.async_turn_on()
         elif isinstance(entity, RollerShutter):
             # RollerShutter could need at least a run to enable
             # support for SET_POSITION
@@ -206,6 +216,18 @@ class EntityTest(EntityComponentTest):
             # MSG150 echoes the target in SETACK before movement finishes.
             # The cover should still show movement until a state GET confirms it.
             assert entity.is_closed == (trans[0] == haec.SERVICE_OPEN_COVER)
+            config = self.device_context.emulator.namespaces[
+                mn.Appliance_GarageDoor_Config
+            ][mc.KEY_CONFIG]
+            opening = trans[0] == haec.SERVICE_OPEN_COVER
+            expected_timeout = (
+                config[mc.KEY_DOOROPENDURATION if opening else mc.KEY_DOORCLOSEDURATION]
+                / 1000
+            )
+            if not opening and config[mc.KEY_BUZZERENABLE]:
+                expected_timeout += config[mc.KEY_BUZZERDELAYTIME] / 1000
+            timer = entity._timers[entity._async_transition_end_callback]
+            assert abs(timer.when() - self.hass.loop.time() - expected_timeout) < 1
         # The GarageDoor/RollerShutter state machine has a timed callback mechanism
         # TODO: use and check that callback instead of the raw 60 seconds timeout
         # we're using async_warp over 40 seconds (which are enough on our emulators
