@@ -89,6 +89,7 @@ class EntityTest(EntityComponentTest):
                 await self._async_test_cover_transition(entity)
                 await self._async_test_cover_transition(entity)
                 await buzzer.async_turn_on()
+                await self._async_test_msg150_activity(entity)
         elif isinstance(entity, RollerShutter):
             # RollerShutter could need at least a run to enable
             # support for SET_POSITION
@@ -201,6 +202,121 @@ class EntityTest(EntityComponentTest):
         state[mc.KEY_OBSTRUCTION] = 2
         await handler.async_get(entity.index)
         assert sensor.is_on is False
+
+    async def _async_test_msg150_activity(self, entity: GarageDoor):
+        from homeassistant.auth.const import GROUP_ID_ADMIN
+        from homeassistant.components.logbook.models import (
+            LogbookConfig,
+            async_event_to_row,
+        )
+        from homeassistant.components.logbook.processor import EventProcessor
+        from homeassistant.const import EVENT_STATE_CHANGED
+        from homeassistant.core import Context
+
+        from custom_components.meross_lan.logbook import (
+            EVENT_GARAGEDOOR_TRIGGER,
+            async_describe_events,
+        )
+        from custom_components.meross_lan.merossclient.protocol.message import (
+            MerossMessage,
+        )
+
+        hass = self.hass
+        events = []
+        unsub_trigger = hass.bus.async_listen(EVENT_GARAGEDOOR_TRIGGER, events.append)
+        unsub_state = hass.bus.async_listen(EVENT_STATE_CHANGED, events.append)
+        external_events = {}
+        async_describe_events(
+            hass,
+            lambda domain, event_type, describe: external_events.update(
+                {event_type: (domain, describe)}
+            ),
+        )
+        previous_logbook = hass.data.get("logbook")
+        hass.data["logbook"] = LogbookConfig(external_events)
+        state = self.device_context.emulator.descriptor.digest[mc.KEY_GARAGEDOOR][0]
+
+        async def notify(source, opened, method=mc.METHOD_PUSH, as_list=True):
+            state[mc.KEY_OPEN] = opened
+            entity.handler_ns.handle(
+                MerossMessage.build(
+                    mn.Appliance_GarageDoor_State,
+                    method,
+                    {mc.KEY_STATE: [dict(state)] if as_list else dict(state)},
+                    self.device_context.emulator.key,
+                    triggerSrc=source,
+                ),
+                False,
+            )
+            await hass.async_block_till_done()
+
+        def trigger_events():
+            return [
+                event
+                for event in events
+                if event.event_type == EVENT_GARAGEDOOR_TRIGGER
+            ]
+
+        try:
+            for source, label, opened in (
+                ("WallButton", "Wall Panel", 1),
+                ("iOS", "App", 0),
+                ("Android", "App", 1),
+                ("DevicePysical", "Remote", 0),
+                ("DevicePhysical", "Remote", 1),
+            ):
+                before = len(trigger_events())
+                await notify(source, opened, as_list=bool(opened))
+                assert len(trigger_events()) == before + 1
+                assert trigger_events()[-1].data["source"] == label
+                await notify(source, opened)
+                assert len(trigger_events()) == before + 1
+            before = len(trigger_events())
+            await notify("Unrecognized", 0)
+            await notify("WallButton", 1, mc.METHOD_GETACK)
+            assert len(trigger_events()) == before
+
+            user = await hass.auth.async_create_user(
+                "Test garage user", group_ids=[GROUP_ID_ADMIN]
+            )
+            await hass.services.async_call(
+                haec.DOMAIN,
+                haec.SERVICE_CLOSE_COVER,
+                {"entity_id": entity.entity_id},
+                blocking=True,
+                context=Context(user_id=user.id),
+            )
+            await notify("DevicePysical", 0)
+            assert (
+                trigger_events()[-1].data["source"]
+                == "Home Assistant (Test garage user)"
+            )
+            assert trigger_events()[-1].context.user_id == user.id
+            processor = EventProcessor(hass, [EVENT_GARAGEDOOR_TRIGGER])
+            entries = processor.humanify(
+                [async_event_to_row(event) for event in events]
+            )
+            entries = [
+                entry for entry in entries if entry.get("entity_id") == entity.entity_id
+            ]
+            assert any(
+                entry.get("context_name") == "Garage Door triggered by Wall Panel"
+                for entry in entries
+            )
+            assert any(
+                entry.get("context_name")
+                == "Garage Door triggered by Home Assistant (Test garage user)"
+                and entry.get("context_user_id") == user.id
+                for entry in entries
+            )
+            await self.device_context.time_mock.async_warp(40, tick=1)
+        finally:
+            unsub_trigger()
+            unsub_state()
+            if previous_logbook is None:
+                hass.data.pop("logbook", None)
+            else:
+                hass.data["logbook"] = previous_logbook
 
     async def _async_test_cover_transition(self, entity):
         """Start and follow the transition from open to close or
