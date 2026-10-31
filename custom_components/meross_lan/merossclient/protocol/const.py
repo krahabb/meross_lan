@@ -493,6 +493,7 @@ TYPE_NAME_MAP["mod"] = "Humidifier"
 
 TYPE_NAME_MAP["mrs"] = "Roller Shutter"
 
+TYPE_MSG150 = "msg150"  # smart garage door with opener light and remote lock
 TYPE_MSG200 = "msg200"  # smart garage door (3 channels)
 TYPE_NAME_MAP["msg"] = "Garage Door"
 
