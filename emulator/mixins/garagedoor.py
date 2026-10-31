@@ -42,6 +42,8 @@ class GarageDoorMixin(Emulator if TYPE_CHECKING else object):
 
     def _SET_Appliance_GarageDoor_Config(self, header, payload):
         p_config = self.namespaces[mn.Appliance_GarageDoor_Config][mc.KEY_CONFIG]
+        if self.descriptor.type.startswith(mc.TYPE_MSG150):
+            assert mc.KEY_SIGNALDURATION in payload[mc.KEY_CONFIG]
         update_dict_strict(p_config, payload[mc.KEY_CONFIG])
         return mc.METHOD_SETACK, {}
 
@@ -81,6 +83,8 @@ class GarageDoorMixin(Emulator if TYPE_CHECKING else object):
 
     def _SET_Appliance_GarageDoor_State(self, header, payload):
         p_channel_payload: "mt.garagedoor.State" = payload[mc.KEY_STATE]
+        if self.descriptor.type.startswith(mc.TYPE_MSG150):
+            assert p_channel_payload[mc.KEY_UUID] == self.descriptor.uuid
         p_channel_state = get_element_by_key(
             self.descriptor.digest[mc.KEY_GARAGEDOOR], p_channel_payload
         )
@@ -91,9 +95,17 @@ class GarageDoorMixin(Emulator if TYPE_CHECKING else object):
             def _state_update_callback():
                 p_channel_state[mc.KEY_OPEN] = request_open
 
+            duration = self.OPENDURATION if request_open else self.CLOSEDURATION
+            if not request_open and self.descriptor.type.startswith(mc.TYPE_MSG150):
+                config = self.namespaces[mn.Appliance_GarageDoor_Config][mc.KEY_CONFIG]
+                if config.get(mc.KEY_BUZZERENABLE):
+                    duration += config.get(mc.KEY_BUZZERDELAYTIME, 0) / 1000
             asyncio.get_event_loop().call_later(
-                self.OPENDURATION if request_open else self.CLOSEDURATION,
+                duration,
                 _state_update_callback,
             )
+        if self.descriptor.type.startswith(mc.TYPE_MSG150):
+            # MSG150 echoes the target while the physical state is unchanged.
+            p_response[mc.KEY_OPEN] = request_open
         p_response[mc.KEY_EXECUTE] = 1
         return mc.METHOD_SETACK, {mc.KEY_STATE: p_response}

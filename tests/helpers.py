@@ -969,6 +969,8 @@ class DeviceContext(ConfigEntryMocker):
     async def async_poll_single(self):
         """Advances the time mocker up to the next polling cycle and executes it."""
         device = self.device
+        if device._polling_task:
+            await device._polling_task
         _polling_timer = device._timers[device._async_polling_schedule]
         self.time_mock.tick(_polling_timer.when() - self.hass.loop.time())
         assert device._polling_task
