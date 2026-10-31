@@ -310,6 +310,7 @@ class GarageDoorConfig(MappingParserHandler):
                 mc.KEY_OBENABLE: GarageConfigSwitchMSG150.DEF(
                     name="Obstruction reporting"
                 ),
+                mc.KEY_LOCKREMOTE: GarageConfigSwitchMSG150.DEF(name="Remote lock"),
             }
             # FW 7.1.8 does not PUSH Config updates for light changes made by
             # motion or the wall panel. Cloud polling keeps the config default.

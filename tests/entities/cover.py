@@ -54,6 +54,9 @@ class EntityTest(EntityComponentTest):
                 self.expected_entity_types.append(type(config.parsers[mc.KEY_LED]))
                 self.expected_entity_types.append(type(config.parsers[mc.KEY_OBENABLE]))
                 self.expected_entity_types.append(
+                    type(config.parsers[mc.KEY_LOCKREMOTE])
+                )
+                self.expected_entity_types.append(
                     type(entity.binary_sensor_obstruction)
                 )
 
