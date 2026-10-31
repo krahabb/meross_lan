@@ -52,6 +52,10 @@ class EntityTest(EntityComponentTest):
             if entity.parent.descriptor.type.startswith(mc.TYPE_MSG150):
                 config = entity.parent.ns_handlers[mn.Appliance_GarageDoor_Config]
                 self.expected_entity_types.append(type(config.parsers[mc.KEY_LED]))
+                self.expected_entity_types.append(type(config.parsers[mc.KEY_OBENABLE]))
+                self.expected_entity_types.append(
+                    type(entity.binary_sensor_obstruction)
+                )
 
         elif isinstance(entity, RollerShutter):
             assert (
@@ -71,6 +75,7 @@ class EntityTest(EntityComponentTest):
             if entity.parent.descriptor.type.startswith(mc.TYPE_MSG150):
                 await self._async_test_msg150_recheck(entity)
                 await self._async_test_msg150_light(entity)
+                await self._async_test_msg150_obstruction(entity)
         elif isinstance(entity, RollerShutter):
             # RollerShutter could need at least a run to enable
             # support for SET_POSITION
@@ -160,6 +165,29 @@ class EntityTest(EntityComponentTest):
             config[mc.KEY_LED] = value
             await handler.async_get()
             assert light.is_on is expected
+
+    async def _async_test_msg150_obstruction(self, entity: GarageDoor):
+        handler = entity.handler_ns
+        sensor = entity.binary_sensor_obstruction
+        state = self.device_context.emulator.descriptor.digest[mc.KEY_GARAGEDOOR][0]
+        is_closed = entity.is_closed
+        for value, expected in ((1, True), (2, False), (0, None), (3, None), (1, True)):
+            state[mc.KEY_OBSTRUCTION] = value
+            state[mc.KEY_OBLMTIME] += 1
+            await handler.async_get(entity.index)
+            assert sensor.is_on is expected
+            assert entity.is_closed is is_closed
+            assert entity.extra_state_attributes[mc.KEY_OBSTRUCTION] == value
+            assert (
+                entity.extra_state_attributes[mc.KEY_OBLMTIME] == state[mc.KEY_OBLMTIME]
+            )
+        # A missing obstruction field leaves the last reported state intact.
+        del state[mc.KEY_OBSTRUCTION]
+        await handler.async_get(entity.index)
+        assert sensor.is_on is True
+        state[mc.KEY_OBSTRUCTION] = 2
+        await handler.async_get(entity.index)
+        assert sensor.is_on is False
 
     async def _async_test_cover_transition(self, entity):
         """Start and follow the transition from open to close or

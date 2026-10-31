@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, override
 from homeassistant.helpers.entity_registry import RegistryEntryDisabler
 from homeassistant.util.dt import now
 
-from ..binary_sensor import BinarySensorEntity
+from ..binary_sensor import BinarySensorEntity, BinarySensorParser
 from ..cover import Cover
 from ..helpers import clamp
 from ..merossclient.client import Transport
@@ -61,6 +61,20 @@ class GarageTimeoutBinarySensor(BinarySensorEntity):
         self.extra_state_attributes[self.ATTR_TRANSITION_TIMEOUT] = now().isoformat()
         self.is_on = True
         self.flush_state()
+
+
+class GarageObstructionBinarySensor(BinarySensorParser):
+    """
+    Binary sensor for MSG150 obstruction status (1: detected, 2: cleared).
+    """
+
+    _INIT_entity_key = mc.KEY_OBSTRUCTION
+    _INIT_key_value = BinarySensorParser.KeyValue(mc.KEY_OBSTRUCTION)
+    _INIT_value_off = 2
+
+    # HA core entity attributes:
+    _attr_device_class = BinarySensorParser.DeviceClass.PROBLEM
+    _attr_name = "Obstruction"
 
 
 class GarageConfigMixin(ValueParser if TYPE_CHECKING else object):
@@ -293,6 +307,9 @@ class GarageDoorConfig(MappingParserHandler):
                 mc.KEY_LED: GarageConfigSwitchMSG150.DEF(
                     name="Opener light", entity_category=None
                 ),
+                mc.KEY_OBENABLE: GarageConfigSwitchMSG150.DEF(
+                    name="Obstruction reporting"
+                ),
             }
             # FW 7.1.8 does not PUSH Config updates for light changes made by
             # motion or the wall panel. Cloud polling keeps the config default.
@@ -326,6 +343,7 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         ENTITY_DEFS: dict[str, type[GarageConfigMixin]]
 
         binary_sensor_timeout: GarageTimeoutBinarySensor
+        binary_sensor_obstruction: GarageObstructionBinarySensor | None
         doorEnable: GarageEnableSwitch
         doorCloseDuration: NumberEntity | _DurationHelper
         doorOpenDuration: NumberEntity | _DurationHelper
@@ -344,6 +362,7 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         "_transition_start",
         "_transition_timeout_retry",
         "binary_sensor_timeout",
+        "binary_sensor_obstruction",
         *GarageDoorMultipleConfig._INIT_parser_defs.keys(),
     )
 
@@ -358,6 +377,7 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         }
         Cover.__init__(self, id, device, **kwargs)
         self.binary_sensor_timeout = GarageTimeoutBinarySensor(self)
+        self.binary_sensor_obstruction = None
         # garage run timeouts config availability is rather articulated across different fw.
         # This approach allows to have dynamic entities that adapt to the actual device capabilities
         # while still providing a fallback solution to cover the cases where the
@@ -454,8 +474,29 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         except (AttributeError, KeyError):
             pass
 
+        attributes_changed = False
+        if self.parent.descriptor.type.startswith(mc.TYPE_MSG150):
+            if mc.KEY_OBSTRUCTION in payload:
+                if self.binary_sensor_obstruction is None:
+                    self.binary_sensor_obstruction = GarageObstructionBinarySensor(
+                        self, ns=self.ns, ns_value=payload[mc.KEY_OBSTRUCTION]
+                    )
+                else:
+                    self.binary_sensor_obstruction.update_device_value(
+                        payload[mc.KEY_OBSTRUCTION]
+                    )
+            for key in (mc.KEY_OBSTRUCTION, mc.KEY_OBLMTIME, mc.KEY_SIGNALVALID):
+                if (
+                    key in payload
+                    and self.extra_state_attributes.get(key) != payload[key]
+                ):
+                    self.extra_state_attributes[key] = payload[key]
+                    attributes_changed = True
+
         is_closed = not payload[mc.KEY_OPEN]
         if self.is_closed == is_closed:
+            if attributes_changed:
+                self.flush_state()
             if self._transition_start:
                 # keep monitoring the transition
                 self.schedule_callback(0.9, self._transition_callback)
