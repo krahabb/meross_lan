@@ -49,6 +49,9 @@ class EntityTest(EntityComponentTest):
                 == haec.CoverEntityFeature.OPEN | haec.CoverEntityFeature.CLOSE
             )
             self._check_remove_togglex(entity)
+            if entity.parent.descriptor.type.startswith(mc.TYPE_MSG150):
+                config = entity.parent.ns_handlers[mn.Appliance_GarageDoor_Config]
+                self.expected_entity_types.append(type(config.parsers[mc.KEY_LED]))
 
         elif isinstance(entity, RollerShutter):
             assert (
@@ -67,6 +70,7 @@ class EntityTest(EntityComponentTest):
             await self._async_test_cover_transition(entity)
             if entity.parent.descriptor.type.startswith(mc.TYPE_MSG150):
                 await self._async_test_msg150_recheck(entity)
+                await self._async_test_msg150_light(entity)
         elif isinstance(entity, RollerShutter):
             # RollerShutter could need at least a run to enable
             # support for SET_POSITION
@@ -141,6 +145,21 @@ class EntityTest(EntityComponentTest):
         assert entity.is_closed is True
         assert not entity.binary_sensor_timeout.is_on
         assert entity._async_transition_end_callback not in entity._timers
+
+    async def _async_test_msg150_light(self, entity: GarageDoor):
+        handler = entity.parent.ns_handlers[mn.Appliance_GarageDoor_Config]
+        light = handler.parsers[mc.KEY_LED]
+        assert light.name == "Opener light"
+        assert light.entity_category is None
+        assert handler.polling_period == 10
+        assert handler.polling_period_cloud == 1200
+        config = self.device_context.emulator.namespaces[handler.id][mc.KEY_CONFIG]
+        # The wall panel or motion sensor can change the light independently.
+        # A config poll should then update the entity through the normal parser.
+        for value, expected in ((1, True), (2, False), (0, None), (2, False)):
+            config[mc.KEY_LED] = value
+            await handler.async_get()
+            assert light.is_on is expected
 
     async def _async_test_cover_transition(self, entity):
         """Start and follow the transition from open to close or

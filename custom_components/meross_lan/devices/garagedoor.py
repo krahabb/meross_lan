@@ -76,7 +76,7 @@ class GarageConfigMixin(ValueParser if TYPE_CHECKING else object):
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         key_value_str = str(kwargs["key_value"])  # type: ignore
         kwargs["entity_key"] = f"config_{key_value_str}"
-        kwargs["name"] = key_value_str
+        kwargs.setdefault("name", key_value_str)
         super().__init__(*args, **kwargs)
         if self.index.value is not None:
             setattr(
@@ -116,6 +116,14 @@ class GarageConfigSwitch(GarageConfigMixin, SwitchParser):
     """
 
     pass
+
+
+class GarageConfigSwitchMSG150(GarageConfigSwitch):
+    """
+    Config switch for MSG150 values encoded as 1 (on) and 2 (off).
+    """
+
+    _INIT_value_off = 2
 
 
 class GarageEnableSwitch(GarageConfigSwitch):
@@ -256,6 +264,9 @@ class GarageDoorMultipleConfig(MappingParser):
 
 class GarageDoorConfig(MappingParserHandler):
 
+    PARAM_LIGHT_UPDATE_PERIOD = 10
+    """local polling period for MSG150 opener light status"""
+
     _INIT_parser_defs = {
         key: GarageDoorMultipleConfig._INIT_parser_defs[key]
         for key in (
@@ -265,6 +276,28 @@ class GarageDoorConfig(MappingParserHandler):
             mc.KEY_DOOROPENDURATION,
         )
     }
+
+    @classmethod
+    @override
+    def namespace_init(
+        cls,
+        ns: mn.Namespace,
+        device: "Device",
+        /,
+        **kwargs: "Unpack[NamespaceHandler.Args]",
+    ):
+        handler = super().namespace_init(ns, device, **kwargs)
+        if device.descriptor.type.startswith(mc.TYPE_MSG150):
+            handler.parser_defs = {
+                **handler.parser_defs,
+                mc.KEY_LED: GarageConfigSwitchMSG150.DEF(
+                    name="Opener light", entity_category=None
+                ),
+            }
+            # FW 7.1.8 does not PUSH Config updates for light changes made by
+            # motion or the wall panel. Cloud polling keeps the config default.
+            handler.polling_period = cls.PARAM_LIGHT_UPDATE_PERIOD
+        return handler
 
     def _handle(self, message: "MerossMessage", /):
         handler = super()._handle
