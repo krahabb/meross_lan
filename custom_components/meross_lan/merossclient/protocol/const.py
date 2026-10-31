@@ -189,6 +189,7 @@ KEY_SIGNALOPEN = "signalOpen"
 KEY_SIGNALCLOSE = "signalClose"
 KEY_SIGNALDURATION = "signalDuration"
 KEY_BUZZERENABLE = "buzzerEnable"
+KEY_LED = "led"
 KEY_DOORENABLE = "doorEnable"
 KEY_DOOROPENDURATION = "doorOpenDuration"
 KEY_DOORCLOSEDURATION = "doorCloseDuration"
@@ -493,6 +494,7 @@ TYPE_NAME_MAP["mod"] = "Humidifier"
 
 TYPE_NAME_MAP["mrs"] = "Roller Shutter"
 
+TYPE_MSG150 = "msg150"  # smart garage door with opener light and remote lock
 TYPE_MSG200 = "msg200"  # smart garage door (3 channels)
 TYPE_NAME_MAP["msg"] = "Garage Door"
 
