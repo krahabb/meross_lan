@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import zoneinfo
 
 import aiohttp
+from homeassistant import const as hac
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
@@ -114,6 +115,7 @@ class BaseDevice(EntityManager):
             sw_version: NotRequired[str]
             connections: NotRequired[set[tuple[str, str]]]
             via_device: NotRequired[tuple[str, str]]
+            via_device_id: NotRequired[str]
 
     __slots__ = (
         "online",
@@ -128,6 +130,12 @@ class BaseDevice(EntityManager):
             **kwargs,
         )
         self.online = False
+        # HA 2026.8 added 'via_device_id' and deprecated 'via_device'
+        # (it stops working in 2027.8). Older cores only know 'via_device'.
+        if (hac.MAJOR_VERSION, hac.MINOR_VERSION) >= (2026, 8):  # type: ignore
+            via_args = {"via_device_id": kwargs.get("via_device_id")}
+        else:
+            via_args = {"via_device": kwargs.get("via_device")}
         self.device_registry_entry = self.api.device_registry.async_get_or_create(
             config_entry_id=self.config_entry.entry_id,
             connections=kwargs.get("connections"),
@@ -136,8 +144,8 @@ class BaseDevice(EntityManager):
             model=kwargs.get("model"),
             hw_version=kwargs.get("hw_version"),
             sw_version=kwargs.get("sw_version"),
-            via_device=kwargs.get("via_device"),
             identifiers=identifiers,
+            **via_args,
         )
 
     # interface: EntityManager
