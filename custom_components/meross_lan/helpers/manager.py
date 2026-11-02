@@ -370,6 +370,11 @@ class ConfigEntryManager(logging.Loggable):
                 return
         except AttributeError:
             issues = self._issues = set()
+        kwargs = (
+            {"config_entry_id": self.config_entry.entry_id}
+            if mlc.HA_VERSION >= (2026, 11)
+            else {}
+        )
         self.parent.issue_registry.async_get_or_create(
             mlc.DOMAIN,
             issue_id,
@@ -379,6 +384,7 @@ class ConfigEntryManager(logging.Loggable):
             severity=severity,
             translation_key=issue_key,
             translation_placeholders=translation_placeholders,
+            **kwargs,
         )
         issues.add(issue_id)
 
