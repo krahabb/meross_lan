@@ -2,6 +2,15 @@
     "files.associations": {
         "*.yaml": "home-assistant"
     },
+    "json.schemas": [
+        {
+            "fileMatch": [
+                "**/library/devices.json"
+            ],
+            "url": "./custom_components/meross_lan/merossclient/library/devices.schema.json"
+        }
+    ],
+    "python.analysis.diagnosticMode": "openFilesOnly",
     "testing.defaultGutterClickAction": "debug",
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,

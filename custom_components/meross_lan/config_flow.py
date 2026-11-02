@@ -2,19 +2,30 @@
 
 import asyncio
 from contextlib import contextmanager
-from enum import StrEnum
+import enum
 from functools import cached_property
 import json
 import logging
+import re
 from time import time
 from types import MappingProxyType
-import typing
+from typing import TYPE_CHECKING
 
-from homeassistant import config_entries as ce, const as hac
+from homeassistant import config_entries as ce
 from homeassistant.const import CONF_ERROR
-from homeassistant.helpers import config_validation as cv, device_registry as dr
-from homeassistant.helpers.selector import selector
-import voluptuous as vol
+from homeassistant.data_entry_flow import AbortFlow
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    selector,
+)
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+try:
+    # HA core 2026.9 introduced probatio in place of voluptuous
+    import probatio as vol
+except:
+    import voluptuous as vol
 
 from . import const as mlc
 from .helpers import (
@@ -23,129 +34,210 @@ from .helpers import (
     reverse_lookup,
 )
 from .helpers.component_api import ComponentApi
-from .helpers.manager import CloudApiClient
+from .helpers.mqtt_profile import MQTTConnection
 from .merossclient import (
+    DeviceDescriptor,
     HostAddress,
-    MerossDeviceDescriptor,
+    async_available_timezones,
     cloudapi,
     fmt_macaddress,
-    get_macaddress_from_uuid,
 )
-from .merossclient.httpclient import MerossHttpClient
-from .merossclient.mqttclient import MerossMQTTDeviceClient
-from .merossclient.protocol import MerossKeyError, const as mc, namespaces as mn
-from .merossclient.protocol.message import (
-    get_message_uuid,
-)
+from .merossclient.client import Transport
+from .merossclient.client.http import HttpClient
+from .merossclient.client.mqtt import MQTTDeviceClient
+from .merossclient.exceptions import MerossKeyError
+from .merossclient.protocol import const as mc, namespaces as mn
 
-if typing.TYPE_CHECKING:
-    from typing import Final
+if TYPE_CHECKING:
+    from typing import Any, ClassVar, Final, Mapping, NotRequired, TypedDict
 
-    from helpers.device import Device
+    from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
+    from homeassistant.helpers.service_info.bluetooth import BluetoothServiceInfo
     from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
     from homeassistant.helpers.service_info.mqtt import MqttServiceInfo
 
+    # re-import voluptuous in typing
+    if mlc.HA_VERSION > (2026, 9):
+        import probatio as vol
+    else:
+        import voluptuous as vol
+
+    from .helpers.device import Device
     from .helpers.manager import ConfigEntryManager
-    from .helpers.meross_profile import MQTTConnection
+    from .helpers.mqtt_profile import MQTTConnection
+    from .merossclient.client import AbstractClient
+    from .merossclient.protocol import types as mt
 
 
-# helper conf keys not persisted to config
-DESCR = "suggested_value"
-ERR_BASE = "base"
-
-
-class FlowErrorKey(StrEnum):
-    """These error keys are common to both Config and Options flows"""
-
-    ALREADY_CONFIGURED_DEVICE = "already_configured_device"
+class FlowErrorKey(enum.StrEnum):
+    ALREADY_CONFIGURED = "already_configured"
     CANNOT_CONNECT = "cannot_connect"
     CLOUD_PROFILE_MISMATCH = "cloud_profile_mismatch"
     INVALID_AUTH = "invalid_auth"
     INVALID_KEY = "invalid_key"
     INVALID_NULL_KEY = "invalid_nullkey"
-
-
-class ConfigFlowErrorKey(StrEnum):
-    pass
-
-
-class OptionsFlowErrorKey(StrEnum):
     DEVICE_ID_MISMATCH = "device_id_mismatch"
-    HABROKER_NOT_CONNECTED = "habroker_not_connected"
+    BROKER_ADDRESS_INVALID = "broker_address_invalid"
+    BROKER_CONNECTION_ERROR = "broker_connection_error"
 
 
 class FlowError(Exception):
-    def __init__(self, key: FlowErrorKey | ConfigFlowErrorKey | OptionsFlowErrorKey):
-        super().__init__(key)
+    def __init__(self, key: FlowErrorKey):
+        Exception.__init__(self, key)
         self.key = key
 
 
 def _optional(key: str, config, default=None):
     try:
-        default = config.get(key, default)
+        return vol.Optional(
+            key,
+            description={"suggested_value": config[key]},
+        )
     except:
-        pass
-    return vol.Optional(key, description={DESCR: default})
+        return vol.Optional(
+            key,
+            description={"suggested_value": default},
+        )
 
 
 def _required(key: str, config, default=None):
     try:
-        default = config.get(key, default)
+        return vol.Required(
+            key,
+            description={"suggested_value": config[key]},
+        )
     except:
-        pass
-    return vol.Required(key, description={DESCR: default})
+        return vol.Required(
+            key,
+            description={"suggested_value": default},
+        )
 
 
-class MerossFlowHandlerMixin(
-    ce.ConfigEntryBaseFlow if typing.TYPE_CHECKING else object
-):
+class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
     """Mixin providing commons for Config and Option flows"""
+
+    if TYPE_CHECKING:
+
+        _is_bluetooth: bool
+        device_id: str
+        device_config: mlc.DeviceConfigType
+        device_descriptor: DeviceDescriptor
+        device_placeholders: dict[str, str]
+
+        profile_config: mlc.ProfileConfigType
+        profile_placeholders: dict[str, str]
+        _is_keyerror: bool
+        """Set when the async_step_profile is invoked to fix a device key configuration."""
+        _profile_entry: ce.ConfigEntry | None
+        """
+        This is set when processing a 'profile' OptionsFlow. It is needed
+        to discriminate the context in the general purpose 'async_step_profile' since
+        that step might come in these scenarios:
+        - user initiated (and auto-discovery) profile ConfigFlow
+        - user initiated profile OptionsFlow (this is the step that 'fixes' the _profile_entry)
+        - intermediate flow step when configuring a device (either ConfigFlow or OptionsFlow)
+        in the latter case, the 'async_step_profile' will smartly create/edit the configuration
+        entry for the profile which is not the actual entry (a device one) under configuration/edit
+        """
+
+        # TODO: implement a 'config' child logger to forward logs instead of using the api
+
+        class BindConfigType(TypedDict):
+            ssid: NotRequired[str | None]
+            password: NotRequired[str | None]
+            timezone: NotRequired[str | None]
+            server: NotRequired[str | None]
+            check: NotRequired[bool | None]
+            key: NotRequired[str | None]
+            userid: NotRequired[int | None]
+
+        bind_config: BindConfigType
+
+        # instance properties managed with show_form_errorcontext
+        # and async_show_form_with_errors
+        _config_schema: dict[vol.Marker, Any]
+        _errors: dict[str, str] | None
 
     VERSION = 1
     MINOR_VERSION = 1
 
-    _profile_entry: ce.ConfigEntry | None = None
-    """
-    This is set when processing a 'profile' OptionsFlow. It is needed
-    to discriminate the context in the general purpose 'async_step_profile' since
-    that step might come in these scenarios:
-    - user initiated (and auto-discovery) profile ConfigFlow
-    - user initiated profile OptionsFlow (this is the step that 'fixes' the _profile_entry)
-    - intermediate flow step when configuring a device (either ConfigFlow or OptionsFlow)
-    in the latter case, the 'async_step_profile' will smartly create/edit the configuration
-    entry for the profile which is not the actual entry (a device one) under configuration/edit
-    """
+    _is_bluetooth = False
+    _is_keyerror = False
+    _profile_entry = None
 
-    # These values are just buffers for UI state persistance
-    device_config: mlc.DeviceConfigType
-    profile_config: mlc.ProfileConfigType
-    device_descriptor: MerossDeviceDescriptor
-
-    device_placeholders: dict[str, str] = {
+    device_placeholders = {
         "device_type": "",
         "device_id": "",
         "host": "",
     }
 
-    profile_placeholders: dict[str, str] = {
+    profile_placeholders = {
         "email": "",
         "placeholder": "",
     }
-
-    _is_keyerror: bool = False
-
-    # instance properties managed with show_form_errorcontext
-    # and async_show_form_with_errors
-    _config_schema: dict
-    _errors: dict[str, str] | None
 
     @cached_property
     def api(self):
         return ComponentApi.get(self.hass)
 
-    @ce.callback
-    def async_abort(self, *, reason: str = "already_configured"):
-        return super().async_abort(reason=reason)
+    @cached_property
+    def config_entries(self):
+        return self.api.config_entries
+
+    @cached_property
+    def flow_manager(self):
+        return self.api.flow_manager
+
+    @cached_property
+    def http_client(self):
+        """Plain MerossHttpClient. When using ensure the host/key are correctly set/refreshed."""
+        return HttpClient(
+            "",
+            self.api,
+            from_=mlc.DOMAIN,
+            trigger_src=self.__class__.__name__,
+        )
+
+    async def async_get_device_client(self, uuid: str) -> "AbstractClient | None":
+        """Returns a suitable low level device client to query/configure the device.
+        This instance must not be modified since it could be an active client used by a Device.
+        """
+        api = self.api
+        try:
+            device = api.devices[uuid]
+            if device:
+                if device._clients_connected:
+                    return next(iter(device._clients_connected.values()))
+                elif device._clients:
+                    return next(iter(device._clients.values()))
+                else:
+                    return None
+        except KeyError:
+            pass
+
+        if self._is_bluetooth:
+            return api.get_bt_client(uuid)
+
+        device_config = self.device_config
+        host = device_config.get(mlc.CONF_HOST)
+        if host:
+            http_client = self.http_client
+            http_client.host = host
+            http_client.key = device_config.get(mlc.CONF_KEY) or ""
+            return http_client
+
+        profile = api.profiles.get(self.device_descriptor.userId)
+        if profile and profile.allow_mqtt_publish:
+            mqttconnections = await profile.get_or_create_mqttconnections(uuid)
+            if mqttconnections:
+                return MQTTConnection.Client(
+                    mqttconnections[0],
+                    api,
+                    uuid=uuid,
+                    key=device_config.get(mlc.CONF_KEY) or "",
+                )
+
+        return None
 
     @contextmanager
     def show_form_errorcontext(self):
@@ -153,37 +245,36 @@ class MerossFlowHandlerMixin(
         The CONF_ERROR key will be added as a string label to the UI schema
         containing the exception message so to provide better (untranslated)
         error context."""
+
+        def _render_exception(e: BaseException):
+            self._config_schema = {
+                _optional(CONF_ERROR, None, f"{e.__class__.__name__}({str(e)})"): str
+            }
+
         try:
             self._config_schema = {}
             self._errors = None
             yield
-        except cloudapi.CloudApiError as error:
+        except cloudapi.CloudApiError as e:
             self._errors = {CONF_ERROR: FlowErrorKey.INVALID_AUTH.value}
-            self._config_schema = {_optional(CONF_ERROR, None, str(error)): str}
-        except FlowError as error:
-            self._errors = {ERR_BASE: error.key.value}
-        except Exception as exception:
+            _render_exception(e)
+        except FlowError as e:
+            self._errors = {"base": e.key}
+            if e.__cause__:
+                _render_exception(e.__cause__)
+        except Exception as e:
             self._errors = {CONF_ERROR: FlowErrorKey.CANNOT_CONNECT.value}
-            self._config_schema = {
-                _optional(
-                    CONF_ERROR,
-                    None,
-                    str(exception) or exception.__class__.__name__,
-                ): str
-            }
-
-    def get_schema_with_errors(self):
-        return self._config_schema
+            _render_exception(e)
 
     def async_show_form_with_errors(
         self,
         step_id: str,
         *,
-        config_schema: dict = {},
-        description_placeholders: typing.Mapping[str, str] | None = None,
+        config_schema: "dict[vol.Marker, Any]" = {},
+        description_placeholders: "Mapping[str, str] | None" = None,
     ):
         """modularize errors managment: use together with show_form_errorcontext and get_schema_with_errors"""
-        return super().async_show_form(
+        return self.async_show_form(
             step_id=step_id,
             data_schema=vol.Schema(self._config_schema | config_schema),
             errors=self._errors,
@@ -200,18 +291,18 @@ class MerossFlowHandlerMixin(
             if mlc.CONF_OBFUSCATE in api_config:
                 config[mlc.CONF_OBFUSCATE] = api_config[mlc.CONF_OBFUSCATE]
 
-    def finish_options_flow(
+    def finish_flow(
         self,
         config: mlc.DeviceConfigType | mlc.ProfileConfigType | mlc.HubConfigType,
         reload: bool = False,
     ):
-        """Used in OptionsFlow to terminate and exit (with save)."""
+        """Used in ConfigFlow/OptionsFlow to terminate and exit (with save)."""
         raise NotImplementedError()
 
     @staticmethod
     def merge_userinput(
-        config,
-        user_input: dict,
+        config: mlc.ManagerConfigType,
+        user_input: "Mapping",
         *nullable_keys,
     ):
         """
@@ -224,14 +315,13 @@ class MerossFlowHandlerMixin(
         I set the key declaration as vol.Optional() = str
         """
         config.update(user_input)
-        for key in nullable_keys:
-            if key not in user_input:
-                config.pop(key, None)
+        for key in (_key for _key in nullable_keys if _key not in user_input):
+            config.pop(key, None)
         # just in case it was added to the schema.
         # this also fixes 'dirty' configurations already stored.
         config.pop(CONF_ERROR, None)
 
-    async def async_step_profile(self, user_input=None):
+    async def async_step_profile(self, user_input: "Mapping[str, Any] | None" = None):
         """configure a Meross cloud profile"""
         # this flow step is really hybrid: it could come from
         # a user flow deciding to create a profile or a user flow
@@ -244,7 +334,6 @@ class MerossFlowHandlerMixin(
 
         with self.show_form_errorcontext():
             if user_input:
-                hass = self.hass
                 api = self.api
                 # profile_config has both user set keys (updated through user_input)
                 # and MerossCloudCredentials keys (updated when logging into Meross http api)
@@ -266,7 +355,11 @@ class MerossFlowHandlerMixin(
                     # On first try we're not setting that (we don't ask the user) but
                     # if an MFA error arises we'll repeat the same step ('profile')
                     # with only the mfa code request field (like if it was an optional sub-step)
-                    cloudapiclient = CloudApiClient(api)
+                    cloudapiclient = cloudapi.CloudApiClient(
+                        "",
+                        api,
+                        session=async_get_clientsession(self.hass),
+                    )
                     try:
                         credentials = await cloudapiclient.async_signin(
                             profile_config[mlc.CONF_EMAIL],
@@ -306,7 +399,7 @@ class MerossFlowHandlerMixin(
 
                 if self._profile_entry:
                     # we were managing a profile OptionsFlow: fast save
-                    return self.finish_options_flow(profile_config)
+                    return self.finish_flow(profile_config)
 
                 # abort any eventual duplicate progress flow
                 # also, even if the user was creating a new profile,
@@ -315,17 +408,17 @@ class MerossFlowHandlerMixin(
                 unique_id = f"profile.{profile_config[mc.KEY_USERID_]}"
                 profile_flow = api.get_config_flow(unique_id)
                 if profile_flow and (profile_flow["flow_id"] != self.flow_id):
-                    hass.config_entries.flow.async_abort(profile_flow["flow_id"])
+                    self.flow_manager.async_abort(profile_flow["flow_id"])
                 profile_entry = api.get_config_entry(unique_id)
                 if profile_entry:
-                    hass.config_entries.async_update_entry(
+                    self.config_entries.async_update_entry(
                         profile_entry,
                         data=profile_config,
                     )
                     if not self._is_keyerror:
                         # this flow was creating a profile but it's entry is
                         # already in place (and updated)
-                        return self.async_abort()
+                        return self.async_abort(reason=FlowErrorKey.ALREADY_CONFIGURED)
                 else:
                     # this profile config is new either because of keyerror
                     # or user creating a cloud profile.
@@ -333,7 +426,7 @@ class MerossFlowHandlerMixin(
                     if self._is_keyerror:
                         # this flow is managing a device but since the profile
                         # entry is new, we'll directly setup that
-                        await hass.config_entries.async_add(
+                        await self.config_entries.async_add(
                             # there's a bad compatibility issue between core 2024.1 and
                             # previous versions up to latest 2023 on ConfigEntry. Namely:
                             # previous core versions used positional args in ConfigEntry
@@ -353,7 +446,7 @@ class MerossFlowHandlerMixin(
                                 unique_id=unique_id,
                                 subentries_data=(),  # required since 2025.3
                             )
-                            if (hac.MAJOR_VERSION, hac.MINOR_VERSION) >= (2025, 3)  # type: ignore
+                            if (mlc.HA_VERSION) >= (2025, 3)
                             else (
                                 ce.ConfigEntry(  # type: ignore
                                     version=self.VERSION,
@@ -368,7 +461,7 @@ class MerossFlowHandlerMixin(
                                     source=ce.SOURCE_USER,
                                     unique_id=unique_id,
                                 )
-                                if hac.MAJOR_VERSION >= 2024
+                                if mlc.hac.MAJOR_VERSION >= 2024
                                 else ce.ConfigEntry(  # type: ignore
                                     version=self.VERSION,
                                     domain=mlc.DOMAIN,
@@ -383,7 +476,9 @@ class MerossFlowHandlerMixin(
                         # this ConfigFlow was creating(user) a profile and looks like
                         # no entry exists
                         if await self.async_set_unique_id(unique_id, raise_on_progress=False):  # type: ignore
-                            return self.async_abort()
+                            return self.async_abort(
+                                reason=FlowErrorKey.ALREADY_CONFIGURED
+                            )
                         return self.async_create_entry(
                             title=profile_config[mc.KEY_EMAIL], data=profile_config
                         )
@@ -392,7 +487,8 @@ class MerossFlowHandlerMixin(
                 self.device_config[mlc.CONF_KEY] = profile_config[mc.KEY_KEY]
                 return await self.async_step_device()
 
-        config_schema = self.get_schema_with_errors()
+        config_schema = self._config_schema
+
         if self._profile_entry:
             # this is a profile OptionsFlow
             profile = self.api.profiles.get(profile_config[mc.KEY_USERID_])
@@ -400,35 +496,59 @@ class MerossFlowHandlerMixin(
         else:
             # this is not a profile OptionsFlow so we'd need to login for sure
             # with full credentials
-            config_schema[_optional(mlc.CONF_CLOUD_REGION, profile_config)] = selector(
-                {
-                    "select": {
+            config_schema[_optional(mlc.CONF_CLOUD_REGION, profile_config)] = (
+                selector.SelectSelector(
+                    {
                         "options": list(cloudapi.API_URL_MAP.keys()),
                         "translation_key": mlc.CONF_CLOUD_REGION,
-                        "mode": "dropdown",
+                        "mode": selector.SelectSelectorMode.DROPDOWN,
                     }
-                }
+                )
             )
             config_schema[_required(mlc.CONF_EMAIL, profile_config)] = str
             require_login = True
         if require_login:
             # token expired or not a profile OptionFlow: we'd need to login again
             config_schema[_required(mlc.CONF_PASSWORD, profile_config)] = str
-            config_schema[_required(mlc.CONF_SAVE_PASSWORD, profile_config, False)] = (
-                bool
-            )
+            config_schema[
+                _required(
+                    mlc.CONF_SAVE_PASSWORD,
+                    profile_config,
+                    mlc.CONF_SAVE_PASSWORD_DEFAULT,
+                )
+            ] = bool
             if profile_config.get(mlc.CONF_MFA_CODE):
                 # this is when we already have credentials (OptionsFlow then)
                 # and those are stating the login was an MFA
                 config_schema[vol.Optional(mlc.CONF_MFA_CODE)] = str
-        config_schema[_required(mlc.CONF_ALLOW_MQTT_PUBLISH, profile_config, False)] = (
-            bool
-        )
         config_schema[
-            _required(mlc.CONF_CHECK_FIRMWARE_UPDATES, profile_config, False)
+            _required(
+                mlc.CONF_ALLOW_MQTT_PUBLISH,
+                profile_config,
+                mlc.CONF_ALLOW_MQTT_PUBLISH_DEFAULT,
+            )
         ] = bool
+        config_schema[
+            _required(
+                mlc.CONF_CHECK_FIRMWARE_UPDATES,
+                profile_config,
+                mlc.CONF_CHECK_FIRMWARE_UPDATES_DEFAULT,
+            )
+        ] = bool
+
         if self._profile_entry:
+            config_schema[_optional(mlc.CONF_RL_WINDOW_SIZE, profile_config)] = (
+                selector.NumberSelector(
+                    {
+                        "min": 1,
+                        "unit_of_measurement": "messages",
+                        "max": 50,
+                        "mode": selector.NumberSelectorMode.BOX,
+                    }
+                )
+            )
             self._setup_entitymanager_schema(config_schema, profile_config)
+
         return self.async_show_form_with_errors(
             "profile",
             description_placeholders=self.profile_placeholders,
@@ -444,65 +564,295 @@ class MerossFlowHandlerMixin(
             step_id="keyerror", menu_options=["profile", "device"]
         )
 
-    async def _async_http_discovery(
-        self, host: str, key: str | None
-    ) -> tuple[mlc.DeviceConfigType, MerossDeviceDescriptor]:
-        # passing key=None would allow key-hack and we don't want it aymore
-        key = key or ""
+    async def async_step_bind(self, user_input: "BindConfigType | None" = None):
+        hass = self.hass
         api = self.api
-        _httpclient = MerossHttpClient(
-            host, key, logger=api, log_level_dump=api.VERBOSE
+        device_id = self.device_id
+        device_descriptor = self.device_descriptor
+        device_config = self.device_config
+        device_ssid = None
+        device_server = str(device_descriptor.server)
+        device_key = device_config.get(mc.KEY_KEY) or ""
+        try:
+            bind_config = self.bind_config
+        except AttributeError:
+            # We'll set some defaults here based off descriptor
+            # but, if we're able to connect, we'll use the Appliance.System.Debug data
+            # to pre-fill the bind config
+            bind_config = self.bind_config = {
+                mc.KEY_SERVER: device_server,
+                mc.KEY_KEY: device_key,
+                mc.KEY_USERID_: (
+                    int(device_descriptor.userId)
+                    if device_descriptor.userId.isnumeric()
+                    else None
+                ),
+            }
+
+        device_client = await self.async_get_device_client(device_id)
+
+        # Build a list of known valid broker addresses.
+        # We start from locally binded active connections by querying loaded devices
+        mqtt_connections: dict[str, tuple["MQTTConnection", HostAddress, bool]] = {}
+        ha_mqtt_connection = api.mqtt_connection
+        for _device in api.active_devices():
+            if (
+                _device.mqtt
+                and _device.mqtt.is_connected
+                and (_device.mqtt.connection is ha_mqtt_connection)
+            ):
+                _broker = _device.descriptor.server
+                mqtt_connections[f"HomeAssistant (mqtt://{_broker})"] = (
+                    ha_mqtt_connection,
+                    _broker,
+                    False,
+                )
+        # This should work as a fallback but is rather fragile since we don't know for
+        # sure the effective address of the HA broker
+        if not mqtt_connections and ha_mqtt_connection.mqtt_is_subscribed:
+            _broker = ha_mqtt_connection.id
+            mqtt_connections[f"HomeAssistant (mqtt://{_broker})"] = (
+                ha_mqtt_connection,
+                _broker,
+                True,
+            )
+            if _broker.port == 1883:
+                mqtt_connections[f"HomeAssistant (mqtt://{_broker.host}:8883)"] = (
+                    ha_mqtt_connection,
+                    HostAddress(_broker.host, 8883),
+                    True,
+                )
+        # Add also Meross cloud bound device connections
+        for _profile in api.active_profiles():
+            for _broker, _mqtt_connection in _profile.mqttconnections.items():
+                mqtt_connections[f"{_profile.display_name} (mqtt://{_broker})"] = (
+                    _mqtt_connection,
+                    _mqtt_connection.id,
+                    False,
+                )
+
+        with self.show_form_errorcontext():
+
+            if not device_client:
+                raise FlowError(FlowErrorKey.CANNOT_CONNECT)
+
+            # retrieve the current bind config/state (for safety)
+            p_debug: "mt.system.Debug" = await device_client.async_request_ns_payload(
+                mn.Appliance_System_Debug
+            )
+            p_network = p_debug[mc.KEY_NETWORK]
+            device_ssid = p_network[mc.KEY_SSID]
+            p_cloud = p_debug[mc.KEY_CLOUD]
+            device_server = f"{p_cloud[mc.KEY_MAINSERVER]}:{p_cloud[mc.KEY_MAINPORT]}"
+            device_userid = p_cloud[mc.KEY_USERID]
+
+            if user_input:
+
+                bind_config[mc.KEY_SSID] = ssid = user_input.get(mc.KEY_SSID)
+                bind_config[mc.KEY_PASSWORD] = password = user_input.get(
+                    mc.KEY_PASSWORD
+                )
+                bind_config[mc.KEY_SERVER] = server = user_input.get(mc.KEY_SERVER)
+                bind_config["check"] = check = user_input.get("check")
+                bind_config[mc.KEY_KEY] = key = user_input.get(mc.KEY_KEY)
+                bind_config[mc.KEY_USERID_] = user_id = user_input.get(mc.KEY_USERID_)
+
+                configure_wifi = ssid and (ssid != device_ssid)
+                if configure_wifi and not password:
+                    raise ValueError("Password is required when SSID is provided")
+
+                configure_mqtt_args: "AbstractClient.ConfigureMQTTArgs" = {}
+                if server and (server != device_server):
+                    # user wants to configure new broker
+                    try:
+                        # check if an available profile/connection was chosen
+                        mqtt_connection, server_address, _resolve_address = (
+                            mqtt_connections[server]
+                        )
+                        # force key,userid if a connection was choosen
+                        profile_key = mqtt_connection.parent.key
+                        profile_userid = int(mqtt_connection.parent.userid)
+                        if (key and (key != profile_key)) or (
+                            user_id and (user_id != profile_userid)
+                        ):
+                            api.log(
+                                api.WARNING,
+                                "Provided 'key' and 'userid' will be ignored when using a predefined connection",
+                            )
+                        key = profile_key
+                        user_id = profile_userid
+                    except KeyError:
+                        # or if manual entry
+                        _match = re.match(
+                            r"mqtt://(?P<host>(?:[a-zA-Z0-9\-\.]+|\d{1,3}(?:\.\d{1,3}){3}|localhost))(?::(?P<port>\d{1,5}))?",
+                            server,
+                        ) or re.match(
+                            r"(?P<host>(?:[a-zA-Z0-9\-\.]+|\d{1,3}(?:\.\d{1,3}){3}|localhost))(?::(?P<port>\d{1,5}))?",
+                            server,
+                        )
+                        if not _match:
+                            raise FlowError(FlowErrorKey.BROKER_ADDRESS_INVALID)
+                        _port = _match.group("port")
+                        server_address = HostAddress.build(
+                            _match.group("host"),
+                            int(_port) if _port else 8883,
+                        )
+                        _resolve_address = True
+                        key = key or device_key
+                        user_id = device_userid if user_id is None else user_id
+
+                    if _resolve_address:
+                        # we have to check the broker address is a network bound IPV4 address
+                        # since localhost would have no meaning (or a wrong one) in the device
+                        import socket
+
+                        # getaddrinfo contains the resolved ipv4 address(es) weather or not
+                        # our broker_address.host is an ipv6 or ipv4 host name/addr
+                        for addrinfo in await hass.loop.getaddrinfo(
+                            server_address.host,
+                            server_address.port,
+                            family=socket.AF_INET,
+                            type=socket.SOCK_STREAM,
+                            proto=socket.IPPROTO_TCP,
+                        ):
+                            # addrinfo: (family, type, proto, canonname, sockaddr)
+                            if addrinfo[4][0] == "127.0.0.1":
+                                # localhost could work in our mqtt.Client check but
+                                # it will not when configured in the device bind
+                                # so we're trying to resolve it to a valid network name
+                                from homeassistant.helpers.network import get_url
+                                from yarl import URL
+
+                                _host = URL(get_url(hass, allow_ip=True)).host
+                                if not _host:
+                                    raise FlowError(FlowErrorKey.BROKER_ADDRESS_INVALID)
+                                server_address.host = _host
+                                break
+
+                    server = str(server_address)
+                    if server != device_server:
+                        if check:
+                            _mqttclient = MQTTDeviceClient(
+                                server_address,
+                                api,
+                                key=key,
+                                uuid=device_id,
+                                user_id=user_id,
+                                sslcontext=get_default_no_verify_ssl_context(),
+                            )
+                            try:
+                                await _mqttclient.async_connect()
+                            except Exception as e:
+                                api.log_exception(
+                                    api.WARNING,
+                                    e,
+                                    "MQTT connection check to %s",
+                                    server_address,
+                                )
+                                raise FlowError(
+                                    FlowErrorKey.BROKER_CONNECTION_ERROR
+                                ) from e
+                            finally:
+                                await _mqttclient.async_shutdown()
+
+                        configure_mqtt_args["host"] = server_address.host
+                        configure_mqtt_args["port"] = server_address.port
+                        configure_mqtt_args["new_key"] = key
+                        configure_mqtt_args["userid"] = user_id
+
+                if not configure_mqtt_args:
+                    # broker update skipped, check if we want to update just key/userid
+                    key = user_input.get(mc.KEY_KEY) or device_key
+                    user_id = user_input.get(mc.KEY_USERID_) or device_userid
+                    if (key != device_key) or (user_id != device_userid):
+                        configure_mqtt_args["new_key"] = key
+                        configure_mqtt_args["userid"] = user_id
+                        server = device_server
+
+                if configure_mqtt_args:
+                    api.log(
+                        api.DEBUG,
+                        "Initiating MQTT binding to %s (key=%s, user_id=%s)",
+                        server=server,
+                        key=key,
+                        userid=user_id,
+                    )
+                    response = await device_client.async_configure_mqtt(
+                        **configure_mqtt_args
+                    )
+                    if response.method != mc.METHOD_SETACK:
+                        raise Exception("Failed MQTT binding configuration")
+                    api.log(
+                        api.DEBUG, "MQTT binding to %s was succesfull", server=server
+                    )
+                    device_config[mlc.CONF_KEY] = key  # type: ignore
+
+                if configure_wifi:
+                    await device_client.async_configure_wifi(
+                        ssid=ssid, password=password  # type: ignore
+                    )
+                    # TODO: use external step flow to wait for (eventual) MQTT/DHCP
+                    # discovery
+
+                return self.finish_flow(device_config)
+            else:
+                bind_config[mc.KEY_SSID] = (
+                    None if device_ssid == "MEROSS_STA" else device_ssid
+                )
+                bind_config[mc.KEY_SERVER] = device_server
+                bind_config[mc.KEY_USERID_] = device_userid
+
+        try:
+            ssid_list = await device_client.async_get_ssid_scan()
+        except:
+            ssid_list = []
+
+        return self.async_show_form_with_errors(
+            "bind",
+            config_schema={
+                _optional(mc.KEY_SSID, bind_config): selector.SelectSelector(
+                    {
+                        "options": ssid_list,
+                        "custom_value": True,
+                    }
+                ),
+                _optional(mc.KEY_PASSWORD, bind_config): str,
+                _optional(mc.KEY_SERVER, bind_config): selector.SelectSelector(
+                    {
+                        "options": list(mqtt_connections),
+                        "custom_value": True,
+                    }
+                ),
+                _required("check", bind_config, True): bool,
+                _optional(mc.KEY_KEY, bind_config): str,
+                _optional(mc.KEY_USERID_, bind_config): cv.positive_int,
+            },
+            description_placeholders={"ssid": device_ssid, "server": device_server},
         )
 
-        response_ability = (
-            await _httpclient.async_request(
-                *mn.Appliance_System_Ability.request_default
-            )
-        ).check()
-        ability = response_ability[mc.KEY_PAYLOAD][mc.KEY_ABILITY]
-        try:
-            all = (
-                await _httpclient.async_request(
-                    *mn.Appliance_System_All.request_default
-                )
-            ).check()[mc.KEY_PAYLOAD][mc.KEY_ALL]
-        except:
-            # might it be the device needs encryption?
-            if mn.Appliance_Encrypt_ECDHE.name not in ability:
-                raise
-            # here we'd need the uuid and mac but we have no ns_all
-            # to parse so we'll try extract these info from ns_ability query
-            uuid = get_message_uuid(response_ability[mc.KEY_HEADER])
-            _httpclient.enable_encryption(uuid, key, get_macaddress_from_uuid(uuid))
-            all = (
-                await _httpclient.async_request(
-                    *mn.Appliance_System_All.request_default
-                )
-            ).check()[mc.KEY_PAYLOAD][mc.KEY_ALL]
-
-        payload = {
-            mc.KEY_ALL: all,
-            mc.KEY_ABILITY: ability,
-        }
-        descriptor = MerossDeviceDescriptor(payload)
+    async def _async_http_discovery(
+        self, host: str, key: str | None
+    ) -> tuple[mlc.DeviceConfigType, DeviceDescriptor]:
+        http_client = self.http_client
+        http_client.host = host
+        http_client.key = key or ""
+        descriptor = await http_client.async_identify()
         return (
             {
                 mlc.CONF_HOST: host,
-                mlc.CONF_PAYLOAD: payload,
-                mlc.CONF_KEY: key,
+                mlc.CONF_PAYLOAD: descriptor.payload,
+                mlc.CONF_KEY: http_client.key,
                 mlc.CONF_DEVICE_ID: descriptor.uuid,
             },
             descriptor,
         )
 
     async def _async_mqtt_discovery(
-        self, device_id: str, key: str | None, descriptor: MerossDeviceDescriptor | None
-    ) -> tuple[mlc.DeviceConfigType, MerossDeviceDescriptor]:
+        self, device_id: str, key: str, descriptor: DeviceDescriptor | None
+    ) -> tuple[mlc.DeviceConfigType, DeviceDescriptor, MQTTConnection]:
         mqttconnections: list[MQTTConnection] = []
-        if key is None:
-            key = ""
         if descriptor:
-            profile = self.api.profiles.get(descriptor.userId)  # type: ignore
+            profile = self.api.profiles.get(descriptor.userId)
             if profile and (profile.key == key):
                 if profile.allow_mqtt_publish:
                     mqttconnections = await profile.get_or_create_mqttconnections(
@@ -521,12 +871,11 @@ class MerossFlowHandlerMixin(
             # this means the device is not Meross cloud binded or the profile
             # is not configured/loaded at least according to our euristics.
             # We'll try HA broker if available
-            hamqttconnection = self.api.mqtt_connection
-            if not hamqttconnection.mqtt_is_connected:
+            if not self.api.mqtt_connection.is_connected:
                 raise Exception(
                     "No MQTT broker (either Meross cloud or HA local broker) available to connect"
                 )
-            mqttconnections.append(hamqttconnection)
+            mqttconnections.append(self.api.mqtt_connection)
 
         # acrobatic asyncio:
         # we expect only one of the mqttconnections to eventually
@@ -535,18 +884,14 @@ class MerossFlowHandlerMixin(
         # we'll then wait for the first (and only) success one while
         # eventually collect the exceptions
         exceptions = []
-        identifies = asyncio.as_completed(
-            {
+        for identify_coro in asyncio.as_completed(
+            (
                 mqttconnection.async_identify_device(device_id, key or "")
                 for mqttconnection in mqttconnections
-            }
-        )
-        for identify_coro in identifies:
+            )
+        ):
             try:
-                device_config = await identify_coro
-                return device_config, MerossDeviceDescriptor(
-                    device_config[mlc.CONF_PAYLOAD]
-                )
+                return await identify_coro
             except Exception as exception:
                 exceptions.append(exception)
 
@@ -560,14 +905,12 @@ class MerossFlowHandlerMixin(
         """
         Fills (the bottom of) the schema presented to the UI with common settings
         available for all (or almost) the config flows (properties typically configuring
-        the EntityManager base class).
+        the ConfigEntryManager base class).
         """
 
 
-class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
+class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
     """Handle a config flow for Meross IoT local LAN."""
-
-    DHCP_DISCOVERIES: typing.ClassVar = {}
 
     @staticmethod
     def async_get_options_flow(config_entry):
@@ -590,7 +933,7 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
         if user_input is not None:
             return self.async_create_entry(title="MQTT Hub", data=user_input)
         if await self.async_set_unique_id(mlc.DOMAIN):
-            return self.async_abort()
+            return self.async_abort(reason=FlowErrorKey.ALREADY_CONFIGURED)
         return self.async_show_form(
             step_id="hub",
             data_schema=vol.Schema(
@@ -632,29 +975,92 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
         """
         return await self._async_set_device_config(
             discovery_info,
-            MerossDeviceDescriptor(discovery_info[mlc.CONF_PAYLOAD]),
+            DeviceDescriptor(discovery_info[mlc.CONF_PAYLOAD]),
         )
 
+    async def async_step_bluetooth(self, discovery_info: "BluetoothServiceInfoBleak"):
+        api = self.api
+
+        try:
+            bt_device = await api.async_bt_advertisement(discovery_info, self)
+            uuid = bt_device.uuid
+            descriptor = bt_device.descriptor
+            config_entry = await self.async_set_unique_id(uuid, raise_on_progress=True)
+            device_config: mlc.DeviceConfigType
+            if config_entry:
+                device_config = dict(config_entry.data)  # type: ignore
+                device_config[mlc.CONF_PROTOCOL] = Transport.BLUETOOTH
+            else:
+                device_config = {
+                    mlc.CONF_KEY: "",
+                    mlc.CONF_DEVICE_ID: uuid,
+                    mlc.CONF_PAYLOAD: descriptor.payload,
+                    mlc.CONF_PROTOCOL: Transport.BLUETOOTH,
+                }
+                self.clone_api_diagnostic_config(device_config)
+
+            # TODO: reconcile with _async_set_device_config
+            self._is_bluetooth = True
+            self.device_id = uuid
+            self.device_config = device_config
+            self.device_descriptor = descriptor
+            self.device_placeholders = {
+                "device_type": descriptor.productnametype,
+                "device_id": uuid,
+            }
+            self._set_flow_title(f"{descriptor.type} - {uuid}")
+            self.bind_config = {}
+            return await self.async_step_bind()
+        except AbortFlow:
+            raise
+        except Exception as e:
+            api.log_exception(api.DEBUG, e, "async_step_bluetooth")
+            return self.async_abort(reason=FlowErrorKey.CANNOT_CONNECT)
+
+    # A device that has just (re)joined the network is often not answering http yet when
+    # its DHCP request is seen, and later lease renewals are unicast (HA never sees them), so a
+    # single failed check would leave the entry on a stale address for good. Keep trying for a
+    # few minutes before giving up. A key error is a definite answer and is not retried.
+    DHCP_VERIFY_RETRY_DELAYS = (5, 10, 15, 30, 30, 60, 60)
+
+    async def _async_http_discovery_retry(self, host: str, key: str | None):
+        for delay in (*self.DHCP_VERIFY_RETRY_DELAYS, None):
+            try:
+                return await self._async_http_discovery(host, key)
+            except MerossKeyError:
+                raise
+            except Exception as e:
+                if delay is None:
+                    raise
+                api = self.api
+                api.log(
+                    api.DEBUG,
+                    "DHCP verify of %s failed (%s): retrying in %s s",
+                    host,
+                    str(e),
+                    delay,
+                )
+                await asyncio.sleep(delay)
+
     async def async_step_dhcp(self, discovery_info: "DhcpServiceInfo"):
-        """Handle a flow initialized by DHCP discovery."""
         api = self.api
         api.log(api.DEBUG, "received dhcp discovery: %s", str(discovery_info))
         host = discovery_info.ip
         macaddress = discovery_info.macaddress
         macaddress_fmt = fmt_macaddress(macaddress)
         # check if the device is already registered
-        config_entries = self.hass.config_entries
         try:
-            for entry in config_entries.async_entries(mlc.DOMAIN):
+            for entry in self.config_entries.async_entries(mlc.DOMAIN):
                 match ConfigEntryType.get_type_and_id(entry.unique_id):
-                    case (ConfigEntryType.DEVICE, device_id):
-                        if device_id[-12:].lower() != macaddress_fmt:
+                    case (ConfigEntryType.DEVICE, uuid):
+                        if uuid[-12:].lower() != macaddress_fmt:
                             continue
                         if entry.source == ce.SOURCE_IGNORE:
-                            ConfigFlow.DHCP_DISCOVERIES[macaddress_fmt] = discovery_info
-                            return self.async_abort()
+                            return self.async_abort(
+                                reason=FlowErrorKey.ALREADY_CONFIGURED
+                            )
                         entry_data = entry.data
-                        entry_descriptor = MerossDeviceDescriptor(
+                        entry_descriptor = DeviceDescriptor(
                             entry_data[mlc.CONF_PAYLOAD]
                         )
                         if entry_descriptor.macAddress_fmt != macaddress_fmt:
@@ -666,7 +1072,7 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
                             # before updating, check the host ip is 'really' valid
                             try:
                                 _device_config, _descriptor = (
-                                    await self._async_http_discovery(
+                                    await self._async_http_discovery_retry(
                                         host, entry_data.get(mlc.CONF_KEY)
                                     )
                                 )
@@ -679,13 +1085,15 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
                                     data[mlc.CONF_TIMESTAMP] = (
                                         time()
                                     )  # force ConfigEntry update..
-                                    config_entries.async_update_entry(entry, data=data)
+                                    self.config_entries.async_update_entry(
+                                        entry, data=data
+                                    )
                                     api.log(
                                         api.INFO,
                                         "DHCP updated (ip:%s mac:%s) for uuid:%s",
                                         host,
                                         macaddress,
-                                        api.loggable_device_id(entry_descriptor.uuid),
+                                        uuid=entry_descriptor.uuid,
                                     )
                                 else:
                                     api.log(
@@ -694,19 +1102,19 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
                                         host,
                                         macaddress,
                                         api.loggable_device_id(_descriptor.uuid),
-                                        api.loggable_device_id(entry_descriptor.uuid),
+                                        uuid=entry_descriptor.uuid,
                                     )
 
-                            except Exception as error:
-                                api.log(
+                            except Exception as e:
+                                api.log_exception(
                                     api.WARNING,
-                                    "DHCP update error %s trying to identify uuid:%s at (ip:%s mac:%s)",
-                                    str(error),
-                                    api.loggable_device_id(entry_descriptor.uuid),
+                                    e,
+                                    "trying to identify (ip:%s mac:%s uuid:%s)",
                                     host,
                                     macaddress,
+                                    uuid=entry_descriptor.uuid,
                                 )
-                        return self.async_abort()
+                        return self.async_abort(reason=FlowErrorKey.ALREADY_CONFIGURED)
 
                     case _:
                         continue
@@ -743,7 +1151,7 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
             )
             # forgive and continue if we cant discover the device...let the user work it out
 
-        for progress in config_entries.flow.async_progress_by_handler(
+        for progress in self.flow_manager.async_progress_by_handler(
             self.handler,
             include_uninitialized=True,
         ):
@@ -751,12 +1159,11 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
                 continue
             try:
                 if progress["context"]["unique_id"] == macaddress_fmt:  # type: ignore
-                    config_entries.flow.async_abort(progress["flow_id"])
+                    self.flow_manager.async_abort(progress["flow_id"])
             except Exception:
                 pass
 
         await self.async_set_unique_id(macaddress_fmt, raise_on_progress=False)
-        ConfigFlow.DHCP_DISCOVERIES[macaddress_fmt] = discovery_info
         self._set_flow_title(f"{discovery_info.hostname or host} ({macaddress})")
         self.device_config = {  # type: ignore
             mlc.CONF_HOST: host,
@@ -772,15 +1179,15 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
         # and we leverage the default mqtt discovery to setup our manager
         mqtt_connection = self.api.mqtt_connection
         if mqtt_connection.mqtt_is_subscribed:
-            return self.async_abort()
+            return self.async_abort(reason=FlowErrorKey.ALREADY_CONFIGURED)
         # try setup the mqtt subscription
         # this call might not register because of errors or because of an overlapping
         # request from 'async_setup_entry' (we're preventing overlapped calls to MQTT
         # subscription)
-        if await mqtt_connection.async_mqtt_subscribe():
+        if await mqtt_connection.async_connect():
             # ok, now pass along the discovering mqtt message so our ComponentApi state machine
             # gets to work on this
-            await mqtt_connection.async_mqtt_message(discovery_info)
+            mqtt_connection.on_message(discovery_info)
         # just in case, setup the MQTT Hub entry to enable the (default) device key configuration
         # if the entry hub is already configured this will disable the discovery
         # subscription (by returning 'already_configured') stopping any subsequent async_step_mqtt message:
@@ -788,23 +1195,28 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
         return await self.async_step_hub()
 
     async def async_step_finalize(self, user_input=None):
-        ConfigFlow.DHCP_DISCOVERIES.pop(self.unique_id[-12:].lower(), None)  # type: ignore
         return self.async_create_entry(
             title=self._title,
             data=self.device_config,
         )
 
+    def finish_flow(
+        self,
+        config: "Mapping[str, Any]",
+        reload: bool = False,
+    ):
+        return self.async_create_entry(title=self._title, data=config)
+
     async def _async_set_device_config(
         self,
         device_config: mlc.DeviceConfigType,
-        descriptor: MerossDeviceDescriptor,
+        descriptor: DeviceDescriptor,
     ):
         uuid = descriptor.uuid
         mac_address_fmt = descriptor.macAddress_fmt
         # The approach here is to abort any previous flow for the
         # same uuid/macaddress and keep flowing only the last (current)
-        flowmanager = self.hass.config_entries.flow
-        for progress in flowmanager.async_progress_by_handler(
+        for progress in self.flow_manager.async_progress_by_handler(
             self.handler,
             include_uninitialized=True,
         ):
@@ -812,7 +1224,7 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
                 continue
             try:
                 if progress["context"]["unique_id"] in (uuid, mac_address_fmt):  # type: ignore
-                    flowmanager.async_abort(progress["flow_id"])
+                    self.flow_manager.async_abort(progress["flow_id"])
             except Exception:
                 pass
 
@@ -823,22 +1235,24 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
         # progress with just the mac are a bit less complete since we're still
         # unable to identify the device
         await self.async_set_unique_id(uuid, raise_on_progress=False)
+        self._abort_if_unique_id_configured(
+            updates=device_config, reload_on_update=False  # type: ignore
+        )
 
         self.clone_api_diagnostic_config(device_config)
+        self.device_id = uuid
         self.device_config = device_config
+        self.device_descriptor = descriptor
         self.device_placeholders = {
             "device_type": descriptor.productnametype,
             "device_id": uuid,
         }
-        api = self.api
-        if (
-            ((profile_id := descriptor.userId) in api.profiles)
-            and (profile := api.profiles.get(profile_id))
+        devname = (
+            device_info.get(mc.KEY_DEVNAME) or uuid
+            if (profile := self.api.profiles.get(descriptor.userId))
             and (device_info := profile.get_device_info(uuid))
-        ):
-            devname = device_info.get(mc.KEY_DEVNAME, uuid)
-        else:
-            devname = uuid
+            else uuid
+        )
         self._set_flow_title(f"{descriptor.type} - {devname}")
         return self.async_show_form(
             step_id="finalize",
@@ -851,12 +1265,13 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
         self.context["title_placeholders"] = {"name": flow_title}
 
 
-class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
+class OptionsFlow(BaseFlow, ce.OptionsFlow):
     """
     Manage device options configuration
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
+        config: mlc.HubConfigType | mlc.DeviceConfigType | mlc.ProfileConfigType
         config_entry: Final[ce.ConfigEntry[ConfigEntryManager]]
         config_entry_id: Final[str]
         repair_issue_id: Final[str | None]
@@ -867,25 +1282,12 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
         "device": ["device", "diagnostics", "bind", "unbind"],
     }
 
-    config: mlc.HubConfigType | mlc.DeviceConfigType | mlc.ProfileConfigType
-
-    BindConfigType = typing.TypedDict(
-        "BindConfigType",
-        {
-            "domain": str | None,
-            "key": str | None,
-            "userid": int | None,
-        },
-    )
-    bind_config: BindConfigType
-
     __slots__ = (
         "config_entry",
         "config_entry_id",
         "config",
         "repair_issue_id",
         "bind_config",
-        "bind_placeholders",
     )
 
     def __init__(
@@ -903,18 +1305,20 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
     async def async_step_init(self, user_input=None):
         match ConfigEntryType.get_type_and_id(self.config_entry.unique_id):
             case (ConfigEntryType.DEVICE, device_id):
-                self.device_config = typing.cast(mlc.DeviceConfigType, self.config)
-                if mlc.CONF_TRACE in self.device_config:
-                    self.device_config.pop(mlc.CONF_TRACE)  # totally removed in v5.0
-                self._device_id = device_id
-                assert device_id == self.device_config[mlc.CONF_DEVICE_ID]
+                self.device_id = device_id
+                device_config: mlc.DeviceConfigType
+                self.device_config = device_config = self.config  # type: ignore
+                self._is_bluetooth = (
+                    device_config.get(mlc.CONF_PROTOCOL) == Transport.BLUETOOTH
+                )
+                assert device_id == device_config[mlc.CONF_DEVICE_ID]
                 try:
-                    device: Device = self.config_entry.runtime_data  # type: ignore
+                    device: "Device" = self.config_entry.runtime_data  # type: ignore
                     self.device_descriptor = device.descriptor
                 except AttributeError:
                     # if config not loaded the device is None
-                    self.device_descriptor = MerossDeviceDescriptor(
-                        self.device_config[mlc.CONF_PAYLOAD]
+                    self.device_descriptor = DeviceDescriptor(
+                        device_config[mlc.CONF_PAYLOAD]
                     )
                 self.device_placeholders = {
                     "device_type": self.device_descriptor.productnametype,
@@ -940,7 +1344,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
             case (ConfigEntryType.HUB, _):
                 return await self.async_step_menu("hub")
 
-    async def async_step_menu(self, user_input):
+    async def async_step_menu(self, user_input: str):
         if self.repair_issue_id:
             return await getattr(self, f"async_step_{user_input}")(None)
         else:
@@ -949,11 +1353,11 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                 menu_options=self._MENU_OPTIONS[user_input],
             )
 
-    async def async_step_hub(self, user_input=None):
+    async def async_step_hub(self, user_input: "Mapping | None" = None):
         hub_config = self.config
         if user_input is not None:
             self.merge_userinput(hub_config, user_input, mlc.CONF_KEY)
-            return self.finish_options_flow(hub_config)
+            return self.finish_flow(hub_config)
 
         config_schema = {
             _optional(mlc.CONF_KEY, hub_config, mlc.PARAM_DEFAULT_KEY): str,
@@ -964,151 +1368,169 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
             step_id="hub", data_schema=vol.Schema(config_schema)
         )
 
-    async def async_step_device(self, user_input=None):
+    async def async_step_device(self, user_input: "Mapping | None" = None):
         """
         general (common) device configuration allowing key set and
         general parameters to be entered/modified
         """
         api = self.api
-        device = api.devices[self._device_id]
-        device_config = self.device_config
+        uuid = self.device_id
+        config = self.device_config
+        descriptor = self.device_descriptor
+        _is_bluetooth = self._is_bluetooth
 
         with self.show_form_errorcontext():
             if user_input is not None:
-                self.merge_userinput(
-                    device_config, user_input, mlc.CONF_KEY, mlc.CONF_HOST
-                )
-                try:
-                    inner_exception = None
-                    device_config_update = None
-                    descriptor_update = None
-                    _host = user_input.get(mlc.CONF_HOST)
-                    _key = user_input.get(mlc.CONF_KEY)
-                    _conf_protocol = mlc.CONF_PROTOCOL_OPTIONS.get(
-                        user_input.get(mlc.CONF_PROTOCOL), mlc.CONF_PROTOCOL_AUTO
+                if _is_bluetooth:
+                    self.merge_userinput(config, user_input)
+                    client = api.get_bt_client(uuid)
+                    _key = ""
+                else:
+                    self.merge_userinput(
+                        config, user_input, mlc.CONF_KEY, mlc.CONF_HOST
                     )
-                    if _conf_protocol is not mlc.CONF_PROTOCOL_HTTP:
-                        try:
-                            (
-                                device_config_update,
-                                descriptor_update,
-                            ) = await self._async_mqtt_discovery(
-                                self._device_id, _key, self.device_descriptor
-                            )
-                        except Exception as e:
-                            inner_exception = e
-                    if _conf_protocol is not mlc.CONF_PROTOCOL_MQTT:
-                        if _try_host := (_host or self.device_descriptor.innerIp):
+                    client = None
+                    try:
+                        inner_exception = None
+                        _host = user_input.get(mlc.CONF_HOST)
+                        _host_fallback = descriptor.innerIp
+                        _key = user_input.get(mlc.CONF_KEY) or ""
+                        _conf_transport = (
+                            user_input.get(mlc.CONF_PROTOCOL) or Transport.AUTO
+                        )
+                        if _conf_transport != Transport.HTTP:
                             try:
-                                (
-                                    device_config_update,
-                                    descriptor_update,
-                                ) = await self._async_http_discovery(_try_host, _key)
+                                config_new, descriptor_new, client = (
+                                    await self._async_mqtt_discovery(
+                                        uuid, _key, descriptor
+                                    )
+                                )
+                                _host_fallback = descriptor_new.innerIp
                             except Exception as e:
                                 inner_exception = e
-
-                    if not device_config_update or not descriptor_update:
-                        raise inner_exception or FlowError(FlowErrorKey.CANNOT_CONNECT)
-                    if self._device_id != device_config_update[mlc.CONF_DEVICE_ID]:
-                        raise FlowError(OptionsFlowErrorKey.DEVICE_ID_MISMATCH)
-                    device_config[mlc.CONF_PAYLOAD] = device_config_update[
-                        mlc.CONF_PAYLOAD
-                    ]
-
-                    try:
-                        await device.async_entry_option_update(user_input)  # type: ignore
-                    except Exception:
-                        pass  # forgive any error
-
-                    # cleanup keys which might wrongly have been persisted
-                    device_config.pop(mlc.CONF_CLOUD_KEY, None)
-                    device_config.pop(mc.KEY_TIMEZONE, None)
-
-                    if self.config_entry.state == ce.ConfigEntryState.SETUP_ERROR:
-                        try:  # to fix the device registry in case it was corrupted by #341
-                            dev_reg = api.device_registry
-                            device_identifiers = {(str(mlc.DOMAIN), self._device_id)}
-                            device_entry = dev_reg.async_get_device(
-                                identifiers=device_identifiers
-                            )
-                            if device_entry and (
-                                len(device_entry.connections) > 1
-                                or len(device_entry.config_entries) > 1
-                            ):
-                                _area_id = device_entry.area_id
-                                _name_by_user = device_entry.name_by_user
-                                dev_reg.async_remove_device(device_entry.id)
-                                dev_reg.async_get_or_create(
-                                    config_entry_id=self.config_entry.entry_id,
-                                    suggested_area=_area_id,
-                                    name=descriptor_update.productname,
-                                    model=descriptor_update.productmodel,
-                                    hw_version=descriptor_update.hardwareVersion,
-                                    sw_version=descriptor_update.firmwareVersion,
-                                    manufacturer=mc.MANUFACTURER,
-                                    connections={
-                                        (
-                                            dr.CONNECTION_NETWORK_MAC,
-                                            descriptor_update.macAddress,
+                        if _conf_transport != Transport.MQTT:
+                            if _try_host := (_host or _host_fallback):
+                                try:
+                                    config_new, descriptor_new = (
+                                        await self._async_http_discovery(
+                                            _try_host, _key
                                         )
-                                    },
-                                    identifiers=device_identifiers,
-                                )
-                                api.log(
-                                    api.WARNING,
-                                    "Device registry entry for %s (uuid:%s) was updated in order to fix it. The friendly name ('%s') has been lost and needs to be manually re-entered",
-                                    descriptor_update.productmodel,
-                                    api.loggable_device_id(self._device_id),
-                                    _name_by_user,
-                                )
+                                    )
+                                    client = self.http_client
+                                except Exception as e:
+                                    inner_exception = e
 
-                        except Exception as error:
-                            api.log(
-                                api.WARNING,
-                                "error (%s) while trying to repair device registry for %s (uuid:%s)",
-                                str(error),
-                                descriptor_update.productmodel,
-                                api.loggable_device_id(self._device_id),
+                        if not client:
+                            raise inner_exception or FlowError(
+                                FlowErrorKey.CANNOT_CONNECT
                             )
-                        return self.finish_options_flow(device_config, True)
+                        if uuid != config_new[mlc.CONF_DEVICE_ID]:
+                            raise FlowError(FlowErrorKey.DEVICE_ID_MISMATCH)
+                        config[mlc.CONF_PAYLOAD] = config_new[mlc.CONF_PAYLOAD]
 
-                    return self.finish_options_flow(device_config)
+                        if (
+                            self.config_entry.state == ce.ConfigEntryState.SETUP_ERROR
+                        ) and (mlc.HA_VERSION < (2026, 9)):
+                            # only apply this repair in Home Assistant Core versions before 2026.9
+                            # since this patch was already dangerous before that..now I'm too lazy to investigate
+                            # this further and the device registry pollution should be anyway prevented
+                            # with the checks in place....
+                            try:  # to fix the device registry in case it was corrupted by #341
+                                dev_reg = api.device_registry
+                                device_identifiers = {(str(mlc.DOMAIN), uuid)}
+                                device_entry = dev_reg.async_get_device(
+                                    identifiers=device_identifiers
+                                )
+                                if device_entry and (
+                                    len(device_entry.connections) > 1
+                                    or len(device_entry.config_entries) > 1
+                                ):
+                                    dev_reg.async_remove_device(device_entry.id)
+                                    dev_reg.async_get_or_create(
+                                        config_entry_id=self.config_entry.entry_id,
+                                        suggested_area=device_entry.area_id,
+                                        name=descriptor_new.productname,
+                                        model=descriptor_new.productmodel,
+                                        hw_version=descriptor_new.hw_version,
+                                        sw_version=descriptor_new.fw_version,
+                                        manufacturer=mc.MANUFACTURER,
+                                        connections={
+                                            (
+                                                dr.CONNECTION_NETWORK_MAC,
+                                                descriptor_new.macAddress,
+                                            )
+                                        },
+                                        identifiers=device_identifiers,
+                                    )
+                                    api.log(
+                                        api.WARNING,
+                                        "Device registry entry for %s (uuid:%s) was updated in order to fix it",
+                                        descriptor_new.productmodel,
+                                        uuid=uuid,
+                                    )
 
-                except MerossKeyError:
-                    return await self.async_step_keyerror()
+                            except Exception as error:
+                                api.log_exception(
+                                    api.WARNING,
+                                    error,
+                                    "repairing device registry for %s (uuid:%s)",
+                                    descriptor_new.productmodel,
+                                    uuid=uuid,
+                                )
+                            return self.finish_flow(config, True)
+
+                    except MerossKeyError:
+                        return await self.async_step_keyerror()
+
+                # mc.KEY_TIMEZONE is 'volatile' i.e. a device conf not stored in ConfigEntry
+                if (timezone := config.pop(mc.KEY_TIMEZONE, None)) and (
+                    timezone != descriptor_new.timezone
+                ):
+                    assert client
+                    await client.async_configure_timezone(timezone, uuid=uuid, key=_key)
+
+                # cleanup keys which might wrongly have been persisted
+                config.pop(mlc.CONF_CLOUD_KEY, None)
+                config.pop(mlc.CONF_TRACE, None)  # totally removed in v5.0
+                return self.finish_flow(config)
 
             else:
-                _host = device_config.get(mlc.CONF_HOST)
-                _key = device_config.get(mlc.CONF_KEY)
+                _host = config.get(mlc.CONF_HOST)
+                _key = config.get(mlc.CONF_KEY)
 
-        self.device_placeholders["host"] = _host or "MQTT"
-        config_schema = self.get_schema_with_errors()
-        config_schema |= {
-            _optional(mlc.CONF_HOST, None, _host): str,
-            _optional(mlc.CONF_KEY, None, _key): str,
-            _required(mlc.CONF_PROTOCOL, device_config, mlc.CONF_PROTOCOL_AUTO): vol.In(
-                mlc.CONF_PROTOCOL_OPTIONS.keys()
-            ),
-            _required(
-                mlc.CONF_POLLING_PERIOD, device_config, mlc.CONF_POLLING_PERIOD_DEFAULT
-            ): cv.positive_int,
-        }
-        # setup device specific config right before last option
-        try:
-            await device.async_entry_option_setup(config_schema)  # type: ignore
-        except Exception:
-            pass  # forgive any error
-
-        self._setup_entitymanager_schema(config_schema, device_config)
+        config_schema = self._config_schema
+        if _is_bluetooth:
+            _bt_device = api.get_bt_client(uuid)
+            self.device_placeholders["host"] = (
+                f"BTDevice({_bt_device.address})" if _bt_device else "BTDevice(unknown)"
+            )
+        else:
+            self.device_placeholders["host"] = _host or "MQTT"
+            config_schema[_optional(mlc.CONF_HOST, None, _host)] = str
+            config_schema[_optional(mlc.CONF_KEY, None, _key)] = str
+            config_schema[_required(mlc.CONF_PROTOCOL, config, Transport.AUTO)] = (
+                vol.In((Transport.AUTO, Transport.HTTP, Transport.MQTT))
+            )
+        config_schema[
+            _required(mlc.CONF_POLLING_PERIOD, config, mlc.CONF_POLLING_PERIOD_DEFAULT)
+        ] = cv.positive_int
+        ability = descriptor.ability
+        if mn.Appliance_Control_Multiple in ability:
+            config_schema[_optional(mlc.CONF_DISABLE_MULTIPLE, config, False)] = bool
+        if mn.Appliance_System_Time in ability:
+            config_schema[_optional(mc.KEY_TIMEZONE, None, descriptor.timezone)] = (
+                vol.In(await async_available_timezones())
+            )
+        self._setup_entitymanager_schema(config_schema, config)
         return self.async_show_form_with_errors(
             "device",
             description_placeholders=self.device_placeholders,
         )
 
-    async def async_step_diagnostics(self, user_input=None):
+    async def async_step_diagnostics(self, user_input: "Mapping | None" = None):
         # when choosing to start a diagnostic from the OptionsFlow UI we'll
         # reload the entry so we trace also the full initialization process
-        # for a more complete insight on the EntityManager context.
+        # for a more complete insight on the ConfigEntryManager context.
         # The info to trigger the trace_open on entry setup is carried through
         # the global ComponentApi.managers_transient_state
         config = self.config
@@ -1134,170 +1556,37 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                 state[mlc.CONF_TRACE] = (
                     self.config_entry.runtime_data.loggable_diagnostic_state()
                 )
-                return self.finish_options_flow(config, True)
-            return self.finish_options_flow(config)
+                return self.finish_flow(config, True)
+            return self.finish_flow(config)
 
-        config_schema = {
-            _required(mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES, config, False): bool,
-            vol.Required(
-                mlc.CONF_LOGGING_LEVEL,
-                description={
-                    DESCR: mlc.CONF_LOGGING_LEVEL_OPTIONS.get(
-                        config.get(mlc.CONF_LOGGING_LEVEL, logging.NOTSET), "default"
-                    )
-                },
-            ): selector(
+        return self.async_show_form(
+            step_id="diagnostics",
+            data_schema=vol.Schema(
                 {
-                    "select": {
-                        "options": list(mlc.CONF_LOGGING_LEVEL_OPTIONS.values()),
-                        "translation_key": mlc.CONF_LOGGING_LEVEL,
-                        "mode": "dropdown",
-                    }
+                    _required(mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES, config, False): bool,
+                    vol.Required(
+                        mlc.CONF_LOGGING_LEVEL,
+                        description={
+                            "suggested_value": mlc.CONF_LOGGING_LEVEL_OPTIONS.get(
+                                config.get(mlc.CONF_LOGGING_LEVEL, logging.NOTSET),
+                                "default",
+                            )
+                        },
+                    ): selector.SelectSelector(
+                        {
+                            "options": list(mlc.CONF_LOGGING_LEVEL_OPTIONS.values()),
+                            "translation_key": mlc.CONF_LOGGING_LEVEL,
+                            "mode": selector.SelectSelectorMode.DROPDOWN,
+                        }
+                    ),
+                    _required(mlc.CONF_OBFUSCATE, config, True): bool,
+                    _required(mlc.CONF_TRACE, None, False): bool,
+                    _optional(
+                        mlc.CONF_TRACE_TIMEOUT, config, mlc.CONF_TRACE_TIMEOUT_DEFAULT
+                    ): cv.positive_int,
                 }
             ),
-            _required(mlc.CONF_OBFUSCATE, config, True): bool,
-            _required(mlc.CONF_TRACE, None, False): bool,
-            _optional(
-                mlc.CONF_TRACE_TIMEOUT, config, mlc.CONF_TRACE_TIMEOUT_DEFAULT
-            ): cv.positive_int,
-        }
-        return self.async_show_form(
-            step_id="diagnostics", data_schema=vol.Schema(config_schema)
         )
-
-    async def async_step_bind(self, user_input=None):
-        with self.show_form_errorcontext():
-            if user_input:
-                hass = self.hass
-                api = self.api
-                bind_config = self.bind_config
-                bind_config[mc.KEY_DOMAIN] = domain = user_input.get(mc.KEY_DOMAIN)
-                bind_config[mc.KEY_KEY] = key = user_input.get(mc.KEY_KEY)
-                bind_config[mc.KEY_USERID_] = userid = user_input.get(mc.KEY_USERID_)
-
-                if domain:
-                    broker_address = HostAddress.build(domain, 8883)
-                else:
-                    mqtt_connection = api.mqtt_connection
-                    if not mqtt_connection.mqtt_is_connected:
-                        raise FlowError(OptionsFlowErrorKey.HABROKER_NOT_CONNECTED)
-                    broker_address = mqtt_connection.broker
-                    if broker_address.port == 1883:
-                        broker_address.port = 8883
-                # set back the value so the user has an hint in case of errors connecting
-                bind_config[mc.KEY_DOMAIN] = domain = str(broker_address)
-                # we have to check the broker address is a network bound IPV4 address
-                # since localhost would have no meaning (or a wrong one) in the device
-                import socket
-
-                addrinfos = socket.getaddrinfo(
-                    socket.getfqdn(broker_address.host),
-                    broker_address.port,
-                    family=socket.AF_INET,
-                    type=socket.SOCK_STREAM,
-                    proto=socket.IPPROTO_TCP,
-                )
-                # addrinfos contains the resolved ipv4 address(es) weather or not
-                # our broker_address.host is an ipv6 or ipv4 host name/addr
-                for addrinfo in addrinfos:
-                    # addrinfo: (family, type, proto, canonname, sockaddr)
-                    if addrinfo[4][0] == "127.0.0.1":
-                        # localhost could work in our mqtt.Client check but
-                        # it will not when configured in the device bind
-                        # so we're trying to resolve it to a valid network name
-                        from homeassistant.helpers.network import get_url
-                        import yarl
-
-                        hasslocalhost = yarl.URL(get_url(hass, allow_ip=True)).host
-                        if not hasslocalhost:
-                            raise FlowError(FlowErrorKey.CANNOT_CONNECT)
-                        broker_address.host = hasslocalhost
-                        bind_config[mc.KEY_DOMAIN] = domain = str(broker_address)
-                        break
-
-                device = api.devices[self._device_id]
-                if not (device and device.online):
-                    raise FlowError(FlowErrorKey.CANNOT_CONNECT)
-
-                key = key or api.key or ""
-                userid = "" if userid is None else str(userid)
-                mqttclient = MerossMQTTDeviceClient(
-                    device.id,
-                    key=key,
-                    userid=userid,
-                    loop=hass.loop,
-                    sslcontext=get_default_no_verify_ssl_context(),
-                )
-                if api.isEnabledFor(api.VERBOSE):
-                    mqttclient.enable_logger(api)  # type: ignore (Loggable is duck-compatible with Logger)
-                try:
-                    await asyncio.wait_for(
-                        await mqttclient.async_connect(broker_address), 5
-                    )
-                finally:
-                    await mqttclient.async_shutdown()
-
-                device.log(device.DEBUG, "Initiating MQTT binding to %s", domain)
-                response = await device.async_bind(
-                    broker_address, key=key, userid=userid
-                )
-                if (
-                    response
-                    and response[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_SETACK
-                ):
-                    device.log(device.INFO, "MQTT binding to %s was succesfull", domain)
-                    device_config = self.device_config
-                    device_config[mlc.CONF_KEY] = key
-                    # the device config needs to be updated too. This is not critical
-                    # since the device, when onlining will refresh this but we have a chance to speed
-                    # up the process so when it restart it'll be already updated
-                    if host := device.host:
-                        try:
-                            (
-                                device_config_update,
-                                descriptor_update,
-                            ) = await self._async_http_discovery(host, key)
-                            device_config[mlc.CONF_PAYLOAD] = device_config_update[
-                                mlc.CONF_PAYLOAD
-                            ]
-                        except Exception:
-                            pass
-                    hass.config_entries.async_update_entry(
-                        self.config_entry, data=device_config
-                    )
-                    return self.async_show_form(
-                        step_id="bind_finalize",
-                        data_schema=vol.Schema({}),
-                        description_placeholders={"domain": domain},
-                    )
-                else:
-                    device.log(device.DEBUG, "MQTT binding to %s has failed", domain)
-
-                raise FlowError(FlowErrorKey.CANNOT_CONNECT)
-            else:
-                self.bind_config = {
-                    mc.KEY_DOMAIN: None,
-                    mc.KEY_KEY: None,
-                    mc.KEY_USERID_: None,
-                }
-                bind_config = self.bind_config
-                self.bind_placeholders = {
-                    "domain": str(next(iter(self.device_descriptor.brokers), None))
-                }
-
-        return self.async_show_form_with_errors(
-            "bind",
-            config_schema={
-                _optional(mc.KEY_DOMAIN, bind_config): str,
-                _optional(mc.KEY_KEY, bind_config): str,
-                _optional(mc.KEY_USERID_, bind_config): cv.positive_int,
-            },
-            description_placeholders=self.bind_placeholders,
-        )
-
-    async def async_step_bind_finalize(self, user_input=None):
-        self.api.schedule_entry_reload(self.config_entry_id)
-        return self.async_create_entry(data=None)  # type: ignore
 
     async def async_step_unbind(self, user_input=None):
         KEY_ACTION = "post_action"
@@ -1307,26 +1596,24 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
         with self.show_form_errorcontext():
             if user_input:
                 api = self.api
-                device = api.devices[self._device_id]
-                if not (device and device.online):
+                device = api.devices[self.device_id]
+                if not (device and device.is_connected):
                     raise FlowError(FlowErrorKey.CANNOT_CONNECT)
 
                 await device.async_unbind()
                 action = user_input[KEY_ACTION]
                 if action == KEY_ACTION_DISABLE:
-                    api.async_create_task(
-                        self.hass.config_entries.async_set_disabled_by(
+                    api.create_task(
+                        self.config_entries.async_set_disabled_by(
                             self.config_entry_id,
                             ce.ConfigEntryDisabler.USER,
                         ),
                         f".OptionsFlow.async_set_disabled_by",
-                        eager_start=False,
                     )
                 elif action == KEY_ACTION_DELETE:
-                    api.async_create_task(
-                        self.hass.config_entries.async_remove(self.config_entry_id),
+                    api.create_task(
+                        self.config_entries.async_remove(self.config_entry_id),
                         f".OptionsFlow.async_remove",
-                        eager_start=False,
                     )
                 return self.async_create_entry(data=None)  # type: ignore
 
@@ -1336,24 +1623,22 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                 vol.Required(
                     KEY_ACTION,
                     default=KEY_ACTION_DISABLE,  # type: ignore
-                ): selector(
+                ): selector.SelectSelector(
                     {
-                        "select": {
-                            "options": [KEY_ACTION_DISABLE, KEY_ACTION_DELETE],
-                            "translation_key": "unbind_post_action",
-                        }
+                        "options": [KEY_ACTION_DISABLE, KEY_ACTION_DELETE],
+                        "translation_key": "unbind_post_action",
                     }
                 )
             },
         )
 
-    def finish_options_flow(
+    def finish_flow(
         self,
-        config: mlc.DeviceConfigType | mlc.ProfileConfigType | mlc.HubConfigType,
+        config: "Mapping[str, Any]",
         reload: bool = False,
     ):
         """Used in OptionsFlow to terminate and exit (with save)."""
-        self.hass.config_entries.async_update_entry(self.config_entry, data=config)
+        self.config_entries.async_update_entry(self.config_entry, data=config)
         if reload:
-            self.api.schedule_entry_reload(self.config_entry_id)
+            self.config_entries.async_schedule_reload(self.config_entry_id)
         return self.async_create_entry(data=None)  # type: ignore

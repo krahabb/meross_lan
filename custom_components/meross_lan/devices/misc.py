@@ -4,176 +4,229 @@ This unit is a collection of rarely used small components where having
 a dedicated unit for each of them would increase the number of small modules.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from .. import const as mlc
-from ..climate import MtsClimate
-from ..helpers.namespaces import NamespaceHandler, mn
-from ..merossclient.protocol import const as mc
-from ..sensor import (
-    MLHumiditySensor,
-    MLLightSensor,
-    MLNumericSensor,
-    MLTemperatureSensor,
-)
-from .ms600 import MLPresenceSensor
+from ..merossclient.device.handler import MappingParser
+from ..merossclient.protocol import const as mc, namespaces as mn
+from ..merossclient.protocol.namespaces import thermostat as mn_t
+from ..number import NumberParser
+from ..select import SelectParser
+from ..sensor import SensorParser
+from ..switch import SwitchParser
 
 if TYPE_CHECKING:
+    from typing import ClassVar, Final, Mapping, NotRequired, Unpack
+
     from ..helpers.device import Device
+    from ..merossclient.device.handler import ValueParser
     from ..merossclient.protocol import types as mt
-    from ..merossclient.protocol.types import sensor as mt_s
+    from .thermostat.mts200 import Mts200Climate
 
-class SensorLatestNamespaceHandler(NamespaceHandler):
-    """
-    Specialized handler for Appliance.Control.Sensor.Latest actually carried in thermostats
-    (seen on an MTS200 so far:2024-06)
-    """
 
-    VALUE_KEY_EXCLUDED = (mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
+class ConfigOverTemp(MappingParser):
 
-    VALUE_KEY_ENTITY_DEF_DEFAULT = MLNumericSensor.SensorDef(MLNumericSensor)
-    VALUE_KEY_ENTITY_DEF_MAP = {
-        mc.KEY_HUMI: MLNumericSensor.SensorDef(
-            MLHumiditySensor
-        ),  # confirmed in MTS200 trace (2024/06)
-        mc.KEY_TEMP: MLNumericSensor.SensorDef(
-            MLTemperatureSensor, device_scale=100
-        ),  # just guessed (2024/04)
-        mc.KEY_LIGHT: MLNumericSensor.SensorDef(
-            MLLightSensor
-        ),  # just guessed (2024/09)
+    _INIT_parser_defs = {
+        mc.KEY_ENABLE: SwitchParser.DEF(
+            entity_key="config_overtemp_enable", value_on=1, value_off=2
+        ),
+        mc.KEY_TYPE: SelectParser.DEF(
+            entity_key="config_overtemp_type", options_map={1: "alert", 2: "turn_off"}
+        ),
     }
 
-    def __init__(self, device: "Device"):
-        NamespaceHandler.__init__(
-            self,
-            device,
-            mn.Appliance_Control_Sensor_Latest,
-            handler=self._handle_Appliance_Control_Sensor_Latest,
-        )
-        self.polling_request_add_channel(0)
 
-    def _handle_Appliance_Control_Sensor_Latest(self, header, payload):
-        """
-        {
-            "latest": [
-                {
-                    "value": [{"humi": 596, "timestamp": 1718302844}],
-                    "channel": 0,
-                    "capacity": 2,
-                }
-            ]
-        }
-        """
-        entities = self.device.entities
-        for p_channel in payload[mc.KEY_LATEST]:
-            channel = p_channel[mc.KEY_CHANNEL]
-            for p_value in p_channel[mc.KEY_VALUE]:
-                # I guess 'value' carries a list of sensors values
-                # carried in a dict like {"humi": 596, "timestamp": 1718302844}
-                for key, value in p_value.items():
-                    if key in SensorLatestNamespaceHandler.VALUE_KEY_EXCLUDED:
-                        continue
-                    try:
-                        entity: MLNumericSensor = entities[f"{channel}_sensor_{key}"]  # type: ignore
-                    except KeyError:
-                        entity_def = SensorLatestNamespaceHandler.VALUE_KEY_ENTITY_DEF_MAP.get(
-                            key,
-                            SensorLatestNamespaceHandler.VALUE_KEY_ENTITY_DEF_DEFAULT,
-                        )
-                        entity = entity_def.type(
-                            self.device,
-                            channel,
-                            f"sensor_{key}",
-                            **entity_def.kwargs,
-                        )
-                        self.polling_request_add_channel(channel)
+class DeviceCfgParser(MappingParser):
+    # This ns is actually globally configured by Device.async_init with
+    # this 'generic' parser config but specialized devices will likely
+    # install their own instances of parsers/configs. This is especially needed because
+    # this ns requires polling with actual indexes and this might vary.
+    # The default here is just a 'placeholder' (still it could provide some
+    # basic entities for some devices)
 
-                    entity.update_device_value(value)
+    # prevent auto-creation of parsers since this ns is pretty peculiar being
+    # sometimes indexed by subId (for hub subdevices)
+    HANDLER_CHANNELS = ()
 
-                    if key == mc.KEY_HUMI:
-                        # look for a thermostat and sync the reported humidity
-                        climate = entities.get(channel)
-                        if isinstance(climate, MtsClimate):
-                            if climate.current_humidity != entity.native_value:
-                                climate.current_humidity = entity.native_value
-                                climate.flush_state()
+    _INIT_ns = mn.Appliance_Config_DeviceCfg
 
-
-class SensorLatestXNamespaceHandler(NamespaceHandler):
-    """
-    Specialized handler for Appliance.Control.Sensor.LatestX. This ns carries
-    a variadic payload of sensor values (seen on Hub/ms130 and ms600).
-    This specific implementation is for standard Device(s) while
-    Hub(s) have a somewhat different parser.
-    """
-
-    VALUE_KEY_ENTITY_DEF_DEFAULT = MLNumericSensor.SensorDef()
-    # many of these defs are guesses
-    VALUE_KEY_ENTITY_DEF_MAP = {
-        mc.KEY_HUMI: MLNumericSensor.SensorDef(MLHumiditySensor),
-        mc.KEY_LIGHT: MLNumericSensor.SensorDef(MLLightSensor),
-        mc.KEY_PRESENCE: MLNumericSensor.SensorDef(MLPresenceSensor),
-        mc.KEY_TEMP: MLNumericSensor.SensorDef(MLTemperatureSensor, device_scale=100),
+    # These are extracted from ms130 payload but they look like generic enough
+    # to be available through a wide set of devices.
+    _INIT_parser_defs = {
+        mc.KEY_CALIBRATECFG: {
+            mc.KEY_HUMI: NumberParser.DEF(
+                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{mc.KEY_CALIBRATECFG}_{mc.KEY_HUMI}",
+                device_scale=10,
+                device_class=NumberParser.DeviceClass.HUMIDITY,
+                translation_key="calibration_humidity",
+                native_min_value=-20,
+                native_max_value=20,
+                native_step=1,
+            ),
+            mc.KEY_TEMP: NumberParser.DEF(
+                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{mc.KEY_CALIBRATECFG}_{mc.KEY_TEMP}",
+                device_scale=100,
+                device_class=NumberParser.DeviceClass.TEMPERATURE,
+                translation_key="calibration_temperature",
+                native_min_value=-5,
+                native_max_value=5,
+                native_step=0.1,
+            ),
+        },
+        mc.KEY_TIMECFG: {
+            mc.KEY_AM: SelectParser.DEF(
+                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{mc.KEY_TIMECFG}_{mc.KEY_AM}",
+                options_map={1: "12_hours", 2: "24_hours"},
+            )
+        },
+        mc.KEY_UNITCFG: {
+            mc.KEY_TEMPUNIT: SelectParser.DEF(
+                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{mc.KEY_UNITCFG}_{mc.KEY_TEMPUNIT}",
+                options_map={
+                    mc.TEMPUNIT_CELSIUS: mlc.hac.UnitOfTemperature.CELSIUS,
+                    mc.TEMPUNIT_FAHRENHEIT: mlc.hac.UnitOfTemperature.FAHRENHEIT,
+                },
+            ),
+            # This doesn't appear in ms130 but it seems to be available in mst devices
+            mc.KEY_UNITTYPE: SelectParser.DEF(
+                entity_key=f"{mn.Appliance_Config_DeviceCfg.slug}__{mc.KEY_UNITCFG}_{mc.KEY_UNITTYPE}",
+                options_map={1: "us_customary", 2: "metric"},
+            ),
+        },
     }
 
-    __slots__ = ()
 
-    def __init__(self, device: "Device"):
-        NamespaceHandler.__init__(
-            self,
-            device,
-            mn.Appliance_Control_Sensor_LatestX,
-            handler=self._handle_Appliance_Control_Sensor_LatestX,
+class Mts200HumiSensor(SensorParser):
+
+    def __init__(self, *args, **kwargs):
+        SensorParser.__init__(self, *args, **kwargs)
+        try:
+            # This is almost 100% sure since key 'humi' in Sensor.Latest
+            # is likely just the mts200 reporting the current humidity, but we can never be sure
+            climate: "Mts200Climate" = self.parent.ns_handlers[  # type: ignore
+                mn_t.Appliance_Control_Thermostat_Mode
+            ].parsers[self.index]
+
+            def _flush_climate_state():
+                climate.current_humidity = self.native_value
+                climate.schedule_flush_state()
+
+            self.register_state_callback(_flush_climate_state)
+            # on self construction we're already parsing an update so
+            # we need to forward to climate because self.flush_state() is not being called
+            _flush_climate_state()
+        except KeyError:
+            # not an mts200?
+            pass
+
+
+class LedMode(SelectParser):
+    """
+    SelectEntity class for Appliance.System.LedMode namespace.
+    """
+
+    _INIT_ns = mn.Appliance_System_LedMode
+    _INIT_key_value = SelectParser.KeyValue(mc.KEY_MODE)
+    _INIT_entity_key = f"{_INIT_ns.slug}__{_INIT_key_value}"
+
+    _INIT_options_map = {
+        0: "off",
+        1: "power",
+        2: "night",
+    }
+
+
+class SensorLatestParser(MappingParser):
+
+    if TYPE_CHECKING:
+        parent: Final[Device]  # type: ignore[override]
+        _INIT_parser_defs: ClassVar[Mapping[str, type[SensorParser]]]
+        parser_defs: Mapping[str, type[SensorParser]]
+
+    _INIT_parser_defs = {
+        mc.KEY_HUMI: Mts200HumiSensor.DEF(
+            **SensorParser.HUMIDITY_ARGS
+            | {
+                "entity_key": f"sensor_{mc.KEY_HUMI}",
+            }
+        ),
+        mc.KEY_TEMP: SensorParser.DEF(
+            **SensorParser.TEMPERATURE_ARGS
+            | {
+                "entity_key": f"sensor_{mc.KEY_TEMP}",
+            }
+        ),
+    }
+
+    @override
+    def __call__(self, payload: "mt.sensor.Latest", /):
+        MappingParser.__call__(self, payload[mc.KEY_VALUE][0])
+
+
+class SensorLatestXParser(MappingParser):
+    """Generalized structured parsing for Appliance.Control.Sensor.LatestX.
+    This ns requires to be polled by the correct key list in the request payload
+    and this striclty depends on the device type.
+    The approach here is to just initialize the handler and configure it with
+    a MappingParser (SensorLatestXParser) as parser_class so that any channel
+    indexed payload is then forwarded to an isntance of this class.
+    The instance itself is able to automatically setup some common types of entities/parsers
+    but we need anyway to configure the correct request payload. The inizialization is then done in 2 steps:
+    1) the handler is initialized with SensorLatestXParser as parser_class
+    2) later specific device initialization will refine polling configuration and parsers config/layout
+    """
+
+    if TYPE_CHECKING:
+        parent: Final[Device]  # type: ignore[override]
+        _INIT_parser_defs: ClassVar[Mapping[str, type[SensorParser]]]
+        parser_defs: Mapping[str, type[SensorParser]]
+        parsers: Final[dict[str, ValueParser]]  # type: ignore[override]
+
+        class Args(MappingParser.Args):
+            parsers: NotRequired[dict[str, ValueParser]]
+
+        def __init__(self, *args, **kwargs: Unpack[Args]): ...  # pragma: no cover
+
+    HANDLER_CHANNELS = ()
+
+    _INIT_ns = mn.Appliance_Control_Sensor_LatestX
+
+    # many of these defs are guesses and the actual composition
+    # of parsers is explicitly preset when constructing a 'known' device SensorLatestXParser
+    # See ms130 and ms600.
+    _INIT_parser_defs = {
+        mc.KEY_HUMI: SensorParser.DEF(**SensorParser.HUMIDITY_ARGS),
+        mc.KEY_LIGHT: SensorParser.DEF(**SensorParser.LIGHT_ARGS),
+        mc.KEY_TEMP: SensorParser.DEF(**SensorParser.TEMPERATURE_ARGS),
+    }
+
+    @override
+    def _namespace_registered(self, handler_registration):
+        super()._namespace_registered(handler_registration)
+        self.handler_ns.polling_request_payload.append(
+            self.handler_ns.polling_request_payload.pop()
+            | {mc.KEY_DATA: [*self.parsers.keys()]}
         )
-        if device.descriptor.type.startswith(mc.TYPE_MS600):
-            MLPresenceSensor(device, 0, "sensor_presence")
-            MLLightSensor(device, 0, "sensor_light")
-            self.polling_request_add_channel(0, {mc.KEY_DATA: [mc.KEY_PRESENCE, mc.KEY_LIGHT]})
-        else:
-            self.polling_request_add_channel(0, {mc.KEY_DATA: []})
 
-    def _handle_Appliance_Control_Sensor_LatestX(self, header, payload, /):
-        ns = self.ns
-        key_channel = ns.key_channel
-        entities = self.device.entities
-        p_channel: "mt_s.LatestXResponse_C"
-        for p_channel in payload[ns.key]:
-            channel: int = p_channel[key_channel]
-            for data_key, data_value in p_channel[mc.KEY_DATA].items():
-                try:
-                    entity: MLNumericSensor = entities[f"{channel}_sensor_{data_key}"]  # type: ignore
-                except KeyError:
-                    # new channel or data_key
-                    entity_def = (
-                        SensorLatestXNamespaceHandler.VALUE_KEY_ENTITY_DEF_MAP.get(
-                            data_key,
-                            SensorLatestXNamespaceHandler.VALUE_KEY_ENTITY_DEF_DEFAULT,
-                        )
-                    )
-                    entity = entity_def.type(
-                        self.device,
-                        channel,
-                        f"sensor_{data_key}",
-                        **entity_def.kwargs,
-                    )
-
-                    polling_request_channels = self.polling_request_channels
-                    for channel_payload in polling_request_channels:
-                        if channel_payload[key_channel] == channel:
-                            channel_payload[mc.KEY_DATA].append(data_key)
-                            break
-                    else:
-                        polling_request_channels.append({key_channel: channel, mc.KEY_DATA: [data_key]})
-                        self.polling_response_size = (
-                            self.polling_response_base_size
-                            + len(polling_request_channels) * self.polling_response_item_size
-                        )
-                entity._parse(data_value[0])
-
-
-def namespace_init_sensor_latestx(device: "Device"):
-    # Hub(s) have a different ns handler so far
-    # TODO: try to reconcile in a single handler
-    if device.get_type() is mlc.DeviceType.DEVICE:
-        SensorLatestXNamespaceHandler(device)
+    @override
+    def __call__(self, payload: "mt.sensor.LatestX", /):
+        for key, value in payload[mc.KEY_DATA].items():
+            try:
+                self.parsers[key](value[0])
+            except KeyError:
+                if key in self.parsers:
+                    raise
+                self.parsers[key] = parser = self.parser_defs.get(key, SensorParser)(
+                    self.index.value,  # FIXME: use a 'sibling' construction semantic
+                    self.parent,
+                    entity_key=f"sensor_{key}",
+                    index=self.index,
+                )
+                parser(value[0])
+                """
+                # TODO: add the data key to out polling request
+                for channel_payload in self.polling_request_payload:
+                    if channel_payload[mc.KEY_CHANNEL] == channel:
+                        channel_payload[mc.KEY_DATA].append(data_key)
+                        break
+                """

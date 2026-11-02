@@ -8,39 +8,24 @@ from homeassistant import config_entries
 from homeassistant.components import dhcp
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState, ConfigFlowResult
 from homeassistant.data_entry_flow import FlowResultType
-
-try:
-    from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
-except ImportError:
-    from homeassistant.components.dhcp import DhcpServiceInfo  # type: ignore
-
-from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
+from homeassistant.helpers import discovery_flow
+from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
+from pytest_homeassistant.common import async_fire_mqtt_message
 
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.merossclient import (
-    cloudapi,
-    fmt_macaddress,
-    json_dumps,
-)
+from custom_components.meross_lan.config_flow import ConfigFlow
+from custom_components.meross_lan.merossclient import cloudapi, fmt_macaddress
+from custom_components.meross_lan.merossclient.client import Transport
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
 )
-from custom_components.meross_lan.merossclient.protocol.message import build_message
+from custom_components.meross_lan.merossclient.protocol.message import MerossMessage
 
 from tests import const as tc, helpers
 
-try:
-    from homeassistant.helpers import discovery_flow
-except ImportError:
-    discovery_flow = None
-
-
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
-    from pytest_homeassistant_custom_component.test_util.aiohttp import (
-        AiohttpClientMocker,
-    )
 
 
 async def _cleanup_config_entry(hass: "HomeAssistant", result: ConfigFlowResult):
@@ -50,11 +35,13 @@ async def _cleanup_config_entry(hass: "HomeAssistant", result: ConfigFlowResult)
     await hass.config_entries.async_remove(config_entry.entry_id)
 
 
-async def test_device_config_flow(hass: "HomeAssistant", aioclient_mock):
+async def test_device_config_flow(hass: "HomeAssistant", aioclient_mock, hamqtt_mock):
     """
     Test standard manual device entry config flow
     """
-    with helpers.EmulatorContext(mc.TYPE_MTS200, aioclient_mock) as emulator_context:
+    async with helpers.EmulatorContext(
+        mc.TYPE_MTS200, aioclient_mock
+    ) as emulator_context:
         emulator = emulator_context.emulator
         host = emulator_context.host
 
@@ -89,6 +76,7 @@ async def test_device_config_flow(hass: "HomeAssistant", aioclient_mock):
         payload = data[mlc.CONF_PAYLOAD]
         payload_all = payload[mc.KEY_ALL]
         payload_time = payload_all[mc.KEY_SYSTEM][mc.KEY_TIME]
+        assert mc.KEY_TIMESTAMP in descriptor.time
         if payload_time[mc.KEY_TIMESTAMP] == descriptor.time[mc.KEY_TIMESTAMP] - 1:
             # we just have to patch when the emulator timestamp ticked around a second
             payload_time[mc.KEY_TIMESTAMP] = descriptor.time[mc.KEY_TIMESTAMP]
@@ -164,7 +152,7 @@ async def test_profile_config_flow(
 
 async def test_device_config_flow_with_profile(
     hass: "HomeAssistant",
-    aioclient_mock: "AiohttpClientMocker",
+    aioclient_mock: "helpers.AiohttpClientMocker",
     cloudapi_mock: helpers.CloudApiMocker,
     merossmqtt_mock: helpers.MerossMQTTMocker,
 ):
@@ -176,7 +164,7 @@ async def test_device_config_flow_with_profile(
         mc.TYPE_MSS310, key=tc.MOCK_PROFILE_KEY, uuid=tc.MOCK_PROFILE_MSS310_UUID
     )
 
-    with helpers.EmulatorContext(emulator, aioclient_mock) as emulator_context:
+    async with helpers.EmulatorContext(emulator, aioclient_mock) as emulator_context:
 
         user_input = {mlc.CONF_HOST: emulator_context.host, mlc.CONF_KEY: ""}
 
@@ -237,15 +225,15 @@ async def test_mqtt_discovery_config_flow(hass: "HomeAssistant", hamqtt_mock):
     device_id = tc.MOCK_DEVICE_UUID
     key = ""
     topic = mc.TOPIC_RESPONSE.format(device_id)
-    payload = build_message(
-        mn.Appliance_Control_ToggleX.name,
+    payload = MerossMessage.build(
+        mn.Appliance_Control_ToggleX,
         mc.METHOD_PUSH,
         {mn.Appliance_Control_ToggleX.key: {mc.KEY_CHANNEL: 0, mc.KEY_ONOFF: 0}},
         key,
         from_=mc.TOPIC_REQUEST.format(device_id),
     )
 
-    async_fire_mqtt_message(hass, topic, json_dumps(payload))
+    async_fire_mqtt_message(hass, topic, payload.json)
     await hass.async_block_till_done()
 
     flow = hass.config_entries.flow
@@ -315,69 +303,74 @@ async def _create_dhcp_discovery_flow(
         )
 
 
-async def test_dhcp_discovery_config_flow(hass: "HomeAssistant"):
-    result = await _create_dhcp_discovery_flow(
-        hass,
-        DhcpServiceInfo(
-            tc.MOCK_DEVICE_IP,
+async def test_dhcp_discovery_config_flow(hass: "HomeAssistant", aioclient_mock):
+    async with helpers.EmulatorContext(
+        mc.TYPE_MTS200, aioclient_mock
+    ) as emulator_context:
+        result = await _create_dhcp_discovery_flow(
+            hass,
+            DhcpServiceInfo(
+                emulator_context.host,
+                "",
+                fmt_macaddress(tc.MOCK_MACADDRESS),
+            ),
+        )
+        assert result, "Dhcp discovery didn't create the discovery flow"
+        assert result.get("step_id") == "device"
+
+
+async def test_dhcp_ignore_config_flow(hass: "HomeAssistant", aioclient_mock):
+    async with helpers.EmulatorContext(
+        mc.TYPE_MTS200, aioclient_mock
+    ) as emulator_context:
+        flow = hass.config_entries.flow
+
+        dhcp_service_info = DhcpServiceInfo(
+            emulator_context.host,
             "",
             fmt_macaddress(tc.MOCK_MACADDRESS),
-        ),
-    )
-    assert result, "Dhcp discovery didn't create the discovery flow"
-    assert result.get("step_id") == "device"
+        )
+        # create the initial discovery
+        result = await _create_dhcp_discovery_flow(hass, dhcp_service_info)
+        assert result, "Dhcp discovery didn't create the initial discovery flow"
+        assert result.get("step_id") == "device"
 
+        # now 'ignore' it
+        entry_unique_id = fmt_macaddress(tc.MOCK_MACADDRESS)
+        result = await flow.async_init(
+            mlc.DOMAIN,
+            context={"source": config_entries.SOURCE_IGNORE},
+            data={
+                "unique_id": entry_unique_id,
+                "title": "",
+            },
+        )
 
-async def test_dhcp_ignore_config_flow(hass: "HomeAssistant"):
+        assert not flow.async_progress_by_handler(mlc.DOMAIN)
 
-    flow = hass.config_entries.flow
+        # try dhcp rediscovery..should abort
+        result = await _create_dhcp_discovery_flow(hass, dhcp_service_info)
+        assert not result, "Dhcp discovery didn't ignored the discovery flow"
 
-    dhcp_service_info = DhcpServiceInfo(
-        tc.MOCK_DEVICE_IP,
-        "",
-        fmt_macaddress(tc.MOCK_MACADDRESS),
-    )
-    # create the initial discovery
-    result = await _create_dhcp_discovery_flow(hass, dhcp_service_info)
-    assert result, "Dhcp discovery didn't create the initial discovery flow"
-    assert result.get("step_id") == "device"
+        # now remove the ignored entry
+        ignored_entry = hass.config_entries.async_entry_for_domain_unique_id(
+            mlc.DOMAIN, entry_unique_id
+        )
+        assert ignored_entry
+        await hass.config_entries.async_remove(ignored_entry.entry_id)
+        await hass.async_block_till_done(wait_background_tasks=True)
 
-    # now 'ignore' it
-    entry_unique_id = fmt_macaddress(tc.MOCK_MACADDRESS)
-    result = await flow.async_init(
-        mlc.DOMAIN,
-        context={"source": config_entries.SOURCE_IGNORE},
-        data={
-            "unique_id": entry_unique_id,
-            "title": "",
-        },
-    )
+        """
+        I expect the DHCP re-discovery kicks in automatically but this check is not not
+        working...I'm giving up atm
+        has_progress = False
+        for progress in hass.config_entries.flow.async_progress_by_handler(mlc.DOMAIN):
+            assert progress.get("context", {}).get("unique_id") == entry_unique_id
+            assert progress.get("step_id") == "device"
+            has_progress = True
 
-    assert not flow.async_progress_by_handler(mlc.DOMAIN)
-
-    # try dhcp rediscovery..should abort
-    result = await _create_dhcp_discovery_flow(hass, dhcp_service_info)
-    assert not result, "Dhcp discovery didn't ignored the discovery flow"
-
-    # now remove the ignored entry
-    ignored_entry = hass.config_entries.async_entry_for_domain_unique_id(
-        mlc.DOMAIN, entry_unique_id
-    )
-    assert ignored_entry
-    await hass.config_entries.async_remove(ignored_entry.entry_id)
-    await hass.async_block_till_done(wait_background_tasks=True)
-
-    """
-    I expect the DHCP re-discovery kicks in automatically but this check is not not
-    working...I'm giving up atm
-    has_progress = False
-    for progress in hass.config_entries.flow.async_progress_by_handler(mlc.DOMAIN):
-        assert progress.get("context", {}).get("unique_id") == entry_unique_id
-        assert progress.get("step_id") == "device"
-        has_progress = True
-
-    assert has_progress, "unignored entry did not progress"
-    """
+        assert has_progress, "unignored entry did not progress"
+        """
 
 
 async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclient_mock):
@@ -388,12 +381,14 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
     device_type = mc.TYPE_MTS200
     flow = hass.config_entries.flow
 
-    async with helpers.DeviceContext(request, hass, device_type) as device_context:
-        emulator = device_context.emulator
-        device = await device_context.perform_coldstart()
+    async with helpers.DeviceContext(
+        request, hass, device_type, auto_poll=True
+    ) as device_context:
+
+        device = device_context.device
 
         # better be sure our context is consistent with expectations!
-        assert device.host == str(id(emulator))
+        assert device.host == device_context.emulator.descriptor.macAddress_fmt
         assert device.id == device.descriptor.uuid
         device_macaddress = device.descriptor.macAddress
         # since we check the DHCP renewal comes form a legit device we need to setup
@@ -412,7 +407,7 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
         ), "wrong emulator clone"
         # now we mock the device emulator at new address
         DHCP_GOOD_HOST = "88.88.88.88"
-        with helpers.EmulatorContext(
+        async with helpers.EmulatorContext(
             emulator_dhcp, aioclient_mock, host=DHCP_GOOD_HOST
         ):
             result = await flow.async_init(
@@ -442,7 +437,7 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
         ), "wrong emulator clone"
         # now we mock the device emulator at new address
         DHCP_BOGUS_HOST = "99.99.99.99"
-        with helpers.EmulatorContext(
+        async with helpers.EmulatorContext(
             emulator_dhcp, aioclient_mock, host=DHCP_BOGUS_HOST
         ):
             result = await flow.async_init(
@@ -468,6 +463,80 @@ async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclien
             )
 
 
+async def test_dhcp_renewal_retry_config_flow(
+    request, hass: "HomeAssistant", aioclient_mock, monkeypatch
+):
+    """
+    A device that has just joined the network is often not answering http yet when
+    its DHCP request is seen: the check of the new address must be retried instead of
+    leaving the entry on its old (stale) host.
+    """
+    device_type = mc.TYPE_MTS200
+    flow = hass.config_entries.flow
+    monkeypatch.setattr(
+        ConfigFlow, "DHCP_VERIFY_RETRY_DELAYS", (0, 0, 0), raising=False
+    )
+    _async_http_discovery = ConfigFlow._async_http_discovery
+    attempts = 0
+    unreachable_attempts = 0
+
+    async def _async_http_discovery_flaky(self, host, key):
+        nonlocal attempts
+        attempts += 1
+        if attempts <= unreachable_attempts:
+            raise OSError(f"Connect call failed ('{host}', 80)")
+        return await _async_http_discovery(self, host, key)
+
+    monkeypatch.setattr(
+        ConfigFlow, "_async_http_discovery", _async_http_discovery_flaky
+    )
+
+    async with helpers.DeviceContext(
+        request, hass, device_type, auto_poll=True
+    ) as device_context:
+
+        device = device_context.device
+        device_macaddress = device.descriptor.macAddress
+        original_host = device.host
+        emulator_dhcp = helpers.build_emulator(
+            device_type, key=device.key, uuid=device.id
+        )
+
+        # never answering: every attempt is used, then the entry keeps its host
+        DHCP_DEAD_HOST = "77.77.77.77"
+        attempts = 0
+        unreachable_attempts = 99
+        result = await flow.async_init(
+            mlc.DOMAIN,
+            context={"source": config_entries.SOURCE_DHCP},
+            data=DhcpServiceInfo(DHCP_DEAD_HOST, "", fmt_macaddress(device_macaddress)),
+        )
+        assert result["type"] == FlowResultType.ABORT  # type: ignore
+        await hass.async_block_till_done()
+        assert attempts == len(ConfigFlow.DHCP_VERIFY_RETRY_DELAYS) + 1
+        assert device.host == original_host, "device host was wrongly updated"
+
+        # answering on the third attempt: the entry follows the device
+        DHCP_GOOD_HOST = "88.88.88.88"
+        async with helpers.EmulatorContext(
+            emulator_dhcp, aioclient_mock, host=DHCP_GOOD_HOST
+        ):
+            attempts = 0
+            unreachable_attempts = 2
+            result = await flow.async_init(
+                mlc.DOMAIN,
+                context={"source": config_entries.SOURCE_DHCP},
+                data=DhcpServiceInfo(
+                    DHCP_GOOD_HOST, "", fmt_macaddress(device_macaddress)
+                ),
+            )
+            assert result["type"] == FlowResultType.ABORT  # type: ignore
+            assert result["reason"] == "already_configured"  # type: ignore
+            await hass.async_block_till_done()
+            assert attempts == 3
+            assert device.host == DHCP_GOOD_HOST, "device host was not updated"
+
+
 async def test_device_options_flow(request, hass: "HomeAssistant"):
     """
     Tests the device config entry option flow. This code could potentially use
@@ -476,8 +545,10 @@ async def test_device_options_flow(request, hass: "HomeAssistant"):
     they behave as expected.
     TODO: check device bind and reset
     """
-    async with helpers.DeviceContext(request, hass, mc.TYPE_MTS200) as context:
-        device = await context.perform_coldstart()
+    async with helpers.DeviceContext(
+        request, hass, mc.TYPE_MTS200, auto_poll=True
+    ) as context:
+        device = context.device
 
         options_flow = hass.config_entries.options
         result = await options_flow.async_init(context.config_entry_id)
@@ -487,7 +558,7 @@ async def test_device_options_flow(request, hass: "HomeAssistant"):
         user_input = {
             mlc.CONF_HOST: device.host,
             mlc.CONF_KEY: "wrongkey",
-            mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_HTTP,
+            mlc.CONF_PROTOCOL: Transport.HTTP.value,
             mlc.CONF_POLLING_PERIOD: mlc.CONF_POLLING_PERIOD_DEFAULT,
         }
         result = await options_flow.async_configure(
@@ -505,8 +576,9 @@ async def test_device_options_flow(request, hass: "HomeAssistant"):
 
 async def test_device_unbind_options_flow(request, hass: "HomeAssistant"):
 
-    async with helpers.DeviceContext(request, hass, mc.TYPE_MTS200) as context:
-        await context.perform_coldstart()
+    async with helpers.DeviceContext(
+        request, hass, mc.TYPE_MTS200, auto_poll=True
+    ) as context:
 
         options_flow = hass.config_entries.options
         result = await options_flow.async_init(context.config_entry_id)

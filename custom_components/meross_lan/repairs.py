@@ -1,17 +1,17 @@
 from typing import TYPE_CHECKING
 
 from homeassistant.components.repairs import ConfirmRepairFlow
-from homeassistant.helpers import selector
+from homeassistant.helpers import device_registry as dr, selector
 from homeassistant.util import dt as dt_util
-import voluptuous as vol
 
 from . import const as mlc
+from .config_flow import vol
 from .helpers.component_api import ComponentApi
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
-    from .devices.hub import HubMixin
+    from .devices.hub import Hub
     from .helpers.device import Device
 
 
@@ -41,16 +41,15 @@ class DeviceTimeZoneRepairFlow(SimpleRepairFlow):
             config_entry = ComponentApi.get(self.hass).get_config_entry(
                 self.issue_id.split(".")[1]
             )
-            device: "Device | None" = getattr(config_entry, "runtime_data", None)
-            if (
-                device
-                and (tzname := getattr(dt_util.DEFAULT_TIME_ZONE, "key", None))
-                and await device.async_config_device_timezone(tzname)
-            ):
-                device.remove_issue_id(self.issue_id)
+            try:
+                device: "Device" = getattr(config_entry, "runtime_data")
+                await device.async_configure_timezone(str(dt_util.DEFAULT_TIME_ZONE))
                 return self.async_create_entry(data={})
-            else:
-                return self.async_abort(reason="cannot_connect")
+            except Exception as e:
+                return self.async_abort(
+                    reason="repair_failed",
+                    description_placeholders={"error": str(e) or e.__class__.__name__},
+                )
 
         return await super().async_step_confirm(user_input)
 
@@ -63,7 +62,7 @@ class HubSubdeviceRemovedFlow(SimpleRepairFlow):
                 api = ComponentApi.get(self.hass)
                 config_entry = api.get_config_entry(device_id)
                 assert config_entry
-                device: "HubMixin | None" = getattr(config_entry, "runtime_data", None)
+                device: "Hub | None" = getattr(config_entry, "runtime_data", None)
                 if device:
                     device.remove_issue_id(self.issue_id)
                     if subdevice_id in device.subdevices:
@@ -75,10 +74,8 @@ class HubSubdeviceRemovedFlow(SimpleRepairFlow):
                     logger = api
 
                 _identifier = (mlc.DOMAIN, subdevice_id)
-                for (
-                    device_entry
-                ) in api.device_registry.devices.get_devices_for_config_entry_id(
-                    config_entry.entry_id
+                for device_entry in dr.async_entries_for_config_entry(
+                    api.device_registry, config_entry.entry_id
                 ):
                     if _identifier in device_entry.identifiers:
                         logger.log(

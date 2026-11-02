@@ -1,151 +1,151 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload, override
 
 from homeassistant.components import number
 
-from .helpers import entity as me, reverse_lookup
-from .merossclient.protocol import const as mc
+from .helpers import entity as mle
 
 if TYPE_CHECKING:
-    from typing import Unpack
+    from typing import ClassVar, Final, NotRequired, Self, Unpack
 
-    from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
-
-    from .climate import MtsClimate
-    from .helpers.device import BaseDevice
+    from .helpers.device import Device
+    from .helpers.manager import ConfigEntryManager
 
 
-async def async_setup_entry(
-    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
-):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, number.DOMAIN)
-
-
-class MLNumber(me.MLNumericEntity, number.NumberEntity):
+class NumberEntity(mle.NumericEntity, number.NumberEntity):
     """
-    Base (abstract) ancestor for ML number entities. This has 2 specializations:
-    - MLConfigNumber: for configuration parameters backed by a device namespace value.
-    - MLEmulatedNumber: for configuration parameters not directly mapped to a device ns.
+    Base (abstract) ancestor for number entities. This has 2 specializations:
+    - ConfigNumber: for configuration parameters backed by a device namespace value.
+    - EmulatedNumber: for configuration parameters not directly mapped to a device ns.
     These in turn will be managed with HA state-restoration.
     """
 
     if TYPE_CHECKING:
-        manager: "BaseDevice"
+
+        DEVICE_CLASS_DURATION: Final[number.NumberDeviceClass]
+        DEVICE_CLASS_TEMPERATURE_DELTA: Final[number.NumberDeviceClass]
         # HA core entity attributes:
-        mode: number.NumberMode
-        native_max_value: float
-        native_min_value: float
+        _attr_device_class: ClassVar[number.NumberDeviceClass | None]
+        _attr_mode: ClassVar[number.NumberMode]
+        _attr_native_max_value: ClassVar[float]
+        _attr_native_min_value: ClassVar[float]
+        _attr_native_step: ClassVar[float]
         native_step: float
 
+        type InitArgs = mle.NumericEntity.InitArgs
+
+        class Args(mle.NumericEntity.Args):
+            device_class: NotRequired[number.NumberDeviceClass | None]  # Override
+            mode: NotRequired[number.NumberMode]
+            native_max_value: NotRequired[float]
+            native_min_value: NotRequired[float]
+            native_step: NotRequired[float]
+
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
+
+        @classmethod
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+
     PLATFORM = number.DOMAIN
+    HA_ENTITY_ATTRIBUTES = mle.NumericEntity.HA_ENTITY_ATTRIBUTES + (
+        "mode",
+        "native_max_value",
+        "native_min_value",
+        "native_step",
+    )
     DeviceClass = number.NumberDeviceClass
 
     # HA core compatibility layer for NumberDeviceClass.DURATION (HA core 2023.7 misses that)
-    DEVICE_CLASS_DURATION = getattr(DeviceClass, "DURATION", "duration")
+    DEVICE_CLASS_DURATION = getattr(DeviceClass, "DURATION", "duration")  # type: ignore
     # HA core compatibility layer for NumberDeviceClass.TEMPERATURE_DELTA (HA core 2025.10 misses that)
     DEVICE_CLASS_TEMPERATURE_DELTA = getattr(
         DeviceClass, "TEMPERATURE_DELTA", DeviceClass.TEMPERATURE
     )
-
-    DEVICECLASS_TO_UNIT_MAP = {
-        None: None,
-        DEVICE_CLASS_DURATION: me.MLEntity.hac.UnitOfTime.SECONDS,
-        DeviceClass.HUMIDITY: me.MLEntity.hac.PERCENTAGE,
-        DeviceClass.TEMPERATURE: me.MLEntity.hac.UnitOfTemperature.CELSIUS,
-        DEVICE_CLASS_TEMPERATURE_DELTA: me.MLEntity.hac.UnitOfTemperature.CELSIUS,
-    }
+    assert mle.NumericEntity.DEVICECLASS_TO_UNIT_MAP
 
     # HA core entity attributes:
-    entity_category = me.MLNumericEntity.EntityCategory.CONFIG
-    mode = number.NumberMode.BOX
-    native_step = 1
+    _attr_entity_category = mle.Entity.EntityCategory.CONFIG
+    _attr_mode = number.NumberMode.BOX
+    _attr_native_step = 1.0
 
 
-class MLConfigNumber(me.MEListChannelMixin, MLNumber):
+class NumberParser(mle.NumericParser, NumberEntity):
     """
-    Base class for any configurable numeric parameter in the device. This works much-like
-    MLSwitch by refining the 'async_request_value' api in order to send the command.
-    Contrary to MLSwitch (which is abstract), this has a default implementation for
-    payloads sent in a list through me.MEListChannelMixin since this looks to be
-    widely adopted (thermostats and the likes) but some care needs to be taken for
-    some namespaces not supporting channels (i.e. Appliance.GarageDoor.Config) or
-    not understanding the list payload (likely all the RollerShutter stuff)
+    Base class for any configurable numeric parameter in the device.
     """
+
+    if TYPE_CHECKING:
+
+        type InitArgs = mle.NumericParser.InitArgs
+
+        class Args(NumberEntity.Args, mle.NumericParser.Args):
+            pass
+
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
+
+        @classmethod
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+
+        DEBOUNCE_DELAY: Final
 
     DEBOUNCE_DELAY = 1
 
-    __slots__ = ("_async_request_debounce_unsub",)
-
-    def __init__(
-        self,
-        manager: "BaseDevice",
-        channel: object | None,
-        entitykey: str | None = None,
-        device_class: MLNumber.DeviceClass | str | None = None,
-        **kwargs: "Unpack[MLConfigNumber.Args]",
-    ):
-        self._async_request_debounce_unsub = None
-        super().__init__(
-            manager,
-            channel,
-            entitykey,
-            device_class,
-            **kwargs,
-        )
-
-    async def async_shutdown(self):
-        self._cancel_request()
-        await super().async_shutdown()
+    # Never mixed-in with NamespaceParser so we fix the slots
+    __slots__ = mle.NumericParser._calc_slots()
 
     def set_unavailable(self):
-        self._cancel_request()
+        self.cancel_callback(self._async_request_debounce)
         super().set_unavailable()
 
     # interface: number.NumberEntity
     async def async_set_native_value(self, value: float):
         """round up the requested value to the device native resolution
-        which is almost always an int number (some exceptions though)."""
-        device_value = round(value * self.device_scale)
-        device_step = round(self.native_step * self.device_scale)
-        device_value = round(device_value / device_step) * device_step
-        # since the async_set_native_value might be triggered back-to-back
-        # especially when using the BOXED UI we're debouncing the device
-        # request and provide 'temporaneous' optimistic updates
-        self.update_native_value(device_value / self.device_scale)
-        if self._async_request_debounce_unsub:
-            self._async_request_debounce_unsub.cancel()
-        self._async_request_debounce_unsub = self.manager.schedule_async_callback(
-            self.DEBOUNCE_DELAY, self._async_request_debounce, device_value
-        )
+        which is almost always an int number (some exceptions though).
+        This method will not immediately send the request but just schedule it after a short debounce delay,
+        in order to 'collapse' multiple back-to-back changes (like when using the BOXED UI slider).
+        """
+        device_scale = self.device_scale
+        if type(device_scale) is int:
+            device_value = round(value * device_scale)
+            device_step = round(self.native_step * device_scale)
+            device_value = round(device_value / device_step) * device_step
+            self.update_native_value(device_value / device_scale)
+            self.schedule_callback(
+                self.DEBOUNCE_DELAY, self._async_request_debounce, device_value
+            )
+        else:
+            self.update_native_value(value)
+            self.schedule_callback(
+                self.DEBOUNCE_DELAY, self._async_request_debounce, value * device_scale
+            )
 
     # interface: self
-    async def _async_request_debounce(self, device_value):
-        self._async_request_debounce_unsub = None
-        if await self.async_request_value(device_value):
-            self.update_device_value(device_value)
-        else:
+    async def _async_request_debounce(self, device_value: int | float):
+        try:
+            await self.async_request_value(device_value)
+        except Exception:
             # restore the last good known device value
-            device_value = self.device_value
-            if device_value is not None:
-                self.update_native_value(device_value / self.device_scale)
-
-    def _cancel_request(self):
-        if self._async_request_debounce_unsub:
-            self._async_request_debounce_unsub.cancel()
-            self._async_request_debounce_unsub = None
+            try:
+                self.update_native_value(self.ns_value / self.device_scale)  # type: ignore
+            except TypeError:
+                pass  # self.ns_value is None
 
 
-class MLEmulatedNumber(me.MEPartialAvailableMixin, MLNumber):
+class EmulatedNumber(NumberEntity.RestoreEntity, NumberEntity):
     """
-    Number entity not directly binded to a device parameter (like MLConfigNumber)
+    Number entity not directly binded to a device parameter (like ConfigNumber)
     but used to store in HA a bit of component configuration.
     """
 
+    __slots__ = NumberEntity._calc_slots()
+
     async def async_added_to_hass(self):
-        await super().async_added_to_hass()
         with self.exception_warning("restoring previous state"):
-            if last_state := await self.get_last_state_available():
-                self.native_value = float(last_state.state)
+            if restored_state := self._async_get_restored_data():
+                self.native_value = float(restored_state.state.state)
+        await super().async_added_to_hass()
 
     async def async_set_native_value(self, value: float):
         self.update_native_value(value)
+
+
+async_setup_entry = NumberEntity.platform_setup_entry

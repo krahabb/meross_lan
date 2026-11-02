@@ -1,26 +1,19 @@
 """
 Base-Common behaviour for all Meross-LAN entities
-
-actual HA custom platform entities will be derived like this:
-MLSwitch(MerossToggle, SwitchEntity)
-
-we also try to 'commonize' HA core symbols import in order to better manage
+We also try to 'commonize' HA core symbols import in order to better manage
 versioning
 """
 
-from functools import partial
-from typing import TYPE_CHECKING, final
+from functools import cached_property
+from typing import TYPE_CHECKING, final, overload, override
 
-try:
-    from homeassistant.components.recorder import get_instance as r_get_instance
-    from homeassistant.components.recorder.history import get_last_state_changes
-except ImportError:
-    get_last_state_changes = None
+from homeassistant.helpers import entity, restore_state
+from homeassistant.helpers.entity_platform import async_get_current_platform
 
-from homeassistant.helpers import entity
-
-from . import Loggable
-from .namespaces import NamespaceParser, mc, mn
+from .. import const as mlc
+from ..merossclient.device import handler
+from ..merossclient.logging import Loggable
+from ..merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
     from typing import (
@@ -28,630 +21,556 @@ if TYPE_CHECKING:
         Callable,
         ClassVar,
         Final,
+        Iterable,
+        Literal,
         Mapping,
         NotRequired,
+        Protocol,
+        Self,
         TypedDict,
         Unpack,
     )
 
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.device_registry import DeviceInfo
+    from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-    from .device import BaseDevice
-    from .manager import ConfigEntryManager, EntityManager
-
-
-#
-# helper function to 'commonize' platform setup
-#
-def platform_setup_entry(
-    hass: "HomeAssistant",
-    config_entry: "ConfigEntry[ConfigEntryManager]",
-    async_add_devices,
-    platform: str,
-):
-    manager = config_entry.runtime_data
-    manager.log(manager.DEBUG, "platform_setup_entry { platform: %s }", platform)
-    manager.platforms[platform] = async_add_devices
-    async_add_devices(manager.managed_entities(platform))
+    from ..merossclient.protocol.types import JsonDict
+    from .device import Device
+    from .manager import ConfigEntryManager
 
 
-class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else object):
+class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
     """
     Mixin style base class for all of the entity platform(s)
     This class must prepend the HA entity class in our custom
-    entity classe definitions like:
-    from homeassistant.components.switch import Switch
-    class MyCustomSwitch(MLEntity, Switch)
+    entity class definitions.
     """
 
     if TYPE_CHECKING:
 
-        type StateCallback = Callable[[], Any]
+        class Sibling(Protocol):
+            """Protocol for building sibling entities. This is used when we want to create multiple entities
+            for the same channel/subid (i.e. entities with a common device_info/entry) so that they share the
+            same HA device_entry. The 'sibling' is used as a source reference for index/device_info/parent(device)
+            settings in the created entity. The sibling itself is likely another entity acting as a kind of 'root'
+            entity for the same channel. This leads to similarities with SubDevice classes which also acts as reference
+            for the same kind of settings but in that case we have a real 'device' instead ofan entity.
+            """
 
-        class Args(TypedDict):
-            name: NotRequired[str]
-            translation_key: NotRequired[str]
+            index: Final[mn.IndexValue]
+            device_info: Final[DeviceInfo | None]
+            parent: Final[Device]
+
+        type InitArgs = tuple[Sibling | Any, *tuple[ConfigEntryManager, ...]]
+
+        class Args(Loggable.Args):
+            entity_key: NotRequired[str | None]
+            index: NotRequired[mn.IndexValue]
+            # HA core entity attributes:
+            device_class: NotRequired[str | None]
+            device_info: NotRequired[DeviceInfo | None]
             entity_category: NotRequired[entity.EntityCategory | None]
-            state_callback: NotRequired["MLEntity.StateCallback"]
+            entity_registry_enabled_default: NotRequired[bool]
+            name: NotRequired[str | None]
+            translation_key: NotRequired[str | None]
+            icon: NotRequired[str]
+            unique_id: NotRequired[str | None]
+
+        @classmethod
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
         EntityCategory: Final
 
         PLATFORM: ClassVar[str]
-
-        is_diagnostic: ClassVar[bool]
+        HA_ENTITY_ATTRIBUTES: ClassVar[tuple[str, ...]]
+        """Provides a list of HA core entity attributes (i.e. 'standard' attributes like 'name')
+        which are actually used in meross_lan and so can be set through kwargs in the constructor.
+        this class initializer will scan the actual class definition in order to correctly extract
+        the eventually provided attributes in kwargs."""
+        is_diagnostic: bool
         """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
 
-        state_callbacks: set[StateCallback] | None
-        # These 'placeholder' definitions support generalization of
-        # Meross protocol message build/parsing when related to the
-        # current entity. These are usually relevant when this entity
-        # is strictly related to a namespace payload key value.
-        # See MLConfigNumber or MerossToggle as basic implementations
-        # supporting this semantic. They're generally set as class definitions
-        # in inherited entities but could nonetheless be set 'per instance'.
-        # These also come handy when generalizing parsing of received payloads
-        # for simple enough entities (like sensors, numbers or switches)
-        # Starting around 2025 some namespaces seems to enrich their payloads structure
-        # by nesting the actual 'key_value' inside 'group_key(s)' (see Appliance.Config.DeviceCfg)
-        ns: mn.Namespace  # no default
-        key_group: str  # no default
-        key_value: str  # defaulted to 'value'
-
+        id: Final[str | int | mn.Namespace]  # type: ignore[override]
+        parent: Final[ConfigEntryManager]  # type: ignore[override]
+        _INIT_entity_key: ClassVar[str | None]
+        entity_key: Final[str | None]
         # used to speed-up checks if entity is enabled and loaded
         hass_connected: Final[bool]  # public ReadOnly attribute
 
         # HA core entity attributes:
-        # These are constants throughout our model
-        force_update: Final[bool]
-        has_entity_name: Final[bool]
-        should_poll: Final[bool]
-        # These may be customized here and there per class
+        # Annotated here are those which are actually used in meross_lan.
+        # Their management is a mixture of HA core Entity initialization or
+        # explicit initialization in our constructor(s) where needed.
+        # For example, when any of these is passed in as kwarg we explicitly set it else
+        # we'll let the default HA mechanics handle it (i.e. _attr_... class attributes or HA defaults).
+        _attr_assumed_state: ClassVar[bool]
         _attr_available: ClassVar[bool]
-        # These may be customized here and there per class or instance
-        assumed_state: bool = False
-        entity_category: entity.EntityCategory | None
-        entity_registry_enabled_default: bool
-        extra_state_attributes: dict[str, object]
-        icon: str | None
-        translation_key: str | None
-        # These are actually per instance
-        available: bool
-        name: str | None
-        suggested_object_id: str | None
-        unique_id: str
+        _attr_device_class: ClassVar[str | None]
+        device_info: Final[DeviceInfo | None]
+        _attr_entity_category: ClassVar[entity.EntityCategory | None]
+        _attr_entity_registry_enabled_default: ClassVar[bool]
+        force_update: Final[Literal[False]]
+        has_entity_name: Final[Literal[True]]
+        _attr_name: ClassVar[str | None]
+        _attr_icon: ClassVar[str]
+        should_poll: Final[Literal[False]]
+        _attr_supported_features: ClassVar[int | None]
+        _attr_translation_key: ClassVar[str | None]
+
+        extra_state_attributes: dict[str, Any]
 
     EntityCategory = entity.EntityCategory
+    RestoreEntity = restore_state.RestoreEntity
 
-    is_diagnostic = False
-
-    key_value = mc.KEY_VALUE
-
-    # HA core entity attributes:
-    force_update = False
-    has_entity_name = True
-    should_poll = False
-    _attr_available = False
-    assumed_state = False
-    entity_category = None
-    entity_registry_enabled_default = True
-    extra_state_attributes = {}
-    icon = None
-    translation_key = None
-
-    __slots__ = (
-        # slotting also base Entity frequently used attributes...
-        "entity_id",
-        "hass",
-        "platform",
-        "registry_entry",
-        "device_entry",
-        "_context",
-        "_context_set",
-        # meross_lan managed attributes
-        "manager",
-        "channel",
-        "entitykey",
-        "state_callbacks",
-        "hass_connected",
-        # HA core
-        "available",
+    HA_ENTITY_ATTRIBUTES = (
         "device_class",
-        "device_info",
+        "entity_category",
+        "entity_registry_enabled_default",
         "name",
-        "suggested_object_id",
+        "icon",
         "unique_id",
     )
 
+    # This works as a default for all the entities which are not NamespaceParsers.
+    index = mn.IndexType.none.get()
+
+    is_diagnostic = False
+
+    # HA core entity attributes:
+    _attr_available = False  # TODO: review the availability mechanics
+
+    _INIT_entity_key = None
+    __slots__ = (
+        "entity_key",
+        "hass_connected",
+    )
+
+    @overload
+    def __init__(self, sibling: "Sibling", /, **kwargs: "Unpack[Args]"): ...
+
+    @overload
     def __init__(
-        self,
-        manager: "EntityManager",
-        channel: object | None,
-        entitykey: str | None = None,
-        device_class: str | None = None,
-        /,
-        **kwargs: "Unpack[Args]",
-    ):
+        self, id, manager: "ConfigEntryManager", /, **kwargs: "Unpack[Args]"
+    ): ...
+
+    def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         """
-        - channel: historically used to create an unique id for this entity inside the device
+        - id (formerly 'channel'): historically used to create an unique id for this entity inside the device
         and also related to the physical channel used in various api for some kind of entities.
         For entities in subdevices (hub paired devices) the channel is usually the Id of the
         subdevice itself since 'HA wise' and 'meross_lan wise' we still group the entities under
         the same (hub) device
-        - entitykey: is added to provide additional 'uniqueness' should the device have multiple
+        - entity_key: is added to provide additional 'uniqueness' should the device have multiple
         entities for the same channel and usually equal to device_class (but might not be)
-        - device_class: used by HA to set some soft 'class properties' for the entity
         """
-        # init these first since Loggable init could call configure_logger which 'sometimes'
-        # could rely on these
-        self.manager = manager
-        self.channel = channel
-        self.entitykey = entitykey
-        id = (
-            channel
-            if entitykey is None
-            else entitykey if channel is None else f"{channel}_{entitykey}"
-        )
-        Loggable.__init__(self, id, logger=manager)
-        # init before raising exceptions so that the Loggable is
-        # setup before any exception is raised
-        if id is None:
-            raise AssertionError(
-                "provide at least channel or entitykey (cannot be 'None' together)"
-            )
-        if id in manager.entities:
-            raise AssertionError(f"id:{id} is not unique inside manager.entities")
+        # FIXME: generalize automatic entity_key generation for this pattern:
+        # entity_key=f"{ns.slug}__{key_value}",
 
-        if "state_callback" in kwargs:
-            self.state_callbacks = set()
-            self.state_callbacks.add(kwargs.pop("state_callback"))
+        entity_key = kwargs.pop("entity_key", self.__class__._INIT_entity_key)
+        if len(args) == 1:
+            sibling: "Entity.Sibling" = args[0]
+            parent = sibling.parent
+            self.device_info = sibling.device_info
+            # intercept 'index' kwarg used by NamespaceParser mixin
+            # eventually provide that by forwarding the sibling one
+            index = kwargs.setdefault("index", sibling.index)
         else:
-            self.state_callbacks = None
+            id, parent = args
+            # We're receiving either the channel or the subdevice id in this 'id' variable and
+            # we use it to get the correct device entry for this entity.
+            try:
+                self.device_info = kwargs.pop("device_info")
+            except KeyError:
+                self.device_info = parent.get_device_entry_info(id)
+            try:
+                # don't pop...NamespaceParser (when mixed-in) will use it
+                index = kwargs["index"]  # type: ignore
+            except KeyError:
+                index = Entity.index  # should be 'none' though
+
+        if index:
+            id = f"{index.slug}_{entity_key}" if entity_key else index.slug
+        else:
+            id = entity_key
+
+        assert (
+            id not in parent.entities
+        ), f"id:{id} is not unique inside parent.entities"
+
+        self.entity_key = entity_key
         self.hass_connected = False
+        # HA core: rather constant
+        self.available = self._attr_available or parent.is_connected
+        self.force_update = False
+        self.has_entity_name = True
+        self.should_poll = False
+        # TODO: try to enforce using entity_key as translation_key removing usage of kwarg and _attr_translation_key.
+        # Also, since translation_key needs to be lowercase and without double underscore/hyphens
+        # we should enforce this at entity_key level. The double underscore by convention is used to separate
+        # the namespace slug from the key_value in entity_key. Right now we just patch the translation_key identifier until we come up with a 'definitive'
+        # entity_key naming scheme which is consistent with translation_key and unique_id semantics (We'll then need to migrate existing unique_ids).
+        self.translation_key = (
+            kwargs.pop("translation_key")
+            if "translation_key" in kwargs
+            else (
+                getattr(self, "_attr_translation_key", None)
+                or (entity_key and entity_key.lower().replace("__", "-"))
+            )
+        )
+        # simple setting of HA core attributes if provided in kwargs
+        # else fallback to HA core mechanics
+        for _attr in tuple(
+            _attr for _attr in kwargs if _attr in self.__class__.HA_ENTITY_ATTRIBUTES
+        ):
+            setattr(self, _attr, kwargs.pop(_attr))
+        super().__init__(id, parent, **kwargs)
+        parent.entities[id] = self
+        if parent.added_entities is not None:
+            # this entity is being created after entry setup
+            parent.add_entity(self)
 
-        self.entity_id = entity.Entity.entity_id
-        self.hass = entity.Entity.hass
-        self.platform = entity.Entity.platform
-        self.registry_entry = None
-        self.device_entry = None
+    # interface: entity.Entity
+    @cached_property
+    def unique_id(self) -> str | None:
+        # unique_id is by default computed internally so to have a consistent layout.
+        # Not all entities should or will adhere to this but since
+        # they should be rare we're using local overrides here and there in descendants
+        # or initialization of unique_id in the constructor when needed.
+        # Considerations about unique_id migration:
+        # The unique_id should follow this format (at least for parsers):
+        # "{uuid}_{ns.slug}_{key_value}_{channel}" where channel is optional ofc
+        # but is always related to the KEY_CHANNEL in the payload and not to the subdevice id
+        # For subdevices we should move to a format where we get rid of the parent hub.id
+        # and use instead the subdev id in the unique_id since it is already unique.
+        # "{subdev_id}_{ns.slug}_{key_value}_{channel}" where channel is optional ofc
+        # This way we could maybe get rid of entity_key
+        return f"{self.parent.id}_{self.id}"
 
-        self._context = None
-        self._context_set = None
-        self.available = self._attr_available or manager.online
-        self.device_class = device_class
-        self.device_info = self.manager.deviceentry_id  # type: ignore
+    @override
+    def _name_internal(
+        self,
+        device_class_name: str | None,
+        platform_translations: dict[str, str],
+    ) -> str | entity.UndefinedType | None:
+        name = super()._name_internal(device_class_name, platform_translations)
+        if (name is entity.UNDEFINED) and (entity_key := self.entity_key):
+            entity_key_split = entity_key.split("_")
+            if len(entity_key_split) > 2:
+                # For 'new style' entity_key(s) in the order of 'ns_slug__key_value' we want to use
+                # only the (last split) key_value part as name.
+                return entity_key_split[-1].capitalize()
+            else:
+                return entity_key.replace("_", " ").capitalize()
+        return name
 
-        if "name" in kwargs:
-            name = kwargs.pop("name")
-        elif entitykey:
-            name = entitykey.replace("_", " ").capitalize()
-        elif device_class:
-            name = str(device_class).capitalize()
-        else:
-            name = None
-        # when channel == 0 it might be the only one so skip it
-        # when channel is already in device name it also may be skipped
-        if channel and (channel is not manager.id):
-            # (channel is manager.id) means this is the 'main' entity of an hub subdevice
-            # so we skip adding the subdevice.id to the entity name
-            name = f"{name} {channel}" if name else str(channel)
-        self.suggested_object_id = self.name = name
-
-        # by default all of our entities have unique_id so they're registered
-        # there could be some exceptions though (MLUpdate)
-        self.unique_id = self._generate_unique_id()
-        for _attr_name, _attr_value in kwargs.items():
-            setattr(self, _attr_name, _attr_value)
-
-        manager.entities[id] = self
-        async_add_devices = manager.platforms.setdefault(self.PLATFORM)
-        if async_add_devices:
-            async_add_devices([self])
-
-    # interface: Entity
     async def async_added_to_hass(self):
+        await super().async_added_to_hass()
         self.log(self.VERBOSE, "Added to HomeAssistant")
         self.hass_connected = True  # type: ignore
-        return await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
+        await super().async_will_remove_from_hass()
         self.log(self.VERBOSE, "Removed from HomeAssistant")
         self.hass_connected = False  # type: ignore
-        return await super().async_will_remove_from_hass()
 
     # interface: self
-    async def async_shutdown(self):
-        await NamespaceParser.async_shutdown(self)
-        self.state_callbacks = None
-        self.manager.entities.pop(self.id)
-        self.manager: "EntityManager" = None  # type: ignore
-
     @final
-    def register_state_callback(self, state_callback: "StateCallback", /):
-        if not self.state_callbacks:
-            self.state_callbacks = set()
-        self.state_callbacks.add(state_callback)
+    def register_state_callback(self, state_callback: "Callable[[], Any]", /):
+        """Registers a callback to be called when flush_state is called."""
+
+        old_flush = self.flush_state
+
+        def _wrapper():
+            old_flush()
+            state_callback()
+
+        self.flush_state = _wrapper
+
+        def _cleanup():
+            del self.flush_state
+
+        self.shutdown_broadcast.add(_cleanup)
 
     def flush_state(self):
         """Actually commits a state change to HA."""
-        if self.state_callbacks:
-            for state_callback in self.state_callbacks:
-                state_callback()
         if self.hass_connected:
             self.async_write_ha_state()
 
+    def schedule_flush_state(self, delay: float = 0):
+        """Schedules a state change to HA after a delay."""
+        if self.hass_connected:
+            self.schedule_callback(delay, self.flush_state)
+        else:
+            self.cancel_callback(self.flush_state)
+
+    def set_available(self):
+        """Expected to be called by device/subdevice on_connect."""
+        self.available = True
+        self.flush_state()
+
+    def set_unavailable(self):
+        """Expected to be called by device/subdevice on_disconnect."""
+        if not self._attr_available:
+            self.available = False
+            self.flush_state()
+
+    def update_device_value(self, device_value, /) -> bool | None:
+        raise NotImplementedError(
+            "update_device_value must be implemented by subclasses if used in parsing scheme"
+        )
+
+    @classmethod
+    async def platform_setup_entry(
+        cls,
+        hass,
+        config_entry: "ConfigEntry[ConfigEntryManager]",
+        async_add_entities: "AddConfigEntryEntitiesCallback",
+    ):
+        platform = cls.PLATFORM
+        manager = config_entry.runtime_data
+        manager.log(manager.DEBUG, "platform_setup_entry { platform: %s }", platform)
+        manager.platforms[platform] = async_get_current_platform()
+        async_add_entities(
+            [
+                entity
+                for entity in manager.entities_iterable
+                if (entity.PLATFORM is platform) and not entity.platform
+            ]
+        )
+
+
+class ParserEntity(handler.NamespaceParser, Entity):
+    """Base class for entities directly linked to a device and not to a namespace.
+    This is actually not used that much since most of the entities are linked to namespaces but it can be useful
+    for some 'general' entities like 'DeviceInfo' or so."""
+
+    if TYPE_CHECKING:
+        parent: Final[Device]  # type: ignore[override]
+        device_info: Final[DeviceInfo]  # type: ignore[override]
+        handler_ns: handler.NamespaceHandler  # override
+
+        _parse_togglex: Callable[[JsonDict], Any]
+
+        type Sibling = Entity.Sibling
+        type InitArgs = tuple[Sibling | Any, *tuple[Device, ...]]
+
+        class Args(Entity.Args, handler.NamespaceParser.Args):
+            pass
+
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
+
+        @classmethod
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+
+    @override
     def set_available(self):
         self.available = True
         # we don't flush here since we'll wait for actual device readings
 
+    @override
     def set_unavailable(self):
         self.available = False
+        self.ns_value = self.__class__._INIT_ns_value
         self.flush_state()
 
+
+class ValueParser(handler.ValueParser, ParserEntity):
+    """Specialization for 'simple' parser entities where the HA entity state is a function
+    of a single data point in the json ns payload. This provides a common implementation
+    for setting the value (using handler.ValueParser.async_request_value) and for parsing the
+    value from the payload (using handler.ValueParser.update_device_value).
+    Examples of such entities are sensors/numbers, binary_sensors/switches."""
+
+    if TYPE_CHECKING:
+
+        type InitArgs = ParserEntity.InitArgs
+
+        class Args(ParserEntity.Args, handler.ValueParser.Args):
+            pass
+
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
+
+    @override
     def update_device_value(self, device_value, /) -> bool | None:
-        """This is a stub definition. It will be called by _parse (when namespace dispatching
-        is configured so) or directly as a short path inside other parsers to forward the
-        incoming device value to the underlyinh HA entity state."""
-        raise NotImplementedError("Called 'update_device_value' on wrong entity type")
-
-    def update_native_value(self, native_value, /) -> bool | None:
-        """This is a stub definition. It will usually be called by update_device_value
-        with the result of the conversion from the incoming device value (from Meross protocol)
-        to the proper HA type/value for the entity class."""
-        raise NotImplementedError("Called 'update_native_value' on wrong entity type")
-
-    async def async_request_value(self, device_value, /):
-        """Sends the actual request to the device. This needs to be overloaded in entities
-        actually supporting the method SET on their namespace. Since the syntax for the payload
-        is almost generalized we have some defaults implementations based on mixins ready to be
-        included in actual entity implementation
-        """
-        raise NotImplementedError("Called 'async_request_value' on wrong entity type")
-
-    async def get_last_state_available(self):
-        """
-        Recover the last known good state from recorder in order to
-        restore transient state information when restarting HA.
-        If the device/entity was disconnected before restarting and we need
-        the last good reading from the device, we need to skip the last
-        state since it is 'unavailable'
-        """
-
-        if not get_last_state_changes:
-            raise Exception("Cannot find history.get_last_state_changes api")
-
-        _last_state = await r_get_instance(self.hass).async_add_executor_job(
-            partial(
-                get_last_state_changes,
-                self.hass,
-                2,
-                self.entity_id,
-            )
-        )
-        if states := _last_state.get(self.entity_id):
-            for state in reversed(states):
-                if state.state not in (
-                    MLEntity.hac.STATE_UNKNOWN,
-                    MLEntity.hac.STATE_UNAVAILABLE,
-                ):
-                    return state
-        return None
-
-    def _generate_unique_id(self):
-        return self.manager.generate_unique_id(self)
-
-    # interface: NamespaceParser
-    def _parse(self, payload: "Mapping[str, Any]", /):
-        """Default parsing for entities. Set the proper
-        key_group/key_value in class/instance definition to make it work."""
-        try:
-            # statistically more common case
-            self.update_device_value(payload[self.key_value])
-        except KeyError:
-            self.update_device_value(payload[self.key_group][self.key_value])
-
-
-class MENoChannelMixin(MLEntity if TYPE_CHECKING else object):
-    """
-    Implementation for protocol method 'SET' on entities/namespaces not backed by a channel.
-    Actual examples: Appliance.Control.Toggle, Appliance.GarageDoor.Config, and so on..
-    """
-
-    manager: "BaseDevice"
-
-    # interface: MLEntity
-    async def async_request_value(self, device_value, /):
-        """sends the actual request to the device. this is likely to be overloaded"""
-        ns = self.ns
-        return await self.manager.async_request_ack(
-            ns.name,
-            mc.METHOD_SET,
-            {ns.key: {self.key_value: device_value}},
-        )
-
-
-class MEDictChannelMixin(MLEntity if TYPE_CHECKING else object):
-    """
-    Implementation for protocol method 'SET' on entities/namespaces backed by a channel
-    where the command payload must be enclosed in a plain dict (without enclosing list).
-    Actual examples: Appliance.Control.ToggleX, Appliance.RollerShutter.Config, and so on..
-    """
-
-    manager: "BaseDevice"
-
-    # interface: MLEntity
-    async def async_request_value(self, device_value, /):
-        """sends the actual request to the device. this is likely to be overloaded"""
-        ns = self.ns
-        return await self.manager.async_request_ack(
-            ns.name,
-            mc.METHOD_SET,
-            {
-                ns.key: {
-                    ns.key_channel: self.channel,
-                    self.key_value: device_value,
-                }
-            },
-        )
-
-
-class MEListChannelMixin(MLEntity if TYPE_CHECKING else object):
-    """
-    Implementation for protocol method 'SET' on entities/namespaces backed by a channel
-    where the command payload must be enclosed in a list
-    Actual examples: Appliance.Control.ToggleX and so on..
-    """
-
-    manager: "BaseDevice"
-
-    # interface: MLEntity
-    async def async_request_value(self, device_value, /):
-        """sends the actual request to the device. this is likely to be overloaded"""
-        ns = self.ns
-        return await self.manager.async_request_ack(
-            ns.name,
-            mc.METHOD_SET,
-            {ns.key: [{ns.key_channel: self.channel, self.key_value: device_value}]},
-        )
-
-
-class MEGroupListChannelMixin(MLEntity if TYPE_CHECKING else object):
-    """
-    Implementation for protocol method 'SET' on entities/namespaces backed by a channel
-    list and the actual entity value is embedded in a 'group' key (see Appliance.Config.DeviceCfg).
-    """
-
-    manager: "BaseDevice"
-
-    # interface: MLEntity
-    async def async_request_value(self, device_value, /):
-        """sends the actual request to the device. this is likely to be overloaded"""
-        ns = self.ns
-        return await self.manager.async_request_ack(
-            ns.name,
-            mc.METHOD_SET,
-            {
-                ns.key: [
-                    {
-                        ns.key_channel: self.channel,
-                        self.key_group: {self.key_value: device_value},
-                    }
-                ]
-            },
-        )
-
-
-class MEAutoChannelMixin(MLEntity if TYPE_CHECKING else object):
-    """
-    Implementation for protocol method 'SET' on entities/namespaces backed by a channel
-    where the command payload could be either a list or a dict. This mixin actually
-    tries to learn the correct format at runtime buy 'sensing' it
-    Actual examples: None.
-    """
-
-    if TYPE_CHECKING:
-        manager: "BaseDevice"
-        _set_format: type | None
-
-    _set_format = None
-
-    # interface: MLEntity
-    async def async_request_value(self, device_value, /):
-        """sends the actual request to the device. this is likely to be overloaded"""
-        ns = self.ns
-        if self._set_format is None:
-            # check if the list format works first
-            if response_set := await self.manager.async_request_ack(
-                ns.name,
-                mc.METHOD_SET,
-                {
-                    ns.key: [
-                        {ns.key_channel: self.channel, self.key_value: device_value}
-                    ]
-                },
-            ):
-                if response_get := await self.manager.async_request_ack(
-                    ns.name,
-                    mc.METHOD_GET,
-                    {ns.key: [{ns.key_channel: self.channel}]},
-                ):
-                    if response_get[ns.key][0][self.key_value] == device_value:
-                        self._set_format = list
-                        return response_set
-            # something didnt work: try with dict format
-            if response_set := await self.manager.async_request_ack(
-                ns.name,
-                mc.METHOD_SET,
-                {ns.key: {ns.key_channel: self.channel, self.key_value: device_value}},
-            ):
-                # even if dict was used we assume response to be in list format
-                if response_get := await self.manager.async_request_ack(
-                    ns.name,
-                    mc.METHOD_GET,
-                    {ns.key: [{ns.key_channel: self.channel}]},
-                ):
-                    if response_get[ns.key][0][self.key_value] == device_value:
-                        self._set_format = dict
-            return response_set
-        elif self._set_format is list:
-            return await self.manager.async_request_ack(
-                ns.name,
-                mc.METHOD_SET,
-                {
-                    ns.key: [
-                        {ns.key_channel: self.channel, self.key_value: device_value}
-                    ]
-                },
-            )
-        else:
-            return await self.manager.async_request_ack(
-                ns.name,
-                mc.METHOD_SET,
-                {ns.key: {ns.key_channel: self.channel, self.key_value: device_value}},
-            )
-
-
-class MEAlwaysAvailableMixin(MLEntity if TYPE_CHECKING else object):
-    """
-    Mixin class for entities which should always be available
-    disregarding current device connection state.
-    """
-
-    # HA core entity attributes:
-    _attr_available = True
-
-    def set_available(self):
-        pass
-
-    def set_unavailable(self):
-        pass
-
-
-class MEPartialAvailableMixin(MLEntity if TYPE_CHECKING else object):
-    """
-    Mixin class for entities which should be available when device is connected
-    but their state needs to be preserved since they're representing a state not directly
-    carried by the device ('emulated' configuration params like MLEmulatedNumber or so).
-    """
-
-    def set_available(self):
-        self.available = True
-        self.flush_state()
-
-    def set_unavailable(self):
-        self.available = False
-        self.flush_state()
-
-
-class MLBinaryEntity(MLEntity):
-    """Partially abstract common base class for ToggleEntity and BinarySensor.
-    The initializer is skipped."""
-
-    if TYPE_CHECKING:
-
-        class Args(MLEntity.Args):
-            device_value: NotRequired[Any]
-
-        # HA core entity attributes:
-        is_on: bool | None
-
-    key_value = mc.KEY_ONOFF
-
-    __slots__ = ("is_on",)
-
-    def __init__(
-        self,
-        manager: "BaseDevice",
-        channel: object,
-        entitykey: str | None = None,
-        device_class: str | None = None,
-        /,
-        **kwargs: "Unpack[Args]",
-    ):
-        self.is_on = kwargs.pop("device_value", None)
-        super().__init__(manager, channel, entitykey, device_class, **kwargs)
-
-    def set_unavailable(self):
-        self.is_on = None
-        super().set_unavailable()
-
-    def update_onoff(self, onoff):
-        if self.is_on != onoff:
-            self.is_on = onoff
-            self.flush_state()
-
-    def _parse(self, payload: dict):
-        """Default parsing for toggles and binary sensors. Set the proper
-        key_value in class/instance definition to make it work."""
-        self.update_onoff(payload[self.key_value])
-
-
-class MLNumericEntity(MLEntity):
-    """Common base class for (numeric) sensors and numbers."""
-
-    if TYPE_CHECKING:
-
-        class Args(MLEntity.Args):
-            device_value: NotRequired[int | float]
-            device_scale: NotRequired[int | float]
-            native_unit_of_measurement: NotRequired[str]
-
-        DEVICECLASS_TO_UNIT_MAP: ClassVar[dict[Any | None, str | None]]
-
-        _attr_device_scale: ClassVar[int | float]
-        device_scale: int | float
-        device_value: int | float | None
-        """The 'native' device value carried in protocol messages."""
-
-        # HA core entity attributes:
-        native_value: int | float | None
-        native_unit_of_measurement: str | None
-
-    """To be init in derived classes with their DeviceClass own types."""
-    _attr_device_scale = 1
-
-    __slots__ = (
-        "device_scale",
-        "device_value",
-        "native_value",
-        "native_unit_of_measurement",
-    )
-
-    def __init__(
-        self,
-        manager: "EntityManager",
-        channel: object,
-        entitykey: str | None = None,
-        device_class: str | None = None,
-        /,
-        **kwargs: "Unpack[Args]",
-    ):
-        self.device_scale = kwargs.pop("device_scale", self._attr_device_scale)
-        if "device_value" in kwargs:
-            self.device_value = kwargs.pop("device_value")
-            self.native_value = self.device_value / self.device_scale
-        else:
-            self.device_value = None
-            self.native_value = None
-        self.native_unit_of_measurement = kwargs.pop(
-            "native_unit_of_measurement", None
-        ) or self.DEVICECLASS_TO_UNIT_MAP.get(device_class)
-        super().__init__(manager, channel, entitykey, device_class, **kwargs)
-
-    def set_unavailable(self):
-        self.device_value = None
-        self.native_value = None
-        super().set_unavailable()
-
-    def update_device_value(self, device_value: int | float, /):
-        if self.device_value != device_value:
-            self.device_value = device_value
-            self.native_value = device_value / self.device_scale
+        if self.ns_value != device_value:
+            self.ns_value = device_value
             self.flush_state()
             return True
+
+
+class NumericEntity(Entity):
+    """Common base class for sensors and numbers."""
+
+    if TYPE_CHECKING:
+
+        DEVICECLASS_TO_UNIT_MAP: ClassVar[dict[str | None, str | None]]
+
+        # HA core entity attributes:
+        _attr_native_unit_of_measurement: ClassVar[str | None]
+        native_value: int | float | None
+
+        type InitArgs = Entity.InitArgs
+
+        class Args(Entity.Args):
+            native_value: NotRequired[int | float]
+            native_unit_of_measurement: NotRequired[str | None]
+
+        def __init__(self, *args: InitArgs, **kwargs: Unpack[Args]): ...
+
+    # We rely on our sensor entity to be initialized for sure since it's going to provide the symbols for
+    # device classes which are nevertheless shared between sensor and number entities. Tha mapping should
+    # be done by str value despite the fact numbers and sensors each defines their own enums.
+    HA_ENTITY_ATTRIBUTES = Entity.HA_ENTITY_ATTRIBUTES + ("native_unit_of_measurement",)
+    _AUTO_INIT = ("native_value",)
+    __slots__ = ("native_value",)
 
     def update_native_value(self, native_value: int | float | None, /):
         if self.native_value != native_value:
             self.native_value = native_value
             self.flush_state()
             return True
+
+    @cached_property
+    def native_unit_of_measurement(self):
+        try:
+            return self._attr_native_unit_of_measurement
+        except AttributeError:
+            try:
+                return self.DEVICECLASS_TO_UNIT_MAP[self.device_class]
+            except KeyError:
+                return None
+
+
+class NumericParser(ValueParser, NumericEntity):
+    """Specialized parser for numeric entities like Number and Sensor."""
+
+    if TYPE_CHECKING:
+
+        _INIT_device_scale: ClassVar[int | float]
+        device_scale: int | float
+        """device_scale type need to follow the type supported for ns_value.
+        This is used in Number entity to do the correct roundings when converting between
+        native_value and ns_value."""
+        ns_value: int | float | None
+
+        type InitArgs = ValueParser.InitArgs
+
+        class Args(ValueParser.Args, NumericEntity.Args):
+            device_scale: NotRequired[int | float]
+
+    _INIT_device_scale = 1
+    _AUTO_INIT = ("device_scale",)
+
+    def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
+        try:
+            kwargs["native_value"] = kwargs["ns_value"] / kwargs.get("device_scale", self._INIT_device_scale)  # type: ignore
+        except KeyError:
+            pass
+        super().__init__(*args, **kwargs)
+
+    @override
+    def update_device_value(self, device_value: int | float, /):
+        if self.ns_value != device_value:
+            self.ns_value = device_value
+            self.native_value = device_value / self.device_scale
+            self.flush_state()
+            return True
+
+
+class BinaryEntity(Entity):
+    """Base class for HA ToggleEntity."""
+
+    if TYPE_CHECKING:
+
+        is_on: Any
+
+        type InitArgs = Entity.InitArgs
+
+        class Args(Entity.Args):
+            is_on: NotRequired[Any]
+
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
+
+    _AUTO_INIT = ("is_on",)
+    __slots__ = ("is_on",)
+
+    def update_boolean_value(self, is_on: "Any", /) -> bool | None:
+        if self.is_on != is_on:
+            self.is_on = is_on
+            self.flush_state()
+            return True
+
+
+class BinaryParser(handler.BooleanParser, ValueParser, BinaryEntity):
+    """Base parsing class for HA core ToggleEntity linked to a namespace."""
+
+    if TYPE_CHECKING:
+
+        type InitArgs = ValueParser.InitArgs
+
+        class Args(handler.BooleanParser.Args, ValueParser.Args, BinaryEntity.Args):
+            pass
+
+        @classmethod
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+
+    def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
+        # This is due for entities which are created after entry setup when device is already loaded
+        # and we want to flush the initial state during HA entry adding (which happens in Entity constructor)
+        # without having to flush twice (UNKNOWN -> device state).
+        try:
+            # if ns_value is not provided this code is unnecessary and
+            # the eventual other arguments will be managed by bases.
+            self.ns_value = kwargs.pop("ns_value")
+            self.value_on = kwargs.pop("value_on", self._INIT_value_on)
+            self.value_off = kwargs.pop("value_off", self._INIT_value_off)
+            match self.ns_value:
+                case self.value_on:
+                    kwargs["is_on"] = True
+                case self.value_off:
+                    kwargs["is_on"] = False
+        except KeyError:
+            pass
+        super().__init__(*args, **kwargs)
+
+    def set_unavailable(self):
+        self.is_on = None
+        super().set_unavailable()
+
+    @override
+    def update_device_value(self, device_value, /) -> bool | None:
+        if super().update_device_value(device_value):
+            self.flush_state()
+            return True
+
+
+class ToggleXParser(BinaryEntity, ParserEntity):
+    """Special parser entity which is also linked to Appliance.Control.ToggleX namespace.
+    This is intended to add Appliance.Control.ToggleX namespace handling/parsing
+    to entities which are represented in HA as more sophisticated entities than simple toggles
+    (like Fan-Light).
+    Since this entity is linked to multiple ns it would be better to use schedule_flush_state
+    to avoid multiple flush in case both ns are present in the same payload."""
+
+    if TYPE_CHECKING:
+
+        parent: Final[Device]  # type: ignore[override]
+        handler_togglex: Final[handler.NamespaceHandler | None]
+
+        type InitArgs = ParserEntity.InitArgs
+
+        class Args(BinaryEntity.Args, ParserEntity.Args):
+            pass
+
+    __slots__ = ("handler_togglex",)
+
+    def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
+        super().__init__(*args, **kwargs)
+        self.handler_togglex = self.parent.register_togglex_channel(self)
+
+    def _parse_togglex(self, payload: dict, /):
+        is_on = bool(payload[mc.KEY_ONOFF])
+        if self.is_on != is_on:
+            self.is_on = is_on
+            self.flush_state()

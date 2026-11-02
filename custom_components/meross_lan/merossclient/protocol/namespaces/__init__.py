@@ -6,18 +6,83 @@ This file contains the knowledge about how namespaces work (their syntax and beh
 from copy import deepcopy
 import enum
 from functools import cached_property
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from .. import const as mc
 
 if TYPE_CHECKING:
-    from typing import Any, Final, Mapping, NotRequired, TypedDict, Unpack
+    from typing import (
+        Any,
+        Callable,
+        Final,
+        Literal,
+        Mapping,
+        NotRequired,
+        Protocol,
+        TypedDict,
+        Unpack,
+    )
 
-    from ..types import MerossRequestType
+    from .. import types as mt
+    from ..types import (
+        JsonDict,
+        JsonList,
+        JsonMapping,
+        MerossPayloadType,
+        MerossRequestType,
+    )
 
+    # Use Mapping so it is not mutable but still subscriptable for type checking purposes.
+    # The actual type is a custom dict to allow dynamic Namespace creation.
     type NamespacesMapType = Mapping[str, "Namespace"]
+    EMPTY_DICT: Final[JsonDict]
+    EMPTY_LIST: Final[list[JsonDict]]
+
     NAMESPACES: Final[NamespacesMapType]
-    HUB_NAMESPACES: Final[NamespacesMapType]
+
+
+def _slug_split(split: str) -> str:
+    """Helper to camelCase a namespace split. This is mostly used to infer
+    the 'key' of a namespace starting from its (last) split."""
+    if split[-1] == "X":
+        return f"{split[0].lower()}{split[1:-1]}x"
+    else:
+        return f"{split[0].lower()}{split[1:]}"
+
+
+def _heuristic_args(name: str, /) -> "Namespace.Args":
+    """Apply some euristics based on the namespace name to deduce
+    missing arguments in the namespace definition.
+    Beware kwargs is modified in place and returned."""
+
+    kwargs: "Namespace.Args" = {
+        "grammar": Grammar.UNKNOWN,
+        "payload_set": PayloadType.UNKNOWN,
+        "payload_del": PayloadType.UNKNOWN,
+        "payload_psh": PayloadType.UNKNOWN,
+    }
+
+    match name.split("."):
+        case (_, "Hub", *_):
+            # This is not always true: some 'hub' namespaces don't get indexed by 'id' (nor by 'subId')
+            kwargs["index_type"] = IndexType.id
+        case (_, "RollerShutter", *_):
+            kwargs["index_type"] = IndexType.channel
+            kwargs["payload_get"] = PayloadType.LIST_IDX
+        case (_, "GarageDoor", *_):
+            kwargs["index_type"] = IndexType.channel
+        case (_, "Control", "Screen", *_):
+            kwargs["index_type"] = IndexType.channel
+            kwargs["payload_get"] = PayloadType.LIST_IDX_STRICT
+        case (_, "Control", "Sensor", *_):
+            kwargs["index_type"] = IndexType.subId
+            kwargs["payload_get"] = PayloadType.LIST_IDX_STRICT
+        case (_, "Control", "Thermostat", *_):
+            kwargs["index_type"] = IndexType.channel
+            kwargs["payload_get"] = PayloadType.LIST_IDX_STRICT
+        case _:
+            kwargs["payload_get"] = PayloadType.UNKNOWN
+    return kwargs
 
 
 class _NamespacesMap(dict):
@@ -25,17 +90,26 @@ class _NamespacesMap(dict):
     Default general map of Namespace(s).
     This map is populated with a set of static (known) definitions but could also be
     updated at runtime when a new undefined namespace enter the device message pipe.
+    BEWARE:
+    Since the ns definitions are split in multiple modules, we need to be sure those are
+    loaded so that the corresponding Namespace instances are created and registered in this map.
     """
 
-    def __getitem__(self, namespace: str) -> "Namespace":
+    # TODO: implement __missing__ semantics
+    def __getitem__(self, name: str) -> "Namespace":
         try:
-            return dict.__getitem__(self, namespace)
+            return dict.__getitem__(self, name)
         except KeyError:
-            return ns(namespace)
+            return Namespace(
+                name,
+                _slug_split(name.split(".")[-1]),
+                -1,
+                _heuristic_args(name),
+            )
 
-    def get(self, namespace: str) -> "Namespace | None":
+    def get(self, name: str) -> "Namespace | None":
         try:
-            return dict.__getitem__(self, namespace)
+            return dict.__getitem__(self, name)
         except KeyError:
             return None
 
@@ -43,34 +117,12 @@ class _NamespacesMap(dict):
 NAMESPACES = _NamespacesMap()
 
 
-class _HubNamespacesMap(dict):
-    """
-    This map is specific for Hub devices so that we can 'override' some Namespace(s) when
-    their default (standard device) based behavior could differ when managed in a Hub.
-    Examples are Appliance.Control.Sensor.LatestX and HistoryX.
-    If a namespace is not found here, it will be looked-up in the default NAMESPACES map
-    and eventually created there. Beware this is not the same meaning of Namespace property 'is_hub'.
-    """
-
-    def __getitem__(self, namespace: str) -> "Namespace":
-        try:
-            return dict.__getitem__(self, namespace)
-        except KeyError:
-            return NAMESPACES[namespace]
-
-    def get(self, namespace: str) -> "Namespace | None":
-        try:
-            return dict.__getitem__(self, namespace)
-        except KeyError:
-            return NAMESPACES.get(namespace)
-
-
-HUB_NAMESPACES = _HubNamespacesMap()
-
-
 class _immutable:
     def __hash__(self):
         return id(self)
+
+    def __eq__(self, other):
+        return self is other
 
     def _raise(self, *args, **kws):
         raise TypeError(f"object of type <{type(self)}> is immutable")
@@ -105,313 +157,792 @@ class _immutablelist(_immutable, list[_immutabledict]):
         return [value.clone() for value in self]
 
 
-class PayloadType(enum.Enum):
-    """Depicts the payload structure in GET queries (defaults to DICT in case)."""
-
-    NONE = _immutabledict({})
-    """No GET query supported."""
-    DICT = _immutabledict({})
-    """Command GET with an empty dict (should) return all the (channels) state.
-    This is used as default unless some heuristic (in __init__) states something different."""
-    DICT_C = _immutabledict({mc.KEY_CHANNEL: 0})
-    """Command GET with channel index in dict returns the state requested."""
-    DICT_C65535 = _immutabledict({mc.KEY_CHANNEL: 65535})
-    """Command GET with channel 65535 in dict returns all the channels (refoss devices ?)."""
-    LIST = _immutablelist([])
-    """Command GET with an empty list returns all the (channels) state."""
-    LIST_C = _immutablelist([DICT_C])
-    """Command GET with channel index dicts in a list returns the states requested."""
-    LIST_SX = _immutablelist([_immutabledict({mc.KEY_CHANNEL: 0, mc.KEY_DATA: []})])
-    """Command GET for *.LatestX (and maybe *.HistoryX) ns."""
+EMPTY_DICT = _immutabledict()
+EMPTY_LIST = _immutablelist()  # type: ignore
 
 
-class Grammar(enum.StrEnum):
-    UNKNOWN = enum.auto()
-    """Used to mark namespaces which still don't have a proper normalization (new/unknown ones)."""
-    EXPERIMENTAL = enum.auto()
-    """Used to mark namespaces for which our normalization is not 100% sure.
-    During tracing we'll check every possible verb/payload format despite our knowledge."""
-    STABLE = enum.auto()
-    """Used to mark namespaces for which our normalization is about 100% correct and complete."""
+class IndexValue(_immutabledict):
+    """Generic base class representing a polimorphic index value for namespace payloads.
+    This is an incomplete class which is meant to be subclassed for specific indexing semantics (e.g. channel, subId/channel, etc..).
+    Nevertheless, this implementation already provides the basic logic for matching a payload against this index value and
+    for equality/hash based on the content of the index value.
+    The actual index value is represented by the 'value' attribute and the keys/values
+    of the dict are used to match the corresponding item in the payload."""
+
+    class Type:
+        """
+        Descriptor for the indexing of items in namespace payloads. This is used to build the logic for parsing and building namespace payloads.
+        The IndexType defines the keys used to identify items in the payload and the logic to build and parse these keys.
+        It works in conjunction with a 'dedicated' familiy of IndexValue classes which represent the actual index values for a given namespace
+        item and provide the matching logic to identify the corresponding item in the payload.
+
+        This class instance embeds a dict which works as a cache of currently defined IndexValue instances for this IndexType.
+        The cache is used to speed-up IndexValue creation/retrieval since these are often duplicated in different code paths.
+        Also, Having a single instance per IndexValue allows to use simple 'is' checks in place of equality.
+        """
+
+        if TYPE_CHECKING:
+            value_class: Final[type["IndexValue"]]
+            key: Final[tuple[str, ...]]
+
+        __slots__ = (
+            "value_class",
+            "key",
+            "_value_",
+            "_name_",
+            "__dict__",
+        )
+
+        def __new__(cls, value_class: type["IndexValue"], *key: str):
+            self = object.__new__(value_class.Type)
+            self._value_ = key
+            return self
+
+        def __init__(self, value_class: type["IndexValue"], *key: str):
+            self.value_class = value_class
+            self.key = key
+
+        def __bool__(self):
+            return bool(self.key)
+
+        def get(self, *value) -> "IndexValue": ...
+
+        """IndexValue Factory method:
+        builds or retrieve an IndexValue instance for this IndexType with the given key value(s).
+        The value tuple is used to lookup a matching definition in a static cache for this IndexType. If no match is found,
+        a new IndexValue instance is created with the given value(s) and stored in the cache for future retrieval.
+        The values tuple must be a fully qualified set of values that matches the IndexType definition.
+        The items in the tuple will be used to populate a prototype dict for the IndexValue instance.
+        The tuple cardinality must match the number of keys that define the IndexType.
+        For IndexType.subId the tuple must be (subId, channel, channels) where channel and channels are mutually exclusive
+        and only one of them can be not None.
+        """
+
+        def index(self, payload: "JsonMapping") -> "IndexValue": ...
+
+        """IndexValue Factory method:
+        extracts the key values of this index type from the payload dict and
+        returns the corresponding IndexValue instance from the cache, creating it if necessary.
+        """
+
+        def __str__(self) -> str:
+            return self._name_
+
+        def __repr__(self):
+            return f"IndexType(value_class={self.value_class.__name__}, key={self.key})"
+
+    if TYPE_CHECKING:
+        type: Final["IndexType"]
+        value: Final[str | int | tuple | None]  # type: ignore[polymorphic]
+        slug: Final[str | int | None]  # type: ignore[polymorphic]
+
+    __slots__ = ("type", "value", "slug", "_hash")
+
+    def __init__(self, index_type: Type, _dict: "JsonDict"):
+        _immutabledict.__init__(self, _dict)
+        self.type = index_type  # type: ignore
+        self._hash = hash(self.value)
+
+    def matches(self, payload: "JsonMapping"):
+        """Checks if the payload matches this IndexValue by comparing
+        the index keys values in the payload with the ones of this IndexValue."""
+        # Just a conceptual definition..sort of
+        # This should actually not be called anyway since
+        # our specializations will provide optimized versions of this check.
+        return all(payload.get(k) == v for k, v in self.items())
+
+    # IndexValue is immutable and hashable based on its content (type and value)
+    # so that it can be used as dict key in the parsers attribute of NamespaceHandler.
+    # This check should be as fast as possible since it'll be accessed
+    # when looking up parsers
+    def __eq__(self, other):
+        return self.value == other or (
+            # assuming no subclassing and the fact that our indexes have different
+            # value types ('id' vs 'channel' vs 'subId/channel')
+            type(other) is type(self)
+            and self.value == other.value
+        )
+
+    def __hash__(self):
+        return self._hash
+
+    def __repr__(self):
+        return f"IndexValue(type={self.type}, value={self.value}, slug='{self.slug}')"
 
 
-class Namespace:
+class NoneIndexValue(IndexValue):
+
+    class Type(IndexValue.Type):
+
+        __slots__ = ("get", "index", "_cache")
+
+        def __init__(self, value_class: type["NoneIndexValue"]):
+            super().__init__(value_class)
+            self._cache = none_index_value = value_class(self)
+            self.get = lambda *values: none_index_value
+            self.index = lambda payload: none_index_value
+
+    if TYPE_CHECKING:
+        value: Final[None]  # type: ignore[override]
+        slug: Final[None]  # type: ignore[override]
+
+    def __init__(self, index_type: Type):
+        self.value = None
+        self.slug = None
+        self.matches = lambda payload: True
+        IndexValue.__init__(self, index_type, EMPTY_DICT)
+
+
+class SimpleIndexValue(IndexValue):
+
+    class Type(IndexValue.Type):
+
+        if TYPE_CHECKING:
+            value_class: Final[type["SimpleIndexValue"]]  # type: ignore
+
+        class Cache(dict["Any", "SimpleIndexValue"]):
+            __slots__ = ("index_type",)
+
+            def __init__(self, index_type: "SimpleIndexValue.Type"):
+                self.index_type = index_type
+
+            def __missing__(self, value: Any) -> "SimpleIndexValue":
+                return self.index_type.value_class(self.index_type, value)
+
+        __slots__ = ("get", "index", "_cache")
+
+        def __init__(self, value_class: type["SimpleIndexValue"], key: str):
+            super().__init__(value_class, key)
+
+            self._cache = cache = self.Cache(self)
+            self.get = lambda value, *args: cache[value]
+            self.index = lambda payload: cache[payload.get(key)]
+
+    if TYPE_CHECKING:
+        value: Final[int | str | None]  # type: ignore[override]
+        slug: Final[int | str | None]  # type: ignore[override]
+
+    def __init__(self, index_type: Type, value: int | str | None):
+        self.value = value
+        self.slug = value
+        key = index_type.key[0]
+        self.matches = lambda payload: payload.get(key) == value
+        IndexValue.__init__(
+            self,
+            index_type,
+            {key: value} if value is not None else EMPTY_DICT,
+        )
+        index_type._cache[value] = self
+
+
+class SubIdIndexValue(IndexValue):
+    """This kind of payload indexing is very articulated since it may have the following patterns:
+    - no 'subId' but only 'channel' (typically for hub namespaces related to the hub itself and not to
+    subdevices, e.g. Appliance.Control.Alarm or for 'hybrid' namespaces which appear on non hub devices
+    and thus only support 'channel' indexing but then appear on the hub with 'subId/channel'
+    indexing like Appliance.Config.DeviceCfg).
+    For this case the index value will be the channel alone.
+    - for mst200 subdevices Appliance.Control.Water introduces what seems a 'custom' indexing
+    where the channel is not carried in a simple 'channel' key but in a list of channels under 'channels' key.
+    For this case we assume that the list will always contain only one channel. Nevertheless, our
+    IndexValue must refer to a single parser channel so we'll always reduce the representation
+    to a (subId, channel) tuple.
     """
-    Namespace descriptor helper class. This is used to build a definition
-    of namespace behaviors and syntax.
-    """
+
+    class Type(IndexValue.Type):
+
+        class Cache(dict[tuple, "IndexValue"]):
+
+            __slots__ = ("index_type",)
+
+            def __init__(self, index_type: "IndexValue.Type"):
+                self.index_type = index_type
+
+            def __missing__(self, value: tuple) -> "IndexValue":
+                self[value] = index_value = self.index_type.value_class(
+                    self.index_type, *value
+                )
+                return index_value
+
+        __slots__ = ("get", "index", "_cache")
+
+        def __init__(self, value_class: type["IndexValue"], *key: str):
+            super().__init__(value_class, *key)
+
+            self._cache = cache = self.Cache(self)
+            self.get = lambda *value: cache[value]
+
+            def _index(payload: "JsonMapping"):
+                value = tuple(payload.get(k) for k in key)
+                if value[2]:
+                    value = (value[0], value[1], value[2][0])
+                return cache[value]
+
+            self.index = _index
+
+    if TYPE_CHECKING:
+        value: Final[int | tuple[str, int]]  # type: ignore[override]
+        slug: Final[int | str]  # type: ignore[override]
+
+    __slots__ = (mc.KEY_SUBID, mc.KEY_CHANNEL)
+
+    def __init__(
+        self,
+        index_type: Type,
+        subid: str | None,
+        channel: int | None,
+        channels: int | None,
+    ):
+        if subid:
+            self.subId = subid
+            # "channel" and "channels" should be mutually exclusive.
+            if channels is None:
+                # In theory channel should be always valued (when no 'channels') but...
+                if channel is None:
+                    # Appliance.Control.Water payloads (in mst100) appear both with channel == 0
+                    # and without the channel key at all. In this case we assume that the
+                    # channel is 0 since these payloads are nonetheless referring to the single
+                    # channel of the mst100. Our 'match' member should take care of this duality.
+                    channel = 0
+                self.channel = channel
+                self.value = (subid, channel)
+                self.slug = f"{subid}_{channel}"
+                IndexValue.__init__(
+                    self, index_type, {mc.KEY_SUBID: subid, mc.KEY_CHANNEL: channel}
+                )
+            else:
+                assert channel is None
+                self.channel = channels
+                self.value = (subid, channels)
+                self.slug = f"{subid}_{channels}"
+                IndexValue.__init__(
+                    self,
+                    index_type,
+                    {mc.KEY_SUBID: subid, mc.KEY_CHANNELS: [channels]},
+                )
+        else:
+            assert channels is None and channel is not None
+            self.channel = channel
+            self.value = channel
+            self.slug = channel
+            self.matches = lambda payload: (mc.KEY_SUBID not in payload) and (
+                payload.get(mc.KEY_CHANNEL) == self.channel
+            )
+            IndexValue.__init__(self, index_type, {mc.KEY_CHANNEL: channel})
+
+    @override
+    def matches(self, payload: "JsonMapping"):
+        try:
+            return (payload[mc.KEY_SUBID] == self.subId) and (
+                payload[mc.KEY_CHANNEL] == self.channel
+            )
+        except KeyError as ke:
+            if ke.args[0] == mc.KEY_SUBID:
+                return False  # missing subId
+            # This might be the case of a payload with 'channels' instead of 'channel' key (mst200 subdevice)
+            # or the case of mst100 subdevice payloads with no channel key at all (see
+            # U0123456789012345678901234567892B-Kpippo-mst100-mst200.json.txt trace)
+            try:
+                return payload[mc.KEY_CHANNELS][0] == self.channel
+            except KeyError:
+                # neither channel nor channels key are present.
+                return self.channel == 0
+            except Exception:
+                # malformed 'channels' key: not a list or empty list
+                return False
+
+
+class IndexType(IndexValue.Type, enum.ReprEnum):
+    none = NoneIndexValue
+    channel = SimpleIndexValue, mc.KEY_CHANNEL
+    id = SimpleIndexValue, mc.KEY_ID
+    subId = SubIdIndexValue, mc.KEY_SUBID, mc.KEY_CHANNEL, mc.KEY_CHANNELS
+    Id = SimpleIndexValue, mc.KEY_ID_
+
+
+class _PayloadType:
 
     if TYPE_CHECKING:
 
-        class Args(TypedDict):
-            """Args are often mututally exclusive and allow for a cascading of heuristics.
-            For example, setting is_hub_id=True will automatically apply 'map' 'payload'
-            'is_hub_namespace' 'key_channel'. The code in __init__ might seem a bit complex
-            but tries to be as tidy (and efficient) as possible in order to be 'guided' by
-            the parameters applied.
-            We'll use a set of simple dicts working as small chunks and allowing to build
-            concise yet complex definitions (See GET, NO_GET, etc definitions)."""
+        class BuildType(Protocol):
+            def __call__(self, ns: "Namespace", /, *idxs) -> "MerossPayloadType": ...
 
-            map: NotRequired[NamespacesMapType]
-            grammar: NotRequired[Grammar]
-            payload: NotRequired[PayloadType | None]
-            is_hub_id: NotRequired[bool]
-            is_hub_subid: NotRequired[bool]
-            is_sensor: NotRequired[bool]
-            is_thermostat: NotRequired[bool]
-
-            has_get: NotRequired[bool | None]
-            has_set: NotRequired[bool | None]
-            has_push: NotRequired[bool | None]
-            has_push_query: NotRequired[bool | None]
-
-        DEFAULT_PUSH_PAYLOAD: Final
-        name: Final[str]
-        """The namespace name"""
-        key: Final[str]
-        """The root key of the payload"""
-        key_channel: Final[str]
-        """The key used to index items in list payloads"""
-        request_payload_type: Final[PayloadType]
-        grammar: Final[Grammar]
-
-        # These indicate support for the corresponding verb. If None we have no clue
-        has_get: Final[bool | None]  # type: ignore
-        has_set: Final[bool | None]  # type: ignore
-        has_push: Final[bool | None]  # type: ignore
-        has_push_query: Final[bool | None]  # type: ignore
-
-        is_hub_namespace: Final[bool]  # type: ignore
-        """This is an indication the namespace is for subdevices (key_channel could be "id" or "subId")"""
-        is_hub_id: Final[bool]  # type: ignore
-        is_hub_subid: Final[bool]  # type: ignore
-        is_sensor: Final[bool]  # type: ignore
-        """This flag could also appear in Hub(s): for that case it is likely mapped to is_hub_subid."""
-        is_thermostat: Final[bool]  # type: ignore
-
-    DEFAULT_PUSH_PAYLOAD = PayloadType.DICT.value
+        build: Final[BuildType]
+        indexed: Final[bool]
 
     __slots__ = (
-        "name",
-        "key",
-        "key_channel",
-        "has_get",
-        "has_set",
-        "has_push",
-        "has_push_query",
-        "payload_get_type",
-        "is_hub_namespace",
-        "is_hub_id",
-        "is_hub_subid",
-        "is_sensor",
-        "is_thermostat",
-        "grammar",
+        "build",
+        "indexed",
         "__dict__",
     )
 
     def __init__(
         self,
+        build: "BuildType",
+        indexed: bool,
+        /,
+    ):
+        self.build = build
+        self.indexed = indexed
+
+    def build_get(self, ns: "Namespace", /, *idxs: IndexValue) -> "MerossRequestType":
+        return ns, mc.METHOD_GET, self.build(ns, *idxs)
+
+    def __bool__(self):
+        return self.build is not PayloadType._build_unsupported
+
+
+class PayloadType(_PayloadType, enum.Enum):
+    """Depicts the payload structure in namespace queries."""
+
+    @staticmethod
+    def _build_unsupported(ns: "Namespace", /, *idxs) -> "MerossPayloadType":
+        raise NotImplementedError("Unsupported payload type")
+
+    UNSUPPORTED = (_build_unsupported, False)
+    """Method is not supported."""
+    UNKNOWN = lambda *args: EMPTY_DICT, False
+    """Method is supported but payload type is unknown."""
+    EMPTY = lambda *args: EMPTY_DICT, False
+    """Payload for assigned method is an empty dict."""
+    DICT = lambda ns, *idxs: {ns.key: EMPTY_DICT}, False
+    """Command GET with {ns_key: {}} returns the state requested."""
+    DICT_IDX = (
+        lambda ns, *idxs: {ns.key: (idxs[0] if idxs else EMPTY_DICT)},
+        True,
+    )
+    """Command GET with {ns_key: {}} returns all the (channels) state (index must be defined)."""
+    DICT_IDX_65535 = (
+        lambda ns, *idxs: {ns.key: idxs[0] if idxs else {mc.KEY_CHANNEL: 65535}},
+        True,
+    )
+    """Command GET with channel 65535 in dict returns all the channels (only refoss devices ?). Else DICT_C_STRICT."""
+    DICT_IDX_STRICT = (
+        lambda ns, *idxs: {ns.key: idxs[0] if idxs else {mc.KEY_CHANNEL: 0}},
+        True,
+    )
+    """Command GET with index in dict returns the channel state requested."""
+    LIST_IDX = (
+        lambda ns, *idxs: {ns.key: [*idxs]},
+        True,
+    )
+    """Command GET with an empty list returns all the (channels) state (index must be defined)."""
+    LIST_IDX_STRICT = (
+        lambda ns, *idxs: {ns.key: ([*idxs] if idxs else [{mc.KEY_CHANNEL: 0}])},
+        True,
+    )
+    """Command GET with indexed dicts in a list returns the states requested."""
+    LIST_IDX_DATA_STRICT = (
+        # FIXME
+        lambda ns, *idxs: {
+            ns.key: (
+                [{mc.KEY_CHANNEL: idx, mc.KEY_DATA: []} for idx in idxs]
+                if idxs
+                else [_immutabledict({mc.KEY_CHANNEL: 0, mc.KEY_DATA: []})]
+            )
+        },
+        True,
+    )
+    """Command GET for *.LatestX (and maybe *.HistoryX) ns."""
+    # Payload types for PUSH verb
+    PUSH = lambda *args: EMPTY_DICT, False
+    """Namespace supports async PUSH of the state."""
+    PUSH_QUERY = lambda *args: EMPTY_DICT, False
+    """Namespace supports PUSH by client triggering (i.e. client query with method PUSH and EMPTY payload)."""
+
+
+# Semantics helpers symbols:
+PUSH_PAYLOADS = (
+    PayloadType.UNSUPPORTED,
+    PayloadType.UNKNOWN,
+    PayloadType.PUSH,
+    PayloadType.PUSH_QUERY,
+)
+
+
+class Content(enum.StrEnum):
+    """Depicts the content type of a namespace payload. These categories are rather 'fuzzy' in definition since
+    configuration and control distinction might be subjective: In this normalization, configuration is something
+    used to set (control) the long term behavior of the device while control is typically used to 'toggle' a
+    specific action (for example turing on an effector or changing the working mode of a climate).
+    The idea behind these is to setup a common set of rules useful for configuring  namespace polling (for example
+    the strategy or the frequency used to poll the ns).
+    """
+
+    UNKNOWN = "UNKNOWN"
+    """Used to mark namespaces which still don't have a proper normalization (new/unknown ones)."""
+    CONSTANT = "CONSTANT"
+    """Content is constant and doesn't change over time (e.g. device info, capabilities, firmware version, etc.)."""
+    INFO = "INFO"
+    """Reports some (maybe varying) info about the device. Like ip address, or other diagnostic informations."""
+    CONFIG = "CONFIG"
+    """Contains device (rather static) configuration (i.e. setpoints, working parameters and so)."""
+    CONTROL = "CONTROL"
+    """Used to control device. This is usually associated with actual state/control like toggles, lights, device operating mode."""
+    STATE = "STATE"
+    """Current state (not controllable through this ns) of the device. This is typically influenced by 'CONTROL' commands and often
+    mirroring (or mirrored by) CONTROL namespaces."""
+    SENSOR_FAST = "SENSOR_FAST"
+    """The ns is readonly and contains actual state which could change at any time (state of a switch sensor for example)."""
+    SENSOR_SLOW = "SENSOR_SLOW"
+    """The ns is readonly and contains actual state which should slowly change over time (temp/humidity/energy/history data)."""
+    HISTORY = "HISTORY"
+    """Reports historical/accumulated data like energy or sensor historical readings."""
+
+
+class Grammar(enum.StrEnum):
+    UNKNOWN = "UNKNOWN"
+    """Used to mark namespaces which still don't have a proper normalization (new/unknown ones)."""
+    EXPERIMENTAL = "EXPERIMENTAL"
+    """Used to mark namespaces for which our normalization is not 100% sure.
+    During tracing we'll check every possible verb/payload format despite our knowledge."""
+    STABLE = "STABLE"
+    """Used to mark namespaces for which our normalization is about 100% correct and complete."""
+
+
+class Namespace(str):
+    """
+    Namespace descriptor helper class. This is used to build a definition
+    of namespace behaviors and syntax.
+    Inheriting from str allows us to efficiently compare against plain namespace keys strings (also in dict access)
+    """
+
+    if TYPE_CHECKING:
+
+        key: Final[str]
+        """The root key of the payload"""
+        payload_item_size: Final[int]
+        """The average size of an item in the payload list/dict. This might be used to estimate the size of the response."""
+        # These indicate support and format for the corresponding verb. None means not supported.
+        payload_get: Final[PayloadType]
+        """Namespace supports GET verb with this payload type ('Falsy' if UNSUPPORTED)."""
+        payload_set: Final[PayloadType]
+        """Namespace supports SET verb with this payload type ('Falsy' if UNSUPPORTED)."""
+        payload_del: Final[PayloadType]
+        """Namespace supports DELETE verb with this payload type ('Falsy' if UNSUPPORTED)."""
+        payload_psh: Final[PayloadType]
+        """Namespace supports PUSH verb with this payload type ('Falsy' if UNSUPPORTED)."""
+        index_type: Final[IndexType]
+        """The key used to index items in list payloads. If None/empty no indexing is used.
+        Special care need to be used when a namespace is declared to be indexed by 'subId'
+        since these namespaces might also carry only 'channel' payloads (for non hub devices or
+        for features related to the hub itself and not to a subdevice).
+        Typical example is Appliance.Control.Alarm where we might configure the hub alarm (only 'channel' == 0)
+        and/or a subdevice alarm feature (both 'subId/channel' are present even though 'channel' is almost always == 0)."""
+        key_digest: Final[str | None]
+        """Indicates the root key in Appliance.System.All payload 'digest' if any."""
+        content: Final[Content]
+        """The content type for this namespace."""
+        grammar: Final[Grammar]
+        """The grammar stability level for this namespace."""
+
+        class Args(TypedDict):
+            """Args are often mututally exclusive and allow for a cascading of heuristics.
+            We'll use a set of simple dicts working as small chunks and allowing to build
+            concise yet complex definitions (See GET, NO_GET, etc definitions)."""
+
+            payload_get: NotRequired[PayloadType | None]
+            payload_set: NotRequired[PayloadType | None]
+            payload_del: NotRequired[PayloadType | None]
+            payload_psh: NotRequired[PayloadType | None]
+            index_type: NotRequired[IndexType]
+            key_digest: NotRequired[str | None]  # True allowed (triggers euristics)
+            content: NotRequired[Content]
+            grammar: NotRequired[Grammar]
+
+    __slots__ = (
+        "key",
+        "payload_item_size",
+        "payload_get",
+        "payload_set",
+        "payload_del",
+        "payload_psh",
+        "index_type",
+        "key_digest",
+        "content",
+        "grammar",
+        "__dict__",
+    )
+
+    @staticmethod
+    def infer_key(name: str, payload: "MerossPayloadType") -> str:
+        """Infer the namespace key from the namespace name and payload."""
+        if len(payload) > 1:
+            # Infer the namespace 'key' by looking up some euristic in the payload
+            # We typically have the key deducted from the last split of the namespace
+            # but it could also come from an intermediate split
+            # (see Appliance.Config.DeviceCfg).
+            for split in reversed(name.split(".")):
+                ns_key = _slug_split(split)
+                if ns_key in payload:
+                    return ns_key
+
+            # Some namespaces use a totally 'random' concept (see Appliance.Control.Beep -> alarm)
+            # so we try to cover some 'likely' candidates here.
+            for ns_key in (mc.KEY_ALARM, mc.KEY_CONFIG, mc.KEY_CONTROL):
+                if ns_key in payload:
+                    return ns_key
+
+        # no better way than hoping the first key is the right one
+        for ns_key in payload:
+            return ns_key
+        else:
+            return mc.KEY_
+
+    @staticmethod
+    def from_message(name: str, method: str, payload: "MerossPayloadType", /):
+        if method == mc.METHOD_ERROR:
+            return Namespace(
+                name,
+                _slug_split(name.split(".")[-1]),
+                -1,
+                _heuristic_args(name),
+            )
+        return Namespace(
+            name,
+            Namespace.infer_key(name, payload),
+            -1,
+            _heuristic_args(name),
+        )
+
+    def __new__(
+        cls,
         name: str,
-        key: str | None = None,
-        kwargs: "Args" = {},
-    ) -> None:
-        self.name = name
-        # When namespace 'key' is not provided we'll infer it
-        # by camelCasing the last split of the namespace
-        # with special care for also the last char which looks
-        # lowercase when it's a X (i.e. ToggleX -> togglex).
-        # Recently (2025) it appears the namespace 'key' is likely to be the 2nd
-        # split of the namespace though (i.e. Appliance.Config.DeviceCfg -> config)
-        self.key = key or self.slug_end
+        key: str,
+        payload_item_size: int,
+        *args: "Args",
+    ):
+        return str.__new__(cls, name)
 
-        map = kwargs.get("map", NAMESPACES)
-        payload = kwargs.get("payload")
-        self.grammar = kwargs.get("grammar", Grammar.UNKNOWN)
-        for _attr in ("has_get", "has_set", "has_push", "has_push_query"):
-            setattr(self, _attr, kwargs.get(_attr, None))
-        for _attr in ("is_hub_id", "is_hub_subid", "is_thermostat", "is_sensor"):
-            setattr(self, _attr, kwargs.get(_attr, False))
+    def __init__(
+        self, name: str, key: str, payload_item_size: int, *extra: "Namespace.Args"
+    ):
+        # split the name parts since we're likely almost always going to use it
+        name_split = name.split(".")
+        # We accept multiple args dicts so that we can build complex definitions
+        # by composing small 'chunks' like ARGS_GET, ARGS_NO_GET, etc.
+        # This also allows us to centralize here the defaults for parameters
+        kwargs: "Namespace.Args" = {
+            "index_type": IndexType.none,
+            "key_digest": None,
+            "content": Content.UNKNOWN,
+            "grammar": Grammar.STABLE,
+        }
+        for _extra in extra:
+            kwargs.update(_extra)
 
-        if self.is_hub_id:
-            self.key_channel = mc.KEY_ID
-            payload = payload or PayloadType.LIST
-        elif self.is_hub_subid:
-            self.key_channel = mc.KEY_SUBID
-            payload = payload or PayloadType.LIST_C
-        elif self.is_thermostat:
-            self.key_channel = mc.KEY_CHANNEL
-            payload = PayloadType.LIST_C
-        elif self.is_sensor:
-            # In a Hub this conditional should not be reached since
-            # sensor namespaces in hubs are being mapped to 'is_hub_subid'
-            assert not self.is_hub_subid
-            self.key_channel = mc.KEY_CHANNEL
-            payload = payload or PayloadType.LIST_C
-        elif not payload:
-            # Don't pass any payload arg if we want to automatically
-            # apply heuristics to incoming new namespaces.
-            # Forwarding a payload arg to the constructor is just an 'hint'
-            # used by our factory functions ('_ns_xxx') to skip unneded name parsing
-            match name.split("."):
-                case (_, "Hub", *_):
-                    # This is not always true: some 'hub' namespaces don't get indexed by 'id' (nor by 'subId')
-                    # Examples are ExtraInfo or SubdeviceList. In our definitions we'll solve the problem
-                    # by explicitly passing the map=HUB_NAMESPACES so that they're mapped into the right storage
-                    # but the rules for parsing are very custom and likely need to be managed on a case by case
-                    # at the HubMixin level.
-                    self.is_hub_id = True
-                    self.key_channel = mc.KEY_ID
-                    payload = PayloadType.LIST
-                case (_, "RollerShutter", *_):
-                    self.key_channel = mc.KEY_CHANNEL
-                    payload = PayloadType.LIST
-                case (_, "Control", "Screen", *_):
-                    self.key_channel = mc.KEY_CHANNEL
-                    payload = PayloadType.LIST_C
-                case (_, "Control", "Sensor", *_):
-                    self.is_sensor = True
-                    if map is HUB_NAMESPACES:
-                        self.is_hub_subid = True
-                        self.key_channel = mc.KEY_SUBID
-                    else:
-                        self.key_channel = mc.KEY_CHANNEL
-                    payload = PayloadType.LIST_C
-                case (_, "Control", "Thermostat", *_):
-                    self.is_thermostat = True
-                    self.key_channel = mc.KEY_CHANNEL
-                    payload = PayloadType.LIST_C
-                case _:
-                    self.key_channel = mc.KEY_CHANNEL
-                    payload = PayloadType.DICT
+        self.key = key  # type: ignore
+        self.payload_item_size = payload_item_size
+        self.payload_get = kwargs.get("payload_get") or PayloadType.UNSUPPORTED
+        self.payload_set = kwargs.get("payload_set") or PayloadType.UNSUPPORTED
+        self.payload_del = kwargs.get("payload_del") or PayloadType.UNSUPPORTED
+        self.payload_psh = kwargs.get("payload_psh") or PayloadType.UNSUPPORTED
+        assert (
+            self.payload_psh in PUSH_PAYLOADS
+        ), f"Namespace {self} has invalid payload_psh {self.payload_psh}"
+        self.index_type = kwargs["index_type"]
+        if self.payload_get.indexed or self.payload_set.indexed:
+            if not self.index_type:
+                raise ValueError(
+                    f"Namespace {self} uses indexed payloads but has no index defined."
+                )
 
-        else:
-            self.key_channel = mc.KEY_CHANNEL
+        self.key_digest = kwargs["key_digest"]
+        if self.key_digest is True:
+            # We have a digest but we don't know the root key. We'll try to guess it with some euristics.
+            # This is typically true for 'Appliance.Control.*' namespaces where the digest structure is consistent.
 
-        self.request_payload_type = payload
+            if len(name_split) == 4:
+                # Typically Appliance.Control.Thermostat.*
+                self.key_digest = name_split[2].lower()
+                # ns digest is in ["all"]["digest"][{self.key_digest}][{self.key}]
+                self.get_digest = self._get_digest_2
+            else:
+                assert len(name_split) == 3
+                # Appliance.Control.* ns digest is typically in ["all"]["digest"][{self.key}]
+                # but we have to be sure about the key to look up
+                # Appliance.GarageDoor.State is a weird case ["all"]["digest"]["garageDoor"]
+                self.key_digest = (
+                    self.key
+                    if name_split[1] in ("Control", "Digest")
+                    else _slug_split(name_split[1])
+                )
+                self.get_digest = self._get_digest_1
+        elif self.key_digest:
+            # key_digest explicitly set in constructor args
+            self.get_digest = self._get_digest_1
 
-        if self.is_hub_id or self.is_hub_subid:
-            self.is_hub_namespace = True
-            HUB_NAMESPACES[name] = self  # type: ignore
-        else:
-            self.is_hub_namespace = False
-            map[name] = self  # type: ignore
+        self.content = kwargs["content"]
+        if self.content is Content.UNKNOWN:
+            # We try to guess the content type based on the namespace name
+            match name_split:
+                case (_, "Control", *_):
+                    self.content = Content.CONTROL
+                case (_, "Config", *_):
+                    self.content = Content.CONFIG
+
+        self.grammar = kwargs["grammar"]
+
+        NAMESPACES[name] = self  # type: ignore
 
     @cached_property
     def slug(self) -> str:
-        return self.name.lower().replace(".", "_")
+        return self.lower().replace(".", "_")
 
     @cached_property
     def slug_end(self) -> str:
-        slug_end = self.name.split(".")[-1]
-        # When namespace 'key' is not provided we'll infer it
-        # by camelCasing the last split of the namespace
-        # with special care for also the last char which looks
-        # lowercase when it's a X (i.e. ToggleX -> togglex).
-        # Recently (2025) it appears the namespace 'key' is likely to be the 2nd
-        # split of the namespace though (i.e. Appliance.Config.DeviceCfg -> config)
-        if slug_end[-1] == "X":
-            return f"{slug_end[0].lower()}{slug_end[1:-1]}x"
-        else:
-            return f"{slug_end[0].lower()}{slug_end[1:]}"
+        return _slug_split(self.split(".")[-1])
 
     @cached_property
-    def payload_get(self) -> dict[str, dict | list]:
-        """
-        Returns a default structured payload for method GET.
-        When we query a device 'namespace' with a GET method the request payload
-        is usually 'well structured' (more or less). We have a dictionary of
-        well-known payloads else we'll use some heuristics
-        """
-        return {self.key: self.request_payload_type.value}
+    def has_get(self) -> bool:
+        return self.payload_get is not PayloadType.UNSUPPORTED
+
+    @cached_property
+    def has_set(self) -> bool:
+        return self.payload_set is not PayloadType.UNSUPPORTED
+
+    @cached_property
+    def has_psh(self) -> bool:
+        return self.payload_psh is not PayloadType.UNSUPPORTED
+
+    @cached_property
+    def has_psq(self) -> bool:
+        return self.payload_psh is PayloadType.PUSH_QUERY
+
+    @cached_property
+    def has_del(self) -> bool:
+        return self.payload_del is not PayloadType.UNSUPPORTED
 
     @cached_property
     def request_default(self) -> "MerossRequestType":
-        if self.has_push_query or (self.has_get is False):
-            return self.request_push
+        if self.has_get:
+            return self.payload_get.build_get(self)
+        elif self.has_psq:
+            return self, mc.METHOD_PUSH, EMPTY_DICT
         else:
-            return self.request_get
+            raise ValueError(
+                f"Namespace {self} has no default request (no GET nor PUSH supported)."
+            )
+
+    @property
+    def can_query(self) -> bool:
+        """Indicates if the namespace supports querying (GET or PUSH_QUERY)."""
+        return self.has_get or self.has_psq
 
     @cached_property
-    def request_get(self) -> "MerossRequestType":
-        return self.name, mc.METHOD_GET, self.payload_get
+    def request_set(self) -> "Callable[..., MerossRequestType]":
+        """
+        Returns a callable generating a proper SET request for this namespace.
+        The callable accepts the payload dict as argument.
+        """
+        match self.payload_set:
+            case PayloadType.LIST_IDX:
+                return self.request_set_list_c
+            case PayloadType.DICT_IDX:
+                return self.request_set_dict_c
+            case PayloadType.DICT:
+                return self.request_set_dict
+            case PayloadType.EMPTY:
+                return self.request_set_empty
+            case _:
+                raise Exception(f"{self} namespace does not support SET method")
 
-    @cached_property
-    def request_push(self) -> "MerossRequestType":
-        return self.name, mc.METHOD_PUSH, Namespace.DEFAULT_PUSH_PAYLOAD
+    def request_set_empty(self, /) -> "MerossRequestType":
+        return self, mc.METHOD_SET, EMPTY_DICT
 
-    def __hash__(self):
-        return hash(self.name)
+    def request_set_dict(self, payload, /) -> "MerossRequestType":
+        return self, mc.METHOD_SET, {self.key: payload}
 
-    def __eq__(self, value):
-        return self is value
+    def request_set_dict_c(self, payload, /) -> "MerossRequestType":
+        return (self, mc.METHOD_SET, {self.key: payload})
 
+    def request_set_list_c(self, payload, /) -> "MerossRequestType":
+        return (self, mc.METHOD_SET, {self.key: [payload]})
 
-def ns_build_from_message(
-    namespace: str, method: str, payload: "Mapping", map: "NamespacesMapType", /
-):
-    # we hope the first key in the payload is the 'namespace key'
-    for ns_key in payload.keys():
-        break
-    else:
-        ns_key = None
+    def get_digest[_T: "JsonMapping | JsonList"](self, digest: "mt.system.All_Digest") -> _T:  # type: ignore
+        """Retrieves the namespace payload/state from the device digest."""
+        raise NotImplementedError("Namespace has no digest key defined.")
 
-    return Namespace(
-        namespace,
-        ns_key,
-        {
-            "has_get": (method == mc.METHOD_GETACK) or None,
-            "has_set": (method == mc.METHOD_SETACK) or None,
-            "has_push": (method == mc.METHOD_PUSH) or None,
-            "map": map,
-        },
-    )
+    def _get_digest_1(self, digest):
+        """Helper to get the namespace digest from the device digest."""
+        return digest[self.key_digest]
+
+    def _get_digest_2(self, digest):
+        """Specialized get_digest for namespaces with 2 levels of digest."""
+        return digest[self.key_digest][self.key]
+
+    def __repr__(self):
+        return f"Namespace({self}, key={self.key}, index={self.index_type})"
 
 
 ns = Namespace  # shortcut for declarations
 
+# When using ARGS_ symbols we're explicitly stating that the namespace
+# doesn't support the missing verbs.
 
-GET: "Namespace.Args" = {"has_get": True}
-"""Device supports method GET."""
-NO_GET: "Namespace.Args" = {"has_get": False}
-SET: "Namespace.Args" = {"has_set": True}
-"""Device supports method SET."""
-NO_SET: "Namespace.Args" = {"has_set": False}
-PUSH: "Namespace.Args" = {"has_push": True}
-"""Device sends async PUSH."""
-NO_PUSH: "Namespace.Args" = {"has_push": False}
-PUSHQ: "Namespace.Args" = {"has_push_query": True}
-"""Supports querying by PUSH client -> device"""
-NO_PUSHQ: "Namespace.Args" = {"has_push_query": False}
-IS_SENSOR: "Namespace.Args" = {"is_sensor": True}
-P_NONE: "Namespace.Args" = {"payload": PayloadType.NONE}
-P_DICT: "Namespace.Args" = {"payload": PayloadType.DICT}
-P_DICT_C: "Namespace.Args" = {"payload": PayloadType.DICT_C}
-P_DICT_C65535: "Namespace.Args" = {"payload": PayloadType.DICT_C65535}
-P_LIST: "Namespace.Args" = {"payload": PayloadType.LIST}
-P_LIST_C: "Namespace.Args" = {"payload": PayloadType.LIST_C}
-P_LIST_SX: "Namespace.Args" = {"payload": PayloadType.LIST_SX}
-G_UNKNOWN: "Namespace.Args" = {"grammar": Grammar.UNKNOWN}
-G_STABLE: "Namespace.Args" = {"grammar": Grammar.STABLE}
-G_EXPERIMENTAL: "Namespace.Args" = {"grammar": Grammar.EXPERIMENTAL}
+G_E: ns.Args = {"payload_get": PayloadType.EMPTY}
+G_D: ns.Args = {"payload_get": PayloadType.DICT}
+G_DI: ns.Args = {"payload_get": PayloadType.DICT_IDX}
+G_DIS: ns.Args = {"payload_get": PayloadType.DICT_IDX_STRICT}
+G_DI65535: ns.Args = {"payload_get": PayloadType.DICT_IDX_65535}
+G_LI: ns.Args = {"payload_get": PayloadType.LIST_IDX}
+G_LIS: ns.Args = {"payload_get": PayloadType.LIST_IDX_STRICT}
+G_LIDS: ns.Args = {"payload_get": PayloadType.LIST_IDX_DATA_STRICT}
 
+S_E: ns.Args = {"payload_set": PayloadType.EMPTY}
+S_D: ns.Args = {"payload_set": PayloadType.DICT}
+S_DI: ns.Args = {"payload_set": PayloadType.DICT_IDX}
+S_LI: ns.Args = {"payload_set": PayloadType.LIST_IDX}
 
-ARGS_NO_Q = NO_GET | NO_SET | NO_PUSH | NO_PUSHQ | P_NONE | G_STABLE
-"""No querying allowed. This is the 'root' of all other set definitions
-which will then just override these defaults."""
-ARGS_GET = ARGS_NO_Q | GET | P_DICT
-"""Only method GET supported with default 'dict' payload."""
-ARGS_GETSET = ARGS_GET | SET
-"""Supports: GET-SET - payload 'dict' by default."""
-ARGS_GETSETPUSH = ARGS_GETSET | PUSH
-"""Supports: GET-SET-PUSH - payload 'dict' by default."""
-ARGS_GETSETPUSHQ = ARGS_GETSETPUSH | PUSHQ
-"""Supports: GET-SET-PUSH query - payload 'dict' by default."""
-ARGS_GETPUSH = ARGS_GET | PUSH
-ARGS_SET = ARGS_NO_Q | SET
-ARGS_SETPUSH = ARGS_SET | PUSH
-ARGS_SETPUSHQ = ARGS_SETPUSH | PUSHQ
-ARGS_PUSH = ARGS_NO_Q | PUSH
-ARGS_PUSHQ = ARGS_PUSH | PUSHQ
+D_DI: ns.Args = {"payload_del": PayloadType.DICT_IDX}
+D_LI: ns.Args = {"payload_del": PayloadType.LIST_IDX}
+
+PSH: ns.Args = {"payload_psh": PayloadType.PUSH}
+PSQ: ns.Args = {"payload_psh": PayloadType.PUSH_QUERY}
+
+IDX_C: ns.Args = {"index_type": IndexType.channel}  # Channel index
+IDX_ID_: ns.Args = {"index_type": IndexType.Id}  # Item (effect) Id
+IDX_ID: ns.Args = {"index_type": IndexType.id}  # Hub subdevice id
+IDX_SUB: ns.Args = {"index_type": IndexType.subId}  # Hub subdevice id
+
+# 'composed' payload verbs configurations
+GS_LI = G_LI | S_LI  # GET and SET by LIST IDX
+GP_LI = G_LI | PSH  # GET by LIST IDX + PUSH
+GSP_LI = GS_LI | PSH  # GET and SET by LIST IDX + PUSH
+GSPQ_LI = GS_LI | PSQ  # GET and SET by LIST IDX + PUSH_QUERY
+GS_LIS = G_LIS | S_LI  # GET (strict) and SET by LIST IDX
+GP_LIS = G_LIS | PSH  # GET (strict) by LIST IDX + PUSH
+GSP_LIS = GS_LIS | PSH  # GET (strict) and SET by LIST IDX + PUSH
+GSPQ_LIS = GS_LIS | PSQ  # GET (strict) and SET by LIST IDX + PUSH_QUERY
+
+# more 'composed' by adding indexing configuration
+GS_LI_C = GS_LI | IDX_C
+GP_LI_C = GP_LI | IDX_C
+GSP_LI_C = GSP_LI | IDX_C
+GS_LIS_C = GS_LIS | IDX_C
+GP_LIS_C = GP_LIS | IDX_C
+GSP_LIS_C = GSP_LIS | IDX_C
+GSPQ_LIS_C = GSPQ_LIS | IDX_C
+
+GS_LI_SUB = GS_LI | IDX_SUB
+GSP_LI_SUB = GSP_LI | IDX_SUB
+GS_LIS_SUB = GS_LIS | IDX_SUB
+GSP_LIS_SUB = GSP_LIS | IDX_SUB
+GSPQ_LIS_SUB = GSPQ_LIS | IDX_SUB
+
+DIG: ns.Args = {"key_digest": True}  # type: ignore[sentinel]
+
+C_UNK: ns.Args = {"content": Content.UNKNOWN}
+C_CON: ns.Args = {"content": Content.CONSTANT}
+C_INF: ns.Args = {"content": Content.INFO}
+C_CFG: ns.Args = {"content": Content.CONFIG}
+C_CTL: ns.Args = {"content": Content.CONTROL}
+C_STA: ns.Args = {"content": Content.STATE}
+C_SNS_F: ns.Args = {"content": Content.SENSOR_FAST}
+C_SNS_S: ns.Args = {"content": Content.SENSOR_SLOW}
+C_HST: ns.Args = {"content": Content.HISTORY}
+
+EXP: ns.Args = {"grammar": Grammar.EXPERIMENTAL}
 
 
 # We predefine grammar for some widely used and well known namespaces either to skip 'euristics'
@@ -419,229 +950,310 @@ ARGS_PUSHQ = ARGS_PUSH | PUSHQ
 # Moreover, for some namespaces, the euristics about 'namespace key' and payload structure are not
 # good so we must fix those beforehand.
 Appliance_Config_Alarm = ns(
-    "Appliance.Config.Alarm", mc.KEY_CONFIG, ARGS_GETSETPUSHQ | P_LIST
-)  # mst100
+    "Appliance.Config.Alarm", mc.KEY_CONFIG, 44, GS_LI_SUB, PSQ, C_CFG
+)
 Appliance_Config_DeviceCfg = ns(
-    "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, ARGS_GETSETPUSH | P_LIST_C
-)  # mts300
-Appliance_Config_Info = ns("Appliance.Config.Info", mc.KEY_INFO, ARGS_GET | ARGS_PUSHQ)
-Appliance_Config_Key = ns("Appliance.Config.Key", mc.KEY_KEY, ARGS_SET)
-Appliance_Config_Matter = ns("Appliance.Config.Matter", mc.KEY_CONFIG, ARGS_PUSHQ)
-Appliance_Config_NtpSite = ns("Appliance.Config.NtpSite", None, ARGS_NO_Q)
-Appliance_Config_OverTemp = ns("Appliance.Config.OverTemp", mc.KEY_OVERTEMP, ARGS_GET)
+    "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, 100, GSP_LIS_SUB, C_CFG
+)
+Appliance_Config_Info = ns(
+    "Appliance.Config.Info", mc.KEY_INFO, -1, G_E, S_D, PSQ, C_CON
+)
+Appliance_Config_Key = ns("Appliance.Config.Key", mc.KEY_KEY, -1, S_D, C_CFG)
+Appliance_Config_Matter = ns("Appliance.Config.Matter", mc.KEY_CONFIG, -1, PSQ, C_CON)
+Appliance_Config_NtpSite = ns("Appliance.Config.NtpSite", mc.KEY_CONFIG, -1)
+Appliance_Config_OverTemp = ns(
+    "Appliance.Config.OverTemp", mc.KEY_OVERTEMP, 40, G_E, S_D, C_CFG
+)
 Appliance_Config_StandbyKiller = ns(
-    "Appliance.Config.StandbyKiller", mc.KEY_CONFIG, ARGS_GETSETPUSHQ | P_LIST_C
-)  # mss305
-Appliance_Config_Trace = ns("Appliance.Config.Trace", None, ARGS_NO_Q)
-Appliance_Config_Wifi = ns("Appliance.Config.Wifi", None, ARGS_NO_Q)
-Appliance_Config_WifiList = ns("Appliance.Config.WifiList", None, ARGS_NO_Q)
-Appliance_Config_WifiX = ns("Appliance.Config.WifiX", None, ARGS_NO_Q)
+    "Appliance.Config.StandbyKiller", mc.KEY_CONFIG, -1, GS_LIS_SUB, PSQ
+)
+Appliance_Config_Trace = ns(
+    "Appliance.Config.Trace", "trace", -1, G_D, C_INF
+)  # likely available only while provisioning
+Appliance_Config_Wifi = ns("Appliance.Config.Wifi", mc.KEY_WIFI, -1, S_D, C_CFG)
+Appliance_Config_WifiList = ns("Appliance.Config.WifiList", "wifiList", -1, G_E, C_INF)
+Appliance_Config_WifiX = ns("Appliance.Config.WifiX", mc.KEY_WIFI, -1, S_D, C_CFG)
 
 Appliance_Config_Sensor_Association = ns(
     "Appliance.Config.Sensor.Association",
     mc.KEY_CONFIG,
-    ARGS_GETSETPUSHQ | P_LIST_C | IS_SENSOR,
+    30,
+    GS_LIS_SUB,
+    PSQ,
+    C_CFG,
 )
 
 Appliance_Control_Alarm = ns(
-    "Appliance.Control.Alarm", mc.KEY_ALARM, ARGS_GETSET | P_LIST
-)  # mst100
+    "Appliance.Control.Alarm", mc.KEY_ALARM, 40, GS_LI_SUB
+)  # mst100/ms130 actually only seen in hub
 Appliance_Control_AlertConfig = ns(
-    "Appliance.Control.AlertConfig", mc.KEY_CONFIG, ARGS_GETSETPUSHQ | P_LIST_C
+    "Appliance.Control.AlertConfig", mc.KEY_CONFIG, 70, GSP_LIS_SUB
 )  # mts300 support the full set of verbs - em06 also exposes it but that's likely different
 Appliance_Control_AlertReport = ns(
-    "Appliance.Control.AlertReport",
-    "alert",
-    ARGS_GETSET | P_LIST_C | G_EXPERIMENTAL,
-)
-Appliance_Control_Beep = ns(
-    "Appliance.Control.Beep", mc.KEY_ALARM, ARGS_GETSET | P_LIST_C
-)
-Appliance_Control_Bind = ns("Appliance.Control.Bind", mc.KEY_BIND, ARGS_NO_Q)
-Appliance_Control_ChangeWifi = ns("Appliance.Control.ChangeWiFi", None, ARGS_NO_Q)
+    "Appliance.Control.AlertReport", mc.KEY_ALERT, -1, GS_LIS_SUB
+)  # no trace of handlingthis ns in Meross App
+Appliance_Control_Beep = ns("Appliance.Control.Beep", mc.KEY_ALARM, -1, GS_LIS_C)
+Appliance_Control_Bind = ns("Appliance.Control.Bind", mc.KEY_BIND, -1)
+Appliance_Control_ChangeWifi = ns(
+    "Appliance.Control.ChangeWiFi", mc.KEY_, -1
+)  # unknown payload
+Appliance_Control_CloudEvent = ns(
+    "Appliance.Control.CloudEvent", mc.KEY_, -1
+)  # unknown payload
 Appliance_Control_ConsumptionConfig = ns(
-    "Appliance.Control.ConsumptionConfig", mc.KEY_CONFIG, ARGS_GET
+    "Appliance.Control.ConsumptionConfig", mc.KEY_CONFIG, -1, G_E, PSH, C_CFG
 )
 Appliance_Control_ConsumptionH = ns(
-    "Appliance.Control.ConsumptionH", mc.KEY_CONSUMPTIONH, ARGS_GET | P_LIST_C
+    "Appliance.Control.ConsumptionH",
+    mc.KEY_CONSUMPTIONH,
+    1900,
+    G_LIS,
+    D_LI,
+    IDX_C,
+    C_HST,
 )
 Appliance_Control_ConsumptionX = ns(
-    "Appliance.Control.ConsumptionX", mc.KEY_CONSUMPTIONX, ARGS_GETPUSH | P_LIST
+    "Appliance.Control.ConsumptionX", mc.KEY_CONSUMPTIONX, 53, G_E, PSH, C_HST
 )
 Appliance_Control_Diffuser_Light = ns(
-    "Appliance.Control.Diffuser.Light", mc.KEY_LIGHT, ARGS_GETSETPUSH
+    "Appliance.Control.Diffuser.Light", mc.KEY_LIGHT, 110, G_E, S_LI, PSQ, IDX_C, DIG
 )
 Appliance_Control_Diffuser_Sensor = ns(
-    "Appliance.Control.Diffuser.Sensor", mc.KEY_SENSOR, ARGS_GETPUSH
+    "Appliance.Control.Diffuser.Sensor", mc.KEY_, 100, G_E, PSH, C_SNS_S
 )  # this ns has no ns_key in payload response
 Appliance_Control_Diffuser_Spray = ns(
-    "Appliance.Control.Diffuser.Spray", mc.KEY_SPRAY, ARGS_GETSETPUSH
+    "Appliance.Control.Diffuser.Spray", mc.KEY_SPRAY, 55, G_E, S_LI, PSH, IDX_C, DIG
 )
 Appliance_Control_Electricity = ns(
-    "Appliance.Control.Electricity", mc.KEY_ELECTRICITY, ARGS_GETPUSH
+    "Appliance.Control.Electricity", mc.KEY_ELECTRICITY, 130, G_E, C_SNS_F
 )
 Appliance_Control_ElectricityX = ns(
     "Appliance.Control.ElectricityX",
     mc.KEY_ELECTRICITY,
-    ARGS_GETPUSH | P_DICT_C65535 | G_EXPERIMENTAL,
+    100,
+    G_DI65535,
+    PSH,
+    IDX_C | EXP,
+    C_SNS_F,
 )
-Appliance_Control_Fan = ns("Appliance.Control.Fan", mc.KEY_FAN, ARGS_GETSET | P_LIST_C)
+Appliance_Control_Fan = ns("Appliance.Control.Fan", mc.KEY_FAN, 20, GS_LIS_C, DIG)
 Appliance_Control_Fan_BtnConfig = ns(
-    "Appliance.Control.Fan.BtnConfig", mc.KEY_FAN, ARGS_GETSETPUSHQ | P_LIST_C
+    "Appliance.Control.Fan.BtnConfig", mc.KEY_CONFIG, -1, GS_LIS_C, PSQ, C_CFG
 )
 Appliance_Control_Fan_Config = ns(
-    "Appliance.Control.Fan.Config", mc.KEY_FAN, ARGS_GETSET | P_LIST_C
+    "Appliance.Control.Fan.Config", mc.KEY_CONFIG, -1, GS_LIS_C, PSQ, C_CFG
 )
 Appliance_Control_FilterMaintenance = ns(
-    "Appliance.Control.FilterMaintenance", mc.KEY_FILTER, ARGS_PUSHQ | P_LIST
+    "Appliance.Control.FilterMaintenance",
+    mc.KEY_FILTER,
+    35,
+    GS_LIS_C,
+    PSQ,
+    C_SNS_S,
 )
-Appliance_Control_Light = ns("Appliance.Control.Light", mc.KEY_LIGHT, ARGS_GETSETPUSH)
+Appliance_Control_Light = ns(
+    "Appliance.Control.Light", mc.KEY_LIGHT, -1, G_E, S_DI, IDX_C, DIG
+)
 Appliance_Control_Light_Effect = ns(
-    "Appliance.Control.Light.Effect", mc.KEY_EFFECT, ARGS_GETSET | P_LIST
+    "Appliance.Control.Light.Effect",
+    mc.KEY_EFFECT,
+    1550,
+    G_E,
+    S_LI,
+    D_LI,
+    IDX_ID_,
+    {"key_digest": mc.KEY_LIGHT_EFFECT},
+    C_CFG,
 )
-Appliance_Control_Mp3 = ns("Appliance.Control.Mp3", mc.KEY_MP3, ARGS_GETSETPUSH)
-Appliance_Control_McuUpgrade = ns("Appliance.Control.McuUpgrade", None, ARGS_NO_Q)
-Appliance_Control_Multiple = ns("Appliance.Control.Multiple", mc.KEY_MULTIPLE, ARGS_SET)
-Appliance_Control_OverTemp = ns(
-    "Appliance.Control.OverTemp", mc.KEY_OVERTEMP, ARGS_GET | P_LIST
-)
+Appliance_Control_Mp3 = ns("Appliance.Control.Mp3", mc.KEY_MP3, 80, G_DI, S_DI, IDX_C)
+Appliance_Control_McuUpgrade = ns("Appliance.Control.McuUpgrade", mc.KEY_, -1)
+Appliance_Control_Multiple = ns("Appliance.Control.Multiple", mc.KEY_MULTIPLE, -1, S_D)
+Appliance_Control_OverTemp = ns("Appliance.Control.OverTemp", mc.KEY_OVERTEMP, -1, PSH)
 Appliance_Control_PhysicalLock = ns(
-    "Appliance.Control.PhysicalLock", mc.KEY_LOCK, ARGS_SETPUSHQ | P_LIST
+    "Appliance.Control.PhysicalLock", mc.KEY_LOCK, 35, GS_LIS_C, PSQ, C_CFG
 )
 Appliance_Control_Presence_Config = ns(
-    "Appliance.Control.Presence.Config", mc.KEY_CONFIG, ARGS_GET | P_LIST_C
+    "Appliance.Control.Presence.Config", mc.KEY_CONFIG, 260, GS_LIS_C, C_CFG
 )
 Appliance_Control_Presence_Study = ns(
-    "Appliance.Control.Presence.Study", mc.KEY_CONFIG, ARGS_PUSHQ | P_LIST
+    "Appliance.Control.Presence.Study",
+    mc.KEY_CONFIG,
+    -1,
+    GSPQ_LIS_C,
+    C_CFG,
 )
 Appliance_Control_Screen_Brightness = ns(
-    "Appliance.Control.Screen.Brightness", mc.KEY_BRIGHTNESS, ARGS_GETSETPUSH | P_LIST_C
+    "Appliance.Control.Screen.Brightness",
+    mc.KEY_BRIGHTNESS,
+    70,
+    GSP_LIS_C,
+    C_CFG,
 )
 # Appliance.Control.Sensor.* appear on both regular devices (ms600) and hub/subdevices (ms130)
 # To distinguish the grammar between regular devices and hubs we save different definitions
 # in NAMESPACES (for regular devices) and in HUB_NAMESPACES (for hubs).
-# For regular devices, even if traces show presence of values at channel 0,
-# the 'LIST_C' query format doesn't always work
-# We so try introduce a new payload type 'DICT_C'. PUSH query too seems to not work.
 Appliance_Control_Sensor_Association = ns(
-    "Appliance.Control.Sensor.Association",
-    mc.KEY_CONTROL,
-    ARGS_GET | P_LIST | IS_SENSOR,
+    "Appliance.Control.Sensor.Association", mc.KEY_CONTROL, -1, G_LI, IDX_SUB, C_CON
 )  # mts300 works: though it seems this ns just returns (in a GET) the list of keys it supports (a kind of grammar).
 # We could setup an heuristic handler alone which queries this ns once and then setups some 'config entities'
 # working on Appliance.Config.Sensor.Association (which looks like the effective configuration).
 Appliance_Control_Sensor_History = ns(
-    "Appliance.Control.Sensor.History", mc.KEY_HISTORY, ARGS_GET | P_LIST_C | IS_SENSOR
+    "Appliance.Control.Sensor.History", mc.KEY_HISTORY, -1, G_LIS, D_LI, IDX_C, C_HST
 )  # history of sensor values
 Appliance_Control_Sensor_Latest = ns(
-    "Appliance.Control.Sensor.Latest",
-    mc.KEY_LATEST,
-    ARGS_GETPUSH | P_LIST_C | IS_SENSOR,
+    "Appliance.Control.Sensor.Latest", mc.KEY_LATEST, 80, G_LIS, PSH, IDX_C, C_SNS_F
 )  # carrying miscellaneous sensor values (temp/humi)
 Appliance_Control_Sensor_HistoryX = ns(
     "Appliance.Control.Sensor.HistoryX",
     mc.KEY_HISTORY,
-    ARGS_GET | P_LIST_SX | IS_SENSOR,
+    1000,
+    G_LIDS,
+    D_LI,
+    IDX_SUB,
+    C_HST,
 )  # cannot get query to work...it might look like LatestX
 Appliance_Control_Sensor_LatestX = ns(
     "Appliance.Control.Sensor.LatestX",
     mc.KEY_LATEST,
-    ARGS_GETPUSH | P_LIST_SX | IS_SENSOR,
+    220,
+    G_LIDS,
+    PSH,
+    IDX_SUB,
+    C_SNS_F,
 )
-Appliance_Control_Spray = ns("Appliance.Control.Spray", mc.KEY_SPRAY, ARGS_GETSETPUSH)
+Appliance_Control_Spray = ns(
+    "Appliance.Control.Spray", mc.KEY_SPRAY, 90, G_D, S_DI, PSH, IDX_C, DIG
+)
 Appliance_Control_TempUnit = ns(
-    "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, ARGS_GETSET | P_LIST_C
-)
-Appliance_Control_Timer = ns("Appliance.Control.Timer", mc.KEY_TIMER, ARGS_GET | P_LIST)
-Appliance_Control_TimerX = ns("Appliance.Control.TimerX", mc.KEY_TIMERX, ARGS_NO_Q)
+    "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, 30, GS_LIS_C, C_CFG
+)  # TODO: move to thermostat.py
+Appliance_Control_Timer = ns(
+    "Appliance.Control.Timer", mc.KEY_TIMER, -1, G_E, S_DI, D_DI, IDX_ID, DIG, C_CFG
+)  # digest key likely referring to 'control' key (like Appliance.Control.Toggle)
+Appliance_Control_TimerX = ns(
+    "Appliance.Control.TimerX", mc.KEY_TIMERX, -1, G_DI, S_DI, D_DI, IDX_ID, DIG, C_CFG
+)  # ns indexed by both 'channel' and 'id'
 Appliance_Control_Toggle = ns(
-    "Appliance.Control.Toggle", mc.KEY_TOGGLE, ARGS_GETSETPUSH
-)
+    "Appliance.Control.Toggle", mc.KEY_TOGGLE, 40, G_D, S_D, PSH, DIG
+)  # digest key points to 'control' key in Appliance.System.All payload
 Appliance_Control_ToggleX = ns(
-    "Appliance.Control.ToggleX", mc.KEY_TOGGLEX, ARGS_GETSETPUSH
+    "Appliance.Control.ToggleX", mc.KEY_TOGGLEX, 50, G_DI, S_DI, PSH, IDX_C, DIG
 )
 Appliance_Control_Trigger = ns(
-    "Appliance.Control.Trigger", mc.KEY_TRIGGER, ARGS_GETSETPUSH
-)
+    "Appliance.Control.Trigger",
+    mc.KEY_TRIGGER,
+    -1,
+    G_E,
+    S_DI,
+    D_DI,
+    PSH,
+    IDX_ID,
+    DIG,
+    C_CFG,
+)  # digest key likely referring to 'control' key (like Appliance.Control.Toggle)
 Appliance_Control_TriggerX = ns(
-    "Appliance.Control.TriggerX", mc.KEY_TRIGGERX, ARGS_GETSETPUSH
+    "Appliance.Control.TriggerX",
+    mc.KEY_TRIGGERX,
+    -1,
+    G_DI,
+    S_DI,
+    D_DI,
+    PSH,
+    IDX_ID,
+    DIG,
+    C_CFG,
+)  # ns indexed by both 'channel' and 'id'
+Appliance_Control_Unbind = ns("Appliance.Control.Unbind", mc.KEY_, -1, PSQ)
+Appliance_Control_Upgrade = ns(
+    "Appliance.Control.Upgrade", "upgrade", -1, S_D, PSH, C_CTL
 )
-Appliance_Control_Unbind = ns("Appliance.Control.Unbind", None, ARGS_PUSHQ)
-Appliance_Control_Upgrade = ns("Appliance.Control.Upgrade", None, ARGS_NO_Q)
-Appliance_Control_Weather = ns("Appliance.Control.Weather", None, ARGS_NO_Q)
+Appliance_Control_Weather = ns("Appliance.Control.Weather", mc.KEY_, -1)
 
-Appliance_Digest_TimerX = ns("Appliance.Digest.TimerX", mc.KEY_DIGEST, ARGS_NO_Q)
-Appliance_Digest_TriggerX = ns("Appliance.Digest.TriggerX", mc.KEY_DIGEST, ARGS_NO_Q)
+Appliance_Digest_TimerX = ns("Appliance.Digest.TimerX", mc.KEY_DIGEST, -1, G_E)
+Appliance_Digest_TriggerX = ns("Appliance.Digest.TriggerX", mc.KEY_DIGEST, -1, G_E)
 
-Appliance_Encrypt_Suite = ns("Appliance.Encrypt.Suite", None, ARGS_NO_Q)
-Appliance_Encrypt_ECDHE = ns("Appliance.Encrypt.ECDHE", None, ARGS_NO_Q)
+Appliance_Encrypt_Suite = ns("Appliance.Encrypt.Suite", mc.KEY_, -1, G_E, C_CON)
+Appliance_Encrypt_ECDHE = ns("Appliance.Encrypt.ECDHE", "ecdhe", -1, S_D, C_CON)
 
 Appliance_GarageDoor_Config = ns(
-    "Appliance.GarageDoor.Config", mc.KEY_CONFIG, ARGS_GETSET
+    "Appliance.GarageDoor.Config", mc.KEY_CONFIG, 110, G_E, S_D, C_CFG
 )
 Appliance_GarageDoor_MultipleConfig = ns(
-    "Appliance.GarageDoor.MultipleConfig", mc.KEY_CONFIG, ARGS_GETSET | P_LIST_C
+    "Appliance.GarageDoor.MultipleConfig", mc.KEY_CONFIG, 140, GS_LIS_C, C_CFG
 )
 Appliance_GarageDoor_State = ns(
-    "Appliance.GarageDoor.State", mc.KEY_STATE, ARGS_GETSETPUSH | G_EXPERIMENTAL
+    "Appliance.GarageDoor.State", mc.KEY_STATE, -1, G_DIS, S_DI, IDX_C, DIG, EXP, C_CTL
 )
 
+Appliance_Mcu_Firmware = ns("Appliance.Mcu.Firmware", mc.KEY_FIRMWARE, 80, G_E, C_CON)
+Appliance_Mcu_Upgrade = ns("Appliance.Mcu.Upgrade", mc.KEY_UPGRADE, -1, S_D, C_CTL)
 
-Appliance_Mcu_Firmware = ns("Appliance.Mcu.Firmware")
-Appliance_Mcu_Upgrade = ns("Appliance.Mcu.Upgrade")
+# Smart cherub HP110A TODO: try implement features for these namespaces
+Appliance_Mcu_Hp110_Favorite = ns(
+    "Appliance.Mcu.Hp110.Favorite", "favorite", -1, G_DIS, S_DI, IDX_ID
+)
+Appliance_Mcu_Hp110_Firmware = ns(
+    "Appliance.Mcu.Hp110.Firmware", mc.KEY_FIRMWARE, 80, G_E, C_CON
+)
+Appliance_Mcu_Hp110_Lock = ns(
+    "Appliance.Mcu.Hp110.Lock", mc.KEY_LOCK, -1, G_E, S_D, C_CFG  # TODO: easy implement
+)
+Appliance_Mcu_Hp110_Preview = ns("Appliance.Mcu.Hp110.Preview", "preview", -1, S_D)
 
-# Smart cherub HP110A
-Appliance_Mcu_Hp110_Firmware = ns("Appliance.Mcu.Hp110.Firmware")
-Appliance_Mcu_Hp110_Favorite = ns("Appliance.Mcu.Hp110.Favorite")
-Appliance_Mcu_Hp110_Preview = ns("Appliance.Mcu.Hp110.Preview")
-Appliance_Mcu_Hp110_Lock = ns("Appliance.Mcu.Hp110.Lock")
 
 Appliance_RollerShutter_Adjust = ns(
-    "Appliance.RollerShutter.Adjust", mc.KEY_ADJUST, ARGS_PUSHQ | P_LIST
-)  # maybe SET supported too
+    "Appliance.RollerShutter.Adjust", mc.KEY_ADJUST, 35, S_DI, PSQ, IDX_C, C_CFG
+)  # maybe SET supported too and/or GET with EMPTY
 Appliance_RollerShutter_Config = ns(
-    "Appliance.RollerShutter.Config", mc.KEY_CONFIG, ARGS_GETSET | P_LIST
+    "Appliance.RollerShutter.Config", mc.KEY_CONFIG, 70, G_LI, S_DI, IDX_C, C_CFG
 )
 Appliance_RollerShutter_Position = ns(
-    "Appliance.RollerShutter.Position", mc.KEY_POSITION, ARGS_GETSETPUSH | P_LIST
+    "Appliance.RollerShutter.Position",
+    mc.KEY_POSITION,
+    50,
+    G_LI,
+    S_DI,
+    PSH,
+    IDX_C,
+    C_CTL,
 )
 Appliance_RollerShutter_State = ns(
-    "Appliance.RollerShutter.State", mc.KEY_STATE, ARGS_GETPUSH | P_LIST
+    "Appliance.RollerShutter.State", mc.KEY_STATE, 40, GP_LI_C, C_STA
 )
 
-Appliance_System_Ability = ns("Appliance.System.Ability", mc.KEY_ABILITY, ARGS_GET)
-Appliance_System_All = ns("Appliance.System.All", mc.KEY_ALL, ARGS_GET)
-Appliance_System_Clock = ns("Appliance.System.Clock", mc.KEY_CLOCK, ARGS_PUSHQ)
-Appliance_System_Debug = ns("Appliance.System.Debug", mc.KEY_DEBUG, ARGS_GET)
-Appliance_System_DNDMode = ns("Appliance.System.DNDMode", mc.KEY_DNDMODE, ARGS_GET)
-Appliance_System_Factory = ns("Appliance.System.Factory", "factory", ARGS_GET)
-Appliance_System_Firmware = ns("Appliance.System.Firmware", mc.KEY_FIRMWARE, ARGS_GET)
-Appliance_System_Hardware = ns("Appliance.System.Hardware", mc.KEY_HARDWARE, ARGS_GET)
-Appliance_System_Online = ns("Appliance.System.Online", mc.KEY_ONLINE, ARGS_GETPUSH)
-Appliance_System_Report = ns("Appliance.System.Report", mc.KEY_REPORT, ARGS_PUSH)
-Appliance_System_Runtime = ns("Appliance.System.Runtime", mc.KEY_RUNTIME, ARGS_GET)
-Appliance_System_Time = ns("Appliance.System.Time", mc.KEY_TIME, ARGS_GETPUSH)
-Appliance_System_Position = ns("Appliance.System.Position", mc.KEY_POSITION, ARGS_GET)
+Appliance_System_Ability = ns(
+    "Appliance.System.Ability", mc.KEY_ABILITY, -1, G_E, C_CON
+)
+Appliance_System_All = ns("Appliance.System.All", mc.KEY_ALL, 700, G_E, C_STA)
+Appliance_System_Clock = ns("Appliance.System.Clock", mc.KEY_CLOCK, -1, PSQ, C_CTL)
+Appliance_System_Debug = ns("Appliance.System.Debug", mc.KEY_DEBUG, 1600, G_E, C_INF)
+Appliance_System_DNDMode = ns(
+    "Appliance.System.DNDMode", mc.KEY_DNDMODE, 30, G_E, S_D, C_CFG
+)
+Appliance_System_Factory = ns("Appliance.System.Factory", "factory", -1, G_D, S_D)
+Appliance_System_Firmware = ns(
+    "Appliance.System.Firmware", mc.KEY_FIRMWARE, -1, G_E, C_INF
+)
+Appliance_System_Hardware = ns(
+    "Appliance.System.Hardware", mc.KEY_HARDWARE, -1, G_E, C_CON
+)
+Appliance_System_LedMode = ns(
+    "Appliance.System.LedMode", mc.KEY_LEDMODE, 24, G_E, S_D, C_CFG
+)
+Appliance_System_Log = ns("Appliance.System.Log", mc.KEY_, -1)  # unknown payload
+Appliance_System_Online = ns(
+    "Appliance.System.Online", mc.KEY_ONLINE, -1, G_E, PSH, C_INF
+)
+Appliance_System_Report = ns("Appliance.System.Report", mc.KEY_REPORT, -1, PSH)
+Appliance_System_Runtime = ns(
+    "Appliance.System.Runtime", mc.KEY_RUNTIME, 30, G_E, C_SNS_S
+)
+Appliance_System_Time = ns(
+    "Appliance.System.Time", mc.KEY_TIME, -1, G_E, S_D, PSH, C_CFG
+)
+Appliance_System_Position = ns(
+    "Appliance.System.Position", mc.KEY_POSITION, -1, G_E, S_D, C_CFG
+)
 
-"""
-Experiment to try declare namespaces as Enum
-
-class NamespaceEnum(Namespace, enum.Enum):
-    def __new__(cls, key=None, kwargs={}):
-        return Namespace.__new__(cls)
-
-    def __init__(self, key=None, kwargs={}):
-        fq_name = self.__class__.__name__.split("_")
-        fq_name.append(self._name_)
-        fq_name = ".".join(fq_name)
-        super().__init__(fq_name, key, kwargs)
-        self._value_ = self
-
-
-class Appliance_System(NamespaceEnum):
-
-    Position = (
-        mc.KEY_POSITION,
-        _ns_get_args,
-    )
-"""
+# This is to ease full loading of NAMESPACES map since definitions are split among multiple files.
+from . import hub, thermostat  # noqa: F401

@@ -1,13 +1,12 @@
 """Constants for the Meross IoT local LAN integration."""
 
-import enum
-import logging
 from typing import TYPE_CHECKING, Final, NotRequired, TypedDict
 
 from homeassistant import const as hac
 
-from .merossclient import cloudapi
-from .merossclient.protocol import const as mc
+from .merossclient import cloudapi, logging
+from .merossclient.device.handler import NamespaceHandler
+from .merossclient.protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
     from typing import Any, Mapping
@@ -15,12 +14,7 @@ if TYPE_CHECKING:
 
 DOMAIN: Final = "meross_lan"
 
-
-class DeviceType(enum.Enum):
-    DEVICE = 1
-    HUB = 2
-    SUBDEVICE = 3
-
+HA_VERSION: Final[tuple[int, int]] = (hac.MAJOR_VERSION, hac.MINOR_VERSION)
 
 #########################
 # common ConfigEntry keys
@@ -29,18 +23,13 @@ CONF_CREATE_DIAGNOSTIC_ENTITIES: Final = "create_diagnostic_entities"
 CONF_KEY: Final = "key"
 # sets the logging level x ConfigEntry
 CONF_LOGGING_LEVEL: Final = "logging_level"
-CONF_LOGGING_VERBOSE: Final = 5
-CONF_LOGGING_DEBUG: Final = logging.DEBUG
-CONF_LOGGING_INFO: Final = logging.INFO
-CONF_LOGGING_WARNING: Final = logging.WARNING
-CONF_LOGGING_CRITICAL: Final = logging.CRITICAL
 CONF_LOGGING_LEVEL_OPTIONS: Final = {
     logging.NOTSET: "default",
-    CONF_LOGGING_CRITICAL: "critical",
-    CONF_LOGGING_WARNING: "warning",
-    CONF_LOGGING_INFO: "info",
-    CONF_LOGGING_DEBUG: "debug",
-    CONF_LOGGING_VERBOSE: "verbose",
+    logging.CRITICAL: "critical",
+    logging.WARNING: "warning",
+    logging.INFO: "info",
+    logging.DEBUG: "debug",
+    logging.VERBOSE: "verbose",
 }
 CONF_OBFUSCATE: Final = "obfuscate"
 # create a file with device info and communication tracing
@@ -53,7 +42,14 @@ CONF_TRACE_MAXSIZE: Final = 262144  # or when MAXSIZE exceeded
 CONF_TRACE_DIRECTORY: Final = "traces"
 # versioning
 CONF_TRACE_VERSION: Final = 3
-CONF_TRACE_COLUMNS: Final = ["time", "rxtx", "protocol", "method", "namespace", "data"]
+CONF_TRACE_COLUMNS: Final = [
+    "time",
+    "direction",
+    "transport",
+    "method",
+    "namespace",
+    "data",
+]
 if TYPE_CHECKING:
 
     class TracingHeaderType(TypedDict):
@@ -74,6 +70,7 @@ class ManagerConfigType(TypedDict):
     """override the default log level set in HA configuration"""
     obfuscate: NotRequired[bool]
     """obfuscate sensitive data when logging/tracing"""
+    # deprecated -> trace: NotRequired[bool]
     trace_timeout: NotRequired[int | None]
     """duration of the tracing feature when activated"""
 
@@ -82,16 +79,26 @@ class ManagerConfigType(TypedDict):
 # ApiProfile (Hub and MerossProfile) ConfigEntry keys
 #####################################################
 CONF_ALLOW_MQTT_PUBLISH: Final = "allow_mqtt_publish"
+CONF_ALLOW_MQTT_PUBLISH_DEFAULT: Final = True
+CONF_RL_RATE: Final = "rl_rate"
+CONF_RL_WINDOW_SIZE: Final = "rl_window_size"
 
 
-class ApiProfileConfigType(ManagerConfigType):
-    """Common config_entry keys for ApiProfile type"""
+class MQTTProfileConfigType(ManagerConfigType):
+    """Common config_entry keys for MQTTProfile type"""
 
     allow_mqtt_publish: NotRequired[bool]
     """allow meross_lan to publish over local MQTT: actually ignored since it is True in code"""
+    rl_rate: NotRequired[float]
+    """Rate of messages allowed to be sent over the MQTT connection in messages per hour.
+    - If None the default will be used (200 msg/hour over Meross cloud - No RL over local MQTT)
+    - If 0 rate-limiting will be disabled
+    """
+    rl_window_size: NotRequired[int]
+    """Number of samples in the 'sliding window' for rate-limiting."""
 
 
-class HubConfigType(ApiProfileConfigType):
+class HubConfigType(MQTTProfileConfigType):
     """MQTT Hub config_entry keys"""
 
 
@@ -103,19 +110,11 @@ CONF_DEVICE_ID: Final = hac.CONF_DEVICE_ID
 # This has been superseded by cloud_profile and will be
 # removed from configentries as soon as the users
 # update/repair/fix their configuration (no automatic migration)
-CONF_CLOUD_KEY: Final = "cloud_key"
+CONF_CLOUD_KEY: Final = "cloud_key"  # deprecated
 CONF_PAYLOAD: Final = hac.CONF_PAYLOAD
 CONF_HOST: Final = hac.CONF_HOST
 # protocol used to communicate with device
 CONF_PROTOCOL: Final = hac.CONF_PROTOCOL
-CONF_PROTOCOL_AUTO: Final = "auto"
-CONF_PROTOCOL_MQTT: Final = "mqtt"
-CONF_PROTOCOL_HTTP: Final = "http"
-CONF_PROTOCOL_OPTIONS: dict[str | None, str] = {
-    CONF_PROTOCOL_AUTO: CONF_PROTOCOL_AUTO,
-    CONF_PROTOCOL_MQTT: CONF_PROTOCOL_MQTT,
-    CONF_PROTOCOL_HTTP: CONF_PROTOCOL_HTTP,
-}
 # general device state polling or whatever
 CONF_POLLING_PERIOD: Final = "polling_period"
 CONF_POLLING_PERIOD_MIN: Final = 5
@@ -140,10 +139,9 @@ class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
     and defined though DeviceConfigTypeMinimal
     """
 
-    cloud_key: NotRequired[str | None]
-    """deprecated field: used to store the device key as recovered from the cloud account"""
-    host: NotRequired[str]
-    """device address: when empty the device can still use the host address recovered through MQTT payloads"""
+    # deprecated -> cloud_key: NotRequired[str | None]
+    host: NotRequired[str | None]
+    """device host (name or ip address): when empty the device can still use the host address recovered through MQTT payloads"""
     protocol: NotRequired[str]
     """configures the protocol: auto will automatically switch between the available transports"""
     polling_period: NotRequired[int | None]
@@ -159,11 +157,13 @@ CONF_EMAIL: Final = mc.KEY_EMAIL
 CONF_PASSWORD: Final = hac.CONF_PASSWORD
 CONF_MFA_CODE: Final = "mfa_code"
 CONF_SAVE_PASSWORD: Final = "save_password"
+CONF_SAVE_PASSWORD_DEFAULT: Final = False
 CONF_CHECK_FIRMWARE_UPDATES: Final = "check_firmware_updates"
+CONF_CHECK_FIRMWARE_UPDATES_DEFAULT: Final = True
 
 
 class ProfileConfigType(
-    ApiProfileConfigType, cloudapi.MerossCloudCredentials, total=False
+    MQTTProfileConfigType, cloudapi.MerossCloudCredentials, total=False
 ):
     """
     Meross cloud profile config_entry keys
@@ -184,7 +184,7 @@ SERVICE_REQUEST = "request"
 """name of the general purpose device send request service exposed by meross_lan"""
 CONF_NOTIFYRESPONSE = "notifyresponse"
 """key used in service 'request' call"""
-CONF_PROFILE_ID_LOCAL: Final = ""
+CONF_PROFILE_ID_LOCAL: Final = "api"
 """label for ComponentApi as a 'fake' cloud profile"""
 
 #
@@ -206,51 +206,19 @@ PARAM_INFINITE_TIMEOUT = 2147483647  # inifinite epoch (2038 bug?)
 """the (infinite) timeout in order to disable timed schedules"""
 PARAM_COLDSTARTPOLL_DELAY = 2
 """(maximum) delay of initial poll after device setup"""
-PARAM_UNAVAILABILITY_TIMEOUT = 20
-"""number of seconds since last inquiry/response to consider the device unavailable"""
-PARAM_HEARTBEAT_PERIOD = 295
-"""whatever the connection state periodically inquire the device is available"""
-PARAM_TIMEZONE_CHECK_OK_PERIOD = 604800
-"""period between checks of timezone infos on locally mqtt binded devices"""
-PARAM_TIMEZONE_CHECK_NOTOK_PERIOD = 86400
-"""period between checks of failing timezone infos on locally mqtt binded devices"""
-PARAM_TIMESTAMP_TOLERANCE = 5
-"""max device timestamp diff against our and trigger warning and (eventually) fix it"""
-PARAM_TRACING_ABILITY_POLL_TIMEOUT = 2
-"""used to delay the iteration of abilities while tracing"""
-PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT = 2
-"""used when polling the cover state to monitor an ongoing transition"""
-PARAM_CLOUDMQTT_UPDATE_PERIOD = 1195
+PARAM_CLOUD_UPDATE_PERIOD = 1195
 """General polling period for entities over cloud MQTT use 'at least' this"""
 PARAM_CONFIG_UPDATE_PERIOD = 300
 """read device config polling period"""
-PARAM_SENSOR_FAST_UPDATE_PERIOD = 0
-"""fast varying sensors polling period (this should lead to updates at every poll depending on polling policy)"""
-PARAM_SENSOR_FAST_UPDATE_CLOUD_PERIOD = 180
-"""fast varying sensors polling period over cloud mqtt"""
-PARAM_SENSOR_MEDIUM_UPDATE_PERIOD = 55
-"""medium speed varying sensors polling period (not as critical as FAST_UPDATEs that need to be queried asap)"""
-PARAM_SENSOR_SLOW_UPDATE_PERIOD = 300
-"""slowly varying sensors polling period"""
-PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD = 600
-"""slowly varying sensors polling period over cloud mqtt"""
-PARAM_DIAGNOSTIC_UPDATE_PERIOD = 300
-"""read diagnostic sensors only every ... second"""
 PARAM_ENERGY_UPDATE_PERIOD = 55
 """read energy consumption only every ... second"""
-PARAM_ENERGY_UPDATE_CLOUD_PERIOD = 600
+PARAM_ENERGY_CLOUD_UPDATE_PERIOD = 600
 """read energy consumption over cloud mqtt only every ... second"""
-PARAM_GARAGEDOOR_TRANSITION_MAXDURATION = 60
-PARAM_GARAGEDOOR_TRANSITION_MINDURATION = 10
 PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT = 5
 """(mimimum) timeout before querying cloud api after loading the profile"""
 PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT = 86400  # 1 day
 """timeout for querying cloud api deviceInfo endpoint"""
-PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT = 604800  # 1 week
-"""timeout for querying cloud api latestVersion endpoint"""
+PARAM_CLOUDPROFILE_QUERY_DEVICELIST_RETRIGGER_TIMEOUT = 300  # 5 minutes
+"""timeout for re-triggering cloud api deviceInfo query when internally solicited."""
 PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT = 30
 """used to delay updated profile data to storage"""
-PARAM_HEADER_SIZE = 300
-"""(rough) estimate of the header part of any response"""
-PARAM_RESPONSE_SIZE_MAX = 3000
-"""(rough) estimate of the allowed response size limit before overflow occurs (see #244)"""

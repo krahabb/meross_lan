@@ -1,53 +1,59 @@
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.components import button
+from homeassistant.util import slugify
 
-from .helpers import entity as me
+from .helpers.entity import Entity
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from types import CoroutineType
-    from typing import Any, Callable, Unpack
-
-    from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
-
-    from .helpers.manager import EntityManager
+    from typing import Any, Callable, ClassVar, NotRequired, Unpack
 
 
-async def async_setup_entry(
-    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
-):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, button.DOMAIN)
-
-
-class MLButton(me.MEPartialAvailableMixin, me.MLEntity, button.ButtonEntity):
+class Button(Entity, button.ButtonEntity):
     # MEPartialAvailableMixin is needed here since this entity state is not being updated
     # by our component. This will ensure (by default) the entity is available/unavailable
     # when the device is online/offline
+    if TYPE_CHECKING:
+        # HA core entity attributes:
+        _attr_device_class: ClassVar[button.ButtonDeviceClass | None]
+
+        type InitArgs = Entity.InitArgs
+
+        class Args(Entity.Args):
+            press: NotRequired[Callable[[], None]]
+            async_press: NotRequired[Callable[[], CoroutineType[Any, Any, None]]]
+            device_class: NotRequired[button.ButtonDeviceClass | None]
 
     PLATFORM = button.DOMAIN
     DeviceClass = button.ButtonDeviceClass
 
-    # HA core entity attributes:
-
+    _AUTO_DESTROY = ("async_press",)
     __slots__ = ()
 
-    def __init__(
-        self,
-        manager: "EntityManager",
-        channel: object | None,
-        entitykey: str | None,
-        press_func: "Callable[[], CoroutineType[Any, Any, None]]",
-        device_class: DeviceClass | None = None,
-        **kwargs: "Unpack[MLButton.Args]",
-    ):
-        super().__init__(manager, channel, entitykey, device_class, **kwargs)
-        self.async_press = press_func
+    def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
+        """Provide either 'async_press' or 'press' callback to install an action on this button."""
+        if "entity_key" not in kwargs:
+            # name is required if entity_key missing
+            kwargs["entity_key"] = f"button_{slugify(kwargs['name'])}"  # type: ignore
 
-    async def async_shutdown(self):
-        self.async_press = None  # type: ignore BOOM!
-        return await super().async_shutdown()
+        try:
+            self.async_press = kwargs.pop("async_press")  # type: ignore
+        except KeyError:
+            press = kwargs.pop("press")  # type: ignore
+
+            async def _async_press():
+                press()
+
+            self.async_press = _async_press
+
+        Entity.__init__(self, *args, **kwargs)
 
 
-class MLPersistentButton(me.MEAlwaysAvailableMixin, MLButton):
-    pass
+class PersistentButton(Button):
+
+    # HA core entity attributes:
+    _attr_available = True
+
+
+async_setup_entry = Button.platform_setup_entry

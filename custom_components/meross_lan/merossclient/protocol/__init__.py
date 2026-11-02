@@ -1,49 +1,48 @@
 """
-A collection of typing definitions for
+Meross protocol core types and helpers
 
 """
 
-import enum
+from binascii import a2b_base64, b2a_base64
+from hashlib import md5
 from typing import TYPE_CHECKING
 
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
 if TYPE_CHECKING:
-    from message import MerossMessage
+    from typing import Final, Unpack
 
 
-#
-# Custom Exceptions
-#
-class MerossProtocolError(Exception):
-    """
-    signal a protocol error like:
-    - missing header keys
-    - application layer ERROR(s)
-
-    - response is the full response payload
-    - reason is an additional context error
-    """
-
-    def __init__(self, response, reason: object | None = None):
-        self.response = response
-        self.reason = reason
-        super().__init__(reason)
+def md5hexdigest(*args: "Unpack[tuple[str, ...]]"):
+    """Returns the MD5 digest of the joined args as an hex string."""
+    return md5("".join(args).encode(), usedforsecurity=False).hexdigest()
 
 
-class MerossKeyError(MerossProtocolError):
-    """
-    signal a protocol key error (wrong key)
-    reported by device
-    """
-
-    def __init__(self, response: "MerossMessage"):
-        super().__init__(response, "Invalid key")
+def compute_wifix_password(password: str, type: str, uuid: str, mac: str, /):
+    return AESCipher(md5hexdigest(type, uuid, mac).encode()).encrypt_text(password)
 
 
-class MerossSignatureError(MerossProtocolError):
-    """
-    signal a protocol signature error detected
-    when validating the received header
-    """
+class AESCipher(Cipher):
 
-    def __init__(self, response: "MerossMessage"):
-        super().__init__(response, "Signature error")
+    if TYPE_CHECKING:
+        IV: Final[bytes]
+
+    IV = b"0000000000000000"
+
+    def __init__(self, encryption_key: bytes):
+        super().__init__(algorithms.AES(encryption_key), modes.CBC(self.IV))
+
+    def encrypt_text(self, text: str):
+        buffer = text.encode()
+        buffer += bytes(16 - (len(buffer) % 16))
+        encryptor = self.encryptor()
+        return b2a_base64(encryptor.update(buffer) + encryptor.finalize()).decode()
+
+    def decrypt(self, data: bytes | bytearray):
+        decryptor = self.decryptor()
+        return (decryptor.update(a2b_base64(data)) + decryptor.finalize()).rstrip(
+            bytes(1)
+        )
+
+    def decrypt_text(self, text: str):
+        return self.decrypt(text.encode()).decode()

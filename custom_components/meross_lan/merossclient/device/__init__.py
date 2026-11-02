@@ -1,0 +1,863 @@
+import asyncio
+from datetime import UTC, tzinfo
+from typing import TYPE_CHECKING, override
+
+import aiohttp
+
+from .. import (
+    Descriptor,
+    DeviceDescriptor,
+    datetime_from_epoch,
+    is_device_online,
+)
+from ..client import AbstractClient
+from ..exceptions import MerossTransportError
+from ..protocol import const as mc, namespaces as mn
+from ..protocol.message import MerossMessage
+from .handler import NamespaceHandler, NamespaceParser
+
+if TYPE_CHECKING:
+    from asyncio import Task
+    from typing import Any, Callable, ClassVar, Final, Self, Unpack
+
+    from .. import SubDeviceDescriptor
+    from ..client.bluetooth import BluetoothClient
+    from ..client.http import HttpClient
+    from ..client.mqtt import AbstractMQTTConnection
+    from ..logging import LoggerType
+    from ..protocol import types as mt
+    from ..protocol.message import MerossRequest, MerossResponse
+    from ..protocol.types import (
+        JsonDict,
+        JsonList,
+        JsonMapping,
+        MerossMessageType,
+        MerossPayloadType,
+        MerossRequestType,
+    )
+
+Transport = AbstractClient.Transport
+
+
+class PhysicalDevice(AbstractClient):
+    """Common base for physical devices including Hub-paired (sub)devices.
+    This is the common root of two main hierarchy branches defined in:
+    - Device: any physical device with it's own network ip address
+    - SubDevice: any physical device connected through an Hub (Device)
+
+    This common root allows to abstract communication with namespaces
+    which is actually carried/mediated by a proper Device.
+    """
+
+    if TYPE_CHECKING:
+        id: Final[str]  # type: ignore[override]
+        """uuid for standard devices (including hub), subdevice id for hub-paired subdevices."""
+        descriptor: Final[Descriptor]  # type: ignore[override]
+
+        class Args(AbstractClient.Args):
+            descriptor: Descriptor
+
+        def __init__(
+            self, id, parent: "LoggerType | None" = None, /, **kwargs: "Unpack[Args]"
+        ): ...
+
+    @override
+    async def async_request_raw(
+        self,
+        request: "MerossRequest",
+        /,
+        **kwargs: "Unpack[AbstractClient.RequestRawArgs]",
+    ) -> "MerossResponse":
+        raise NotImplementedError(
+            "async_request_raw is not implemented by design. Please use async_request instead"
+        )
+
+    # interface: self
+    @property
+    def display_name(self) -> str:
+        return self.descriptor.productname
+
+    def _handle_missing_parser(
+        self, nh: NamespaceHandler, index: mn.IndexValue, payload: "mt.JsonMapping", /
+    ) -> bool:
+        """This is called by a NamespaceHandler when it receives a message
+        addressed to this device but no parser has been registered.
+        """
+        return False
+
+
+class Device(PhysicalDevice):
+    """Class to manage a Meross device. This is the main class of the library
+    and provides the core functionalities to interact with the device (be it an Hub or a standard device),
+    manage its state, and handle its namespaces."""
+
+    if TYPE_CHECKING:
+
+        type DigestParseFunc = Callable[[JsonDict], None] | Callable[[JsonList], None]
+
+        class Args(PhysicalDevice.Args):
+            descriptor: DeviceDescriptor
+
+        class ConnectArgs(AbstractClient.ConnectArgs):
+            pass
+
+        NAMESPACE_INIT_PACKAGE: ClassVar[str]
+        """Package/module path where to look for namespace initialization functions."""
+        NAMESPACE_INIT: ClassVar[dict[mn.Namespace, NamespaceHandler.Factory]]
+        """Static dict of namespace initialization functions. This will be looked up
+        and matched against the current device abilities (at device init time) and
+        usually setups a dedicated namespace handler and/or a dedicated entity.
+        As far as the initialization functions are looked up in related modules,
+        they'll be cached in the dict.
+        Namespace handlers will be initialized in the order as they appear in NAMESPACE_INIT
+        so that dependencies are initialized in a consistent way."""
+
+        descriptor: Final[DeviceDescriptor]  # type: ignore[override]
+
+        # Configuration
+        preferred_transport: Transport
+        polling_period: int
+
+        # State
+        transport: Final[Transport]
+        """Currently active transport. This is a proxy for self.client.transport."""
+        client: Final[AbstractClient | None]
+        """Currently active client i.e. the client used by default for requests."""
+        bluetooth: Final[BluetoothClient | None]
+        http: Final[HttpClient | None]
+        mqtt: Final[AbstractMQTTConnection.Client | None]
+        mqtt_active: Final[bool]
+        """MQTT application layer is fully connected i.e. we receive valid data from the remote end.
+        This attribute is a proxy for the actual MQTT client state (is_connected) and
+        need to be kept in sync (This is mostly accomplished in AbstractMQTTConnection.Client)."""
+        _clients: Final[dict[Transport, AbstractClient]]
+        _clients_connected: Final[dict[Transport, AbstractClient]]
+        subdevices: dict[str, "SubDevice"]
+        ns_handlers: Final[dict[mn.Namespace, NamespaceHandler]]
+        handler_all: Final[NamespaceHandler]
+
+        tz: tzinfo
+
+        device_response_size_min: int
+        device_response_size_max: int
+        multiple_max: int
+        _multiple_requests: list[NamespaceHandler]
+        _multiple_response_size: int
+
+        _polling_task: Task | None
+        polling_lock: asyncio.Lock
+        polling_epoch: Final[float]
+        _lazypoll_requests: list[NamespaceHandler]
+
+    HEARTBEAT_TIMEOUT = 300
+    TRANSPORT = Transport.AUTO  # type: ignore[override]
+
+    # TODO: define global symbol for merossclient package/library
+    NAMESPACE_INIT_PACKAGE = "merossclient"
+    NAMESPACE_INIT = {}
+
+    _SLOTS = (
+        "preferred_transport",
+        "polling_period",
+        "transport",
+        "client",
+        "bluetooth",
+        "http",
+        "mqtt",
+        "mqtt_active",
+        "_clients",
+        "_clients_connected",
+        "subdevices",
+        "ns_handlers",
+        "handler_all",
+        "tz",
+        "device_response_size_min",
+        "device_response_size_max",
+        "multiple_max",
+        "_multiple_requests",
+        "_multiple_response_size",
+        "_polling_task",
+        "_polling_lock",
+        "polling_epoch",
+        "_lazypoll_requests",
+    )
+
+    def __init__(
+        self, id, parent: "LoggerType | None" = None, **kwargs: "Unpack[Args]"
+    ):
+        super().__init__(id, parent, **kwargs)
+        self.transport = self.preferred_transport = self.TRANSPORT
+        self.client = None
+        self.bluetooth = None
+        self.http = None
+        self.mqtt = None
+        self.mqtt_active = False
+        self._clients = {}
+        self._clients_connected = {}
+        self.subdevices = {}
+        self.ns_handlers = {}
+        self.handler_all = NamespaceHandler(
+            mn.Appliance_System_All,
+            self,
+            config=(
+                self.HEARTBEAT_TIMEOUT,
+                0,
+                NamespaceHandler.async_polling_strategy_ns_all,
+            ),
+        )
+        self.tz = UTC
+        self.device_response_size_min = 1000
+        self.device_response_size_max = (
+            self.descriptor.ability.get(mn.Appliance_Control_Multiple, {}).get(
+                "maxCmdNum", 0
+            )
+            * 800
+        )
+        if self.device_response_size_max < self.device_response_size_min:
+            self.device_response_size_max = self.device_response_size_min
+        self.multiple_max = 0
+        self._multiple_requests = []
+        self._multiple_response_size = NamespaceHandler.HEADER_AVG_SIZE
+        self._lazypoll_requests = []
+        self._polling_task = None
+        self.polling_lock = asyncio.Lock()
+        self.polling_epoch = self.time()
+
+    async def async_init(self):
+        await self._async_init_zoneinfo()
+        for ns, nh_factory in self.NAMESPACE_INIT.items():
+            if nh_factory.auto and (ns in self.descriptor.ability):
+                try:
+                    await nh_factory.async_build(ns, self)
+                except Exception as exception:
+                    self.log_exception(
+                        self.WARNING, exception, "initializing namespace %s", ns
+                    )
+
+    async def _async_init_zoneinfo(self, /):
+        if tzname := self.descriptor.timezone:
+            try:
+                self.tz = await self.async_load_zoneinfo(tzname)
+            except Exception:
+                self.tz = UTC
+        else:
+            self.tz = UTC
+
+    @override
+    async def async_shutdown(self):
+        await self.async_polling_stop()
+        for client in tuple(self._clients.values()):
+            await client.async_shutdown()
+        for subdevice in self.subdevices.values():
+            await subdevice.async_shutdown()
+        self.subdevices.clear()
+        for handler in self.ns_handlers.values():
+            await handler.async_shutdown()
+        self.ns_handlers.clear()
+        await super().async_shutdown()
+        del self.handler_all  # type: ignore
+        # This must be by design
+        assert self.is_connected is False, "Device shutdown failed: still connected"
+        assert not self.client, "Device shutdown failed: client still set"
+        assert not self._clients, "Device shutdown failed: clients still set"
+        assert (
+            not self._clients_connected
+        ), "Device shutdown failed: connected clients still set"
+
+    # interface: AbstractClient
+    @override
+    async def async_connect(self, /, **kwargs: "Unpack[ConnectArgs]"):
+        connect_tasks = [
+            _client.create_task(
+                _client.async_request(*self.handler_all.polling_request),
+                f".async_connect_{_client.TRANSPORT}_task",
+                eager_start=False,
+            )
+            for _client in self._clients.values()
+        ]
+        if connect_tasks:
+            try:
+                async for earliest_connect in asyncio.as_completed(
+                    connect_tasks,
+                    timeout=kwargs.get("timeout", self.timeout),
+                ):
+                    try:
+                        response = await earliest_connect
+                        if not self.is_connected:
+                            self.on_connect()
+                        self.handler_all.handle(response)
+                        self.handler_all.polling_response_size = len(response.json)
+                        return response
+                    except MerossTransportError as e:
+                        e.log(self.WARNING, "async_connect", timeout=14400)
+                    except Exception as e:
+                        self.log_exception(
+                            self.WARNING, e, "async_connect", timeout=14400
+                        )
+            except Exception as e:
+                raise MerossTransportError(self) from e
+
+        raise MerossTransportError(self, "No transport available")
+
+    @override
+    async def async_disconnect(self, /):
+        await asyncio.gather(
+            *[
+                _client.async_disconnect()
+                for _client in self._clients_connected.values()
+            ],
+            return_exceptions=True,
+        )
+        assert (
+            not self.is_connected
+        ), "disconnect failed: still connected to some transports"
+
+    @override
+    def on_connect(self, /):
+        super().on_connect()
+        for nh in self.ns_handlers.values():
+            nh.reset_state()
+
+    @override
+    def on_disconnect(self, /):
+        super().on_disconnect()
+        for subdevice in self.subdevices.values():
+            if subdevice.is_connected:
+                subdevice.on_disconnect()
+        self.client = None  # type: ignore[assignment]
+        self.transport = self.TRANSPORT  # type: ignore[assignment]
+        self.mqtt_active = False  # type: ignore[assignment]
+
+    @override
+    async def async_request(
+        self,
+        *args: "Unpack[MerossRequestType]",
+        **kwargs: "Unpack[AbstractClient.RequestArgs]",
+    ):
+        """
+        route the request through available transports to the physical device according to
+        current protocol. When switching transport the message is recomputed to
+        avoid reusing the same (old) timestamps and messageids.
+        """
+        # save a copy since any transport error might 'flip' self.client
+        _client = self.client
+        try:
+            # We expect this to work most of the time, so we try it first without checking
+            # for _client validity and catch any exception to trigger the fallback logic.
+            return await _client.async_request(*args, **kwargs)  # type: ignore
+        except Exception as e:
+            if _client:
+                if len(self._clients) < 2:
+                    raise
+                tryed_clients = {_client}
+                self.log_exception(
+                    self.DEBUG,
+                    e,
+                    "%s request (client:%s): trying fall-back",
+                    _client.TRANSPORT,
+                    _client,
+                )
+            else:
+                if not self._clients:
+                    raise MerossTransportError(
+                        self, "No transport available to send the request"
+                    )
+                tryed_clients = set()
+
+        while True:
+            for _client in self._clients_connected.values():
+                if _client in tryed_clients:
+                    continue
+                try:
+                    return await _client.async_request(*args, **kwargs)
+                except Exception as e:
+                    tryed_clients.add(_client)
+                    last_exception = e
+                    # We need to break here because _clients_connected might change
+                    # This is expensive but we could only have max 2 connected clients at a time
+                    break  # to outer (infinite) loop
+            else:
+                break
+
+        while True:
+            for _client in self._clients.values():
+                if _client in tryed_clients:
+                    continue
+                try:
+                    return await _client.async_request(*args, **kwargs)
+                except Exception as e:
+                    tryed_clients.add(_client)
+                    last_exception = e
+                    break  # to outer (infinite) loop
+            else:
+                break
+
+        raise last_exception  # type: ignore[unbound-variable]
+
+    # interface: self
+    @property
+    def meross_binded(self):
+        """
+        Reports if the device own MQTT connection is active and likely Meross
+        account binded.
+        """
+        if (mqtt := self.mqtt) and mqtt.is_connected:
+            return mqtt.connection.is_cloud
+        # if we're not connected (either reason) check the internal
+        # device state connection
+        if not is_device_online(self.descriptor.system):
+            return False
+        # the device is connected to its own broker..assume
+        # it is a Meross cloud one
+        return True
+
+    def get_device_datetime(self, epoch, /):
+        """
+        given the epoch (utc timestamp) returns the datetime
+        in device local timezone
+        """
+        return datetime_from_epoch(epoch, self.tz)
+
+    def add_client(self, client: "AbstractClient", /):
+        assert (
+            getattr(self, client.TRANSPORT) is None
+        ), f"{client.TRANSPORT} client already attached to {self}"
+        client.on_device_add(self)
+        setattr(self, client.TRANSPORT, client)
+        self._clients[client.TRANSPORT] = client
+        client.connect_broadcast.add(self.on_client_connect)
+        client.disconnect_broadcast.add(self.on_client_disconnect)
+        client.tx_broadcast.add(self.on_tx)
+        client.rx_broadcast.add(self.on_rx)
+        if client.is_connected:
+            self.on_client_connect(client)
+
+    def remove_client(self, client: "AbstractClient", /):
+        assert (
+            getattr(self, client.TRANSPORT) is client
+        ), f"{client.TRANSPORT} client not attached to {self}"
+        client.on_device_remove(self)
+        del self._clients[client.TRANSPORT]
+        setattr(self, client.TRANSPORT, None)
+        if client.is_connected:
+            self.on_client_disconnect(client)
+        client.connect_broadcast.remove(self.on_client_connect)
+        client.disconnect_broadcast.remove(self.on_client_disconnect)
+        client.tx_broadcast.remove(self.on_tx)
+        client.rx_broadcast.remove(self.on_rx)
+        if self.client is client:
+            self.client = None  # type: ignore[assignment]
+            self.transport = self.TRANSPORT  # type: ignore[assignment]
+            self.log(self.DEBUG, "Switching transport to %s", self.transport)
+
+    def on_client_connect(self, client: "AbstractClient", /):
+        self._clients_connected[client.TRANSPORT] = client
+
+    def on_client_disconnect(self, client: "AbstractClient", /):
+        del self._clients_connected[client.TRANSPORT]
+        if self._clients_connected:
+            if self.client is client:
+                self._switch_client(next(iter(self._clients_connected.values())))
+        elif self.is_connected:
+            self.on_disconnect()
+
+    def _switch_client(self, client: "AbstractClient"):
+        self.client = client  # type: ignore[assignment]
+        self.transport = client.TRANSPORT  # type: ignore[assignment]
+        self.log(self.DEBUG, "Switching transport to %s", self.transport)
+
+    def build_handler(self, ns: "mn.Namespace", /) -> NamespaceHandler:
+        """Creates an actual NamespaceHandler by building a proper one using configuration in NAMESPACE_INIT or,
+        as last resort, instantiating a plain default handler. Any namespace not explicitly configured will be
+        created with a policy to not be polled."""
+        try:
+            return self.NAMESPACE_INIT[ns].build(ns, self)
+        except KeyError:
+            # We consider any namespace not explicitly configured in NAMESPACE_INIT as not
+            # needing polling whatever the ns content semantics.
+            return NamespaceHandler(
+                ns, self, config=NamespaceHandler.POLLING_CONFIG_NONE
+            )
+
+    def get_handler(self, ns: "mn.Namespace", /):
+        """Returns an actual NamespaceHandler by looking up those already installed in the device
+        or building a proper one through 'build_handler'."""
+        try:
+            return self.ns_handlers[ns]
+        except KeyError:
+            return self.build_handler(ns)
+
+    def register_parser_ex(self, parser: NamespaceParser, *nss: "mn.Namespace"):
+        """Register a parser for multiple namespaces. Abilities are checked for namespaces availability."""
+        for ns in nss:
+            try:
+                # fast path here since likely to suceed
+                self.ns_handlers[ns].register_parser(parser)
+            except KeyError:
+                if ns not in self.descriptor.ability:
+                    continue
+                if ns in self.ns_handlers:
+                    raise
+                self.build_handler(ns).register_parser(parser)
+
+    @property
+    def polling_response_size_available(self):
+        """Returns the expected maximum allowed request response size in the current
+        multiple request poll. If multiple polling is disabled this works too."""
+        return (
+            self.device_response_size_max - self._multiple_response_size
+            if self.multiple_max
+            else self.device_response_size_max
+        )
+
+    @property
+    def should_limit_cloud_polling(self):
+        """Returns True if we should limit cloud polling in order to avoid hitting the device rate-limiting.
+        This is typically when we're using Meross cloud MQTT and we should avoid hitting the 200 messages x hour limit.
+        """
+        return (
+            self.mqtt
+            and (self.client is self.mqtt)  # active client is MQTT
+            and (
+                self.mqtt.connection.get_rl_safe_delay(self.id) > 20
+            )  # 20 secs to wait before next MQTT request without hitting rate-limiting
+        )
+
+    def enable_multiple(self, enable: bool, /):
+        self.multiple_max = (
+            self.descriptor.ability.get(mn.Appliance_Control_Multiple, {}).get(
+                "maxCmdNum", 0
+            )
+            if enable
+            else 0
+        )
+        self._multiple_requests.clear()
+        self._multiple_response_size = NamespaceHandler.HEADER_AVG_SIZE
+
+    def polling_start(self):
+        """Starts scheduling the polling task. This will be automatically
+        re-scheduled until polling_stop is called which will cancel the schedule
+        and any ongoing polling task.
+        When called while a schedule is already in place, it'll be cancelled and re-started immediately.
+        """
+        if not self._polling_task:
+            self.cancel_callback(self._async_polling_schedule)
+            self._async_polling_schedule()
+
+    async def async_polling_stop(self):
+        """Stops the polling schedule and cancels any ongoing polling task."""
+        if self._polling_task and self._polling_task.cancel("polling_stop"):
+            try:
+                await self._polling_task
+            except asyncio.CancelledError:
+                pass
+        self.cancel_callback(self._async_polling_schedule)
+
+    def _async_polling_schedule(self, /):
+        assert not self._polling_task
+        self._polling_task = self.create_task(
+            self._async_poll(), f"._polling", eager_start=False
+        )
+        return self._polling_task
+
+    async def _async_poll(self, /):
+        self.log(self.DEBUG, "Polling begin")
+        try:
+            async with self.polling_lock:
+                self.polling_epoch = epoch = self.time()  # type: ignore[assignment]
+                if self.is_connected:
+                    # perform some heartbeats in case
+                    if (
+                        (http := self.http)
+                        and (self.client is not http)
+                        and (self.preferred_transport is Transport.HTTP)
+                        and ((epoch - http.last_tx_epoch) > self.HEARTBEAT_TIMEOUT)
+                    ):
+                        try:
+                            self.handler_all.handle(
+                                await http.async_request(
+                                    *self.handler_all.polling_request
+                                )
+                            )
+                        except Exception:
+                            pass
+
+                    if (
+                        (mqtt := self.mqtt)
+                        and mqtt.connection.can_publish
+                        and ((epoch - mqtt.last_rx_epoch) > self.HEARTBEAT_TIMEOUT)
+                        and ((epoch - mqtt.last_tx_epoch) > self.HEARTBEAT_TIMEOUT)
+                    ):
+                        try:
+                            self.handler_all.handle(
+                                await mqtt.async_request(
+                                    *self.handler_all.polling_request
+                                )
+                            )
+                        except Exception:
+                            pass
+
+                else:  # offline
+                    await self.async_connect()
+
+                """
+                When 'namespace' is not 'None' it represents the device coming online
+                following a succesful received message. This is likely to be 'NS_ALL'.
+                If we're connected to an MQTT broker anyway it could be any 'PUSH' message.
+                We'll use _queued_smartpoll_requests to track how many polls went through
+                over MQTT for this cycle in order to only send 1 for each if we're
+                binded to a cloud MQTT broker (in order to reduce bursts).
+                If a poll request is discarded because of this, it should go through
+                on the next polling cycle. This will 'spread' smart requests over
+                subsequent polls
+                """
+                # self.ns_handlers could change at any time due to async
+                # message parsing (handlers might be dynamically created by then)
+                # Also, we skip ns polling for data wich might be carried in ns_all digest
+                # since self._async_poll_all is already automatically taking care of this.
+                for nh in self.ns_handlers.values():
+                    if nh.polling_strategy and not nh.digest:
+                        try:
+                            await nh.polling_strategy(nh)
+                        except Exception as e:
+                            if self.is_connected:
+                                self.log_exception(
+                                    self.WARNING,
+                                    e,
+                                    "%s for %s",
+                                    nh.polling_strategy.__name__,
+                                    nh.id,
+                                )
+                            else:
+                                raise
+
+                if self._multiple_requests:
+                    await self.async_poll_flush()
+
+        except asyncio.CancelledError:
+            self.log(self.DEBUG, "Polling cancelled")
+            raise
+        except MerossTransportError as e:
+            e.log(self.WARNING, "async_poll", timeout=14400)
+        except Exception as e:
+            self.log_exception(self.WARNING, e, "async_poll", timeout=14400)
+        finally:
+            self._multiple_requests.clear()
+            self._multiple_response_size = NamespaceHandler.HEADER_AVG_SIZE
+            self._lazypoll_requests.clear()
+            self._polling_task = None
+        # When cancelling all this stuff will be skipped meaning we're not rescheduling
+        # until async_poll_start again
+        if self.polling_period:
+            # We'll schedule the next callback only at the end thus leading to an overall irregular
+            # effective polling period but this avoids having overlapping polls when some timeouts
+            # make the polling cycle last too much
+            self.schedule_callback(self.polling_period, self._async_polling_schedule)
+        self.log(self.DEBUG, "Polling end")
+
+    async def async_poll_full(self):
+        """Perform a 'full' namespaces poll like when onlining i.e. without any lazy optimization."""
+        await self.async_polling_stop()
+        for nh in self.ns_handlers.values():
+            nh.reset_state()
+        await self._async_polling_schedule()
+
+    async def async_poll_flush(self):
+        multiple_requests = self._multiple_requests
+        multiple_response_size = self._multiple_response_size
+        self._multiple_requests = []
+        self._multiple_response_size = NamespaceHandler.HEADER_AVG_SIZE
+
+        requests_len = len(multiple_requests)
+        while self.is_connected and requests_len:
+            lazypoll_requests = self._lazypoll_requests
+            while (requests_len < self.multiple_max) and lazypoll_requests:
+                # we have space available in current ns_multiple and lazy pollers are waiting
+                for nh in lazypoll_requests:
+                    # lazy pollers are ordered by 'oldest polled first' so
+                    # the first is the one which hasn't been polled since longer
+                    # we then decide to add to the current ns_multiple the first that would fit in
+                    if (
+                        nh.polling_response_size + multiple_response_size
+                    ) < self.device_response_size_max:
+                        nh.next_poll_epoch = self.polling_epoch + nh.polling_period
+                        multiple_requests.append(nh)
+                        lazypoll_requests.remove(nh)
+                        multiple_response_size += nh.polling_response_size
+                        requests_len += 1
+                        # check if we can add more
+                        break  # for
+                else:
+                    # no lazy_poller could match..break out of while
+                    break  # while
+
+            if requests_len == 1:
+                nh = multiple_requests[0]
+                nh.handle(await self.async_request(*nh.polling_request))
+                return
+
+            try:
+                response = await self.async_request_multiple(
+                    (nh.polling_request for nh in multiple_requests),
+                )
+            except MerossTransportError as e:
+                if not self.is_connected:
+                    raise
+                # The ns_multiple failed but the reason could be the device
+                # did overflow somehow. I've seen 2 kind of errors so far on the
+                # HTTP client: typically the device returns an incomplete json
+                # and this is partly recovered in our http interface. One(old)
+                # bulb (msl120) instead completely disconnects (ServerDisconnectedException
+                # in http client) and so we get here with no response. The same
+                # msl bulb timeouts completely on MQTT. At this point, if the device is
+                # still online we're trying a last resort issue of single requests
+                self.log(
+                    self.DEBUG,
+                    "Appliance.Control.Multiple failed with '%s' (requests=%d expected size=%d)",
+                    str(e),
+                    requests_len,
+                    multiple_response_size,
+                )
+                # Here we reduce the device_response_size_max so that
+                # next ns_multiple will be less demanding. device_response_size_min
+                # is another dynamic param representing the biggest payload ever received
+                if e.likely_remote_overflow:
+                    self.device_response_size_max = (
+                        self.device_response_size_max + self.device_response_size_min
+                    ) / 2  # type: ignore
+                    self.log(
+                        self.DEBUG,
+                        "Updating device_response_size_max:%d",
+                        self.device_response_size_max,
+                    )
+                for nh in multiple_requests:
+                    nh.handle(await self.async_request(*nh.polling_request))
+                return
+
+            multiple_responses = response[mc.KEY_PAYLOAD][mc.KEY_MULTIPLE]
+            if not multiple_responses:
+                # no response at all..this is pathological but we have
+                # examples (#526) of this so we'll just try issue single requests
+                self.log(
+                    self.WARNING,
+                    "Appliance.Control.Multiple empty response (requests=%d expected size=%d)",
+                    requests_len,
+                    multiple_response_size,
+                    timeout=14400,
+                )
+                for nh in multiple_requests:
+                    nh.handle(await self.async_request(*nh.polling_request))
+                return
+
+            responses_len = len(multiple_responses)
+            if self.isEnabledFor(self.DEBUG):
+                self.log(
+                    self.DEBUG,
+                    "Appliance.Control.Multiple requests=%d (responses=%d) expected size=%d (actual=%d)",
+                    requests_len,
+                    responses_len,
+                    multiple_response_size,
+                    len(response.json),
+                )
+
+            message: "MerossMessageType"
+            for message in multiple_responses:
+                _response = MerossMessage(message)
+                for nh in multiple_requests:
+                    if nh.id != _response.namespace:
+                        continue
+                    multiple_requests.remove(nh)
+                    nh.handle(_response)
+                    break
+                else:
+                    # not found..something is wrong!! TODO: log a DEBUG/WARNING here?
+                    pass
+
+            # and re-issue the missing ones
+            requests_len = len(multiple_requests)
+            multiple_response_size = -1  # logging purpose
+
+    async def async_unbind(self):
+        """
+        WARNING!!!
+        Hardware reset to factory default: the device will unpair itself from
+        the (cloud) broker and then reboot, ready to be initialized/paired.
+        This coroutine will likely raise an exception (server connection reset or timeout)
+        """
+        # in case we're connected to a broker we'll use that since
+        # it appears the (cloud) broker session level will take care of also removing
+        # the device from its list, thus totally cancelling it from the Meross account
+        if self.mqtt and self.mqtt.is_connected:
+            return await self.mqtt.async_request(
+                *mn.Appliance_Control_Unbind.request_default
+            )
+        # else go with whatever transport: the device will reset it's configuration
+        return await self.async_request(*mn.Appliance_Control_Unbind.request_default)
+
+    def _handle_Appliance_System_All(self, message: MerossMessage, /):
+        descr = self.descriptor
+        descr.update(message.payload)
+
+        if (self.client is self.http) and (mqtt := self.mqtt):
+            # speed up MQTT online/offline detection by checking device reported state
+            if mqtt.is_connected:
+                if not is_device_online(descr.system):
+                    mqtt.on_disconnect()
+            elif is_device_online(descr.system):
+                connection = mqtt.connection
+                # if connection.id != descr.server we cannot assume anything since
+                # host name might have different labels but still refer to the same host
+                if connection.is_connected and (connection.id == descr.server):
+                    mqtt.on_connect()
+                    if self.preferred_transport is Transport.MQTT:
+                        self._switch_client(mqtt)
+
+        digest = descr.digest or descr.control
+        for nh in self.ns_handlers.values():
+            if nh.digest:
+                nh.last_poll_epoch = self.last_rx_epoch
+                nh.next_poll_epoch = self.last_rx_epoch + nh.polling_period
+                nh.digest = nh.id.get_digest(digest)
+                nh.parse_digest(nh.digest)
+
+
+class SubDevice(PhysicalDevice, NamespaceParser):
+    """Common base for hub-paired subdevices."""
+
+    if TYPE_CHECKING:
+        parent: Final[Device]  # type: ignore[override]
+        descriptor: Final[SubDeviceDescriptor]  # type: ignore[override]
+
+        class Args(PhysicalDevice.Args):
+            descriptor: SubDeviceDescriptor
+
+    _AUTO_DESTROY = ("async_request",)
+    __slots__ = ()
+
+    def __init__(self, subid: str, parent: "Device", **kwargs: "Unpack[Args]"):
+        self.async_request = parent.async_request
+        kwargs["key"] = parent.key
+        kwargs["from_"] = parent.from_
+        kwargs["trigger_src"] = parent.trigger_src
+        kwargs["timeout"] = parent.timeout
+        parent.subdevices[subid] = self
+        super().__init__(subid, parent, **kwargs)
+
+    # interface: AbstractClient
+    @override
+    async def async_connect(self, /, **kwargs):
+        pass
+
+    @override
+    async def async_disconnect(self, /):
+        pass
+
+    # interface: self
+    def log_duplicated(self, /):
+        self.log(
+            self.CRITICAL,
+            "Subdevice: %s (id:%s) appears twice in device data. Shouldn't happen",
+            self.display_name,
+            self.id,
+            timeout=604800,  # 1 week
+        )

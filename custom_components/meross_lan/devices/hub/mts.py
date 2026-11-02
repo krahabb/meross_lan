@@ -1,0 +1,452 @@
+from enum import StrEnum
+from typing import TYPE_CHECKING, override
+
+from . import SubDevice, mc, mn_h
+from ...binary_sensor import BinarySensorEntity
+from ...climate import MtsClimate
+from ...number import NumberParser
+from ...select import SelectParser
+from ...sensor import SensorEntity
+from ...switch import EmulatedSwitch, SwitchParser
+
+if TYPE_CHECKING:
+    from typing import Unpack
+
+    from . import Hub
+    from ...merossclient import SubDeviceDescriptor
+    from ...merossclient.protocol import types as mt
+
+
+class mts100(SubDevice, MtsClimate):
+    """Climate entity for hub paired devices MTS100, MTS100V3, MTS150"""
+
+    class AdjustNumber(MtsClimate.AdjustNumber):
+
+        _INIT_ns = mn_h.Appliance_Hub_Mts100_Adjust
+        _INIT_key_value = MtsClimate.AdjustNumber.KeyValue(mc.KEY_TEMPERATURE)
+        _INIT_entity_key = f"config_{_INIT_ns.key}_{_INIT_key_value}"
+        _INIT_device_scale = 100
+        _attr_native_max_value = 5
+        _attr_native_min_value = -5
+        _attr_native_step = 0.5
+
+    if TYPE_CHECKING:
+        ns_value: mt.hub._Mts100_Temperature
+        binary_sensor_window: BinarySensorEntity
+        switch_patch_hvacaction: EmulatedSwitch
+
+    NS_HUB = (
+        mn_h.Appliance_Hub_Mts100_All,
+        mn_h.Appliance_Hub_Mts100_Mode,
+        mn_h.Appliance_Hub_SubDevice_Lock,
+        mn_h.Appliance_Hub_ToggleX,
+    )
+    _INIT_ns = mn_h.Appliance_Hub_Mts100_Temperature
+
+    # MtsClimate class attributes
+    SCHEDULE_NS = mn_h.Appliance_Hub_Mts100_ScheduleB
+    MTS_MODE_TO_PRESET_MAP = {
+        mc.MTS100_MODE_CUSTOM: MtsClimate.Preset.CUSTOM,
+        mc.MTS100_MODE_HEAT: MtsClimate.Preset.COMFORT,
+        mc.MTS100_MODE_COOL: MtsClimate.Preset.SLEEP,
+        mc.MTS100_MODE_ECO: MtsClimate.Preset.AWAY,
+        mc.MTS100_MODE_AUTO: MtsClimate.Preset.AUTO,
+    }
+    # when setting target temp we'll set an appropriate payload key
+    # for the mts100 depending on current 'preset' mode.
+    # if mts100 is in any of 'off', 'auto' we just set the 'custom'
+    # target temp but of course the valve will not follow
+    # this temp since it's mode is not set to follow a manual set
+    MTS_MODE_TO_TEMPERATUREKEY_MAP = {
+        k: MtsClimate.SetPointNumber.KeyValue(v)
+        for k, v in mc.MTS100_MODE_TO_CURRENTSET_MAP.items()
+    }
+
+    # HA core entity attributes:
+    _unrecorded_attributes = frozenset((mc.KEY_SCHEDULEBMODE,))
+
+    _AUTO_DESTROY = ("binary_sensor_window", "switch_patch_hvacaction")
+
+    def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
+        SubDevice.__init__(self, descriptor, hub, **kwargs)
+        self.extra_state_attributes = {}
+        try:
+            self.schedule._schedule_unit_time = hub.descriptor.ability[
+                mn_h.Appliance_Hub_Mts100_ScheduleB
+            ][mc.KEY_SCHEDULEUNITTIME]
+        except KeyError:
+            self.schedule._schedule_unit_time = 15
+        self.binary_sensor_window = BinarySensorEntity(
+            self,
+            entity_key=BinarySensorEntity.DeviceClass.WINDOW.value,
+            device_class=BinarySensorEntity.DeviceClass.WINDOW,
+        )
+        self.switch_patch_hvacaction = EmulatedSwitch(
+            self,
+            entity_key="patch_hvacaction",
+            is_on=False,
+            entity_registry_enabled_default=False,
+        )
+        self.switch_patch_hvacaction.register_state_callback(self.flush_state)
+
+    # interface: MtsClimate
+    @override
+    def flush_state(self, /):
+        self.preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)
+        if self._mts_onoff:
+            self.hvac_mode = MtsClimate.HVACMode.HEAT
+            if self.switch_patch_hvacaction.is_on:
+                # locally compute the state of the valve ignoring what's being
+                # reported in self._mts_active (see #331)
+                self.hvac_action = (
+                    MtsClimate.HVACAction.HEATING
+                    if (
+                        (self.native_target_temperature or 0)
+                        > (self.native_current_temperature or 0)
+                    )
+                    else MtsClimate.HVACAction.IDLE
+                )
+            else:
+                self.hvac_action = (
+                    MtsClimate.HVACAction.HEATING
+                    if self._mts_active
+                    else MtsClimate.HVACAction.IDLE
+                )
+        else:
+            self.hvac_mode = MtsClimate.HVACMode.OFF
+            self.hvac_action = MtsClimate.HVACAction.OFF
+        MtsClimate.flush_state(self)
+
+    async def async_set_temperature(self, **kwargs):
+        if (
+            self.SET_TEMP_FORCE_MANUAL_MODE and self._mts_mode != mc.MTS100_MODE_CUSTOM
+        ) or (self._mts_mode == mc.MTS100_MODE_AUTO):
+            # setting the temperature automatically switches
+            # to manual 'custom' mode. (2024-06-27) This is a change
+            # against previous behavior where the mode was retained
+            # (unless schedule mode) and the temp setting was directed to any
+            # of the presets, whichever was active at the moment.
+            # This is following #401 and seems more natural behavior.
+            # self.SET_TEMP_FORCE_MANUAL_MODE acts as a config bool
+            # to enable this behavior or fallback to the legacy one.
+            # Keep in mind we're not also forcing the device to 'ON'.
+            # This is intended (right now) to allow the user change
+            # the setpoint without implying the device switch on.
+            # Turning on/off the device must be an explicit action on HVACMode.
+            await self.parent.async_request(
+                *mn_h.Appliance_Hub_Mts100_Mode.request_set(
+                    self.index | {mc.KEY_STATE: mc.MTS100_MODE_CUSTOM}
+                )
+            )
+            self._mts_mode = mc.MTS100_MODE_CUSTOM
+
+        key = mc.MTS100_MODE_TO_CURRENTSET_MAP.get(self._mts_mode) or mc.KEY_CUSTOM
+        await self.async_request_parse_ex(
+            {key: round(kwargs[mts100.ATTR_TEMPERATURE] * self.temperature_scale)}
+        )
+
+    @override
+    async def async_request_preset(self, mode: int, /):
+        """Requests an mts mode and (ensure) turn-on"""
+        await self.parent.async_request(
+            *mn_h.Appliance_Hub_Mts100_Mode.request_set(
+                self.index | {mc.KEY_STATE: mode}
+            )
+        )
+        self._mts_mode = mode
+        if not self._mts_onoff:
+            await self.parent.async_request(
+                *mn_h.Appliance_Hub_ToggleX.request_set(self.index | {mc.KEY_ONOFF: 1})
+            )
+            self._mts_onoff = 1
+        try:
+            native_target_temperature = self.ns_value[
+                mc.MTS100_MODE_TO_CURRENTSET_MAP[mode]
+            ]
+            self.ns_value[mc.KEY_CURRENTSET] = native_target_temperature
+            self.native_target_temperature = (
+                native_target_temperature / self.temperature_scale
+            )
+        except KeyError:
+            pass
+        self.flush_state()
+
+    @override
+    async def async_request_onoff(self, onoff: int, /):
+        await self.parent.async_request(
+            *mn_h.Appliance_Hub_ToggleX.request_set(self.index | {mc.KEY_ONOFF: onoff})
+        )
+        self._mts_onoff = onoff
+        self.flush_state()
+
+    @override
+    def is_mts_scheduled(self, /):
+        return self._mts_onoff and self._mts_mode == mc.MTS100_MODE_AUTO
+
+    @override
+    def __call__(self, payload: "mt.hub._Mts100_Temperature", /):
+        if self.ns_value == payload:
+            return
+        self.ns_value = payload
+        if mc.KEY_ROOM in payload:
+            self._update_current_temperature(
+                payload[mc.KEY_ROOM] / self.temperature_scale
+            )
+        if mc.KEY_CURRENTSET in payload:
+            self.native_target_temperature = (
+                payload[mc.KEY_CURRENTSET] / self.temperature_scale
+            )
+            if (
+                len(payload) == 2
+            ):  # { "id: "...", "room": ...} or { "id: "...", "currentSet": ...}
+                # only room temperature/setpoint updated -> this is 99.9% a PUSH
+                # whenever the target temp or mode changes
+                self.flush_state()
+                self.parent.ns_handlers[mn_h.Appliance_Hub_Mts100_Mode].schedule_get(
+                    self.index
+                )
+                return
+        if mc.KEY_MIN in payload:
+            self.min_temp = payload[mc.KEY_MIN] / self.temperature_scale
+        if mc.KEY_MAX in payload:
+            self.max_temp = payload[mc.KEY_MAX] / self.temperature_scale
+        if mc.KEY_HEATING in payload:
+            self._mts_active = payload[mc.KEY_HEATING]
+        if mc.KEY_OPENWINDOW in payload:
+            self.binary_sensor_window.update_boolean_value(payload[mc.KEY_OPENWINDOW])
+
+        for _number in self.number_preset_temperature:
+            try:
+                _number.native_max_value = self.max_temp
+                _number.native_min_value = self.min_temp
+                _number(payload)
+            except KeyError:
+                pass
+        self.flush_state()
+
+    # interface: SubDevice
+    @override
+    def _parse_digest_(self, payload: "mt.hub._mts100v3", /):
+        """parse digest key for mts100/mts100v3 subdevice"""
+        mode = payload[mc.KEY_MODE]
+        if self._mts_mode != mode:
+            self._mts_mode = mode
+            self.flush_state()
+
+    @override
+    def _parse_all(self, payload: "mt.hub.Mts100_All", /):
+        if self._parse_online(payload[mc.KEY_ONLINE]):
+            if mc.KEY_SCHEDULEBMODE in payload:
+                self.update_scheduleb_mode(payload[mc.KEY_SCHEDULEBMODE])
+            if p_mode := payload.get(mc.KEY_MODE):
+                self._mts_mode = p_mode[mc.KEY_STATE]
+            if p_togglex := payload.get(mc.KEY_TOGGLEX):
+                self._mts_onoff = p_togglex[mc.KEY_ONOFF]
+            if p_temperature := payload.get(mc.KEY_TEMPERATURE):
+                self(p_temperature)
+            else:
+                self.flush_state()
+
+    # interface: self
+    def _parse_mode(self, payload: "mt.hub._Mts100_Mode", /):
+        mode = payload[mc.KEY_STATE]
+        if self._mts_mode != mode:
+            self._mts_mode = mode
+            self.flush_state()
+
+    def _parse_lock(self, payload: "mt.hub.SubDevice_Lock", /):
+        # only install the switch entity when we receive the lock state update,
+        # this is to avoid creating the entity if the lock feature is not actually
+        # supported by the subdevice (it is not clear to me which hw/fw really supports this)
+        self.parent.ns_handlers[mn_h.Appliance_Hub_SubDevice_Lock].swap_parsers(
+            self,
+            SwitchParser(
+                self,
+                entity_key=(
+                    f"{mn_h.Appliance_Hub_SubDevice_Lock.slug}__{mc.KEY_STATE}"
+                ),
+                ns=mn_h.Appliance_Hub_SubDevice_Lock,
+                key_value=SwitchParser.KeyValue(mc.KEY_STATE),
+                name="Child lock",
+                ns_value=payload[mc.KEY_STATE],
+            ),
+        )
+
+    def _parse_togglex(self, payload: "mt.hub.ToggleX", /):
+        onoff = payload[mc.KEY_ONOFF]
+        if self._mts_onoff != onoff:
+            self._mts_onoff = onoff
+            self.flush_state()
+
+    def update_scheduleb_mode(self, mode, /):
+        self.extra_state_attributes[mc.KEY_SCHEDULEBMODE] = mode
+        self.schedule._schedule_entry_count_max = mode
+        self.schedule._schedule_entry_count_min = mode
+
+
+# No known differences between mts100 and mts100v3, they share the same
+# structure and ns support, just different key_digest. So we can just alias the class.
+mts100v3 = mts100
+
+
+class mts150(mts100):
+    """Climate entity for hub paired devices MTS150, MTS150P"""
+
+    if TYPE_CHECKING:
+        sensor_motor_position: SensorEntity | None
+        sensor_motor_start_count: SensorEntity | None
+
+    _AUTO_INIT = ("sensor_motor_position", "sensor_motor_start_count")
+    _AUTO_DESTROY = ("sensor_motor_position", "sensor_motor_start_count")
+
+    class PidGradeSelect(SelectParser):
+
+        class Option(StrEnum):
+            DEFAULT = "0"
+            LOW = "1"
+            MILD = "2"
+            MIDDLE = "3"
+            STRONG = "4"
+
+        if TYPE_CHECKING:
+            MTS150_PID_GRADE_MAP: dict[str, mt.hub.Mts100_Config_pid]
+            MTS150P_PID_GRADE_MAP: dict[str, mt.hub.Mts100_Config_pid]
+            _pid_grade_map: dict[str, mt.hub.Mts100_Config_pid]
+
+        _INIT_ns = mn_h.Appliance_Hub_Mts100_Config
+        _INIT_key_value = SelectParser.KeyValue(mc.KEY_PID, mc.KEY_GRADE)
+        _INIT_entity_key = f"{_INIT_ns.slug}__{_INIT_key_value}"
+        _INIT_options_map = {
+            0: Option.DEFAULT,
+            1: Option.LOW,
+            2: Option.MILD,
+            3: Option.MIDDLE,
+            4: Option.STRONG,
+        }
+
+        # presets from Meross App
+        MTS150_PID_GRADE_MAP = {
+            Option.DEFAULT: {mc.KEY_GRADE: 0, mc.KEY_P: 0, mc.KEY_I: 0},
+            Option.LOW: {mc.KEY_GRADE: 1, mc.KEY_P: 30, mc.KEY_I: 90},
+            Option.MILD: {mc.KEY_GRADE: 2, mc.KEY_P: 24, mc.KEY_I: 75},
+            Option.MIDDLE: {mc.KEY_GRADE: 3, mc.KEY_P: 16, mc.KEY_I: 45},
+            Option.STRONG: {mc.KEY_GRADE: 4, mc.KEY_P: 10, mc.KEY_I: 30},
+        }
+        MTS150P_PID_GRADE_MAP = {
+            Option.DEFAULT: {mc.KEY_GRADE: 0, mc.KEY_P: 0, mc.KEY_I: 0, mc.KEY_D: 0},
+            Option.LOW: {mc.KEY_GRADE: 1, mc.KEY_P: 12, mc.KEY_I: 4, mc.KEY_D: 2},
+            Option.MILD: {mc.KEY_GRADE: 2, mc.KEY_P: 18, mc.KEY_I: 5, mc.KEY_D: 2},
+            Option.MIDDLE: {mc.KEY_GRADE: 3, mc.KEY_P: 25, mc.KEY_I: 8, mc.KEY_D: 4},
+            Option.STRONG: {mc.KEY_GRADE: 4, mc.KEY_P: 30, mc.KEY_I: 11, mc.KEY_D: 5},
+        }
+        _INIT__pid_grade_map = MTS150P_PID_GRADE_MAP
+
+        _AUTO_INIT = ("_pid_grade_map",)
+        __slots__ = ("p", "i", "d")
+
+        @override
+        async def async_select_option(self, option: str):
+            try:
+                payload = {mc.KEY_PID: self._pid_grade_map[option]}
+            except KeyError:
+                await super().async_select_option(option)
+            else:
+                await self.parent.async_request(
+                    *self.ns.request_set(self.index | payload)
+                )
+                self(payload)  # type: ignore[call-arg]
+
+        @override
+        def __call__(self, payload: "mt.hub.Mts100_Config", /):
+            pid = payload[mc.KEY_PID]
+            self.update_device_value(pid[mc.KEY_GRADE])
+            for _key in (mc.KEY_P, mc.KEY_I, mc.KEY_D):
+                try:
+                    value = pid[_key]  # type: ignore
+                    getattr(self, _key).update_device_value(value)
+                except KeyError:
+                    # Auto-detect mts150/mts150p different payload layout
+                    if _key == mc.KEY_D:
+                        self._pid_grade_map = self.MTS150_PID_GRADE_MAP
+                    continue
+                except AttributeError:
+                    key_value = NumberParser.KeyValue(mc.KEY_PID, _key)
+                    setattr(
+                        self,
+                        _key,
+                        NumberParser(
+                            self,
+                            entity_key=f"{self.ns.slug}__{key_value}",
+                            ns=self.ns,
+                            key_value=key_value,
+                            ns_value=value,
+                        ),
+                    )
+
+    def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
+        mts100.__init__(self, descriptor, hub, **kwargs)
+        PidGradeSelect = mts150.PidGradeSelect
+        if PidGradeSelect._INIT_ns in hub.descriptor.ability:
+            hub.get_handler(PidGradeSelect._INIT_ns).register_parser(
+                PidGradeSelect(self)
+            )
+
+    # interface: MtsClimate
+    @override
+    def flush_state(self, /):
+        # The mts150 always reports 'heating': 0 so, when the digest carries the
+        # valve motor position, we use it to tell if the valve is open (heating).
+        if self.sensor_motor_position and (
+            (position := self.sensor_motor_position.native_value) is not None
+        ):
+            self._mts_active = position > 0
+        mts100.flush_state(self)
+
+    @override
+    def _parse_digest_(self, payload: "mt.hub._mts150", /):
+        """parse digest key for mts150/mts150p subdevice"""
+        mode = payload[mc.KEY_MODE]
+        if self._mts_mode != mode:
+            self._mts_mode = mode
+            # TODO: parse more keys?
+            self.flush_state()
+        if mc.KEY_MOTORCURLOCATION in payload:
+            self._parse_motor(payload)
+
+    # interface: self
+    def _parse_motor(self, payload: "mt.hub._mts150", /):
+        """Valve motor state carried in the digest: 'motorCurLocation' is the motor position
+        in pulses (0 = fully closed) and 'motorStartCtr' counts the motor starts."""
+        # After a hub reboot all the motor keys read 0 until the valve reports again
+        # so we're not trusting them until 'motorTotalPath' is set.
+        if payload.get(mc.KEY_MOTORTOTALPATH) == 0:
+            position = start_count = None
+        else:
+            position = payload[mc.KEY_MOTORCURLOCATION]
+            start_count = payload.get(mc.KEY_MOTORSTARTCTR)
+        if self.sensor_motor_position:
+            self.sensor_motor_position.update_native_value(position)
+        else:
+            self.sensor_motor_position = SensorEntity(
+                self,
+                entity_key=mc.KEY_MOTORCURLOCATION,
+                name="Motor position",
+                icon="mdi:valve",
+                entity_registry_enabled_default=False,
+                state_class=SensorEntity.StateClass.MEASUREMENT,
+                native_value=position,
+            )
+        if self.sensor_motor_start_count:
+            self.sensor_motor_start_count.update_native_value(start_count)
+        elif mc.KEY_MOTORSTARTCTR in payload:
+            self.sensor_motor_start_count = SensorEntity(
+                self,
+                entity_key=mc.KEY_MOTORSTARTCTR,
+                name="Motor start count",
+                icon="mdi:counter",
+                entity_registry_enabled_default=False,
+                state_class=SensorEntity.StateClass.TOTAL_INCREASING,
+                native_value=start_count,
+            )
+        if (position is not None) and ((position > 0) != bool(self._mts_active)):
+            self.flush_state()

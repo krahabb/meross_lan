@@ -35,29 +35,21 @@
                     "ok": "問題ありません"
                 }
             },
-            "common": {
-                "state": {
-                    "ok": "良い",
-                    "disconnected": "切断された",
-                    "low": "低",
-                    "medium": "中",
-                    "high": "高",
-                    "idle": "アイドル"
-                }
-            },
-            "mts_overheat_warning": {
+            "overheat_warning": {
                 "state": {
                     "1": "過熱",
                     "0": "良い",
                     "2": "切断された"
-                }
+                },
+                "name": "過熱保護"
             },
-            "mts_frost_warning": {
+            "frost_warning": {
                 "state": {
                     "0": "良い",
                     "1": "Freezing",
                     "2": "切断された"
-                }
+                },
+                "name": "霜害防止"
             },
             "mts300_status": {
                 "state": {
@@ -73,8 +65,124 @@
                     "2": "加湿",
                     "0": "アイドル"
                 }
+            },
+            "consumption": {
+                "name": "Consumption"
+            },
+            "energy_estimate": {
+                "name": "Estimated daily consumption"
+            },
+            "mconsume": {
+                "name": "Monthly consumption"
+            },
+            "overheat_currenttemp": {
+                "name": "External temperature"
+            }
+        },
+        "number": {
+            "calibration_humidity": {
+                "name": "Calibration (humidity)"
+            },
+            "calibration_temperature": {
+                "name": "Calibration (temperature)"
+            },
+            "temperature_comfort": {
+                "name": "Preset comfort"
+            },
+            "temperature_sleep": {
+                "name": "Preset sleep"
+            },
+            "temperature_away": {
+                "name": "Preset away"
+            },
+            "deadzone": {
+                "name": "Differential temperature"
+            },
+            "frost": {
+                "name": "霜害防止"
+            },
+            "overheat": {
+                "name": "過熱保護"
+            },
+            "appliance_hub_mts100_config-pid_grade": {
+                "name": "PID: Grade"
+            },
+            "appliance_hub_mts100_config-pid_p": {
+                "name": "PID: Proportional"
+            },
+            "appliance_hub_mts100_config-pid_i": {
+                "name": "PID: Integral"
+            },
+            "appliance_hub_mts100_config-pid_d": {
+                "name": "PID: Derivative"
+            }
+        },
+        "switch": {
+            "frost_switch": {
+                "name": "霜害防止"
+            },
+            "overheat_switch": {
+                "name": "過熱保護"
+            },
+            "config_overtemp_enable": {
+                "name": "Overheat alert"
+            }
+        },
+        "select": {
+            "appliance_config_devicecfg-unitcfg_tempunit": {
+                "name": "Display: temperature unit"
+            },
+            "appliance_config_devicecfg-timecfg_am": {
+                "name": "Display: time format",
+                "state": {
+                    "12_hours": "12 hours",
+                    "24_hours": "24 hours"
+                }
+            },
+            "appliance_config_devicecfg-unitcfg_unittype": {
+                "name": "Display: unit system",
+                "state": {
+                    "us_customary": "US customary",
+                    "metric": "Metric"
+                }
+            },
+            "appliance_hub_mts100_config-pid_grade": {
+                "name": "PID: Preset",
+                "state": {
+                    "0": "Default",
+                    "1": "Low",
+                    "2": "Mild",
+                    "3": "Middle",
+                    "4": "Strong"
+                }
+            },
+            "appliance_system_ledmode-mode": {
+                "name": "Led mode",
+                "state": {
+                    "off": "Off",
+                    "power": "Power",
+                    "night": "Night"
+                }
+            },
+            "config_overtemp_type": {
+                "name": "Overheat alert action",
+                "state": {
+                    "alert": "Alert only",
+                    "turn_off": "Alert and turn off"
+                }
             }
         }
+    },
+    "common": {
+        "ok": "良い",
+        "disconnected": "切断された",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "idle": "アイドル",
+        "frost": "霜害防止",
+        "overheat": "過熱保護",
+        "alarm": "Alarm"
     },
     "config": {
         "flow_title": "{name}",
@@ -89,7 +197,9 @@
             "cloud_profile_mismatch": "クラウドプロファイルが構成と一致しません",
             "invalid_auth": "認証エラー",
             "invalid_key": "キーエラー: select 'Cloud retrieve' to get from Meross",
-            "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key"
+            "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key",
+            "broker_address_invalid": "MQTT broker address not recognized",
+            "broker_connection_error": "MQTT broker connection error"
         },
         "step": {
             "user": {
@@ -134,12 +244,36 @@
                     "check_firmware_updates": "ファームウェアのアップデートを確認する",
                     "error": "エラーメッセージ",
                     "cloud_region": "アカウントの地域",
-                    "mfa_code": "認証コード"
+                    "mfa_code": "認証コード",
+                    "rl_window_size": "Rate limit window size"
+                },
+                "data_description": {
+                    "allow_mqtt_publish": "Disable to only listen for incoming messages",
+                    "check_firmware_updates": "Issue a periodical query to the Meross cloud api to retrieve the updated fw versions list",
+                    "rl_window_size": "Length of the rate limiting observation window (High values allow higher bursts but increase the time to recover)"
                 }
             },
             "finalize": {
                 "title": "デバイス設定",
                 "description": "タイップ: {device_type}\nUUID: {device_id}"
+            },
+            "bind": {
+                "title": "WiFi\/MQTTの再設定（ローカルバインディング）",
+                "description": "デバイスを別のMQTTブローカーに接続（バインド）します\nCurrent Wi-Fi: {ssid}\n現在のブローカー：{server}",
+                "data": {
+                    "ssid": "Wi-Fi SSID",
+                    "password": "パスワード",
+                    "server": "新しいMQTTブローカーのアドレス",
+                    "check": "再設定前にMQTTブローカーとの互換性を確認する",
+                    "key": "デバイスキー",
+                    "userid": "ユーザーID",
+                    "error": "エラーメッセージ"
+                },
+                "data_description": {
+                    "server": "ホスト(:port)'形式でアドレスを入力するか",
+                    "key": "Enter the Key used to sign protocol messages (empty keeps current value)",
+                    "userid": "Enter the User Id (empty keeps current value)"
+                }
             }
         }
     },
@@ -198,7 +332,13 @@
                     "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
                     "check_firmware_updates": "ファームウェアのアップデートを確認する",
                     "error": "エラーメッセージ",
-                    "mfa_code": "認証コード"
+                    "mfa_code": "認証コード",
+                    "rl_window_size": "Rate limit window size"
+                },
+                "data_description": {
+                    "allow_mqtt_publish": "Disable to only listen for incoming messages",
+                    "check_firmware_updates": "Issue a periodical query to the Meross cloud api to retrieve the updated fw versions list",
+                    "rl_window_size": "Length of the rate limiting observation window (High values allow higher bursts but increase the time to recover)"
                 }
             },
             "menu": {
@@ -208,24 +348,26 @@
                     "device": "設定",
                     "profile": "設定",
                     "diagnostics": "診断",
-                    "bind": "MQTTの再設定（ローカルバインディング）",
+                    "bind": "WiFi\/MQTTの再設定（ローカルバインディング）",
                     "unbind": "ハードウェア・リセット"
                 }
             },
             "bind": {
-                "title": "MQTTの再設定（ローカルバインディング）",
-                "description": "デバイスを別のMQTTブローカーに接続（バインド）します\n現在のブローカー：{domain}",
+                "title": "WiFi\/MQTTの再設定（ローカルバインディング）",
+                "description": "デバイスを別のMQTTブローカーに接続（バインド）します\nCurrent Wi-Fi: {ssid}\n現在のブローカー：{server}",
                 "data": {
-                    "domain": "新しいMQTTブローカーのアドレス",
                     "check": "再設定前にMQTTブローカーとの互換性を確認する",
                     "key": "デバイスキー",
                     "userid": "ユーザーID",
-                    "error": "エラーメッセージ"
+                    "error": "エラーメッセージ",
+                    "ssid": "Wi-Fi SSID",
+                    "password": "パスワード",
+                    "server": "新しいMQTTブローカーのアドレス"
                 },
                 "data_description": {
-                    "domain": "host(:port)'形式でアドレスを入力するか、HomeAssistantのものを使用する場合は空のままにします。",
-                    "userid": "meross_lanとの互換性を高めるために空白にしてください",
-                    "key": "meross_lanとの互換性を高めるために空白にしてください"
+                    "userid": "Enter the User Id (empty keeps current value)",
+                    "key": "Enter the Key used to sign protocol messages (empty keeps current value)",
+                    "server": "ホスト(:port)'形式でアドレスを入力するか"
                 }
             },
             "unbind": {
@@ -235,10 +377,6 @@
                     "post_action": "バインドを解いた後",
                     "error": "エラーメッセージ"
                 }
-            },
-            "bind_finalize": {
-                "title": "MQTTの再設定（ローカルバインディング）",
-                "description": "デバイスは新しいMQTTブローカーに成功的に設定されました{domain}。\n設定は更新され、再読み込みされましたが、新しいブローカーに接続するためにはデバイスを再起動（電源を切る）する必要があるかもしれません。"
             }
         },
         "error": {
@@ -249,7 +387,9 @@
             "invalid_auth": "認証エラー",
             "invalid_key": "キーエラー: select 'Cloud retrieve' to get from Meross",
             "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key",
-            "habroker_not_connected": "HomeAssistant MQTTブローカーが接続されていない"
+            "habroker_not_connected": "HomeAssistant MQTTブローカーが接続されていない",
+            "broker_address_invalid": "MQTT broker address not recognized",
+            "broker_connection_error": "MQTT broker connection error"
         }
     },
     "issues": {
@@ -296,13 +436,13 @@
         "device_timezone": {
             "title": "{device_name}のタイムゾーンが設定されていないか、HomeAssistantのデフォルトと異なります",
             "fix_flow": {
-                "abort": {
-                    "cannot_connect": "接続できません"
-                },
                 "step": {
                     "confirm": {
                         "title": "{device_name}のタイムゾーンが設定されていないか、HomeAssistantのデフォルトと異なります"
                     }
+                },
+                "abort": {
+                    "repair_failed": "修復を完了できませんでした: {error}"
                 }
             }
         },

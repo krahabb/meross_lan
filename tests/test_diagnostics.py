@@ -9,7 +9,6 @@ from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.diagnostics import async_get_device_diagnostics
-from custom_components.meross_lan.merossclient.protocol import const as mc
 
 from tests import const as tc, helpers
 
@@ -49,7 +48,7 @@ async def _async_run_tracing(
     manager = entry_mock.manager
     await time_mock.async_warp(
         tc.MOCK_TRACE_TIMEOUT,
-        tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
+        tick=tc.MOCK_TRACE_TIMEOUT // 10,
     )
     assert not manager._trace_file
 
@@ -90,10 +89,18 @@ async def test_profile_tracing(request, hass: "HomeAssistant"):
 
 async def test_device_diagnostics(request, hass: "HomeAssistant"):
 
+    CONFIG_ENTRY_DATA = {
+        mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES: True,
+    }
     for emulator in helpers.build_emulators():
-        async with helpers.DeviceContext(request, hass, emulator) as context:
-            await context.perform_coldstart()
-            context.time_mock.warp(tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT)
+        async with helpers.DeviceContext(
+            request, hass, emulator, auto_poll=True, data=CONFIG_ENTRY_DATA
+        ) as context:
+
+            context.dump_ns_handlers()
+            context.time_mock.warp(
+                tick=context.device.PARAM_TRACING_ABILITY_POLL_TIMEOUT
+            )
             try:
                 diagnostic = await async_get_device_diagnostics(
                     hass, context.config_entry, None
@@ -109,18 +116,22 @@ async def test_device_diagnostics(request, hass: "HomeAssistant"):
 
 async def test_device_tracing(request, hass: "HomeAssistant"):
 
+    CONFIG_ENTRY_DATA = {
+        mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES: True,
+    }
+
     for emulator in helpers.build_emulators():
-        async with helpers.DeviceContext(request, hass, emulator) as context:
-            await context.perform_coldstart()
+        async with helpers.DeviceContext(
+            request, hass, emulator, auto_poll=True, data=CONFIG_ENTRY_DATA
+        ) as context:
             await _async_configure_options_tracing(context)
             # We now need to 'coldstart' again the device
-            await context.perform_coldstart()
             device = context.device
             async for time in context.time_mock.async_warp_iterator(
                 tc.MOCK_TRACE_TIMEOUT,
-                tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
+                tick=device.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
             ):
-                if not device._trace_ability_callback_unsub:
+                if not device._timers.get(device._async_trace_ability):
                     device.trace_close()
                     break
 

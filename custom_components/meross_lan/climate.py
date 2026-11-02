@@ -1,120 +1,128 @@
 import enum
-from time import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from homeassistant.components import climate, sensor
 from homeassistant.core import CoreState, callback
-from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util.unit_conversion import TemperatureConverter
 
-from .helpers import entity as me, reverse_lookup
-from .merossclient.protocol import const as mc
-from .number import MLConfigNumber
-from .select import MLSelect
-from .sensor import MLTemperatureSensor
+from .calendar import MtsSchedule
+from .const import HA_VERSION, hac
+from .helpers import reverse_lookup
+from .helpers.entity import ParserEntity
+from .number import NumberParser
+from .select import SelectEntity
+from .sensor import SensorParser
 
 if TYPE_CHECKING:
-    from typing import ClassVar, Final, Unpack
+    from typing import ClassVar, Final, Self, Unpack
 
-    from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import Event, HomeAssistant, State
-    from homeassistant.helpers.event import EventStateChangedData
-
-    from .calendar import MtsSchedule
-    from .helpers.device import BaseDevice, Device
-    from .helpers.namespaces import NamespaceHandler
+    from .merossclient.protocol import namespaces as mn, types as mt
 
 
-async def async_setup_entry(
-    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
-):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, climate.DOMAIN)
-
-
-class MtsClimate(me.MLEntity, climate.ClimateEntity):
+class MtsClimate(ParserEntity, climate.ClimateEntity):
 
     class Preset(enum.StrEnum):
         CUSTOM = "custom"
-        COMFORT = "comfort"
-        SLEEP = "sleep"
-        AWAY = "away"
+        COMFORT = climate.PRESET_COMFORT
+        SLEEP = climate.PRESET_SLEEP
+        AWAY = climate.PRESET_AWAY
         AUTO = "auto"
 
-    class TrackSensorSelect(me.MEAlwaysAvailableMixin, MLSelect):
+    class AdjustNumber(NumberParser):
+
+        _attr_device_class = NumberParser.DEVICE_CLASS_TEMPERATURE_DELTA
+        _attr_translation_key = "calibration_temperature"
+
+    class SetPointNumber(NumberParser):
         """
-        TODO: move to climate.py ?
+        Helper entity to configure MTS100/150/200 setpoints
+        AKA: Heat(comfort) - Cool(sleep) - Eco(away)
+        """
+
+        if TYPE_CHECKING:
+
+            class Args(NumberParser.Args):
+                ns: mn.Namespace
+                key_value: NumberParser.KeyValue
+
+            def __init__(
+                self, *args: Unpack[NumberParser.InitArgs], **kwargs: Unpack[Args]
+            ): ...
+
+        _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
+
+        _AUTO_INIT = ("icon",)
+        __slots__ = ()
+
+        async def async_request_value(self, device_value, /):
+            # This implementation is only valid for mts100/mts200 where
+            # this entity state is actually parsed in the related MtsClimate.
+            # We'll then forward the callback to the climate entity in order to
+            # ensure the climate state is consistent after a setpoint change.
+            # Consider both ns reply with the full state in the SETACK response.
+            climate: "MtsClimate" = self.handler_ns.parsers[self.index]  # type: ignore
+            return await climate.async_request_parse_ex(
+                self.key_value.payload(device_value)
+            )
+
+    Schedule = MtsSchedule
+    """Overriden in derived to provide specific behavior."""
+
+    class TrackSensorSelect(SelectEntity.RestoreEntity, SelectEntity):
+        """
         A select entity used to select among all temperature sensors in HA
         an entity to track so that the thermostat regulates T against
-        that other sensor. The idea is to track changes in
-        the tracked entitites and adjust the MTS temp correction on the fly
+        that other sensor. The tracked entity is sampled at a fixed period
+        and the MTS temp correction is adjusted by the tracking error.
         """
 
         if TYPE_CHECKING:
             TRACKING_DELAY: Final[int]
-            """Delay before tracking updates are applied after a triggering event."""
-            TRACKING_DEADTIME: Final[int]
-            """minimum delay (dead-time) between trying to adjust the climate entity."""
-            climate: "MtsClimate"
-            # HA core entity attributes:
-            current_option: str
+            """Delay before the first sample when tracking is (re)started."""
+            TRACKING_PERIOD: Final[int]
+            """Sampling period of the tracking loop. Temperatures change slowly and the
+            device needs some time to apply a calibration and report back its new reading
+            (some minutes for hub thermostats like the mts150)."""
 
+        _INIT_entity_key = "tracked_sensor"
         TRACKING_DELAY = 5
-        TRACKING_DEADTIME = 60
+        TRACKING_PERIOD = 600
 
         # HA core entity attributes:
-        entity_registry_enabled_default = False
+        _attr_available = True
+        _attr_entity_registry_enabled_default = False
 
-        __slots__ = (
-            "climate",
-            "_tracking_state",
-            "_tracking_state_change_unsub",
-            "_track_last_epoch",
-            "_track_unsub",
-        )
+        _INIT__track_pending = False
+        _AUTO_INIT = ("_track_pending",)
+        __slots__ = ("climate",)
 
-        def __init__(
-            self,
-            climate: "MtsClimate",
-        ):
-            self.current_option = MLSelect.hac.STATE_OFF
-            self.options = []
+        def __init__(self, climate: "MtsClimate", /):
             self.climate = climate
-            self._tracking_state = None
-            self._tracking_state_change_unsub = None
-            self._track_last_epoch = 0
-            self._track_unsub = None
-            super().__init__(climate.manager, climate.channel, "tracked_sensor")
+            super().__init__(climate)
 
-        # interface: MLEntity
+        @override
         async def async_shutdown(self):
             self._tracking_stop()
             await super().async_shutdown()
-            self.climate = None  # type: ignore
+            del self.climate
 
+        @override
         def set_unavailable(self):
-            if self._track_unsub:
-                self._track_unsub.cancel()
-                self._track_unsub = None
+            # Keep the selected option (the base class would reset it) and let
+            # the tracking loop run: samples are skipped while disconnected.
+            pass
 
         async def async_added_to_hass(self):
-            hass = self.hass
+            if not self.current_option and (
+                restore_data := self._async_get_restored_data()
+            ):
+                self.current_option = restore_data.state.state
 
-            if self.current_option is MLSelect.hac.STATE_OFF:
-                with self.exception_warning("restoring previous state"):
-                    if last_state := await self.get_last_state_available():
-                        self.current_option = last_state.state
-
-            if hass.state == CoreState.running:
+            if self.hass.state == CoreState.running:
                 self._setup_tracking_entities()
             else:
-                # setup a temp list in order to not loose restored state
-                # since HA validates 'current_option' against 'options'
-                # when persisting the state and we could loose the
-                # current restored state if we don't setup the tracking
-                # list soon enough
-                self.options = [self.current_option]
-                hass.bus.async_listen_once(
-                    MLSelect.hac.EVENT_HOMEASSISTANT_STARTED,
+                self.hass.bus.async_listen_once(
+                    hac.EVENT_HOMEASSISTANT_STARTED,
                     self._setup_tracking_entities,
                 )
 
@@ -127,6 +135,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
             await super().async_will_remove_from_hass()
 
         # interface: SelectEntity
+        @override
         async def async_select_option(self, option: str):
             self.update_option(option)
             self._tracking_start()
@@ -134,16 +143,60 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         # interface: self
         def check_tracking(self):
             """
-            called when either the climate or the tracked_entity has a new
-            temperature reading in order to see if the climate needs to be adjusted
+            called by the climate entity when its temperature reading changes:
+            from now on the reading is expected to include the last calibration sent.
             """
-            if self._track_unsub:
-                self._track_unsub.cancel()
-                self._track_unsub = None
+            self._track_pending = False
 
-            if not self.manager.online or not self._tracking_state_change_unsub:
+        @callback
+        def _setup_tracking_entities(self, *_):
+            _units = (
+                hac.UnitOfTemperature.CELSIUS,
+                hac.UnitOfTemperature.FAHRENHEIT,
+            )
+            self.options = [hac.STATE_OFF]
+            self.options.extend(
+                entity.entity_id
+                for entity in self.hass.data[sensor.DATA_COMPONENT].entities
+                if getattr(entity, "native_unit_of_measurement", None) in _units
+            )
+            if self.current_option not in self.options:
+                # this might happen when restoring a not anymore valid entity
+                self.current_option = hac.STATE_OFF
+
+            self.flush_state()
+            self._tracking_start()
+
+        def _tracking_start(self):
+            self._tracking_stop()
+            if self.current_option not in (
+                None,
+                hac.STATE_OFF,
+                hac.STATE_UNKNOWN,
+                hac.STATE_UNAVAILABLE,
+            ):
+                self.schedule_callback(self.TRACKING_DELAY, self._track)
+
+        def _tracking_stop(self):
+            self.cancel_callback(self._track)
+
+        def _track(self):
+            """Sampling loop: runs every TRACKING_PERIOD while tracking is active."""
+            self.schedule_callback(self.TRACKING_PERIOD, self._track)
+            if not self.parent.is_connected:
                 return
-            tracked_state = self._tracking_state
+            climate = self.climate
+            if self._track_pending:
+                # The climate didn't report a new reading since our last calibration
+                # so its native_current_temperature doesn't include it yet: applying the
+                # same error again would wind up the calibration (see #684).
+                self.log(
+                    self.DEBUG,
+                    "Skipping %s calibration (waiting for a new reading)",
+                    climate.entity_id,
+                )
+                return
+            tracked_state = self.hass.states.get(self.current_option)  # type: ignore
             if not tracked_state:
                 # we've setup tracking but the entity doesn't exist in the
                 # state machine...was it removed from HA ?
@@ -155,88 +208,13 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
                 )
                 return
             if tracked_state.state in (
-                MLSelect.hac.STATE_UNAVAILABLE,
-                MLSelect.hac.STATE_UNKNOWN,
+                hac.STATE_UNAVAILABLE,
+                hac.STATE_UNKNOWN,
             ):
                 # might be transient so we don't take any action or log
                 return
-
-            # Always use some delay between this call and the effective calibration
-            # since there might be some concurrent 'almost synchronous' updates in HA
-            # and we want to avoid synchronizing in a 'glitch'.
-            # This way, repeated 'check_tracking' calls will
-            # invalidate each other and just apply the latest (supposedly stable) one.
-            # See also https://github.com/krahabb/meross_lan/issues/593 for a particularly
-            # difficult case (even tho a bit paroxysmal).
-            delay = time() - self._track_last_epoch
-            self._track_unsub = self.manager.schedule_callback(
-                (
-                    self.TRACKING_DELAY
-                    if delay > self.TRACKING_DEADTIME
-                    else self.TRACKING_DEADTIME - delay
-                ),
-                self._track,
-                tracked_state,
-            )
-
-        @callback
-        def _setup_tracking_entities(self, *_):
-            _units = (
-                MLSelect.hac.UnitOfTemperature.CELSIUS,
-                MLSelect.hac.UnitOfTemperature.FAHRENHEIT,
-            )
-            self.options = [
-                entity.entity_id
-                for entity in self.hass.data[sensor.DATA_COMPONENT].entities
-                if getattr(entity, "native_unit_of_measurement", None) in _units
-            ]
-            self.options.append(MLSelect.hac.STATE_OFF)
-            if self.current_option not in self.options:
-                # this might happen when restoring a not anymore valid entity
-                self.current_option = MLSelect.hac.STATE_OFF
-
-            self.flush_state()
-            self._tracking_start()
-
-        def _tracking_start(self):
-            self._tracking_stop()
-            entity_id = self.current_option
-            if entity_id and entity_id not in (
-                MLSelect.hac.STATE_OFF,
-                MLSelect.hac.STATE_UNKNOWN,
-                MLSelect.hac.STATE_UNAVAILABLE,
-            ):
-
-                @callback
-                def _tracking_callback(event: "Event[EventStateChangedData]"):
-                    with self.exception_warning("processing state update event"):
-                        self._tracking_state_change(event.data.get("new_state"))
-
-                self._tracking_state_change_unsub = async_track_state_change_event(
-                    self.hass, entity_id, _tracking_callback
-                )
-                self._tracking_state_change(self.hass.states.get(entity_id))
-
-        def _tracking_stop(self):
-            if self._tracking_state_change_unsub:
-                self._tracking_state_change_unsub()
-                self._tracking_state_change_unsub = None
-                self._tracking_state = None
-            if self._track_unsub:
-                self._track_unsub.cancel()
-                self._track_unsub = None
-
-        def _tracking_state_change(self, tracked_state: "State | None"):
-            self._tracking_state = tracked_state
-            self.check_tracking()
-
-        def _track(self, tracked_state: "State"):
-            """This is only called internally after a timeout when tracking needs to be updated
-            due to state changes in either tracked entity or climate."""
-            self._track_unsub = None
-            climate = self.climate
-            current_temperature = climate.current_temperature
-            if not current_temperature:
+            native_current_temperature = climate.native_current_temperature
+            if not native_current_temperature:
                 # should be transitory - just a safety check
                 return
             number_adjust_temperature = climate.number_adjust_temperature
@@ -248,21 +226,22 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
                 tracked_temperature = float(tracked_state.state)
                 # ensure tracked_temperature is °C
                 tracked_temperature_unit = tracked_state.attributes.get(
-                    MtsClimate.hac.ATTR_UNIT_OF_MEASUREMENT
+                    hac.ATTR_UNIT_OF_MEASUREMENT
                 )
                 if not tracked_temperature_unit:
                     raise ValueError("tracked entity has no unit of measure")
-                if tracked_temperature_unit != climate.temperature_unit:
+                if tracked_temperature_unit != climate.native_temperature_unit:
                     tracked_temperature = TemperatureConverter.convert(
                         tracked_temperature,
                         tracked_temperature_unit,
-                        climate.temperature_unit,
+                        climate.native_temperature_unit,
                     )
-                error_temperature = tracked_temperature - current_temperature
-                native_error_temperature = round(
-                    error_temperature * climate.device_scale
-                )
-                if not native_error_temperature:
+                error_temperature = tracked_temperature - native_current_temperature
+                # correct by whole calibration steps so that errors within the
+                # calibration resolution don't send (useless) adjust commands
+                adjust_step = number_adjust_temperature.native_step
+                error_steps = round(error_temperature / adjust_step)
+                if not error_steps:
                     # tracking error within device resolution limits..we're ok
                     self.log(
                         self.DEBUG,
@@ -270,7 +249,9 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
                         climate.entity_id,
                     )
                     return
-                adjust_temperature = current_adjust_temperature + error_temperature
+                adjust_temperature = (
+                    current_adjust_temperature + error_steps * adjust_step
+                )
                 # check if our correction is within the native adjust limits
                 # and avoid sending (useless) adjust commands
                 if adjust_temperature > number_adjust_temperature.native_max_value:
@@ -283,7 +264,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
                             "Skipping %s calibration (%s [%s] beyond %s limit)",
                             climate.entity_id,
                             current_adjust_temperature,
-                            climate.temperature_unit,
+                            climate.native_temperature_unit,
                             number_adjust_temperature.native_max_value,
                         )
                         return
@@ -298,64 +279,66 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
                             "Skipping %s calibration (%s [%s] below %s limit)",
                             climate.entity_id,
                             current_adjust_temperature,
-                            climate.temperature_unit,
+                            climate.native_temperature_unit,
                             number_adjust_temperature.native_min_value,
                         )
                         return
                     adjust_temperature = number_adjust_temperature.native_min_value
-                self._track_last_epoch = time()
-                self.manager.async_create_task(
+                self._track_pending = True
+                number_adjust_temperature.create_task(
                     number_adjust_temperature.async_set_native_value(
                         adjust_temperature
                     ),
-                    f"MtsTrackedSensor._track(adjust_temperature={adjust_temperature} [{climate.temperature_unit}])",
+                    f"TrackSensorSelect._track(adjust_temperature={adjust_temperature} [{climate.native_temperature_unit}])",
+                    eager_start=True,
                 )
                 self.log(
                     self.DEBUG,
                     "Applying %s calibration (%s [%s])",
                     climate.entity_id,
                     adjust_temperature,
-                    climate.temperature_unit,
+                    climate.native_temperature_unit,
                 )
 
     if TYPE_CHECKING:
+        ns_value: mt.JsonMapping
         ATTR_HVAC_MODE: Final
         ATTR_TEMPERATURE: Final
         ATTR_TARGET_TEMP_HIGH: Final
         ATTR_TARGET_TEMP_LOW: Final
 
-        device_scale: ClassVar[float]
-        AdjustNumber: ClassVar[type["MLConfigNumber"]]
-        """The specific Adjust/Calibrate number class to instantiate."""
-        SetPointNumber: ClassVar[type["MtsSetPointNumber"] | None]
-        """The (optional) class for setting up a group of preset setpoints."""
+        SCHEDULE_NS: ClassVar[mn.Namespace]
         Schedule: ClassVar[type[MtsSchedule]]
-        """The specific Schedule/Calendar class to instantiate."""
-
+        TARGET_TEMPERATURE_STEP: ClassVar[float]
         MTS_MODE_TO_PRESET_MAP: ClassVar[dict[int | None, str]]
-        """maps device 'mode' value to the HA climate.preset_mode"""
-        MTS_MODE_TO_TEMPERATUREKEY_MAP: ClassVar[dict[int | None, str]]
-        """maps the current mts mode to the name of temperature setpoint key"""
-        PRESET_TO_ICON_MAP: Final[dict[Preset, str]]
-        """Used in Number entities for temperatues setpoint."""
+        """Maps device 'mode' value to the HA climate.preset_mode"""
+        MTS_MODE_TO_TEMPERATUREKEY_MAP: ClassVar[
+            dict[int | None, NumberParser.KeyValue]
+        ]
+        """Maps the current mts mode to the name of a temperature setpoint key.
+        Used also to setup SetPointNumber entities (when empty -> no setpoints)."""
+        SETPOINT_ICON_MAP: Final[dict[Preset, str]]
+        """Simple map to configure SetPointNumber icons."""
         SET_TEMP_FORCE_MANUAL_MODE: Final[bool]
         """Determines the behavior of async_set_temperature."""
-        manager: BaseDevice
-        number_adjust_temperature: Final["MLConfigNumber"]
-        number_preset_temperature: dict[str, "MtsSetPointNumber"]
+
+        index: Final[mn.IndexValue]  # type: ignore[override]
+        temperature_scale: Final[int]
+        number_adjust_temperature: Final[NumberParser]
+        number_preset_temperature: Final[tuple[SetPointNumber, ...]]
         schedule: Final[MtsSchedule]
         select_track_sensor: Final[TrackSensorSelect]
-        sensor_current_temperature: Final[MLTemperatureSensor]
-        _mts_active: bool
+        sensor_current_temperature: Final[SensorParser]
+        _mts_active: bool | int
         _mts_mode: int
         _mts_onoff: int
-        _mts_payload: dict
 
         # HA core entity attributes override:
-        _attr_preset_modes: list[str]
-        _attr_supported_features: climate.ClimateEntityFeature
+        _attr_preset_modes: ClassVar[list[str]]
+        _attr_supported_features: ClassVar[climate.ClimateEntityFeature]
+
         current_humidity: float | None
-        current_temperature: float | None
+        native_current_temperature: float | None
         hvac_action: climate.HVACAction | None
         hvac_mode: climate.HVACMode | None
         max_temp: float
@@ -363,10 +346,12 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         preset_mode: str | None
         preset_modes: list[str]
         supported_features: climate.ClimateEntityFeature
-        target_temperature: float | None
+        native_target_temperature: float | None
         target_temperature_step: float
-        temperature_unit: Final[str]
-        translation_key: Final[str]
+        native_temperature_unit: Final[str]
+
+        type InitArgs = ParserEntity.InitArgs
+        type Args = ParserEntity.Args
 
     PLATFORM = climate.DOMAIN
 
@@ -379,20 +364,15 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
     HVACAction = climate.HVACAction
     HVACMode = climate.HVACMode
 
-    device_scale = 1
-
-    SetPointNumber = None
-
-    PRESET_TO_ICON_MAP = {
+    TARGET_TEMPERATURE_STEP = 0.5
+    MTS_MODE_TO_TEMPERATUREKEY_MAP = {}
+    SETPOINT_ICON_MAP = {
         Preset.COMFORT: "mdi:sun-thermometer",
         Preset.SLEEP: "mdi:power-sleep",
         Preset.AWAY: "mdi:bag-checked",
     }
-    """lookups used in MtsSetpointNumber to map a pretty icon to the setpoint entity"""
-
     SET_TEMP_FORCE_MANUAL_MODE = True
     """Determines the behavior of async_set_temperature."""
-
     # HA core entity attributes:
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
     _attr_preset_modes = list(Preset)
@@ -404,11 +384,17 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
     )
     _enable_turn_on_off_backwards_compatibility = False
 
-    translation_key = "mts_climate"
+    _attr_translation_key = "mts_climate"
 
-    __slots__ = (
+    _AUTO_DESTROY = (
+        "number_adjust_temperature",
+        "schedule",
+        "select_track_sensor",
+        "sensor_current_temperature",
+    )
+    __slots__ = ParserEntity._calc_slots(
         "current_humidity",
-        "current_temperature",
+        "native_current_temperature",
         "hvac_action",
         "hvac_mode",
         "hvac_modes",
@@ -417,23 +403,19 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         "preset_mode",
         "preset_modes",
         "supported_features",
-        "target_temperature",
+        "native_target_temperature",
         "target_temperature_step",
-        "temperature_unit",
+        "native_temperature_unit",
+        "temperature_scale",
         "_mts_active",
         "_mts_mode",
         "_mts_onoff",
-        "_mts_payload",
-        "number_adjust_temperature",
         "number_preset_temperature",
-        "schedule",
-        "select_track_sensor",
-        "sensor_current_temperature",
     )
 
-    def __init__(self, manager: "BaseDevice", channel: object, /):
+    def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         self.current_humidity = None
-        self.current_temperature = None
+        self.native_current_temperature = None
         self.hvac_action = None
         self.hvac_mode = None
         self.hvac_modes = self._attr_hvac_modes
@@ -442,40 +424,66 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         self.preset_mode = None
         self.preset_modes = self._attr_preset_modes
         self.supported_features = self._attr_supported_features
-        self.target_temperature = None
-        self.target_temperature_step = 0.5
-        self.temperature_unit = self.hac.UnitOfTemperature.CELSIUS
+        self.native_target_temperature = None
+        self.target_temperature_step = self.TARGET_TEMPERATURE_STEP
+        self.native_temperature_unit = hac.UnitOfTemperature.CELSIUS
         self._mts_active = False
         self._mts_mode = 0
         self._mts_onoff = 0
-        self._mts_payload = {}
-        super().__init__(manager, channel)
-        self.number_adjust_temperature = self.__class__.AdjustNumber(self)  # type: ignore
-        self.number_preset_temperature = {}
-        if preset_number_class := self.__class__.SetPointNumber:
-            for preset in MtsClimate.PRESET_TO_ICON_MAP.keys():
-                number_preset_temperature = preset_number_class(self, preset)
-                self.number_preset_temperature[number_preset_temperature.key_value] = (
-                    number_preset_temperature
-                )
-        self.schedule = self.__class__.Schedule(self)
-        self.select_track_sensor = MtsClimate.TrackSensorSelect(self)
-        self.sensor_current_temperature = MLTemperatureSensor(manager, channel)
-        self.sensor_current_temperature.entity_registry_enabled_default = False
+        super().__init__(*args, **kwargs)
+        self.temperature_scale = getattr(
+            self, "descriptor", self.parent.descriptor
+        ).parameters["temperature_scale"]
+        cls = self.__class__
+        self.number_adjust_temperature = cls.AdjustNumber(
+            self, ns=cls.AdjustNumber._INIT_ns
+        )
 
-    # interface: MLEntity
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        self.sensor_current_temperature = None  # type: ignore
-        self.select_track_sensor = None  # type: ignore
-        self.schedule = None  # type: ignore
-        self.number_adjust_temperature = None  # type: ignore
-        self.number_preset_temperature = None  # type: ignore
+        if cls.MTS_MODE_TO_TEMPERATUREKEY_MAP:
+            self.number_preset_temperature = tuple(
+                cls.SetPointNumber(
+                    self,
+                    entity_key=f"config_temperature_{key_value}",
+                    ns=self.ns,
+                    key_value=key_value,
+                    device_scale=self.temperature_scale,
+                    native_max_value=self.max_temp,
+                    native_min_value=self.min_temp,
+                    native_step=self.target_temperature_step,
+                    icon=cls.SETPOINT_ICON_MAP[preset],
+                    translation_key=f"temperature_{preset}",
+                )
+                for preset, key_value in {
+                    preset: cls.MTS_MODE_TO_TEMPERATUREKEY_MAP[
+                        reverse_lookup(cls.MTS_MODE_TO_PRESET_MAP, preset)
+                    ]
+                    for preset in cls.SETPOINT_ICON_MAP
+                }.items()
+            )
+
+        schedule_ns = cls.SCHEDULE_NS
+        self.schedule = cls.Schedule(
+            self,
+            climate=self,
+            entity_key=schedule_ns.key,
+            ns=schedule_ns,
+        )
+        self.parent.enable_check_device_time()  # useful for schedule entity times
+
+        self.select_track_sensor = cls.TrackSensorSelect(self)
+        self.sensor_current_temperature = SensorParser(
+            self,
+            **(
+                SensorParser.TEMPERATURE_ARGS
+                | {"entity_registry_enabled_default": False}
+            ),
+        )
+        for _entity in (self.number_adjust_temperature, self.schedule):
+            self.parent.get_handler(_entity.ns).register_parser(_entity)
 
     def set_unavailable(self):
-        self._mts_payload.clear()
         self.current_humidity = None
-        self.current_temperature = None
+        self.native_current_temperature = None
         self.preset_mode = None
         self.hvac_action = None
         self.hvac_mode = None
@@ -486,6 +494,24 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         self.schedule.flush_state()
 
     # interface: ClimateEntity
+    if HA_VERSION < (2026, 11):
+        # patch pre 2026.11 ClimateEntity properties
+        # The idea is to implement the renamed attributes with the new re-names (as mandatory in 2026.11 and later)
+        # and just provide the following properties to establish a compatibility layer with HA core when running on previous versions.
+        # Our code will use the new attributes anyway (pre and post 2026.11) since they're totally interchangeable in semantics
+        # and we don't really care if they were named differently before...
+        @property
+        def current_temperature(self):  # type: ignore
+            return self.native_current_temperature
+
+        @property
+        def target_temperature(self):  # type: ignore
+            return self.native_target_temperature
+
+        @property
+        def temperature_unit(self):  # type: ignore
+            return self.native_temperature_unit
+
     async def async_turn_on(self):
         await self.async_request_onoff(1)
 
@@ -493,7 +519,10 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         await self.async_request_onoff(0)
 
     async def async_set_hvac_mode(self, hvac_mode: climate.HVACMode):
-        raise NotImplementedError()
+        if hvac_mode == MtsClimate.HVACMode.OFF:
+            await self.async_request_onoff(0)
+            return
+        await self.async_request_onoff(1)
 
     async def async_set_preset_mode(self, preset_mode: str):
         mode = reverse_lookup(self.MTS_MODE_TO_PRESET_MAP, preset_mode)
@@ -515,84 +544,36 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
     def is_mts_scheduled(self, /):
         raise NotImplementedError()
 
-    def get_ns_adjust(self, /) -> "NamespaceHandler":
-        """
-        Returns the correct ns handler for the adjust namespace.
-        Used to trigger a poll and the ns which is by default polled
-        on a long timeout.
-        """
-        raise NotImplementedError()
-
-    def _update_current_temperature(self, current_temperature: float | int, /):
+    def _update_current_temperature(self, native_current_temperature: float | int, /):
         """
         Common handler for incoming room temperature value
         """
-        current_temperature = current_temperature / self.device_scale
-        if self.current_temperature != current_temperature:
-            self.current_temperature = current_temperature
-            self.sensor_current_temperature.update_native_value(current_temperature)
+        if self.native_current_temperature != native_current_temperature:
+            self.native_current_temperature = native_current_temperature
+            self.sensor_current_temperature.update_native_value(
+                native_current_temperature
+            )
             self.select_track_sensor.check_tracking()
             # temp change might be an indication of a calibration so
             # we'll speed up polling for the adjust/calibration ns
             try:
-                ns_adjust = self.get_ns_adjust()
-                if ns_adjust.polling_epoch_next > (ns_adjust.device.lastresponse + 30):
-                    ns_adjust.polling_epoch_next = 0.0
+                handler = self.number_adjust_temperature.handler_ns
+                if handler.next_poll_epoch > (handler.parent.last_rx_epoch + 30):
+                    handler.next_poll_epoch = 0.0
             except:
                 # in case the ns is not available for this device
                 pass
 
-
-class MtsSetPointNumber(MLConfigNumber):
-    """
-    Helper entity to configure MTS100/150/200 setpoints
-    AKA: Heat(comfort) - Cool(sleep) - Eco(away)
-    """
-
-    __slots__ = (
-        "climate",
-        "icon",
-        "key_value",
-    )
-
-    def __init__(self, climate: "MtsClimate", preset_mode: "MtsClimate.Preset", /):
-        self.climate = climate
-        self.icon = climate.PRESET_TO_ICON_MAP[preset_mode]
-        self.key_value = climate.MTS_MODE_TO_TEMPERATUREKEY_MAP[
-            reverse_lookup(climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
-        ]
-        super().__init__(
-            climate.manager,
-            climate.channel,
-            f"config_temperature_{self.key_value}",
-            MLConfigNumber.DeviceClass.TEMPERATURE,
-            name=f"{preset_mode} temperature",
-            device_scale=climate.device_scale,
+    async def async_request_parse_ex(self, payload: dict, /):
+        """
+        Issues a command to the main NS for this climate entity.
+        This is typically the NS controlling the setpoints/modes.
+        """
+        await self.handler_ns.async_set_parse_ex(
+            payload,
+            self,
+            self.ns_value,
         )
 
-    @property
-    def native_max_value(self):
-        return self.climate.max_temp
 
-    @property
-    def native_min_value(self):
-        return self.climate.min_temp
-
-    @property
-    def native_step(self):
-        return self.climate.target_temperature_step
-
-    async def async_request_value(self, device_value, /):
-        if response := await super().async_request_value(device_value):
-            # mts100(s) reply to the setack with the 'full' (or anyway richer) payload
-            # so we'll use the _parse_temperature logic (a bit overkill sometimes) to
-            # make sure the climate state is consistent and all the correct roundings
-            # are processed when changing any of the presets
-            # not sure about mts200 replies..but we're optimist
-            ns_slug_end = self.ns.slug_end
-            payload = response[mc.KEY_PAYLOAD]
-            if ns_slug_end in payload:
-                # by design ns_slug is either "temperature" (mts100) or "mode" (mts200)
-                getattr(self.climate, f"_parse_{ns_slug_end}")(payload[ns_slug_end][0])
-
-        return response
+async_setup_entry = MtsClimate.platform_setup_entry

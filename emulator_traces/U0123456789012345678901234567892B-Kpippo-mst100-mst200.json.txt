@@ -1,0 +1,4264 @@
+{
+  "home_assistant": {
+    "installation_type": "Home Assistant OS",
+    "version": "2026.4.3",
+    "dev": false,
+    "hassio": true,
+    "virtualenv": false,
+    "python_version": "3.14.2",
+    "docker": true,
+    "arch": "aarch64",
+    "timezone": "Europe/Madrid",
+    "os_name": "Linux",
+    "os_version": "6.12.77-haos",
+    "container_arch": "aarch64",
+    "supervisor": "2026.04.0",
+    "host_os": "Home Assistant OS 17.2",
+    "docker_version": "29.3.1",
+    "chassis": "embedded",
+    "run_as_root": true
+  },
+  "custom_components": {
+    "meross_lan": {
+      "documentation": "https://github.com/krahabb/meross_lan",
+      "version": "5.8.0",
+      "requirements": []
+    },
+    "hacs": {
+      "documentation": "https://hacs.xyz/docs/use/",
+      "version": "2.0.5",
+      "requirements": [
+        "aiogithubapi>=22.10.1"
+      ]
+    },
+    "pyscript": {
+      "documentation": "https://github.com/custom-components/pyscript",
+      "version": "1.7.0",
+      "requirements": [
+        "croniter==6.0.0",
+        "watchdog==6.0.0"
+      ]
+    }
+  },
+  "integration_manifest": {
+    "domain": "meross_lan",
+    "name": "Meross LAN",
+    "after_dependencies": [
+      "mqtt",
+      "dhcp",
+      "recorder",
+      "persistent_notification"
+    ],
+    "codeowners": [
+      "krahabb"
+    ],
+    "config_flow": true,
+    "dhcp": [
+      {
+        "hostname": "*",
+        "macaddress": "48E1E9*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "C4E7AE*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "34298F1*"
+      },
+      {
+        "registered_devices": true
+      }
+    ],
+    "documentation": "https://github.com/krahabb/meross_lan",
+    "integration_type": "hub",
+    "iot_class": "local_polling",
+    "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
+    "loggers": [
+      "custom_components.meross_lan"
+    ],
+    "mqtt": [
+      "/appliance/+/publish"
+    ],
+    "requirements": [],
+    "version": "5.8.0",
+    "is_built_in": false,
+    "overwrites_built_in": false
+  },
+  "setup_times": {
+    "null": {
+      "setup": 8.487503509968519e-05
+    },
+    "01KP1C76NFXSXASGCDVFF3Z56C": {
+      "wait_import_platforms": -0.0001502089435234666,
+      "config_entry_setup": 0.01836953405290842
+    },
+    "01KP1C7FHC3CMBVW5XKZZZZD4Z": {
+      "wait_import_platforms": -0.0004541269736364484,
+      "wait_base_component": -0.004413809976540506,
+      "config_entry_setup": 1.0832097929669544
+    }
+  },
+  "data": {
+    "version": 3,
+    "config": {
+      "device_id": "###############################0",
+      "host": "############0",
+      "key": "###############################0",
+      "payload": {
+        "all": {
+          "system": {
+            "hardware": {
+              "type": "msh450",
+              "subType": "un",
+              "version": "9.0.0",
+              "chipType": "rtl8720cm",
+              "uuid": "###############################0",
+              "macAddress": "################0"
+            },
+            "firmware": {
+              "version": "9.1.20",
+              "compileTime": "2026/02/10-14:08:53",
+              "encrypt": 1,
+              "wifiMac": "################0",
+              "innerIp": "############0",
+              "server": "###################0",
+              "port": "@0",
+              "userId": "@0"
+            },
+            "time": {
+              "timestamp": 1776799292,
+              "timezone": "Europe/Madrid",
+              "timeRule": [
+                [
+                  1774746000,
+                  7200,
+                  1
+                ],
+                [
+                  1792890000,
+                  3600,
+                  0
+                ],
+                [
+                  1806195600,
+                  7200,
+                  1
+                ],
+                [
+                  1824944400,
+                  3600,
+                  0
+                ],
+                [
+                  1837645200,
+                  7200,
+                  1
+                ],
+                [
+                  1856394000,
+                  3600,
+                  0
+                ],
+                [
+                  1869094800,
+                  7200,
+                  1
+                ],
+                [
+                  1887843600,
+                  3600,
+                  0
+                ],
+                [
+                  1901149200,
+                  7200,
+                  1
+                ],
+                [
+                  1919293200,
+                  3600,
+                  0
+                ],
+                [
+                  1932598800,
+                  7200,
+                  1
+                ],
+                [
+                  1950742800,
+                  3600,
+                  0
+                ],
+                [
+                  1964048400,
+                  7200,
+                  1
+                ],
+                [
+                  1982797200,
+                  3600,
+                  0
+                ],
+                [
+                  1995498000,
+                  7200,
+                  1
+                ],
+                [
+                  2014246800,
+                  3600,
+                  0
+                ],
+                [
+                  2026947600,
+                  7200,
+                  1
+                ],
+                [
+                  2045696400,
+                  3600,
+                  0
+                ],
+                [
+                  2058397200,
+                  7200,
+                  1
+                ],
+                [
+                  2077146000,
+                  3600,
+                  0
+                ]
+              ]
+            },
+            "online": {
+              "status": 1,
+              "bindId": "4Kk1zLhcB05kShh6",
+              "who": 1
+            }
+          },
+          "digest": {
+            "hub": {
+              "hubId": 2921116857,
+              "mode": 0,
+              "nvdmChl": 0,
+              "workChl": 1,
+              "curChl": 1,
+              "subdevice": [
+                {
+                  "id": "1B00899F0934",
+                  "status": 2,
+                  "onoff": 2,
+                  "lastActiveTime": 1776794882,
+                  "mst": {
+                    "ts": 1776794599,
+                    "dura": 3,
+                    "wflow": 2
+                  }
+                },
+                {
+                  "id": "1B1091AFACDD",
+                  "status": 1,
+                  "onoff": 2,
+                  "lastActiveTime": 1776798389,
+                  "mst": {
+                    "waDet": []
+                  }
+                },
+                {
+                  "id": "1B00899EE1DB",
+                  "status": 1,
+                  "onoff": 2,
+                  "lastActiveTime": 1776798381,
+                  "mst": {
+                    "ts": 1776798348,
+                    "dura": 5,
+                    "wflow": 1
+                  }
+                },
+                {
+                  "id": "1B0094AFCB6F",
+                  "status": 1,
+                  "onoff": 2,
+                  "lastActiveTime": 1776798356,
+                  "mst": {
+                    "ts": 1776798248,
+                    "dura": 17,
+                    "wflow": 1
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "ability": {
+          "Appliance.Config.Key": {},
+          "Appliance.Config.WifiList": {},
+          "Appliance.Config.Wifi": {},
+          "Appliance.Config.WifiX": {},
+          "Appliance.Config.Trace": {},
+          "Appliance.Config.Info": {},
+          "Appliance.Config.NtpSite": {},
+          "Appliance.Config.Matter": {},
+          "Appliance.System.All": {},
+          "Appliance.System.Hardware": {},
+          "Appliance.System.Firmware": {},
+          "Appliance.System.Debug": {},
+          "Appliance.System.Online": {},
+          "Appliance.System.Time": {},
+          "Appliance.System.Clock": {},
+          "Appliance.System.Ability": {},
+          "Appliance.System.Runtime": {},
+          "Appliance.System.Report": {},
+          "Appliance.System.Position": {},
+          "Appliance.System.DNDMode": {},
+          "Appliance.System.Log": {},
+          "Appliance.Control.Multiple": {
+            "maxCmdNum": 3
+          },
+          "Appliance.Control.Bind": {},
+          "Appliance.Control.Unbind": {},
+          "Appliance.Control.Upgrade": {},
+          "Appliance.Control.ChangeWiFi": {},
+          "Appliance.Config.Alarm": {},
+          "Appliance.Config.DeviceCfg": {},
+          "Appliance.Config.WaterPlan": {},
+          "Appliance.Control.Alarm": {},
+          "Appliance.Control.Water": {},
+          "Appliance.Control.Smoke.Config": {},
+          "Appliance.Control.Sensor.LatestX": {},
+          "Appliance.Control.Sensor.HistoryX": {},
+          "Appliance.Control.Weather": {},
+          "Appliance.Control.CloudEvent": {},
+          "Appliance.Control.WaterEvent": {},
+          "Appliance.Control.WaterEvent.Skip": {},
+          "Appliance.Control.WaterPlan.Skip": {},
+          "Appliance.Control.AlertConfig": {},
+          "Appliance.Control.AlertReport": {},
+          "Appliance.Digest.TimerX": {},
+          "Appliance.Digest.TriggerX": {},
+          "Appliance.Digest.WaterPlan": {},
+          "Appliance.Hub.Online": {},
+          "Appliance.Hub.ToggleX": {},
+          "Appliance.Hub.SubdeviceList": {},
+          "Appliance.Hub.Battery": {},
+          "Appliance.Hub.PairSubDev": {},
+          "Appliance.Hub.Report": {},
+          "Appliance.Hub.ExtraInfo": {},
+          "Appliance.Hub.Mts100.All": {},
+          "Appliance.Hub.Mts100.Temperature": {},
+          "Appliance.Hub.Mts100.ScheduleB": {
+            "scheduleUnitTime": 15
+          },
+          "Appliance.Hub.Mts100.Mode": {},
+          "Appliance.Hub.Mts100.Adjust": {},
+          "Appliance.Hub.Mts100.SuperCtl": {},
+          "Appliance.Hub.Mts100.Config": {},
+          "Appliance.Hub.SubDevice.MotorAdjust": {},
+          "Appliance.Hub.SubDevice.Beep": {},
+          "Appliance.Hub.SubDevice.Version": {},
+          "Appliance.Hub.Sensor.All": {},
+          "Appliance.Hub.Sensor.WaterLeak": {},
+          "Appliance.Hub.Sensor.TempHum": {},
+          "Appliance.Hub.Sensor.Adjust": {},
+          "Appliance.Hub.Sensor.DoorWindow": {},
+          "Appliance.Hub.Sensor.Smoke": {},
+          "Appliance.Hub.Sensor.Alert": {}
+        }
+      },
+      "timestamp": 1776795992.9700723,
+      "create_diagnostic_entities": true,
+      "logging_level": 0,
+      "obfuscate": true,
+      "trace_timeout": 600,
+      "protocol": "http",
+      "polling_period": 30,
+      "disable_multiple": false
+    },
+    "state": {
+      "class": "HubMixinDevice",
+      "conf_protocol": "http",
+      "pref_protocol": "http",
+      "curr_protocol": "http",
+      "polling_period": 30,
+      "device_response_size_min": 1863,
+      "device_response_size_max": 2400,
+      "MQTT": {
+        "cloud_profile": true,
+        "locally_active": false,
+        "mqtt_connection": false,
+        "mqtt_connected": false,
+        "mqtt_publish": false,
+        "mqtt_active": false
+      },
+      "HTTP": {
+        "http": true,
+        "http_active": true
+      },
+      "namespace_handlers": {
+        "Appliance.System.All": {
+          "lastrequest": 1776799292.5465183,
+          "lastresponse": 1776799293.4400783,
+          "lastpush": null,
+          "polling_epoch_next": 1776799588.4400783,
+          "polling_strategy": "async_poll_all"
+        },
+        "Appliance.System.DNDMode": {
+          "lastrequest": 1776799323.815381,
+          "lastresponse": 1776799324.113373,
+          "lastpush": null,
+          "polling_epoch_next": 1776799624.113373,
+          "polling_strategy": "async_poll_smart"
+        },
+        "Appliance.System.Runtime": {
+          "lastrequest": 1776799323.815381,
+          "lastresponse": 1776799324.1925018,
+          "lastpush": null,
+          "polling_epoch_next": 1776799624.1925018,
+          "polling_strategy": "async_poll_smart"
+        },
+        "Appliance.Hub.Battery": {
+          "lastrequest": 1776799292.5465183,
+          "lastresponse": 1776799293.5166605,
+          "lastpush": null,
+          "polling_epoch_next": 1776802893.5166605,
+          "polling_strategy": "async_poll_smart"
+        },
+        "Appliance.Hub.ToggleX": {
+          "lastrequest": 1776799323.815381,
+          "lastresponse": 1776799324.113373,
+          "lastpush": null,
+          "polling_epoch_next": 1776799324.113373,
+          "polling_strategy": "async_poll_default"
+        },
+        "Appliance.Hub.SubDevice.Version": {
+          "lastrequest": 1776799292.5465183,
+          "lastresponse": 1776799293.5864205,
+          "lastpush": null,
+          "polling_epoch_next": 1776799293.5864205,
+          "polling_strategy": "async_poll_once"
+        },
+        "Appliance.Hub.Sensor.All": {
+          "lastrequest": 1776799323.815381,
+          "lastresponse": 1776799324.113373,
+          "lastpush": null,
+          "polling_epoch_next": 1776799619.113373,
+          "polling_strategy": "async_poll_chunked"
+        },
+        "Appliance.Config.DeviceCfg": {
+          "lastrequest": 1776799292.5465183,
+          "lastresponse": 1776799293.6570954,
+          "lastpush": null,
+          "polling_epoch_next": 1776799593.6570954,
+          "polling_strategy": "async_poll_smart"
+        },
+        "Appliance.Control.Water": {
+          "lastrequest": 1776799323.815381,
+          "lastresponse": 1776799324.1925018,
+          "lastpush": null,
+          "polling_epoch_next": 1776799324.1925018,
+          "polling_strategy": "async_poll_default"
+        },
+        "Appliance.Config.Info": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799252.7786412,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.System.Debug": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799252.921914,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Config.Alarm": {
+          "lastrequest": 1776799292.5465183,
+          "lastresponse": 1776799293.742816,
+          "lastpush": {
+            "config": [
+              {
+                "channel": 0,
+                "enable": 1,
+                "volume": 100,
+                "song": 1
+              }
+            ]
+          },
+          "polling_epoch_next": 1776799593.742816,
+          "polling_strategy": "async_poll_diagnostic"
+        },
+        "Appliance.Config.WaterPlan": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799253.1112561,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Control.Alarm": {
+          "lastrequest": 1776799292.5465183,
+          "lastresponse": 1776799293.742816,
+          "lastpush": null,
+          "polling_epoch_next": 1776799593.742816,
+          "polling_strategy": "async_poll_diagnostic"
+        },
+        "Appliance.Control.Smoke.Config": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799253.2466955,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Control.Sensor.LatestX": {
+          "lastrequest": 1776799323.815381,
+          "lastresponse": 1776799324.1925018,
+          "lastpush": null,
+          "polling_epoch_next": 1776799324.1925018,
+          "polling_strategy": "async_poll_smart"
+        },
+        "Appliance.Digest.WaterPlan": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799253.5930197,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Hub.Online": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799253.6555607,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Hub.ExtraInfo": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799253.7670903,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Hub.Mts100.All": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799253.8297017,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Hub.Mts100.Temperature": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799253.8920054,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Hub.Mts100.ScheduleB": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799253.9638288,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Hub.Mts100.Mode": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799254.025006,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Hub.Mts100.Adjust": {
+          "lastrequest": 1776799292.5465183,
+          "lastresponse": 1776799293.81293,
+          "lastpush": null,
+          "polling_epoch_next": 1776800488.81293,
+          "polling_strategy": "async_poll_smart"
+        },
+        "Appliance.Hub.Mts100.SuperCtl": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799254.1613617,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Hub.Mts100.Config": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799254.2242935,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Hub.SubDevice.Beep": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799254.2868712,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Hub.Sensor.WaterLeak": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799254.350493,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Hub.Sensor.TempHum": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799254.4121644,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Hub.Sensor.Adjust": {
+          "lastrequest": 1776799292.5465183,
+          "lastresponse": 1776799293.81293,
+          "lastpush": null,
+          "polling_epoch_next": 1776800488.81293,
+          "polling_strategy": "async_poll_smart"
+        },
+        "Appliance.Hub.Sensor.DoorWindow": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799254.6056423,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Hub.Sensor.Smoke": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799254.6711252,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Hub.Sensor.Alert": {
+          "lastrequest": 0.0,
+          "lastresponse": 1776799254.7333314,
+          "lastpush": null,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        }
+      },
+      "device_info": {
+        "uuid": "###############################0",
+        "onlineStatus": 1,
+        "devName": "Smart Hub 450",
+        "devIconId": "device_msh450_un",
+        "bindTime": 1775575750,
+        "deviceType": "msh450",
+        "subType": "un",
+        "channels": [
+          {}
+        ],
+        "region": "eu",
+        "fmwareVersion": "9.1.20",
+        "hdwareVersion": "9.0.0",
+        "userDevIcon": "",
+        "iconType": 1,
+        "domain": "###################0",
+        "reservedDomain": "###################0",
+        "hardwareCapabilities": [],
+        "__subDeviceInfo": {
+          "1B0094AFCB6F": {
+            "subDeviceIconId": "device_mst100_un",
+            "subDeviceId": "1B0094AFCB6F",
+            "subDeviceName": "reg arbres v2",
+            "subDeviceSubType": "un",
+            "subDeviceType": "mst100",
+            "bindTime": 1775576356,
+            "iconType": 1
+          },
+          "1B00899EE1DB": {
+            "subDeviceIconId": "device_mst100_un",
+            "subDeviceId": "1B00899EE1DB",
+            "subDeviceName": "reg plantes v2",
+            "subDeviceSubType": "un",
+            "subDeviceType": "mst100",
+            "bindTime": 1775576699,
+            "iconType": 1
+          },
+          "1B1091AFACDD": {
+            "subDeviceIconId": "device_mst200_un",
+            "subDeviceId": "1B1091AFACDD",
+            "subDeviceName": "valvula-doble",
+            "subDeviceSubType": "un",
+            "subDeviceType": "mst200",
+            "bindTime": 1776004812,
+            "iconType": 1,
+            "channels": [
+              {},
+              {
+                "devName": "Hort",
+                "devIconId": "ms_device_sprinkler_sel"
+              },
+              {
+                "devName": "Leilandis",
+                "devIconId": "ms_device_sprinkler_sel"
+              }
+            ]
+          },
+          "1B00899F0934": {
+            "subDeviceIconId": "device_mst100_un",
+            "subDeviceId": "1B00899F0934",
+            "subDeviceName": "Reg hort v2",
+            "subDeviceSubType": "un",
+            "subDeviceType": "mst100",
+            "bindTime": 1776428025,
+            "iconType": 1
+          }
+        }
+      }
+    },
+    "trace": [
+      [
+        "time",
+        "rxtx",
+        "protocol",
+        "method",
+        "namespace",
+        "data"
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Polling begin"
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh450",
+                "subType": "un",
+                "version": "9.0.0",
+                "chipType": "rtl8720cm",
+                "uuid": "###############################0",
+                "macAddress": "################0"
+              },
+              "firmware": {
+                "version": "9.1.20",
+                "compileTime": "2026/02/10-14:08:53",
+                "encrypt": 1,
+                "wifiMac": "################0",
+                "innerIp": "############0",
+                "server": "###################0",
+                "port": "@0",
+                "userId": "@0"
+              },
+              "time": {
+                "timestamp": 1776799350,
+                "timezone": "Europe/Madrid",
+                "timeRule": [
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1982797200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1995498000,
+                    7200,
+                    1
+                  ],
+                  [
+                    2014246800,
+                    3600,
+                    0
+                  ],
+                  [
+                    2026947600,
+                    7200,
+                    1
+                  ],
+                  [
+                    2045696400,
+                    3600,
+                    0
+                  ],
+                  [
+                    2058397200,
+                    7200,
+                    1
+                  ],
+                  [
+                    2077146000,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "4Kk1zLhcB05kShh6",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 2921116857,
+                "mode": 0,
+                "nvdmChl": 0,
+                "workChl": 1,
+                "curChl": 1,
+                "subdevice": [
+                  {
+                    "id": "1B00899F0934",
+                    "status": 2,
+                    "onoff": 2,
+                    "lastActiveTime": 1776794882,
+                    "mst": {
+                      "ts": 1776794599,
+                      "dura": 3,
+                      "wflow": 2
+                    }
+                  },
+                  {
+                    "id": "1B1091AFACDD",
+                    "status": 1,
+                    "onoff": 2,
+                    "lastActiveTime": 1776798389,
+                    "mst": {
+                      "waDet": []
+                    }
+                  },
+                  {
+                    "id": "1B00899EE1DB",
+                    "status": 1,
+                    "onoff": 2,
+                    "lastActiveTime": 1776798381,
+                    "mst": {
+                      "ts": 1776798348,
+                      "dura": 5,
+                      "wflow": 1
+                    }
+                  },
+                  {
+                    "id": "1B0094AFCB6F",
+                    "status": 1,
+                    "onoff": 2,
+                    "lastActiveTime": 1776798356,
+                    "mst": {
+                      "ts": 1776798248,
+                      "dura": 17,
+                      "wflow": 1
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "TX",
+        "http",
+        "SET",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "daf31d885205a353b686b7deb0159300",
+                "method": "GET",
+                "namespace": "Appliance.System.DNDMode"
+              },
+              "payload": {
+                "DNDMode": {}
+              }
+            },
+            {
+              "header": {
+                "messageId": "ccca555db2afba1d34554fe0b671a7b0",
+                "method": "GET",
+                "namespace": "Appliance.System.Runtime"
+              },
+              "payload": {
+                "runtime": {}
+              }
+            },
+            {
+              "header": {
+                "messageId": "e95a15ac1b0f7f77bc41a1881fafa786",
+                "method": "GET",
+                "namespace": "Appliance.Hub.Battery"
+              },
+              "payload": {
+                "battery": []
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "RX",
+        "http",
+        "SETACK",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "daf31d885205a353b686b7deb0159300",
+                "namespace": "Appliance.System.DNDMode",
+                "triggerSrc": "meross_lan",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################0/publish",
+                "uuid": "###############################0",
+                "timestamp": 1776799350,
+                "timestampMs": 462,
+                "sign": "301da15ea30976c11f81f8ff8d14b83a"
+              },
+              "payload": {
+                "DNDMode": {
+                  "mode": 0
+                }
+              }
+            },
+            {
+              "header": {
+                "messageId": "ccca555db2afba1d34554fe0b671a7b0",
+                "namespace": "Appliance.System.Runtime",
+                "triggerSrc": "meross_lan",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################0/publish",
+                "uuid": "###############################0",
+                "timestamp": 1776799350,
+                "timestampMs": 463,
+                "sign": "56cb457c3ca9d0466551d679d697c815"
+              },
+              "payload": {
+                "runtime": {
+                  "signal": 86,
+                  "netType": 1,
+                  "iotStatus": 1,
+                  "ssid": "#######0"
+                }
+              }
+            },
+            {
+              "header": {
+                "messageId": "e95a15ac1b0f7f77bc41a1881fafa786",
+                "namespace": "Appliance.Hub.Battery",
+                "triggerSrc": "meross_lan",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################0/publish",
+                "uuid": "###############################0",
+                "timestamp": 1776799350,
+                "timestampMs": 464,
+                "sign": "c7566e20b858a1bfdb09483b991b9f91"
+              },
+              "payload": {
+                "battery": [
+                  {
+                    "id": "1B00899F0934",
+                    "value": 100
+                  },
+                  {
+                    "id": "1B1091AFACDD",
+                    "value": 100
+                  },
+                  {
+                    "id": "1B00899EE1DB",
+                    "value": 98
+                  },
+                  {
+                    "id": "1B0094AFCB6F",
+                    "value": 95
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "TX",
+        "http",
+        "SET",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "54c9c79fa88fd2e414ed2341cbee4054",
+                "method": "GET",
+                "namespace": "Appliance.Hub.ToggleX"
+              },
+              "payload": {
+                "togglex": []
+              }
+            },
+            {
+              "header": {
+                "messageId": "4c96a120d676e92897707dd613d5ffce",
+                "method": "GET",
+                "namespace": "Appliance.Hub.SubDevice.Version"
+              },
+              "payload": {
+                "version": []
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "RX",
+        "http",
+        "SETACK",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "54c9c79fa88fd2e414ed2341cbee4054",
+                "namespace": "Appliance.Hub.ToggleX",
+                "triggerSrc": "meross_lan",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################0/publish",
+                "uuid": "###############################0",
+                "timestamp": 1776799350,
+                "timestampMs": 539,
+                "sign": "04a5b56dfd5ad74e724c2cc978c065c8"
+              },
+              "payload": {
+                "togglex": [
+                  {
+                    "id": "1B00899F0934",
+                    "onoff": 0
+                  },
+                  {
+                    "id": "1B1091AFACDD",
+                    "onoff": 0
+                  },
+                  {
+                    "id": "1B00899EE1DB",
+                    "onoff": 0
+                  },
+                  {
+                    "id": "1B0094AFCB6F",
+                    "onoff": 0
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "4c96a120d676e92897707dd613d5ffce",
+                "namespace": "Appliance.Hub.SubDevice.Version",
+                "triggerSrc": "meross_lan",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################0/publish",
+                "uuid": "###############################0",
+                "timestamp": 1776799350,
+                "timestampMs": 540,
+                "sign": "5af4f3cdb06eae5631d4c88b015bc44e"
+              },
+              "payload": {
+                "version": [
+                  {
+                    "id": "1B00899F0934",
+                    "hardware": "1.1.1",
+                    "firmware": "1.1.18"
+                  },
+                  {
+                    "id": "1B1091AFACDD",
+                    "hardware": "1.1.1",
+                    "firmware": "1.1.7"
+                  },
+                  {
+                    "id": "1B00899EE1DB",
+                    "hardware": "1.1.1",
+                    "firmware": "1.1.18"
+                  },
+                  {
+                    "id": "1B0094AFCB6F",
+                    "hardware": "1.1.1",
+                    "firmware": "1.1.18"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "TX",
+        "http",
+        "SET",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "333890571c4c7232dc54d99d36b0af89",
+                "method": "GET",
+                "namespace": "Appliance.Hub.Sensor.All"
+              },
+              "payload": {
+                "all": [
+                  {
+                    "id": "1B00899F0934"
+                  },
+                  {
+                    "id": "1B1091AFACDD"
+                  },
+                  {
+                    "id": "1B00899EE1DB"
+                  },
+                  {
+                    "id": "1B0094AFCB6F"
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "5d89bfece3e4453b627a23d6f6e44e57",
+                "method": "GET",
+                "namespace": "Appliance.Config.DeviceCfg"
+              },
+              "payload": {
+                "config": [
+                  {
+                    "subId": "1B00899F0934",
+                    "channel": 0
+                  },
+                  {
+                    "subId": "1B1091AFACDD",
+                    "channel": 0
+                  },
+                  {
+                    "subId": "1B00899EE1DB",
+                    "channel": 0
+                  },
+                  {
+                    "subId": "1B0094AFCB6F",
+                    "channel": 0
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "RX",
+        "http",
+        "SETACK",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "333890571c4c7232dc54d99d36b0af89",
+                "namespace": "Appliance.Hub.Sensor.All",
+                "triggerSrc": "meross_lan",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################0/publish",
+                "uuid": "###############################0",
+                "timestamp": 1776799350,
+                "timestampMs": 624,
+                "sign": "2283a2288431d3046d5d8a524bb76633"
+              },
+              "payload": {
+                "all": []
+              }
+            },
+            {
+              "header": {
+                "messageId": "5d89bfece3e4453b627a23d6f6e44e57",
+                "namespace": "Appliance.Config.DeviceCfg",
+                "triggerSrc": "meross_lan",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################0/publish",
+                "uuid": "###############################0",
+                "timestamp": 1776799350,
+                "timestampMs": 626,
+                "sign": "b9439d3a0d752e8831a6383efb73fcbf"
+              },
+              "payload": {
+                "config": [
+                  {
+                    "channel": 0,
+                    "subId": "1B00899F0934",
+                    "mstCfg": {
+                      "dura": 1800,
+                      "wfm": 1,
+                      "calibration": {
+                        "lmTime": 0
+                      }
+                    }
+                  },
+                  {
+                    "channel": 0,
+                    "subId": "1B00899EE1DB",
+                    "mstCfg": {
+                      "dura": 1800,
+                      "wfm": 1,
+                      "calibration": {
+                        "lmTime": 0
+                      }
+                    }
+                  },
+                  {
+                    "channel": 0,
+                    "subId": "1B0094AFCB6F",
+                    "mstCfg": {
+                      "dura": 4500,
+                      "wfm": 1,
+                      "calibration": {
+                        "lmTime": 0
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "TX",
+        "http",
+        "SET",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "25df665e36fca8c8fd7219de552c68a7",
+                "method": "GET",
+                "namespace": "Appliance.Control.Water"
+              },
+              "payload": {
+                "control": [
+                  {
+                    "subId": "1B00899F0934",
+                    "channel": 0
+                  },
+                  {
+                    "subId": "1B1091AFACDD",
+                    "channel": 0
+                  },
+                  {
+                    "subId": "1B00899EE1DB",
+                    "channel": 0
+                  },
+                  {
+                    "subId": "1B0094AFCB6F",
+                    "channel": 0
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "ac5d8c67204816046f70258084da3ecb",
+                "method": "PUSH",
+                "namespace": "Appliance.Config.Alarm"
+              },
+              "payload": {}
+            },
+            {
+              "header": {
+                "messageId": "777390d0c5f0495994774c79d0d6ffaa",
+                "method": "GET",
+                "namespace": "Appliance.Control.Alarm"
+              },
+              "payload": {
+                "alarm": []
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "RX",
+        "http",
+        "SETACK",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "25df665e36fca8c8fd7219de552c68a7",
+                "namespace": "Appliance.Control.Water",
+                "triggerSrc": "meross_lan",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################0/publish",
+                "uuid": "###############################0",
+                "timestamp": 1776799350,
+                "timestampMs": 703,
+                "sign": "78a9ce404bdf5a242121abdee78b6f12"
+              },
+              "payload": {
+                "control": [
+                  {
+                    "subId": "1B00899F0934",
+                    "onoff": 2,
+                    "dura": 1800,
+                    "lmTime": 1776794833
+                  },
+                  {
+                    "subId": "1B1091AFACDD",
+                    "channels": []
+                  },
+                  {
+                    "subId": "1B00899EE1DB",
+                    "onoff": 2,
+                    "dura": 60,
+                    "lmTime": 1776798351
+                  },
+                  {
+                    "subId": "1B0094AFCB6F",
+                    "onoff": 2,
+                    "dura": 60,
+                    "lmTime": 1776798291
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "ac5d8c67204816046f70258084da3ecb",
+                "namespace": "Appliance.Config.Alarm",
+                "triggerSrc": "meross_lan",
+                "method": "PUSH",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################0/publish",
+                "uuid": "###############################0",
+                "timestamp": 1776799350,
+                "timestampMs": 704,
+                "sign": "9d3ea660d095960dfffd80a9aacd4287"
+              },
+              "payload": {
+                "config": [
+                  {
+                    "channel": 0,
+                    "enable": 1,
+                    "volume": 100,
+                    "song": 1
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "777390d0c5f0495994774c79d0d6ffaa",
+                "namespace": "Appliance.Control.Alarm",
+                "triggerSrc": "meross_lan",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################0/publish",
+                "uuid": "###############################0",
+                "timestamp": 1776799350,
+                "timestampMs": 705,
+                "sign": "62c8f0055582c340b0b35fdc6a673c09"
+              },
+              "payload": {
+                "alarm": [
+                  {
+                    "channel": 0,
+                    "event": {
+                      "interConn": {
+                        "value": 2,
+                        "timestamp": 0
+                      },
+                      "security": {
+                        "value": 2,
+                        "timestamp": 0
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "",
+        "auto",
+        "LOG",
+        "warning",
+        "KeyError('onoff') in NamespaceHandler(Appliance.Control.Water)._handle_list: payload={'control': [{'subId': '1B00899F0934', 'onoff': 2, 'dura': 1800, 'lmTime': 1776794833}, {'subId': '1B1091AFACDD', 'channels': []}, {'subId': '1B00899EE1DB', 'onoff': 2, 'dura': 60, 'lmTime': 1776798351}, {'subId': '1B0094AFCB6F', 'onoff': 2, 'dura': 60, 'lmTime': 1776798291}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:PUSH namespace:Appliance.Config.Alarm payload:{'config': [{'channel': 0, 'enable': 1, 'volume': 100, 'song': 1}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.Alarm payload:{'alarm': [{'channel': 0, 'event': {'interConn': {'value': 2, 'timestamp': 0}, 'security': {'value': 2, 'timestamp': 0}}}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "TX",
+        "http",
+        "SET",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "a79660446b325d1124d93e0e113c98d8",
+                "method": "GET",
+                "namespace": "Appliance.Control.Sensor.LatestX"
+              },
+              "payload": {
+                "latest": []
+              }
+            },
+            {
+              "header": {
+                "messageId": "72d29233ec94298d7158c6dfc3582cf4",
+                "method": "GET",
+                "namespace": "Appliance.Hub.Mts100.Adjust"
+              },
+              "payload": {
+                "adjust": []
+              }
+            },
+            {
+              "header": {
+                "messageId": "88b19b77dee0f6159cfea78028da7aa9",
+                "method": "GET",
+                "namespace": "Appliance.Hub.Sensor.Adjust"
+              },
+              "payload": {
+                "adjust": []
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "RX",
+        "http",
+        "SETACK",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "a79660446b325d1124d93e0e113c98d8",
+                "namespace": "Appliance.Control.Sensor.LatestX",
+                "triggerSrc": "meross_lan",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################0/publish",
+                "uuid": "###############################0",
+                "timestamp": 1776799350,
+                "timestampMs": 778,
+                "sign": "fbf1db6b3a17a1a458d58bb7bce9bf35"
+              },
+              "payload": {
+                "latest": []
+              }
+            },
+            {
+              "header": {
+                "messageId": "72d29233ec94298d7158c6dfc3582cf4",
+                "namespace": "Appliance.Hub.Mts100.Adjust",
+                "triggerSrc": "meross_lan",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################0/publish",
+                "uuid": "###############################0",
+                "timestamp": 1776799350,
+                "timestampMs": 779,
+                "sign": "8a8c5e833c1f79a1d21440b20e3f3d73"
+              },
+              "payload": {
+                "adjust": []
+              }
+            },
+            {
+              "header": {
+                "messageId": "88b19b77dee0f6159cfea78028da7aa9",
+                "namespace": "Appliance.Hub.Sensor.Adjust",
+                "triggerSrc": "meross_lan",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################0/publish",
+                "uuid": "###############################0",
+                "timestamp": 1776799350,
+                "timestampMs": 780,
+                "sign": "427232ae3e325f3b098fb2fa09a1872a"
+              },
+              "payload": {
+                "adjust": []
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.Sensor.LatestX payload:{'latest': []}"
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Polling end"
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Config.Info",
+        {}
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Config.Info",
+        {
+          "info": {
+            "matter": {}
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:30",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Config.Matter",
+        {}
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Config.Matter",
+        {
+          "config": {
+            "matterPlatform": [
+              24582,
+              4933
+            ]
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:PUSH namespace:Appliance.Config.Matter payload:{'config': {'matterPlatform': [24582, 4933]}}"
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Debug",
+        {
+          "debug": {}
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Debug",
+        {
+          "debug": {
+            "system": {
+              "version": "9.1.20",
+              "sysUpTime": "2h3m13s",
+              "UTC": 1776799350,
+              "localTimeOffset": 7200,
+              "localTime": "Tue Apr 21 21:22:30 2026",
+              "suncalc": "6:59;20:36",
+              "memTotal": 3953088,
+              "memFree": 3531096,
+              "memMini": 3484824,
+              "sysIdx": 1
+            },
+            "network": {
+              "linkStatus": "connected",
+              "snr": 35,
+              "channel": 6,
+              "signal": 86,
+              "rssi": -56,
+              "ssid": "#######0",
+              "gatewayMac": "################0",
+              "innerIp": "############0",
+              "wifiDisconnectCount": 0,
+              "wifiDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            },
+            "cloud": {
+              "linkStatus": "connected",
+              "activeServer": "###################0",
+              "mainServer": "###################0",
+              "mainPort": "@0",
+              "secondServer": "###################0",
+              "secondPort": "@2",
+              "userId": "@0",
+              "sysConnectTime": "Tue Apr 21 18:25:57 2026",
+              "sysOnlineTime": "0h56m33s",
+              "sysDisconnectCount": 3,
+              "iotDisconnectDetail": {
+                "totalCount": 3,
+                "detials": [
+                  {
+                    "sysUptime": 2456,
+                    "timestamp": 1776794414
+                  },
+                  {
+                    "sysUptime": 2489,
+                    "timestamp": 1776794447
+                  },
+                  {
+                    "sysUptime": 3988,
+                    "timestamp": 1776795945
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 86,
+            "netType": 1,
+            "iotStatus": 1,
+            "ssid": "#######0"
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.System.Log",
+        {}
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.System.Log (messageId:d25d168ee57a24e55108e7ed54e8e491 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Log",
+        {
+          "log": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.System.Log (messageId:3335471106b5be5de52bad69f3f186b3 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Config.Alarm",
+        {}
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Config.Alarm",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "enable": 1,
+              "volume": 100,
+              "song": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:PUSH namespace:Appliance.Config.Alarm payload:{'config': [{'channel': 0, 'enable': 1, 'volume': 100, 'song': 1}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.DeviceCfg",
+        {
+          "config": [
+            {
+              "subId": "1B00899F0934",
+              "channel": 0
+            },
+            {
+              "subId": "1B1091AFACDD",
+              "channel": 0
+            },
+            {
+              "subId": "1B00899EE1DB",
+              "channel": 0
+            },
+            {
+              "subId": "1B0094AFCB6F",
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.DeviceCfg",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "subId": "1B00899F0934",
+              "mstCfg": {
+                "dura": 1800,
+                "wfm": 1,
+                "calibration": {
+                  "lmTime": 0
+                }
+              }
+            },
+            {
+              "channel": 0,
+              "subId": "1B00899EE1DB",
+              "mstCfg": {
+                "dura": 1800,
+                "wfm": 1,
+                "calibration": {
+                  "lmTime": 0
+                }
+              }
+            },
+            {
+              "channel": 0,
+              "subId": "1B0094AFCB6F",
+              "mstCfg": {
+                "dura": 4500,
+                "wfm": 1,
+                "calibration": {
+                  "lmTime": 0
+                }
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Config.WaterPlan",
+        {}
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:PUSH namespace:Appliance.Config.WaterPlan payload:{'config': []}"
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": [
+            {
+              "subId": "1B00899F0934"
+            },
+            {
+              "subId": "1B1091AFACDD"
+            },
+            {
+              "subId": "1B00899EE1DB"
+            },
+            {
+              "subId": "1B0094AFCB6F"
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Config.WaterPlan payload:{'config': []}"
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": {
+            "channel": 65535
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": [
+            {
+              "id": "",
+              "exception": {
+                "code": 5062
+              }
+            },
+            {
+              "id": "",
+              "exception": {
+                "code": 5062
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Config.WaterPlan payload:{'config': [{'id': '', 'exception': {'code': 5062}}, {'id': '', 'exception': {'code': 5062}}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "",
+        "auto",
+        "LOG",
+        "warning",
+        "KeyError('subId') in NamespaceHandler(Appliance.Config.WaterPlan)._handle_undefined: payload={'config': [{'id': '', 'exception': {'code': 5062}}, {'id': '', 'exception': {'code': 5062}}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": {
+            "channel": 0
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": [
+            {
+              "id": "",
+              "exception": {
+                "code": 5062
+              }
+            },
+            {
+              "id": "",
+              "exception": {
+                "code": 5062
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Config.WaterPlan payload:{'config': [{'id': '', 'exception': {'code': 5062}}, {'id': '', 'exception': {'code': 5062}}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "",
+        "auto",
+        "LOG",
+        "warning",
+        "KeyError('subId') in NamespaceHandler(Appliance.Config.WaterPlan)._handle_undefined: payload={'config': [{'id': '', 'exception': {'code': 5062}}, {'id': '', 'exception': {'code': 5062}}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "RX",
+        "http",
+        "ERROR",
+        "Appliance.Config.WaterPlan",
+        {
+          "error": {
+            "code": 5000
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "",
+        "auto",
+        "LOG",
+        "warning",
+        "Protocol error: namespace:Appliance.Config.WaterPlan payload:{'error': {'code': 5000}}"
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "RX",
+        "http",
+        "ERROR",
+        "Appliance.Config.WaterPlan",
+        {
+          "error": {
+            "code": 5000
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "",
+        "auto",
+        "LOG",
+        "warning",
+        "Protocol error: namespace:Appliance.Config.WaterPlan payload:{'error': {'code': 5000}}"
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": {
+            "subId": "1B00899F0934"
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": [
+            {
+              "id": "",
+              "exception": {
+                "code": 5062
+              }
+            },
+            {
+              "id": "",
+              "exception": {
+                "code": 5062
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Config.WaterPlan payload:{'config': [{'id': '', 'exception': {'code': 5062}}, {'id': '', 'exception': {'code': 5062}}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "",
+        "auto",
+        "LOG",
+        "warning",
+        "KeyError('subId') in NamespaceHandler(Appliance.Config.WaterPlan)._handle_undefined: payload={'config': [{'id': '', 'exception': {'code': 5062}}, {'id': '', 'exception': {'code': 5062}}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": {
+            "subId": "1B1091AFACDD"
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": [
+            {
+              "id": "",
+              "exception": {
+                "code": 5062
+              }
+            },
+            {
+              "id": "",
+              "exception": {
+                "code": 5062
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Config.WaterPlan payload:{'config': [{'id': '', 'exception': {'code': 5062}}, {'id': '', 'exception': {'code': 5062}}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "",
+        "auto",
+        "LOG",
+        "warning",
+        "KeyError('subId') in NamespaceHandler(Appliance.Config.WaterPlan)._handle_undefined: payload={'config': [{'id': '', 'exception': {'code': 5062}}, {'id': '', 'exception': {'code': 5062}}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:31",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": {
+            "subId": "1B00899EE1DB"
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": [
+            {
+              "id": "",
+              "exception": {
+                "code": 5062
+              }
+            },
+            {
+              "id": "",
+              "exception": {
+                "code": 5062
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Config.WaterPlan payload:{'config': [{'id': '', 'exception': {'code': 5062}}, {'id': '', 'exception': {'code': 5062}}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "warning",
+        "KeyError('subId') in NamespaceHandler(Appliance.Config.WaterPlan)._handle_undefined: payload={'config': [{'id': '', 'exception': {'code': 5062}}, {'id': '', 'exception': {'code': 5062}}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": {
+            "subId": "1B0094AFCB6F"
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": [
+            {
+              "id": "",
+              "exception": {
+                "code": 5062
+              }
+            },
+            {
+              "id": "",
+              "exception": {
+                "code": 5062
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Config.WaterPlan payload:{'config': [{'id': '', 'exception': {'code': 5062}}, {'id': '', 'exception': {'code': 5062}}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "warning",
+        "KeyError('subId') in NamespaceHandler(Appliance.Config.WaterPlan)._handle_undefined: payload={'config': [{'id': '', 'exception': {'code': 5062}}, {'id': '', 'exception': {'code': 5062}}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": [
+            {
+              "subId": "1B00899F0934",
+              "channel": 0
+            },
+            {
+              "subId": "1B1091AFACDD",
+              "channel": 0
+            },
+            {
+              "subId": "1B00899EE1DB",
+              "channel": 0
+            },
+            {
+              "subId": "1B0094AFCB6F",
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.WaterPlan",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Config.WaterPlan payload:{'config': []}"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Alarm",
+        {
+          "alarm": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Alarm",
+        {
+          "alarm": [
+            {
+              "channel": 0,
+              "event": {
+                "interConn": {
+                  "value": 2,
+                  "timestamp": 0
+                },
+                "security": {
+                  "value": 2,
+                  "timestamp": 0
+                }
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.Alarm payload:{'alarm': [{'channel': 0, 'event': {'interConn': {'value': 2, 'timestamp': 0}, 'security': {'value': 2, 'timestamp': 0}}}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Water",
+        {
+          "control": [
+            {
+              "subId": "1B00899F0934",
+              "channel": 0
+            },
+            {
+              "subId": "1B1091AFACDD",
+              "channel": 0
+            },
+            {
+              "subId": "1B00899EE1DB",
+              "channel": 0
+            },
+            {
+              "subId": "1B0094AFCB6F",
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Water",
+        {
+          "control": [
+            {
+              "subId": "1B00899F0934",
+              "onoff": 2,
+              "dura": 1800,
+              "lmTime": 1776794833
+            },
+            {
+              "subId": "1B1091AFACDD",
+              "channels": []
+            },
+            {
+              "subId": "1B00899EE1DB",
+              "onoff": 2,
+              "dura": 60,
+              "lmTime": 1776798351
+            },
+            {
+              "subId": "1B0094AFCB6F",
+              "onoff": 2,
+              "dura": 60,
+              "lmTime": 1776798291
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "warning",
+        "KeyError('onoff') in NamespaceHandler(Appliance.Control.Water)._handle_list: payload={'control': [{'subId': '1B00899F0934', 'onoff': 2, 'dura': 1800, 'lmTime': 1776794833}, {'subId': '1B1091AFACDD', 'channels': []}, {'subId': '1B00899EE1DB', 'onoff': 2, 'dura': 60, 'lmTime': 1776798351}, {'subId': '1B0094AFCB6F', 'onoff': 2, 'dura': 60, 'lmTime': 1776798291}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.Smoke.Config",
+        {}
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.Control.Smoke.Config (messageId:abab77d48b29b6911e84f6b87243fec2 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Smoke.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Smoke.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.Smoke.Config payload:{'config': []}"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Smoke.Config",
+        {
+          "config": [
+            {
+              "id": "1B00899F0934"
+            },
+            {
+              "id": "1B1091AFACDD"
+            },
+            {
+              "id": "1B00899EE1DB"
+            },
+            {
+              "id": "1B0094AFCB6F"
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Smoke.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.Smoke.Config payload:{'config': []}"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Smoke.Config",
+        {
+          "config": [
+            {
+              "subId": "1B00899F0934"
+            },
+            {
+              "subId": "1B1091AFACDD"
+            },
+            {
+              "subId": "1B00899EE1DB"
+            },
+            {
+              "subId": "1B0094AFCB6F"
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Smoke.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.Smoke.Config payload:{'config': []}"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Smoke.Config",
+        {
+          "config": [
+            {
+              "subId": "1B00899F0934",
+              "channel": 0
+            },
+            {
+              "subId": "1B1091AFACDD",
+              "channel": 0
+            },
+            {
+              "subId": "1B00899EE1DB",
+              "channel": 0
+            },
+            {
+              "subId": "1B0094AFCB6F",
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Smoke.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.Smoke.Config payload:{'config': []}"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Sensor.LatestX",
+        {
+          "latest": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Sensor.LatestX",
+        {
+          "latest": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.Sensor.LatestX payload:{'latest': []}"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.CloudEvent",
+        {}
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.Control.CloudEvent (messageId:55e7f1e331b4e96afda7d1bf25ad856a ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.CloudEvent",
+        {
+          "cloudEvent": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.CloudEvent (messageId:24de546fe475ae21a54347f24c3616fd ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.WaterEvent.Skip",
+        {}
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.Control.WaterEvent.Skip (messageId:644afd6ab10632d841174af9cd217f08 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.WaterEvent.Skip",
+        {
+          "control": [
+            {
+              "subId": "1B00899F0934"
+            },
+            {
+              "subId": "1B1091AFACDD"
+            },
+            {
+              "subId": "1B00899EE1DB"
+            },
+            {
+              "subId": "1B0094AFCB6F"
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.WaterEvent.Skip (messageId:fc63a8b369de04733fe8dc90988bb7b8 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.WaterEvent.Skip",
+        {
+          "control": {
+            "channel": 65535
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.WaterEvent.Skip (messageId:1fbfb9c452497074276645a8e037b392 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.WaterEvent.Skip",
+        {
+          "control": {
+            "channel": 0
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.WaterEvent.Skip (messageId:66b467076ec001c4eaea54f13a4570fc ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:32",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.WaterEvent.Skip",
+        {
+          "control": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.WaterEvent.Skip (messageId:128387485adbecd1fe99ad1b21ea903a ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.WaterEvent.Skip",
+        {
+          "control": {}
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.WaterEvent.Skip (messageId:8c296365bcae345d60ad03c5525e1734 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.WaterEvent.Skip",
+        {
+          "control": {
+            "subId": "1B00899F0934"
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.WaterEvent.Skip (messageId:6f9936b0b9520e834691d32734bfa63e ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.WaterEvent.Skip",
+        {
+          "control": {
+            "subId": "1B1091AFACDD"
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.WaterEvent.Skip (messageId:aadad8a3554603225edbf5cd4e0914b0 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.WaterEvent.Skip",
+        {
+          "control": {
+            "subId": "1B00899EE1DB"
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.WaterEvent.Skip (messageId:78de84d4cac526659973f098c983b922 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.WaterEvent.Skip",
+        {
+          "control": {
+            "subId": "1B0094AFCB6F"
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.WaterEvent.Skip (messageId:805305c38f34351d417fe36e3895e0e0 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.WaterEvent.Skip",
+        {
+          "control": [
+            {
+              "subId": "1B00899F0934",
+              "channel": 0
+            },
+            {
+              "subId": "1B1091AFACDD",
+              "channel": 0
+            },
+            {
+              "subId": "1B00899EE1DB",
+              "channel": 0
+            },
+            {
+              "subId": "1B0094AFCB6F",
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.WaterEvent.Skip (messageId:8798ee5d6be93d7bc429c10d7ca271fa ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.AlertConfig",
+        {}
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Control.AlertConfig",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:PUSH namespace:Appliance.Control.AlertConfig payload:{'config': []}"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.AlertReport",
+        {}
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.Control.AlertReport (messageId:8eaddb06b0786b75fadf8411fbb53d7c ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.AlertReport",
+        {
+          "alert": [
+            {
+              "channel": "1B00899F0934"
+            },
+            {
+              "channel": "1B1091AFACDD"
+            },
+            {
+              "channel": "1B00899EE1DB"
+            },
+            {
+              "channel": "1B0094AFCB6F"
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.AlertReport (messageId:b37f8c54ac78f48d671e3f35c4165ad6 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.AlertReport",
+        {
+          "alert": {
+            "channel": 65535
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.AlertReport (messageId:5d6e522e3a92d5276858009a93abe5ad ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.AlertReport",
+        {
+          "alert": {
+            "channel": 0
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.AlertReport (messageId:74a68c8855b64e081799e3a2635519f5 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.AlertReport",
+        {
+          "alert": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.AlertReport (messageId:df5895fe756e8907832fa430257f6fd4 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.AlertReport",
+        {
+          "alert": {}
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.AlertReport (messageId:2296f7473c903e6e33818c9bcab13ff1 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.AlertReport",
+        {
+          "alert": {
+            "channel": "1B00899F0934"
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.AlertReport (messageId:cb981763d3f677b5a6c0405f3f57c511 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.AlertReport",
+        {
+          "alert": {
+            "channel": "1B1091AFACDD"
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.AlertReport (messageId:491f0689d743d7df6e651461a3bca6c1 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.AlertReport",
+        {
+          "alert": {
+            "channel": "1B00899EE1DB"
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.AlertReport (messageId:7943162b03559c06d4034d83edbb9917 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.AlertReport",
+        {
+          "alert": {
+            "channel": "1B0094AFCB6F"
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.AlertReport (messageId:fcf9f965415e84b3e59e65df4550d899 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Digest.WaterPlan",
+        {}
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.Digest.WaterPlan (messageId:f423185282170b7e9dd9753c38ac5118 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2026/04/21 - 21:22:33",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Digest.WaterPlan",
+        {
+          "digest": [
+            {
+              "subId": "1B00899F0934"
+            },
+            {
+              "subId": "1B1091AFACDD"
+            },
+            {
+              "subId": "1B00899EE1DB"
+            },
+            {
+              "subId": "1B0094AFCB6F"
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Digest.WaterPlan",
+        {
+          "digest": [
+            {
+              "channel": 0,
+              "subId": "1B00899F0934",
+              "ids": []
+            },
+            {
+              "channel": 0,
+              "subId": "1B00899EE1DB",
+              "ids": []
+            },
+            {
+              "channel": 0,
+              "subId": "1B0094AFCB6F",
+              "ids": []
+            },
+            {
+              "channel": 0,
+              "subId": "1B1091AFACDD",
+              "ids": []
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Digest.WaterPlan payload:{'digest': [{'channel': 0, 'subId': '1B00899F0934', 'ids': []}, {'channel': 0, 'subId': '1B00899EE1DB', 'ids': []}, {'channel': 0, 'subId': '1B0094AFCB6F', 'ids': []}, {'channel': 0, 'subId': '1B1091AFACDD', 'ids': []}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "MLDiagnosticSensor(1B00899F0934_waterPlan_digest_subId): init"
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "",
+        "auto",
+        "LOG",
+        "verbose",
+        "MLDiagnosticSensor(1B00899F0934_waterPlan_digest_subId): Added to HomeAssistant"
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "MLDiagnosticSensor(1B00899EE1DB_waterPlan_digest_subId): init"
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "",
+        "auto",
+        "LOG",
+        "verbose",
+        "MLDiagnosticSensor(1B00899EE1DB_waterPlan_digest_subId): Added to HomeAssistant"
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "MLDiagnosticSensor(1B0094AFCB6F_waterPlan_digest_subId): init"
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "",
+        "auto",
+        "LOG",
+        "verbose",
+        "MLDiagnosticSensor(1B0094AFCB6F_waterPlan_digest_subId): Added to HomeAssistant"
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "MLDiagnosticSensor(1B1091AFACDD_waterPlan_digest_subId): init"
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "",
+        "auto",
+        "LOG",
+        "verbose",
+        "MLDiagnosticSensor(1B1091AFACDD_waterPlan_digest_subId): Added to HomeAssistant"
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Digest.WaterPlan",
+        {
+          "digest": {
+            "channel": 65535
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Digest.WaterPlan",
+        {
+          "digest": [
+            {
+              "id": "",
+              "exception": {
+                "code": 5062
+              }
+            },
+            {
+              "id": "",
+              "exception": {
+                "code": 5062
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Digest.WaterPlan payload:{'digest': [{'id': '', 'exception': {'code': 5062}}, {'id': '', 'exception': {'code': 5062}}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "",
+        "auto",
+        "LOG",
+        "warning",
+        "KeyError('subId') in NamespaceHandler(Appliance.Digest.WaterPlan)._handle_undefined: payload={'digest': [{'id': '', 'exception': {'code': 5062}}, {'id': '', 'exception': {'code': 5062}}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Digest.WaterPlan",
+        {
+          "digest": {
+            "channel": 0
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Digest.WaterPlan",
+        {
+          "digest": [
+            {
+              "id": "",
+              "exception": {
+                "code": 5062
+              }
+            },
+            {
+              "id": "",
+              "exception": {
+                "code": 5062
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Digest.WaterPlan payload:{'digest': [{'id': '', 'exception': {'code': 5062}}, {'id': '', 'exception': {'code': 5062}}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "",
+        "auto",
+        "LOG",
+        "warning",
+        "KeyError('subId') in NamespaceHandler(Appliance.Digest.WaterPlan)._handle_undefined: payload={'digest': [{'id': '', 'exception': {'code': 5062}}, {'id': '', 'exception': {'code': 5062}}]}"
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Digest.WaterPlan",
+        {
+          "digest": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Digest.WaterPlan",
+        {
+          "digest": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Digest.WaterPlan payload:{'digest': []}"
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Digest.WaterPlan",
+        {
+          "digest": {}
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Digest.WaterPlan",
+        {
+          "digest": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Digest.WaterPlan payload:{'digest': []}"
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Online",
+        {
+          "online": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Online",
+        {
+          "online": [
+            {
+              "id": "1B00899F0934",
+              "status": 2,
+              "lastActiveTime": 1776794882
+            },
+            {
+              "id": "1B1091AFACDD",
+              "status": 1,
+              "lastActiveTime": 1776798389
+            },
+            {
+              "id": "1B00899EE1DB",
+              "status": 1,
+              "lastActiveTime": 1776798381
+            },
+            {
+              "id": "1B0094AFCB6F",
+              "status": 1,
+              "lastActiveTime": 1776798356
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.ToggleX",
+        {
+          "togglex": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.ToggleX",
+        {
+          "togglex": [
+            {
+              "id": "1B00899F0934",
+              "onoff": 0
+            },
+            {
+              "id": "1B1091AFACDD",
+              "onoff": 0
+            },
+            {
+              "id": "1B00899EE1DB",
+              "onoff": 0
+            },
+            {
+              "id": "1B0094AFCB6F",
+              "onoff": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Battery",
+        {
+          "battery": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Battery",
+        {
+          "battery": [
+            {
+              "id": "1B00899F0934",
+              "value": 100
+            },
+            {
+              "id": "1B1091AFACDD",
+              "value": 100
+            },
+            {
+              "id": "1B00899EE1DB",
+              "value": 98
+            },
+            {
+              "id": "1B0094AFCB6F",
+              "value": 95
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.ExtraInfo",
+        {
+          "extraInfo": {}
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.ExtraInfo",
+        {
+          "extraInfo": {
+            "upgradeSubDevs": [
+              {
+                "type": "ms200"
+              },
+              {
+                "type": "mts150p"
+              },
+              {
+                "type": "ms405"
+              },
+              {
+                "type": "ms130"
+              },
+              {
+                "type": "ma151"
+              },
+              {
+                "type": "mst100"
+              },
+              {
+                "type": "mst200"
+              }
+            ],
+            "subDevs": [
+              {
+                "type": "mts150"
+              },
+              {
+                "type": "ms200"
+              },
+              {
+                "type": "mts150p"
+              },
+              {
+                "type": "ms400"
+              },
+              {
+                "type": "ms405"
+              },
+              {
+                "type": "ms100f"
+              },
+              {
+                "type": "ms130"
+              },
+              {
+                "type": "gs559a"
+              },
+              {
+                "type": "ma151"
+              },
+              {
+                "type": "mst100"
+              },
+              {
+                "type": "mst200"
+              }
+            ]
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Temperature",
+        {
+          "temperature": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Temperature",
+        {
+          "temperature": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.ScheduleB",
+        {
+          "schedule": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.ScheduleB",
+        {
+          "schedule": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Mode",
+        {
+          "mode": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Mode",
+        {
+          "mode": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:34",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.SuperCtl",
+        {
+          "superCtl": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.SuperCtl",
+        {
+          "superCtl": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Hub.SubDevice.Beep",
+        {}
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": [
+            {
+              "id": "1B00899F0934"
+            },
+            {
+              "id": "1B1091AFACDD"
+            },
+            {
+              "id": "1B00899EE1DB"
+            },
+            {
+              "id": "1B0094AFCB6F"
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": {
+            "channel": 65535
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": {
+            "channel": 0
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": {}
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": {
+            "id": "1B00899F0934"
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": {
+            "id": "1B1091AFACDD"
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": {
+            "id": "1B00899EE1DB"
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": {
+            "id": "1B0094AFCB6F"
+          }
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "alarm": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.SubDevice.Version",
+        {
+          "version": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.SubDevice.Version",
+        {
+          "version": [
+            {
+              "id": "1B00899F0934",
+              "hardware": "1.1.1",
+              "firmware": "1.1.18"
+            },
+            {
+              "id": "1B1091AFACDD",
+              "hardware": "1.1.1",
+              "firmware": "1.1.7"
+            },
+            {
+              "id": "1B00899EE1DB",
+              "hardware": "1.1.1",
+              "firmware": "1.1.18"
+            },
+            {
+              "id": "1B0094AFCB6F",
+              "hardware": "1.1.1",
+              "firmware": "1.1.18"
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "1B00899F0934"
+            },
+            {
+              "id": "1B1091AFACDD"
+            },
+            {
+              "id": "1B00899EE1DB"
+            },
+            {
+              "id": "1B0094AFCB6F"
+            }
+          ]
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.WaterLeak",
+        {
+          "waterLeak": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.WaterLeak",
+        {
+          "waterLeak": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:35",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.TempHum",
+        {
+          "tempHum": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:36",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.TempHum",
+        {
+          "tempHum": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:36",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:36",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:36",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.DoorWindow",
+        {
+          "doorWindow": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:36",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.DoorWindow",
+        {
+          "doorWindow": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:36",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Smoke",
+        {
+          "smokeAlarm": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:36",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Smoke",
+        {
+          "smokeAlarm": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:36",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Alert",
+        {
+          "alert": []
+        }
+      ],
+      [
+        "2026/04/21 - 21:22:36",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Alert",
+        {
+          "alert": []
+        }
+      ]
+    ]
+  },
+  "issues": [
+    {
+      "created": "2026-04-06T18:54:13.231715+00:00",
+      "dismissed_version": null,
+      "domain": "meross_lan",
+      "is_persistent": false,
+      "issue_id": "hub_subdevice_removed.25030431130393620801c4e7ae1415c7.1B00899EE1DB"
+    }
+  ]
+}
