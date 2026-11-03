@@ -1,123 +1,56 @@
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from functools import cached_property
+from typing import TYPE_CHECKING, override
 
+from homeassistant import const as hac
 from homeassistant.components import sensor
 
-from . import const as mlc
-from .helpers import entity as me
-from .helpers.namespaces import (
-    EntityNamespaceHandler,
-    EntityNamespaceMixin,
-    NamespaceHandler,
-    mc,
-    mn,
-)
-from .merossclient import json_dumps
+from .helpers import entity as mle
+from .merossclient.client import Transport
+from .merossclient.protocol import const as mc
+from .merossclient.protocol.message import json_dumps
 
 if TYPE_CHECKING:
-    from typing import ClassVar, Final, NotRequired, Unpack
-
-    from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
+    from typing import (
+        ClassVar,
+        Final,
+        Never,
+        NotRequired,
+        Protocol,
+        Self,
+        Unpack,
+    )
 
     from .helpers.device import Device
-    from .helpers.manager import EntityManager
+    from .helpers.mqtt_profile import MQTTConnection
+    from .merossclient.client import AbstractClient
+    from .merossclient.protocol.types import JsonMapping
 
 
-async def async_setup_entry(
-    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
-):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, sensor.DOMAIN)
-
-
-class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
-    """Specialization for sensor with ENUM device_class which allows to store
-    anything as opposed to numeric sensor types which have units and so."""
+class SensorEntity(mle.NumericEntity, sensor.SensorEntity):
+    """Base wrapper around HA core SensorEntity."""
 
     if TYPE_CHECKING:
 
-        class Args(me.MLEntity.Args):
-            native_value: NotRequired[sensor.StateType]
+        DEVICE_CLASS_TEMPERATURE_DELTA: Final[sensor.SensorDeviceClass]
+        # HA core entity attributes:
+        _attr_device_class: ClassVar[sensor.SensorDeviceClass | None]
+        _attr_suggested_display_precision: ClassVar[int | None]
+        device_class: sensor.SensorDeviceClass | None
 
-    @dataclass(slots=True)
-    class SensorDef:
-        """Descriptor class used when populating maps used to dynamically instantiate (sensor)
-        entities based on their appearance in a payload key."""
+        type InitArgs = mle.NumericEntity.InitArgs
 
-        type: "Final[type[MLEnumSensor]]"
-        entitykey: str | None
-        kwargs: "Final[MLEnumSensor.Args]"
-
-        def __init__(
-            self, entitykey: str | None = None, **kwargs: "Unpack[MLEnumSensor.Args]"
-        ):
-            self.type = MLEnumSensor
-            self.entitykey = entitykey
-            self.kwargs = kwargs
-
-    PLATFORM = sensor.DOMAIN
-
-    # HA core entity attributes:
-    native_value: "sensor.StateType"
-    native_unit_of_measurement: None = None
-
-    __slots__ = ("native_value",)
-
-    def __init__(
-        self,
-        manager: "EntityManager",
-        channel: object | None,
-        entitykey: str | None,
-        **kwargs: "Unpack[Args]",
-    ):
-        self.native_value = kwargs.pop("native_value", None)
-        super().__init__(
-            manager, channel, entitykey, sensor.SensorDeviceClass.ENUM, **kwargs
-        )
-
-    def set_unavailable(self):
-        self.native_value = None
-        super().set_unavailable()
-
-    def update_native_value(self, native_value: sensor.StateType):
-        if self.native_value != native_value:
-            self.native_value = native_value
-            self.flush_state()
-            return True
-
-
-class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
-
-    if TYPE_CHECKING:
-
-        class Args(me.MLNumericEntity.Args):
-            state_class: NotRequired[sensor.SensorStateClass]
+        class Args(mle.NumericEntity.Args):
+            device_class: NotRequired[sensor.SensorDeviceClass | None]  # Override
+            state_class: NotRequired[sensor.SensorStateClass | None]
             suggested_display_precision: NotRequired[int]
 
-        # HA core entity attributes:
-        _attr_suggested_display_precision: ClassVar[int | None]
-        suggested_display_precision: int | None
-
-    @dataclass(slots=True)
-    class SensorDef:
-        """Descriptor class used when populating maps used to dynamically instantiate (sensor)
-        entities based on their appearance in a payload key."""
-
-        type: "Final[type[MLNumericSensor]]"
-        entitykey: str | None
-        kwargs: "Final[MLNumericSensor.Args]"
-
-        def __init__(
-            self,
-            type: "type[MLNumericSensor] | None" = None,
-            entitykey: str | None = None,
-            **kwargs: "Unpack[MLNumericSensor.Args]",
-        ):
-            self.type = type or MLNumericSensor
-            self.entitykey = entitykey
-            self.kwargs = kwargs
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
     PLATFORM = sensor.DOMAIN
+    HA_ENTITY_ATTRIBUTES = mle.NumericEntity.HA_ENTITY_ATTRIBUTES + (
+        "state_class",
+        "suggested_display_precision",
+    )
     DeviceClass = sensor.SensorDeviceClass
     StateClass = sensor.SensorStateClass
 
@@ -126,316 +59,316 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
         DeviceClass, "TEMPERATURE_DELTA", DeviceClass.TEMPERATURE
     )
 
-    DEVICECLASS_TO_UNIT_MAP = {
-        DeviceClass.POWER: me.MLEntity.hac.UnitOfPower.WATT,
-        DeviceClass.CURRENT: me.MLEntity.hac.UnitOfElectricCurrent.AMPERE,
-        DeviceClass.VOLTAGE: me.MLEntity.hac.UnitOfElectricPotential.VOLT,
-        DeviceClass.ENERGY: me.MLEntity.hac.UnitOfEnergy.WATT_HOUR,
-        DeviceClass.TEMPERATURE: me.MLEntity.hac.UnitOfTemperature.CELSIUS,
-        DEVICE_CLASS_TEMPERATURE_DELTA: me.MLEntity.hac.UnitOfTemperature.CELSIUS,
-        DeviceClass.HUMIDITY: me.MLEntity.hac.PERCENTAGE,
-        DeviceClass.BATTERY: me.MLEntity.hac.PERCENTAGE,
-        DeviceClass.ILLUMINANCE: me.MLEntity.hac.LIGHT_LUX,
+    mle.NumericEntity.DEVICECLASS_TO_UNIT_MAP = {
+        None: None,
+        DeviceClass.POWER: hac.UnitOfPower.WATT,
+        DeviceClass.CURRENT: hac.UnitOfElectricCurrent.AMPERE,
+        DeviceClass.VOLTAGE: hac.UnitOfElectricPotential.VOLT,
+        DeviceClass.ENERGY: hac.UnitOfEnergy.WATT_HOUR,
+        DeviceClass.TEMPERATURE: hac.UnitOfTemperature.CELSIUS,
+        DEVICE_CLASS_TEMPERATURE_DELTA: hac.UnitOfTemperature.CELSIUS,
+        DeviceClass.HUMIDITY: hac.PERCENTAGE,
+        DeviceClass.BATTERY: hac.PERCENTAGE,
+        DeviceClass.ILLUMINANCE: hac.LIGHT_LUX,
+        DeviceClass.DURATION: hac.UnitOfTime.SECONDS,
+        DeviceClass.ENUM: None,
     }
 
     # we basically default Sensor.state_class to SensorStateClass.MEASUREMENT
     # except these device classes
-    DEVICECLASS_TO_STATECLASS_MAP: dict[DeviceClass | None, StateClass] = {
-        None: StateClass.MEASUREMENT,
+    DEVICECLASS_TO_STATECLASS_MAP: dict[DeviceClass | None, StateClass | None] = {
         DeviceClass.ENERGY: StateClass.TOTAL_INCREASING,
+        DeviceClass.ENUM: None,
     }
 
-    # HA core entity attributes:
-    state_class: StateClass
-    _attr_suggested_display_precision = None
-
-    __slots__ = (
-        "state_class",
-        "suggested_display_precision",
-    )
-
-    def __init__(
-        self,
-        manager: "EntityManager",
-        channel: object | None,
-        entitykey: str | None,
-        device_class: DeviceClass | None = None,
-        **kwargs: "Unpack[Args]",
-    ):
-        assert device_class is not sensor.SensorDeviceClass.ENUM
-        self.state_class = kwargs.pop(
-            "state_class", None
-        ) or self.DEVICECLASS_TO_STATECLASS_MAP.get(
-            device_class, MLNumericSensor.StateClass.MEASUREMENT
-        )
-        self.suggested_display_precision = kwargs.pop(
-            "suggested_display_precision", self._attr_suggested_display_precision
-        )
-        super().__init__(
-            manager,
-            channel,
-            entitykey,
-            device_class,
-            **kwargs,
-        )
-
-    @staticmethod
-    def build_for_device(
-        device: "Device",
-        device_class: "MLNumericSensor.DeviceClass",
-        **kwargs: "Unpack[Args]",
-    ):
-        return MLNumericSensor(
-            device,
-            None,
-            str(device_class),
-            device_class,
-            **kwargs,
-        )
+    @cached_property
+    def state_class(self):
+        try:
+            return self._attr_state_class
+        except AttributeError:
+            pass
+        try:
+            return self.DEVICECLASS_TO_STATECLASS_MAP[self.device_class]
+        except KeyError:
+            return (
+                sensor.SensorStateClass.MEASUREMENT
+                if self.native_unit_of_measurement
+                else None
+            )
 
 
-class MLHumiditySensor(MLNumericSensor):
-    """Specialization for Humidity sensor.
-    - device_scale defaults to 10 which is actually the only scale seen so far.
-    - suggested_display_precision defaults to 1
-    """
-
-    _attr_device_scale = 10
-    # HA core entity attributes:
-    _attr_suggested_display_precision = 1
-
-    def __init__(
-        self,
-        manager: "EntityManager",
-        channel: object | None,
-        entitykey: str = "humidity",
-        **kwargs: "Unpack[MLNumericSensor.Args]",
-    ):
-        kwargs.setdefault("name", entitykey.capitalize())
-        super().__init__(
-            manager,
-            channel,
-            entitykey,
-            sensor.SensorDeviceClass.HUMIDITY,
-            **kwargs,
-        )
-
-
-class MLTemperatureSensor(MLNumericSensor):
-    """Specialization for Temperature sensor.
-    - device_scale defaults to 1 (from base class definition) and is likely to be overriden.
-    - suggested_display_precision defaults to 1
-    """
-
-    # HA core entity attributes:
-    _attr_suggested_display_precision = 1
-
-    def __init__(
-        self,
-        manager: "EntityManager",
-        channel: object | None,
-        entitykey: str = "temperature",
-        **kwargs: "Unpack[MLNumericSensor.Args]",
-    ):
-        kwargs.setdefault("name", entitykey.capitalize())
-        super().__init__(
-            manager,
-            channel,
-            entitykey,
-            sensor.SensorDeviceClass.TEMPERATURE,
-            **kwargs,
-        )
-
-
-class MLLightSensor(MLNumericSensor):
-    """Specialization for sensor reporting light illuminance (lux)."""
-
-    _attr_device_scale = 1
-    # HA core entity attributes:
-    _attr_suggested_display_precision = 0
-
-    def __init__(
-        self,
-        manager: "EntityManager",
-        channel: object | None,
-        entitykey: str = "light",
-        **kwargs: "Unpack[MLNumericSensor.Args]",
-    ):
-        kwargs.setdefault("name", entitykey.capitalize())
-        super().__init__(
-            manager,
-            channel,
-            entitykey,
-            sensor.SensorDeviceClass.ILLUMINANCE,
-            **kwargs,
-        )
-
-
-class MLDiagnosticSensor(MLEnumSensor):
+class EnumSensorEntity(SensorEntity):
+    """Base wrapper around HA core SensorEntity with enum device class."""
 
     if TYPE_CHECKING:
-        is_diagnostic: Final
+
+        _attr_device_class: Final
+        _attr_state_class: Final
+        _attr_suggested_display_precision: Final
+        native_value: sensor.StateType
+
+        type InitArgs = SensorEntity.InitArgs
+
+        class Args(SensorEntity.Args):
+            native_value: NotRequired[sensor.StateType]  # Override
+            device_class: NotRequired[Never]  # Override
+            state_class: NotRequired[Never]  # Override
+            suggested_display_precision: NotRequired[Never]  # Override
+
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
+
+        @classmethod
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+
+        def update_native_value(
+            self, native_value: sensor.StateType, /
+        ) -> bool | None: ...
+
+    # HA core entity attributes:
+    _attr_device_class = sensor.SensorDeviceClass.ENUM
+    _attr_state_class = None
+    _attr_suggested_display_precision = None
+
+
+class EnumParser(mle.ValueParser, EnumSensorEntity):
+    """Specialized class for enum sensors bound to a namespace parser."""
+
+    if TYPE_CHECKING:
+
+        type InitArgs = mle.ValueParser.InitArgs
+
+        class Args(EnumSensorEntity.Args, mle.ValueParser.Args):
+            pass
+
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
+
+        @classmethod
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+
+    @override
+    def update_device_value(self, device_value: sensor.StateType, /):
+        if self.ns_value != device_value:
+            self.ns_value = device_value
+            self.native_value = device_value
+            self.flush_state()
+            return True
+
+    update_native_value = update_device_value
+
+
+class SensorParser(mle.NumericParser, SensorEntity):
+    """Specialized class for numeric sensors bound to a namespace parser."""
+
+    if TYPE_CHECKING:
+
+        type InitArgs = mle.NumericParser.InitArgs
+
+        class Args(SensorEntity.Args, mle.NumericParser.Args):
+            pass
+
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
+
+        @classmethod
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+
+        HUMIDITY_ARGS: Final[Args]
+        LIGHT_ARGS: Final[Args]
+        TEMPERATURE_ARGS: Final[Args]
+
+    HUMIDITY_ARGS = {
+        "entity_key": mc.KEY_HUMIDITY,
+        "device_scale": 10,  # almost always valid
+        "device_class": SensorEntity.DeviceClass.HUMIDITY,
+        "suggested_display_precision": 1,
+    }
+
+    LIGHT_ARGS = {
+        "entity_key": mc.KEY_LIGHT,
+        "device_class": SensorEntity.DeviceClass.ILLUMINANCE,
+        "suggested_display_precision": 0,
+    }
+
+    TEMPERATURE_ARGS = {
+        "entity_key": mc.KEY_TEMPERATURE,
+        "device_scale": 100,  # almost always valid
+        "device_class": SensorEntity.DeviceClass.TEMPERATURE,
+        "suggested_display_precision": 1,
+    }
+
+    __slots__ = mle.NumericParser._calc_slots()
+
+
+class DiagnosticSensor(SensorEntity):
+    """These are entities always added later (when config entry is already setup) on demand
+    to provide diagnostic/debug informations when the entry is configured so.
+    They're typically installed while parsing unknown namespaces to expose the raw payload values
+    as simple sensors.
+    """
+
+    if TYPE_CHECKING:
+        native_value: sensor.StateType
+
+        type InitArgs = SensorEntity.InitArgs
+
+        class Args(SensorEntity.Args):
+            native_value: NotRequired[sensor.StateType]
+
+        def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"): ...
+        @classmethod
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+
+        def update_native_value(
+            self, native_value: sensor.StateType, /
+        ) -> bool | None: ...
 
     is_diagnostic = True
 
     # HA core entity attributes:
-    entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
+    _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC
+    _attr_state_class = None
 
-    def _parse(self, payload: dict):
+
+class DiagnosticParser(mle.ValueParser, DiagnosticSensor):
+    """
+    This is a specialization of DiagnosticSensor which is also a ParserEntity, so that it can be
+    easily registered in NamespaceHandler to parse the whole payload of an unexpected namespace and
+    store it as-is in the state of this sensor.
+    """
+
+    @override
+    def __call__(self, payload: "JsonMapping", /):
         """
         This implementation aims at diagnostic sensors installed in 'well-known'
         namespace handlers to manage 'unexpected' channels when they eventually
         pop-up and we (still) have no clue why these channels are pushed (See #428)
         """
-        self.update_native_value(json_dumps(payload))
+        self.update_device_value(json_dumps(payload))
 
 
-class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
+class ProtocolSensor(EnumSensorEntity):
+
+    if TYPE_CHECKING:
+        parent: Final[Device]  # type: ignore[override]
+        native_value: str
+
     STATE_DISCONNECTED = "disconnected"
     STATE_ACTIVE = "active"
     STATE_INACTIVE = "inactive"
-    ATTR_HTTP = mlc.CONF_PROTOCOL_HTTP
-    ATTR_MQTT = mlc.CONF_PROTOCOL_MQTT
     ATTR_MQTT_BROKER = "mqtt_broker"
+    ATTR_NAMESPACES = "namespaces"
 
-    manager: "Device"
+    _INIT_entity_key = "sensor_protocol"
+    _INIT_native_value = STATE_DISCONNECTED
+    _INIT_extra_state_attributes = dict
 
     # HA core entity attributes:
-    entity_category = MLEnumSensor.EntityCategory.DIAGNOSTIC
-    entity_registry_enabled_default = False
-    native_value: str
+    _unrecorded_attributes = frozenset((ATTR_NAMESPACES,))
+    _attr_available = True
+    _attr_entity_category = SensorEntity.EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+    _attr_name = "Protocol"
+
     options: list[str] = [
         STATE_DISCONNECTED,
-        mlc.CONF_PROTOCOL_MQTT,
-        mlc.CONF_PROTOCOL_HTTP,
+        Transport.BLUETOOTH,
+        Transport.HTTP,
+        Transport.MQTT,
     ]
 
-    @staticmethod
-    def _get_attr_state(value):
-        return ProtocolSensor.STATE_ACTIVE if value else ProtocolSensor.STATE_INACTIVE
+    _AUTO_INIT = ("extra_state_attributes",)
+    __slots__ = ()
 
-    def __init__(
-        self,
-        manager: "Device",
-    ):
-        self.extra_state_attributes = {}
-        super().__init__(
-            manager,
-            None,
-            "sensor_protocol",
-            native_value=ProtocolSensor.STATE_DISCONNECTED,
-        )
-
+    @override
     def set_available(self):
-        manager = self.manager
-        self.native_value = manager.curr_protocol
-        attrs = self.extra_state_attributes
-        _get_attr_state = self._get_attr_state
-        if manager.conf_protocol is not manager.curr_protocol:
-            # this is to identify when conf_protocol is CONF_PROTOCOL_AUTO
-            # if conf_protocol is fixed we'll not set these attrs (redundant)
-            attrs[self.ATTR_HTTP] = _get_attr_state(manager._http_active)
-            attrs[self.ATTR_MQTT] = _get_attr_state(manager._mqtt_active)
-            attrs[self.ATTR_MQTT_BROKER] = _get_attr_state(manager._mqtt_connected)
-        self.flush_state()
+        # This will not be called automatically on device connection (because of
+        # _attr_available == True) so we have to manually invoke this
+        # when we want to update connection status.
+        self.native_value = self.parent.transport
+        self.schedule_flush_state()
 
+    @override
     def set_unavailable(self):
-        self.native_value = ProtocolSensor.STATE_DISCONNECTED
-        if self.manager._mqtt_connection:
-            self.extra_state_attributes = {
-                self.ATTR_MQTT_BROKER: self._get_attr_state(
-                    self.manager._mqtt_connected
-                )
-            }
-        else:
-            self.extra_state_attributes = {}
-        self.flush_state()
+        self.native_value = self.STATE_DISCONNECTED
+        self.schedule_flush_state()
 
-    # these smart updates are meant to only flush attrs
-    # when they are already present..i.e. meaning the device
-    # conf_protocol is CONF_PROTOCOL_AUTO
-    # call them 'before' connecting the device so they'll not flush
-    # and the full state will be flushed by the update_connected call
-    # and call them 'after' any eventual disconnection for the same reason
+    def report_full_state(self, /):
+        self.extra_state_attributes[self.ATTR_NAMESPACES] = {
+            str(nh.id): nh.payload for nh in self.parent.ns_handlers.values()
+        }
+        self.schedule_flush_state()
 
-    def update_attr(self, attrname: str, attr_state):
-        attrs = self.extra_state_attributes
-        if attrname in attrs:
-            attrs[attrname] = self._get_attr_state(attr_state)
-            self.flush_state()
+    # callbacks from Device._clients connect/disconnect events
+    def on_client_add(self, client: "AbstractClient", /):
+        client.connect_broadcast.add(self.on_client_connect)
+        client.disconnect_broadcast.add(self.on_client_disconnect)
+        self.extra_state_attributes[client.TRANSPORT] = (
+            ProtocolSensor.STATE_ACTIVE
+            if client and client.is_connected
+            else ProtocolSensor.STATE_INACTIVE
+        )
 
-    def update_attr_active(self, attrname: str):
-        attrs = self.extra_state_attributes
-        if attrname in attrs:
-            attrs[attrname] = self.STATE_ACTIVE
-            self.flush_state()
+        if client.TRANSPORT is Transport.MQTT:
+            connection: "MQTTConnection" = client.connection  # type: ignore
+            connection.connect_broadcast.add(self.on_broker_connect)
+            connection.disconnect_broadcast.add(self.on_broker_disconnect)
+            self.extra_state_attributes[self.ATTR_MQTT_BROKER] = (
+                ProtocolSensor.STATE_ACTIVE
+                if connection and connection.is_connected
+                else ProtocolSensor.STATE_INACTIVE
+            )
+            if sensor := connection.sensor_connection:
+                sensor.update_devices()
+        self.schedule_flush_state()
 
-    def update_attr_inactive(self, attrname: str):
-        attrs = self.extra_state_attributes
-        if attrname in attrs:
-            attrs[attrname] = self.STATE_INACTIVE
-            self.flush_state()
+    def on_client_remove(self, client: "AbstractClient", /):
+        client.connect_broadcast.remove(self.on_client_connect)
+        client.disconnect_broadcast.remove(self.on_client_disconnect)
+        self.extra_state_attributes.pop(client.TRANSPORT)
+        if client.TRANSPORT is Transport.MQTT:
+            connection: "MQTTConnection" = client.connection  # type: ignore
+            connection.connect_broadcast.remove(self.on_broker_connect)
+            connection.disconnect_broadcast.remove(self.on_broker_disconnect)
+            self.extra_state_attributes.pop(self.ATTR_MQTT_BROKER)
+            if sensor := connection.sensor_connection:
+                sensor.update_devices()
+        self.schedule_flush_state()
 
-    def update_attrs_inactive(self, *attrnames):
-        flush = False
-        attrs = self.extra_state_attributes
-        for attrname in attrnames:
-            if attrs.get(attrname) is self.STATE_ACTIVE:
-                attrs[attrname] = self.STATE_INACTIVE
-                flush = True
-        if flush:
-            self.flush_state()
+    def on_client_connect(self, client: "AbstractClient", /):
+        self.extra_state_attributes[client.TRANSPORT] = self.STATE_ACTIVE
+        self.schedule_flush_state()
+
+    def on_client_disconnect(self, client: "AbstractClient", /):
+        self.extra_state_attributes[client.TRANSPORT] = self.STATE_INACTIVE
+        self.schedule_flush_state()
+
+    def on_broker_connect(self, connection: "MQTTConnection", /):
+        self.extra_state_attributes[self.ATTR_MQTT_BROKER] = self.STATE_ACTIVE
+        self.schedule_flush_state()
+
+    def on_broker_disconnect(self, connection: "MQTTConnection", /):
+        self.extra_state_attributes[self.ATTR_MQTT_BROKER] = self.STATE_INACTIVE
+        self.schedule_flush_state()
 
 
-class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
+class SignalStrengthSensor(SensorParser):
 
-    ns = mn.Appliance_System_Runtime
+    _INIT_entity_key = "signal_strength"
+    _INIT_key_value = SensorParser.KeyValue(mc.KEY_SIGNAL)
+    # HA core entity attributes:
+    _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:wifi"
+    _attr_name = "Signal strength"
+    _attr_native_unit_of_measurement = hac.PERCENTAGE
 
-    ENTITY_KEY = "signal_strength"
+
+class FilterMaintenanceSensor(SensorParser):
+
+    _INIT_entity_key = mc.KEY_FILTER
+    _INIT_key_value = SensorParser.KeyValue(mc.KEY_LIFE)
 
     # HA core entity attributes:
-    entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
-    icon = "mdi:wifi"
-
-    def __init__(self, manager: "Device"):
-        super().__init__(
-            manager,
-            None,
-            MLSignalStrengthSensor.ENTITY_KEY,
-            None,
-            native_unit_of_measurement=me.MLEntity.hac.PERCENTAGE,
-        )
-        EntityNamespaceHandler(self)
-
-    def _handle(self, header: dict, payload: dict):
-        self.update_native_value(payload[mc.KEY_RUNTIME][mc.KEY_SIGNAL])
+    _attr_entity_category = SensorParser.EntityCategory.DIAGNOSTIC
+    _attr_native_unit_of_measurement = hac.PERCENTAGE
 
 
-class MLFilterMaintenanceSensor(MLNumericSensor):
-
-    ns = mn.Appliance_Control_FilterMaintenance
-    key_value = mc.KEY_LIFE
-
-    # HA core entity attributes:
-    entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
-
-    def __init__(self, manager: "Device", channel):
-        super().__init__(
-            manager,
-            channel,
-            mc.KEY_FILTER,
-            None,
-            native_unit_of_measurement=me.MLEntity.hac.PERCENTAGE,
-        )
-        manager.register_parser_entity(self)
-
-
-class FilterMaintenanceNamespaceHandler(NamespaceHandler):
-
-    def __init__(self, device: "Device"):
-        NamespaceHandler.__init__(
-            self,
-            device,
-            mn.Appliance_Control_FilterMaintenance,
-        )
-        MLFilterMaintenanceSensor(device, 0)
+async_setup_entry = SensorEntity.platform_setup_entry

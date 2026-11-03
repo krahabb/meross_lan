@@ -1,27 +1,16 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from homeassistant.components import select
 
-from .helpers import entity as me, reverse_lookup
+from .helpers import entity as mle, reverse_lookup
 
 if TYPE_CHECKING:
-    from typing import Any, ClassVar, Final, Unpack
-
-    from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
-
-    from .helpers.device import BaseDevice
+    from typing import Any, ClassVar, Final, Never, NotRequired, Self, Unpack
 
 
-async def async_setup_entry(
-    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
-):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, select.DOMAIN)
-
-
-class MLSelect(me.MLEntity, select.SelectEntity):
+class SelectEntity(mle.Entity, select.SelectEntity):
     """Base 'abstract' class for both select entities representing a
-    device config/option value (through MLConfigSelect) and
+    device config/option value (through ParserSelect) and
     emulated entities used to configure meross_lan (i.e. MtsTrackedSensor).
     Be sure to correctly init current_option and options in any derived class."""
 
@@ -32,12 +21,22 @@ class MLSelect(me.MLEntity, select.SelectEntity):
         current_option: str | None
         options: list[str]
 
-    entity_category = me.MLEntity.EntityCategory.CONFIG
+        type InitArgs = mle.Entity.InitArgs
 
-    __slots__ = (
-        "current_option",
-        "options",
-    )
+        class Args(mle.Entity.Args):
+            current_option: NotRequired[str | None]
+            options: NotRequired[list[str]]
+
+        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
+
+        @classmethod
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+
+    _attr_entity_category = mle.Entity.EntityCategory.CONFIG
+
+    _INIT_options = []
+    _AUTO_INIT = ("current_option", "options")
+    __slots__ = ()
 
     def set_unavailable(self):
         self.current_option = None
@@ -49,64 +48,72 @@ class MLSelect(me.MLEntity, select.SelectEntity):
             self.flush_state()
 
 
-class MLConfigSelect(MLSelect):
+class SelectParser(mle.ValueParser, SelectEntity):
     """
     Base class for any configurable 'list-like' parameter in the device.
-    This works much-like MLConfigNumber but does not provide a default
-    async_request_value so this needs to be defined in actual implementations.
     The mapping between HA entity select.options (string representation) and
     the native (likely int) device value is carried in a dedicated map
     (which also auto-updates should the device provide an unmapped value).
     """
 
     if TYPE_CHECKING:
-        OPTIONS_MAP: ClassVar[dict[Any, str]]
+
+        _INIT_options_map: ClassVar[dict[Any, str]]
         options_map: dict[Any, str]
 
-        device_value: Any
+        type InitArgs = mle.ValueParser.InitArgs
+
+        class Args(mle.ValueParser.Args, SelectEntity.Args):
+            options_map: NotRequired[dict[Any, str]]
+            # options: NotRequired[Never]
+
+        @classmethod
+        def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
     # configure initial options(map) through a class default
-    OPTIONS_MAP = {}
-
-    __slots__ = (
+    _INIT_options_map = {}
+    # Never mixed-in with NamespaceParser so we fix the slots
+    __slots__ = mle.ValueParser._calc_slots(
         "options_map",
-        "device_value",
     )
 
-    def __init__(
-        self,
-        manager: "BaseDevice",
-        channel: object | None,
-        entitykey: str | None = None,
-        **kwargs: "Unpack[MLSelect.Args]",
-    ):
-        self.current_option = None
-        self.options_map = self.OPTIONS_MAP
-        self.options = list(self.options_map.values())
-        self.device_value = None
-        super().__init__(manager, channel, entitykey, None, **kwargs)
-
-    def set_unavailable(self):
-        self.device_value = None
-        return super().set_unavailable()
-
-    def update_device_value(self, device_value, /):
-        if self.device_value != device_value:
+    def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
+        self.options_map = kwargs.pop("options_map", self._INIT_options_map)
+        try:
+            # if ns_value is not provided this code is unnecessary and
+            # the eventual other arguments will be managed by bases.
+            self.ns_value = kwargs.pop("ns_value")
             try:
-                self.update_option(self.options_map[device_value])
+                kwargs["current_option"] = self.options_map[self.ns_value]
             except KeyError:
-                if self.options_map is self.OPTIONS_MAP:
+                self.options_map = dict(self.options_map)
+                self.options_map[self.ns_value] = option = str(self.ns_value)
+                kwargs["current_option"] = option
+        except KeyError:
+            pass
+        kwargs["options"] = list(self.options_map.values())
+        super().__init__(*args, **kwargs)
+
+    @override
+    def update_device_value(self, device_value, /):
+        if self.ns_value != device_value:
+            try:
+                self.current_option = self.options_map[device_value]
+            except KeyError:
+                if self.options_map is self._INIT_options_map:
                     # first time we see a new value - create an instance map
-                    self.options_map = dict(self.OPTIONS_MAP)
+                    self.options_map = dict(self._INIT_options_map)
                 self.options_map[device_value] = option = str(device_value)
                 self.options.append(option)
-                self.update_option(option)
-
-            self.device_value = device_value
+                self.current_option = option
+            self.ns_value = device_value
+            self.flush_state()
             return True
 
     # interface: select.SelectEntity
+    @override
     async def async_select_option(self, option: str):
-        device_value = reverse_lookup(self.options_map, option)
-        if await self.async_request_value(device_value):
-            self.update_device_value(device_value)
+        await self.async_request_value(reverse_lookup(self.options_map, option))
+
+
+async_setup_entry = SelectEntity.platform_setup_entry

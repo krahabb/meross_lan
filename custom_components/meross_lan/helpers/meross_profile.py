@@ -2,223 +2,146 @@
 meross_lan module interface to access Meross Cloud services
 """
 
-import asyncio
 from contextlib import asynccontextmanager
-from time import time
-import typing
 from typing import TYPE_CHECKING, override
 
-from homeassistant.core import callback
-from homeassistant.helpers import storage
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
+# import core modules instead of symbols to ease patching in a single place
 from . import (
-    datetime_from_epoch,
     get_default_ssl_context,
-    versiontuple,
 )
 from .. import const as mlc
-from ..helpers.obfuscate import OBFUSCATE_DEVICE_ID_MAP, obfuscated_dict
-from ..merossclient import MEROSSDEBUG, HostAddress, get_active_broker
-from ..merossclient.cloudapi import APISTATUS_TOKEN_ERRORS, CloudApiError
-from ..merossclient.mqttclient import MerossMQTTAppClient
-from ..merossclient.protocol import const as mc, namespaces as mn
-from .manager import CloudApiClient
+from ..merossclient import HostAddress, cloudapi, datetime_from_epoch, versiontuple
+from ..merossclient.client.mqtt import MQTTAppClient
+from ..merossclient.obfuscate import OBFUSCATE_DICT, OBFUSCATE_UUID_MAP
+from ..merossclient.protocol import const as mc
 from .mqtt_profile import MQTTConnection, MQTTProfile
 
 if TYPE_CHECKING:
-    from typing import Final, TypedDict, Unpack
+    from typing import Final, Literal, NotRequired, TypedDict, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from ..const import ProfileConfigType
-    from ..devices.hub import HubMixin
+    from ..merossclient import Descriptor
     from ..merossclient.cloudapi import (
         DeviceInfoType,
         LatestVersionType,
+        MerossCloudCredentials,
         SubDeviceInfoType,
     )
     from ..merossclient.protocol.message import MerossMessage
     from .component_api import ComponentApi
-    from .device import Device, MerossDeviceDescriptor
+    from .device import Device
 
-    UuidType = str
-    DeviceInfoDictType = dict[UuidType, "DeviceInfoType"]
+    class DeviceInfoExtType(DeviceInfoType):
+        __subDeviceInfo: NotRequired[list[SubDeviceInfoType]]
+
+    type DeviceInfoStorageType = dict[str, DeviceInfoExtType]
+    type LatestVersionStorageType = list[LatestVersionType]
+    type LatestVersionHistoryStorageType = dict[str, list[dict[str, LatestVersionType]]]
+    """
+    {
+        "type:subtype": [
+            {
+                "recording date isoformat": {...LatestVersionType data...}
+            },
+        ],
+    }
+    """
 
     class MerossProfileStoreType(TypedDict):
         appId: str
         # TODO credentials: NotRequired[MerossCloudCredentials]
-        deviceInfo: DeviceInfoDictType
+        deviceInfo: DeviceInfoStorageType
         deviceInfoTime: float
-        latestVersion: list[LatestVersionType]
-        latestVersionTime: float
+        latestVersion: LatestVersionStorageType
+        latestVersionHistory: LatestVersionHistoryStorageType
+        # REMOVED: latestVersionTime: float
         token: str | None  # TODO remove
         tokenRequestTime: float
 
 
-class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
+class MerossMQTTConnection(MQTTConnection, MQTTAppClient):
 
-    # here we're acrobatically slottizing MerossMQTTAppClient
-    # since it cannot be slotted itself leading to multiple inheritance
-    # "forbidden" slots
+    __slots__ = MQTTAppClient._calc_slots()
 
-    if TYPE_CHECKING:
-        is_cloud_connection: Final[bool]
-
-    __slots__ = (
-        "_asyncio_loop",
-        "_future_connected",
-        "_tasks",
-        "_lock_state",
-        "_lock_queue",
-        "_rl_dropped",
-        "_rl2_queues",
-        "_stateext",
-        "_subscribe_topics",
-        "_unsub_random_disconnect",
-    )
-
-    def __init__(self, profile: "MerossProfile", broker: "HostAddress"):
-        MerossMQTTAppClient.__init__(
+    def __init__(self, broker: "HostAddress", profile: "MerossProfile"):
+        MQTTConnection.__init__(
             self,
-            profile.key,
-            profile.userid,
-            app_id=profile.app_id,
-            loop=profile.hass.loop,
-            sslcontext=get_default_ssl_context(),
-        )
-        self.is_cloud_connection = True
-        MQTTConnection.__init__(self, profile, broker, self.topic_command)
-        if profile.isEnabledFor(profile.VERBOSE):
-            self.enable_logger(self)  # type: ignore (Loggable is duck-compatible with Logger)
-
-        if MEROSSDEBUG:
-
-            @callback
-            async def _async_random_disconnect():
-                if self.state_inactive:
-                    if MEROSSDEBUG.mqtt_random_connect():
-                        self.log(self.DEBUG, "Random connect")
-                        await self.async_connect(self.broker)
-                else:
-                    if MEROSSDEBUG.mqtt_random_disconnect():
-                        self.log(self.DEBUG, "Random disconnect")
-                        await self.async_disconnect()
-                self._unsub_random_disconnect = profile.schedule_async_callback(
-                    60, _async_random_disconnect
-                )
-
-            self._unsub_random_disconnect = profile.schedule_async_callback(
-                60, _async_random_disconnect
-            )
-        else:
-            self._unsub_random_disconnect = None
-
-    # interface: MQTTConnection
-    async def async_shutdown(self):
-        if self._unsub_random_disconnect:
-            self._unsub_random_disconnect.cancel()
-            self._unsub_random_disconnect = None
-        await MerossMQTTAppClient.async_shutdown(self)
-        await MQTTConnection.async_shutdown(self)
-
-    async def entry_update_listener(self, profile: "MerossProfile"):
-        await MQTTConnection.entry_update_listener(self, profile)
-        if profile.isEnabledFor(profile.VERBOSE):
-            self.enable_logger(self)  # type: ignore (Loggable is duck-compatible with Logger)
-        else:
-            self.disable_logger()
-
-    def get_rl_safe_delay(self, uuid: str):
-        return MerossMQTTAppClient.get_rl_safe_delay(self, uuid)
-
-    async def _async_mqtt_publish(
-        self,
-        device_id: str,
-        request: "MerossMessage",
-    ):
-        return await self.profile.hass.async_add_executor_job(
-            self.rl_publish, device_id, request
+            broker,
+            profile,
+            app_id=profile.app_id,  # type: ignore
+            user_id=profile.userid,  # type: ignore
+            sslcontext=get_default_ssl_context(),  # type: ignore
         )
 
-    @callback
-    def _mqtt_connected(self):
-        MerossMQTTAppClient._mqtt_connected(self)
-        MQTTConnection._mqtt_connected(self)
 
-    @callback
-    def _mqtt_published(self):
-        if sensor_connection := self.sensor_connection:
-            attrs = sensor_connection.extra_state_attributes
-            attrs[sensor_connection.ATTR_DROPPED] = self.rl_dropped
-            attrs[sensor_connection.ATTR_PUBLISHED] += 1
-            if self.mqtt_is_connected:
-                # enforce the state eventually cancelling queued, dropped...
-                sensor_connection.native_value = sensor_connection.STATE_CONNECTED
-            sensor_connection.flush_state()
-
-
-MerossMQTTConnection.SESSION_HANDLERS = {
-    mn.Appliance_System_Online.name: MQTTConnection._handle_Appliance_System_Online,
-}
-
-
-class MerossProfileStore(storage.Store["MerossProfileStoreType"]):
+class MerossProfileStore(Store["MerossProfileStoreType"]):
     VERSION = 1
 
     def __init__(self, hass: "HomeAssistant", profile_id: str):
-        super().__init__(
+        Store.__init__(
+            self,
             hass,
             MerossProfileStore.VERSION,
             f"{mlc.DOMAIN}.profile.{profile_id}",
         )
 
+    async def async_remove_and_logout(self, credentials: "MerossCloudCredentials"):
+
+        await Store.async_remove(self)
+        await cloudapi.CloudApiClient(
+            credentials["userid"],
+            credentials=credentials,
+            session=async_get_clientsession(self.hass),
+        ).async_logout_safe()
+
 
 class MerossProfile(MQTTProfile):
     """
     Represents and manages a cloud account profile used to retrieve keys
-    and/or to manage cloud mqtt connection(s)
+    and/or to manage cloud mqtt connection(s).
+    TODO: add a Button to manually trigger api device list refresh
     """
 
     if TYPE_CHECKING:
-        is_cloud_profile: Final[bool]
-        config: ProfileConfigType
 
         KEY_APP_ID: Final
         KEY_DEVICE_INFO: Final
         KEY_DEVICE_INFO_TIME: Final
         KEY_SUBDEVICE_INFO: Final
         KEY_LATEST_VERSION: Final
-        KEY_LATEST_VERSION_TIME: Final
+        KEY_LATEST_VERSION_HISTORY: Final
         KEY_TOKEN_REQUEST_TIME: Final
 
         _data: MerossProfileStoreType
-        _unsub_polling_query_device_info: asyncio.TimerHandle | None
+
+        # Overrides
+        config: Final[mlc.ProfileConfigType]  # type: ignore[override]
+        mqttconnections: Final[dict[str, MerossMQTTConnection]]  # type: ignore[override]
 
     KEY_APP_ID = "appId"
     KEY_DEVICE_INFO = "deviceInfo"
     KEY_DEVICE_INFO_TIME = "deviceInfoTime"
     KEY_SUBDEVICE_INFO = "__subDeviceInfo"
     KEY_LATEST_VERSION = "latestVersion"
-    KEY_LATEST_VERSION_TIME = "latestVersionTime"
+    KEY_LATEST_VERSION_HISTORY = "latestVersionHistory"
+    # REMOVED KEY_LATEST_VERSION_TIME = "latestVersionTime"
     KEY_TOKEN_REQUEST_TIME = "tokenRequestTime"
 
     __slots__ = (
         "apiclient",
         "_data",
         "_store",
-        "_unsub_polling_query_device_info",
         "_device_info_time",
     )
 
-    def __init__(
-        self, profile_id: str, api: "ComponentApi", config_entry: "ConfigEntry"
-    ):
-        self.is_cloud_profile = True
-        MQTTProfile.__init__(
-            self, profile_id, api=api, hass=api.hass, config_entry=config_entry
-        )
+    def __init__(self, id: str, api: "ComponentApi", config_entry: "ConfigEntry", /):
+        MQTTProfile.__init__(self, id, api, config_entry)
         # state of the art for credentials is that they're mixed in
         # into the config_entry.data but this is prone to issues and confusing
         # so we 'might' decide to move them to a dict valued key in configentry.data
@@ -227,23 +150,26 @@ class MerossProfile(MQTTProfile):
         # so we're putting the migration code in 5.0.0 but still not going
         # to change the version(s) in storage/config. At the moment I'm still very confused
         # and opting to keep the credentials where they are embedded in ConfigEntry
-        self.apiclient = CloudApiClient(self, self.config)
-        self._store = MerossProfileStore(self.hass, profile_id)
-        self._unsub_polling_query_device_info = None
+        self.apiclient = cloudapi.CloudApiClient(
+            id, self, credentials=self.config, session=async_get_clientsession(api.hass)
+        )
+        self._store = MerossProfileStore(api.hass, id)
 
-    async def async_init(self):
-        """
-        Performs 'cold' initialization of the profile by checking
-        if we need to update the device_info and eventually start the
-        unknown devices discovery.
-        We'll eventually setup the mqtt listeners in case our
-        configured devices don't match the profile list. This usually means
-        the user has binded a new device and we need to 'discover' it.
-        """
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        await self.apiclient.async_shutdown()
+        del self.apiclient
+        self.parent.profiles[self.id] = None
+
+    # interface: ConfigEntryManager
+    @override
+    async def async_setup_entry(
+        self, hass: "HomeAssistant", config_entry: "ConfigEntry", /
+    ):
         if data := await self._store.async_load():
             self._data = data
             if self.KEY_APP_ID not in data:
-                data[self.KEY_APP_ID] = MerossMQTTAppClient.generate_app_id()
+                data[self.KEY_APP_ID] = MQTTAppClient.generate_app_id()
             if type(data.get(self.KEY_DEVICE_INFO)) is not dict:
                 data[self.KEY_DEVICE_INFO] = {}
             self._device_info_time = data.get(self.KEY_DEVICE_INFO_TIME, 0.0)
@@ -251,8 +177,15 @@ class MerossProfile(MQTTProfile):
                 data[self.KEY_DEVICE_INFO_TIME] = self._device_info_time = 0.0
             if type(data.get(self.KEY_LATEST_VERSION)) is not list:
                 data[self.KEY_LATEST_VERSION] = []
-            if self.KEY_LATEST_VERSION_TIME not in data:
-                data[self.KEY_LATEST_VERSION_TIME] = 0.0
+            if type(data.get(self.KEY_LATEST_VERSION_HISTORY)) is not dict:
+                _time = dt_util.utcnow().isoformat()
+                data[self.KEY_LATEST_VERSION_HISTORY] = {
+                    f"{latest_version.get(mc.KEY_TYPE)}:{latest_version.get(mc.KEY_SUBTYPE)}": [
+                        {_time: latest_version}
+                    ]
+                    for latest_version in data[self.KEY_LATEST_VERSION]
+                }
+            data.pop("latestVersionTime", None)  # removed key cleanup
             if self.KEY_TOKEN_REQUEST_TIME not in data:
                 data[self.KEY_TOKEN_REQUEST_TIME] = 0.0
 
@@ -266,45 +199,38 @@ class MerossProfile(MQTTProfile):
         else:
             self._device_info_time = 0.0
             self._data = {
-                self.KEY_APP_ID: MerossMQTTAppClient.generate_app_id(),
+                self.KEY_APP_ID: MQTTAppClient.generate_app_id(),
                 mc.KEY_TOKEN: self.config.get(mc.KEY_TOKEN),
                 self.KEY_DEVICE_INFO: {},
                 self.KEY_DEVICE_INFO_TIME: 0.0,
                 self.KEY_LATEST_VERSION: [],
-                self.KEY_LATEST_VERSION_TIME: 0.0,
+                self.KEY_LATEST_VERSION_HISTORY: {},
                 self.KEY_TOKEN_REQUEST_TIME: 0.0,
             }
 
         if mc.KEY_MQTTDOMAIN in self.config:
-            broker = HostAddress.build(self.config[mc.KEY_MQTTDOMAIN])  # type: ignore
-            mqttconnection = MerossMQTTConnection(self, broker)
-            mqttconnection.schedule_connect(broker)
+            MerossMQTTConnection(
+                HostAddress.build(self.config[mc.KEY_MQTTDOMAIN]), self
+            ).start()
 
         # compute the next cloud devlist query and setup the scheduled callback
         next_query_epoch = (
             self._device_info_time + mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
         )
-        next_query_delay = next_query_epoch - time()
+        next_query_delay = next_query_epoch - self.time()
         if next_query_delay < mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT:
             # we'll give some breath to the init process
             next_query_delay = mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT
-        self._unsub_polling_query_device_info = self.schedule_async_callback(
+        self.schedule_callback(
             next_query_delay,
             self._async_query_device_info,
         )
 
-    @override
-    async def async_shutdown(self):
-        if self._unsub_polling_query_device_info:
-            self._unsub_polling_query_device_info.cancel()
-            self._unsub_polling_query_device_info = None
-        await super().async_shutdown()
-        self.api.profiles[self.id] = None
+        await MQTTProfile.async_setup_entry(self, hass, config_entry)
 
-    # interface: ConfigEntryManager
     @override
     async def entry_update_listener(self, hass, config_entry: "ConfigEntry"):
-        config: ProfileConfigType = config_entry.data  # type: ignore
+        config: mlc.ProfileConfigType = config_entry.data  # type: ignore
         self.remove_issue(mlc.ISSUE_CLOUD_TOKEN_EXPIRED)
         curr_credentials = self.apiclient.credentials
         if not curr_credentials or (
@@ -321,18 +247,13 @@ class MerossProfile(MQTTProfile):
         if self.config.get(mc.KEY_MQTTDOMAIN) != config.get(mc.KEY_MQTTDOMAIN):
             self.schedule_reload()
         else:
-            await super().entry_update_listener(hass, config_entry)
+            await MQTTProfile.entry_update_listener(self, hass, config_entry)
             # the 'async_check_query_devices' will only occur if we didn't refresh
             # on our polling schedule for whatever reason (invalid token -
             # no connection - whatsoever) so, having a fresh token and likely
             # good connectivity we're going to retrigger that
             if self._need_query_device_info():
-                # retrigger the poll at the right time since async_query_devices
-                # might be called for whatever reason 'asynchronously'
-                # at any time (say the user does a new cloud login or so...)
-                if self._unsub_polling_query_device_info:
-                    self._unsub_polling_query_device_info.cancel()
-                    await self._async_query_device_info()
+                await self._async_query_device_info()
 
     @override
     def get_logger_name(self) -> str:
@@ -341,13 +262,13 @@ class MerossProfile(MQTTProfile):
     @override
     def loggable_diagnostic_state(self):
         if self.obfuscate:
-            store_data = obfuscated_dict(self._data)
+            store_data = OBFUSCATE_DICT(self._data)
             # the profile contains uuid as keys and obfuscation
             # is not smart enough (but OBFUSCATE_DEVICE_ID_MAP is already
             # filled with uuid(s) from the profile device_info(s) and
             # the device_info(s) were already obfuscated in data)
             store_data[MerossProfile.KEY_DEVICE_INFO] = {
-                OBFUSCATE_DEVICE_ID_MAP[device_id]: device_info
+                OBFUSCATE_UUID_MAP[device_id]: device_info
                 for device_id, device_info in store_data[
                     MerossProfile.KEY_DEVICE_INFO
                 ].items()
@@ -357,79 +278,90 @@ class MerossProfile(MQTTProfile):
             return {"store": self._data}
 
     @override
-    def get_device_info(self, uuid: str):
+    def get_device_info(self, uuid: str, /):
         return self._data[self.KEY_DEVICE_INFO].get(uuid)
 
     @override
-    def get_latest_version(self, descriptor: "MerossDeviceDescriptor"):
+    def get_latest_version(self, descriptor: "Descriptor", /):
         """returns LatestVersionType info if device has an update available"""
-        _type = descriptor.type
-        _version = versiontuple(descriptor.firmwareVersion)
-        # the LatestVersionType struct reports also the subType for the firmware
-        # but the meaning of this field is a bit confusing since a lot of traces
-        # are reporting the value "un" (undefined?) for the vast majority.
-        # Also, the mcu field (should contain a list of supported mcus?) is not
-        # reported in my api queries and I don't have enough data to guess anything
-        # at any rate, actual implementation is not proceeding with effective
-        # update so these infos we gather and show are just cosmethic right now and
-        # will not harm anyone ;)
-        # _subtype = descriptor.subType
-        for latest_version in self._data[self.KEY_LATEST_VERSION]:
-            if (
-                latest_version.get(mc.KEY_TYPE)
-                == _type
-                # and latest_version.get(mc.KEY_SUBTYPE) == _subtype
-            ):
-                if versiontuple(latest_version.get(mc.KEY_VERSION, "")) > _version:
-                    return latest_version
-                else:
-                    return None
-        return None
+        try:
+            latest_version_history = self._data[self.KEY_LATEST_VERSION_HISTORY][
+                f"{descriptor.type}:{descriptor.subType}"
+            ]
+        except KeyError:
+            return None
+        try:
+            _firmware_version = versiontuple(descriptor.fw_version)
+            _hardware_version = versiontuple(descriptor.hw_version)
+            if _firmware_version[0] != _hardware_version[0]:
+                return None  # major version mismatch, no update available
+            # Devices on matching hw/fw major versions should stay on that train.
+            latest_versions = [
+                latest_version
+                for latest_version_entry in latest_version_history
+                for latest_version in latest_version_entry.values()
+            ]
+            same_train_latest_versions = [
+                latest_version
+                for latest_version in latest_versions
+                if (_latest_version_t := versiontuple(latest_version[mc.KEY_VERSION]))
+                and _latest_version_t[0] == _firmware_version[0]
+            ]
+            return max(
+                same_train_latest_versions,
+                key=lambda latest_version: versiontuple(latest_version[mc.KEY_VERSION]),
+                default=None,
+            )
+        except Exception as exception:
+            self.log_exception(
+                self.DEBUG,
+                exception,
+                "get_latest_version(%s)",
+                str(descriptor),
+                timeout=14400,
+            )
+
+    @override
+    def get_latest_versions(self, /):
+        return self._data[self.KEY_LATEST_VERSION_HISTORY]
 
     @override
     def link(self, device: "Device"):
-        """
-        Device linking to a cloud profile sets the environment for
-        the device MQTT attachment/connection. This process uses a lot
-        of euristics to ensure the device really belongs to this cloud
-        profile.
-        A device binded to a cloud profile should:
-        - have the same userid
-        - have the same key
-        - have a broker address compatible with the profile available brokers
-        - be present in the device_info db
-        The second check could be now enforced since the new Meross signin api
-        tells us ('mqttDomain') which is the (only) broker assigned to this profile.
-        It was historically not this way since devices binded to a cloud account could
-        be spread among a pool of brokers.
-        Presence in the device_info db might be unreliable since the query is only
-        done once in 24 hours and thus, the db being out of sync
-        """
-        super().link(device)
-        if device_info := self.get_device_info(device.id):
-            device.update_device_info(device_info)
-        if latest_version := self.get_latest_version(device.descriptor):
-            device.update_latest_version(latest_version)
+        MQTTProfile.link(self, device)
+        try:
+            device.update_device_info(self._data[self.KEY_DEVICE_INFO][device.id], self)
+        except KeyError as ke:
+            if ke.args[0] != device.id:
+                raise
+            # missing device info, this is mostly due to a recently added device
+            # appearing on MQTT before we had a chance to refresh the device list from the cloud.
+            # We eventually post-pone the query if it was recently issued
+            self.schedule_callback(
+                (
+                    0
+                    if self._device_info_time
+                    < (
+                        self.time()
+                        - mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_RETRIGGER_TIMEOUT
+                    )
+                    else mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_RETRIGGER_TIMEOUT
+                ),
+                self._async_query_device_info,
+            )
 
     @override
-    def attach_mqtt(self, device: "Device"):
-        descr = device.descriptor
+    def get_connection(self, device: "Device"):
         try:
-            if device.online:
-                if device.device_debug:
-                    try:
-                        broker = get_active_broker(device.device_debug)
-                    except Exception:
-                        broker = descr.main_broker
-                else:
-                    broker = descr.main_broker
+            if device.is_connected:
+                broker = device.descriptor.server
             else:
                 # decide which broker to connect to based off the most recent info
+                descr = device.descriptor
                 device_info = self._data[self.KEY_DEVICE_INFO][device.id]
                 timestamp_fw = descr.time.get(mc.KEY_TIMESTAMP, 0)
                 timestamp_di = self._data[self.KEY_DEVICE_INFO_TIME]
                 if timestamp_fw > timestamp_di:
-                    broker = descr.main_broker
+                    broker = descr.server
                 else:
                     if domain := device_info.get(mc.KEY_DOMAIN):
                         broker = HostAddress.build(domain)
@@ -444,9 +376,9 @@ class MerossProfile(MQTTProfile):
             self.log_exception(
                 self.WARNING,
                 exception,
-                "attach_mqtt for device uuid:%s (%s)",
-                self.loggable_device_id(device.id),
-                device.name,
+                "attach_mqtt for %s (uuid:%s)",
+                device.display_name,
+                uuid=device.id,
             )
             try:
                 # fallback if we have the KEY_MQTTDOMAIN
@@ -455,9 +387,25 @@ class MerossProfile(MQTTProfile):
                 return
 
         mqttconnection = self._get_mqttconnection(broker)
-        mqttconnection.attach(device)
-        if mqttconnection.state_inactive:
-            mqttconnection.schedule_connect(broker)
+        mqttconnection.start()  # ensure connection loop is on
+        return mqttconnection
+
+    @property
+    @override
+    def is_cloud_profile(self):
+        return True
+
+    @property
+    @override
+    def rl_rate(self):
+        # Ideally we would like to allow customization of the rate limit to allow more customization
+        # but this might prove dangerous unless people really know where they're going
+        return MQTTConnection._INIT_rl_rate
+
+    @property
+    @override
+    def userid(self):
+        return self.config[mc.KEY_USERID_]
 
     # interface: self
     @property
@@ -467,10 +415,6 @@ class MerossProfile(MQTTProfile):
     @property
     def token_is_valid(self):
         return bool(self._data.get(mc.KEY_TOKEN))
-
-    @property
-    def userid(self):
-        return self.config[mc.KEY_USERID_]
 
     async def get_or_create_mqttconnections(self, device_id: str):
         """
@@ -485,7 +429,7 @@ class MerossProfile(MQTTProfile):
                 return
             broker = HostAddress.build(domain)
             for mqttconnection in mqttconnections:
-                if mqttconnection.broker == broker:
+                if mqttconnection.id == broker:
                     return
             mqttconnection = await self._async_get_mqttconnection(broker)
             if mqttconnection:
@@ -499,15 +443,15 @@ class MerossProfile(MQTTProfile):
 
         return mqttconnections
 
-    def _get_mqttconnection(self, broker: HostAddress) -> MerossMQTTConnection:
+    def _get_mqttconnection(self, broker: HostAddress):
         """
         Returns an existing connection from the managed pool or create one and add
         to the mqttconnections pool. The connection state is not ensured.
         """
-        connection_id = str(broker)
-        if connection_id in self.mqttconnections:
-            return self.mqttconnections[connection_id]  # type: ignore
-        return MerossMQTTConnection(self, broker)
+        try:
+            return self.mqttconnections[str(broker)]
+        except KeyError:
+            return MerossMQTTConnection(broker, self)
 
     async def _async_get_mqttconnection(self, broker: HostAddress):
         """
@@ -517,19 +461,12 @@ class MerossProfile(MQTTProfile):
         and we so need it soon).
         """
         mqttconnection = self._get_mqttconnection(broker)
-        if mqttconnection.state_active:
-            if mqttconnection.stateext is mqttconnection.STATE_CONNECTED:
-                return mqttconnection
-            else:
+        if not mqttconnection.is_connected:
+            try:
+                await mqttconnection.async_connect()
+            except:
                 return None
-        try:
-            await asyncio.wait_for(await mqttconnection.async_connect(broker), 5)
-            return mqttconnection
-        except Exception as exception:
-            self.log_exception(
-                self.DEBUG, exception, "waiting to subscribe to %s", str(broker)
-            )
-            return None
+        return mqttconnection
 
     async def _async_token_refresh(self):
         """
@@ -538,7 +475,7 @@ class MerossProfile(MQTTProfile):
         """
         try:
             data = self._data
-            if (_time := time()) < data[
+            if (_time := self.time()) < data[
                 self.KEY_TOKEN_REQUEST_TIME
             ] + mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT:
                 return None
@@ -557,13 +494,13 @@ class MerossProfile(MQTTProfile):
             # since it should still be pending...
             data[mc.KEY_TOKEN] = credentials[mc.KEY_TOKEN]
             self.log(self.INFO, "Meross api token was automatically refreshed")
-            profile_entry = self.api.get_config_entry(f"profile.{self.id}")
+            profile_entry = self.parent.get_config_entry(f"profile.{self.id}")
             if profile_entry:
                 # weird enough if this isnt true...
                 profile_config = dict(profile_entry.data)
                 profile_config.update(credentials)
                 # watchout: this will in turn call self.entry_update_listener
-                self.hass.config_entries.async_update_entry(
+                self.parent.config_entries.async_update_entry(
                     profile_entry,
                     data=profile_config,
                 )
@@ -586,216 +523,138 @@ class MerossProfile(MQTTProfile):
             credentials = self.apiclient.credentials or (
                 await self._async_token_refresh()
             )
-            if not credentials:
+            if credentials:
+                yield credentials
+            else:
                 self.log(self.WARNING, f"{msg} cancelled: missing cloudapi token")
-            yield credentials
-        except CloudApiError as clouderror:
+        except cloudapi.CloudApiError as clouderror:
             self.log_exception(self.WARNING, clouderror, msg)
-            if clouderror.apistatus in APISTATUS_TOKEN_ERRORS:
+            if clouderror.apistatus in cloudapi.APISTATUS_TOKEN_ERRORS:
                 self.apiclient.credentials = None
                 if self._data.pop(mc.KEY_TOKEN, None):  # type: ignore
                     await self._async_token_refresh()
         except Exception as exception:
             self.log_exception(self.WARNING, exception, msg)
 
-    async def _async_check_query_latest_version(self, epoch: float):
-        if (
-            self.config.get(mlc.CONF_CHECK_FIRMWARE_UPDATES)
-            and (epoch - self._data[self.KEY_LATEST_VERSION_TIME])
-            > mlc.PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT
-        ):
-            self._data[self.KEY_LATEST_VERSION_TIME] = epoch
-            async with self._async_credentials_manager(
-                "async_check_query_latest_version"
-            ) as credentials:
-                if not credentials:
-                    return
-                self._data[self.KEY_LATEST_VERSION] = (
-                    await self.apiclient.async_device_latestversion()
-                )
-                self._schedule_save_store()
-                for device in self.api.active_devices():
-                    if latest_version := self.get_latest_version(device.descriptor):
-                        device.update_latest_version(latest_version)
-
     def _need_query_device_info(self):
         return (
-            time() - self._device_info_time
+            self.time() - self._device_info_time
         ) > mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
 
     async def _async_query_device_info(self):
-        self._unsub_polling_query_device_info = self.schedule_async_callback(
+        self.schedule_callback(
             mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
             self._async_query_device_info,
         )
         async with self._async_credentials_manager(
             "_async_query_device_info"
         ) as credentials:
-            if not credentials:
-                return
             self.log(
                 self.DEBUG,
-                "Querying device list - last query was at: %s",
-                datetime_from_epoch(
-                    self._device_info_time, dt_util.DEFAULT_TIME_ZONE
-                ).isoformat(),
+                "Querying device info - last query was at: %s",
+                datetime_from_epoch(self._device_info_time, dt_util.DEFAULT_TIME_ZONE),
             )
-            self._device_info_time = time()
-            device_info_new = await self.apiclient.async_device_devlist()
-            await self._process_device_info_new(device_info_new)
+            self._device_info_time = self.time()
+            if self.config.get(mlc.CONF_CHECK_FIRMWARE_UPDATES):
+                with self.exception_warning("_async_query_device_info - latestversion"):
+                    self._data[self.KEY_LATEST_VERSION] = (
+                        await self.apiclient.async_device_latestversion()
+                    )
+                    latest_version_history = self._data[self.KEY_LATEST_VERSION_HISTORY]
+                    _time = datetime_from_epoch(
+                        self._device_info_time, dt_util.UTC
+                    ).isoformat()
+                    for latest_version in self._data[self.KEY_LATEST_VERSION]:
+                        _key = f"{latest_version.get(mc.KEY_TYPE)}:{latest_version.get(mc.KEY_SUBTYPE)}"
+                        try:
+                            _list = latest_version_history[_key]
+                            for _latest in _list[-1].values():
+                                if _latest != latest_version:
+                                    _list.append({_time: latest_version})
+                        except KeyError:
+                            latest_version_history[_key] = [{_time: latest_version}]
+
+            await self._process_device_info_new(
+                await self.apiclient.async_device_devlist()  # type: ignore
+            )
             self._data[self.KEY_DEVICE_INFO_TIME] = self._device_info_time
             self._schedule_save_store()
-            # this is a 'low relevance task' as a new feature (in 4.3.0) to just provide hints
-            # when new updates are available: we're not going (yet) to manage the
-            # effective update since we're not able to do any basic validation
-            # of the whole process and it might be a bit 'dangerous'
-            await self._async_check_query_latest_version(self._device_info_time)
-
-    async def _async_query_subdevices(self, device_id: str):
-        async with self._async_credentials_manager(
-            "_async_query_subdevices"
-        ) as credentials:
-            if not credentials:
-                return None
-            self.log(
-                self.DEBUG,
-                "Querying hub subdevice list (uuid:%s)",
-                self.loggable_device_id(device_id),
-            )
-            return await self.apiclient.async_hub_getsubdevices(device_id)
-        return None
 
     async def _process_device_info_new(
-        self, device_info_list_new: list["DeviceInfoType"]
+        self, device_info_list_new: list["DeviceInfoExtType"]
     ):
-        api_devices = self.api.devices
+        api_devices = self.parent.devices
         device_info_dict = self._data[self.KEY_DEVICE_INFO]
-        device_info_removed = {device_id for device_id in device_info_dict.keys()}
-        device_info_unknown: list["DeviceInfoType"] = []
+        device_info_removed = {device_id for device_id in device_info_dict}
         for device_info in device_info_list_new:
             with self.exception_warning("_process_device_info_new"):
-                device_id = device_info[mc.KEY_UUID]
-                # preserved (old) dict of hub subdevices to process/carry over
-                # for Hub(s)
-                sub_device_info_dict: dict[str, "SubDeviceInfoType"] | None
-                if device_id in device_info_dict:
+                uuid = device_info[mc.KEY_UUID]
+                if uuid in device_info_dict:
                     # already known device
-                    device_info_removed.remove(device_id)
-                    sub_device_info_dict = device_info_dict[device_id].get(
-                        self.KEY_SUBDEVICE_INFO
-                    )
-                else:
-                    # new device
-                    sub_device_info_dict = None
-                device_info_dict[device_id] = device_info
-
-                try:
-                    device = api_devices[device_id]
-                except KeyError:
-                    device_info_unknown.append(device_info)
-                    continue
-                if not device:  # device loaded
-                    continue
-                if device.get_type() is mlc.DeviceType.HUB:
-                    if sub_device_info_dict is None:
-                        sub_device_info_dict = {}
-                    device_info[self.KEY_SUBDEVICE_INFO] = sub_device_info_dict
-                    sub_device_info_list_new = await self._async_query_subdevices(
-                        device_id
-                    )
-                    if sub_device_info_list_new is not None:
-                        await self._process_subdevice_info_new(
-                            typing.cast("HubMixin", device),
-                            sub_device_info_dict,
-                            sub_device_info_list_new,
+                    device_info_removed.remove(uuid)
+                device_info_dict[uuid] = device_info
+                device_name = device_info.get(mc.KEY_DEVNAME, "")
+                device_type = device_info.get(mc.KEY_DEVICETYPE, "")
+                if device_type.startswith(mc.TYPE_HUB):
+                    async with self._async_credentials_manager(
+                        "_async_query_subdevices"
+                    ) as credentials:
+                        self.log(
+                            self.DEBUG,
+                            "Querying '%s' subdevice list (uuid:%s)",
+                            device_name,
+                            uuid=uuid,
                         )
-                device.update_device_info(device_info)
+                        device_info[MerossProfile.KEY_SUBDEVICE_INFO] = (
+                            await self.apiclient.async_hub_getsubdevices(uuid)
+                        )
+                try:
+                    device = api_devices[uuid]
+                except KeyError:
+                    # unknown/unconfigured device
+                    self.log(
+                        self.DEBUG,
+                        "Meross cloud api reported new device '%s' (type:%s, uuid:%s): initiating discovery",
+                        device_name,
+                        device_type,
+                        uuid=uuid,
+                    )
+                    if domain := device_info.get(mc.KEY_DOMAIN):
+                        # try first broker in the cloud configuration
+                        if mqttconnection := await self._async_get_mqttconnection(
+                            HostAddress.build(domain)
+                        ):
+                            if await mqttconnection.async_try_discovery(uuid, self.key):
+                                continue  # identification succeded, a flow has been created
+                    if (reserveddomain := device_info.get(mc.KEY_RESERVEDDOMAIN)) and (
+                        reserveddomain != domain
+                    ):
+                        # try the second broker in the cloud configuration
+                        # only if it's different from the previous
+                        if mqttconnection := await self._async_get_mqttconnection(
+                            HostAddress.build(reserveddomain)
+                        ):
+                            if await mqttconnection.async_try_discovery(uuid, self.key):
+                                continue  # identification succeded, a flow has been created
+                    continue
 
-        for device_id in device_info_removed:
+                if device:
+                    device.update_device_info(device_info, self)
+
+        for uuid in device_info_removed:
+            device_info = device_info_dict.pop(uuid)
             self.log(
                 self.DEBUG,
-                "The uuid:%s has been removed from the cloud profile",
-                self.loggable_device_id(device_id),
+                "Device '%s' (type:%s, uuid:%s) has been removed from the cloud profile",
+                device_info.get(mc.KEY_DEVNAME, mc.TYPE_UNKNOWN),
+                device_info.get(mc.KEY_DEVICETYPE, mc.TYPE_UNKNOWN),
+                uuid=uuid,
             )
-            device_info_dict.pop(device_id)
-            if device := self.linkeddevices.get(device_id):
-                self.unlink(device)
-
-        if len(device_info_unknown):
-            await self._process_device_info_unknown(device_info_unknown)
-
-    async def _process_subdevice_info_new(
-        self,
-        hub_device: "HubMixin",
-        sub_device_info_dict: dict[str, "SubDeviceInfoType"],
-        sub_device_info_list_new: list["SubDeviceInfoType"],
-    ):
-        sub_device_info_removed = {
-            subdeviceid for subdeviceid in sub_device_info_dict.keys()
-        }
-        sub_device_info_unknown: list["SubDeviceInfoType"] = []
-
-        for sub_device_info in sub_device_info_list_new:
-            with self.exception_warning("_process_subdevice_info_new"):
-                subdeviceid = sub_device_info[mc.KEY_SUBDEVICEID]
-                if subdeviceid in sub_device_info_dict:
-                    # already known device
-                    sub_device_info_removed.remove(subdeviceid)
-
-                sub_device_info_dict[subdeviceid] = sub_device_info
-                if subdevice := hub_device.subdevices.get(subdeviceid):
-                    subdevice.update_sub_device_info(sub_device_info)
-                else:
-                    sub_device_info_unknown.append(sub_device_info)
-
-        for subdeviceid in sub_device_info_removed:
-            sub_device_info_dict.pop(subdeviceid)
-            # TODO: warn the user? should we remove the subdevice from the hub?
-
-        if len(sub_device_info_unknown):
-            # subdevices were added.. discovery should be managed by the hub itself
-            # TODO: warn the user ?
-            pass
-
-    async def _process_device_info_unknown(
-        self, device_info_unknown: list["DeviceInfoType"]
-    ):
-        if not self.allow_mqtt_publish:
-            self.log(
-                self.WARNING,
-                "Meross cloud api reported new devices but MQTT publishing is disabled: skipping automatic discovery",
-                timeout=604800,  # 1 week
-            )
-            return
-
-        for device_info in device_info_unknown:
-            with self.exception_warning("_process_device_info_unknown"):
-                device_id = device_info[mc.KEY_UUID]
-                self.log(
-                    self.DEBUG,
-                    "Trying/Initiating discovery for (new) uuid:%s",
-                    self.loggable_device_id(device_id),
-                )
-                if self.api.get_config_flow(device_id):
-                    continue  # device configuration already progressing
-                # cloud conf has a new device
-                if domain := device_info.get(mc.KEY_DOMAIN):
-                    # try first broker in the cloud configuration
-                    if mqttconnection := await self._async_get_mqttconnection(
-                        HostAddress.build(domain)
-                    ):
-                        if await mqttconnection.async_try_discovery(device_id):
-                            continue  # identification succeded, a flow has been created
-                if (reserveddomain := device_info.get(mc.KEY_RESERVEDDOMAIN)) and (
-                    reserveddomain != domain
-                ):
-                    # try the second broker in the cloud configuration
-                    # only if it's different than the previous
-                    if mqttconnection := await self._async_get_mqttconnection(
-                        HostAddress.build(reserveddomain)
-                    ):
-                        if await mqttconnection.async_try_discovery(device_id):
-                            continue  # identification succeded, a flow has been created
+            try:
+                self.unlink(self.linkeddevices[uuid])
+            except KeyError as ke:
+                if ke.args[0] != uuid:
+                    raise
 
     def _schedule_save_store(self):
         def _data_func():

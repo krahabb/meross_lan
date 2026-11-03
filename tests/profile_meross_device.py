@@ -10,9 +10,9 @@ from tests import helpers
 
 
 async def profile_async_request_updates(request, hass, capsys):
-    async with helpers.DeviceContext(request, hass, mc.TYPE_MSS310) as context:
-        device = await context.perform_coldstart()
-
+    async with helpers.DeviceContext(
+        request, hass, mc.TYPE_MSS310, auto_poll=True
+    ) as context:
         # disable delay in emulator<->aioclient_mock response
         context.emulator_context.frozen_time = None
 

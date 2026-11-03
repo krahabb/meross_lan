@@ -1,8 +1,13 @@
 from homeassistant.components import climate as haec
-from homeassistant.components.climate import ClimateEntity, HVACMode
+from homeassistant.components.climate import (
+    ClimateEntity,
+    ClimateEntityFeature,
+    HVACMode,
+)
 
 from custom_components.meross_lan.climate import MtsClimate
-from custom_components.meross_lan.devices.hub.mts100 import Mts100Climate
+from custom_components.meross_lan.devices import thermostat as mts
+from custom_components.meross_lan.devices.hub.mts import mts100, mts150
 from custom_components.meross_lan.devices.thermostat.mts200 import Mts200Climate
 from custom_components.meross_lan.devices.thermostat.mts300 import Mts300Climate
 from custom_components.meross_lan.devices.thermostat.mts960 import Mts960Climate
@@ -17,8 +22,9 @@ from custom_components.meross_lan.merossclient.protocol.namespaces import (
 from tests.entities import EntityComponentTest
 
 HVAC_MODES: dict[type[MtsClimate], set[HVACMode]] = {
-    Mts100Climate: {HVACMode.OFF, HVACMode.HEAT, HVACMode.AUTO},
-    Mts200Climate: {HVACMode.OFF, HVACMode.HEAT, HVACMode.AUTO},
+    mts100: {HVACMode.OFF, HVACMode.HEAT, HVACMode.AUTO},
+    mts150: {HVACMode.OFF, HVACMode.HEAT, HVACMode.AUTO},
+    Mts200Climate: {HVACMode.OFF, HVACMode.AUTO},  # heat/cool depends on summer mode
     Mts300Climate: {
         HVACMode.OFF,
         HVACMode.HEAT,
@@ -29,8 +35,9 @@ HVAC_MODES: dict[type[MtsClimate], set[HVACMode]] = {
     Mts960Climate: {HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO},
 }
 
-PRESET_MODES: dict[type[MtsClimate], set] = {
-    Mts100Climate: {"none", "comfort", "sleep", "away"},
+PRESET_MODES: dict[type[MtsClimate], set[str]] = {
+    mts100: {"none", "comfort", "sleep", "away"},
+    mts150: {"none", "comfort", "sleep", "away"},
     Mts200Climate: {"none", "comfort", "sleep", "away"},
     Mts300Climate: set(),
     Mts960Climate: {
@@ -56,12 +63,12 @@ class EntityTest(EntityComponentTest):
         },
     }
     NAMESPACES_ENTITIES = {
-        mn_t.Appliance_Control_Thermostat_ModeC.name: [Mts300Climate],
+        mn_t.Appliance_Control_Thermostat_ModeC: [Mts300Climate],
     }
     HUB_SUBDEVICES_ENTITIES = {
-        mc.TYPE_MTS100: [Mts100Climate],
-        mc.TYPE_MTS100V3: [Mts100Climate],
-        mc.TYPE_MTS150: [Mts100Climate],
+        mc.TYPE_MTS100: [mts100],
+        mc.TYPE_MTS100V3: [mts100],
+        mc.TYPE_MTS150: [mts150],
     }
 
     async def async_test_each_callback(self, entity: MtsClimate):
@@ -69,30 +76,60 @@ class EntityTest(EntityComponentTest):
         entity_hvac_modes = set(entity.hvac_modes)
         expected_hvac_modes = HVAC_MODES[entity.__class__]
         assert expected_hvac_modes.issubset(entity_hvac_modes)
-        if mn_t.Appliance_Control_Thermostat_SummerMode.name in self.ability:
-            assert HVACMode.COOL in entity_hvac_modes
 
-        assert set(entity.preset_modes) == PRESET_MODES[entity.__class__]
-        assert "auto" not in entity.preset_modes
-        assert bool(entity.preset_modes) == (
-            haec.ClimateEntityFeature.PRESET_MODE in entity.supported_features
+        expected_preset_modes = PRESET_MODES[entity.__class__]
+        assert set(entity.preset_modes) == expected_preset_modes
+        assert bool(expected_preset_modes) == bool(
+            entity.supported_features & ClimateEntityFeature.PRESET_MODE
         )
+        assert "auto" not in entity.preset_modes
 
-        if mn.Appliance_Control_Sensor_Latest.name in self.ability:
+        # Thermostat identity survives the v6 parser hierarchy changes.
+        assert entity.unique_id == f"{entity.parent.id}_{entity.index.slug}"
+
+        if mn.Appliance_Control_Sensor_Latest in self.ability:
             # this is prone to false checks depending on the
             # emulator trace consistency. Right now (2024-09) it works
             assert entity.current_humidity is not None
 
     async def async_test_enabled_callback(self, entity: MtsClimate):
-        if isinstance(entity, Mts960Climate):
-            # TODO: restore testing once mts960 is done.
-            # Guess we need to add support for Timer namespace in emulator.
-            return
-
-        for hvac_mode in entity.hvac_modes:
-            await self.async_service_call_check(
-                haec.SERVICE_SET_HVAC_MODE, hvac_mode, {haec.ATTR_HVAC_MODE: hvac_mode}
+        if mn_t.Appliance_Control_Thermostat_SummerMode in self.ability:
+            switch_summermode: mts.MtsSummerMode = (  # type: ignore
+                self.device_context.device.ns_handlers[
+                    mn_t.Appliance_Control_Thermostat_SummerMode
+                ].parsers[entity.index]
             )
+            await switch_summermode.async_turn_on()
+            assert entity.hvac_modes == [
+                haec.HVACMode.OFF,
+                haec.HVACMode.COOL,
+                haec.HVACMode.AUTO,
+            ]
+            for hvac_mode in entity.hvac_modes:
+                await self.async_service_call_check(
+                    haec.SERVICE_SET_HVAC_MODE,
+                    hvac_mode,
+                    {haec.ATTR_HVAC_MODE: hvac_mode},
+                )
+            await switch_summermode.async_turn_off()
+            assert entity.hvac_modes == [
+                haec.HVACMode.OFF,
+                haec.HVACMode.HEAT,
+                haec.HVACMode.AUTO,
+            ]
+            for hvac_mode in entity.hvac_modes:
+                await self.async_service_call_check(
+                    haec.SERVICE_SET_HVAC_MODE,
+                    hvac_mode,
+                    {haec.ATTR_HVAC_MODE: hvac_mode},
+                )
+        else:
+            for hvac_mode in entity.hvac_modes:
+                await self.async_service_call_check(
+                    haec.SERVICE_SET_HVAC_MODE,
+                    hvac_mode,
+                    {haec.ATTR_HVAC_MODE: hvac_mode},
+                )
 
         for preset_mode in entity.preset_modes:
             state = await self.async_service_call(

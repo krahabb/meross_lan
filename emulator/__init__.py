@@ -50,38 +50,24 @@ from aiohttp import web
 # so I've changed a bit the import sequence in meross_lan
 # to have the homeassistant.core imported (initialized) before
 # homeassistant.helpers.storage
-from custom_components.meross_lan.merossclient.protocol import (
-    const as mc,
-    namespaces as mn,
-)
-from custom_components.meross_lan.merossclient.protocol.namespaces import (
-    thermostat as mn_t,
-)
-
-from .mixins import MerossEmulator, MerossEmulatorDescriptor
+from .mixins import Emulator, EmulatorDescriptor, mc, mn
 
 if TYPE_CHECKING:
-    from typing import Iterable
+    from typing import Iterable, Unpack
+
+    class build_emulator_kwargs(Emulator.Args, EmulatorDescriptor.Args):
+        pass
 
 
-def build_emulator(
-    tracefile,
-    *,
-    key: str,
-    uuid: str,
-    broker: str | None = None,
-    userId: int | None = None,
-) -> MerossEmulator:
+def build_emulator(tracefile, **kwargs: Unpack[build_emulator_kwargs]) -> Emulator:
     """
     Given a supported 'tracefile' (either a legacy trace .csv or a diagnostic .json)
     parse it and build the appropriate emulator instance with the give 'uuid' and 'key'
     this will also set the correct inferred mac address in the descriptor based on the uuid
     as this appears to be consistent with real devices config
     """
-    print(f"Initializing uuid({uuid}):", end="")
-    descriptor = MerossEmulatorDescriptor(
-        tracefile, uuid=uuid, broker=broker, userId=userId
-    )
+    print(f"Initializing descriptor({kwargs.values()}):", end="")
+    descriptor = EmulatorDescriptor(tracefile, **kwargs)
     ability = descriptor.ability
     digest = descriptor.digest
     mixin_classes = []
@@ -92,7 +78,7 @@ def build_emulator(
         mixin_classes.append(HubMixin)
     if (
         mc.KEY_THERMOSTAT in digest
-        or mn_t.Appliance_Control_Thermostat_ModeC.name in ability
+        or mn.thermostat.Appliance_Control_Thermostat_ModeC in ability
     ):
         from .mixins.thermostat import ThermostatMixin
 
@@ -101,64 +87,63 @@ def build_emulator(
         from .mixins.garagedoor import GarageDoorMixin
 
         mixin_classes.append(GarageDoorMixin)
-    if mn.Appliance_Control_Electricity.name in ability:
+    if mn.Appliance_Control_Electricity in ability:
         from .mixins.electricity import ElectricityMixin
 
         mixin_classes.append(ElectricityMixin)
-    if mn.Appliance_Control_ElectricityX.name in ability:
+    if mn.Appliance_Control_ElectricityX in ability:
         from .mixins.electricity import ElectricityXMixin
 
         mixin_classes.append(ElectricityXMixin)
-    if mn.Appliance_Control_ConsumptionH.name in ability:
+    if mn.Appliance_Control_ConsumptionH in ability:
         from .mixins.electricity import ConsumptionHMixin
 
         mixin_classes.append(ConsumptionHMixin)
 
-    if mn.Appliance_Control_ConsumptionX.name in ability:
+    if mn.Appliance_Control_ConsumptionX in ability:
         from .mixins.electricity import ConsumptionXMixin
 
         mixin_classes.append(ConsumptionXMixin)
 
-    if mn.Appliance_Control_Light.name in ability:
+    if mn.Appliance_Control_Light in ability:
         from .mixins.light import LightMixin
 
         mixin_classes.append(LightMixin)
 
-    if mn.Appliance_Control_Fan.name in ability:
+    if mn.Appliance_Control_Fan in ability:
         from .mixins.fan import FanMixin
 
         mixin_classes.append(FanMixin)
 
-    if mn.Appliance_RollerShutter_State.name in ability:
+    if mn.Appliance_RollerShutter_State in ability:
         from .mixins.rollershutter import RollerShutterMixin
 
         mixin_classes.append(RollerShutterMixin)
 
-    if mn.Appliance_Control_PhysicalLock.name in ability:
+    if mn.Appliance_Control_PhysicalLock in ability:
         from .mixins.physicallock import PhysicalLockMixin
 
         mixin_classes.append(PhysicalLockMixin)
 
-    mixin_classes.append(MerossEmulator)
+    mixin_classes.append(Emulator)
     # build a label to cache the set
     class_name = ""
     for m in mixin_classes:
         class_name = class_name + m.__name__
     class_type = type(class_name, tuple(mixin_classes), {})
 
-    emulator = class_type(descriptor, key)
-    print(f" {descriptor.type} (model:{descriptor.productmodel})")
+    emulator = class_type(descriptor, **kwargs)
+    print(
+        f" {descriptor.type} (model:{descriptor.productmodel} uuid:{descriptor.uuid})"
+    )
     return emulator
 
 
 def build_emulators(
     tracespath: str,
     *,
-    key: str,
-    uuid: str,
-    broker: str | None = None,
-    userId: int | None = None,
-    included_uuid: "Iterable[str] | None" = None,
+    included_uuid: Iterable[str] | None = None,
+    **kwargs: Unpack[build_emulator_kwargs],
 ):
     """
     This function is a generator.
@@ -169,6 +154,8 @@ def build_emulators(
     basic plain filenames which don't contain any info but also, will make
     it difficult to understand which device is which
     """
+    uuid = kwargs.get("uuid") or Emulator.DEFAULT_UUID
+
     uuidsub = 0
     for f in os.listdir(tracespath):
         fullpath = os.path.join(tracespath, f)
@@ -177,22 +164,21 @@ def build_emulators(
         if f[-1] not in ("csv", "txt", "json"):
             continue
 
+        _kwargs = kwargs.copy()
         # filename could be formatted to carry device definitions parameters:
         # format the filename like 'xxxwhatever-Kdevice_key-Udevice_id'
         # this way, parameters will be 'binded' to that trace in an easy way
-        _key = key
         _uuid = None
-        _broker = broker
-        _userId = userId
         for _f in f[0].split("-"):
             if _f.startswith("K"):
-                _key = _f[1:].strip()
+                _kwargs["key"] = _f[1:].strip()
             elif _f.startswith("U"):
                 _uuid = _f[1:].strip()
             elif _f.startswith("B"):
-                _broker = _f[1:].strip()
+                _kwargs["broker"] = _f[1:].strip()
             elif _f.startswith("A"):
-                _userId = int(_f[1:].strip())
+                _kwargs["userId"] = int(_f[1:].strip())
+
         if _uuid:
             if included_uuid and (_uuid not in included_uuid):
                 continue
@@ -200,10 +186,8 @@ def build_emulators(
             uuidsub = uuidsub + 1
             _uuidsub = str(uuidsub)
             _uuid = uuid[: -len(_uuidsub)] + _uuidsub
-
-        yield build_emulator(
-            fullpath, key=_key, uuid=_uuid, broker=_broker, userId=_userId
-        )
+        _kwargs["uuid"] = _uuid
+        yield build_emulator(fullpath, **_kwargs)
 
 
 def run(argv):
@@ -212,25 +196,22 @@ def run(argv):
     command line invocation:
     'python -m aiohttp.web -H localhost -P 80 meross_lan.emulator:run tracefilepath'
     """
-    key = ""
-    uuid = "01234567890123456789001122334455"
-    broker = None
-    userId = None
+    emulator_kwargs: build_emulator_kwargs = {}
     tracefilepath = "."
     for arg in argv:
         arg: str
         if arg.startswith("-key"):
-            key = arg[4:].strip()
+            emulator_kwargs["key"] = arg[4:].strip()
         elif arg.startswith("-uuid"):
-            uuid = arg[5:].strip()
+            emulator_kwargs["uuid"] = arg[5:].strip()
         elif arg.startswith("-broker"):
-            broker = arg[7:].strip()
+            emulator_kwargs["broker"] = arg[7:].strip()
         else:
             tracefilepath = arg
 
     app = web.Application()
 
-    def web_post_handler(emulator: MerossEmulator):
+    def web_post_handler(emulator: Emulator):
         async def _callback(request: web.Request) -> web.Response:
             try:
                 return web.Response(
@@ -248,26 +229,24 @@ def run(argv):
     if os.path.isdir(tracefilepath):
         emulators = {
             emulator.uuid: emulator
-            for emulator in build_emulators(
-                tracefilepath, key=key, uuid=uuid, broker=broker, userId=userId
-            )
+            for emulator in build_emulators(tracefilepath, **emulator_kwargs)
         }
         for _uuid, emulator in emulators.items():
             app.router.add_post(f"/{_uuid}/config", web_post_handler(emulator))
     else:
-        emulator = build_emulator(
-            tracefilepath, key=key, uuid=uuid, broker=broker, userId=userId
-        )
+        emulator = build_emulator(tracefilepath, **emulator_kwargs)
         emulators = {emulator.uuid: emulator}
         app.router.add_post("/config", web_post_handler(emulator))
 
     async def _on_startup(app: web.Application):
         for emulator in emulators.values():
-            await emulator.async_startup(enable_scheduler=True, enable_mqtt=True)
+            await emulator.async_startup(
+                enable_scheduler=True, enable_mqtt="broker" in emulator_kwargs
+            )
 
     async def _on_shutdown(app: web.Application):
         for emulator in emulators.values():
-            emulator.shutdown()
+            await emulator.async_shutdown()
 
     app.on_startup.append(_on_startup)
     app.on_shutdown.append(_on_shutdown)

@@ -1,47 +1,101 @@
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.components import update
+from homeassistant.exceptions import HomeAssistantError
 
-from .helpers import entity as me
-from .merossclient.cloudapi import LatestVersionType
-from .merossclient.protocol import const as mc
+from .helpers.entity import Entity
+from .merossclient.protocol import namespaces as mn
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
+    from typing import ClassVar, Final, NotRequired
 
-    from .helpers.device import Device
-
-
-async def async_setup_entry(hass, config_entry, async_add_devices):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, update.DOMAIN)
+    from .helpers.device import BaseDevice, Device
+    from .merossclient.cloudapi import LatestVersionType
 
 
-class MLUpdate(me.MEAlwaysAvailableMixin, me.MLEntity, update.UpdateEntity):
+class UpdateEntity(Entity, update.UpdateEntity):
+    if TYPE_CHECKING:
+        parent: Final[Device]  # type: ignore[override]
+        device: Final[BaseDevice]
+        """The PhysicalDevice associated with this entity. Could be either a subdevice or a plain device."""
+        latest_version_info: LatestVersionType  # latest firmware version available for the device (if any).
+        # HA core entity attributes:
+        in_progress: bool
+        installed_version: str | None
+        latest_version: str | None
+        release_summary: str | None
+
+        class Args(Entity.Args):
+            device_class: NotRequired[update.UpdateDeviceClass | None]
+
     PLATFORM = update.DOMAIN
     DeviceClass = update.UpdateDeviceClass
-    manager: "Device"
 
-    # HA core entity attributes:
-    entity_category = me.MLEntity.EntityCategory.DIAGNOSTIC
-    installed_version: str | None
-    latest_version: str | None
-    release_summary: str | None
+    _INIT_entity_key = "firmware_update"
+
+    _attr_device_class = update.UpdateDeviceClass.FIRMWARE
+    _attr_supported_features = (
+        update.UpdateEntityFeature.INSTALL | update.UpdateEntityFeature.PROGRESS
+    )
 
     __slots__ = (
+        "device",
+        "latest_version_info",
+        "in_progress",
         "installed_version",
         "latest_version",
         "release_summary",
+        "title",
     )
 
-    def __init__(self, manager: "Device", latest_version: LatestVersionType):
-        self.installed_version = manager.descriptor.firmwareVersion
-        self.latest_version = latest_version.get(mc.KEY_VERSION)
-        self.release_summary = latest_version.get(mc.KEY_DESCRIPTION)
-        super().__init__(
-            manager,
-            None,
-            "update_firmware",
-            self.DeviceClass.FIRMWARE,
+    def __init__(
+        self,
+        device: "BaseDevice",
+        parent: "Device",
+        latest_version_info: "LatestVersionType",
+        /,
+    ):
+        self.device = device
+        self.latest_version_info = latest_version_info
+        self.title = device.display_name
+        self.in_progress = False
+        self.installed_version, self.latest_version, self.release_summary = (
+            device.descriptor.get_upgrade_info(latest_version_info)
         )
+        Entity.__init__(
+            self,
+            device.id if device is not parent else None,
+            parent,
+            device_info=None,
+            unique_id=None,
+        )
+        device.update_firmware = self
 
-    def _generate_unique_id(self):
-        return None
+    def update_latest_version(self, latest_version_info: "LatestVersionType"):
+        self.latest_version_info = latest_version_info
+        self.flush_state()
+
+    def flush_state(self):
+        self.installed_version, self.latest_version, self.release_summary = (
+            self.device.descriptor.get_upgrade_info(self.latest_version_info)
+        )
+        if self.installed_version == self.latest_version:
+            self.in_progress = False
+        Entity.flush_state(self)
+
+    async def async_install(self, *args, **kwargs):
+        device = self.device
+        if not device.is_connected:
+            raise HomeAssistantError("Device is offline")
+        upgrade_payload = device.descriptor.get_upgrade_payload(
+            self.latest_version_info
+        )
+        if not upgrade_payload:
+            raise HomeAssistantError("No upgrade available")
+        await device.async_request(
+            *mn.Appliance_Control_Upgrade.request_set(upgrade_payload),
+        )
+        self.in_progress = True
+
+
+async_setup_entry = UpdateEntity.platform_setup_entry

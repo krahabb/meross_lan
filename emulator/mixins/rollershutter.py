@@ -4,19 +4,17 @@ import asyncio
 from time import time
 from typing import TYPE_CHECKING
 
-from custom_components.meross_lan.helpers import clamp, versiontuple
+from custom_components.meross_lan.helpers import clamp
 from custom_components.meross_lan.merossclient import extract_dict_payloads
-from custom_components.meross_lan.merossclient.protocol import (
-    const as mc,
-    namespaces as mn,
-)
 
-from . import MerossEmulator
+from . import Emulator, mc, mn
 
 if TYPE_CHECKING:
     from typing import Final
 
-    from . import MerossEmulatorDescriptor
+    from custom_components.meross_lan.merossclient.protocol import types as mt
+
+    from . import EmulatorDescriptor
 
 
 _SIGNAL_SCALE = 1000
@@ -107,7 +105,7 @@ class _Transition:
             )
 
 
-class RollerShutterMixin(MerossEmulator if TYPE_CHECKING else object):
+class RollerShutterMixin(Emulator if TYPE_CHECKING else object):
 
     # set open/close timeouts (in msec to align to device natives)
     # different so to test they're used correctly
@@ -116,13 +114,13 @@ class RollerShutterMixin(MerossEmulator if TYPE_CHECKING else object):
     # the internal sampling of the 'Transition'
     SIGNAL_TRANSITION_PERIOD = 1  # sec
 
-    NAMESPACES_DEFAULT: "MerossEmulator.NSDefault" = {
+    NAMESPACES_DEFAULT: "Emulator.NSDefault" = {
         mn.Appliance_RollerShutter_Adjust: (
-            MerossEmulator.NSDefaultMode.MixOut,
+            Emulator.NSDefaultMode.MixOut,
             {mc.KEY_CHANNEL: 0, mc.KEY_STATUS: 0},
         ),
         mn.Appliance_RollerShutter_Config: (
-            MerossEmulator.NSDefaultMode.MixIn,
+            Emulator.NSDefaultMode.MixIn,
             {
                 mc.KEY_CHANNEL: 0,
                 mc.KEY_SIGNALCLOSE: SIGNALCLOSE,
@@ -130,11 +128,11 @@ class RollerShutterMixin(MerossEmulator if TYPE_CHECKING else object):
             },
         ),
         mn.Appliance_RollerShutter_Position: (
-            MerossEmulator.NSDefaultMode.MixIn,
+            Emulator.NSDefaultMode.MixIn,
             {mc.KEY_CHANNEL: 0, mc.KEY_POSITION: mc.ROLLERSHUTTER_POSITION_CLOSED},
         ),
         mn.Appliance_RollerShutter_State: (
-            MerossEmulator.NSDefaultMode.MixIn,
+            Emulator.NSDefaultMode.MixIn,
             {mc.KEY_CHANNEL: 0, mc.KEY_STATE: mc.ROLLERSHUTTER_STATE_IDLE},
         ),
     }
@@ -146,17 +144,15 @@ class RollerShutterMixin(MerossEmulator if TYPE_CHECKING else object):
     # the internal sampling of the 'Transition'
     SIGNAL_TRANSITION_PERIOD = 1  # sec
 
-    def __init__(self, descriptor: "MerossEmulatorDescriptor", key: str):
-        super().__init__(descriptor, key)
+    def __init__(self, descriptor: "EmulatorDescriptor", **kwargs):
+        super().__init__(descriptor, **kwargs)
         self._transitions: dict[int, _Transition] = {}
-        self.has_native_position = versiontuple(
-            descriptor.firmwareVersion
-        ) >= versiontuple("6.6.6")
+        self.has_native_position = descriptor.fw_version_t >= (6, 6, 6)
 
-    def shutdown(self):
+    async def async_shutdown(self):
         for transition in tuple(self._transitions.values()):
             transition.shutdown()
-        super().shutdown()
+        await super().async_shutdown()
 
     def _GET_Appliance_Control_ToggleX(self, header, payload):
         # this code was used to debug our 'resiliency' to
@@ -164,11 +160,26 @@ class RollerShutterMixin(MerossEmulator if TYPE_CHECKING else object):
         # return mc.METHOD_GETACK, {"channel": 0}  # debug testing'strange' format response in #447
         return mc.METHOD_GETACK, {"togglex": []}
 
-    def _SET_Appliance_RollerShutter_Position(self, header, payload):
-        """payload = { "postion": {"channel": 0, "position": 100}}"""
-        for p_request in extract_dict_payloads(payload[mc.KEY_POSITION]):
+    def _SET_Appliance_RollerShutter_Adjust(self, header, payload):
+        p_request: "mt.rollershutter.AdjustRequest_C"
+        for p_request in extract_dict_payloads(payload[mc.KEY_ADJUST]):
 
             channel: int = p_request[mc.KEY_CHANNEL]
+            value: int = p_request[mc.KEY_VALUE]
+
+            p_adjust = self.get_namespace_state(
+                mn.Appliance_RollerShutter_Adjust, channel
+            )
+            p_adjust[mc.KEY_STATUS] = 1 if value == 1 else 0
+
+        return mc.METHOD_SETACK, {}
+
+    def _SET_Appliance_RollerShutter_Position(self, header, payload):
+        """payload = { "postion": {"channel": 0, "position": 100}}"""
+        p_request: "mt.rollershutter.Position_C"
+        for p_request in extract_dict_payloads(payload[mc.KEY_POSITION]):
+
+            channel = p_request[mc.KEY_CHANNEL]
 
             if channel in self._transitions:
                 self._transitions[channel].shutdown()

@@ -1,11 +1,12 @@
 from homeassistant.components import binary_sensor as haec
 
-from custom_components.meross_lan.binary_sensor import MLBinarySensor
-from custom_components.meross_lan.devices.thermostat.mts960 import Mts960Climate
-from custom_components.meross_lan.devices.thermostat.mtsthermostat import (
-    MtsWarningSensor,
+from custom_components.meross_lan.binary_sensor import BinarySensorEntity
+from custom_components.meross_lan.devices import garagedoor as gd
+from custom_components.meross_lan.devices.hub import ms
+from custom_components.meross_lan.devices.thermostat import (
     MtsWindowOpened,
 )
+from custom_components.meross_lan.devices.thermostat.mts960 import Mts960Climate
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
@@ -22,6 +23,7 @@ class EntityTest(EntityComponentTest):
     ENTITY_TYPE = haec.BinarySensorEntity
 
     DIGEST_ENTITIES = {
+        mc.KEY_GARAGEDOOR: [gd.GarageTimeoutBinarySensor],
         mc.KEY_THERMOSTAT: {
             mc.KEY_MODEB: [
                 Mts960Climate.PlugState,
@@ -30,23 +32,25 @@ class EntityTest(EntityComponentTest):
     }
 
     NAMESPACES_ENTITIES = {
-        mn_t.Appliance_Control_Thermostat_Frost.name: [MtsWarningSensor],
-        mn_t.Appliance_Control_Thermostat_Overheat.name: [MtsWarningSensor],
-        mn_t.Appliance_Control_Thermostat_WindowOpened.name: [MtsWindowOpened],
+        mn.Appliance_Control_Presence_Config: [
+            # These are entities installed by mn.Appliance_Control_Sensor_LatestX
+            # but we use this namespace to detect presence capability (ms600)
+            BinarySensorEntity,
+        ],
+        mn_t.Appliance_Control_Thermostat_WindowOpened: [MtsWindowOpened],
     }
 
     HUB_SUBDEVICES_ENTITIES = {
-        mc.KEY_DOORWINDOW: [
-            MLBinarySensor,  # window opened
-        ],
-        mc.TYPE_MTS100: [MLBinarySensor],  # window opened
-        mc.TYPE_MTS100V3: [MLBinarySensor],  # window opened
-        mc.TYPE_MTS150: [MLBinarySensor],  # window opened
+        mc.TYPE_MTS100: [BinarySensorEntity],  # window opened
+        mc.TYPE_MTS100V3: [BinarySensorEntity],  # window opened
+        mc.TYPE_MTS150: [BinarySensorEntity],  # window opened
+        mc.KEY_DOORWINDOW: [ms.ms200],
         mc.KEY_SMOKEALARM: [
-            MLBinarySensor,  # alarm
-            MLBinarySensor,  # error
-            MLBinarySensor,  # muted
+            BinarySensorEntity,  # alarm
+            BinarySensorEntity,  # error
+            BinarySensorEntity,  # muted
         ],
+        mc.KEY_WATERLEAK: [ms.ms400],
     }
 
     async def async_test_enabled_callback(self, entity):

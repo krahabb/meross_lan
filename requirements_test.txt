@@ -23,14 +23,15 @@
 #pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.295 # HA core 2025.11.1
 #pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.299 # HA core 2025.12.1
 #pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.302 # HA core 2026.1.0b2
+#pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.324 # HA core 2026.4.3
+#pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.330 # HA core 2026.5.1
+#pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.340 # HA core 2026.6.4
+#pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.363 # HA core 2026.9.0
+#pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.371 # HA core 2026.10.0
+# Keep the test helper aligned with the stable Home Assistant pin in requirements_dev.txt.
 pytest-homeassistant-custom-component==0.13.375 # HA core 2026.10.4
-
-aiodiscover
-aiodhcpwatcher
-aiohttp-cors
-scapy
-janus
-fnv-hash-fast
-psutil-home-assistant
+pytest-timeout
+pytest-cov
+pytest-xdist
 
 -r requirements_dev.txt

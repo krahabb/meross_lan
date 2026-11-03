@@ -29,6 +29,7 @@ METHOD_ACK_MAP = {
 }
 
 # misc keys for json payloads
+KEY_ = ""
 KEY_HEADER = "header"
 KEY_MESSAGEID = "messageId"
 KEY_NAMESPACE = "namespace"
@@ -53,6 +54,7 @@ KEY_VERSION = "version"
 KEY_UUID = "uuid"
 KEY_MACADDRESS = "macAddress"
 KEY_FIRMWARE = "firmware"
+KEY_WIFI = "wifi"
 KEY_WIFIMAC = "wifiMac"
 KEY_INNERIP = "innerIp"
 KEY_GATEWAY = "gateway"
@@ -100,12 +102,14 @@ KEY_SIGNAL = "signal"
 KEY_LMTIME = "lmTime"
 KEY_LMTIME_ = "lmtime"
 KEY_CHANNEL = "channel"
+KEY_CHANNELS = "channels"
 KEY_SECTION = "section"
 KEY_LOCK = "lock"
 KEY_TOGGLE = "toggle"
 KEY_TOGGLEX = "togglex"
 KEY_ONOFF = "onoff"
 KEY_LIGHT = "light"
+KEY_LIGHT_EFFECT = "light.effect"
 KEY_EFFECT = "effect"
 KEY_EFFECTNAME = "effectName"
 KEY_MEMBER = "member"
@@ -117,6 +121,7 @@ KEY_TEMPERATURE = "temperature"
 KEY_TEMP = "temp"
 KEY_HUMIDITY = "humidity"
 KEY_HUMI = "humi"
+KEY_HUMIVALUE = "humiValue"
 KEY_SPRAY = "spray"
 KEY_FAN = "fan"
 KEY_SPEED = "speed"
@@ -200,7 +205,15 @@ KEY_COMFORT = "comfort"
 KEY_ECONOMY = "economy"
 KEY_HEATING = "heating"
 KEY_AWAY = "away"
+KEY_PID = "pid"
+KEY_GRADE = "grade"
+KEY_P = "p"
+KEY_I = "i"
+KEY_D = "d"
 KEY_OPENWINDOW = "openWindow"
+KEY_MOTORCURLOCATION = "motorCurLocation"
+KEY_MOTORSTARTCTR = "motorStartCtr"
+KEY_MOTORTOTALPATH = "motorTotalPath"
 KEY_THERMOSTAT = "thermostat"
 KEY_CURRENTTEMP = "currentTemp"
 KEY_HEATTEMP = "heatTemp"
@@ -210,8 +223,13 @@ KEY_MANUALTEMP = "manualTemp"
 KEY_TARGETTEMP = "targetTemp"
 KEY_WINDOWOPENED = "windowOpened"
 KEY_TEMPUNIT = "tempUnit"
+KEY_ALERT = "alert"
 KEY_ALARM = "alarm"
 KEY_ALARMCONFIG = "alarmConfig"
+KEY_EVENT = "event"
+KEY_DEMOLISH = "demolish"
+KEY_MASECURITY = "maSecurity"
+KEY_SECURITY = "security"
 KEY_CALIBRATION = "calibration"
 KEY_CTLRANGE = "ctlRange"
 KEY_CTLMAX = "ctlMax"
@@ -245,9 +263,19 @@ KEY_CLOUD = "cloud"
 KEY_ACTIVESERVER = "activeServer"
 KEY_MAINSERVER = "mainServer"
 KEY_MAINPORT = "mainPort"
-KEY_SYSCONNECTTIME = "sysConnectTime"
-KEY_SYSONLINETIME = "sysOnlineTime"
-KEY_SYSDISCONNECTCOUNT = "sysDisconnectCount"
+KEY_UPGRADE = "upgrade"
+KEY_URL = "url"
+KEY_MD5 = "md5"
+KEY_MCU = "mcu"
+KEY_LEDMODE = "LedMode"
+# Appliance.Config.DeviceCfg keys
+KEY_CALIBRATECFG = "calibrateCfg"
+KEY_TIMECFG = "timeCfg"
+KEY_AM = "am"
+KEY_UNITCFG = "unitCfg"
+KEY_UNITTYPE = "unitType"  # This doesn't appear in ms130 but it seems to be available in mst devices
+
+# mostly related to Meross cloud api
 KEY_NONCE = "nonce"
 KEY_PARAMS = "params"
 KEY_APISTATUS = "apiStatus"
@@ -281,6 +309,17 @@ STATUS_ONLINE = 1
 STATUS_OFFLINE = 2
 STATUS_UPGRADING = 3
 
+# Appliance.Config.Alarm
+CONFIG_ALARM_SONGS = {
+    1: "Siren",
+    2: "Beep",
+    3: "Chime",
+    4: "Alarm",
+    5: "Roar",
+    6: "Whistle",
+    7: "Buzzer",
+}
+
 # Appliance.Control.TempUnit
 TEMPUNIT_CELSIUS = 1
 TEMPUNIT_FAHRENHEIT = 2
@@ -309,7 +348,6 @@ ROLLERSHUTTER_POSITION_CLOSED = 0
 
 
 # mts100 (and the likes..) valves mode
-MTS100_TEMP_SCALE = 10  # native mts temperatures expressed in tenths of °C
 MTS100_MODE_CUSTOM = 0
 MTS100_MODE_HEAT = 1  # preset heat/comfort
 MTS100_MODE_COOL = 2  # preset cool/night
@@ -329,7 +367,6 @@ MTS_HOLDACTION_NEXT_SCHEDULE = 1
 MTS_HOLDACTION_TIMER = 2
 
 # I don't have an MTS200 to test so these are inferred from a user trace
-MTS200_TEMP_SCALE = 10  # native mts temperatures expressed in tenths of °C
 MTS200_MODE_HEAT = 0  # preset heat/comfort
 MTS200_MODE_COOL = 1  # preset cool/night
 MTS200_MODE_ECO = 2  # preset away/eco
@@ -356,7 +393,6 @@ MTS200_OVERHEAT_WARNING_MAP = {
     MTS200_OVERHEAT_WARNING_NOTCONNECTED: "disconnected",
 }
 
-MTS300_TEMP_SCALE = 100  # 1°C == 100 device value
 MTS300_MODE_OFF = 0
 MTS300_MODE_HEAT = 1
 MTS300_MODE_COOL = 2
@@ -378,7 +414,6 @@ MTS300_FAN_SPEED_MEDIUM = 2
 MTS300_FAN_SPEED_HIGH = 3
 MTS300_FAN_HOLD_DISABLED = 99999
 
-MTS960_TEMP_SCALE = 100  # 1°C == 100 device value
 # inferring the mts960 modes from the manual
 MTS960_MODE_HEAT_COOL = 1
 MTS960_MODE_SCHEDULE = 2
@@ -448,87 +483,84 @@ HP110A_MP3_VOLUME_MAX = 16
 TYPE_UNKNOWN = "unknown"
 TYPE_NAME_MAP = collections.OrderedDict()
 
-TYPE_MAP100 = "map100"
-TYPE_NAME_MAP["map"] = "Smart Air Purifier"
+TYPE_NAME_MAP["map"] = "Air Purifier"
+TYPE_NAME_MAP["msxh0"] = "Air Purifier"
 
 TYPE_MFC100 = "mfc100"
-TYPE_NAME_MAP["mfc"] = "Smart Fan"
+TYPE_NAME_MAP["mfc"] = "Fan"
 
-TYPE_MOD100 = "mod100"  # smart humidifier
-TYPE_MOD150 = "mod150"  # smart humidifier
-TYPE_NAME_MAP["mod"] = "Smart Humidifier"
+TYPE_NAME_MAP["mod"] = "Humidifier"
 
-TYPE_NAME_MAP["mrs"] = "Smart Roller Shutter"
+TYPE_NAME_MAP["mrs"] = "Roller Shutter"
 
-TYPE_MSG100 = "msg100"  # smart garage door (1 channel)
 TYPE_MSG200 = "msg200"  # smart garage door (3 channels)
-TYPE_NAME_MAP["msg"] = "Smart Garage Door"
+TYPE_NAME_MAP["msg"] = "Garage Door"
 
+TYPE_HUB = "msh"
 TYPE_MSH300 = "msh300"  # WiFi Hub
-TYPE_NAME_MAP["msh"] = "Smart Hub"
+TYPE_NAME_MAP[TYPE_HUB] = "Smart Hub"
 
-TYPE_MSL100 = "msl100"  # smart bulb
-TYPE_NAME_MAP[TYPE_MSL100] = "Smart Bulb"
-TYPE_MSL120 = "msl120"  # smart bulb with color/temp
-TYPE_NAME_MAP[TYPE_MSL120] = "Smart RGB Bulb"
+TYPE_NAME_MAP["msl100"] = "Smart Bulb"
+TYPE_NAME_MAP["msl120"] = "RGB Bulb"
 TYPE_MSL320_PRO = "msl320cp"  # smart led strip pro
-TYPE_NAME_MAP[TYPE_MSL320_PRO] = "Smart RGB Pro Led Strip"
-TYPE_MSL320 = "msl320"  # smart led strip
-TYPE_NAME_MAP[TYPE_MSL320] = "Smart RGB Led Strip"
+TYPE_NAME_MAP[TYPE_MSL320_PRO] = "RGB Pro Led Strip"
+TYPE_NAME_MAP["msl320"] = "RGB Led Strip"
 TYPE_NAME_MAP["msl"] = "Smart Light"
 
 TYPE_MSS310 = "mss310"  # smart plug with energy meter
-TYPE_NAME_MAP[TYPE_MSS310] = "Smart Plug"
-TYPE_NAME_MAP["mss560"] = "Smart Dimmer Switch"
-TYPE_NAME_MAP["mss570"] = TYPE_NAME_MAP["mss560"]
+TYPE_NAME_MAP["mss2"] = "Smart Plug"
+TYPE_NAME_MAP["mss3"] = TYPE_NAME_MAP["mss2"]
+TYPE_NAME_MAP["mss5"] = "Dimmer Switch"
 TYPE_NAME_MAP["mss"] = "Smart Switch"
-TYPE_NAME_MAP["mop320"] = "Smart Outdoor Plug"
+TYPE_NAME_MAP["mop320"] = "Outdoor Plug"
 
+TYPE_MTS = "mts"  # smart thermostat prefix
 TYPE_MTS100 = "mts100"  # Smart thermostat over hub
 TYPE_MTS100V3 = "mts100v3"  # Smart thermostat over hub
 TYPE_MTS150 = "mts150"  # Smart thermostat over hub
 TYPE_MTS150P = "mts150p"  # Smart thermostat over hub
-TYPE_NAME_MAP["mts1"] = "Smart Thermostat Valve"
+TYPE_NAME_MAP["mts1"] = "Thermostat Valve"
 TYPE_MTS200 = "mts200"  # Smart thermostat over wifi
-TYPE_MTS960 = "mts960"  # Smart thermostat over wifi
-TYPE_NAME_MAP[TYPE_MTS960] = "Smart Socket Thermostat"
-TYPE_NAME_MAP["mts"] = "Smart Thermostat"
+TYPE_NAME_MAP["mts9"] = "Socket Thermostat"
+TYPE_NAME_MAP[TYPE_MTS] = "Thermostat"
 # do not register class 'ms' since it is rather
 # unusual naming and could issue collissions with mss or msl
 # just set the known type
 TYPE_HP110A = "hp110"
-TYPE_NAME_MAP[TYPE_HP110A] = "Smart Cherub Baby Machine"
+TYPE_NAME_MAP[TYPE_HP110A] = "Cherub Baby Machine"
 
 TYPE_GS559 = "gs559"
-TYPE_NAME_MAP[TYPE_GS559] = "Smart Smoke Alarm"
+TYPE_NAME_MAP[TYPE_GS559] = "Smoke Alarm"
 
 TYPE_MS100 = "ms100"  # Smart temp/humidity sensor over Hub
-TYPE_NAME_MAP[TYPE_MS100] = "Smart Temp/Humidity Sensor"
-
+TYPE_MS100F = "ms100f"  # Smart temp/humidity sensor over Hub
 TYPE_MS130 = "ms130"  # Smart temp/humidity sensor (with display) over Hub
-TYPE_NAME_MAP[TYPE_MS130] = "Smart Temp/Humidity Sensor"
+TYPE_NAME_MAP["ms1"] = "Temp/Humidity Sensor"
 
 TYPE_MS200 = "ms200"
-TYPE_NAME_MAP[TYPE_MS200] = "Smart Door/Window Sensor"
+TYPE_NAME_MAP[TYPE_MS200] = "Door/Window Sensor"
+
+TYPE_MS300 = "ms300"  # TODO: unknown sensor type
 
 TYPE_MS400 = "ms400"
-TYPE_NAME_MAP[TYPE_MS400] = "Smart Water Leak Sensor"
+TYPE_NAME_MAP[TYPE_MS400] = "Water Leak Sensor"
 
 TYPE_MS600 = "ms600"
-TYPE_NAME_MAP[TYPE_MS600] = "Smart Presence Sensor"
+TYPE_NAME_MAP[TYPE_MS600] = "Presence Sensor"
 
 TYPE_MST100 = "mst100"
-TYPE_NAME_MAP[TYPE_MST100] = "Smart Sprinkler Timer"
+TYPE_MST200 = "mst200"
+TYPE_NAME_MAP[KEY_MST] = "Sprinkler Timer"
 
 # REFOSS device types
-_SMART_ENERGY_MONITOR = "Smart Energy Monitor"
+_SMART_ENERGY_MONITOR = "Energy Monitor"
 
 
 class RefossModel(enum.Enum):
     em06 = _SMART_ENERGY_MONITOR
     em16 = _SMART_ENERGY_MONITOR
     em = _SMART_ENERGY_MONITOR
-    p11 = TYPE_NAME_MAP[TYPE_MSS310]  # Smart Plug
+    p11 = TYPE_NAME_MAP["mss3"]  # Smart Plug
     r10 = TYPE_NAME_MAP["mss"]  # Smart Switch
     r11 = TYPE_NAME_MAP["mss"]  # Smart Switch
     r21 = TYPE_NAME_MAP["mss"]  # Smart Switch
@@ -544,11 +576,6 @@ class RefossModel(enum.Enum):
 
 for _rt in RefossModel:
     TYPE_NAME_MAP[_rt.name] = _rt.value
-#
-# HUB helpers symbols
-#
-MTS100_ALL_TYPESET = {TYPE_MTS150, TYPE_MTS150P, TYPE_MTS100V3, TYPE_MTS100}
-"""subdevices types listed in NS_APPLIANCE_HUB_MTS100_ALL"""
 
 
 """
@@ -561,3 +588,5 @@ HEADER_TRIGGERSRC_DEVBOOT = "DevBoot"
 HEADER_TRIGGERSRC_DEVICE = "Device"
 MEROSS_MACADDRESS = "48:e1:e9:xx:xx:xx"
 MQTT_DEFAULT_PORT = 443
+HTTP_DEFAULT_IP = "10.0.0.1"
+EMPTY_KEY = ""

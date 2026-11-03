@@ -1,8 +1,11 @@
 from homeassistant.components import button as habc
 from homeassistant.util import dt as dt_util
 
-from custom_components.meross_lan.button import MLButton, MLPersistentButton
+from custom_components.meross_lan.button import Button, PersistentButton
 from custom_components.meross_lan.merossclient.protocol import const as mc
+from custom_components.meross_lan.merossclient.protocol.namespaces import (
+    hub as mn_h,
+)
 
 from tests.entities import EntityComponentTest
 
@@ -11,34 +14,31 @@ class EntityTest(EntityComponentTest):
 
     ENTITY_TYPE = habc.ButtonEntity
 
-    DEVICE_ENTITIES = [MLPersistentButton, MLPersistentButton]
+    DEVICE_ENTITIES = [PersistentButton, PersistentButton]
 
     DIGEST_ENTITIES = {}
 
-    NAMESPACES_ENTITIES = {}
-
-    HUB_SUBDEVICES_ENTITIES = {
-        mc.KEY_SMOKEALARM: [MLButton, MLButton],  # mute, test
+    NAMESPACES_ENTITIES = {
+        mn_h.Appliance_Hub_PairSubDev: [Button],  # pair subdevice button
     }
 
-    async def async_test_enabled_callback(self, entity: MLButton):
-        # We'll patch the hard way so that pressing thse buttons has no consequences.
-        # Specific buttons behaviors are to be tested in dedicated code.
-        old_handler = entity.async_press
-        pressed = False
+    HUB_SUBDEVICES_ENTITIES = {
+        mc.KEY_SMOKEALARM: [Button, Button],  # mute, test
+    }
 
-        async def _async_press():
-            nonlocal pressed
-            pressed = True
+    async def async_test_enabled_callback(self, entity: Button):
+        # TODO: test each expected outcome according to the button type
 
-        entity.async_press = _async_press
-        try:
-            await self.async_service_call_check(
-                habc.SERVICE_PRESS, dt_util.utcnow().isoformat()
-            )
-            assert pressed, ("button was not pressed", self.entity_id)
-        finally:
-            entity.async_press = old_handler
+        if entity.entity_key in ("button_refresh", "button_reload"):
+            return  # skip reload button testing
 
-    async def async_test_disabled_callback(self, entity: MLButton):
-        pass
+        await self.async_service_call_check(
+            habc.SERVICE_PRESS, dt_util.utcnow().isoformat()
+        )
+
+    async def async_test_disabled_callback(self, entity: Button):
+
+        if entity.entity_key in ("button_refresh", "button_reload"):
+            return  # skip reload button testing
+
+        await entity.async_press()

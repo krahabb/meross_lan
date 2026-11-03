@@ -3,17 +3,14 @@
 import asyncio
 from typing import TYPE_CHECKING
 
-from homeassistant import const as hac
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.setup import async_setup_component
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.helpers.component_api import ComponentApi
-from custom_components.meross_lan.light import MLDNDLightEntity
 from custom_components.meross_lan.merossclient.protocol import (
-    const as mc,
     namespaces as mn,
 )
-from custom_components.meross_lan.sensor import MLSignalStrengthSensor
 
 from tests import const as tc, helpers
 
@@ -55,7 +52,7 @@ async def test_mqtthub_entry_notready(request, hass: "HomeAssistant"):
             message=(
                 r"HAMQTTConnection\(############0:@0\): "
                 r"HomeAssistantError\(mqtt_not_setup_cannot_subscribe\) "
-                r"in async_mqtt_subscribe"
+                r"in async_connect"
             ),
         )
 
@@ -71,46 +68,24 @@ async def test_device_entry(request, hass: "HomeAssistant"):
     i.e. we're testing something close to http connected devices
     """
     for emulator in helpers.build_emulators():
-        async with helpers.DeviceContext(request, hass, emulator) as context:
-            assert await context.async_setup()
+        async with helpers.DeviceContext(
+            request, hass, emulator, auto_poll=True
+        ) as context:
 
             descriptor = emulator.descriptor
             ability = descriptor.ability
             device = context.device
 
-            entity_dnd = None
-            if mn.Appliance_System_DNDMode.name in ability:
-                entity_dnd = device.entities[MLDNDLightEntity.ENTITY_KEY]
-                assert isinstance(entity_dnd, MLDNDLightEntity)
-                state = hass.states.get(entity_dnd.entity_id)
-                assert state and state.state == hac.STATE_UNAVAILABLE
-
-            sensor_signal_strength = None
-            if mn.Appliance_System_Runtime.name in ability:
-                sensor_signal_strength = device.entities[
-                    MLSignalStrengthSensor.ENTITY_KEY
-                ]
-                state = hass.states.get(sensor_signal_strength.entity_id)
-                assert state and state.state == hac.STATE_UNAVAILABLE
-
-            await context.perform_coldstart()
-
             # try to ensure some 'formal' consistency in ns configuration
-            for namespace_handler in device.namespace_handlers.values():
-                ns = namespace_handler.ns
+            for handler in device.ns_handlers.values():
                 assert (
-                    (ns.request_payload_type is not mn.PayloadType.LIST_C)
-                    or ns.is_sensor
-                    or namespace_handler.polling_request_channels
-                ), f"Incorrect config for {ns.name} namespace"
-
-            if entity_dnd:
-                state = hass.states.get(entity_dnd.entity_id)
-                assert state and state.state in (hac.STATE_OFF, hac.STATE_ON)
-
-            if sensor_signal_strength:
-                state = hass.states.get(sensor_signal_strength.entity_id)
-                assert state and state.state.isdigit()
+                    handler.id in ability
+                ), f"Namespace {handler.id} has no ability declared"
+                assert (
+                    (handler.id.payload_get is not mn.PayloadType.LIST_IDX_STRICT)
+                    or handler.polling_request_payload  # if IDX_STRICT we need polling indexes in request
+                    or handler.id is mn.Appliance_Config_DeviceCfg  # special case
+                ), f"Incorrect config for {handler.id} namespace"
 
 
 async def test_profile_entry(request, hass: "HomeAssistant"):
@@ -119,3 +94,46 @@ async def test_profile_entry(request, hass: "HomeAssistant"):
     """
     async with helpers.ProfileEntryMocker(request, hass) as profile_mock:
         assert profile_mock.api.profiles[tc.MOCK_PROFILE_ID] is not None
+
+
+async def test_setup_concurrency(request, hass: "HomeAssistant"):
+    # Stable HA initializes already registered entries during the first component
+    # setup. Load the component before creating entries so this test controls
+    # their simultaneous setup rather than racing that automatic initialization.
+    assert await async_setup_component(hass, mlc.DOMAIN, {})
+
+    contexts: list[helpers.ConfigEntryMocker] = [
+        helpers.DeviceContext(
+            request, hass, emulator, auto_setup=False, auto_poll=False
+        )
+        for emulator in helpers.build_emulators()
+    ]
+    contexts.append(helpers.ProfileEntryMocker(request, hass, auto_setup=False))
+
+    # initialize contexts (they'll not auto_load config_entry though)
+    for context in contexts:
+        await context.__aenter__()
+
+    assert all(
+        context.config_entry.state is ConfigEntryState.NOT_LOADED
+        for context in contexts
+    )
+
+    # Load all of them concurrently trying to emulate HA boot sequence
+    await asyncio.gather(
+        *[
+            hass.config_entries.async_setup(context.config_entry_id)
+            for context in contexts
+        ]
+    )
+
+    # ensure all setup in place
+    for context in contexts:
+        assert context.config_entry.state is ConfigEntryState.LOADED, (
+            context.logtag,
+            context.config_entry.reason,
+        )
+
+    # Try to cleanup ;)
+    for context in contexts:
+        await context.__aexit__(None, None, None)

@@ -1,202 +1,37 @@
-import typing
+from typing import TYPE_CHECKING, override
 
-from ..binary_sensor import MLBinarySensor
-from ..helpers import entity as me
-from ..helpers.namespaces import NamespaceHandler, mc, mn
-from ..number import MLConfigNumber
-from ..select import MLConfigSelect
-from ..sensor import MLNumericSensor
+from .. import const as mlc
+from ..binary_sensor import BinarySensorEntity
+from ..merossclient.device.handler import MappingParser
+from ..merossclient.protocol import const as mc, namespaces as mn
+from ..number import NumberParser
+from ..select import SelectParser
+from ..sensor import SensorParser
+from .misc import SensorLatestXParser
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from typing import Unpack
 
     from ..helpers.device import Device
+    from ..merossclient.device.handler import NamespaceHandler
 
 
-class PresenceConfigBase(me.MLEntity if typing.TYPE_CHECKING else object):
-    """Mixin style base class for all of the entities managed in Appliance.Control.Presence.Config"""
-
-    manager: "Device"
-
-    ns = mn.Appliance_Control_Presence_Config
-
-    key_value_root: str
-
-    # HA core entity attributes:
-    entity_category = me.MLEntity.EntityCategory.CONFIG
-
-    async def async_request_value(self, device_value):
-        ns = self.ns
-        return await self.manager.async_request_ack(
-            ns.name,
-            mc.METHOD_SET,
-            {
-                ns.key: [
-                    {
-                        ns.key_channel: self.channel,
-                        self.key_value_root: {self.key_value: device_value},
-                    }
-                ]
-            },
-        )
-
-
-class PresenceConfigNumberBase(PresenceConfigBase, MLConfigNumber):
-    """Base class for config values represented as Number entities in HA."""
-
-
-class PresenceConfigSelectBase(PresenceConfigBase, MLConfigSelect):
-    """Base class for config values represented as Select entities in HA."""
-
-
-class PresenceConfigModeBase(PresenceConfigSelectBase):
-
-    key_value_root = mc.KEY_MODE
+class PresenceConfigMode(SelectParser):
 
     # TODO: configure real labels
     # This map would actually be shared between workMode and testMode though
-    OPTIONS_MAP = {
+    _INIT_options_map = {
         0: "0",
         1: "1",
         2: "2",
     }
 
-    def __init__(self, manager: "Device", channel: object, key: str):
-        self.key_value = key
-        super().__init__(manager, channel, f"presence_config_mode_{key}", name=key)
 
-
-class PresenceConfigNoBodyTime(PresenceConfigNumberBase):
-
-    key_value_root = mc.KEY_NOBODYTIME
-    key_value = mc.KEY_TIME
-
-    # HA core entity attributes:
-    native_max_value = 3600  # 1 hour ?
-    native_min_value = 1
-    native_step = 1
-
-    def __init__(self, manager: "Device", channel: object):
-        super().__init__(
-            manager,
-            channel,
-            f"presence_config_noBodyTime_time",
-            MLConfigNumber.DEVICE_CLASS_DURATION,  # defaults to seconds which is the native device unit
-            name=mc.KEY_NOBODYTIME,
-        )
-
-
-class PresenceConfigDistance(PresenceConfigNumberBase):
-
-    key_value_root = mc.KEY_DISTANCE
-    key_value = mc.KEY_VALUE
-
-    # HA core entity attributes:
-    native_max_value = 12
-    native_min_value = 0.1
-    native_step = 0.1
-
-    def __init__(self, manager: "Device", channel: object):
-        super().__init__(
-            manager,
-            channel,
-            f"presence_config_distance_value",
-            MLConfigNumber.DeviceClass.DISTANCE,
-            device_scale=1000,
-            native_unit_of_measurement=MLConfigNumber.hac.UnitOfLength.METERS,
-            name=mc.KEY_DISTANCE,
-        )
-
-
-class PresenceConfigSensitivity(PresenceConfigSelectBase):
-
-    key_value_root = mc.KEY_SENSITIVITY
-    key_value = mc.KEY_LEVEL
-
-    # TODO: configure real labels
-    OPTIONS_MAP = {
-        0: "0",
-        1: "1",
-        2: "2",
-    }
-
-    def __init__(self, manager: "Device", channel: object):
-        super().__init__(
-            manager,
-            channel,
-            f"presence_config_sensitivity_level",
-            name=mc.KEY_SENSITIVITY,
-        )
-
-
-class PresenceConfigMthX(PresenceConfigNumberBase):
-    key_value_root = mc.KEY_MTHX
-    # HA core entity attributes:
-    native_max_value = 1000
-    native_min_value = 1
-    native_step = 1
-
-    def __init__(self, manager: "Device", channel: object, key: str):
-        self.key_value = key
-        super().__init__(
-            manager,
-            channel,
-            f"presence_config_mthx_{key}",
-            None,
-            name=key,
-        )
-
-
-class PresenceConfigMode(PresenceConfigModeBase):
-
-    _entities: tuple[PresenceConfigBase, ...]
-
-    __slots__ = ("_entities",)
-
-    def __init__(self, manager: "Device", channel: object):
-        super().__init__(manager, channel, mc.KEY_WORKMODE)
-        self._entities = (
-            self,
-            PresenceConfigModeBase(manager, channel, mc.KEY_TESTMODE),
-            PresenceConfigNoBodyTime(manager, channel),
-            PresenceConfigDistance(manager, channel),
-            PresenceConfigSensitivity(manager, channel),
-            PresenceConfigMthX(manager, channel, mc.KEY_MTH1),
-            PresenceConfigMthX(manager, channel, mc.KEY_MTH2),
-            PresenceConfigMthX(manager, channel, mc.KEY_MTH3),
-        )
-        manager.register_parser_entity(self)
-
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        self._entities = None  # type: ignore
-
-    def _parse_config(self, payload: dict):
-        """
-        {
-            "channel": 0,
-            "mode": {"workMode": 1,"testMode": 2},
-            "noBodyTime": {"time": 15},
-            "distance": {"value": 8100},
-            "sensitivity": {"level": 2},
-            "mthx": {"mth1": 120,"mth2": 72,"mth3": 72}
-        }
-        """
-        for entity in self._entities:
-            entity.update_device_value(payload[entity.key_value_root][entity.key_value])
-
-
-def namespace_init_presence_config(device: "Device"):
-    NamespaceHandler(
-        device, mn.Appliance_Control_Presence_Config
-    ).register_entity_class(PresenceConfigMode)
-    PresenceConfigMode(device, 0)  # this will auto register itself in handler
-
-
-class MLPresenceSensor(MLNumericSensor):
+class PresenceSensor(SensorParser):
     """ms600 presence sensor."""
 
-    manager: "Device"
+    _INIT_entity_key = f"sensor_{mc.KEY_PRESENCE}"  # backward compatibility
+    _attr_name = "Presence"
 
     __slots__ = (
         "sensor_distance",
@@ -206,45 +41,150 @@ class MLPresenceSensor(MLNumericSensor):
 
     def __init__(
         self,
-        manager: "Device",
-        channel: object | None,
-        entitykey: str | None,
-        **kwargs: "Unpack[MLNumericSensor.Args]",
+        id,
+        device: "Device",
+        /,
+        **kwargs: "Unpack[SensorParser.Args]",
     ):
-        super().__init__(
-            manager, channel, entitykey, None, **(kwargs | {"name": "Presence"})
-        )
-        self.sensor_distance = MLNumericSensor(
-            manager,
-            channel,
-            f"{entitykey}_distance",
-            MLNumericSensor.DeviceClass.DISTANCE,
+        SensorParser.__init__(self, id, device, **kwargs)
+        self.sensor_distance = SensorParser(
+            self,
+            entity_key=f"{self.entity_key}_distance",
             device_scale=1000,
-            native_unit_of_measurement=MLNumericSensor.hac.UnitOfLength.METERS,
+            device_class=SensorParser.DeviceClass.DISTANCE,
+            native_unit_of_measurement=mlc.hac.UnitOfLength.METERS,
             suggested_display_precision=2,
             name="Presence distance",
         )
-        self.binary_sensor_motion = MLBinarySensor(
-            manager, channel, f"{entitykey}_motion", MLBinarySensor.DeviceClass.MOTION
+        self.binary_sensor_motion = BinarySensorEntity(
+            self,
+            entity_key=f"{self.entity_key}_motion",
+            device_class=BinarySensorEntity.DeviceClass.MOTION,
         )
-        self.sensor_times = MLNumericSensor(
-            manager,
-            channel,
-            f"{entitykey}_times",
+        self.sensor_times = SensorParser(
+            self,
+            entity_key=f"{self.entity_key}_times",
             name="Presence times",
         )
 
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        self.sensor_times: MLNumericSensor = None  # type: ignore
-        self.binary_sensor_motion: MLBinarySensor = None  # type: ignore
-        self.sensor_distance: MLNumericSensor = None  # type: ignore
-
-    def _parse(self, payload: dict):
+    @override
+    def __call__(self, payload: dict, /):
         """
         {"times": 0, "distance": 760, "value": 2, "timestamp": 1725907895}
         """
         self.update_device_value(payload[mc.KEY_VALUE])
         self.sensor_distance.update_device_value(payload[mc.KEY_DISTANCE])
-        self.binary_sensor_motion.update_onoff(payload[mc.KEY_VALUE] == 2)
+        self.binary_sensor_motion.update_boolean_value(payload[mc.KEY_VALUE] == 2)
         self.sensor_times.update_device_value(payload[mc.KEY_TIMES])
+
+
+class PresenceConfigParser(MappingParser):
+
+    _INIT_parser_defs = {
+        mc.KEY_MODE: {
+            mc.KEY_WORKMODE: PresenceConfigMode.DEF(
+                entity_key=f"presence_config_{mc.KEY_MODE}_{mc.KEY_WORKMODE}",
+                name=mc.KEY_WORKMODE,
+            ),
+            mc.KEY_TESTMODE: PresenceConfigMode.DEF(
+                entity_key=f"presence_config_{mc.KEY_MODE}_{mc.KEY_TESTMODE}",
+                name=mc.KEY_TESTMODE,
+            ),
+        },
+        mc.KEY_NOBODYTIME: {
+            mc.KEY_TIME: NumberParser.DEF(
+                entity_key=f"presence_config_{mc.KEY_NOBODYTIME}_{mc.KEY_TIME}",
+                name=mc.KEY_NOBODYTIME,
+                device_class=NumberParser.DEVICE_CLASS_DURATION,
+                native_max_value=3600,  # 1 hour ?
+                native_min_value=1,
+                native_step=1,
+            ),
+        },
+        mc.KEY_DISTANCE: {
+            mc.KEY_VALUE: NumberParser.DEF(
+                entity_key=f"presence_config_{mc.KEY_DISTANCE}_{mc.KEY_VALUE}",
+                device_scale=1000,
+                name=mc.KEY_DISTANCE,
+                device_class=NumberParser.DeviceClass.DISTANCE,
+                native_unit_of_measurement=mlc.hac.UnitOfLength.METERS,
+                native_max_value=12,
+                native_min_value=0.1,
+                native_step=0.1,
+            ),
+        },
+        mc.KEY_SENSITIVITY: {
+            mc.KEY_LEVEL: SelectParser.DEF(
+                entity_key=f"presence_config_{mc.KEY_SENSITIVITY}_{mc.KEY_LEVEL}",
+                options_map={  # TODO: configure real labels
+                    0: "0",
+                    1: "1",
+                    2: "2",
+                },
+                name=mc.KEY_SENSITIVITY,
+            ),
+        },
+        mc.KEY_MTHX: {
+            mc.KEY_MTH1: NumberParser.DEF(
+                entity_key=f"presence_config_{mc.KEY_MTHX}_{mc.KEY_MTH1}",
+                name=mc.KEY_MTH1,
+                native_max_value=1000,
+                native_min_value=1,
+                native_step=1,
+            ),
+            mc.KEY_MTH2: NumberParser.DEF(
+                entity_key=f"presence_config_{mc.KEY_MTHX}_{mc.KEY_MTH2}",
+                name=mc.KEY_MTH2,
+                native_max_value=1000,
+                native_min_value=1,
+                native_step=1,
+            ),
+            mc.KEY_MTH3: NumberParser.DEF(
+                entity_key=f"presence_config_{mc.KEY_MTHX}_{mc.KEY_MTH3}",
+                name=mc.KEY_MTH3,
+                native_max_value=1000,
+                native_min_value=1,
+                native_step=1,
+            ),
+        },
+    }
+
+    @classmethod
+    @override
+    def namespace_init(
+        cls,
+        ns: mn.Namespace,
+        device: "Device",
+        /,
+        **kwargs: "Unpack[NamespaceHandler.Args]",
+    ):
+        nh = super().namespace_init(ns, device, **kwargs)
+
+        index = mn.IndexType.channel.get(0)
+        sensor_presence = PresenceSensor(
+            0,
+            device,
+            entity_key=f"sensor_{mc.KEY_PRESENCE}",
+            index=index,
+            device_info=device.get_device_entry_info(0),
+        )
+
+        device.ns_handlers[mn.Appliance_Control_Sensor_LatestX].register_parser(
+            SensorLatestXParser(
+                0,
+                device,
+                index=index,
+                parsers={
+                    mc.KEY_PRESENCE: sensor_presence,
+                    mc.KEY_LIGHT: SensorParser(
+                        sensor_presence,
+                        **(
+                            SensorParser.LIGHT_ARGS
+                            | {"entity_key": f"sensor_{mc.KEY_LIGHT}"}
+                        ),
+                    ),
+                },
+            )
+        )
+
+        return nh

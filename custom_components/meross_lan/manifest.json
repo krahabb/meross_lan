@@ -2,10 +2,16 @@
   "domain": "meross_lan",
   "name": "Meross LAN",
   "after_dependencies": [
-    "mqtt",
+    "bluetooth",
     "dhcp",
+    "mqtt",
     "recorder",
     "persistent_notification"
+  ],
+  "bluetooth": [
+    {
+      "service_uuid": "0000a00a-0000-1000-8000-00805f9b34fb"
+    }
   ],
   "codeowners": [
     "@krahabb"
@@ -38,6 +44,9 @@
   "mqtt": [
     "/appliance/+/publish"
   ],
-  "requirements": [],
-  "version": "5.8.0"
+  "requirements": [
+    "bleak",
+    "paho-mqtt"
+  ],
+  "version": "6.0.0"
 }
