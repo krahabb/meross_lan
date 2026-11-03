@@ -97,8 +97,11 @@ def validate_home_tree(marker=None, ref=None):
     version = tree_json(MANIFEST)["version"]
     if marker["tag"].removeprefix("v") != version:
         raise ValueError("Upstream tag and integration manifest version differ")
-    if tree_json("hacs.json").get("name") != HACS_NAME:
+    hacs = tree_json("hacs.json")
+    if hacs.get("name") != HACS_NAME:
         raise ValueError(f"hacs.json name must be {HACS_NAME!r}")
+    if not hacs.get("homeassistant"):
+        raise ValueError("hacs.json must declare the minimum Home Assistant version")
     return marker
 
 

@@ -138,7 +138,9 @@ class AutomationTests(unittest.TestCase):
                 "sha": self.initial_sha,
             },
         )
-        home_common.write_json("hacs.json", {"name": home_common.HACS_NAME})
+        home_common.write_json(
+            "hacs.json", {"name": home_common.HACS_NAME, "homeassistant": "2026.8.0"}
+        )
         Path("control.txt").write_text("home\n")
         Path("home.txt").write_text("local changes must survive\n")
         self.commit("Home changes")
@@ -298,6 +300,9 @@ class AutomationTests(unittest.TestCase):
         self.assertEqual(self.api.tag_sha, self.head())
         self.assertNotEqual(self.api.tag_sha, self.upstream_sha)
         self.assertEqual(self.api.release["tag_name"], "v1.1.0")
+        self.assertIn(
+            "- Requires Home Assistant 2026.8.0 or newer.", self.api.release["body"]
+        )
         self.assertFalse(self.api.release["draft"])
         self.api.calls.clear()
         home_publish.publish(self.api)
@@ -369,6 +374,11 @@ class AutomationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "hacs.json name"):
             home_common.validate_home_tree()
         home_common.write_json("hacs.json", {"name": home_common.HACS_NAME})
+        with self.assertRaisesRegex(ValueError, "minimum Home Assistant"):
+            home_common.validate_home_tree()
+        home_common.write_json(
+            "hacs.json", {"name": home_common.HACS_NAME, "homeassistant": "2026.8.0"}
+        )
         home_common.write_json(home_common.MANIFEST, {"version": "1.1.0+home.1"})
         with self.assertRaisesRegex(ValueError, "manifest version"):
             home_common.validate_home_tree()

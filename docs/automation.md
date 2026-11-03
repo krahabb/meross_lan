@@ -53,9 +53,26 @@ published version unchanged. An existing tag pointing elsewhere causes a failure
 never a tag move. Older unfinished runs cannot publish themselves as latest after
 `master` has imported a newer release. Retry a failed draft/asset upload with
 **Re-run all jobs** on the original failed workflow run, so the same commit is
-tested and published. Changes made after publication of a version must wait
-for the next upstream release to reach HACS; preserving upstream version numbers
-means there is no separate home-only patch version.
+tested and published.
+
+The release notes list the fork's home changes from `scripts/home_publish.py` and
+the minimum Home Assistant version from `hacs.json`. Update that list whenever
+fork behavior changes.
+
+## Home patch releases
+
+Changes merged after a version has been published do not have to wait for the
+next upstream release. Once `release-home.yml` has passed on the merged `master`
+commit, create a GitHub Release by hand: a new tag on that commit that appends a
+fourth number to the upstream tag (`v5.8.0.1`, `v5.8.0.2`, …), the tag as the
+release name, and **Set as the latest release** selected. Describe the home
+changes and any breaking changes for automations in the notes. HACS installs the
+tag's source archive; the `meross_lan.zip` asset is optional.
+
+The integration manifest keeps the upstream version, so Home Assistant shows
+`5.8.0` for every `v5.8.0.N` release. The automation neither creates nor moves
+these tags; the next imported upstream release is published under its own tag
+as usual.
 
 ## Initial repository settings
 

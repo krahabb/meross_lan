@@ -9,7 +9,7 @@ import tempfile
 import urllib.request
 import zipfile
 
-from home_common import FORK, GitHub, git, quote, validate_home_tree
+from home_common import FORK, GitHub, git, quote, read_json, validate_home_tree
 
 
 def upload(api, release_id, path):
@@ -100,6 +100,8 @@ def publish(api):
             f"This release contains the tested home fork commit `{sha}`.\n\n"
             "Home changes:\n"
             "- Device schedules are exposed through HVAC mode AUTO instead of an auto preset, across supported MTS models.\n"
+            "- MTS100/MTS150 and MTS200-compatible thermostats report the standard none preset instead of custom; MTS300 has no presets.\n"
+            f"- Requires Home Assistant {read_json('hacs.json')['homeassistant']} or newer.\n"
             "- HACS displays Meross LAN (home version).\n\n"
             "The upstream tag and manifest version are retained without a fork suffix. "
             "HACS installs source from this fork's tag; meross_lan.zip also contains the integration "
