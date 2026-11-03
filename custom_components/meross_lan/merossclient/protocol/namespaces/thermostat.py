@@ -2,95 +2,96 @@
 Descriptors for thermostats specific namespaces management (Appliance.Control.Thermostat.XXX)
 """
 
-from . import (
-    ARGS_GETPUSH,
-    ARGS_GETSET,
-    ARGS_GETSETPUSH,
-    ARGS_GETSETPUSHQ,
-    ns,
-)
-from .. import const as mc
+from .. import const as mc, namespaces as mn
 
-IS_THERMOSTAT: "ns.Args" = {"is_thermostat": True}
-
-Appliance_Control_Thermostat_Alarm = ns(
-    "Appliance.Control.Thermostat.Alarm", mc.KEY_ALARM, ARGS_GETPUSH | IS_THERMOSTAT
+Appliance_Control_Thermostat_Alarm = mn.ns(
+    "Appliance.Control.Thermostat.Alarm", mc.KEY_ALARM, -1, mn.GP_LIS_C
 )
-Appliance_Control_Thermostat_AlarmConfig = ns(
+Appliance_Control_Thermostat_AlarmConfig = mn.ns(
     "Appliance.Control.Thermostat.AlarmConfig",
     mc.KEY_ALARMCONFIG,
-    ARGS_GETSET | IS_THERMOSTAT,
+    -1,
+    mn.GS_LIS_C,
+    mn.C_CFG,
 )
-Appliance_Control_Thermostat_Calibration = ns(
+Appliance_Control_Thermostat_Calibration = mn.ns(
     "Appliance.Control.Thermostat.Calibration",
     mc.KEY_CALIBRATION,
-    ARGS_GETSET | IS_THERMOSTAT,
+    80,
+    mn.GS_LIS_C,
+    mn.C_CFG,
 )
-Appliance_Control_Thermostat_CompressorDelay = ns(
-    "Appliance.Control.Thermostat.CompressorDelay",
-    mc.KEY_DELAY,
-    ARGS_GETSET | IS_THERMOSTAT,
+Appliance_Control_Thermostat_CompressorDelay = mn.ns(
+    "Appliance.Control.Thermostat.CompressorDelay", mc.KEY_DELAY, -1, mn.GS_LIS_C
 )
-Appliance_Control_Thermostat_CtlRange = ns(
-    "Appliance.Control.Thermostat.CtlRange",
-    mc.KEY_CTLRANGE,
-    ARGS_GETSET | IS_THERMOSTAT,
+Appliance_Control_Thermostat_CtlRange = mn.ns(
+    "Appliance.Control.Thermostat.CtlRange", mc.KEY_CTLRANGE, 80, mn.GS_LIS_C, mn.C_CON
 )
-Appliance_Control_Thermostat_DeadZone = ns(
-    "Appliance.Control.Thermostat.DeadZone",
-    mc.KEY_DEADZONE,
-    ARGS_GETSET | IS_THERMOSTAT,
+Appliance_Control_Thermostat_DeadZone = mn.ns(
+    "Appliance.Control.Thermostat.DeadZone", mc.KEY_DEADZONE, 80, mn.GS_LIS_C, mn.C_CFG
 )
-Appliance_Control_Thermostat_Frost = ns(
-    "Appliance.Control.Thermostat.Frost", mc.KEY_FROST, ARGS_GETSET | IS_THERMOSTAT
+Appliance_Control_Thermostat_Frost = mn.ns(
+    "Appliance.Control.Thermostat.Frost", mc.KEY_FROST, 80, mn.GS_LIS_C, mn.C_SNS_S
 )
-Appliance_Control_Thermostat_HoldAction = ns(
+Appliance_Control_Thermostat_HoldAction = mn.ns(
     "Appliance.Control.Thermostat.HoldAction",
     mc.KEY_HOLDACTION,
-    ARGS_GETSETPUSH | IS_THERMOSTAT,
+    30,
+    mn.GSP_LIS_C,
+    mn.C_CFG,
 )
-Appliance_Control_Thermostat_Mode = ns(
-    "Appliance.Control.Thermostat.Mode", mc.KEY_MODE, ARGS_GETSETPUSH | IS_THERMOSTAT
+Appliance_Control_Thermostat_Mode = mn.ns(
+    "Appliance.Control.Thermostat.Mode", mc.KEY_MODE, -1, mn.GSP_LIS_C, mn.DIG
 )
-Appliance_Control_Thermostat_ModeB = ns(
-    "Appliance.Control.Thermostat.ModeB", mc.KEY_MODEB, ARGS_GETSETPUSH | IS_THERMOSTAT
+Appliance_Control_Thermostat_ModeB = mn.ns(
+    "Appliance.Control.Thermostat.ModeB", mc.KEY_MODEB, -1, mn.GSP_LIS_C, mn.DIG
 )
-Appliance_Control_Thermostat_ModeC = ns(
-    "Appliance.Control.Thermostat.ModeC",
-    mc.KEY_CONTROL,
-    ARGS_GETSETPUSH | IS_THERMOSTAT,
+Appliance_Control_Thermostat_ModeC = mn.ns(
+    "Appliance.Control.Thermostat.ModeC", mc.KEY_CONTROL, 120, mn.GSP_LIS_C
 )
-Appliance_Control_Thermostat_Overheat = ns(
+Appliance_Control_Thermostat_Overheat = mn.ns(
     "Appliance.Control.Thermostat.Overheat",
     mc.KEY_OVERHEAT,
-    ARGS_GETSETPUSH | IS_THERMOSTAT,
+    140,
+    mn.GSP_LIS_C,
+    mn.C_SNS_S,
 )
-Appliance_Control_Thermostat_Schedule = ns(
+Appliance_Control_Thermostat_Schedule = mn.ns(
     "Appliance.Control.Thermostat.Schedule",
     mc.KEY_SCHEDULE,
-    ARGS_GETSETPUSH | IS_THERMOSTAT,
+    550,
+    mn.GSP_LIS_C,
+    mn.C_CFG,
 )
-Appliance_Control_Thermostat_ScheduleB = ns(
+Appliance_Control_Thermostat_ScheduleB = mn.ns(
     "Appliance.Control.Thermostat.ScheduleB",
     mc.KEY_SCHEDULEB,
-    ARGS_GETSETPUSH | IS_THERMOSTAT,
+    550,
+    mn.GSP_LIS_C,
+    mn.C_CFG,
 )
-Appliance_Control_Thermostat_Sensor = ns(
-    "Appliance.Control.Thermostat.Sensor", mc.KEY_SENSOR, ARGS_GETPUSH | IS_THERMOSTAT
+Appliance_Control_Thermostat_Sensor = mn.ns(
+    "Appliance.Control.Thermostat.Sensor", mc.KEY_SENSOR, 40, mn.GSP_LIS_C, mn.C_SNS_S
 )
-Appliance_Control_Thermostat_SummerMode = ns(
+Appliance_Control_Thermostat_SummerMode = mn.ns(
     "Appliance.Control.Thermostat.SummerMode",
     mc.KEY_SUMMERMODE,
-    ARGS_GETSETPUSH | IS_THERMOSTAT,
+    22,
+    mn.GSP_LIS_C,
+    mn.DIG,
+    mn.C_CFG,
 )
-Appliance_Control_Thermostat_System = ns(
-    "Appliance.Control.Thermostat.System", mc.KEY_CONTROL, ARGS_GETSETPUSHQ | IS_THERMOSTAT
+Appliance_Control_Thermostat_System = mn.ns(
+    "Appliance.Control.Thermostat.System", mc.KEY_CONTROL, 580, mn.GSPQ_LIS_C, mn.C_CFG
 )
-Appliance_Control_Thermostat_Timer = ns(
-    "Appliance.Control.Thermostat.Timer", mc.KEY_TIMER, ARGS_GETSETPUSH | IS_THERMOSTAT
+Appliance_Control_Thermostat_Timer = mn.ns(
+    "Appliance.Control.Thermostat.Timer", mc.KEY_TIMER, 550, mn.GSP_LIS_C, mn.C_CFG
 )
-Appliance_Control_Thermostat_WindowOpened = ns(
+Appliance_Control_Thermostat_WindowOpened = mn.ns(
     "Appliance.Control.Thermostat.WindowOpened",
     mc.KEY_WINDOWOPENED,
-    ARGS_GETPUSH | IS_THERMOSTAT,
+    132,
+    mn.GP_LIS_C,
+    mn.DIG,
+    mn.C_SNS_S,
 )

@@ -3,10 +3,11 @@ A collection of typing definitions for payloads
 in Appliance.Control.Thermostat
 """
 
-from . import ChannelPayload, NotRequired, TypedDict, _MerossPayloadType
+from . import NotRequired, TypedDict
+from .. import types as mt
 
 
-class CommonTemperature_C(ChannelPayload):
+class CommonTemperature_C(mt.ChannelPayload):
     """Common base TypedDict carried in various Appliance.Control.Thermostat.* namespaces.
     "calibration": {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
     "deadZone": {"channel":0,"value":300,"min":50,"max":2000}
@@ -34,7 +35,7 @@ class Calibration_C(CommonTemperature_C):
     humiValue: NotRequired[int]  # only mts300
 
 
-class CtlRange_C(ChannelPayload):
+class CtlRange_C(mt.ChannelPayload):
     """{"channel": 0, "max": 11000, "min": -3000, "ctlMax": 5000, "ctlMin": 0}"""
 
     max: int
@@ -55,7 +56,7 @@ class Frost_C(CommonTemperatureExt_C):
     pass
 
 
-class HoldAction_C(ChannelPayload):
+class HoldAction_C(mt.ChannelPayload):
     mode: int  # 0: permanent, 1: until next schedule, 2: on timer (in 'time' field)
     expire: NotRequired[int]  # seen in a PUSH on mts200
     time: NotRequired[
@@ -72,7 +73,7 @@ class Overheat_C(CommonTemperatureExt_C):
     currentTemp: int  # external sensor temp
 
 
-class Mode_C(ChannelPayload):
+class Mode_C(mt.ChannelPayload):
     """
     {
         "channel": 0,
@@ -119,11 +120,11 @@ class Mode_C(ChannelPayload):
     """Last measure time (epoch)"""
 
 
-class Mode(_MerossPayloadType):
+class Mode(mt._MerossPayloadType):
     mode: list[Mode_C]
 
 
-class ModeB_C(ChannelPayload):
+class ModeB_C(mt.ChannelPayload):
     """
     {
         "channel": 0,
@@ -146,7 +147,7 @@ class ModeB_C(ChannelPayload):
     sensorStatus: int
 
 
-class ModeBRequest_C(ChannelPayload):
+class ModeBRequest_C(mt.ChannelPayload):
     """Subset of ModeB payload keys used in requests."""
 
     mode: NotRequired[int]
@@ -155,8 +156,31 @@ class ModeBRequest_C(ChannelPayload):
     onoff: NotRequired[int]
 
 
-class ModeB(_MerossPayloadType):
+class ModeB(mt._MerossPayloadType):
     mode: list[ModeB_C]
+
+
+class Timer_Cycle(TypedDict):
+    onDuration: int  # minutes
+    offDuration: int  # minutes
+    end: int
+    state: int  # 1: on, 2: off
+
+
+class Timer_Down(TypedDict):
+    duration: int  # minutes
+    end: int
+    onoff: int  # 1: on, 2: off
+
+
+class Timer_C(mt.ChannelPayload):
+    type: int  # 1: countdown, 2: cycle
+    down: NotRequired[Timer_Down]  # for type 1
+    cycle: NotRequired[Timer_Cycle]  # for type 2
+
+
+class Timer(mt._MerossPayloadType):
+    timer: list[Timer_C]
 
 
 class ModeC_fan(TypedDict):
@@ -171,7 +195,7 @@ class ModeC_more(TypedDict):
     cStatus: int  # [0..2] cooling level
     hStatus: int  # [0..3] heating level
     fStatus: int  # [0..3] fan level (speed)
-    aStatus: int  # [0..3] auxilliary control level
+    aStatus: int  # [0..3] auxiliary control level
 
 
 class ModeC_targetTemp(TypedDict):
@@ -179,7 +203,7 @@ class ModeC_targetTemp(TypedDict):
     cold: int  # 2400
 
 
-class ModeC_C(ChannelPayload):
+class ModeC_C(mt.ChannelPayload):
     """
     {
         "fan": {
@@ -232,5 +256,12 @@ class ModeC_C(ChannelPayload):
     targetTemp: ModeC_targetTemp
 
 
-class ModeC(_MerossPayloadType):
+class ModeC(mt._MerossPayloadType):
     control: list[ModeC_C]
+
+
+class Digest(TypedDict):
+    mode: list[Mode_C]
+    summerMode: list[mt.ChannelPayload]  # TODO: define dict, seen in mts200 only
+    windowOpened: list[mt.ChannelPayload]  # TODO: define dict, seen in mts200 only
+    modeB: list[ModeB_C]

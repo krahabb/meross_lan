@@ -4,11 +4,11 @@ import typing
 from unittest.mock import ANY
 
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.merossclient import json_dumps
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
 )
+from custom_components.meross_lan.merossclient.protocol.message import json_dumps
 
 from tests import const as tc, helpers
 
@@ -30,7 +30,7 @@ async def test_request_on_mqtt(
             mlc.SERVICE_REQUEST,
             service_data={
                 mlc.CONF_DEVICE_ID: tc.MOCK_DEVICE_UUID,
-                mc.KEY_NAMESPACE: mn.Appliance_System_All.name,
+                mc.KEY_NAMESPACE: mn.Appliance_System_All,
                 mc.KEY_METHOD: mc.METHOD_GET,
             },
             blocking=True,
@@ -43,16 +43,14 @@ async def test_request_on_mqtt(
 
 
 async def test_request_on_device(
-    request,
-    hass: "HomeAssistant",
-    hamqtt_mock: helpers.HAMQTTMocker,
+    request, hass: "HomeAssistant", hamqtt_mock: helpers.HAMQTTMocker
 ):
     """
     Test service calls routed through a device
     """
-    async with helpers.DeviceContext(request, hass, mc.TYPE_MSS310) as context:
-        # let the device perform it's poll and come online
-        await context.perform_coldstart()
+    async with helpers.DeviceContext(
+        request, hass, mc.TYPE_MSS310, auto_poll=True
+    ) as context:
 
         # get the actual state of the emulator
         digest = context.emulator.descriptor.digest
@@ -63,7 +61,7 @@ async def test_request_on_device(
             mlc.SERVICE_REQUEST,
             service_data={
                 mlc.CONF_DEVICE_ID: context.device_id,
-                mc.KEY_NAMESPACE: mn.Appliance_Control_ToggleX.name,
+                mc.KEY_NAMESPACE: mn.Appliance_Control_ToggleX,
                 mc.KEY_METHOD: mc.METHOD_SET,
                 mc.KEY_PAYLOAD: json_dumps(
                     {
@@ -87,23 +85,21 @@ async def test_request_on_device(
 
 
 async def test_request_notification(
-    request,
-    hass: "HomeAssistant",
-    hamqtt_mock: helpers.HAMQTTMocker,
+    request, hass: "HomeAssistant", hamqtt_mock: helpers.HAMQTTMocker
 ):
     """
     Test service calls routed through a device
     """
-    async with helpers.DeviceContext(request, hass, mc.TYPE_MSS310) as context:
-        # let the device perform it's poll and come online
-        await context.perform_coldstart()
+    async with helpers.DeviceContext(
+        request, hass, mc.TYPE_MSS310, auto_poll=True
+    ) as context:
         # when routing the call through a device the service data 'key' is not used
         await hass.services.async_call(
             mlc.DOMAIN,
             mlc.SERVICE_REQUEST,
             service_data={
                 mlc.CONF_DEVICE_ID: context.device_id,
-                mc.KEY_NAMESPACE: mn.Appliance_System_All.name,
+                mc.KEY_NAMESPACE: mn.Appliance_System_All,
                 mlc.CONF_NOTIFYRESPONSE: True,
             },
             blocking=True,

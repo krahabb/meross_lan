@@ -1,8 +1,9 @@
 from homeassistant.components import cover as haec
 
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.cover import MLCover, MLRollerShutter
-from custom_components.meross_lan.devices.garagedoor import MLGarage
+from custom_components.meross_lan.cover import Cover
+from custom_components.meross_lan.devices.garagedoor import GarageDoor
+from custom_components.meross_lan.devices.rollershutter import RollerShutter
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
@@ -17,11 +18,11 @@ class EntityTest(EntityComponentTest):
     ENTITY_TYPE = haec.CoverEntity
 
     DIGEST_ENTITIES = {
-        mc.KEY_GARAGEDOOR: [MLGarage],
+        mc.KEY_GARAGEDOOR: [GarageDoor],
     }
 
     NAMESPACES_ENTITIES = {
-        mn.Appliance_RollerShutter_State.name: [MLRollerShutter],
+        mn.Appliance_RollerShutter_State: [RollerShutter],
     }
 
     COVER_TRANSITIONS = {
@@ -37,43 +38,39 @@ class EntityTest(EntityComponentTest):
         ),
     }
 
-    async def async_test_each_callback(self, entity: MLCover):
+    async def async_test_each_callback(self, entity: Cover):
         await super().async_test_each_callback(entity)
 
-        if isinstance(entity, MLGarage):
+        if isinstance(entity, GarageDoor):
             assert (
                 entity.supported_features
                 == haec.CoverEntityFeature.OPEN | haec.CoverEntityFeature.CLOSE
             )
             self._check_remove_togglex(entity)
 
-        elif isinstance(entity, MLRollerShutter):
+        elif isinstance(entity, RollerShutter):
             assert (
                 entity.supported_features
                 >= haec.CoverEntityFeature.OPEN
                 | haec.CoverEntityFeature.CLOSE
                 | haec.CoverEntityFeature.STOP
             )
-            assert (
-                entity.number_signalClose.device_value == RollerShutterMixin.SIGNALCLOSE
-            )
-            assert (
-                entity.number_signalOpen.device_value == RollerShutterMixin.SIGNALOPEN
-            )
+            assert entity.number_signalClose.ns_value == RollerShutterMixin.SIGNALCLOSE
+            assert entity.number_signalOpen.ns_value == RollerShutterMixin.SIGNALOPEN
 
-    async def async_test_enabled_callback(self, entity: MLCover):
-        states = self.hass_states
-        if isinstance(entity, MLGarage):
-            await self._async_test_garage_transition(entity)
-            await self._async_test_garage_transition(entity)
-        elif isinstance(entity, MLRollerShutter):
-            # MLRollerShutter could need at least a run to enable
+    async def async_test_enabled_callback(self, entity: Cover):
+        get_hass_state = EntityComponentTest.get_hass_state
+        if isinstance(entity, GarageDoor):
+            await self._async_test_cover_transition(entity)
+            await self._async_test_cover_transition(entity)
+        elif isinstance(entity, RollerShutter):
+            # RollerShutter could need at least a run to enable
             # support for SET_POSITION
             # this should open the cover (emulator starts with closed)
-            await self._async_test_garage_transition(entity)
+            await self._async_test_cover_transition(entity)
             assert haec.CoverEntityFeature.OPEN in entity.supported_features
             # this should close the cover
-            state = await self._async_test_garage_transition(entity)
+            state = await self._async_test_cover_transition(entity)
             assert (
                 state.attributes[haec.ATTR_CURRENT_POSITION] == 0
             ), f"{haec.ATTR_CURRENT_POSITION}!=0"
@@ -82,15 +79,15 @@ class EntityTest(EntityComponentTest):
             await self._async_test_set_position(entity, 30)
 
             # now we'll interrupt a transition
-            state = await self.async_service_call(
+            await self.async_service_call(
                 haec.SERVICE_SET_COVER_POSITION, {haec.ATTR_POSITION: 60}
             )
             # advance the time a bit
             await self.device_context.time_mock.async_tick(
-                mlc.PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT
+                RollerShutter.PARAM_TRANSITION_POLL_TIMEOUT
             )
             # ensure we're still opening
-            assert (state := states.get(self.entity_id))
+            assert (state := get_hass_state(self.entity_id))
             assert (
                 state.state == haec.CoverState.OPENING
             ), f"{haec.SERVICE_SET_COVER_POSITION}: state!={haec.CoverState.OPENING}"
@@ -102,18 +99,18 @@ class EntityTest(EntityComponentTest):
             await self._async_test_set_position(entity, 0)
             await self._async_test_set_position(entity, 100)
 
-    async def async_test_disabled_callback(self, entity: MLCover):
+    async def async_test_disabled_callback(self, entity: Cover):
         pass
 
-    async def _async_test_garage_transition(self, entity):
+    async def _async_test_cover_transition(self, entity):
         """Start and follow the transition from open to close or
         close to open depending on current state."""
-        states = self.hass_states
-        assert (state := states.get(self.entity_id))
+        get_hass_state = EntityComponentTest.get_hass_state
+        assert (state := get_hass_state(self.entity_id))
         trans = self.COVER_TRANSITIONS[state.state]
         state = await self.async_service_call(trans[0])
         assert state.state == trans[1], trans[1]
-        # The MLGarage/MLRollerShutter state machine has a timed callback mechanism
+        # The GarageDoor/RollerShutter state machine has a timed callback mechanism
         # TODO: use and check that callback instead of the raw 60 seconds timeout
         # we're using async_warp over 40 seconds (which are enough on our emulators
         # to complete the transition) so to better 'match' the callbacks state refresh
@@ -121,14 +118,13 @@ class EntityTest(EntityComponentTest):
             40,
             tick=1,
         )
-        assert (state := states.get(self.entity_id))
+        assert (state := get_hass_state(self.entity_id))
         assert state.state == trans[2], trans[2]
         return state
 
     async def _async_test_set_position(
-        self, entity: MLRollerShutter, target_position: int
+        self, entity: RollerShutter, target_position: int
     ):
-
         state = await self.async_service_call(
             haec.SERVICE_SET_COVER_POSITION, {haec.ATTR_POSITION: target_position}
         )
@@ -164,10 +160,10 @@ class EntityTest(EntityComponentTest):
 
         while current_epoch < transition_end_epoch_max:
             # Advances the time mocker up to the next transition polling cycle and executes it
-            _transition_unsub = entity._transition_unsub
-            if not _transition_unsub:
+            _transition_timer = entity._timers.get(entity._transition_callback)
+            if not _transition_timer:
                 break
-            _when = _transition_unsub.when()
+            _when = _transition_timer.when()
             if _when >= transition_end_epoch:
                 if entity._position_native_isgood:
                     # the entity just monitors the device state
@@ -186,21 +182,24 @@ class EntityTest(EntityComponentTest):
                         pass  # let it loop until transition_end_epoch_max
                     else:
                         # the entity is timing the transition and it ends when then
-                        # internal _transition_end_unsub kicks-in
-                        _transition_end_unsub = entity._transition_end_unsub
-                        assert _transition_end_unsub, "missing transition_end callback"
-                        assert transition_end_epoch == _transition_end_unsub.when()
+                        # internal _async_transition_end_callback kicks-in
+                        _transition_end_timer = entity._timers.get(
+                            entity._async_transition_end_callback
+                        )
+                        assert _transition_end_timer, "missing transition_end callback"
+                        assert transition_end_epoch == _transition_end_timer.when()
                         await time_mock.async_tick(transition_end_epoch - current_epoch)
                         break
             # kicks an entity transition polling
             await time_mock.async_tick(_when - current_epoch)
             current_epoch = loop_time()
 
+        _transition_timer = entity._timers.get(entity._transition_callback)
         assert (
-            entity._transition_unsub is None
-        ), f"transition to {target_position} still pending:current_epoch=={current_epoch} transition_end={entity._transition_unsub.when()}"
+            _transition_timer is None
+        ), f"transition to {target_position} still pending:current_epoch=={current_epoch} transition_end={_transition_timer.when()}"
 
-        assert (state := self.hass_states.get(self.entity_id))
+        assert (state := EntityComponentTest.get_hass_state(self.entity_id))
         expected_state = (
             haec.CoverState.OPEN if target_position else haec.CoverState.CLOSED
         )
@@ -222,27 +221,3 @@ class EntityTest(EntityComponentTest):
         assert (
             state.state == excpected_state
         ), f"{haec.SERVICE_STOP_COVER}: state=={state.state}"
-
-    """
-    async def _async_warp_shutter_transition(
-        self, entity: MLRollerShutter, timeout_sec: float
-    ):
-        ""Advances the time mocker up to the timeout (delta or absolute)
-        stepping exactly through each single polling loop.""
-        time_mock = self.device_context._time_mock
-        loop_time = self.hass.loop.time
-
-        if not entity._position_native_isgood:
-            # the entity is controlling the transition and it ends when then
-            # internal timer kicks-in
-            _transition_end_unsub = entity._transition_end_unsub
-            assert _transition_end_unsub
-            timeout_sec = _transition_end_unsub.when() - loop_time()
-
-        timeout = time_mock.time() + timedelta(seconds=timeout_sec)
-        while time_mock.time() < timeout:
-            # Advances the time mocker up to the next transition polling cycle and executes it
-            _transition_unsub = entity._transition_unsub
-            assert _transition_unsub
-            await time_mock.async_tick(_transition_unsub.when() - loop_time())
-    """

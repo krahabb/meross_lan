@@ -1,23 +1,22 @@
 """The Meross IoT local LAN integration."""
 
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .helpers import LOGGER, ConfigEntryType
+from .helpers import (
+    ConfigEntryType,
+    device as mld,
+    meross_profile as mlp,
+)
 from .helpers.component_api import ComponentApi
-from .helpers.meross_profile import MerossProfile, MerossProfileStore
-from .merossclient import cloudapi
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
     from .helpers.manager import ConfigEntryManager
-    from .merossclient.cloudapi import MerossCloudCredentials
-
 
 else:
     # In order to avoid a static dependency we resolve these
@@ -28,21 +27,22 @@ else:
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry[ConfigEntryManager]"
 ):
-    LOGGER.debug("async_setup_entry (entry_id:%s)", config_entry.entry_id)
+    ComponentApi.ROOT_LOGGER.debug(
+        "async_setup_entry (entry_id:%s)", config_entry.entry_id
+    )
 
     api = ComponentApi.get(hass)
 
     match ConfigEntryType.get_type_and_id(config_entry.unique_id):
         case (ConfigEntryType.DEVICE, device_id):
-            if device_id in api.devices:
-                assert api.devices[device_id] is None, "device already initialized"
-            else:
-                # this could happen when we add profile entries
-                # after boot
-                api.devices[device_id] = None
-            device = await api.async_build_device(device_id, config_entry)
             try:
-                await device.async_init()
+                assert api.devices[device_id] is None, "device already initialized"
+            except KeyError:
+                # this could happen when we add profile entries after boot
+                api.devices[device_id] = None
+
+            device = mld.Device(device_id, api, config_entry)
+            try:
                 await device.async_setup_entry(hass, config_entry)
                 api.devices[device_id] = device
                 # this code needs to run after registering api.devices[device_id]
@@ -54,15 +54,13 @@ async def async_setup_entry(
                 raise ConfigEntryError from error
 
         case (ConfigEntryType.PROFILE, profile_id):
-            if profile_id in api.profiles:
-                assert api.profiles[profile_id] is None
-            else:
-                # this could happen when we add profile entries
-                # after boot
-                api.profiles[profile_id] = None
-            profile = MerossProfile(profile_id, api, config_entry)
             try:
-                await profile.async_init()
+                assert api.profiles[profile_id] is None, "profile already initialized"
+            except KeyError:
+                # this could happen when we add entries after boot
+                api.profiles[profile_id] = None
+            profile = mlp.MerossProfile(profile_id, api, config_entry)
+            try:
                 await profile.async_setup_entry(hass, config_entry)
                 api.profiles[profile_id] = profile
                 # 'link' the devices already initialized
@@ -77,11 +75,8 @@ async def async_setup_entry(
                 raise ConfigEntryError from error
 
         case (ConfigEntryType.HUB, _):
-            if not await api.mqtt_connection.async_mqtt_subscribe():
+            if not await api.mqtt_connection.async_connect():
                 raise ConfigEntryNotReady("MQTT unavailable")
-            api.config_entry = config_entry  # type: ignore
-            config_entry.runtime_data = api
-            await api.entry_update_listener(hass, config_entry)
             await api.async_setup_entry(hass, config_entry)
             return True
 
@@ -94,12 +89,16 @@ async def async_setup_entry(
 async def async_unload_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry[ConfigEntryManager]"
 ) -> bool:
-    LOGGER.debug("async_unload_entry (entry_id:%s)", config_entry.entry_id)
+    ComponentApi.ROOT_LOGGER.debug(
+        "async_unload_entry (entry_id:%s)", config_entry.entry_id
+    )
     return await config_entry.runtime_data.async_unload_entry(hass, config_entry)
 
 
 async def async_remove_entry(hass: "HomeAssistant", config_entry: "ConfigEntry"):
-    LOGGER.debug("async_remove_entry (entry_id:%s)", config_entry.entry_id)
+    ComponentApi.ROOT_LOGGER.debug(
+        "async_remove_entry (entry_id:%s)", config_entry.entry_id
+    )
     api = ComponentApi.get(hass)
     match ConfigEntryType.get_type_and_id(config_entry.unique_id):
         case (ConfigEntryType.DEVICE, device_id):
@@ -107,8 +106,4 @@ async def async_remove_entry(hass: "HomeAssistant", config_entry: "ConfigEntry")
 
         case (ConfigEntryType.PROFILE, profile_id):
             api.profiles.pop(profile_id)
-            await MerossProfileStore(hass, profile_id).async_remove()
-            credentials: "MerossCloudCredentials" = config_entry.data  # type: ignore
-            await cloudapi.CloudApiClient(
-                credentials=credentials, session=async_get_clientsession(hass)
-            ).async_logout_safe()
+            await mlp.MerossProfileStore(hass, profile_id).async_remove_and_logout(config_entry.data)  # type: ignore

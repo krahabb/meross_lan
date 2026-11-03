@@ -16,11 +16,11 @@ jobs:
     name: Validate integration
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version-file: .python-version
       - name: Check home release metadata
@@ -41,11 +41,11 @@ jobs:
     name: Check Python formatting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version-file: .python-version
       - run: python -m pip install black==26.10.1
@@ -53,7 +53,8 @@ jobs:
         run: >-
           black --check scripts
           custom_components/meross_lan/climate.py
-          custom_components/meross_lan/devices/hub/mts100.py
+          custom_components/meross_lan/devices/hub/mts.py
+          custom_components/meross_lan/devices/thermostat/__init__.py
           custom_components/meross_lan/devices/thermostat/mts200.py
           custom_components/meross_lan/devices/thermostat/mts300.py
           custom_components/meross_lan/devices/hub/__init__.py
@@ -61,17 +62,19 @@ jobs:
           custom_components/meross_lan/helpers/entity.py
           tests/entities/climate.py tests/test_climate_schedule.py
           tests/test_config_entry.py tests/test_meross_profile.py
+          tests/helpers.py tests/test_calendar.py tests/test_diagnostics.py
+          tests/test_config_flow.py tests/test_consumption.py tests/test_merossapi.py
           tests/conftest.py tests/ha_logging.py tests/test_ha_logging.py
 
   tests:
     name: Test integration and AUTO contract
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version-file: .python-version
       - name: Test automation without Home Assistant dependencies

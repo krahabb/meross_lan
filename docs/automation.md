@@ -11,9 +11,11 @@ Actions → Import stable upstream releases → Run workflow. Prereleases and co
 that have not been released are not selected.
 
 The release's tag and full upstream commit SHA are recorded in
-`.github/upstream-release.json`. For example, the initial upstream tag is
-`v5.8.0`, while its integration manifest version is `5.8.0`. Both keep their
-original upstream spelling; the fork adds no version suffix.
+`.github/upstream-release.json`. The current upstream baseline is `v6.0.0` at
+`fc3b64c06dbd461572fb78f955219e91b367cfad`, with integration manifest version
+`6.0.0`. Both keep their original upstream spelling; the fork adds no version
+suffix. The v6 refactor is imported with upstream ancestry intact; home behavior
+is applied to the new handlers rather than retaining the old device internals.
 
 The importer starts from `master`, performs a normal Git merge of that upstream
 release and updates one branch, `automation/upstream-release`, and one open PR.
@@ -33,6 +35,9 @@ The integration tests use stable Home Assistant **2026.10.4** with its matching
 `pytest-homeassistant-custom-component` **0.13.375**, both pinned in the requirements
 files. All Python jobs read **3.14.10** from `.python-version`; the development
 container uses the verified `3.14-bookworm` image pinned by digest to that patch.
+The upstream v6 test suite uses a beta Home Assistant test package; this fork
+keeps its matching stable helper and adapts the suite to that API. Upstream
+development dependencies and the Bluetooth system support are retained.
 These pins keep a future install from silently selecting a beta. Update the
 Home Assistant/test helper pair together and align the Python file and container
 image when changing the interpreter version. See [test setup](../tests/README.md).
@@ -64,13 +69,13 @@ fork behavior changes.
 Changes merged after a version has been published do not have to wait for the
 next upstream release. Once `release-home.yml` has passed on the merged `master`
 commit, create a GitHub Release by hand: a new tag on that commit that appends a
-fourth number to the upstream tag (`v5.8.0.1`, `v5.8.0.2`, …), the tag as the
+fourth number to the upstream tag (`v6.0.0.1`, `v6.0.0.2`, …), the tag as the
 release name, and **Set as the latest release** selected. Describe the home
 changes and any breaking changes for automations in the notes. HACS installs the
 tag's source archive; the `meross_lan.zip` asset is optional.
 
 The integration manifest keeps the upstream version, so Home Assistant shows
-`5.8.0` for every `v5.8.0.N` release. The automation neither creates nor moves
+`6.0.0` for every `v6.0.0.N` release. The automation neither creates nor moves
 these tags; the next imported upstream release is published under its own tag
 as usual.
 
@@ -87,7 +92,7 @@ as usual.
    up to date before merge. Allow merge commits for upstream PRs. Configure the
    required context after its first successful run has appeared.
 5. Merge the home behavior changes and automation. The first successful
-   `release-home.yml` run publishes `v5.8.0` from the fork, provided that tag is not
+   `release-home.yml` run publishes the tracked upstream tag from the fork, provided it is not
    already occupied. Add this GitHub fork as a custom HACS integration repository.
 
 ## Authentication and CI

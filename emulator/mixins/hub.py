@@ -4,32 +4,108 @@ from random import randint
 from typing import TYPE_CHECKING
 
 from custom_components.meross_lan.merossclient import (
-    delete_element_by_key,
+    extract_dict_payloads,
     get_element_by_key,
-    get_element_by_key_safe,
-    get_mts_digest,
     update_dict_strict,
-)
-from custom_components.meross_lan.merossclient.protocol import (
-    const as mc,
-    namespaces as mn,
 )
 from custom_components.meross_lan.merossclient.protocol.namespaces import hub as mn_h
 
+from . import Emulator, mc, mn
+
 if TYPE_CHECKING:
-    from typing import Any, Mapping
+    from typing import Any
 
-    from . import MerossEmulator, MerossEmulatorDescriptor
+    from custom_components.meross_lan.merossclient.protocol import types as mt
+
+    from . import EmulatorDescriptor
 
 
-class HubMixin(MerossEmulator if TYPE_CHECKING else object):
-
-    NAMESPACES = mn_h.HUB_NAMESPACES
+class HubMixin(Emulator if TYPE_CHECKING else object):
 
     MAXIMUM_RESPONSE_SIZE = 4000
 
-    def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
-        super().__init__(descriptor, key)
+    NAMESPACES_DEFAULT = {
+        mn.Appliance_Config_Alarm: (
+            Emulator.NSDefaultMode.MixOut,
+            {mc.KEY_CHANNEL: 0, mc.KEY_ENABLE: 1, mc.KEY_VOLUME: 100, mc.KEY_SONG: 1},
+        ),
+        mn.Appliance_Control_Alarm: (
+            Emulator.NSDefaultMode.MixOut,
+            {mc.KEY_CHANNEL: 0, "event": {"security": {"value": 1}}},
+        ),
+    }
+
+    # This is an initialization map for those namespaces actually implemented only by specific subdevices types
+    # This will be used at runtime together with DIGEST_SUBID_NAMESPACES_MAP to setup only those defaults related
+    # to subdevices type actually appearing in the Hub digest.
+    # If the default definition carries a subid, then it will be applied only to the matching subdevice id,
+    # otherwise (no subid in default) it will be applied to all subdevices of the matching type.
+    SUBID_NAMESPACES_DEFAULT: "Emulator.NSDefault" = {
+        mn.Appliance_Config_Alarm: (
+            Emulator.NSDefaultMode.MixOut,
+            [
+                {  # gs559 mocked cfg: not sure this ns supports this
+                    # the subId here is in order to not install this patch
+                    mc.KEY_SUBID: "",
+                    mc.KEY_CHANNEL: 0,
+                    "enable": 1,
+                    "volume": 100,
+                    "song": 1,
+                },
+            ],
+        ),
+        mn.Appliance_Config_DeviceCfg: (
+            Emulator.NSDefaultMode.MixOut,
+            [
+                {  # mst100 mocked cfg
+                    mc.KEY_SUBID: "_1B00839E9A6D",
+                    mc.KEY_CHANNEL: 0,
+                    "mstCfg": {
+                        "dura": 60,
+                        "wfm": 1,
+                        "calibration": {"waCon": 0, "onoff": 0, "lmTime": 0},
+                    },
+                },
+                {  # mst200 mocked cfg
+                    mc.KEY_SUBID: "_1B1091AFCF10",
+                    mc.KEY_CHANNEL: 1,
+                    "mstCfg": {
+                        "dura": 60,
+                        "wfm": 1,
+                        "calibration": {"waCon": 0, "onoff": 0, "lmTime": 0},
+                    },
+                },
+                {  # mst200 mocked cfg
+                    mc.KEY_SUBID: "_1B1091AFCF10",
+                    mc.KEY_CHANNEL: 2,
+                    "mstCfg": {
+                        "dura": 60,
+                        "wfm": 1,
+                        "calibration": {"waCon": 0, "onoff": 0, "lmTime": 0},
+                    },
+                },
+            ],
+        ),
+        mn_h.Appliance_Hub_SubDevice_Beep: (
+            Emulator.NSDefaultMode.MixOut,
+            {mc.KEY_ONOFF: 0},
+        ),
+    }
+
+    DIGEST_SUBID_NAMESPACES_MAP: dict[str, tuple[mn.Namespace, ...]] = {
+        # this is a map subdevice type (as per digest) to the namespaces it supports
+        mc.KEY_DOORWINDOW: (mn_h.Appliance_Hub_SubDevice_Beep,),
+        mc.KEY_MST: (
+            mn.Appliance_Config_DeviceCfg,
+            mn_h.Appliance_Control_Water,
+        ),
+        mc.TYPE_MTS150: (mn_h.Appliance_Hub_SubDevice_Beep,),
+        mc.KEY_SMOKEALARM: (mn.Appliance_Config_Alarm, mn.Appliance_Control_Alarm),
+        mc.KEY_WATERLEAK: (mn_h.Appliance_Hub_SubDevice_Beep,),
+    }
+
+    def __init__(self, descriptor: "EmulatorDescriptor", **kwargs):
+        super().__init__(descriptor, **kwargs)
         # we have to sanitize our structures since it might happen some traces
         # have broken payloads due to errors while tracing but some of these
         # need to be consistently in place in order for the emulator to behave correctly
@@ -65,12 +141,12 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
             ]
         }
         """
-        digest_subdevices = descriptor.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE]
+        subdevices = descriptor.subdevices
         namespaces = descriptor.namespaces
         ability = descriptor.ability
 
-        ns_state: dict[mn.Namespace, list[dict]] = {
-            ns: namespaces[ns.name].setdefault(ns.key, [])
+        ns_state: dict[mn.Namespace, mt.JsonList] = {
+            ns: namespaces[ns].setdefault(ns.key, [])
             for ns in (
                 mn_h.Appliance_Hub_Mts100_Adjust,
                 mn_h.Appliance_Hub_Mts100_All,
@@ -81,25 +157,28 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
                 mn_h.Appliance_Hub_Sensor_All,
                 mn_h.Appliance_Hub_Sensor_Smoke,
                 mn_h.Appliance_Hub_Sensor_DoorWindow,
+                mn_h.Appliance_Hub_Sensor_WaterLeak,
                 mn_h.Appliance_Hub_Battery,
                 mn_h.Appliance_Hub_Online,
                 mn_h.Appliance_Hub_ToggleX,
-                mn_h.Appliance_Control_Sensor_HistoryX,
-                mn_h.Appliance_Control_Sensor_LatestX,
+                # TODO: move the 2 next to SUBID_NAMESPACES_DEFAULT
+                # since they are only relevant for specific subdevices types
+                mn.Appliance_Control_Sensor_HistoryX,
+                mn.Appliance_Control_Sensor_LatestX,
             )
-            if ns.name in ability
+            if ns in ability
         }
 
         # these maps help in generalizing the rules for
         # digest <-> ns_all payloads structure relationship
         NS_BASE_TO_DIGEST_MAP: dict[mn.Namespace, str] = {
             mn_h.Appliance_Hub_Online: mc.KEY_STATUS,
-            mn_h.Appliance_Hub_ToggleX: mc.KEY_ONOFF,
         }
         """digest structure common to both sensors and mtss"""
         NS_TO_DIGEST_MAP: dict[mn.Namespace, dict[mn.Namespace, str]] = {
             mn_h.Appliance_Hub_Mts100_All: NS_BASE_TO_DIGEST_MAP
             | {
+                mn_h.Appliance_Hub_ToggleX: mc.KEY_ONOFF,
                 mn_h.Appliance_Hub_Mts100_Mode: "",  # "" here means we're not defaulting to a digest key
                 mn_h.Appliance_Hub_Mts100_Temperature: "",
             },
@@ -108,55 +187,128 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
         """specialization based on subdevice type for digest <-> ns_all relationship"""
 
         # DEBUG/TESTING feature: remove a subdevice from hub definitions
+        """
         if subdevice_id_remove := "28004811B776":
-            delete_element_by_key(digest_subdevices, mc.KEY_ID, subdevice_id_remove)
+            delete_element_by_key(subdevices, mc.KEY_ID, subdevice_id_remove)
             for _, _ns_state in ns_state.items():
                 delete_element_by_key(_ns_state, mc.KEY_ID, subdevice_id_remove)
+        """
 
-        for p_subdevice_digest in digest_subdevices:
-            subdevice_id = p_subdevice_digest[mc.KEY_ID]
+        p_subdevice_all: "mt.JsonDict"
+        for subdevice in subdevices:
+            subdevice_id = subdevice.id
+            key_digest = subdevice.key_digest
+
+            try:
+                for subid_ns in self.DIGEST_SUBID_NAMESPACES_MAP[key_digest]:
+                    if subid_ns not in ability:
+                        continue
+                    mixmode, payload = self.SUBID_NAMESPACES_DEFAULT[subid_ns]
+                    # get the key name used to map the id/subid in the namespace index.
+                    subid_ns_key = subid_ns.index_type.key[0]
+                    assert subid_ns_key in (
+                        mc.KEY_ID,
+                        mc.KEY_SUBID,
+                    ), f"Namespace {subid_ns} index type not supported for subid mapping"
+                    for payload in extract_dict_payloads(payload):
+                        try:
+                            if payload[subid_ns_key] != subdevice_id:
+                                continue
+                            # Our payload default has a specific subdev binding and this is matching
+                            self.update_namespace_state(subid_ns, mixmode, payload)
+                        except KeyError:
+                            # Our payload default doesn't have a specific subid instance binding
+                            # so we use it whatever subid instance we're processing.
+                            self.update_namespace_state(
+                                subid_ns,
+                                mixmode,
+                                {subid_ns_key: subdevice_id} | payload,
+                            )
+
+            except KeyError:
+                pass
+
             # detect first if it's an mts like or a sensor like
-            if p_subdevice_digest[mc.KEY_STATUS] == mc.STATUS_ONLINE:
-                p_mts_digest = get_mts_digest(p_subdevice_digest)
-                subdevice_ns = (
-                    mn_h.Appliance_Hub_Mts100_All
-                    if p_mts_digest is not None
-                    else mn_h.Appliance_Hub_Sensor_All
-                )
-                assert (
-                    subdevice_ns in ns_state
-                ), f"Hub emulator init: missing {subdevice_ns.name}"
-                p_subdevice_all = get_element_by_key_safe(
-                    ns_state[subdevice_ns],
-                    mc.KEY_ID,
-                    subdevice_id,
-                )
-            else:
-                # the p_mts_digest could be missing from digest
-                # when the valve is offline so we'll fallback to inspecting either
-                # MTS100_ALL or SENSOR_ALL for clues..
-                for subdevice_ns in (
-                    mn_h.Appliance_Hub_Mts100_All,
-                    mn_h.Appliance_Hub_Sensor_All,
-                ):
-                    if subdevice_ns in ns_state:
-                        p_subdevice_all = get_element_by_key_safe(
-                            ns_state[subdevice_ns],
-                            mc.KEY_ID,
-                            subdevice_id,
+            for ns_all in (
+                mn_h.Appliance_Hub_Mts100_All,
+                mn_h.Appliance_Hub_Sensor_All,
+            ):
+                if ns_all in ns_state:
+                    try:
+                        p_subdevice_all = get_element_by_key(
+                            ns_state[ns_all], subdevice_id, mc.KEY_ID
                         )
-                        if p_subdevice_all:
-                            break
+                        break
+                    except KeyError:
+                        continue
+            else:
+                if key_digest.startswith(mc.TYPE_MTS):
+                    ns_all = mn_h.Appliance_Hub_Mts100_All
+                    p_subdevice_all = {mc.KEY_ID: subdevice_id}
+                    ns_state[ns_all].append(p_subdevice_all)
                 else:
-                    raise Exception(f"Cannot detect type for subdevice {subdevice_id}")
+                    ns_all = None
 
-            # subdevice_ns now tells us if its an mts like or a sensor
+            if not ns_all:
+                # We cannot determine if it is a sensor or an mts like subdevice.
+                match key_digest:
+                    case mc.KEY_MST:
+                        # mst devices have 'funny' syntax
+                        if "waDet" in subdevice.digest[mc.KEY_MST]:  # type: ignore
+                            # mst200
+                            channels = (1, 2)
+                            self.update_namespace_state(
+                                mn_h.Appliance_Control_Water,
+                                Emulator.NSDefaultMode.MixOut,
+                                [
+                                    {
+                                        mc.KEY_SUBID: subdevice_id,
+                                        mc.KEY_CHANNELS: [channel],
+                                        mc.KEY_ONOFF: 2,
+                                        "dura": 7200,
+                                        "lmTime": 0,
+                                    }
+                                    for channel in channels
+                                ],
+                            )
+                        else:
+                            # mst100
+                            channels = (0,)
+                            self.update_namespace_state(
+                                mn_h.Appliance_Control_Water,
+                                Emulator.NSDefaultMode.MixOut,
+                                {
+                                    mc.KEY_SUBID: subdevice_id,
+                                    mc.KEY_ONOFF: 2,
+                                    "dura": 7200,
+                                    "lmTime": 0,
+                                },
+                            )
+                        self.update_namespace_state(
+                            mn.Appliance_Config_DeviceCfg,
+                            Emulator.NSDefaultMode.MixOut,
+                            [
+                                {
+                                    mc.KEY_SUBID: subdevice_id,
+                                    mc.KEY_CHANNEL: channel,
+                                    "mstCfg": {
+                                        "dura": 60,
+                                        "wfm": 1,
+                                        "calibration": {
+                                            "waCon": 0,
+                                            "onoff": 0,
+                                            "lmTime": 0,
+                                        },
+                                    },
+                                }
+                                for channel in channels
+                            ],
+                        )
+                continue
+
+            # ns_all now tells us if its an mts like or a sensor
             # p_subdevice_all already carries the ns_all state (if present in trace)
-            if not p_subdevice_all:
-                p_subdevice_all = {mc.KEY_ID: subdevice_id}
-                ns_state[subdevice_ns].append(p_subdevice_all)
-
-            if subdevice_ns is mn_h.Appliance_Hub_Mts100_All:
+            if ns_all is mn_h.Appliance_Hub_Mts100_All:
                 # this subdevice is an mts like so we'll ensure its
                 # 'all' payload (at least) is set. we'll also bind
                 # the child dicts in 'all' to the corresponding specific
@@ -164,67 +316,73 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
                 # state is maintained consistent. For instance, the 'temperature' dict
                 # in the subdevice ns_all payload is the same as the corresponding
                 # payload in Mts100.Temperature
-                if mc.KEY_SCHEDULEBMODE in p_subdevice_digest:
-                    p_subdevice_all[mc.KEY_SCHEDULEBMODE] = p_subdevice_digest[
+                if mc.KEY_SCHEDULEBMODE in subdevice.digest:
+                    p_subdevice_all[mc.KEY_SCHEDULEBMODE] = subdevice.digest[
                         mc.KEY_SCHEDULEBMODE
                     ]
-
-            for subnamespace, digest_key in NS_TO_DIGEST_MAP[subdevice_ns].items():
+            for subnamespace, digest_key in NS_TO_DIGEST_MAP[ns_all].items():
                 # here we'll link the specific ns_state to a corresponding
                 # dict in p_subdevice_all payload. This will also
                 # create a default corresponding subdevice ns_state should it be missing
                 if subnamespace in ns_state:
                     # (sub)namespace is supported in abilities so we'll fix/setup it
-                    p_subdevice_substate = get_element_by_key_safe(
-                        ns_state[subnamespace],
-                        mc.KEY_ID,
-                        subdevice_id,
-                    )
-                    if not p_subdevice_substate:
+                    try:
+                        p_subdevice_substate = get_element_by_key(
+                            ns_state[subnamespace], subdevice_id, mc.KEY_ID
+                        )
+                    except KeyError:
                         # we don't have the state in the specific ns
                         # so we default it eventually initializing with the digest data
                         p_subdevice_substate = {mc.KEY_ID: subdevice_id}
-                        if digest_key in p_subdevice_digest:
-                            p_subdevice_substate[digest_key] = p_subdevice_digest[
+                        if digest_key in subdevice.digest:
+                            p_subdevice_substate[digest_key] = subdevice.digest[
                                 digest_key
                             ]
                         ns_state[subnamespace].append(p_subdevice_substate)
                     p_subdevice_all[subnamespace.key] = p_subdevice_substate
 
-    def _get_subdevice_digest(self, subdevice_id: str):
-        """returns the subdevice dict from the hub digest key"""
-        return get_element_by_key(
-            self.descriptor.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE],
-            mc.KEY_ID,
-            subdevice_id,
-        )
+    def _scheduler(self):
+        super()._scheduler()
+        for subdevice in self.descriptor.subdevices:
+            # we randomly change the status of subdevices to emulate
+            # motion/smoke/doorwindow triggers
+            digest = subdevice.digest
+            if mc.KEY_DOORWINDOW in digest:
+                if randint(0, 4) == 0:
+                    digest[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 1
+                else:
+                    digest[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 0
+            elif mc.KEY_SMOKEALARM in digest:
+                a = randint(0, 2)
+                if a == 0:
+                    digest[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = randint(17, 27)
+                elif a == 1:
+                    digest[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = 170
+            # TODO: add randomization for other subdevices payloads
 
     def _get_subdevice_namespace(
         self, subdevice_id: str, ns: mn.Namespace, *, force_create: bool = True
     ) -> "dict[str, Any]":
         """returns the subdevice namespace dict. It will create a default entry if not present
         and the device abilities supports the namespace."""
+        assert (
+            ns.index_type is mn.IndexType.id
+        ), f"Namespace {ns} is not indexed by 'id'"
         try:
-            subdevices_namespace: list = self.namespaces[ns.name][ns.key]
+            subdevices_namespace: list = self.namespaces[ns][ns.key]
             try:
-                return get_element_by_key(
-                    subdevices_namespace,
-                    ns.key_channel,
-                    subdevice_id,
-                )
+                return get_element_by_key(subdevices_namespace, subdevice_id, mc.KEY_ID)
             except KeyError:
                 if not force_create:
                     raise
-                p_subdevice = {ns.key_channel: subdevice_id}
+                p_subdevice = {mc.KEY_ID: subdevice_id}
                 subdevices_namespace.append(p_subdevice)
         except KeyError:
             if not force_create:
                 raise
-            assert (
-                ns.name in self.descriptor.ability
-            ), f"{ns.name} not available in Hub abilities"
-            p_subdevice = {ns.key_channel: subdevice_id}
-            self.namespaces[ns.name] = {ns.key: [p_subdevice]}
+            assert ns in self.descriptor.ability, f"{ns} not available in Hub abilities"
+            p_subdevice = {mc.KEY_ID: subdevice_id}
+            self.namespaces[ns] = {ns.key: [p_subdevice]}
         return p_subdevice
 
     def _get_mts100_all(self, subdevice_id: str, *, force_create: bool = True):
@@ -246,51 +404,6 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
             # so we'll try to get the sensor all
             return self._get_sensor_all(subdevice_id, force_create=False)
 
-    def _handler_default(self, method: str, namespace: str, payload: "Mapping"):
-        if method == mc.METHOD_GET:
-            ns = self.NAMESPACES[namespace]
-            if ns.is_hub_namespace:
-                ns_key = ns.key
-                ns_key_channel = ns.key_channel
-                response_payload = self.namespaces[namespace]
-                request_subdevices = payload[ns_key]
-                if request_subdevices:
-                    # client asked for defined set of ids
-                    current_subdevices = response_payload[ns_key]
-                    response_subdevices = []
-                    for p_subdevice_id in request_subdevices:
-                        if p_subdevice := get_element_by_key_safe(
-                            current_subdevices,
-                            ns_key_channel,
-                            p_subdevice_id[ns_key_channel],
-                        ):
-                            response_subdevices.append(p_subdevice)
-                    response_payload = {ns_key: response_subdevices}
-                else:
-                    # client request empty list -> device responds with full set
-                    response_subdevices = response_payload[ns_key]
-
-                # response_subdevices contains the list of subdevices state being returned.
-                # we'll apply some randomization to the state to emulate signals
-                for p_subdevice in response_subdevices:
-                    if mc.KEY_DOORWINDOW in p_subdevice:
-                        if randint(0, 4) == 0:
-                            p_subdevice[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 1
-                        else:
-                            p_subdevice[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 0
-                    elif mc.KEY_SMOKEALARM in p_subdevice:
-                        a = randint(0, 2)
-                        if a == 0:
-                            p_subdevice[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = randint(
-                                17, 27
-                            )
-                        elif a == 1:
-                            p_subdevice[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = 170
-
-                return mc.METHOD_GETACK, response_payload
-
-        return super()._handler_default(method, namespace, payload)
-
     def _SET_Appliance_Hub_Mts100_Adjust(self, header, payload):
         for p_subdevice in payload[mc.KEY_ADJUST]:
             subdevice_id = p_subdevice[mc.KEY_ID]
@@ -305,11 +418,10 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
         for p_mode in payload[mc.KEY_MODE]:
             subdevice_id = p_mode[mc.KEY_ID]
             mts_mode = p_mode[mc.KEY_STATE]
-            p_subdevice_digest = self._get_subdevice_digest(subdevice_id)
-            mts_digest = get_mts_digest(p_subdevice_digest)
-            if mts_digest and mc.KEY_MODE in mts_digest:
+            subdevice = self.descriptor.get_subdevice(subdevice_id)
+            mts_digest = subdevice.digest[subdevice.key_digest]
+            if mc.KEY_MODE in mts_digest:
                 mts_digest[mc.KEY_MODE] = mts_mode
-
             p_subdevice_mode = self._get_subdevice_namespace(
                 subdevice_id, mn_h.Appliance_Hub_Mts100_Mode
             )
@@ -386,10 +498,9 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
     def _SET_Appliance_Hub_ToggleX(self, header, payload):
         for p_togglex in payload[mc.KEY_TOGGLEX]:
             subdevice_id = p_togglex[mc.KEY_ID]
-            p_subdevice_digest = self._get_subdevice_digest(subdevice_id)
-            if mc.KEY_ONOFF in p_subdevice_digest:
-                p_subdevice_digest[mc.KEY_ONOFF] = p_togglex[mc.KEY_ONOFF]
-
+            subdevice = self.descriptor.get_subdevice(subdevice_id)
+            if mc.KEY_ONOFF in subdevice.digest:
+                subdevice.digest[mc.KEY_ONOFF] = p_togglex[mc.KEY_ONOFF]
             p_subdevice_all = self._get_subdevice_all(subdevice_id)
             if mc.KEY_TOGGLEX in p_subdevice_all:
                 # beware the "onoff" key in "all" is a embedded in the "togglex" dict

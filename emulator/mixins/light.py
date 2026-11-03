@@ -9,21 +9,21 @@ from custom_components.meross_lan.merossclient import (
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
+    types as mt,
 )
 
 if TYPE_CHECKING:
-    from . import MerossEmulator, MerossEmulatorDescriptor
+    from . import Emulator, EmulatorDescriptor
 
 
-class LightMixin(MerossEmulator if TYPE_CHECKING else object):
-    def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
-        super().__init__(descriptor, key)
+class LightMixin(Emulator if TYPE_CHECKING else object):
+    def __init__(self, descriptor: "EmulatorDescriptor", **kwargs):
+        super().__init__(descriptor, **kwargs)
 
         try:
             get_element_by_key(
                 descriptor.digest[mc.KEY_TOGGLEX],
-                mc.KEY_CHANNEL,
-                descriptor.digest[mc.KEY_LIGHT][mc.KEY_CHANNEL],
+                descriptor.digest[mc.KEY_LIGHT],
             )
             self._togglex_switch = True  # use TOGGLEX to (auto) switch
             self._togglex_mode = (
@@ -37,9 +37,9 @@ class LightMixin(MerossEmulator if TYPE_CHECKING else object):
         # need to override basic handler since lights turning on/off is tricky between
         # various firmwares: some supports onoff in light payload some use the togglex
         p_digest = self.descriptor.digest
-        p_digest_light: dict = p_digest[mc.KEY_LIGHT]
-        p_digest_light_saved = dict(p_digest_light)
-        p_light: dict = payload[mc.KEY_LIGHT]
+        p_digest_light = p_digest[mc.KEY_LIGHT]
+        p_digest_light_saved = p_digest_light.copy()
+        p_light: "mt.control.Light" = payload[mc.KEY_LIGHT]
         channel = p_light[mc.KEY_CHANNEL]
         if channel != p_digest_light[mc.KEY_CHANNEL]:
             raise Exception("wrong request channel")
@@ -48,28 +48,28 @@ class LightMixin(MerossEmulator if TYPE_CHECKING else object):
         # the device is not using togglex
         if self._togglex_switch:
             if mc.KEY_ONOFF in p_digest_light:
-                p_digest_togglex: dict = p_digest[mc.KEY_TOGGLEX][channel]
+                p_digest_togglex = p_digest[mc.KEY_TOGGLEX][channel]
                 if p_digest_togglex[mc.KEY_ONOFF] != p_digest_light[mc.KEY_ONOFF]:
                     p_digest_togglex[mc.KEY_ONOFF] = p_digest_light[mc.KEY_ONOFF]
                     if self.mqtt_connected:
                         self.mqtt_publish_push(
-                            mn.Appliance_Control_ToggleX.name,
+                            mn.Appliance_Control_ToggleX,
                             {mn.Appliance_Control_ToggleX.key: p_digest_togglex},
                         )
             else:
                 if not self._togglex_mode:
-                    p_digest_togglex: dict = p_digest[mc.KEY_TOGGLEX][channel]
+                    p_digest_togglex = p_digest[mc.KEY_TOGGLEX][channel]
                     if not p_digest_togglex.get(mc.KEY_ONOFF):
                         p_digest_togglex[mc.KEY_ONOFF] = 1
                         if self.mqtt_connected:
                             self.mqtt_publish_push(
-                                mn.Appliance_Control_ToggleX.name,
+                                mn.Appliance_Control_ToggleX,
                                 {mn.Appliance_Control_ToggleX.key: p_digest_togglex},
                             )
 
         if self.mqtt_connected and (p_digest_light != p_digest_light_saved):
             self.mqtt_publish_push(
-                mn.Appliance_Control_Light.name, {mc.KEY_LIGHT: p_digest_light}
+                mn.Appliance_Control_Light, {mc.KEY_LIGHT: p_digest_light}
             )
 
         return mc.METHOD_SETACK, {}
@@ -77,7 +77,7 @@ class LightMixin(MerossEmulator if TYPE_CHECKING else object):
     def _SET_Appliance_Control_Light_Effect(self, header, payload):
 
         p_state_effect_list: list[dict] = self.namespaces[
-            mn.Appliance_Control_Light_Effect.name
+            mn.Appliance_Control_Light_Effect
         ][mc.KEY_EFFECT]
         effect_id_enabled = None
 
@@ -87,7 +87,7 @@ class LightMixin(MerossEmulator if TYPE_CHECKING else object):
                 effect_id_enabled = effect_id
             try:
                 p_state_effect = get_element_by_key(
-                    p_state_effect_list, mc.KEY_ID_, effect_id
+                    p_state_effect_list, effect_id, mc.KEY_ID_
                 )
                 p_state_effect.update(p_effect)
             except KeyError:
@@ -105,7 +105,7 @@ class LightMixin(MerossEmulator if TYPE_CHECKING else object):
                     effect_index = index
             index += 1
 
-        p_light: dict = self.descriptor.digest[mc.KEY_LIGHT]
+        p_light = self.descriptor.digest[mc.KEY_LIGHT]
         p_light_saved = dict(p_light)
         if effect_index == -1:
             p_light.pop(mc.KEY_EFFECT, None)
@@ -118,8 +118,6 @@ class LightMixin(MerossEmulator if TYPE_CHECKING else object):
                 p_light[mc.KEY_CAPACITY] | mc.LIGHT_CAPACITY_EFFECT
             )
         if self.mqtt_connected and (p_light != p_light_saved):
-            self.mqtt_publish_push(
-                mn.Appliance_Control_Light.name, {mc.KEY_LIGHT: p_light}
-            )
+            self.mqtt_publish_push(mn.Appliance_Control_Light, {mc.KEY_LIGHT: p_light})
 
         return mc.METHOD_SETACK, {}
