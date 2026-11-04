@@ -67,7 +67,6 @@ class UpdateEntity(Entity, update.UpdateEntity):
             device.id if device is not parent else None,
             parent,
             device_info=None,
-            unique_id=None,
         )
         device.update_firmware = self
 
