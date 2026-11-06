@@ -12,6 +12,7 @@ from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
 )
+from custom_components.meross_lan.schedule_sync import ScheduleHelperSelect
 
 from tests.entities import EntityComponentTest
 
@@ -22,8 +23,8 @@ class EntityTest(EntityComponentTest):
 
     DIGEST_ENTITIES = {
         mc.KEY_THERMOSTAT: {
-            mc.KEY_MODE: [climate.MtsClimate.TrackSensorSelect],
-            mc.KEY_MODEB: [climate.MtsClimate.TrackSensorSelect],
+            mc.KEY_MODE: [climate.MtsClimate.TrackSensorSelect, ScheduleHelperSelect],
+            mc.KEY_MODEB: [climate.MtsClimate.TrackSensorSelect, ScheduleHelperSelect],
         },
         mc.KEY_SPRAY: [spray.Spray],
         mc.KEY_DIFFUSER: {mc.KEY_SPRAY: [diffuser.DiffuserSpray]},
@@ -39,13 +40,16 @@ class EntityTest(EntityComponentTest):
             ms600.SelectParser,  # sensitivity
         ],
         mn_t.Appliance_Control_Thermostat_HoldAction: [MtsHoldAction],
-        mn_t.Appliance_Control_Thermostat_ModeC: [climate.MtsClimate.TrackSensorSelect],
+        mn_t.Appliance_Control_Thermostat_ModeC: [
+            climate.MtsClimate.TrackSensorSelect,
+            ScheduleHelperSelect,
+        ],
         mn.Appliance_System_LedMode: [misc.LedMode],
     }
     HUB_SUBDEVICES_ENTITIES = {
-        mc.TYPE_MTS100: [climate.MtsClimate.TrackSensorSelect],
-        mc.TYPE_MTS100V3: [climate.MtsClimate.TrackSensorSelect],
-        mc.TYPE_MTS150: [climate.MtsClimate.TrackSensorSelect],
+        mc.TYPE_MTS100: [climate.MtsClimate.TrackSensorSelect, ScheduleHelperSelect],
+        mc.TYPE_MTS100V3: [climate.MtsClimate.TrackSensorSelect, ScheduleHelperSelect],
+        mc.TYPE_MTS150: [climate.MtsClimate.TrackSensorSelect, ScheduleHelperSelect],
         mc.KEY_TEMPHUMI: [
             select.SelectParser,  # timeCfg_am
             select.SelectParser,  # ms130Cfg_bl_bri

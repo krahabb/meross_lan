@@ -316,6 +316,15 @@ class MtsTempUnit(SelectParser):
 
     _attr_translation_key = _tempunit_cfg["entity_key"]
 
+    @override
+    def flush_state(self):
+        super().flush_state()
+        # the schedule sync compiles on the device unit grid: notify it (a climate
+        # flush might not follow)
+        for entity in tuple(self.parent.entities.values()):
+            if isinstance(entity, MtsClimate) and entity.index == self.index:
+                entity.schedule.flush_state()
+
 
 class MtsThermostatClimate(MtsClimate):
     """

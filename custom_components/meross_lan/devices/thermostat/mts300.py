@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING, override
 
-from homeassistant.components import calendar
 from homeassistant.components.climate import const as hacc
 
 from . import (
@@ -14,8 +13,8 @@ from . import (
     mn,
     mn_t,
 )
-from ...calendar import MtsSchedule
 from ...helpers import reverse_lookup
+from ...helpers.schedule import KEY_COOL, KEY_HEAT
 from ...switch import EmulatedSwitch
 
 if TYPE_CHECKING:
@@ -81,12 +80,6 @@ class Mts300Climate(MtsThermostatClimate):
             2: "Internal sensor",  # almost sure
         }
 
-    class Schedule(MtsSchedule):
-        # read-only: editing [minutes, heat, cool] entries is not supported yet
-        _attr_supported_features = calendar.CalendarEntityFeature(0)
-
-        __slots__ = ()
-
     if TYPE_CHECKING:
         # overrides
         ns_value: mt.thermostat.ModeC_C
@@ -107,6 +100,9 @@ class Mts300Climate(MtsThermostatClimate):
 
     # MtsClimate class attributes
     SCHEDULE_NS = mn_t.Appliance_Control_Thermostat_ScheduleB
+    # schedule entries carry [minutes, heat, cold], exposed as 'heat'/'cool'.
+    # Writing them is unconfirmed: only schedule reads were ever traced.
+    SCHEDULE_KEYS = (KEY_HEAT, KEY_COOL)
     # TODO: customize parsing of native payload since we have 2 temperatures
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS300_WORK_MANUAL: MtsThermostatClimate.Preset.CUSTOM,
@@ -184,6 +180,9 @@ class Mts300Climate(MtsThermostatClimate):
 
     def __init__(self, id, device: "Device", /, **kwargs):
         MtsThermostatClimate.__init__(self, id, device, **kwargs)
+        # The device reports no slot limit: 12 per day comes from a third-party
+        # copy of the MTS300 manual and a review (unconfirmed on hardware).
+        self.schedule._schedule_entry_count_max = 12
         device.register_parser_ex(
             self,
             mn.Appliance_Config_Sensor_Association,

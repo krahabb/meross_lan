@@ -5,11 +5,19 @@ from homeassistant.components import climate, sensor
 from homeassistant.core import CoreState, callback
 from homeassistant.util.unit_conversion import TemperatureConverter
 
-from .calendar import MtsSchedule
 from .const import HA_VERSION, hac
 from .helpers import reverse_lookup
 from .helpers.entity import ParserEntity
+from .helpers.schedule import KEY_COOL, KEY_TEMPERATURE
 from .number import NumberParser
+from .schedule_sync import (
+    MtsSchedule,
+    ScheduleHelperSelect,
+    SchedulePullButton,
+    SchedulePushButton,
+    ScheduleSyncSensor,
+    schedule_device_fahrenheit,
+)
 from .select import SelectEntity
 from .sensor import SensorParser
 
@@ -64,9 +72,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             return await climate.async_request_parse_ex(
                 self.key_value.payload(device_value)
             )
-
-    Schedule = MtsSchedule
-    """Overriden in derived to provide specific behavior."""
 
     class TrackSensorSelect(SelectEntity.RestoreEntity, SelectEntity):
         """
@@ -308,7 +313,9 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         ATTR_TARGET_TEMP_LOW: Final
 
         SCHEDULE_NS: ClassVar[mn.Namespace]
-        Schedule: ClassVar[type[MtsSchedule]]
+        SCHEDULE_KEYS: ClassVar[tuple[str, ...]]
+        """Schedule helper block data keys carried (in order) by the device
+        schedule entries ([minutes, *values])."""
         TARGET_TEMPERATURE_STEP: ClassVar[float]
         MTS_MODE_TO_PRESET_MAP: ClassVar[dict[int | None, str]]
         """Maps device 'mode' value to the HA climate.preset_mode"""
@@ -328,7 +335,9 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         number_preset_temperature: Final[tuple[SetPointNumber, ...]]
         schedule: Final[MtsSchedule]
         select_track_sensor: Final[TrackSensorSelect]
+        select_schedule_helper: Final[ScheduleHelperSelect]
         sensor_current_temperature: Final[SensorParser]
+        sensor_schedule_sync: Final[ScheduleSyncSensor]
         _mts_active: bool | int
         _mts_mode: int
         _mts_onoff: int
@@ -364,6 +373,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
     HVACAction = climate.HVACAction
     HVACMode = climate.HVACMode
 
+    SCHEDULE_KEYS = (KEY_TEMPERATURE,)
     TARGET_TEMPERATURE_STEP = 0.5
     MTS_MODE_TO_TEMPERATUREKEY_MAP = {}
     SETPOINT_ICON_MAP = {
@@ -389,8 +399,10 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
     _AUTO_DESTROY = (
         "number_adjust_temperature",
         "schedule",
+        "select_schedule_helper",
         "select_track_sensor",
         "sensor_current_temperature",
+        "sensor_schedule_sync",
     )
     __slots__ = ParserEntity._calc_slots(
         "current_humidity",
@@ -461,16 +473,16 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
                 }.items()
             )
 
-        schedule_ns = cls.SCHEDULE_NS
-        self.schedule = cls.Schedule(
-            self,
-            climate=self,
-            entity_key=schedule_ns.key,
-            ns=schedule_ns,
-        )
-        self.parent.enable_check_device_time()  # useful for schedule entity times
+        self.schedule = MtsSchedule(self)
+        # the device runs its schedule on its local time
+        self.parent.enable_check_device_time()
 
         self.select_track_sensor = cls.TrackSensorSelect(self)
+        # sensor first: the select references it
+        self.sensor_schedule_sync = ScheduleSyncSensor(self)
+        self.select_schedule_helper = ScheduleHelperSelect(self)
+        SchedulePullButton(self.select_schedule_helper)
+        SchedulePushButton(self.select_schedule_helper)
         self.sensor_current_temperature = SensorParser(
             self,
             **(
@@ -488,6 +500,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         self.hvac_action = None
         self.hvac_mode = None
         super().set_unavailable()
+        self.schedule.set_unavailable()
 
     def flush_state(self):
         super().flush_state()
@@ -543,6 +556,35 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
     def is_mts_scheduled(self, /):
         raise NotImplementedError()
+
+    def schedule_limits_known(self, /) -> bool:
+        """True when the device schedule (and so its limits) and the other compile
+        inputs (device unit, off values) are known so that a schedule can be
+        compiled for (and written to) the device."""
+        return bool(self.schedule.ns_value) and (
+            schedule_device_fahrenheit(self) is not None
+        )
+
+    def schedule_off_values(self, /) -> list[int]:
+        """The device (scaled) values of the schedule time not covered by the
+        helper blocks (off): max_temp for 'cool' or when cooling, else min_temp."""
+        cooling = self._schedule_cooling()
+        return [
+            round(
+                (self.max_temp if cooling or key == KEY_COOL else self.min_temp)
+                * self.temperature_scale
+            )
+            for key in self.SCHEDULE_KEYS
+        ]
+
+    def _schedule_cooling(self, /) -> bool:
+        """The (single setpoint) schedule cools: off is max_temp."""
+        return False
+
+    def is_device_connected(self, /) -> bool:
+        """The device carrying this climate is online (hub valves override this:
+        they can be offline while the hub is online)."""
+        return self.parent.is_connected
 
     def _update_current_temperature(self, native_current_temperature: float | int, /):
         """

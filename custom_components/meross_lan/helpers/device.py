@@ -1542,7 +1542,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         """This is a scheduled task that runs every now and then when the device is connected
         to check the device time configuration and state.
         -> Checks device current timestamp (epoch) is aligned to HA. This is especially important
-        for devices with 'Consumption' or schedules (calendar entities) in order to align device
+        for devices with 'Consumption' or (thermostat) schedules in order to align device
         local time to what is expected in HA.
         -> Checks the device timezone has the same utc offset as HA local timezone.
         -> Checks if the device timezone transition times are still correctly set."""
@@ -1604,7 +1604,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                         )
         # Verifies the device timezone has the same utc offset as HA local timezone.
         # This is expecially sensible when the device has 'Consumption' or
-        # schedules (calendar entities) in order to align device local time to
+        # (thermostat) schedules in order to align device local time to
         # what is expected in HA.
         ha_now = dt_util.now()
         if ha_now.utcoffset() == ha_now.astimezone(self.tz).utcoffset():
