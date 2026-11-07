@@ -536,21 +536,19 @@ class ComponentApi(mlq.MQTTProfile):
             service_call: "ServiceCall",
         ) -> "ServiceResponse":
             service_response = {}
-            device_id = service_call.data.get(mlc.CONF_DEVICE_ID)
-            host = service_call.data.get(mlc.CONF_HOST)
+            service_data = service_call.data
+            device_id = service_data.get(mlc.CONF_DEVICE_ID)
+            host = service_data.get(mlc.CONF_HOST)
             if not device_id and not host:
                 raise HomeAssistantError(
                     "Missing both device_id and host: provide at least one valid entry"
                 )
-            try:
-                protocol = Transport.from_str(service_call.data[mlc.CONF_PROTOCOL])
-            except KeyError:
-                protocol = Transport.AUTO
-            namespace = service_call.data[mc.KEY_NAMESPACE]
-            method = service_call.data.get(mc.KEY_METHOD, mc.METHOD_GET)
-            key = service_call.data.get(mlc.CONF_KEY)
-            if mc.KEY_PAYLOAD in service_call.data:
-                payload = service_call.data[mc.KEY_PAYLOAD]
+            protocol = Transport.from_str(service_data.get(mlc.CONF_PROTOCOL))
+            namespace = service_data[mc.KEY_NAMESPACE]
+            method = service_data.get(mc.KEY_METHOD, mc.METHOD_GET)
+            key = service_data.get(mlc.CONF_KEY)
+            if mc.KEY_PAYLOAD in service_data:
+                payload = service_data[mc.KEY_PAYLOAD]
                 if type(payload) is str:
                     try:
                         payload = json_loads(payload)

@@ -669,10 +669,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         """
         config = self.config
         # map CONF_PROTOCOL value to a const symbol in order to use 'is' in Device code checks
-        try:
-            self.configured_transport = Transport.from_str(config[mlc.CONF_PROTOCOL])  # type: ignore
-        except KeyError:
-            self.configured_transport = Transport.AUTO
+        self.configured_transport = Transport.from_str(config.get(mlc.CONF_PROTOCOL))
         self.polling_period = (
             config.get(mlc.CONF_POLLING_PERIOD) or mlc.CONF_POLLING_PERIOD_DEFAULT
         )

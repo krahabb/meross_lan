@@ -50,11 +50,12 @@ class Transport(StrEnum):
     BLUETOOTH = "bluetooth"
 
     @staticmethod
-    def from_str(label: str):
-        label = label.lower()
-        for transport in Transport:
-            if transport.value == label:
-                return transport
+    def from_str(label: str | None) -> "Transport":
+        if label:
+            label = label.lower()
+            for transport in Transport:
+                if transport.value == label:
+                    return transport
         return Transport.AUTO
 
 
