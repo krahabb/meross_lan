@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock, patch
+
 from homeassistant.components import cover as haec
 
 from custom_components.meross_lan import const as mlc
@@ -47,6 +49,19 @@ class EntityTest(EntityComponentTest):
                 == haec.CoverEntityFeature.OPEN | haec.CoverEntityFeature.CLOSE
             )
             self._check_remove_togglex(entity)
+            if entity.parent.descriptor.type.startswith(mc.TYPE_MSG150):
+                config = entity.parent.ns_handlers[mn.Appliance_GarageDoor_Config]
+                self.expected_entity_types.append(type(config.parsers[mc.KEY_LED]))
+                self.expected_entity_types.append(type(config.parsers[mc.KEY_OBENABLE]))
+                self.expected_entity_types.append(
+                    type(config.parsers[mc.KEY_LOCKREMOTE])
+                )
+                self.expected_entity_types.append(
+                    type(entity.binary_sensor_obstruction)
+                )
+                self.expected_entity_types.append(
+                    type(config.parsers[mc.KEY_BUZZERDELAYTIME])
+                )
 
         elif isinstance(entity, RollerShutter):
             assert (
@@ -63,6 +78,17 @@ class EntityTest(EntityComponentTest):
         if isinstance(entity, GarageDoor):
             await self._async_test_cover_transition(entity)
             await self._async_test_cover_transition(entity)
+            if entity.parent.descriptor.type.startswith(mc.TYPE_MSG150):
+                await self._async_test_msg150_recheck(entity)
+                await self._async_test_msg150_light(entity)
+                await self._async_test_msg150_obstruction(entity)
+                buzzer = entity.parent.ns_handlers[
+                    mn.Appliance_GarageDoor_Config
+                ].parsers[mc.KEY_BUZZERENABLE]
+                await buzzer.async_turn_off()
+                await self._async_test_cover_transition(entity)
+                await self._async_test_cover_transition(entity)
+                await buzzer.async_turn_on()
         elif isinstance(entity, RollerShutter):
             # RollerShutter could need at least a run to enable
             # support for SET_POSITION
@@ -102,6 +128,80 @@ class EntityTest(EntityComponentTest):
     async def async_test_disabled_callback(self, entity: Cover):
         pass
 
+    async def _async_test_msg150_recheck(self, entity: GarageDoor):
+        handler = entity.handler_ns
+        for error in (None, TimeoutError):
+            entity._transition_cancel()
+            entity.is_closed = False
+            entity.is_closing = True
+            start = entity._transition_start = entity.time()
+            with patch.object(
+                type(handler), "async_get", new=AsyncMock(side_effect=error)
+            ):
+                await entity._async_transition_end_callback()
+                assert entity._transition_start == start
+                assert entity._transition_timeout_retry is True
+                assert entity.is_closing is True
+                assert not entity.binary_sensor_timeout.is_on
+                timer = entity._timers[entity._async_transition_end_callback]
+                assert abs(timer.when() - self.hass.loop.time() - 5) < 1
+                entity.cancel_callback(entity._async_transition_end_callback)
+                await entity._async_transition_end_callback()
+                assert entity.binary_sensor_timeout.is_on
+                assert entity._async_transition_end_callback not in entity._timers
+            entity._transition_cancel()
+            await handler.async_get(entity.index)
+            entity.binary_sensor_timeout.update_ok(True)
+
+        # A final position arriving during the extra check cancels its timer.
+        entity.is_closed = False
+        entity.is_closing = True
+        entity._transition_start = entity.time()
+        with patch.object(type(handler), "async_get", new=AsyncMock()):
+            await entity._async_transition_end_callback()
+        await handler.async_get(entity.index)
+        assert entity.is_closed is True
+        assert not entity.binary_sensor_timeout.is_on
+        assert entity._async_transition_end_callback not in entity._timers
+
+    async def _async_test_msg150_light(self, entity: GarageDoor):
+        handler = entity.parent.ns_handlers[mn.Appliance_GarageDoor_Config]
+        light = handler.parsers[mc.KEY_LED]
+        assert light.name == "Opener light"
+        assert light.entity_category is None
+        assert handler.polling_period == 10
+        assert handler.polling_period_cloud == 1200
+        config = self.device_context.emulator.namespaces[handler.id][mc.KEY_CONFIG]
+        # The wall panel or motion sensor can change the light independently.
+        # A config poll should then update the entity through the normal parser.
+        for value, expected in ((1, True), (2, False), (0, None), (2, False)):
+            config[mc.KEY_LED] = value
+            await handler.async_get()
+            assert light.is_on is expected
+
+    async def _async_test_msg150_obstruction(self, entity: GarageDoor):
+        handler = entity.handler_ns
+        sensor = entity.binary_sensor_obstruction
+        state = self.device_context.emulator.descriptor.digest[mc.KEY_GARAGEDOOR][0]
+        is_closed = entity.is_closed
+        for value, expected in ((1, True), (2, False), (0, None), (3, None), (1, True)):
+            state[mc.KEY_OBSTRUCTION] = value
+            state[mc.KEY_OBLMTIME] += 1
+            await handler.async_get(entity.index)
+            assert sensor.is_on is expected
+            assert entity.is_closed is is_closed
+            assert entity.extra_state_attributes[mc.KEY_OBSTRUCTION] == value
+            assert (
+                entity.extra_state_attributes[mc.KEY_OBLMTIME] == state[mc.KEY_OBLMTIME]
+            )
+        # A missing obstruction field leaves the last reported state intact.
+        del state[mc.KEY_OBSTRUCTION]
+        await handler.async_get(entity.index)
+        assert sensor.is_on is True
+        state[mc.KEY_OBSTRUCTION] = 2
+        await handler.async_get(entity.index)
+        assert sensor.is_on is False
+
     async def _async_test_cover_transition(self, entity):
         """Start and follow the transition from open to close or
         close to open depending on current state."""
@@ -110,6 +210,24 @@ class EntityTest(EntityComponentTest):
         trans = self.COVER_TRANSITIONS[state.state]
         state = await self.async_service_call(trans[0])
         assert state.state == trans[1], trans[1]
+        if isinstance(entity, GarageDoor) and entity.parent.descriptor.type.startswith(
+            mc.TYPE_MSG150
+        ):
+            # MSG150 echoes the target in SETACK before movement finishes.
+            # The cover should still show movement until a state GET confirms it.
+            assert entity.is_closed == (trans[0] == haec.SERVICE_OPEN_COVER)
+            config = self.device_context.emulator.namespaces[
+                mn.Appliance_GarageDoor_Config
+            ][mc.KEY_CONFIG]
+            opening = trans[0] == haec.SERVICE_OPEN_COVER
+            expected_timeout = (
+                config[mc.KEY_DOOROPENDURATION if opening else mc.KEY_DOORCLOSEDURATION]
+                / 1000
+            )
+            if not opening and config[mc.KEY_BUZZERENABLE]:
+                expected_timeout += config[mc.KEY_BUZZERDELAYTIME] / 1000
+            timer = entity._timers[entity._async_transition_end_callback]
+            assert abs(timer.when() - self.hass.loop.time() - expected_timeout) < 1
         # The GarageDoor/RollerShutter state machine has a timed callback mechanism
         # TODO: use and check that callback instead of the raw 60 seconds timeout
         # we're using async_warp over 40 seconds (which are enough on our emulators
