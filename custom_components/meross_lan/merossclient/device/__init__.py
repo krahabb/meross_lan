@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from ..client.bluetooth import BluetoothClient
     from ..client.http import HttpClient
     from ..client.mqtt import AbstractMQTTConnection
-    from ..logging import LoggerType
+    from ..logging import LoggerArgs, LoggerType
     from ..protocol import types as mt
     from ..protocol.message import MerossRequest, MerossResponse
     from ..protocol.types import (
@@ -276,6 +276,11 @@ class Device(PhysicalDevice):
             for _client in self._clients.values()
         ]
         if connect_tasks:
+            # Transports are tried concurrently: a failure in one of them is not worth
+            # a warning if another one succeeds (e.g. the MQTT broker connection is not
+            # yet established at startup while HTTP works). Failures are then collected
+            # and logged as warnings only when no transport was able to connect.
+            failures: list[Exception] = []
             try:
                 async for earliest_connect in asyncio.as_completed(
                     connect_tasks,
@@ -287,17 +292,26 @@ class Device(PhysicalDevice):
                             self.on_connect()
                         self.handler_all.handle(response)
                         self.handler_all.polling_response_size = len(response.json)
+                        self._log_connect_failures(failures, self.DEBUG)
                         return response
-                    except MerossTransportError as e:
-                        e.log(self.WARNING, "async_connect", timeout=14400)
                     except Exception as e:
-                        self.log_exception(
-                            self.WARNING, e, "async_connect", timeout=14400
-                        )
+                        failures.append(e)
             except Exception as e:
+                self._log_connect_failures(failures, self.WARNING)
                 raise MerossTransportError(self) from e
+            self._log_connect_failures(failures, self.WARNING)
 
         raise MerossTransportError(self, "No transport available")
+
+    def _log_connect_failures(self, failures: "list[Exception]", level: int, /):
+        # The log 'timeout' trap is shared among levels: only rate-limit warnings so that
+        # debug logs (when another transport succeeded) don't mute a later real warning.
+        kwargs: "LoggerArgs" = {"timeout": 14400} if level > self.DEBUG else {}
+        for e in failures:
+            if isinstance(e, MerossTransportError):
+                e.log(level, "async_connect", **kwargs)
+            else:
+                self.log_exception(level, e, "async_connect", **kwargs)
 
     @override
     async def async_disconnect(self, /):
