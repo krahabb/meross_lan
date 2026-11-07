@@ -3,6 +3,7 @@ from functools import cached_property
 from typing import TYPE_CHECKING, final, override
 
 from .. import async_import_module, extract_dict_payloads, logging, merge_dicts
+from ..client import Transport
 from ..protocol import const as mc, namespaces as mn
 
 if TYPE_CHECKING:
@@ -865,11 +866,16 @@ class NamespaceHandler(logging.Loggable):
         """
         device = self.parent
         self.next_poll_epoch = device.polling_epoch + self.polling_period
-        if (not device.multiple_max) or (
-            self.polling_response_size >= device.device_response_size_max
+        if (
+            not device.multiple_max
+            or self.polling_response_size >= device.device_response_size_max
+            or (
+                # MSG200 can truncate HTTP batches that include System.All.
+                self is device.handler_all
+                and device.transport is Transport.HTTP
+                and device.descriptor.type == mc.TYPE_MSG200
+            )
         ):
-            # multiple requests are disabled
-            # or this request alone would overflow the device response size limit
             self.handle(await device.async_request(*self.polling_request))
             return
         # estimate the size of the multiple response
