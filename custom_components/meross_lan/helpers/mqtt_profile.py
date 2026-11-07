@@ -383,12 +383,10 @@ class MQTTConnection(AbstractMQTTConnection):
                     # we'll ensure that (in case device cfg is stale) we're correctly binded here
                     client = device.mqtt
                     if client is None:
-                        self.attach(device).on_async_mqtt_message(message)
-                        return
-                    if client.connection != self:
+                        client = self.attach(device)
+                    elif client.connection != self:
                         device.remove_client(client)
-                        self.attach(device).on_async_mqtt_message(message)
-                        return
+                        client = self.attach(device)
                     client.on_async_mqtt_message(message)
                     return
 
@@ -544,10 +542,12 @@ class MQTTProfile(ConfigEntryManager):
         config: Final[mlc.MQTTProfileConfigType]  # type: ignore[override]
         linkeddevices: Final[dict[str, Device]]
         mqttconnections: Final[dict[str, MQTTConnection]]
+        _mqttconnection: MQTTConnection | None  # default connection (if any)
 
     __slots__ = (
         "linkeddevices",
         "mqttconnections",
+        "_mqttconnection",
     )
 
     def __init__(
@@ -561,12 +561,14 @@ class MQTTProfile(ConfigEntryManager):
         ConfigEntryManager.__init__(self, id, api, config_entry, **kwargs)
         self.linkeddevices = {}
         self.mqttconnections = {}
+        self._mqttconnection = None
 
     # interface: ConfigEntryManager
     async def async_shutdown(self):
         for mqttconnection in self.mqttconnections.values():
             await mqttconnection.async_shutdown()
         self.mqttconnections.clear()
+        self._mqttconnection = None
         for device in tuple(self.linkeddevices.values()):
             self.unlink(device)
         await ConfigEntryManager.async_shutdown(self)
@@ -636,5 +638,4 @@ class MQTTProfile(ConfigEntryManager):
         device.profile = None  # type: ignore[assignment]
 
     @abstractmethod
-    def get_connection(self, device: "Device") -> "MQTTConnection":
-        pass
+    def get_connection(self, device: "Device") -> MQTTConnection | None: ...

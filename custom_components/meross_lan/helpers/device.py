@@ -734,22 +734,16 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
 
     def _check_protocol(self):
         """called whenever the configuration or the profile linking changes to fix transports."""
+        if self.mqtt:
+            # No matter what: we cleanup current mqtt and eventually restart clean
+            self.remove_client(self.mqtt)
         conf_transport = self.configured_transport
         if conf_transport in (Transport.BLUETOOTH, Transport.HTTP):
             self.preferred_transport = conf_transport
-            if self.mqtt:
-                self.remove_client(self.mqtt)
         else:
-            _profile = self.profile
-            # assert profile ?
-            if self.mqtt:
-                if self.mqtt.connection.parent != _profile:
-                    self.remove_client(self.mqtt)
-                    if _profile:
-                        _profile.get_connection(self).attach(self)
-            else:
-                if _profile:
-                    _profile.get_connection(self).attach(self)
+            mqttconnection = self.profile and self.profile.get_connection(self)
+            if mqttconnection:
+                mqttconnection.attach(self)
 
             if conf_transport is Transport.AUTO:
                 # When using Transport.AUTO we try to use our 'preferred' transport.
@@ -1727,6 +1721,8 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                                 continue
                             channel_name = f"{newname} Channel {channel}"
                         if mlc.HA_VERSION >= (2026, 11):
+                            if TYPE_CHECKING:
+                                assert isinstance(device_entry_info.identifiers, set)
                             device_entry = (
                                 self.device_registry.async_get_device_by_identifier(
                                     next(iter(device_entry_info.identifiers)),

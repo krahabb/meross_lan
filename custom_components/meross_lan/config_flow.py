@@ -228,10 +228,10 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
 
         profile = api.profiles.get(self.device_descriptor.userId)
         if profile and profile.allow_mqtt_publish:
-            mqttconnections = await profile.get_or_create_mqttconnections(uuid)
-            if mqttconnections:
+            for mqttconnection in await profile.get_or_create_mqttconnections(uuid):
+                # Just the first
                 return MQTTConnection.Client(
-                    mqttconnections[0],
+                    mqttconnection,
                     api,
                     uuid=uuid,
                     key=device_config.get(mlc.CONF_KEY) or "",
@@ -593,39 +593,39 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
 
         # Build a list of known valid broker addresses.
         # We start from locally binded active connections by querying loaded devices
-        mqtt_connections: dict[str, tuple["MQTTConnection", HostAddress, bool]] = {}
-        ha_mqtt_connection = api.mqtt_connection
+        mqttconnections: dict[str, tuple["MQTTConnection", HostAddress, bool]] = {}
+        ha_mqttconnection = api.mqttconnection
         for _device in api.active_devices():
             if (
                 _device.mqtt
                 and _device.mqtt.is_connected
-                and (_device.mqtt.connection is ha_mqtt_connection)
+                and (_device.mqtt.connection is ha_mqttconnection)
             ):
                 _broker = _device.descriptor.server
-                mqtt_connections[f"HomeAssistant (mqtt://{_broker})"] = (
-                    ha_mqtt_connection,
+                mqttconnections[f"HomeAssistant (mqtt://{_broker})"] = (
+                    ha_mqttconnection,
                     _broker,
                     False,
                 )
         # This should work as a fallback but is rather fragile since we don't know for
         # sure the effective address of the HA broker
-        if not mqtt_connections and ha_mqtt_connection.mqtt_is_subscribed:
-            _broker = ha_mqtt_connection.id
-            mqtt_connections[f"HomeAssistant (mqtt://{_broker})"] = (
-                ha_mqtt_connection,
+        if not mqttconnections and ha_mqttconnection.mqtt_is_subscribed:
+            _broker = ha_mqttconnection.id
+            mqttconnections[f"HomeAssistant (mqtt://{_broker})"] = (
+                ha_mqttconnection,
                 _broker,
                 True,
             )
             if _broker.port == 1883:
-                mqtt_connections[f"HomeAssistant (mqtt://{_broker.host}:8883)"] = (
-                    ha_mqtt_connection,
+                mqttconnections[f"HomeAssistant (mqtt://{_broker.host}:8883)"] = (
+                    ha_mqttconnection,
                     HostAddress(_broker.host, 8883),
                     True,
                 )
         # Add also Meross cloud bound device connections
         for _profile in api.active_profiles():
             for _broker, _mqtt_connection in _profile.mqttconnections.items():
-                mqtt_connections[f"{_profile.display_name} (mqtt://{_broker})"] = (
+                mqttconnections[f"{_profile.display_name} (mqtt://{_broker})"] = (
                     _mqtt_connection,
                     _mqtt_connection.id,
                     False,
@@ -667,7 +667,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                     try:
                         # check if an available profile/connection was chosen
                         mqtt_connection, server_address, _resolve_address = (
-                            mqtt_connections[server]
+                            mqttconnections[server]
                         )
                         # force key,userid if a connection was choosen
                         profile_key = mqtt_connection.parent.key
@@ -819,7 +819,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
                 _optional(mc.KEY_PASSWORD, bind_config): str,
                 _optional(mc.KEY_SERVER, bind_config): selector.SelectSelector(
                     {
-                        "options": list(mqtt_connections),
+                        "options": list(mqttconnections),
                         "custom_value": True,
                     }
                 ),
@@ -850,7 +850,7 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
     async def _async_mqtt_discovery(
         self, device_id: str, key: str, descriptor: DeviceDescriptor | None
     ) -> tuple[mlc.DeviceConfigType, DeviceDescriptor, MQTTConnection]:
-        mqttconnections: list[MQTTConnection] = []
+        mqttconnections = None
         if descriptor:
             profile = self.api.profiles.get(descriptor.userId)
             if profile and (profile.key == key):
@@ -871,11 +871,11 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
             # this means the device is not Meross cloud binded or the profile
             # is not configured/loaded at least according to our euristics.
             # We'll try HA broker if available
-            if not self.api.mqtt_connection.is_connected:
+            if not self.api.mqttconnection.is_connected:
                 raise Exception(
                     "No MQTT broker (either Meross cloud or HA local broker) available to connect"
                 )
-            mqttconnections.append(self.api.mqtt_connection)
+            mqttconnections = {self.api.mqttconnection}
 
         # acrobatic asyncio:
         # we expect only one of the mqttconnections to eventually
@@ -1178,17 +1178,17 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
         # If our ComponentApi is already running it will manage the discovery itself
         # so this flow is only useful when MerossLan has no configuration yet
         # and we leverage the default mqtt discovery to setup our manager
-        mqtt_connection = self.api.mqtt_connection
-        if mqtt_connection.mqtt_is_subscribed:
+        mqttconnection = self.api.mqttconnection
+        if mqttconnection.mqtt_is_subscribed:
             return self.async_abort(reason=FlowErrorKey.ALREADY_CONFIGURED)
         # try setup the mqtt subscription
         # this call might not register because of errors or because of an overlapping
         # request from 'async_setup_entry' (we're preventing overlapped calls to MQTT
         # subscription)
-        if await mqtt_connection.async_connect():
+        if await mqttconnection.async_connect():
             # ok, now pass along the discovering mqtt message so our ComponentApi state machine
             # gets to work on this
-            mqtt_connection.on_message(discovery_info)
+            mqttconnection.on_message(discovery_info)
         # just in case, setup the MQTT Hub entry to enable the (default) device key configuration
         # if the entry hub is already configured this will disable the discovery
         # subscription (by returning 'already_configured') stopping any subsequent async_step_mqtt message:
