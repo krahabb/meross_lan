@@ -421,6 +421,9 @@ class ConsumptionXSensor(SensorParser.RestoreEntity, SensorParser):
         self.parent.enable_check_device_time()
 
     def set_unavailable(self):
+        # Force the next consumption payload to publish again, even when its
+        # value is unchanged. ParserEntity.set_available does not flush state.
+        self.native_value = None
         self._yesterday_midnight_epoch = 0
         self._today_midnight_epoch = 0
         self._tomorrow_midnight_epoch = 0

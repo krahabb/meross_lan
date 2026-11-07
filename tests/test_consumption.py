@@ -111,6 +111,49 @@ class DeviceConsumptionContext(helpers.DeviceContext):
         await self.async_poll_single()
 
 
+@pytest.mark.parametrize("consumption,offset", [(0, 0), (3, 0), (3, 1)])
+async def test_consumption_recovers_unchanged_value(
+    request, hass: "HomeAssistant", consumption: int, offset: int
+):
+    """Publish recovery after reconnect even when consumption has not increased."""
+    async with DeviceConsumptionContext(
+        request, hass, dt_util.DEFAULT_TIME_ZONE
+    ) as context:
+        sensor = context.sensor_consumption
+        timestamp = context.device.device_timestamp
+        yesterday_timestamp = int(sensor._today_midnight_epoch) - 1
+        days = [
+            {mc.KEY_TIME: yesterday_timestamp, mc.KEY_VALUE: 10},
+            {mc.KEY_TIME: timestamp, mc.KEY_VALUE: consumption},
+        ]
+        sensor(days)
+        sensor.offset = offset
+        sensor.extra_state_attributes[sensor.ATTR_OFFSET] = offset
+        # Establish the adjusted value before simulating a disconnection.
+        sensor.native_value = consumption - offset
+        sensor.flush_state()
+        expected_attributes = dict(sensor.extra_state_attributes)
+        expected_reset_ts = sensor.reset_ts
+
+        for _ in range(2):
+            # These are the callbacks invoked by the device connection lifecycle.
+            sensor.set_unavailable()
+            state = context.get_hass_state(sensor.entity_id)
+            assert state and state.state == STATE_UNAVAILABLE
+            sensor.set_available()
+            # Reconnection waits for a fresh payload before publishing to HA.
+            state = context.get_hass_state(sensor.entity_id)
+            assert state and state.state == STATE_UNAVAILABLE
+
+            sensor(days)
+
+            state = context.get_hass_state(sensor.entity_id)
+            assert state and float(state.state) == consumption - offset
+            assert sensor.offset == offset
+            assert sensor.reset_ts == expected_reset_ts
+            assert sensor.extra_state_attributes == expected_attributes
+
+
 async def test_consumption(request, hass: "HomeAssistant"):
     """
     Basic test with device timezone set the same as HA localtime
