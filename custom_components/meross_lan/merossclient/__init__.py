@@ -629,8 +629,7 @@ class Descriptor:
     def get_upgrade_info(
         self, latest_version: "LatestVersionType", /
     ) -> tuple[str | None, ...]:
-        """If an update is available returns a tuple of (installed_version, latest_version, release_summary).
-        This might raise AttributeError if latest_version is not externally set."""
+        """If an update is available returns a tuple of (installed_version, latest_version, release_summary)."""
         try:
             return (
                 self.fw_version,
@@ -638,7 +637,7 @@ class Descriptor:
                 latest_version.get(mc.KEY_DESCRIPTION),
             )
         except Exception:
-            return None, None, None
+            return self.fw_version, None, None
 
     def get_upgrade_payload(
         self, latest_version: "LatestVersionType", /
@@ -968,7 +967,7 @@ class DeviceDescriptor(Descriptor):
                     latest_version.get(mc.KEY_DESCRIPTION),
                 )
         except Exception as e:
-            return None, None, None
+            return self.fw_version, None, None
 
     @override
     def get_upgrade_payload(

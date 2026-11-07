@@ -416,6 +416,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         kwargs["index"] = mn.IndexType.id.get(subid)
         kwargs["descriptor"] = descriptor
         super().__init__(subid, hub, **kwargs)
+        self.update_firmware = UpdateEntity(self, hub)
         _ns_hub = [self.ns] if self.ns else []
         for _cls in self.__class__.__mro__:
             try:
@@ -466,10 +467,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         )
 
         if latest_version := profile.get_latest_version(descriptor):
-            if self.update_firmware:
-                self.update_firmware.update_latest_version(latest_version)
-            else:
-                UpdateEntity(self, self.parent, latest_version)
+            self.update_firmware.update_latest_version(latest_version)
 
     def parse_digest(self, payload: "mt.hub.Digest_SubDevice", /):
         """
@@ -598,10 +596,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         if (profile := self.parent.profile) and (
             latest_version := profile.get_latest_version(descriptor)
         ):
-            if self.update_firmware:
-                self.update_firmware.update_latest_version(latest_version)
-            else:
-                UpdateEntity(self, self.parent, latest_version)
+            self.update_firmware.update_latest_version(latest_version)
 
     def _hub_parse(self, key: str, payload: dict, /):
         """Heuristic subdevice parsing system. This will be eventually removed

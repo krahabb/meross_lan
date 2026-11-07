@@ -67,8 +67,7 @@ class BaseDevice(device.PhysicalDevice):
         device_entry: dr.DeviceEntry
         device_info: dr.DeviceInfo
         entities_iterable: Iterable[Entity]
-
-        update_firmware: UpdateEntity | None
+        update_firmware: UpdateEntity
 
         class Args(device.PhysicalDevice.Args):
             pass
@@ -81,9 +80,8 @@ class BaseDevice(device.PhysicalDevice):
         "device_registry",
         "device_entry",
         "device_info",
+        "update_firmware",
     )
-
-    _AUTO_INIT = ("update_firmware",)
     _AUTO_DESTROY = ("update_firmware",)
 
     @property
@@ -116,6 +114,7 @@ class BaseDevice(device.PhysicalDevice):
     device_entry = NotImplemented
     device_info = NotImplemented
     entities_iterable = NotImplemented
+    update_firmware = NotImplemented
 
     def update_device_registry(self, **kwargs):
         self.device_entry = (
@@ -606,6 +605,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         self.device_timedelta_log_epoch = 0
         self.device_timedelta_config_epoch = 0
         self.profile = None
+        self.update_firmware = UpdateEntity(self, self)
         self.sensor_protocol = ProtocolSensor(None, self)
         PersistentButton(
             None,
@@ -1404,8 +1404,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
 
     def _handle_Appliance_Mcu_Firmware(self, message: MerossMessage, /):
         self.descriptor.mcu = message.payload[mc.KEY_FIRMWARE]
-        if self.update_firmware:
-            self.update_firmware.flush_state()
+        self.update_firmware.flush_state()
 
     _handle_Appliance_Mcu_Hp110_Firmware = _handle_Appliance_Mcu_Firmware
 
@@ -1435,8 +1434,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             self.schedule_entry_update(True)
             if oldfirmware.get("version") != descr.fw_version:
                 self.update_device_registry(sw_version=descr.fw_version)
-                if self.update_firmware:
-                    self.update_firmware.flush_state()
+                self.update_firmware.flush_state()
             if not self.config.get(mlc.CONF_HOST):
                 self._update_host(descr.innerIp)
         elif oldtimezone != descr.timezone:
@@ -1744,10 +1742,8 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                             )
             # check for firmware updates too
             if latest_version := profile.get_latest_version(self.descriptor):
-                if self.update_firmware:
-                    self.update_firmware.update_latest_version(latest_version)
-                else:
-                    UpdateEntity(self, self, latest_version)
+                self.update_firmware.update_latest_version(latest_version)
+
         except Exception as e:
             self.log_exception(
                 self.WARNING,

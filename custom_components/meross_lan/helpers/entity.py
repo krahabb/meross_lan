@@ -166,15 +166,18 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         """
         # FIXME: generalize automatic entity_key generation for this pattern:
         # entity_key=f"{ns.slug}__{key_value}",
-
+        # TODO: reconsider this 'polimorphic' initializer. The concept of 'sibling' initialization
+        # was introduced in order to reduce the kwargs overhead but this looks messy
         entity_key = kwargs.pop("entity_key", self.__class__._INIT_entity_key)
         if len(args) == 1:
+            # assert entity_key
             sibling: "Entity.Sibling" = args[0]
             parent = sibling.parent
             self.device_info = sibling.device_info
             # intercept 'index' kwarg used by NamespaceParser mixin
             # eventually provide that by forwarding the sibling one
             index = kwargs.setdefault("index", sibling.index)
+            id = f"{index.slug}_{entity_key}" if index else entity_key
         else:
             id, parent = args
             # We're receiving either the channel or the subdevice id in this 'id' variable and
@@ -183,16 +186,15 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
                 self.device_info = kwargs.pop("device_info")
             except KeyError:
                 self.device_info = parent.get_device_entry_info(id)
-            try:
-                # don't pop...NamespaceParser (when mixed-in) will use it
-                index = kwargs["index"]  # type: ignore
-            except KeyError:
-                index = Entity.index  # should be 'none' though
-
-        if index:
-            id = f"{index.slug}_{entity_key}" if entity_key else index.slug
-        else:
-            id = entity_key
+            # don't pop "index": NamespaceParser (when mixed-in) will use it
+            index = kwargs.get("index", Entity.index)
+            if index:
+                id = f"{index.slug}_{entity_key}" if entity_key else index.slug
+            elif id:
+                if entity_key:
+                    id = f"{id}_{entity_key}"
+            else:
+                id = entity_key
 
         assert (
             id not in parent.entities
