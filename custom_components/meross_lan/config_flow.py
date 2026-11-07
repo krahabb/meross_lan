@@ -1024,14 +1024,12 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
     DHCP_VERIFY_RETRY_DELAYS = (5, 10, 15, 30, 30, 60, 60)
 
     async def _async_http_discovery_retry(self, host: str, key: str | None):
-        for delay in (*self.DHCP_VERIFY_RETRY_DELAYS, None):
+        for delay in self.DHCP_VERIFY_RETRY_DELAYS:
             try:
                 return await self._async_http_discovery(host, key)
             except MerossKeyError:
                 raise
             except Exception as e:
-                if delay is None:
-                    raise
                 api = self.api
                 api.log(
                     api.DEBUG,
@@ -1041,6 +1039,9 @@ class ConfigFlow(BaseFlow, ce.ConfigFlow, domain=mlc.DOMAIN):
                     delay,
                 )
                 await asyncio.sleep(delay)
+        raise TimeoutError(
+            f"DHCP verify of {host} failed after {sum(self.DHCP_VERIFY_RETRY_DELAYS)} s"
+        )
 
     async def async_step_dhcp(self, discovery_info: "DhcpServiceInfo"):
         api = self.api
