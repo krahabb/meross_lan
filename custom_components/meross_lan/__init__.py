@@ -78,6 +78,11 @@ async def async_setup_entry(
             if not await api.mqtt_connection.async_connect():
                 raise ConfigEntryNotReady("MQTT unavailable")
             await api.async_setup_entry(hass, config_entry)
+            # 'link' the devices already initialized which were not linked since
+            # the HA MQTT connection was not available at that time
+            for device in api.active_devices():
+                if (not device.profile) and (device.get_mqtt_profile() is api):
+                    api.link(device)
             return True
 
         case _:

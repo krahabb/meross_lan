@@ -630,12 +630,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         # or after a config change. Here we'll register mqtt bindings,
         # fix transports according to the current configuration and profile
         # linking, and finally (re)start polling.
-        try:
-            profile = self.parent.profiles[self.descriptor.userId]
-            if profile and (profile.key != self.key):
-                profile = self.parent
-        except KeyError:
-            profile = self.parent
+        profile = self.get_mqtt_profile()
         if self.profile == profile:
             self._check_protocol()
         else:
@@ -661,6 +656,26 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             self.profile.unlink(self)
         del self.sensor_protocol
         self.parent.devices[self.id] = None
+
+    def get_mqtt_profile(self) -> "MQTTProfile | None":
+        """Returns the MQTT profile the device should be linked to according to its binding:
+        - the Meross cloud profile matching the device userId (if loaded and keys match)
+        - the local HA MQTT broker (ComponentApi) but only if its MQTT connection is
+          actually available (i.e. subscribed). When HA MQTT is not configured, linking
+          to it would just install a non-working MQTT transport which keeps failing with
+          'mqtt_not_setup_cannot_publish' (e.g. while a cloud device is being re-bound).
+        - None when no usable profile is available."""
+        api = self.parent
+        try:
+            profile = api.profiles[self.descriptor.userId]
+            if not profile:
+                # cloud profile configured but not loaded (yet): it will link us when ready
+                return None
+            if profile.key == self.key:
+                return profile
+        except KeyError:
+            pass
+        return api if api.mqtt_connection.mqtt_is_subscribed else None
 
     # miscellaneous internals to prepare/refresh internal config
     def _update_config(self):
@@ -757,9 +772,13 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             if conf_transport is Transport.AUTO:
                 # When using Transport.AUTO we try to use our 'preferred' transport.
                 # When binded to a cloud_profile always prefer http since it will avoid excessive
-                # MQTT traffic and related cloud 'issues' like rate-limiting
-                if self.config.get(mlc.CONF_HOST) or (
-                    self.mqtt and self.mqtt.connection.is_cloud
+                # MQTT traffic and related cloud 'issues' like rate-limiting.
+                # Also prefer http when no MQTT transport is available at all (i.e. no usable
+                # profile linked) since preferring MQTT would be pointless.
+                if (
+                    self.config.get(mlc.CONF_HOST)
+                    or (not self.mqtt)
+                    or self.mqtt.connection.is_cloud
                 ):
                     self.preferred_transport = Transport.HTTP
                 else:
