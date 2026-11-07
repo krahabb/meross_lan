@@ -93,6 +93,7 @@ This list might not be exhaustive since newer devices are being marketed every n
   Valve
   - [MTS200](https://www.meross.com/Detail/116/Smart%20Wi-Fi%20Thermostat): Smart Wifi Thermostat
   - [MTS205](https://www.meross.com/en-gc/smart-thermostat/MTS205/196): Smart Wifi Thermostat
+  - MTS215B: Smart Wifi Thermostat (floor heating, with humidity sensor)
   - [MTS300](https://www.meross.com/en-gc/smart-thermostat/mts300-us/192): Smart Wifi Thermostat
   - [MTS960](https://www.meross.com/en-gc/smart-thermostat/smart-socket-thermostat/145): Smart Wifi Socket Thermostat
 - Covers

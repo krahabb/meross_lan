@@ -118,6 +118,12 @@
             }
         },
         "switch": {
+            "screenbrightness_standbyview": {
+                "name": "Streamlined standby view"
+            },
+            "windowopened_detect": {
+                "name": "Open window detection"
+            },
             "frost_switch": {
                 "name": "Ochrana proti zamrznutiu"
             },
