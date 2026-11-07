@@ -1144,10 +1144,13 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         # and we want to 'translate' this timings in our (local) time.
         # We ignore delays below PARAM_TIMESTAMP_TOLERANCE since
         # we'll always be a bit late in processing
-        self.device_timestamp = message.header[mc.KEY_TIMESTAMP]
-        self.device_timedelta = (
-            9 * self.device_timedelta + (self.last_rx_epoch - self.device_timestamp)
-        ) / 10
+        # Messages carrying a 0 (i.e. invalid) timestamp are skipped: a single one would
+        # otherwise add ~10% of the current epoch to the device_timedelta average.
+        if device_timestamp := message.header.get(mc.KEY_TIMESTAMP):
+            self.device_timestamp = device_timestamp
+            self.device_timedelta = (
+                9 * self.device_timedelta + (self.last_rx_epoch - device_timestamp)
+            ) / 10
 
         if self.isEnabledFor(self.DEBUG):
             # it appears sometimes the devices
