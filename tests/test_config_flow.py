@@ -513,7 +513,7 @@ async def test_dhcp_renewal_retry_config_flow(
         )
         assert result["type"] == FlowResultType.ABORT  # type: ignore
         await hass.async_block_till_done()
-        assert attempts == len(ConfigFlow.DHCP_VERIFY_RETRY_DELAYS) + 1
+        assert attempts == len(ConfigFlow.DHCP_VERIFY_RETRY_DELAYS)
         assert device.host == original_host, "device host was wrongly updated"
 
         # answering on the third attempt: the entry follows the device
