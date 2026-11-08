@@ -424,7 +424,7 @@ class ConsumptionXSensor(SensorParser.RestoreEntity, SensorParser):
         self._yesterday_midnight_epoch = 0
         self._today_midnight_epoch = 0
         self._tomorrow_midnight_epoch = 0
-        return SensorParser.set_unavailable(self)
+        SensorParser.set_unavailable(self)
 
     async def async_added_to_hass(self):
         try:

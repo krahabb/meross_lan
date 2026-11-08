@@ -38,10 +38,6 @@ class SelectEntity(mle.Entity, select.SelectEntity):
     _AUTO_INIT = ("current_option", "options")
     __slots__ = ()
 
-    def set_unavailable(self):
-        self.current_option = None
-        super().set_unavailable()
-
     def update_option(self, option: str):
         if self.current_option != option:
             self.current_option = option
@@ -93,6 +89,11 @@ class SelectParser(mle.ValueParser, SelectEntity):
             pass
         kwargs["options"] = list(self.options_map.values())
         super().__init__(*args, **kwargs)
+
+    @override
+    def set_unavailable(self):
+        self.current_option = None
+        super().set_unavailable()
 
     @override
     def update_device_value(self, device_value, /):

@@ -106,12 +106,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             await super().async_shutdown()
             del self.climate
 
-        @override
-        def set_unavailable(self):
-            # Keep the selected option (the base class would reset it) and let
-            # the tracking loop run: samples are skipped while disconnected.
-            pass
-
         async def async_added_to_hass(self):
             if not self.current_option and (
                 restore_data := self._async_get_restored_data()

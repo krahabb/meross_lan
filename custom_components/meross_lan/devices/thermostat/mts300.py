@@ -223,7 +223,7 @@ class Mts300Climate(MtsThermostatClimate):
         self.native_target_temperature_high = None
         self.native_target_temperature_low = None
         self._mts_work = None
-        return MtsThermostatClimate.set_unavailable(self)
+        MtsThermostatClimate.set_unavailable(self)
 
     if mlc.HA_VERSION < (2026, 11):
         # patch pre 2026.11 ClimateEntity properties

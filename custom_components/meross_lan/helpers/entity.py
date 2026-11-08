@@ -471,6 +471,10 @@ class NumericParser(ValueParser, NumericEntity):
             pass
         super().__init__(*args, **kwargs)
 
+    def set_unavailable(self):
+        self.native_value = None
+        super().set_unavailable()
+
     @override
     def update_device_value(self, device_value: int | float, /):
         if self.ns_value != device_value:

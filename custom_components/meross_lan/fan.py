@@ -58,7 +58,7 @@ class Fan(ToggleXParser, fan.FanEntity):
     @override
     def set_unavailable(self):
         self.cancel_callback(self.__async_refresh)
-        super().set_unavailable()
+        ToggleXParser.set_unavailable(self)
 
     # interface: fan.FanEntity
     @override

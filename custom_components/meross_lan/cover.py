@@ -56,7 +56,7 @@ class Cover(ParserEntity, cover.CoverEntity):
         self.is_closed = None
         self.is_closing = None
         self.is_opening = None
-        super().set_unavailable()
+        ParserEntity.set_unavailable(self)
 
     # interface: self
     def _transition_cancel(self):

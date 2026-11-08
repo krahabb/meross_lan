@@ -203,7 +203,7 @@ class MtsSchedule(ParserEntity, calendar.CalendarEntity):
 
     def set_unavailable(self):
         self._schedule = mn.EMPTY_DICT
-        super().set_unavailable()
+        ParserEntity.set_unavailable(self)
 
     # interface: Calendar
     @property
