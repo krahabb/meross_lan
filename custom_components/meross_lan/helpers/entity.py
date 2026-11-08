@@ -425,7 +425,7 @@ class NumericEntity(Entity):
     # be done by str value despite the fact numbers and sensors each defines their own enums.
     HA_ENTITY_ATTRIBUTES = Entity.HA_ENTITY_ATTRIBUTES + ("native_unit_of_measurement",)
     _AUTO_INIT = ("native_value",)
-    __slots__ = ("native_value",)
+    __slots__ = _AUTO_INIT
 
     def update_native_value(self, native_value: int | float | None, /):
         if self.native_value != native_value:
@@ -499,7 +499,7 @@ class BinaryEntity(Entity):
         def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
 
     _AUTO_INIT = ("is_on",)
-    __slots__ = ("is_on",)
+    __slots__ = _AUTO_INIT
 
     def update_boolean_value(self, is_on: "Any", /) -> bool | None:
         if self.is_on != is_on:
@@ -520,6 +520,8 @@ class BinaryParser(handler.BooleanParser, ValueParser, BinaryEntity):
 
         @classmethod
         def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+
+    __slots__ = handler.BooleanParser._calc_slots(bases=(ValueParser, BinaryEntity))
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         # This is due for entities which are created after entry setup when device is already loaded
@@ -569,7 +571,7 @@ class ToggleXParser(BinaryEntity, ParserEntity):
         class Args(BinaryEntity.Args, ParserEntity.Args):
             pass
 
-    __slots__ = ("handler_togglex",)
+    __slots__ = ParserEntity._calc_slots("handler_togglex", bases=(BinaryEntity,))
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         super().__init__(*args, **kwargs)

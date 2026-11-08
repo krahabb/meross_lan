@@ -832,7 +832,6 @@ class SubDevice(PhysicalDevice, NamespaceParser):
             descriptor: SubDeviceDescriptor
 
     _AUTO_DESTROY = ("async_request",)
-    __slots__ = ()
 
     def __init__(self, subid: str, parent: "Device", **kwargs: "Unpack[Args]"):
         self.async_request = parent.async_request

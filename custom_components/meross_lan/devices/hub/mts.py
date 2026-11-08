@@ -66,6 +66,7 @@ class mts100(SubDevice, MtsClimate):
     _unrecorded_attributes = frozenset((mc.KEY_SCHEDULEBMODE,))
 
     _AUTO_DESTROY = ("binary_sensor_window", "switch_patch_hvacaction")
+    __slots__ = SubDevice._calc_slots(*_AUTO_DESTROY, bases=(MtsClimate,))
 
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
         SubDevice.__init__(self, descriptor, hub, **kwargs)
@@ -297,7 +298,7 @@ class mts150(mts100):
         sensor_motor_start_count: SensorEntity | None
 
     _AUTO_INIT = ("sensor_motor_position", "sensor_motor_start_count")
-    _AUTO_DESTROY = ("sensor_motor_position", "sensor_motor_start_count")
+    _AUTO_DESTROY = _AUTO_INIT
 
     class PidGradeSelect(SelectParser):
 
@@ -342,7 +343,7 @@ class mts150(mts100):
         _INIT__pid_grade_map = MTS150P_PID_GRADE_MAP
 
         _AUTO_INIT = ("_pid_grade_map",)
-        __slots__ = ("p", "i", "d")
+        __slots__ = ("p", "i", "d", *_AUTO_INIT)
 
         @override
         async def async_select_option(self, option: str):

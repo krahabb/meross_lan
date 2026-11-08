@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, overload, override
+from typing import TYPE_CHECKING
 
 from homeassistant.components import number
 
@@ -6,9 +6,6 @@ from .helpers import entity as mle
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final, NotRequired, Self, Unpack
-
-    from .helpers.device import Device
-    from .helpers.manager import ConfigEntryManager
 
 
 class NumberEntity(mle.NumericEntity, number.NumberEntity):
@@ -135,8 +132,6 @@ class EmulatedNumber(NumberEntity.RestoreEntity, NumberEntity):
     Number entity not directly binded to a device parameter (like ConfigNumber)
     but used to store in HA a bit of component configuration.
     """
-
-    __slots__ = NumberEntity._calc_slots()
 
     async def async_added_to_hass(self):
         with self.exception_warning("restoring previous state"):

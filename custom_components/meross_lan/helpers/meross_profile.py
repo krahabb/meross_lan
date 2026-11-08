@@ -10,9 +10,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 # import core modules instead of symbols to ease patching in a single place
-from . import (
-    get_default_ssl_context,
-)
+from . import get_default_ssl_context
 from .. import const as mlc
 from ..merossclient import HostAddress, cloudapi, datetime_from_epoch, versiontuple
 from ..merossclient.client.mqtt import MQTTAppClient
@@ -67,7 +65,7 @@ if TYPE_CHECKING:
 
 class MerossMQTTConnection(MQTTConnection, MQTTAppClient):
 
-    __slots__ = MQTTAppClient._calc_slots()
+    __slots__ = MQTTConnection._calc_slots(bases=(MQTTAppClient,))
 
     def __init__(self, broker: "HostAddress", profile: "MerossProfile"):
         MQTTConnection.__init__(

@@ -274,7 +274,7 @@ class ProtocolSensor(EnumSensorEntity):
     ]
 
     _AUTO_INIT = ("extra_state_attributes",)
-    __slots__ = ()
+    __slots__ = _AUTO_INIT
 
     @override
     def set_available(self):

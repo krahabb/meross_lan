@@ -180,6 +180,7 @@ class Mts300Climate(MtsThermostatClimate):
         "_mts_work",
         "sensor_current_humidity",
         "select_temp_association",
+        *_AUTO_DESTROY,
     )
 
     def __init__(self, id, device: "Device", /, **kwargs):
