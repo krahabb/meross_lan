@@ -459,18 +459,26 @@ class NumericParser(ValueParser, NumericEntity):
         type InitArgs = ValueParser.InitArgs
 
         class Args(ValueParser.Args, NumericEntity.Args):
+            ns_value: NotRequired[int | float]  # Override
             device_scale: NotRequired[int | float]
 
     _INIT_device_scale = 1
     _AUTO_INIT = ("device_scale",)
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
-        try:
-            kwargs["native_value"] = kwargs["ns_value"] / kwargs.get("device_scale", self._INIT_device_scale)  # type: ignore
-        except KeyError:
-            pass
+        if "ns_value" in kwargs:
+            try:
+                kwargs["native_value"] = kwargs["ns_value"] / kwargs.get(
+                    "device_scale", self._INIT_device_scale
+                )
+            except TypeError:
+                # at init time we might prefer discard any 'contaminated' ns_value since it usually
+                # comes from device payloads and we'd better not trust that...better an unitialized entity
+                # than a crash at load time.
+                pass
         super().__init__(*args, **kwargs)
 
+    @override
     def set_unavailable(self):
         self.native_value = None
         super().set_unavailable()
@@ -527,19 +535,12 @@ class BinaryParser(handler.BooleanParser, ValueParser, BinaryEntity):
         # This is due for entities which are created after entry setup when device is already loaded
         # and we want to flush the initial state during HA entry adding (which happens in Entity constructor)
         # without having to flush twice (UNKNOWN -> device state).
-        try:
-            # if ns_value is not provided this code is unnecessary and
-            # the eventual other arguments will be managed by bases.
-            self.ns_value = kwargs.pop("ns_value")
-            self.value_on = kwargs.pop("value_on", self._INIT_value_on)
-            self.value_off = kwargs.pop("value_off", self._INIT_value_off)
-            match self.ns_value:
-                case self.value_on:
-                    kwargs["is_on"] = True
-                case self.value_off:
-                    kwargs["is_on"] = False
-        except KeyError:
-            pass
+        if "ns_value" in kwargs:
+            ns_value = kwargs["ns_value"]
+            if ns_value == kwargs.get("value_on", self._INIT_value_on):
+                kwargs["is_on"] = True
+            elif ns_value == kwargs.get("value_off", self._INIT_value_off):
+                kwargs["is_on"] = False
         super().__init__(*args, **kwargs)
 
     def set_unavailable(self):

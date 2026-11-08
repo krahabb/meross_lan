@@ -138,12 +138,15 @@ class EnumParser(mle.ValueParser, EnumSensorEntity):
         type InitArgs = mle.ValueParser.InitArgs
 
         class Args(EnumSensorEntity.Args, mle.ValueParser.Args):
-            pass
-
-        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
+            ns_value: NotRequired[StateType]  # Override
 
         @classmethod
         def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
+
+    def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
+        if "ns_value" in kwargs:
+            kwargs["native_value"] = kwargs["ns_value"]
+        super().__init__(*args, **kwargs)
 
     @override
     def update_device_value(self, device_value: "StateType", /):
