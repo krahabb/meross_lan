@@ -1,11 +1,14 @@
 from typing import TYPE_CHECKING, override
 
+from homeassistant.core import Context
 from homeassistant.helpers.entity_registry import RegistryEntryDisabler
 from homeassistant.util.dt import now
 
-from ..binary_sensor import BinarySensorEntity
+from ..binary_sensor import BinarySensorEntity, BinarySensorParser
 from ..cover import Cover
 from ..helpers import clamp
+from ..logbook import EVENT_GARAGEDOOR_TRIGGER
+from ..merossclient import extract_dict_payloads
 from ..merossclient.client import Transport
 from ..merossclient.device.handler import (
     MappingParser,
@@ -63,6 +66,20 @@ class GarageTimeoutBinarySensor(BinarySensorEntity):
         self.flush_state()
 
 
+class GarageObstructionBinarySensor(BinarySensorParser):
+    """
+    Binary sensor for MSG150 obstruction status (1: detected, 2: cleared).
+    """
+
+    _INIT_entity_key = mc.KEY_OBSTRUCTION
+    _INIT_key_value = BinarySensorParser.KeyValue(mc.KEY_OBSTRUCTION)
+    _INIT_value_off = 2
+
+    # HA core entity attributes:
+    _attr_device_class = BinarySensorParser.DeviceClass.PROBLEM
+    _attr_name = "Obstruction"
+
+
 class GarageConfigMixin(ValueParser if TYPE_CHECKING else object):
     if TYPE_CHECKING:
 
@@ -76,7 +93,7 @@ class GarageConfigMixin(ValueParser if TYPE_CHECKING else object):
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         key_value_str = str(kwargs["key_value"])  # type: ignore
         kwargs["entity_key"] = f"config_{key_value_str}"
-        kwargs["name"] = key_value_str
+        kwargs.setdefault("name", key_value_str)
         super().__init__(*args, **kwargs)
         if self.index.value is not None:
             setattr(
@@ -87,6 +104,27 @@ class GarageConfigMixin(ValueParser if TYPE_CHECKING else object):
                 self,
             )
 
+    async def async_request_value(self, device_value, /):
+        device = self.parent
+        if self.ns is not mn.Appliance_GarageDoor_Config or not (
+            device.descriptor.type.startswith(mc.TYPE_MSG150)
+        ):
+            return await super().async_request_value(device_value)
+
+        # MSG150 config SET requests also carry signalDuration when changing
+        # another setting. The cached value may be missing after going offline.
+        handler = device.ns_handlers[self.ns]
+        signal_duration = handler.parsers.get(mc.KEY_SIGNALDURATION)
+        if signal_duration is None or signal_duration.ns_value is None:
+            await handler.async_get()
+            signal_duration = handler.parsers[mc.KEY_SIGNALDURATION]
+        if signal_duration.ns_value is None:
+            raise ValueError("MSG150 config is missing signalDuration")
+        payload = {mc.KEY_SIGNALDURATION: signal_duration.ns_value}
+        payload.update(self.key_value.payload(device_value))
+        await device.async_request(*self.ns.request_set(payload))
+        self.update_device_value(device_value)
+
 
 class GarageConfigSwitch(GarageConfigMixin, SwitchParser):
     """
@@ -95,6 +133,14 @@ class GarageConfigSwitch(GarageConfigMixin, SwitchParser):
     """
 
     pass
+
+
+class GarageConfigSwitchMSG150(GarageConfigSwitch):
+    """
+    Config switch for MSG150 values encoded as 1 (on) and 2 (off).
+    """
+
+    _INIT_value_off = 2
 
 
 class GarageEnableSwitch(GarageConfigSwitch):
@@ -235,6 +281,9 @@ class GarageDoorMultipleConfig(MappingParser):
 
 class GarageDoorConfig(MappingParserHandler):
 
+    PARAM_LIGHT_UPDATE_PERIOD = 10
+    """local polling period for MSG150 opener light status"""
+
     _INIT_parser_defs = {
         key: GarageDoorMultipleConfig._INIT_parser_defs[key]
         for key in (
@@ -244,6 +293,33 @@ class GarageDoorConfig(MappingParserHandler):
             mc.KEY_DOOROPENDURATION,
         )
     }
+
+    @classmethod
+    @override
+    def namespace_init(
+        cls,
+        ns: mn.Namespace,
+        device: "Device",
+        /,
+        **kwargs: "Unpack[NamespaceHandler.Args]",
+    ):
+        handler = super().namespace_init(ns, device, **kwargs)
+        if device.descriptor.type.startswith(mc.TYPE_MSG150):
+            handler.parser_defs = {
+                **handler.parser_defs,
+                mc.KEY_LED: GarageConfigSwitchMSG150.DEF(
+                    name="Opener light", entity_category=None
+                ),
+                mc.KEY_OBENABLE: GarageConfigSwitchMSG150.DEF(
+                    name="Obstruction reporting"
+                ),
+                mc.KEY_LOCKREMOTE: GarageConfigSwitchMSG150.DEF(name="Remote lock"),
+                mc.KEY_BUZZERDELAYTIME: GarageConfigNumber.DEF(),
+            }
+            # FW 7.1.8 does not PUSH Config updates for light changes made by
+            # motion or the wall panel. Cloud polling keeps the config default.
+            handler.polling_period = cls.PARAM_LIGHT_UPDATE_PERIOD
+        return handler
 
     def _handle(self, message: "MerossMessage", /):
         handler = super()._handle
@@ -272,6 +348,7 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         ENTITY_DEFS: dict[str, type[GarageConfigMixin]]
 
         binary_sensor_timeout: GarageTimeoutBinarySensor
+        binary_sensor_obstruction: GarageObstructionBinarySensor | None
         doorEnable: GarageEnableSwitch
         doorCloseDuration: NumberEntity | _DurationHelper
         doorOpenDuration: NumberEntity | _DurationHelper
@@ -279,6 +356,16 @@ class GarageDoor(Cover.RestoreEntity, Cover):
     PARAM_TRANSITION_MAXDURATION = 60
     PARAM_TRANSITION_MINDURATION = 10
     ATTR_TRANSITION_DURATION = "transition_duration"
+    ATTR_LAST_TRIGGER_SOURCE = "last_trigger_source"
+    ATTR_LAST_TRIGGER_SOURCE_RAW = "last_trigger_source_raw"
+
+    TRIGGER_SOURCE_MAP = {
+        "iOS": "App",
+        "Android": "App",
+        "WallButton": "Wall Panel",
+        "DevicePysical": "Remote",
+        "DevicePhysical": "Remote",
+    }
 
     # HA core entity attributes:
     _attr_device_class = Cover.DeviceClass.GARAGE
@@ -288,7 +375,14 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         "_config",
         "_transition_duration",
         "_transition_start",
+        "_transition_timeout_retry",
+        "_ha_command_context",
+        "_ha_command_deadline",
+        "_ha_command_target",
+        "_ha_command_user",
+        "_trigger_context",
         "binary_sensor_timeout",
+        "binary_sensor_obstruction",
         *GarageDoorMultipleConfig._INIT_parser_defs.keys(),
     )
 
@@ -297,11 +391,18 @@ class GarageDoor(Cover.RestoreEntity, Cover):
             self.PARAM_TRANSITION_MAXDURATION + self.PARAM_TRANSITION_MINDURATION
         ) / 2
         self._transition_start = 0.0
+        self._transition_timeout_retry = False
+        self._ha_command_context = None
+        self._ha_command_deadline = 0.0
+        self._ha_command_target = None
+        self._ha_command_user = None
+        self._trigger_context = None
         self.extra_state_attributes = {
             self.ATTR_TRANSITION_DURATION: self._transition_duration
         }
         Cover.__init__(self, id, device, **kwargs)
         self.binary_sensor_timeout = GarageTimeoutBinarySensor(self)
+        self.binary_sensor_obstruction = None
         # garage run timeouts config availability is rather articulated across different fw.
         # This approach allows to have dynamic entities that adapt to the actual device capabilities
         # while still providing a fallback solution to cover the cases where the
@@ -330,15 +431,35 @@ class GarageDoor(Cover.RestoreEntity, Cover):
 
     # interface: cover.CoverEntity
     async def async_open_cover(self, **kwargs):
+        await self._async_capture_command_context()
         await self.async_request_position(1)
 
     async def async_close_cover(self, **kwargs):
+        await self._async_capture_command_context()
         await self.async_request_position(0)
+
+    async def _async_capture_command_context(self):
+        if not self.parent.descriptor.type.startswith(mc.TYPE_MSG150):
+            return
+        self._ha_command_target = None
+        self._ha_command_context = self._context
+        self._ha_command_user = None
+        if self._context is not None and self._context.user_id:
+            try:
+                if user := await self.hass.auth.async_get_user(self._context.user_id):
+                    self._ha_command_user = user.name
+            except Exception:
+                # A failed user lookup should still allow the door command.
+                pass
 
     # interface: self
     async def async_request_position(self, open_request: int, /):
         self._transition_cancel()
-        response = await self.async_request_payload({mc.KEY_OPEN: open_request})
+        is_msg150 = self.parent.descriptor.type.startswith(mc.TYPE_MSG150)
+        payload = {mc.KEY_OPEN: open_request}
+        if is_msg150:
+            payload[mc.KEY_UUID] = self.parent.id
+        response = await self.async_request_payload(payload)
         """
         example (historical) payload in SETACK:
         {"state": {"channel": 0, "open": 0, "lmTime": 0, "execute": 1}}
@@ -358,8 +479,13 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         if type(p_state) is list:
             # we eventually expect a 1 item list with our channel of course
             p_state = p_state[0]
-        _open = p_state[mc.KEY_OPEN]
-        self.is_closed = not _open
+        if is_msg150:
+            # MSG150 echoes the target in SETACK before movement finishes.
+            # The position is only confirmed by a GET, PUSH or digest update.
+            _open = None if self.is_closed is None else not self.is_closed
+        else:
+            _open = p_state[mc.KEY_OPEN]
+            self.is_closed = not _open
         if p_state.get(mc.KEY_EXECUTE) and open_request != _open:
             device = self.parent
             self._transition_start = device.last_rx_epoch
@@ -371,11 +497,17 @@ class GarageDoor(Cover.RestoreEntity, Cover):
                 self.is_closing = True
                 self.is_opening = False
                 timeout = self.doorCloseDuration.native_value
+            timeout = timeout or self._transition_duration
+            if not open_request:
+                timeout += self._get_close_delay()
+            if is_msg150:
+                self._ha_command_target = bool(open_request)
+                self._ha_command_deadline = self.time() + timeout + 5
             self.schedule_callback(0.9, self._transition_callback)
             # check the timeout after expected to account
             # for delays in communication
             self.schedule_callback(
-                (timeout or self._transition_duration),  # type: ignore
+                timeout,
                 self._async_transition_end_callback,
             )
 
@@ -389,14 +521,84 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         except (AttributeError, KeyError):
             pass
 
+        attributes_changed = False
+        source_label = None
+        ha_command = False
+        if self.parent.descriptor.type.startswith(mc.TYPE_MSG150):
+            if mc.KEY_OBSTRUCTION in payload:
+                if self.binary_sensor_obstruction is None:
+                    self.binary_sensor_obstruction = GarageObstructionBinarySensor(
+                        self, ns=self.ns, ns_value=payload[mc.KEY_OBSTRUCTION]
+                    )
+                else:
+                    self.binary_sensor_obstruction.update_device_value(
+                        payload[mc.KEY_OBSTRUCTION]
+                    )
+            for key in (mc.KEY_OBSTRUCTION, mc.KEY_OBLMTIME, mc.KEY_SIGNALVALID):
+                if (
+                    key in payload
+                    and self.extra_state_attributes.get(key) != payload[key]
+                ):
+                    self.extra_state_attributes[key] = payload[key]
+                    attributes_changed = True
+
+            source = payload.get(mc.KEY_TRIGGERSRC)
+            ha_command = (
+                self._ha_command_target is not None
+                and self._ha_command_target == bool(payload[mc.KEY_OPEN])
+                and self.time() <= self._ha_command_deadline
+                and source in (None, "DevicePysical", "DevicePhysical")
+            )
+            if ha_command:
+                source = "Home Assistant"
+                source_label = (
+                    f"Home Assistant ({self._ha_command_user})"
+                    if self._ha_command_user
+                    else source
+                )
+            elif source:
+                source_label = self.TRIGGER_SOURCE_MAP.get(source)
+            if source:
+                for key, value in (
+                    (self.ATTR_LAST_TRIGGER_SOURCE_RAW, source),
+                    (self.ATTR_LAST_TRIGGER_SOURCE, source_label or "Unknown"),
+                ):
+                    if self.extra_state_attributes.get(key) != value:
+                        self.extra_state_attributes[key] = value
+                        attributes_changed = True
+
         is_closed = not payload[mc.KEY_OPEN]
         if self.is_closed == is_closed:
+            if attributes_changed:
+                self.flush_state()
             if self._transition_start:
                 # keep monitoring the transition
                 self.schedule_callback(0.9, self._transition_callback)
             return
 
         # door open state changed
+        if self.parent.descriptor.type.startswith(mc.TYPE_MSG150):
+            if source_label and self.hass_connected:
+                parent_context = self._ha_command_context if ha_command else None
+                context = Context(
+                    user_id=parent_context.user_id if parent_context else None,
+                    parent_id=parent_context.id if parent_context else None,
+                )
+                self.hass.bus.async_fire(
+                    EVENT_GARAGEDOOR_TRIGGER,
+                    {"source": source_label},
+                    context=context,
+                )
+                self.async_set_context(context)
+                self._trigger_context = context
+            elif self.hass_connected:
+                # A recent physical trigger could still be in HA's context
+                # window when an operation with an unknown source arrives.
+                self.async_set_context(Context())
+                self._trigger_context = None
+            self._ha_command_target = None
+            self._ha_command_context = None
+            self._ha_command_user = None
         if self._transition_start:
             # We're "in transition" and the physical contact has reached the target.
             # we can monitor the (sampled) exact time when the garage closes to
@@ -408,7 +610,11 @@ class GarageDoor(Cover.RestoreEntity, Cover):
             # Also to note: if we're on HTTP this sampled time could happen anyway after the 'real'
             # state switched to 'closed' so we're likely going to measure in exceed of real transition duration
             if is_closed:
-                transition_duration = self.parent.last_rx_epoch - self._transition_start
+                transition_duration = (
+                    self.parent.last_rx_epoch
+                    - self._transition_start
+                    - self._get_close_delay()
+                )
                 # autoregression filtering applying 20% of last updated sample
                 self._update_transition_duration(
                     int((4 * self._transition_duration + transition_duration) / 5)
@@ -423,6 +629,8 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         self.is_closing = False
         self.is_opening = False
         self._transition_start = 0.0
+        self._transition_timeout_retry = False
+        self._trigger_context = None
         Cover._transition_cancel(self)
 
     @override
@@ -436,6 +644,10 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         checks the transition did finish as per the timeout(s)
         """
         was_closing = self.is_closing
+        transition_start = self._transition_start
+        if self._trigger_context is not None:
+            # Opening can outlast HA's five-second entity context window.
+            self.async_set_context(self._trigger_context)
         if was_closing:
             # When closing we expect this callback not to be called since
             # the transition should be terminated by our parser callback,
@@ -443,7 +655,9 @@ class GarageDoor(Cover.RestoreEntity, Cover):
             # If we're here, we still havent received a proper 'physical close'
             # because our configured closeduration is too short
             # or the garage didnt close at all
-            if self._transition_duration < (self.time() - self._transition_start):
+            if not self._transition_timeout_retry and self._transition_duration < (
+                self.time() - transition_start
+            ):
                 self._update_transition_duration(self._transition_duration + 1)
 
         self.is_closing = False
@@ -458,13 +672,41 @@ class GarageDoor(Cover.RestoreEntity, Cover):
                 if was_closing == self.is_closed:
                     self.binary_sensor_timeout.update_ok(was_closing)
                 else:
-                    self.binary_sensor_timeout.update_timeout(was_closing)
+                    self._transition_timeout(was_closing, transition_start)
             except Exception:
-                self.flush_state()
-                self.binary_sensor_timeout.update_timeout(was_closing)
+                self._transition_timeout(was_closing, transition_start, flush=True)
         else:
             self.flush_state()
             self.binary_sensor_timeout.update_ok(was_closing)
+
+    def _transition_timeout(
+        self, was_closing: bool, transition_start: float, /, *, flush: bool = False
+    ):
+        if (
+            self.parent.descriptor.type.startswith(mc.TYPE_MSG150)
+            and not self._transition_timeout_retry
+        ):
+            # MSG150 FW 7.1.8 can PUSH the final state after the configured
+            # timeout. One extra check allows for this reporting delay.
+            self._transition_timeout_retry = True
+            self._transition_start = transition_start
+            self.is_closing = was_closing
+            self.is_opening = not was_closing
+            self.schedule_callback(5, self._async_transition_end_callback)
+            return
+        if flush:
+            self.flush_state()
+        self.binary_sensor_timeout.update_timeout(was_closing)
+
+    def _get_close_delay(self) -> float:
+        if self.parent.descriptor.type.startswith(mc.TYPE_MSG150):
+            try:
+                config = self.parent.ns_handlers[mn.Appliance_GarageDoor_Config].parsers
+                if config[mc.KEY_BUZZERENABLE].is_on:
+                    return config[mc.KEY_BUZZERDELAYTIME].native_value or 0
+            except KeyError:
+                pass
+        return 0
 
     def _update_transition_duration(self, transition_duration, /):
         self._transition_duration = clamp(
@@ -504,7 +746,12 @@ class GarageDoor(Cover.RestoreEntity, Cover):
 
         # do not register_parser_class since we don't want to create spurious
         # GarageDoor at channel 0 (msg200)
-        nh = NamespaceHandler(ns, device, **kwargs)
+        handler_class = (
+            GarageDoorStateHandler
+            if descriptor.type.startswith(mc.TYPE_MSG150)
+            else NamespaceHandler
+        )
+        nh = handler_class(ns, device, **kwargs)
         for channel_digest in ns.get_digest(descriptor.digest):
             channel = channel_digest[mc.KEY_CHANNEL]
             nh.register_parser(
@@ -513,3 +760,23 @@ class GarageDoor(Cover.RestoreEntity, Cover):
                 )
             )
         return nh
+
+
+class GarageDoorStateHandler(NamespaceHandler):
+    """
+    State handler forwarding MSG150 triggerSrc headers to the door parser.
+    """
+
+    @override
+    def _handle_index_channel(self, message: "MerossMessage", /):
+        source = (
+            message.header.get(mc.KEY_TRIGGERSRC)
+            if message.header[mc.KEY_METHOD] == mc.METHOD_PUSH
+            else None
+        )
+        for payload in extract_dict_payloads(message.payload[self.id.key]):
+            # GET headers can identify the polling client. Only PUSH headers
+            # carry the operator source; copying preserves the traced message.
+            if source:
+                payload = {**payload, mc.KEY_TRIGGERSRC: source}
+            self._parse_channel(payload)
