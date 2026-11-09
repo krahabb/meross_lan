@@ -451,3 +451,5 @@ class mts150(mts100):
             )
         if (position is not None) and ((position > 0) != bool(self._mts_active)):
             self.flush_state()
+
+mts150p = mts150
