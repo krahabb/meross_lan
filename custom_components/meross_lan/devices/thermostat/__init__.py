@@ -74,7 +74,7 @@ class MtsCommonTemperatureNumber(NumberParser):
 
     _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
 
-    def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]):
+    def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         # TODO: this mess should be reorganized.
         # We could maybe create a thermostats dict in Device so that we can always
         # access those entities wherever since MtsClimate entities are needed here and there
@@ -263,6 +263,15 @@ class MtsExternalSensorSwitch(SwitchParser):
 
 
 class MtsHoldAction(SelectParser):
+    """Handles the 'hold' of the temperature setpoint. I'm not really sure but this should be a
+    feature allowing to 'override' current thermostat setpoint (especially when in schedule mode)
+    for a limited amount of time.
+    It should work like this:
+    mode == 0 : disabled ?
+    mode == 1 : until next schedule change
+    mode == 2 : on a timer as configured in the 'time' key for the command
+    This payload might also report an 'expire' key likely reporting when an 'hold' is in place
+    and the time it should expire."""
 
     if TYPE_CHECKING:
         number_time: NumberParser
@@ -275,33 +284,61 @@ class MtsHoldAction(SelectParser):
         mc.MTS_HOLDACTION_TIMER: "timer",
     }
 
-    __slots__ = ("number_time",)
+    _AUTO_DESTROY = ("number_time", "sensor_expire")
+    __slots__ = _AUTO_DESTROY
+
+    def __init__(self, *args, **kwargs):
+        SelectParser.__init__(self, *args, **kwargs)
+        self.number_time = NumberParser(
+            self,
+            entity_key="hold_action_time",
+            device_scale=1,
+            name="Hold action time",
+            device_class=NumberParser.DEVICE_CLASS_DURATION,
+            native_max_value=480,
+            native_min_value=0,
+            native_step=1,
+            native_unit_of_measurement=mlc.hac.UnitOfTime.MINUTES,
+        )
+        self.number_time.async_request_value = self._async_request_value_number_time
+        self.sensor_expire = SensorParser(
+            self,
+            ns=self.ns,
+            entity_key=f"{self.ns.slug}__{mc.KEY_EXPIRE}",
+            key_value=SensorParser.KeyValue(mc.KEY_EXPIRE),
+            name="Hold expire",
+            device_class=SensorParser.DeviceClass.TIMESTAMP,
+        )
 
     @override
     def __call__(self, payload: "mt.thermostat.HoldAction_C", /):
         self.update_device_value(payload[mc.KEY_MODE])
-        try:
-            time = payload[mc.KEY_TIME]  # type: ignore
-            self.number_time.update_device_value(time)
-        except AttributeError:
-            self.number_time = NumberParser(
-                self,
-                entity_key="hold_action_time",
-                device_scale=1,
-                ns_value=time,
-                name="Hold action time",
-                device_class=NumberParser.DEVICE_CLASS_DURATION,
-                native_unit_of_measurement=mlc.hac.UnitOfTime.MINUTES,
-            )
-            self.number_time.async_request_value = self._async_request_value_number_time
-        except KeyError:
-            pass
+        if mc.KEY_TIME in payload:
+            self.number_time.update_device_value(payload[mc.KEY_TIME])
+        if mc.KEY_EXPIRE in payload:
+            self.sensor_expire.update_native_value(self.parent.get_device_datetime(payload[mc.KEY_EXPIRE]))  # type: ignore
+        else:
+            self.sensor_expire.update_native_value(None)
 
-    async def _async_request_value_number_time(self, device_value, /):
+    @override
+    async def async_request_value(self, mode) -> None:
+        # Intercept HA service request to modify the entity value
+        await self.async_request_parse(
+            {
+                mc.KEY_MODE: mode,
+                mc.KEY_TIME: self.number_time.ns_value or 0,
+            }
+            if mode == mc.MTS_HOLDACTION_TIMER
+            else {
+                mc.KEY_MODE: mode,
+            }
+        )
+
+    async def _async_request_value_number_time(self, time, /):
         await self.async_request_parse(
             {
                 mc.KEY_MODE: mc.MTS_HOLDACTION_TIMER,
-                mc.KEY_TIME: device_value,
+                mc.KEY_TIME: time,
             }
         )
 
