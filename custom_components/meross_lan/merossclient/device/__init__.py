@@ -615,7 +615,11 @@ class Device(PhysicalDevice):
                 # message parsing (handlers might be dynamically created by then)
                 # Also, we skip ns polling for data wich might be carried in ns_all digest
                 # since self._async_poll_all is already automatically taking care of this.
-                for nh in self.ns_handlers.values():
+                # We iterate over a snapshot since a new handler might be added while awaiting
+                # (i.e. an unsolicited message for a not yet managed namespace) and this would
+                # raise 'RuntimeError: dictionary changed size during iteration'. Newly added
+                # handlers will be polled in the next cycle.
+                for nh in tuple(self.ns_handlers.values()):
                     if nh.polling_strategy and not nh.digest:
                         try:
                             await nh.polling_strategy(nh)
