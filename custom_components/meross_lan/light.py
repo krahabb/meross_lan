@@ -527,6 +527,7 @@ class Light(LightBase):
             await self.async_request_parse_ex({mc.KEY_ONOFF: onoff})
 
     async def async_request_light_on_flush(self, _light: "mt.JsonDict", /):
+        was_on = self.is_on
         if mc.KEY_ONOFF in _light:
             _light[mc.KEY_ONOFF] = 1
         else:
@@ -534,6 +535,11 @@ class Light(LightBase):
 
         await self.async_request_parse(_light)
         if self.is_on:
+            if not was_on:
+                # is_on may have been set optimistically above: __call__ only flushes
+                # when the light payload changed and _parse_togglex only flushes when
+                # is_on changed, so neither would publish this off -> on transition.
+                self.flush_state()
             return
         # In general, the LIGHT payload with LUMINANCE set should rightly
         # turn on the light, but this is not true for every model/fw.
