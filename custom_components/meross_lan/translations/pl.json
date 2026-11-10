@@ -81,10 +81,10 @@
         },
         "number": {
             "calibration_humidity": {
-                "name": "Calibration (humidity)"
+                "name": "Kalibracja (wilgotność względna)"
             },
             "calibration_temperature": {
-                "name": "Calibration (temperature)"
+                "name": "Kalibracja (temperatura)"
             },
             "temperature_comfort": {
                 "name": "Preset comfort"
@@ -118,6 +118,12 @@
             }
         },
         "switch": {
+            "screenbrightness_standbyview": {
+                "name": "Usprawniony widok w trybie gotowości"
+            },
+            "windowopened_detect": {
+                "name": "Wykrywanie otwartego okna"
+            },
             "frost_switch": {
                 "name": "Ochrona przed mrozem"
             },
