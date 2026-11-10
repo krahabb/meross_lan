@@ -766,26 +766,47 @@ class Emulator:
         ]
         return mc.METHOD_SETACK, {}
 
+    DEBUG_UPTIME_INIT = 169 * 3600 + 52 * 60 + 27
+    """Emulated device uptime (seconds) at the first Appliance.System.Debug query."""
+
+    def get_debug_boot_epoch(self, /) -> int:
+        """Emulated device boot epoch (stable for the emulator lifetime)."""
+        try:
+            return self._debug_boot_epoch  # type: ignore
+        except AttributeError:
+            self._debug_boot_epoch = int(self.epoch) - self.DEBUG_UPTIME_INIT
+            return self._debug_boot_epoch
+
     def _GET_Appliance_System_Debug(self, header, payload, /):
         firmware = self.descriptor.firmware
+        epoch = int(self.epoch)
+        uptime = epoch - self.get_debug_boot_epoch()
         return mc.METHOD_GETACK, {
             mc.KEY_DEBUG: {
                 mc.KEY_SYSTEM: {
                     mc.KEY_VERSION: firmware.get(mc.KEY_VERSION),
-                    "sysUpTime": "169h52m27s",
+                    "sysUpTime": f"{uptime // 3600}h{uptime % 3600 // 60}m{uptime % 60}s",
+                    "UTC": epoch,
                     "localTimeOffset": 0,
                     "localTime": "Sun Mar 10 13:19:09 2024",
                     "suncalc": "6:6;18:13",
+                    "memTotal": 3958496,
+                    "memFree": 3562976,
+                    "memMini": 3548256,
                 },
                 mc.KEY_NETWORK: {
                     "linkStatus": "connected",
+                    "snr": 36,
+                    "channel": 11,
                     mc.KEY_SIGNAL: 70,
+                    "rssi": -65,
                     "ssid": "######0",
                     mc.KEY_GATEWAYMAC: firmware.get(mc.KEY_WIFIMAC),
                     mc.KEY_INNERIP: firmware.get(mc.KEY_INNERIP),
                     "wifiDisconnectCount": 0,
                 },
                 mc.KEY_CLOUD: {
+                    "linkStatus": "connected",
                     mc.KEY_ACTIVESERVER: firmware.get(mc.KEY_SERVER),
                     mc.KEY_MAINSERVER: firmware.get(mc.KEY_SERVER),
                     mc.KEY_MAINPORT: firmware.get(mc.KEY_PORT),

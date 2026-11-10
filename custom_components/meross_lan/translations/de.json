@@ -23,7 +23,30 @@
                 }
             }
         },
+        "binary_sensor": {
+            "cloud_connection": {
+                "name": "Cloud-Verbindung"
+            }
+        },
         "sensor": {
+            "uptime": {
+                "name": "Betriebszeit"
+            },
+            "wifi_rssi": {
+                "name": "WLAN-RSSI"
+            },
+            "wifi_channel": {
+                "name": "WLAN-Kanal"
+            },
+            "wifi_disconnects": {
+                "name": "WLAN-Verbindungsabbrüche"
+            },
+            "cloud_disconnects": {
+                "name": "Cloud-Verbindungsabbrüche"
+            },
+            "memory_free": {
+                "name": "Freier Speicher"
+            },
             "smoke_alarm_status": {
                 "state": {
                     "error_temperature": "Fehler: Temperatursensor",
