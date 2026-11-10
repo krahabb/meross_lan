@@ -20,6 +20,8 @@ if TYPE_CHECKING:
         Unpack,
     )
 
+    from homeassistant.helpers.typing import StateType
+
     from .helpers.device import Device
     from .helpers.mqtt_profile import MQTTConnection
     from .merossclient.client import AbstractClient
@@ -105,12 +107,12 @@ class EnumSensorEntity(SensorEntity):
         _attr_device_class: Final
         _attr_state_class: Final
         _attr_suggested_display_precision: Final
-        native_value: sensor.StateType
+        native_value: StateType
 
         type InitArgs = SensorEntity.InitArgs
 
         class Args(SensorEntity.Args):
-            native_value: NotRequired[sensor.StateType]  # Override
+            native_value: NotRequired[StateType]  # Override
             device_class: NotRequired[Never]  # Override
             state_class: NotRequired[Never]  # Override
             suggested_display_precision: NotRequired[Never]  # Override
@@ -120,9 +122,7 @@ class EnumSensorEntity(SensorEntity):
         @classmethod
         def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
-        def update_native_value(
-            self, native_value: sensor.StateType, /
-        ) -> bool | None: ...
+        def update_native_value(self, native_value: StateType, /) -> bool | None: ...
 
     # HA core entity attributes:
     _attr_device_class = sensor.SensorDeviceClass.ENUM
@@ -138,15 +138,18 @@ class EnumParser(mle.ValueParser, EnumSensorEntity):
         type InitArgs = mle.ValueParser.InitArgs
 
         class Args(EnumSensorEntity.Args, mle.ValueParser.Args):
-            pass
-
-        def __init__(self, *args: *InitArgs, **kwargs: Unpack[Args]): ...
+            ns_value: NotRequired[StateType]  # Override
 
         @classmethod
         def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
+    def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
+        if "ns_value" in kwargs:
+            kwargs["native_value"] = kwargs["ns_value"]
+        super().__init__(*args, **kwargs)
+
     @override
-    def update_device_value(self, device_value: sensor.StateType, /):
+    def update_device_value(self, device_value: "StateType", /):
         if self.ns_value != device_value:
             self.ns_value = device_value
             self.native_value = device_value
@@ -206,20 +209,18 @@ class DiagnosticSensor(SensorEntity):
     """
 
     if TYPE_CHECKING:
-        native_value: sensor.StateType
+        native_value: StateType
 
         type InitArgs = SensorEntity.InitArgs
 
         class Args(SensorEntity.Args):
-            native_value: NotRequired[sensor.StateType]
+            native_value: NotRequired[StateType]
 
         def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"): ...
         @classmethod
         def DEF(cls, **kwargs: Unpack[Args]) -> type[Self]: ...
 
-        def update_native_value(
-            self, native_value: sensor.StateType, /
-        ) -> bool | None: ...
+        def update_native_value(self, native_value: StateType, /) -> bool | None: ...
 
     is_diagnostic = True
 
@@ -276,7 +277,7 @@ class ProtocolSensor(EnumSensorEntity):
     ]
 
     _AUTO_INIT = ("extra_state_attributes",)
-    __slots__ = ()
+    __slots__ = _AUTO_INIT
 
     @override
     def set_available(self):

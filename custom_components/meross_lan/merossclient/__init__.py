@@ -31,7 +31,7 @@ if TYPE_CHECKING:
         Unpack,
     )
 
-    from cloudapi import LatestVersionType
+    from cloudapi import DeviceInfoType, LatestVersionType
 
     from .library import DeviceParameters
     from .protocol import types as mt
@@ -454,10 +454,29 @@ class HostAddress:
     @staticmethod
     def build(address: str, default_port=mc.MQTT_DEFAULT_PORT):
         """Splits the eventual :port suffix from domain and return (host, port)"""
+        # TODO: maybe use a regex to enforce some syntax and raise error when explicitly wrong
         if (colon_index := address.find(":")) != -1:
             return HostAddress(address[0:colon_index], int(address[colon_index + 1 :]))
         else:
             return HostAddress(address, default_port)
+
+    @staticmethod
+    def from_device_info(device_info: "DeviceInfoType"):
+        """Returns an iterator for (unique) host addresses extracted from a DeviceInfoType cloudapi struct."""
+        try:
+            domain = HostAddress.build(device_info[mc.KEY_DOMAIN])
+        except Exception:
+            pass
+        else:
+            yield domain
+
+        try:
+            reserved_domain = HostAddress.build(device_info[mc.KEY_RESERVEDDOMAIN])
+        except Exception:
+            pass
+        else:
+            if reserved_domain != domain:
+                yield reserved_domain
 
     def __init__(self, host: str, port: int):
         self.host = host
@@ -610,8 +629,7 @@ class Descriptor:
     def get_upgrade_info(
         self, latest_version: "LatestVersionType", /
     ) -> tuple[str | None, ...]:
-        """If an update is available returns a tuple of (installed_version, latest_version, release_summary).
-        This might raise AttributeError if latest_version is not externally set."""
+        """If an update is available returns a tuple of (installed_version, latest_version, release_summary)."""
         try:
             return (
                 self.fw_version,
@@ -619,7 +637,7 @@ class Descriptor:
                 latest_version.get(mc.KEY_DESCRIPTION),
             )
         except Exception:
-            return None, None, None
+            return self.fw_version, None, None
 
     def get_upgrade_payload(
         self, latest_version: "LatestVersionType", /
@@ -949,7 +967,7 @@ class DeviceDescriptor(Descriptor):
                     latest_version.get(mc.KEY_DESCRIPTION),
                 )
         except Exception as e:
-            return None, None, None
+            return self.fw_version, None, None
 
     @override
     def get_upgrade_payload(

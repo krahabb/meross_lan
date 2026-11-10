@@ -77,7 +77,8 @@ class mst(SubDevice):
         _INIT_value_off = 1
         _attr_device_class = BinarySensorParser.DeviceClass.PROBLEM
 
-    _SLOTS = ("sensor_wflow",)
+    _AUTO_DESTROY = ("sensor_wflow",)
+    __slots__ = SubDevice._calc_slots(*_AUTO_DESTROY)
 
 
 class mst100(mst):

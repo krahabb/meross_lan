@@ -29,7 +29,7 @@ async def test_mqtthub_entry(
     async with helpers.MQTTHubEntryMocker(request, hass):
         api = hass.data[mlc.DOMAIN]
         assert isinstance(api, ComponentApi)
-        assert api._mqtt_connection and api._mqtt_connection.mqtt_is_subscribed
+        assert api._mqttconnection and api._mqttconnection.mqtt_is_subscribed
 
     # Unload the entry and verify that the data has not been removed
     # we actually never remove the ComponentApi...

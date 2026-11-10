@@ -13,7 +13,7 @@ from homeassistant.helpers import (
 )
 
 # import core modules instead of symbols to ease patching in a single place
-from . import ConfigEntryType, mqtt_profile as mlq
+from . import ConfigEntryType
 from .. import const as mlc
 from ..merossclient import HostAddress
 from ..merossclient.client import Transport, bluetooth as m_bt
@@ -28,6 +28,7 @@ from ..merossclient.protocol.message import (
     json_loads,
 )
 from .manager import ConfigEntryManager
+from .mqtt_profile import MQTTConnection, MQTTProfile
 
 if TYPE_CHECKING:
 
@@ -48,11 +49,11 @@ if TYPE_CHECKING:
     from .meross_profile import MerossProfile
 
 
-class HAMQTTConnection(mlq.MQTTConnection):
+class HAMQTTConnection(MQTTConnection):
 
     if TYPE_CHECKING:
 
-        class ConnectArgs(mlq.MQTTConnection.ConnectArgs):
+        class ConnectArgs(MQTTConnection.ConnectArgs):
             pass
 
         parent: Final["ComponentApi"]  # type: ignore[override]
@@ -70,7 +71,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
     )
 
     def __init__(self, api: "ComponentApi", /):
-        mlq.MQTTConnection.__init__(
+        MQTTConnection.__init__(
             self,
             HostAddress("homeassistant", 0),
             api,
@@ -80,6 +81,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
         self._mqtt_disconnected_unsub = None
         self._mqtt_connected_unsub = None
         self._mqtt_subscribe_future = None
+        api._mqttconnection = self
 
     @override  # MQTTConnection
     async def async_connect(self, /, **kwargs: "Unpack[ConnectArgs]"):
@@ -181,7 +183,7 @@ class HAMQTTConnection(mlq.MQTTConnection):
                 self.id.port = conf.get(mlc.hac.CONF_PORT, mqtt.const.DEFAULT_PORT)
                 self.configure_logger()
 
-        mlq.MQTTConnection.on_connect(self)
+        MQTTConnection.on_connect(self)
 
     # these handlers are used to manage session establishment on MQTT.
     # They are typically sent by the device when they connect to the broker
@@ -272,10 +274,10 @@ HAMQTTConnection.SESSION_HANDLERS = {
     mn.Appliance_Control_Bind: HAMQTTConnection._handle_Appliance_Control_Bind,
     mn.Appliance_Control_ConsumptionConfig: HAMQTTConnection._handle_Appliance_Control_ConsumptionConfig,
     mn.Appliance_System_Clock: HAMQTTConnection._handle_Appliance_System_Clock,
-} | mlq.MQTTConnection.SESSION_HANDLERS  # type: ignore
+} | MQTTConnection.SESSION_HANDLERS  # type: ignore
 
 
-class ComponentApi(mlq.MQTTProfile):
+class ComponentApi(MQTTProfile):
     """
     central meross_lan management (singleton) class which handles devices
     and MQTT discovery and message routing
@@ -432,7 +434,7 @@ class ComponentApi(mlq.MQTTProfile):
         config_entries: Final
         flow_manager: Final
 
-        _mqtt_connection: HAMQTTConnection | None
+        _mqttconnection: HAMQTTConnection | None
 
         _bt_devices: Final[dict[str, BTClient]]
 
@@ -448,7 +450,6 @@ class ComponentApi(mlq.MQTTProfile):
         "issue_registry",
         "config_entries",
         "flow_manager",
-        "_mqtt_connection",
         "_bt_devices",
     )
 
@@ -490,7 +491,6 @@ class ComponentApi(mlq.MQTTProfile):
         self.issue_registry = ir.async_get(hass)
         self.config_entries = hass.config_entries
         self.flow_manager = hass.config_entries.flow
-        self._mqtt_connection = None
         for config_entry in self.config_entries.async_entries(mlc.DOMAIN):
             match ConfigEntryType.get_type_and_id(config_entry.unique_id):
                 case (ConfigEntryType.DEVICE, device_id):
@@ -522,7 +522,7 @@ class ComponentApi(mlq.MQTTProfile):
 
         Loggable.create_task = _create_task  # type: ignore
 
-        mlq.MQTTProfile.__init__(
+        MQTTProfile.__init__(
             self,
             mlc.CONF_PROFILE_ID_LOCAL,
             self,
@@ -536,21 +536,19 @@ class ComponentApi(mlq.MQTTProfile):
             service_call: "ServiceCall",
         ) -> "ServiceResponse":
             service_response = {}
-            device_id = service_call.data.get(mlc.CONF_DEVICE_ID)
-            host = service_call.data.get(mlc.CONF_HOST)
+            service_data = service_call.data
+            device_id = service_data.get(mlc.CONF_DEVICE_ID)
+            host = service_data.get(mlc.CONF_HOST)
             if not device_id and not host:
                 raise HomeAssistantError(
                     "Missing both device_id and host: provide at least one valid entry"
                 )
-            try:
-                protocol = Transport.from_str(service_call.data[mlc.CONF_PROTOCOL])
-            except KeyError:
-                protocol = Transport.AUTO
-            namespace = service_call.data[mc.KEY_NAMESPACE]
-            method = service_call.data.get(mc.KEY_METHOD, mc.METHOD_GET)
-            key = service_call.data.get(mlc.CONF_KEY)
-            if mc.KEY_PAYLOAD in service_call.data:
-                payload = service_call.data[mc.KEY_PAYLOAD]
+            protocol = Transport.from_str(service_data.get(mlc.CONF_PROTOCOL))
+            namespace = service_data[mc.KEY_NAMESPACE]
+            method = service_data.get(mc.KEY_METHOD, mc.METHOD_GET)
+            key = service_data.get(mlc.CONF_KEY)
+            if mc.KEY_PAYLOAD in service_data:
+                payload = service_data[mc.KEY_PAYLOAD]
                 if type(payload) is str:
                     try:
                         payload = json_loads(payload)
@@ -621,7 +619,7 @@ class ComponentApi(mlq.MQTTProfile):
                     return await _async_bluetooth_request(_bt_device)
                 if (
                     protocol in (Transport.AUTO, Transport.MQTT)
-                    and (mqtt_connection := self._mqtt_connection)
+                    and (mqtt_connection := self._mqttconnection)
                     and mqtt_connection.is_connected
                 ):
                     service_response["request"] = request = MerossRequest(
@@ -690,9 +688,8 @@ class ComponentApi(mlq.MQTTProfile):
                 await profile.async_shutdown()
             for bt_device in tuple(self._bt_devices.values()):
                 await bt_device.async_shutdown()
-            await mlq.MQTTProfile.async_shutdown(self)
+            await MQTTProfile.async_shutdown(self)
             await HttpClient.async_shutdown_session()
-            self._mqtt_connection = None
             del self.device_registry  # type: ignore
             del self.entity_registry  # type: ignore
             del self.issue_registry  # type: ignore
@@ -731,8 +728,8 @@ class ComponentApi(mlq.MQTTProfile):
         self.key = config.get(mlc.CONF_KEY) or ""
         self.obfuscate = config.get(mlc.CONF_OBFUSCATE, True)
         self.configure_logger()
-        await mlq.MQTTProfile.async_setup_entry(self, hass, config_entry)
-        self.mqtt_connection.entry_update_listener(self)
+        await MQTTProfile.async_setup_entry(self, hass, config_entry)
+        self.mqttconnection.entry_update_listener(self)
 
     # interface: MQTTProfile
     @property
@@ -756,15 +753,13 @@ class ComponentApi(mlq.MQTTProfile):
         return "0"
 
     @override
-    def get_connection(self, device: "Device"):
-        return self.mqtt_connection
+    def get_connection(self, device: "Device") -> MQTTConnection | None:
+        return self._mqttconnection or HAMQTTConnection(self)
 
     # interface: self
     @property
-    def mqtt_connection(self):
-        if not (mqtt_connection := self._mqtt_connection):
-            self._mqtt_connection = mqtt_connection = HAMQTTConnection(self)
-        return mqtt_connection
+    def mqttconnection(self):
+        return self._mqttconnection or HAMQTTConnection(self)
 
     def get_config_entry(self, unique_id: str):
         """Gets the configured entry if it exists."""

@@ -211,7 +211,7 @@ class LightBase(mle.ToggleXParser, light.LightEntity):
     _attr_max_color_temp_kelvin = MSL_KELVIN_MAX
     _attr_min_color_temp_kelvin = MSL_KELVIN_MIN
     # Never mixed-in with NamespaceParser so we fix the slots
-    __slots__ = mle.ToggleXParser._calc_slots(
+    __slots__ = (
         "_rgb_to_native",
         "_native_to_rgb",
         "_t_begin",

@@ -99,6 +99,7 @@ class gs559(SensorSubDevice, EnumParser):
     }
 
     _AUTO_DESTROY = ENTITY_DEFS.keys()
+    __slots__ = SensorSubDevice._calc_slots(*_AUTO_DESTROY, bases=(EnumParser,))
 
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
         SensorSubDevice.__init__(
@@ -180,6 +181,7 @@ class ms100(SensorSubDevice):
     TEMPERATURE_ARGS = SensorParser.TEMPERATURE_ARGS | {"device_scale": 10}
 
     _AUTO_DESTROY = ("sensor_temperature", "sensor_humidity")
+    __slots__ = SensorSubDevice._calc_slots(*_AUTO_DESTROY)
 
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
         SensorSubDevice.__init__(self, descriptor, hub, **kwargs)
@@ -390,6 +392,8 @@ class ms200(SensorSubDevice, BinarySensorParser):
     _INIT_key_value = BinarySensorParser.KeyValue(mc.KEY_STATUS)
     _attr_device_class = BinarySensorParser.DeviceClass.WINDOW
 
+    __slots__ = SensorSubDevice._calc_slots(bases=(BinarySensorParser,))
+
     @cached_property
     def unique_id(self) -> str | None:
         return f"{self.parent.id}_{self.id}_window"
@@ -399,6 +403,8 @@ class ms400(SensorSubDevice, BinarySensorParser):
     NS_HUB = (mn_h.Appliance_Hub_Sensor_WaterLeak,)
     _INIT_key_value = BinarySensorParser.KeyValue(mc.KEY_LATESTWATERLEAK)
     _attr_device_class = BinarySensorParser.DeviceClass.SAFETY
+
+    __slots__ = SensorSubDevice._calc_slots(bases=(BinarySensorParser,))
 
     @cached_property
     def unique_id(self) -> str | None:

@@ -370,6 +370,7 @@ class NamespaceHandler(logging.Loggable):
                 exception,
                 "handle_response (payload: %s)",
                 _payload=message.payload,
+                timeout=86400,
             )
 
     def _handle_index_none(self, message: "MerossMessage", /):

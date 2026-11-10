@@ -29,7 +29,7 @@ class Button(Entity, button.ButtonEntity):
     DeviceClass = button.ButtonDeviceClass
 
     _AUTO_DESTROY = ("async_press",)
-    __slots__ = ()
+    __slots__ = _AUTO_DESTROY
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         """Provide either 'async_press' or 'press' callback to install an action on this button."""

@@ -98,7 +98,8 @@ class Mts960Climate(MtsThermostatClimate):
         "_mts_working",
         "_mts_timer_payload",
         "_mts_timer_mode",
-        *DIAGNOSTIC_SENSOR_KEYS,
+        *DIAGNOSTIC_SENSOR_KEYS.keys(),
+        *_AUTO_DESTROY,
     )
 
     def __init__(self, id, device: "Device", /, **kwargs):

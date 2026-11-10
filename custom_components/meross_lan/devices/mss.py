@@ -258,15 +258,16 @@ class ConsumptionHSensor(SensorParser):
         """
         {"channel": 1, "total": 958, "data": [{"timestamp": 1721548740, "value": 0}]}
         """
-        handler = self.handler_ns
-        if self.update_device_value(payload[mc.KEY_TOTAL]):
-            # value is changing..reschedule polling sooner
-            polling_delay = handler.polling_period * 2
-        else:
-            # value is steady..postpone next polling
-            polling_delay = handler.polling_period * 6
-        if handler.channel_polling_remove(self.index):
-            handler.channel_polling_add(self.index, polling_delay)
+        self.handler_ns.need_polling(
+            self.index,
+            (
+                self.handler_ns.polling_period
+                * 2  # value is changing..reschedule sooner
+                if self.update_device_value(payload[mc.KEY_TOTAL])
+                else self.handler_ns.polling_period
+                * 6  # value is steady..postpone a bit
+            ),
+        )
 
 
 class ConsumptionHNamespaceHandler(NamespaceHandler):
@@ -306,62 +307,57 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
         kwargs["config"] = (
             mlc.PARAM_ENERGY_UPDATE_PERIOD,
             mlc.PARAM_ENERGY_CLOUD_UPDATE_PERIOD,
-            (
-                ConsumptionHNamespaceHandler.async_polling_strategy_probe
-                if len(device.descriptor.channels) == 6
-                else ConsumptionHNamespaceHandler.async_polling_strategy_smartchunk
-            ),
+            ConsumptionHNamespaceHandler.async_polling_strategy_smartchunk,
         )
         NamespaceHandler.__init__(self, ns, device, **kwargs)
         device.enable_check_device_time()
 
-    def channel_polling_add(self, index: mn.IndexValue, delay: float = 0, /):
+    @override
+    def polling_request_configure(self, payload_type: mn.PayloadType | None, /):
+        self.polling_request_payload = [mn.EMPTY_DICT]
+        self.polling_request = (
+            self.id,
+            mc.METHOD_GET,
+            {self.id.key: self.polling_request_payload},
+        )
+        self.polling_response_size = (
+            NamespaceHandler.HEADER_AVG_SIZE + self.id.payload_item_size
+        )
+
+    def channel_polling_add(self, index: mn.IndexValue, /):
         # assert not already present ?
         insort_right(
             self._indexes_to_poll,
-            (self.parent.polling_epoch + delay, index),
+            (self.parent.polling_epoch, index),
             key=lambda ctp: ctp[0],
         )
 
     def channel_polling_remove(self, index: mn.IndexValue, /):
-        indexes_to_poll = self._indexes_to_poll
-        for i in range(len(indexes_to_poll)):
-            if indexes_to_poll[i][1] is index:
-                del indexes_to_poll[i]
-                return True
-        return False
+        i = 0
+        for index_to_poll in self._indexes_to_poll:
+            if index_to_poll[1] is index:
+                del self._indexes_to_poll[i]
+                return
+            i += 1
 
-    def need_polling(self, index: mn.IndexValue, /):
-        """Raise the channel polling priority in the queue."""
-        indexes_to_poll = self._indexes_to_poll
-        for i in range(len(indexes_to_poll)):
-            if indexes_to_poll[i][1] is index:
-                if indexes_to_poll[i][0] > self.parent.polling_epoch:
-                    del indexes_to_poll[i]
+    def need_polling(self, index: mn.IndexValue, delay: float = 0.0, /):
+        """Raise the channel polling priority in the queue. This only updates the position
+        of a channel/index already registered for polling i.e. the relative ConsumptionHSensor
+        is enabled in HA.
+        - delay is 0: schedules the channel poll as soon as possible without disrupting existing priorities.
+        - delay not 0: sets the position in the polling queue ordering by delay."""
+        i = 0
+        for index_to_poll in self._indexes_to_poll:
+            if index_to_poll[1] is index:
+                if delay or (index_to_poll[0] > self.parent.polling_epoch):
+                    del self._indexes_to_poll[i]
                     insort_right(
-                        indexes_to_poll,
-                        (self.parent.polling_epoch, index),
+                        self._indexes_to_poll,
+                        (self.parent.polling_epoch + delay, index),
                         key=lambda ctp: ctp[0],
                     )
                 return
-
-    async def async_polling_strategy_probe(self, /):
-        # This poller is mainly used to discover the multiple_response available buffer size
-        # since em06 looks like having a way more than our default estimated 2400 (3 * 800) bytes
-        # We're then going to try a full poll and see what happens. Also, we're expecting the device
-        # to reply with just 3 channels when queried with an empty list (em06).
-        self.polling_response_size = (
-            NamespaceHandler.HEADER_AVG_SIZE + 3 * self.id.payload_item_size
-        )
-        self.polling_request_payload.clear()
-        await self.async_poll_queue()
-        self.polling_request_payload.append({})
-        self.polling_response_size = (
-            NamespaceHandler.HEADER_AVG_SIZE + self.id.payload_item_size
-        )
-        self.polling_strategy = (
-            ConsumptionHNamespaceHandler.async_polling_strategy_smartchunk
-        )
+            i += 1
 
     async def async_polling_strategy_smartchunk(self, /):
         """This has a huge ns response payload so we need to optimize polling.
@@ -424,7 +420,7 @@ class ConsumptionXSensor(SensorParser.RestoreEntity, SensorParser):
         self._yesterday_midnight_epoch = 0
         self._today_midnight_epoch = 0
         self._tomorrow_midnight_epoch = 0
-        return SensorParser.set_unavailable(self)
+        SensorParser.set_unavailable(self)
 
     async def async_added_to_hass(self):
         try:
