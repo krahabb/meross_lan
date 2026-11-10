@@ -636,17 +636,12 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 profile = self.parent
         except KeyError:
             profile = self.parent
-        if self.profile == profile:
-            self._check_protocol()
-        else:
+        if self.profile != profile:
             if profile:
                 profile.link(self)
-                # _check_protocol already called
             elif self.profile:
                 self.profile.unlink(self)
-                self._check_protocol()
-            else:
-                self._check_protocol()
+        self.check_protocol()
         self.polling_start()
 
     async def async_shutdown(self):
@@ -732,25 +727,34 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         elif http:
             self.remove_client(http)
 
-    def _check_protocol(self):
+    def check_protocol(self):
         """called whenever the configuration or the profile linking changes to fix transports."""
-        if self.mqtt:
-            # No matter what: we cleanup current mqtt and eventually restart clean
-            self.remove_client(self.mqtt)
         conf_transport = self.configured_transport
         if conf_transport in (Transport.BLUETOOTH, Transport.HTTP):
             self.preferred_transport = conf_transport
+            if self.mqtt:
+                self.remove_client(self.mqtt)
         else:
-            mqttconnection = self.profile and self.profile.get_connection(self)
-            if mqttconnection:
-                mqttconnection.attach(self)
+            # MQTT required (eventually) but we need to sort out profile binding
+            profile = self.profile
+            if self.mqtt and (self.mqtt.connection.parent is not profile):
+                # This should ensure any current mqtt survives only if correct
+                # for (new) profile and profile is set
+                self.remove_client(self.mqtt)
+
+            if profile and not self.mqtt:
+                mqttconnection = profile.get_connection(self)
+                if mqttconnection:
+                    mqttconnection.attach(self)
 
             if conf_transport is Transport.AUTO:
                 # When using Transport.AUTO we try to use our 'preferred' transport.
                 # When binded to a cloud_profile always prefer http since it will avoid excessive
                 # MQTT traffic and related cloud 'issues' like rate-limiting
-                if self.config.get(mlc.CONF_HOST) or (
-                    self.mqtt and self.mqtt.connection.is_cloud
+                if (
+                    self.config.get(mlc.CONF_HOST)
+                    or (not self.mqtt)
+                    or (self.mqtt.connection.is_cloud)
                 ):
                     self.preferred_transport = Transport.HTTP
                 else:

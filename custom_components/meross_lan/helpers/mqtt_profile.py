@@ -372,15 +372,12 @@ class MQTTConnection(AbstractMQTTConnection):
                         timeout=86400,
                     )
                     return
-                if device.profile == profile:
-                    self.attach(device).on_async_mqtt_message(message)
-                    return
+
                 if (device.key == profile.key) and (
                     device.descriptor.userId == profile.id
                 ):
-                    profile.link(device)
-                    # profile.link will attach to the mqtt broker known to the device cfg..
-                    # we'll ensure that (in case device cfg is stale) we're correctly binded here
+                    if device.profile != profile:
+                        profile.link(device)
                     client = device.mqtt
                     if client is None:
                         client = self.attach(device)
@@ -622,20 +619,18 @@ class MQTTProfile(ConfigEntryManager):
         return None
 
     def link(self, device: "Device"):
-        assert (device.id not in self.linkeddevices) and (device.profile is not self)
         if device.profile:
             device.profile.unlink(device)
         device.profile = self  # type: ignore[assignment]
-        device.log(device.DEBUG, "linked to profile:%s", userid=self.id)
-        device._check_protocol()
         self.linkeddevices[device.id] = device
+        device.log(device.DEBUG, "linked to profile:%s", userid=self.id)
 
     def unlink(self, device: "Device"):
-        del self.linkeddevices[device.id]
         if device.mqtt:
             device.remove_client(device.mqtt)
-        device.log(device.DEBUG, "unlinked from profile:%s", userid=self.id)
+        del self.linkeddevices[device.id]
         device.profile = None  # type: ignore[assignment]
+        device.log(device.DEBUG, "unlinked from profile:%s", userid=self.id)
 
     @abstractmethod
     def get_connection(self, device: "Device") -> MQTTConnection | None: ...

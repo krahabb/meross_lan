@@ -69,6 +69,7 @@ async def async_setup_entry(
                         device.descriptor.userId == profile_id
                     ):
                         profile.link(device)
+                        device.check_protocol()
                 return True
             except Exception as error:
                 await profile.async_shutdown()
