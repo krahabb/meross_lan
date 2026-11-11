@@ -14,7 +14,6 @@ from homeassistant.components.light import (
 )
 import homeassistant.util.color as color_util
 
-from . import const as mlc
 from .helpers import clamp, entity as mle
 from .merossclient.device.handler import NamespaceHandler
 from .merossclient.protocol import const as mc, namespaces as mn
@@ -35,12 +34,10 @@ BRIGHTNESS_SCALE = (MSL_LUMINANCE_MIN, MSL_LUMINANCE_MAX)
 
 def brightness_to_native(brightness: int):
     return round(color_util.brightness_to_value(BRIGHTNESS_SCALE, brightness))
-    return MSL_LUMINANCE_MIN + round((brightness - 1) * MSL_LUMINANCE_SCALE)
 
 
 def native_to_brightness(luminance: int):
     return color_util.value_to_brightness(BRIGHTNESS_SCALE, luminance)
-    return 1 + round((luminance - MSL_LUMINANCE_MIN) / MSL_LUMINANCE_SCALE)
 
 
 def rgb_to_native(rgb: tuple[int, int, int]) -> int:
@@ -388,9 +385,9 @@ class Light(LightBase):
         ATTR_TOGGLEX_AUTO: Final[str]
         _togglex_auto: bool | None
         """
-        - False: the device needs to use TOGGLEX
+        - False: the device needs to use ToggleX
         - True: the device automatically turns on when setting 'Appliance.Control.Light' (very fragile though)
-        - None: the component needs to auto-learn the device behavior
+        - None: the component needs to auto-learn the device behavior or use the 'onoff' key in Light payload
         """
 
         class Args(LightBase.Args):
@@ -432,7 +429,7 @@ class Light(LightBase):
             else:
                 supported_color_modes.add(ColorMode.ONOFF)
         LightBase.__init__(self, id, device, **kwargs)
-        self._togglex_auto = None if self.handler_togglex else False
+        self._togglex_auto = None
 
     @override
     def __call__(self, payload: "mt.control.Light", /):
@@ -527,33 +524,46 @@ class Light(LightBase):
             await self.async_request_parse_ex({mc.KEY_ONOFF: onoff})
 
     async def async_request_light_on_flush(self, _light: "mt.JsonDict", /):
-        was_on = self.is_on
         if mc.KEY_ONOFF in _light:
             _light[mc.KEY_ONOFF] = 1
-        else:
-            self.is_on = self.is_on or self._togglex_auto
 
         await self.async_request_parse(_light)
         if self.is_on:
-            if not was_on:
-                # is_on may have been set optimistically above: __call__ only flushes
-                # when the light payload changed and _parse_togglex only flushes when
-                # is_on changed, so neither would publish this off -> on transition.
-                self.flush_state()
             return
-        # In general, the LIGHT payload with LUMINANCE set should rightly
+        # In general, the '*.Light' payload with 'luminance' set should rightly
         # turn on the light, but this is not true for every model/fw.
-        # Since devices exposing TOGGLEX have different behaviors we'll
+        # Since devices exposing ToggleX have different behaviors we'll
         # try to learn this at runtime.
+        # This code is only meaningful when we have 'handler_togglex' else
+        # we're in unknown space if '*.Light' doesn't carry 'onoff'
+        # (no asserts though just checks where needed)
+        if self._togglex_auto:
+            self.is_on = True
+            self.flush_state()
+            return
+
+        if not self.handler_togglex:
+            # Inconsistent configuration
+            if self._togglex_auto is None:
+                # Put a guard so we only log once
+                self._togglex_auto = False
+                self.log(
+                    self.WARNING, "Light toggling behaviour is unknown: missing ToggleX"
+                )
+            return
+
         if self._togglex_auto is None:
             # we need to learn the device behavior...
-            # wait a bit since this query would report off
-            # if the device has not had the time to internally update
+            # wait a bit to see if a PUSH eventually hits or give time
+            # for the device firmware to internally update and turn on
+            # before issuing ToggleX GET
             await asyncio.sleep(1)
-            if self.is_on or not self.handler_togglex:
+            if self.is_on:
                 # in case MQTT pushed the togglex -> on
                 self._togglex_auto = True
-                self.extra_state_attributes = {Light.ATTR_TOGGLEX_AUTO: True}
+                self.extra_state_attributes = {
+                    Light.ATTR_TOGGLEX_AUTO: True
+                }  # lazy flush
                 return
 
             try:
@@ -562,7 +572,7 @@ class Light(LightBase):
                 # simple dict since the "togglex" namespace used to be hybrid and still is.
                 # This led to #357 but the resolution is to just bypass parsing since
                 # our device message pipe has already processed the response with
-                # all its (working) euristics after returning from async_request
+                # all its (working) euristics after returning from async_get
                 self._togglex_auto = self.is_on
                 self.extra_state_attributes = {
                     Light.ATTR_TOGGLEX_AUTO: self._togglex_auto
@@ -570,10 +580,11 @@ class Light(LightBase):
                 if self.is_on:
                     return
             except Exception:
-                # no way
+                # bad luck? maybe disconnected?
                 return
-        # previous test showed that we need TOGGLEX
-        await self.async_request_onoff(1)
+
+        # previous test showed that we need ToggleX
+        await self.handler_togglex.async_set_parse({mc.KEY_ONOFF: 1}, self)
 
     @classmethod
     @override
