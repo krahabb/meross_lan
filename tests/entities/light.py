@@ -143,3 +143,30 @@ class EntityTest(ToggleEntityComponentTest):
                     state.attributes[haec.ATTR_BRIGHTNESS] == brightness
                     and entity.ns_value[mc.KEY_LUMINANCE] == luminance
                 ), "brightness_to_native"
+
+        if (
+            check_brightness
+            and isinstance(entity, Light)
+            and entity.handler_togglex
+            and hasattr(self.device_context.emulator, "_togglex_mode")
+        ):
+            # Lights which switch on by themselves when receiving a 'light' payload
+            # (togglex_auto) must still publish 'on' when that payload is unchanged
+            # from the previous one (#718).
+            emulator = self.device_context.emulator
+            saved_togglex_mode = emulator._togglex_mode
+            saved_togglex_auto = entity._togglex_auto
+            emulator._togglex_mode = False
+            entity._togglex_auto = True
+            try:
+                await self.async_service_call_check(
+                    haec.SERVICE_TURN_OFF, hac.STATE_OFF
+                )
+                await self.async_service_call_check(
+                    haec.SERVICE_TURN_ON,
+                    hac.STATE_ON,
+                    {haec.ATTR_BRIGHTNESS: 255},  # same as the last call above
+                )
+            finally:
+                emulator._togglex_mode = saved_togglex_mode
+                entity._togglex_auto = saved_togglex_auto

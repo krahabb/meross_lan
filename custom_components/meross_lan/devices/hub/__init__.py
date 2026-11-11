@@ -373,14 +373,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
     _SLOTS = ("key_digest",)
 
     def __init_subclass__(cls):
-        # We don't want to explicitly declare __slots__ in any descendant, rather use _SLOTS for that, so
-        # that the following '_calc_slots' will consistently fix everything. This lame trick is needed
-        # because we're mixing the SubDevice hierarchy with NamespaceParser(s) implementations from
-        # various specializations and we cannot mismatch slots between these hierarchies.
-        assert "__slots__" not in cls.__dict__
-        # Compute the whole mro slots here before super().__init_subclass__() since it will also 'patch'
-        # the __slots__ but it'd need a consistent preset to not add/remove unwanted/needed slots
-        cls.__slots__ = cls._calc_slots()
         super().__init_subclass__()
         # By default, the digest key (key_digest) has the same payload as the default
         # parser (i.e. __call__) so we can just point the digest parsing to the default one.
@@ -416,6 +408,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         kwargs["index"] = mn.IndexType.id.get(subid)
         kwargs["descriptor"] = descriptor
         super().__init__(subid, hub, **kwargs)
+        self.update_firmware = UpdateEntity(self, hub)
         _ns_hub = [self.ns] if self.ns else []
         for _cls in self.__class__.__mro__:
             try:
@@ -466,10 +459,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         )
 
         if latest_version := profile.get_latest_version(descriptor):
-            if self.update_firmware:
-                self.update_firmware.update_latest_version(latest_version)
-            else:
-                UpdateEntity(self, self.parent, latest_version)
+            self.update_firmware.update_latest_version(latest_version)
 
     def parse_digest(self, payload: "mt.hub.Digest_SubDevice", /):
         """
@@ -598,10 +588,7 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         if (profile := self.parent.profile) and (
             latest_version := profile.get_latest_version(descriptor)
         ):
-            if self.update_firmware:
-                self.update_firmware.update_latest_version(latest_version)
-            else:
-                UpdateEntity(self, self.parent, latest_version)
+            self.update_firmware.update_latest_version(latest_version)
 
     def _hub_parse(self, key: str, payload: dict, /):
         """Heuristic subdevice parsing system. This will be eventually removed

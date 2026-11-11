@@ -5,6 +5,7 @@ Logging utilities for merossclient library.
 import abc
 import asyncio
 from contextlib import contextmanager
+import itertools
 import logging
 import sys
 from time import time
@@ -226,19 +227,18 @@ class Loggable(metaclass=abc.ABCMeta):
         _AUTO_INIT: ClassVar[Iterable[str]]
         """Provides a list of slotted attributes which will be automatically initialized during initialization.
         Automatic initialization tries to recover the actual value from kwargs if present, else it will
-        lookup the 'static' initializer defined as class attribute via _INIT_{attribute_name}. This could either be
+        lookup the static initializer defined as class attribute via _INIT_{attribute_name}. This could either be
         a plain value/object or a callable (the result of the call will be used to initialize self.{attribute_name}).
-        If nothing is provided it will be intiialized with None.
+        If nothing is provided it will be initialized with 'None'.
         If a callable have to be set for the attribute the _INIT_{attribute_name} will need to wrap it (lambda might be useful).
         This class attribute (_AUTO_INIT) will be read during class construction in order to update the internal cache (_AUTO_INIT_)
-        of all the inherited 'auto init slots' (See __init_subclass__).
-        Attributes listed here will also be automatically added to the class _SLOTS so they'd not need to be defined twice."""
+        of all the inherited 'auto init attributes' (See __init_subclass__).
+        Attributes listed here will be eventually added as slots in the result provided by _calc_slots."""
         _AUTO_INIT_: Final[frozenset[str]]
         """Auto-built cache of all the '_AUTO_INIT' defined for the full class hierarchy so that
         the constructor doesn't have to traverse the mro every time in order to apply initialization."""
         _AUTO_DESTROY: ClassVar[Iterable[str]]
-        """Provides a list of attributes which need to be destroyed during shutdown. These will eventually be added
-        to __slots__ if not already there.
+        """Provides a list of attributes which need to be destroyed during shutdown.
         This will ease removing circular references without needing to override the shutdown() method."""
         _AUTO_DESTROY_: Final[frozenset[str]]
         """Same as _AUTO_INIT_ but for _AUTO_DESTROY."""
@@ -295,34 +295,21 @@ class Loggable(metaclass=abc.ABCMeta):
                 pass
 
         cls_dict = cls.__dict__
-
-        if "__slots__" in cls_dict:
-            cls_slots = set(cls_dict["__slots__"])
-        else:
-            cls_slots = None
-
         if "_AUTO_INIT" in cls_dict:
-            _slots_auto_init = cls_dict["_AUTO_INIT"]
-            auto_init.update(_slots_auto_init)
-            if cls_slots is not None:
-                cls_slots.update(_slots_auto_init)
+            auto_init.update(cls_dict["_AUTO_INIT"])
 
         if "_AUTO_DESTROY" in cls_dict:
-            _slots_auto_destroy = cls_dict["_AUTO_DESTROY"]
-            auto_destroy.update(_slots_auto_destroy)
-            if cls_slots is not None:
-                cls_slots.update(_slots_auto_destroy)
+            auto_destroy.update(cls_dict["_AUTO_DESTROY"])
 
         if len(auto_init) > len(cls._AUTO_INIT_):
             cls._AUTO_INIT_ = auto_init  # type: ignore
         if len(auto_destroy) > len(cls._AUTO_DESTROY_):
             cls._AUTO_DESTROY_ = auto_destroy  # type: ignore
 
-        if cls_slots:
-            cls.__slots__ = tuple(cls_slots)
-
     @classmethod
-    def _calc_slots(cls, *slots: "Unpack[tuple[str, ...]]"):
+    def _calc_slots(
+        cls, *slots: "Unpack[tuple[str, ...]]", bases: tuple[type, ...] = ()
+    ):
         """
         Helper to calculate the (missing) slots from mro(s) when some of the base hierarchies
         could not be slotted themselves because of mixin requirements. This method, even though powerful and reliable,
@@ -339,21 +326,23 @@ class Loggable(metaclass=abc.ABCMeta):
         # TODO: we need to see if it's feasible to cache results in
         # cls.__dict__ to avoid repeating this on every subclass since our
         # mro could be highly repetitive and this method is called on every subclass
-        for _base in cls.__mro__:
+        all_bases = {*itertools.chain(cls.__mro__, *(base.__mro__ for base in bases))}
+        for _base in all_bases:
+            _base_dict = _base.__dict__
             try:
-                _added_slots.update(_base.__dict__["_SLOTS"])
+                _added_slots.update(_base_dict["_SLOTS"])
             except KeyError:
                 pass
             try:
-                _added_slots.update(_base.__dict__["_AUTO_INIT"])
+                _added_slots.update(_base_dict["_AUTO_INIT"])
             except KeyError:
                 pass
             try:
-                _added_slots.update(_base.__dict__["_AUTO_DESTROY"])
+                _added_slots.update(_base_dict["_AUTO_DESTROY"])
             except KeyError:
                 pass
             try:
-                _existing_slots.update(_base.__dict__["__slots__"])
+                _existing_slots.update(_base_dict["__slots__"])
             except KeyError:
                 pass
 

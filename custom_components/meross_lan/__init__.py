@@ -69,13 +69,14 @@ async def async_setup_entry(
                         device.descriptor.userId == profile_id
                     ):
                         profile.link(device)
+                        device.check_protocol()
                 return True
             except Exception as error:
                 await profile.async_shutdown()
                 raise ConfigEntryError from error
 
         case (ConfigEntryType.HUB, _):
-            if not await api.mqtt_connection.async_connect():
+            if not await api.mqttconnection.async_connect():
                 raise ConfigEntryNotReady("MQTT unavailable")
             await api.async_setup_entry(hass, config_entry)
             return True

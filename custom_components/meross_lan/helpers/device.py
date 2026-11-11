@@ -67,8 +67,7 @@ class BaseDevice(device.PhysicalDevice):
         device_entry: dr.DeviceEntry
         device_info: dr.DeviceInfo
         entities_iterable: Iterable[Entity]
-
-        update_firmware: UpdateEntity | None
+        update_firmware: UpdateEntity
 
         class Args(device.PhysicalDevice.Args):
             pass
@@ -81,9 +80,8 @@ class BaseDevice(device.PhysicalDevice):
         "device_registry",
         "device_entry",
         "device_info",
+        "update_firmware",
     )
-
-    _AUTO_INIT = ("update_firmware",)
     _AUTO_DESTROY = ("update_firmware",)
 
     @property
@@ -116,6 +114,7 @@ class BaseDevice(device.PhysicalDevice):
     device_entry = NotImplemented
     device_info = NotImplemented
     entities_iterable = NotImplemented
+    update_firmware = NotImplemented
 
     def update_device_registry(self, **kwargs):
         self.device_entry = (
@@ -606,6 +605,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         self.device_timedelta_log_epoch = 0
         self.device_timedelta_config_epoch = 0
         self.profile = None
+        self.update_firmware = UpdateEntity(self, self)
         self.sensor_protocol = ProtocolSensor(None, self)
         PersistentButton(
             None,
@@ -636,17 +636,12 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 profile = self.parent
         except KeyError:
             profile = self.parent
-        if self.profile == profile:
-            self._check_protocol()
-        else:
+        if self.profile != profile:
             if profile:
                 profile.link(self)
-                # _check_protocol already called
             elif self.profile:
                 self.profile.unlink(self)
-                self._check_protocol()
-            else:
-                self._check_protocol()
+        self.check_protocol()
         self.polling_start()
 
     async def async_shutdown(self):
@@ -669,10 +664,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         """
         config = self.config
         # map CONF_PROTOCOL value to a const symbol in order to use 'is' in Device code checks
-        try:
-            self.configured_transport = Transport.from_str(config[mlc.CONF_PROTOCOL])  # type: ignore
-        except KeyError:
-            self.configured_transport = Transport.AUTO
+        self.configured_transport = Transport.from_str(config.get(mlc.CONF_PROTOCOL))
         self.polling_period = (
             config.get(mlc.CONF_POLLING_PERIOD) or mlc.CONF_POLLING_PERIOD_DEFAULT
         )
@@ -735,7 +727,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         elif http:
             self.remove_client(http)
 
-    def _check_protocol(self):
+    def check_protocol(self):
         """called whenever the configuration or the profile linking changes to fix transports."""
         conf_transport = self.configured_transport
         if conf_transport in (Transport.BLUETOOTH, Transport.HTTP):
@@ -743,23 +735,26 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             if self.mqtt:
                 self.remove_client(self.mqtt)
         else:
-            _profile = self.profile
-            # assert profile ?
-            if self.mqtt:
-                if self.mqtt.connection.parent != _profile:
-                    self.remove_client(self.mqtt)
-                    if _profile:
-                        _profile.get_connection(self).attach(self)
-            else:
-                if _profile:
-                    _profile.get_connection(self).attach(self)
+            # MQTT required (eventually) but we need to sort out profile binding
+            profile = self.profile
+            if self.mqtt and (self.mqtt.connection.parent is not profile):
+                # This should ensure any current mqtt survives only if correct
+                # for (new) profile and profile is set
+                self.remove_client(self.mqtt)
+
+            if profile and not self.mqtt:
+                mqttconnection = profile.get_connection(self)
+                if mqttconnection:
+                    mqttconnection.attach(self)
 
             if conf_transport is Transport.AUTO:
                 # When using Transport.AUTO we try to use our 'preferred' transport.
                 # When binded to a cloud_profile always prefer http since it will avoid excessive
                 # MQTT traffic and related cloud 'issues' like rate-limiting
-                if self.config.get(mlc.CONF_HOST) or (
-                    self.mqtt and self.mqtt.connection.is_cloud
+                if (
+                    self.config.get(mlc.CONF_HOST)
+                    or (not self.mqtt)
+                    or (self.mqtt.connection.is_cloud)
                 ):
                     self.preferred_transport = Transport.HTTP
                 else:
@@ -1413,8 +1408,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
 
     def _handle_Appliance_Mcu_Firmware(self, message: MerossMessage, /):
         self.descriptor.mcu = message.payload[mc.KEY_FIRMWARE]
-        if self.update_firmware:
-            self.update_firmware.flush_state()
+        self.update_firmware.flush_state()
 
     _handle_Appliance_Mcu_Hp110_Firmware = _handle_Appliance_Mcu_Firmware
 
@@ -1444,8 +1438,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             self.schedule_entry_update(True)
             if oldfirmware.get("version") != descr.fw_version:
                 self.update_device_registry(sw_version=descr.fw_version)
-                if self.update_firmware:
-                    self.update_firmware.flush_state()
+                self.update_firmware.flush_state()
             if not self.config.get(mlc.CONF_HOST):
                 self._update_host(descr.innerIp)
         elif oldtimezone != descr.timezone:
@@ -1730,6 +1723,8 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                                 continue
                             channel_name = f"{newname} Channel {channel}"
                         if mlc.HA_VERSION >= (2026, 11):
+                            if TYPE_CHECKING:
+                                assert isinstance(device_entry_info.identifiers, set)
                             device_entry = (
                                 self.device_registry.async_get_device_by_identifier(
                                     next(iter(device_entry_info.identifiers)),
@@ -1751,10 +1746,8 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                             )
             # check for firmware updates too
             if latest_version := profile.get_latest_version(self.descriptor):
-                if self.update_firmware:
-                    self.update_firmware.update_latest_version(latest_version)
-                else:
-                    UpdateEntity(self, self, latest_version)
+                self.update_firmware.update_latest_version(latest_version)
+
         except Exception as e:
             self.log_exception(
                 self.WARNING,

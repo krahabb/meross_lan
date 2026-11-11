@@ -52,7 +52,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         _attr_device_class = NumberParser.DeviceClass.TEMPERATURE
 
         _AUTO_INIT = ("icon",)
-        __slots__ = ()
+        __slots__ = _AUTO_INIT
 
         async def async_request_value(self, device_value, /):
             # This implementation is only valid for mts100/mts200 where
@@ -94,7 +94,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
 
         _INIT__track_pending = False
         _AUTO_INIT = ("_track_pending",)
-        __slots__ = ("climate",)
+        __slots__ = ("climate", *_AUTO_INIT)
 
         def __init__(self, climate: "MtsClimate", /):
             self.climate = climate
@@ -105,12 +105,6 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
             self._tracking_stop()
             await super().async_shutdown()
             del self.climate
-
-        @override
-        def set_unavailable(self):
-            # Keep the selected option (the base class would reset it) and let
-            # the tracking loop run: samples are skipped while disconnected.
-            pass
 
         async def async_added_to_hass(self):
             if not self.current_option and (
@@ -411,6 +405,7 @@ class MtsClimate(ParserEntity, climate.ClimateEntity):
         "_mts_mode",
         "_mts_onoff",
         "number_preset_temperature",
+        *_AUTO_DESTROY,
     )
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):

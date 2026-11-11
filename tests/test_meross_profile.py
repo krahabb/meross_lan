@@ -310,7 +310,11 @@ async def test_meross_profile_with_device(
         assert cloudapi_mock.api_calls[cloudapi.API_DEVICE_DEVLIST_PATH] == 1
 
         # now check if a new fw is correctly managed in update entity
-        assert device.update_firmware is None
+        update_firmware = device.update_firmware
+        assert update_firmware
+        update_firmware_state = device_context.get_hass_state(update_firmware.entity_id)
+        assert update_firmware_state and update_firmware_state.state == "unknown"
+
         latest_version = tc.MOCK_CLOUDAPI_DEVICE_LATESTVERSION[0]
         latest_version[mc.KEY_TYPE] = device.descriptor.type
         latest_version[mc.KEY_SUBTYPE] = device.descriptor.subType
@@ -318,8 +322,7 @@ async def test_meross_profile_with_device(
         await device_context.time_mock.async_tick(
             mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT + 1
         )
-        update_firmware = device.update_firmware
-        assert update_firmware
+
         update_firmware_state = device_context.get_hass_state(update_firmware.entity_id)
         assert update_firmware_state and update_firmware_state.state == "on"
 

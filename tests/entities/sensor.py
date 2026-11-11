@@ -39,7 +39,6 @@ class EntityTest(EntityComponentTest):
     }
 
     NAMESPACES_ENTITIES = {
-        mn.Appliance_Config_OverTemp: [EnumParser],
         mn.Appliance_Control_ConsumptionH: [mss.ConsumptionHSensor],
         mn.Appliance_Control_ConsumptionX: [mss.ConsumptionXSensor],
         mn.Appliance_Control_Diffuser_Sensor: [

@@ -10,9 +10,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 # import core modules instead of symbols to ease patching in a single place
-from . import (
-    get_default_ssl_context,
-)
+from . import get_default_ssl_context
 from .. import const as mlc
 from ..merossclient import HostAddress, cloudapi, datetime_from_epoch, versiontuple
 from ..merossclient.client.mqtt import MQTTAppClient
@@ -67,7 +65,7 @@ if TYPE_CHECKING:
 
 class MerossMQTTConnection(MQTTConnection, MQTTAppClient):
 
-    __slots__ = MQTTAppClient._calc_slots()
+    __slots__ = MQTTConnection._calc_slots(bases=(MQTTAppClient,))
 
     def __init__(self, broker: "HostAddress", profile: "MerossProfile"):
         MQTTConnection.__init__(
@@ -208,10 +206,15 @@ class MerossProfile(MQTTProfile):
                 self.KEY_TOKEN_REQUEST_TIME: 0.0,
             }
 
-        if mc.KEY_MQTTDOMAIN in self.config:
-            MerossMQTTConnection(
-                HostAddress.build(self.config[mc.KEY_MQTTDOMAIN]), self
-            ).start()
+        try:
+            self._mqttconnection = MerossMQTTConnection(
+                HostAddress.build(self.config[mc.KEY_MQTTDOMAIN]), self  # type: ignore
+            )
+            self._mqttconnection.start()
+        except Exception as e:
+            self.log_exception(
+                self.DEBUG, e, "trying setting up profile default broker"
+            )
 
         # compute the next cloud devlist query and setup the scheduled callback
         next_query_epoch = (
@@ -350,45 +353,36 @@ class MerossProfile(MQTTProfile):
             )
 
     @override
-    def get_connection(self, device: "Device"):
-        try:
-            if device.is_connected:
-                broker = device.descriptor.server
-            else:
-                # decide which broker to connect to based off the most recent info
-                descr = device.descriptor
-                device_info = self._data[self.KEY_DEVICE_INFO][device.id]
-                timestamp_fw = descr.time.get(mc.KEY_TIMESTAMP, 0)
-                timestamp_di = self._data[self.KEY_DEVICE_INFO_TIME]
-                if timestamp_fw > timestamp_di:
-                    broker = descr.server
-                else:
-                    if domain := device_info.get(mc.KEY_DOMAIN):
-                        broker = HostAddress.build(domain)
-                    elif reserveddomain := device_info.get(mc.KEY_RESERVEDDOMAIN):
-                        broker = HostAddress.build(reserveddomain)
-                    else:
-                        raise Exception(
-                            "Unable to detect MQTT broker from current cloud device info"
-                        )
+    def get_connection(self, device: "Device") -> MQTTConnection | None:
 
-        except Exception as exception:
-            self.log_exception(
-                self.WARNING,
-                exception,
-                "attach_mqtt for %s (uuid:%s)",
-                device.display_name,
-                uuid=device.id,
-            )
+        def _get_and_connect(broker: HostAddress):
+            mqttconnection = self._get_mqttconnection(broker)
+            mqttconnection.start()  # ensure connection loop is on
+            return mqttconnection
+
+        descriptor = device.descriptor
+
+        if device.is_connected:
             try:
-                # fallback if we have the KEY_MQTTDOMAIN
-                broker = HostAddress.build(self.config[mc.KEY_MQTTDOMAIN])  # type: ignore
-            except:
-                return
+                return _get_and_connect(descriptor.server)
+            except Exception:
+                pass
 
-        mqttconnection = self._get_mqttconnection(broker)
-        mqttconnection.start()  # ensure connection loop is on
-        return mqttconnection
+        if device_info := self.get_device_info(device.id):
+            timestamp_fw = descriptor.time.get(mc.KEY_TIMESTAMP, 0)
+            timestamp_di = self._data.get(self.KEY_DEVICE_INFO_TIME, 0)
+            if timestamp_fw >= timestamp_di:
+                try:
+                    return _get_and_connect(descriptor.server)
+                except Exception:
+                    pass
+            for host in HostAddress.from_device_info(device_info):
+                try:
+                    return _get_and_connect(host)
+                except Exception:
+                    pass
+
+        return self._mqttconnection
 
     @property
     @override
@@ -420,26 +414,23 @@ class MerossProfile(MQTTProfile):
         """
         Returns a list of (active) broker connections according to the cloud configuration.
         The list is empty if device not configured or if the connection(s) to the brokers
-        cannot be established (like broker is down any network issue)
+        cannot be established (like broker is down or any network issue)
         """
-        mqttconnections: list[MQTTConnection] = []
+        mqttconnections: set[MQTTConnection] = set()
 
-        async def _add_connection(domain: str | None):
-            if not domain:
-                return
-            broker = HostAddress.build(domain)
-            for mqttconnection in mqttconnections:
-                if mqttconnection.id == broker:
-                    return
+        async def _add_connection(broker: HostAddress):
             mqttconnection = await self._async_get_mqttconnection(broker)
             if mqttconnection:
-                mqttconnections.append(mqttconnection)
-
-        await _add_connection(self.config.get(mc.KEY_MQTTDOMAIN))
+                mqttconnections.add(mqttconnection)
 
         if device_info := self.get_device_info(device_id):
-            await _add_connection(device_info.get(mc.KEY_DOMAIN))
-            await _add_connection(device_info.get(mc.KEY_RESERVEDDOMAIN))
+            for host in HostAddress.from_device_info(device_info):
+                await _add_connection(host)
+
+        # Add this last since code might prefer to just use the first in the set
+        # and that should be a proper device_info sourced broker
+        if self._mqttconnection:
+            await _add_connection(self._mqttconnection.id)
 
         return mqttconnections
 
@@ -619,23 +610,10 @@ class MerossProfile(MQTTProfile):
                         device_type,
                         uuid=uuid,
                     )
-                    if domain := device_info.get(mc.KEY_DOMAIN):
-                        # try first broker in the cloud configuration
-                        if mqttconnection := await self._async_get_mqttconnection(
-                            HostAddress.build(domain)
-                        ):
+                    for host in HostAddress.from_device_info(device_info):
+                        if mqttconnection := await self._async_get_mqttconnection(host):
                             if await mqttconnection.async_try_discovery(uuid, self.key):
-                                continue  # identification succeded, a flow has been created
-                    if (reserveddomain := device_info.get(mc.KEY_RESERVEDDOMAIN)) and (
-                        reserveddomain != domain
-                    ):
-                        # try the second broker in the cloud configuration
-                        # only if it's different from the previous
-                        if mqttconnection := await self._async_get_mqttconnection(
-                            HostAddress.build(reserveddomain)
-                        ):
-                            if await mqttconnection.async_try_discovery(uuid, self.key):
-                                continue  # identification succeded, a flow has been created
+                                break  # identification succeded, a flow has been created
                     continue
 
                 if device:

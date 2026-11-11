@@ -53,12 +53,12 @@ class Fan(ToggleXParser, fan.FanEntity):
     _INIT_speed_count = 1
     _INIT__saved_speed = 1
     _AUTO_INIT = ("percentage", "speed_count", "_saved_speed")
-    __slots__ = ToggleXParser._calc_slots()
+    __slots__ = _AUTO_INIT
 
     @override
     def set_unavailable(self):
         self.cancel_callback(self.__async_refresh)
-        super().set_unavailable()
+        ToggleXParser.set_unavailable(self)
 
     # interface: fan.FanEntity
     @override

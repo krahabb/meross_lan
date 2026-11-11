@@ -6,7 +6,7 @@ from ...binary_sensor import BinarySensorEntity
 from ...climate import MtsClimate
 from ...number import NumberParser
 from ...select import SelectParser
-from ...sensor import SensorEntity
+from ...sensor import SensorParser
 from ...switch import EmulatedSwitch, SwitchParser
 
 if TYPE_CHECKING:
@@ -66,6 +66,7 @@ class mts100(SubDevice, MtsClimate):
     _unrecorded_attributes = frozenset((mc.KEY_SCHEDULEBMODE,))
 
     _AUTO_DESTROY = ("binary_sensor_window", "switch_patch_hvacaction")
+    __slots__ = SubDevice._calc_slots(*_AUTO_DESTROY, bases=(MtsClimate,))
 
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
         SubDevice.__init__(self, descriptor, hub, **kwargs)
@@ -293,11 +294,38 @@ class mts150(mts100):
     """Climate entity for hub paired devices MTS150, MTS150P"""
 
     if TYPE_CHECKING:
-        sensor_motor_position: SensorEntity | None
-        sensor_motor_start_count: SensorEntity | None
+        sensor_motor_cur_location: SensorParser
+        sensor_motor_start_ctr: SensorParser
+        sensor_motor_total_path: SensorParser
 
-    _AUTO_INIT = ("sensor_motor_position", "sensor_motor_start_count")
-    _AUTO_DESTROY = ("sensor_motor_position", "sensor_motor_start_count")
+    ENTITY_DEFS: dict[str, type[SensorParser]] = {
+        "sensor_motor_cur_location": SensorParser.DEF(
+            entity_key=mc.KEY_MOTORCURLOCATION,
+            name="Motor position",
+            icon="mdi:valve",
+            entity_registry_enabled_default=False,
+            state_class=SensorParser.StateClass.MEASUREMENT,
+        ),
+        "sensor_motor_start_ctr": SensorParser.DEF(
+            entity_key=mc.KEY_MOTORSTARTCTR,
+            name="Motor start count",
+            icon="mdi:counter",
+            entity_registry_enabled_default=False,
+            state_class=SensorParser.StateClass.TOTAL_INCREASING,
+            entity_category=SensorParser.EntityCategory.DIAGNOSTIC,
+        ),
+        "sensor_motor_total_path": SensorParser.DEF(
+            entity_key=mc.KEY_MOTORTOTALPATH,
+            name="Motor total path",
+            icon="mdi:counter",
+            entity_registry_enabled_default=False,
+            state_class=SensorParser.StateClass.TOTAL_INCREASING,
+            entity_category=SensorParser.EntityCategory.DIAGNOSTIC,
+        ),
+    }
+
+    _AUTO_DESTROY = ENTITY_DEFS.keys()
+    __slots__ = _AUTO_DESTROY
 
     class PidGradeSelect(SelectParser):
 
@@ -342,7 +370,7 @@ class mts150(mts100):
         _INIT__pid_grade_map = MTS150P_PID_GRADE_MAP
 
         _AUTO_INIT = ("_pid_grade_map",)
-        __slots__ = ("p", "i", "d")
+        __slots__ = ("p", "i", "d", *_AUTO_INIT)
 
         @override
         async def async_select_option(self, option: str):
@@ -385,6 +413,10 @@ class mts150(mts100):
 
     def __init__(self, descriptor: "SubDeviceDescriptor", hub: "Hub", /, **kwargs):
         mts100.__init__(self, descriptor, hub, **kwargs)
+
+        for key, entity_def in self.__class__.ENTITY_DEFS.items():
+            setattr(self, key, entity_def(self))
+
         PidGradeSelect = mts150.PidGradeSelect
         if PidGradeSelect._INIT_ns in hub.descriptor.ability:
             hub.get_handler(PidGradeSelect._INIT_ns).register_parser(
@@ -396,57 +428,42 @@ class mts150(mts100):
     def flush_state(self, /):
         # The mts150 always reports 'heating': 0 so, when the digest carries the
         # valve motor position, we use it to tell if the valve is open (heating).
-        if self.sensor_motor_position and (
-            (position := self.sensor_motor_position.native_value) is not None
-        ):
-            self._mts_active = position > 0
+        self._mts_active = (self.sensor_motor_cur_location.native_value or 0) > 0
         mts100.flush_state(self)
 
     @override
     def _parse_digest_(self, payload: "mt.hub._mts150", /):
         """parse digest key for mts150/mts150p subdevice"""
+        need_flush = False
+        try:
+            # Valve motor state carried in the digest: 'motorCurLocation' is the motor position
+            # in pulses (0 = fully closed) and 'motorStartCtr' counts the motor starts.
+            # After a hub reboot all the motor keys read 0 until the valve reports again
+            # so we're not trusting them until 'motorTotalPath' is set.
+            motor_cur_location = payload[mc.KEY_MOTORCURLOCATION]  # type: ignore
+            motor_start_ctr = payload[mc.KEY_MOTORSTARTCTR]  # type: ignore
+            motor_total_path = payload[mc.KEY_MOTORTOTALPATH]  # type: ignore
+        except KeyError:
+            pass
+        else:
+            if motor_total_path:
+                self.sensor_motor_cur_location.update_native_value(motor_cur_location)
+                self.sensor_motor_start_ctr.update_native_value(motor_start_ctr)
+                self.sensor_motor_total_path.update_native_value(motor_total_path)
+                if (motor_cur_location > 0) != self._mts_active:
+                    need_flush = True
+            else:
+                self.sensor_motor_cur_location.update_native_value(None)
+                self.sensor_motor_start_ctr.update_native_value(None)
+                self.sensor_motor_total_path.update_native_value(None)
+
         mode = payload[mc.KEY_MODE]
         if self._mts_mode != mode:
+            need_flush = True
             self._mts_mode = mode
-            # TODO: parse more keys?
-            self.flush_state()
-        if mc.KEY_MOTORCURLOCATION in payload:
-            self._parse_motor(payload)
 
-    # interface: self
-    def _parse_motor(self, payload: "mt.hub._mts150", /):
-        """Valve motor state carried in the digest: 'motorCurLocation' is the motor position
-        in pulses (0 = fully closed) and 'motorStartCtr' counts the motor starts."""
-        # After a hub reboot all the motor keys read 0 until the valve reports again
-        # so we're not trusting them until 'motorTotalPath' is set.
-        if payload.get(mc.KEY_MOTORTOTALPATH) == 0:
-            position = start_count = None
-        else:
-            position = payload[mc.KEY_MOTORCURLOCATION]
-            start_count = payload.get(mc.KEY_MOTORSTARTCTR)
-        if self.sensor_motor_position:
-            self.sensor_motor_position.update_native_value(position)
-        else:
-            self.sensor_motor_position = SensorEntity(
-                self,
-                entity_key=mc.KEY_MOTORCURLOCATION,
-                name="Motor position",
-                icon="mdi:valve",
-                entity_registry_enabled_default=False,
-                state_class=SensorEntity.StateClass.MEASUREMENT,
-                native_value=position,
-            )
-        if self.sensor_motor_start_count:
-            self.sensor_motor_start_count.update_native_value(start_count)
-        elif mc.KEY_MOTORSTARTCTR in payload:
-            self.sensor_motor_start_count = SensorEntity(
-                self,
-                entity_key=mc.KEY_MOTORSTARTCTR,
-                name="Motor start count",
-                icon="mdi:counter",
-                entity_registry_enabled_default=False,
-                state_class=SensorEntity.StateClass.TOTAL_INCREASING,
-                native_value=start_count,
-            )
-        if (position is not None) and ((position > 0) != bool(self._mts_active)):
+        if need_flush:
             self.flush_state()
+
+
+mts150p = mts150

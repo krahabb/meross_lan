@@ -180,6 +180,7 @@ class Mts300Climate(MtsThermostatClimate):
         "_mts_work",
         "sensor_current_humidity",
         "select_temp_association",
+        *_AUTO_DESTROY,
     )
 
     def __init__(self, id, device: "Device", /, **kwargs):
@@ -223,7 +224,7 @@ class Mts300Climate(MtsThermostatClimate):
         self.native_target_temperature_high = None
         self.native_target_temperature_low = None
         self._mts_work = None
-        return MtsThermostatClimate.set_unavailable(self)
+        MtsThermostatClimate.set_unavailable(self)
 
     if mlc.HA_VERSION < (2026, 11):
         # patch pre 2026.11 ClimateEntity properties
