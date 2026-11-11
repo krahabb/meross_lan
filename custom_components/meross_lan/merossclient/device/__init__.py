@@ -267,6 +267,7 @@ class Device(PhysicalDevice):
     # interface: AbstractClient
     @override
     async def async_connect(self, /, **kwargs: "Unpack[ConnectArgs]"):
+        mqtt = self.mqtt
         connect_tasks = [
             _client.create_task(
                 _client.async_request(*self.handler_all.polling_request),
@@ -274,6 +275,8 @@ class Device(PhysicalDevice):
                 eager_start=False,
             )
             for _client in self._clients.values()
+            # Keep receive-only MQTT attached for pushes, but don't probe it.
+            if mqtt is None or _client is not mqtt or mqtt.connection.allow_publish
         ]
         if connect_tasks:
             try:
