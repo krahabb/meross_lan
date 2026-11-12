@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from . import MtsThermostatClimate, mc, mn_t
 
@@ -68,6 +68,27 @@ class Mts200Climate(MtsThermostatClimate):
 
     def is_mts_scheduled(self, /):
         return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
+
+    @override
+    def schedule_limits_known(self, /):
+        # the off values depend on the summer mode (see schedule_off_values)
+        return super().schedule_limits_known() and self._summer_mode() is not None
+
+    @override
+    def _schedule_cooling(self, /):
+        return self._summer_mode() == mc.MTS200_SUMMERMODE_COOL
+
+    # interface: self
+    def _summer_mode(self, /):
+        """The summer mode (MtsSummerMode) value, None while not known (heat when
+        not supported). Its changes flush this climate."""
+        try:
+            handler = self.parent.ns_handlers[
+                mn_t.Appliance_Control_Thermostat_SummerMode
+            ]
+            return handler.parsers[self.index].ns_value  # type: ignore
+        except (KeyError, AttributeError):
+            return mc.MTS200_SUMMERMODE_HEAT
 
     def __call__(self, payload: "mt.thermostat.Mode_C", /):
         if self.ns_value == payload:

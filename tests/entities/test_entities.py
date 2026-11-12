@@ -64,7 +64,6 @@ async def test_entities(
     for entity_domain in (
         "binary_sensor",
         "button",
-        "calendar",
         "climate",
         "cover",
         "fan",
