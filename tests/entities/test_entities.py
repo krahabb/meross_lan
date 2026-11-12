@@ -57,6 +57,7 @@ for entity_domain in (
     "sensor",
     "siren",
     "switch",
+    "update",
 ):
     module = import_module(f".{entity_domain}", "tests.entities")
     entity_test: EntityComponentTest = module.EntityTest()

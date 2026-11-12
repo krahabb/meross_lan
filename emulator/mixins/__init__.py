@@ -759,11 +759,14 @@ class Emulator:
         return mc.METHOD_GETACK, {mc.KEY_TOGGLE: self._get_control_key(mc.KEY_TOGGLE)}
 
     def _SET_Appliance_Control_Toggle(self, header, payload, /):
-        # only acual example of this usage comes from legacy firmwares
+        # only actual example of this usage comes from legacy firmwares
         # carrying state in all->control
         self._get_control_key(mc.KEY_TOGGLE)[mc.KEY_ONOFF] = payload[mc.KEY_TOGGLE][
             mc.KEY_ONOFF
         ]
+        return mc.METHOD_SETACK, {}
+
+    def _SET_Appliance_Control_Upgrade(self, header, payload, /):
         return mc.METHOD_SETACK, {}
 
     def _GET_Appliance_System_Debug(self, header, payload, /):
