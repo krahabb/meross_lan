@@ -14,6 +14,12 @@
             "problemMatcher": []
         },
         {
+            "label": "Pytest: Update Snapshots (Current File)",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m pytest ${file} --snapshot-update",
+            "problemMatcher": []
+        },
+        {
             "label": "Upload to lokalise",
             "type": "shell",
             "command": "./bin/lokalise2 --config=./bin/lokalise2_config.yml file upload --file=./custom_components/meross_lan/strings.json --lang-iso=en --replace-modified=true",

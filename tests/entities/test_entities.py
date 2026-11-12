@@ -106,6 +106,7 @@ async def test_entities(
     hass: HomeAssistant,
     capsys: CaptureFixture,
     disable_entity_registry_update,
+    snapshot,
     uuid: str,
     build_args: helpers.EmulatorBuildArgs,
 ):
@@ -194,10 +195,31 @@ async def test_entities(
                     )
                 device_context.dump_ns_handlers()
                 device = device_context.device
+                assert device.descriptor.is_hub == ishub
                 await _async_test_entities(
                     device.entities_iterable, expected, unexpected, unavailable
                 )
-                assert device.descriptor.is_hub == ishub
+
+                entities_snapshot = {
+                    internal_id: {
+                        "class": entity.__class__,
+                    }
+                    | {
+                        attr: getattr(entity, attr)
+                        for attr in (
+                            "unique_id",
+                            "index",
+                            "ns",
+                            "key_value",
+                            "device_scale",
+                            "device_class",
+                            "native_unit_of_measurement",
+                        )
+                        if hasattr(entity, attr)
+                    }
+                    for internal_id, entity in device.entities.items()
+                }
+                assert snapshot == entities_snapshot
 
             except BaseException as e:
                 e.args = (*e.args, EntityComponentTest.entity_id)

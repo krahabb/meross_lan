@@ -1403,6 +1403,9 @@ class ValueParser(NamespaceParser):
         def __str__(self):
             return "_".join(self.key)
 
+        def __repr__(self):
+            return repr(self.key)
+
         def parse(self, payload: "JsonMapping") -> "JsonType":
             """Extracts the value from the payload using the key(s) defined in this descriptor."""
             for key in self.key:
