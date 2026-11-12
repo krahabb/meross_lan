@@ -51,6 +51,59 @@ def report(api, body):
         )
 
 
+def close_report(api):
+    issues = api.request("GET", f"repos/{FORK}/issues?state=open&per_page=100")
+    for issue in issues:
+        if issue["title"] == REPORT_TITLE and "pull_request" not in issue:
+            run_url = f"https://github.com/{FORK}/actions/runs/{os.environ.get('GITHUB_RUN_ID', '')}"
+            api.request(
+                "POST",
+                f"repos/{FORK}/issues/{issue['number']}/comments",
+                {
+                    "body": f"The importer completed in [this run]({run_url}). "
+                    "Any remaining conflicts are listed in the open update PR."
+                },
+            )
+            api.request(
+                "PATCH",
+                f"repos/{FORK}/issues/{issue['number']}",
+                {"state": "closed", "state_reason": "completed"},
+            )
+
+
+def is_ancestor(ancestor, descendant):
+    return (
+        git("merge-base", "--is-ancestor", ancestor, descendant, check=False).returncode
+        == 0
+    )
+
+
+def conflict_body(marker, release, paths):
+    listed = "\n".join(f"- `{path}`" for path in paths)
+    return (
+        f"Import stable upstream release [{marker['tag']}]({release['html_url']}) "
+        f"at `{marker['sha']}`.\n\n"
+        "**Git could not merge this release into `master` automatically.** This branch "
+        "points at the upstream release commit itself, so GitHub lists the conflicts and "
+        "shows the upstream changes. It cannot be merged until they are resolved.\n\n"
+        f"Conflicting paths:\n\n{listed}\n\n"
+        "Resolve them while preserving AUTO HVAC mode, the HACS name and the home test pins:\n\n"
+        "```bash\n"
+        "git fetch origin\n"
+        f"git switch -C {BRANCH} origin/{BASE}\n"
+        f"git merge {marker['sha']}\n"
+        "# resolve, test and commit the merge\n"
+        f"git push --force-with-lease origin {BRANCH}\n"
+        "```\n\n"
+        "Simple text conflicts can also be resolved with GitHub's **Resolve conflicts** "
+        "button. Then run **Actions → Import stable upstream releases → Run workflow**: "
+        "it keeps your resolution, merges newer `master` commits, records the release in "
+        f"`{MARKER}` and starts the checks. Review and use **Create a merge commit**; "
+        "do not squash or rebase.\n\n"
+        f"Upstream release notes:\n\n{release.get('body') or '(No upstream release notes.)'}"
+    )
+
+
 def dispatch_checks(api, sha):
     # The workflow definition comes from trusted master; candidate code gets read-only jobs.
     api.request(
@@ -128,26 +181,19 @@ def sync(api):
         "GET",
         f"repos/{FORK}/pulls?state=open&head={quote(owner + ':' + BRANCH)}&base={BASE}",
     )
-    if old_branch and pulls:
+    existing_sha = old_branch["object"]["sha"] if old_branch and pulls else None
+    if existing_sha:
         git(
             "fetch",
             "--no-tags",
             "origin",
             f"+refs/heads/{BRANCH}:refs/remotes/origin/{BRANCH}",
         )
-        existing_sha = old_branch["object"]["sha"]
         existing_marker = git("show", f"{existing_sha}:{MARKER}", check=False)
         if (
             existing_marker.returncode == 0
             and json.loads(existing_marker.stdout) == marker
-            and git(
-                "merge-base",
-                "--is-ancestor",
-                f"origin/{BASE}",
-                existing_sha,
-                check=False,
-            ).returncode
-            == 0
+            and is_ancestor(f"origin/{BASE}", existing_sha)
         ):
             dispatch_checks(automation_api, existing_sha)
             output(changed="false", sha=existing_sha, tag=marker["tag"])
@@ -157,11 +203,11 @@ def sync(api):
             return
     # Keep any human conflict resolutions already committed to an open update PR.
     # New master commits are merged into that history instead of rebuilding it.
-    starting_ref = (
-        old_branch["object"]["sha"] if old_branch and pulls else f"origin/{BASE}"
-    )
-    git("checkout", "-B", BRANCH, starting_ref)
-    if old_branch and pulls:
+    # A branch holding only upstream commits is an unresolved conflict PR: nothing
+    # on it needs preserving, so the merge is retried from master.
+    preserve = existing_sha and not is_ancestor(existing_sha, marker["sha"])
+    git("checkout", "-B", BRANCH, existing_sha if preserve else f"origin/{BASE}")
+    if preserve:
         merged_base = git(
             "merge", "--no-ff", "--no-edit", f"origin/{BASE}", check=False
         )
@@ -172,17 +218,24 @@ def sync(api):
                 f"Merge conflict updating the existing PR with master. No candidate was pushed.\n\n{paths}"
             )
     merged = git("merge", "--no-ff", "--no-edit", marker["sha"], check=False)
+    conflicts = []
     if merged.returncode:
-        paths = git("diff", "--name-only", "--diff-filter=U").stdout
+        conflicts = git("diff", "--name-only", "--diff-filter=U").stdout.split()
         git("merge", "--abort", check=False)
-        raise ValueError(
-            f"Merge conflict importing {marker['tag']}. No candidate was pushed.\n\n{paths}"
-        )
-    write_json(MARKER, marker)
-    validate_home_tree(marker)
-    git("add", str(MARKER))
-    if git("diff", "--cached", "--quiet", check=False).returncode:
-        git("commit", "-m", f"Track upstream release {marker['tag']}")
+        if preserve or not conflicts:
+            target = " into the existing PR commits" if preserve else ""
+            raise ValueError(
+                f"Merge conflict importing {marker['tag']}{target}. "
+                "No candidate was pushed.\n\n" + ("\n".join(conflicts) or merged.stderr)
+            )
+        # Publish the release commit itself so the PR shows the conflicts on GitHub.
+        git("checkout", "-B", BRANCH, marker["sha"])
+    else:
+        write_json(MARKER, marker)
+        validate_home_tree(marker)
+        git("add", str(MARKER))
+        if git("diff", "--cached", "--quiet", check=False).returncode:
+            git("commit", "-m", f"Track upstream release {marker['tag']}")
     sha = git("rev-parse", "HEAD").stdout.strip()
     expected = old_branch["object"]["sha"] if old_branch else ""
     git(
@@ -201,13 +254,22 @@ def sync(api):
         "Automatic merging is disabled.\n\n"
         f"Upstream release notes:\n\n{release.get('body') or '(No upstream release notes.)'}"
     )
+    if conflicts:
+        body = conflict_body(marker, release, conflicts)
     values = {"title": f"Update upstream to {marker['tag']}", "body": body}
     if pulls:
-        api.request("PATCH", f"repos/{FORK}/pulls/{pulls[0]['number']}", values)
+        pull = api.request("PATCH", f"repos/{FORK}/pulls/{pulls[0]['number']}", values)
     else:
-        api.request(
+        pull = api.request(
             "POST", f"repos/{FORK}/pulls", {**values, "head": BRANCH, "base": BASE}
         )
+    if conflicts:
+        output(changed="true", conflict="true", sha=sha, tag=marker["tag"])
+        print(
+            f"::warning::{marker['tag']} conflicts with {BASE} in "
+            f"{', '.join(conflicts)}. Resolve them in PR #{pull['number']}."
+        )
+        return
     dispatch_checks(automation_api, sha)
     output(changed="true", sha=sha, tag=marker["tag"])
     print(f"Prepared {marker['tag']} at fork commit {sha}.")
@@ -215,6 +277,11 @@ def sync(api):
 
 def main():
     api = GitHub()
+    automation_api = (
+        GitHub(os.environ.get("AUTOMATION_TOKEN"))
+        if os.environ.get("AUTOMATION_TOKEN")
+        else api
+    )
     try:
         sync(api)
     except Exception as error:
@@ -222,17 +289,17 @@ def main():
         run_url = f"https://github.com/{FORK}/actions/runs/{os.environ.get('GITHUB_RUN_ID', '')}"
         try:
             report(
-                (
-                    GitHub(os.environ.get("AUTOMATION_TOKEN"))
-                    if os.environ.get("AUTOMATION_TOKEN")
-                    else api
-                ),
+                automation_api,
                 f"Synchronization stopped safely.\n\n```text\n{message}\n```\n\n[Workflow log]({run_url})",
             )
         except Exception as report_error:
             print(f"Could not create GitHub issue: {report_error}", file=sys.stderr)
         print(message, file=sys.stderr)
         return 1
+    try:
+        close_report(automation_api)
+    except Exception as close_error:
+        print(f"Could not close GitHub issue: {close_error}", file=sys.stderr)
     return 0
 
 

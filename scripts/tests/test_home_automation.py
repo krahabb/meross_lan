@@ -66,6 +66,8 @@ class FakeGitHub:
             return None
         if method == "GET" and "/issues?" in path:
             return self.issues
+        if method == "POST" and path.endswith("/comments"):
+            return {}
         if method == "POST" and path.endswith("/issues"):
             self.issues.append({"number": 9, **data})
             return self.issues[-1]
@@ -219,23 +221,84 @@ class AutomationTests(unittest.TestCase):
         ]
         self.assertEqual(dispatch[2], {"ref": "master", "inputs": {"ref": candidate}})
 
-    def test_conflict_does_not_push_a_candidate(self):
+    def remote_branch(self):
+        return self.run_git(
+            "--git-dir",
+            str(self.origin),
+            "rev-parse",
+            f"refs/heads/{home_common.BRANCH}",
+        ).stdout.strip()
+
+    def dispatches(self):
+        return [call for call in self.api.calls if call[1].endswith("/dispatches")]
+
+    def test_conflict_opens_pr_on_the_release_commit(self):
         self.new_release(conflict=True)
-        with self.assertRaisesRegex(ValueError, "Merge conflict"):
-            self.sync()
-        self.assertEqual(self.api.pulls, [])
-        self.assertNotEqual(
-            self.run_git(
-                "--git-dir",
-                str(self.origin),
-                "rev-parse",
-                f"refs/heads/{home_common.BRANCH}",
-                check=False,
-            ).returncode,
-            0,
-        )
+        self.sync()
+        self.assertEqual(self.remote_branch(), self.upstream_sha)
+        self.assertEqual(len(self.api.pulls), 1)
+        self.assertEqual(self.api.pulls[0]["head"], home_common.BRANCH)
+        self.assertIn("- `control.txt`", self.api.pulls[0]["body"])
+        self.assertEqual(self.dispatches(), [])
+        master_marker = self.run_git(
+            "--git-dir", str(self.origin), "show", f"master:{home_common.MARKER}"
+        ).stdout
+        self.assertEqual(json.loads(master_marker)["sha"], self.initial_sha)
+        # Scheduled reruns keep the conflict PR instead of failing.
+        self.api.pulls[0]["body"] = "stale"
+        self.sync()
+        self.assertEqual(self.remote_branch(), self.upstream_sha)
+        self.assertEqual(len(self.api.pulls), 1)
+        self.assertIn("- `control.txt`", self.api.pulls[0]["body"])
+
+    def test_resolved_conflict_pr_is_completed_and_checked(self):
+        self.new_release(conflict=True)
+        self.sync()
+        self.run_git("checkout", "-B", "resolution", "origin/master")
+        self.run_git("merge", self.upstream_sha, check=False)
+        Path("control.txt").write_text("home and upstream\n")
+        self.commit("Resolve upstream conflict")
+        resolution = self.head()
+        self.run_git("push", "--force", "origin", f"HEAD:{home_common.BRANCH}")
+        self.sync()
+        candidate = self.remote_branch()
+        self.run_git("merge-base", "--is-ancestor", resolution, candidate)
+        self.assertEqual(Path("control.txt").read_text(), "home and upstream\n")
         self.assertEqual(
-            home_common.read_json(home_common.MARKER)["sha"], self.initial_sha
+            home_common.read_json(home_common.MARKER)["sha"], self.upstream_sha
+        )
+        self.assertNotIn("conflicts", self.api.pulls[0]["body"])
+        self.assertEqual(self.dispatches()[-1][2]["inputs"], {"ref": candidate})
+
+    def test_conflict_with_human_pr_commits_is_reported(self):
+        self.new_release()
+        self.sync()
+        Path("control.txt").write_text("manual\n")
+        self.commit("Manual change on the update PR")
+        self.run_git("push", "origin", f"HEAD:{home_common.BRANCH}")
+        manual_sha = self.head()
+        self.run_git("checkout", "upstream-work")
+        Path("control.txt").write_text("newer upstream\n")
+        home_common.write_json(home_common.MANIFEST, {"version": "1.2.0"})
+        self.commit("Newer upstream release")
+        self.upstream_sha = self.head()
+        self.run_git("push", str(self.upstream), "HEAD:refs/tags/v1.1.0", "--force")
+        self.run_git("checkout", "master")
+        with self.assertRaisesRegex(ValueError, "existing PR commits"):
+            self.sync()
+        self.assertEqual(self.remote_branch(), manual_sha)
+
+    def test_successful_run_closes_report(self):
+        home_sync.report(self.api, "Old conflict")
+        with (
+            patch.object(home_sync, "GitHub", return_value=self.api),
+            patch.object(home_sync, "sync"),
+        ):
+            self.assertEqual(home_sync.main(), 0)
+        self.assertEqual(self.api.issues[0]["state"], "closed")
+        self.assertIn(
+            ("POST", f"repos/{home_common.FORK}/issues/9/comments"),
+            [(method, path) for method, path, _ in self.api.calls],
         )
 
     def test_existing_pr_keeps_human_commits_when_master_moves(self):

@@ -121,16 +121,24 @@ provided. Do not store a broad personal token just to run this automation.
 
 ## Conflicts and recovery
 
-Conflicting merges, changed upstream tags, non-descendant releases and invalid
-metadata fail closed. The importer does not choose `ours` or `theirs` globally,
-does not update `master`, and does not publish an untested candidate. It creates
-or updates the issue **Upstream synchronization needs attention**, including the
-workflow log and conflicting paths. An existing PR remains available for review.
+When the release does not merge cleanly into `master`, the importer still opens
+the update PR. Its branch points at the upstream release commit itself, so GitHub
+marks the PR as conflicting, shows the upstream changes and blocks merging. The PR
+description lists the conflicting paths and the commands to resolve them; no
+checks are dispatched. The importer does not choose `ours` or `theirs` and does
+not update `master`. Later runs keep that PR until it is resolved and retry the
+merge from the current `master`, so a conflict fixed on `master` clears itself.
 
-Resolve the merge on a working branch while preserving the home contract, review
-and test it, then merge it normally. Update the release marker only to the exact
-upstream release tag/SHA actually imported. Re-run the importer after configuring
-a missing token or fixing the cause of the failure.
+Resolve the merge on `automation/upstream-release` (starting from `master`, or
+with GitHub's **Resolve conflicts** button for simple text conflicts), test it and
+push it. Then run the importer: it keeps the resolution, merges newer `master`
+commits, records the release marker and dispatches the checks.
+
+Changed upstream tags, non-descendant releases, invalid metadata, missing tokens
+and conflicts with commits already added to an open PR fail closed instead. The
+importer creates or updates the issue **Upstream synchronization needs attention**,
+including the workflow log, and closes it after the next successful run. Update
+the release marker only to the exact upstream release tag/SHA actually imported.
 
 GitHub disables scheduled workflows in public repositories after **60 days with
 no repository activity**. Scheduled runs alone do not guarantee continued

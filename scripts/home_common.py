@@ -44,7 +44,14 @@ class GitHub:
         except urllib.error.HTTPError as error:
             if missing_ok and error.code == 404:
                 return None
-            raise RuntimeError(f"GitHub {method} {path}: HTTP {error.code}") from None
+            try:
+                detail = json.loads(error.read()).get("message", "")
+            except Exception:
+                detail = ""
+            raise RuntimeError(
+                f"GitHub {method} {path}: HTTP {error.code}"
+                + (f" ({detail})" if detail else "")
+            ) from None
 
 
 def git(*args, check=True):
