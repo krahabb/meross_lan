@@ -14,7 +14,7 @@ from yarl import URL
 from . import AbstractClient
 from .. import MEROSSDEBUG
 from ..exceptions import MerossKeyError, MerossTransportError
-from ..protocol import AESCipher, const as mc, md5hexdigest
+from ..protocol import AESCipher, const as mc, md5hexdigest, namespaces as mn
 from ..protocol.message import MerossMessage
 
 if TYPE_CHECKING:
@@ -66,6 +66,14 @@ class HttpClient(AbstractClient):
     # Setting SESSION_MAXIMUM_CONNECTIONS_PER_HOST == 1 should prevent
     # concurrent http sessions to the same device.
     _SESSION = None
+
+    # In general, TimeoutError is better regarded as a sign of temporary unavailability since it happens here
+    # and there we hit the timeout but the device would nevertheless respond if queried again.
+    # A TimeoutError on these abilities instead would directly disconnect the device.
+    CRITICAL_TIMEOUT_NAMESPACES = (
+        mn.Appliance_System_All,
+        mn.Appliance_System_Ability,
+    )
 
     @staticmethod
     def _get_or_create_client_session():
@@ -172,21 +180,38 @@ class HttpClient(AbstractClient):
     ):
         """Internal wrapper to perform the request."""
         if cipher:
-            response = await self._session.post(
-                url=self._url,
-                data=cipher.encrypt_text(request.json),
-                headers=HttpClient._HEADERS_ENCRYPTED,
-                timeout=timeout,
-            )
+            data = cipher.encrypt_text(request.json)
+            headers = HttpClient._HEADERS_ENCRYPTED
+        else:
+            data = request.json
+            headers = HttpClient._HEADERS_PLAINTEXT
+
+        # since device HTTP service sometimes timeouts with no apparent
+        # reason we're using an increasing timeout loop to try recover
+        # when this timeout is transient. This will lead to a total timeout
+        # (for the caller) exceeding the value(s) actually set in timeout
+        _connect_timeout_max = timeout.connect or timeout.total or 5
+        _connect_timeout = 1
+        while True:
+            try:
+                response = await self._session.post(
+                    url=self._url,
+                    data=data,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(
+                        total=timeout.total, connect=_connect_timeout
+                    ),
+                )
+                break
+            except TimeoutError:
+                if _connect_timeout < _connect_timeout_max:
+                    _connect_timeout = _connect_timeout * 2
+                else:
+                    raise
+
+        if cipher:
             return cipher.decrypt(await response.read())
         else:
-            # no encryption: session defaults to json
-            response = await self._session.post(
-                url=self._url,
-                data=request.json,
-                headers=HttpClient._HEADERS_PLAINTEXT,
-                timeout=timeout,
-            )
             return await response.read()
 
     @override
@@ -215,10 +240,17 @@ class HttpClient(AbstractClient):
             # We consider this to not be a real cause of disconnection by itself since the device
             # could likely be recoverable.
             raise MerossTransportError(self, request=request) from e
-        except (aiohttp.ClientError, TimeoutError) as e:
+        except aiohttp.ClientError as e:
             # General sink for any aiohttp exception including the connector errors raised when
             # the address is unresolvable or host unreachable for any reason
             if self.is_connected:
+                self.on_disconnect()
+            raise MerossTransportError(self, request=request) from e
+        except TimeoutError as e:
+            # Likely the same as ServerDisconnectedError but this could be more generic
+            if self.is_connected and (
+                request.namespace in self.CRITICAL_TIMEOUT_NAMESPACES
+            ):
                 self.on_disconnect()
             raise MerossTransportError(self, request=request) from e
         except Exception as e:
