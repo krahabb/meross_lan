@@ -112,19 +112,17 @@ class EmulatorDescriptor(DeviceDescriptor):
             # 2 'auto' rows carrying ns.All and ns.Ability from config
             version = 0
             _import_legacy_config(row)
+        elif row[2] == "auto":
+            # Version 1: no column headers - trace starting with
+            # 2 'auto' rows carrying ns.All and ns.Ability from config
+            version = 1
+            _import_legacy_config(row)
         else:
-            match row[2]:  # 'protocol' column
-                case "auto":
-                    # Version 1: no column headers - trace starting with
-                    # 2 'auto' rows carrying ns.All and ns.Ability from config
-                    version = 1
-                    _import_legacy_config(row)
-                case "protocol":
-                    # Version 2 (and on): we have column headers
-                    columns = row
-                    row = next(f).split("\t")
-                    # first data row contains an 'HEADER' i.e. 'diagnostic like' dict
-                    version = self._import_config(json_loads(row[-1]))
+            # Version 2 (and on): we have column headers
+            columns = row
+            row = next(f).split("\t")
+            # first data row contains an 'HEADER' i.e. 'diagnostic like' dict
+            version = self._import_config(json_loads(row[-1]))
 
         for line in f:
             row = line.split("\t")
