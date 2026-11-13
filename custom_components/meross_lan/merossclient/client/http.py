@@ -203,9 +203,15 @@ class HttpClient(AbstractClient):
                     ),
                 )
                 break
-            except TimeoutError:
+            except TimeoutError as e:
                 if _connect_timeout < _connect_timeout_max:
                     _connect_timeout = _connect_timeout * 2
+                    self.log_exception(
+                        self.DEBUG,
+                        e,
+                        "_perform_request: retrying with %i sec timeout",
+                        _connect_timeout,
+                    )
                 else:
                     raise
 
