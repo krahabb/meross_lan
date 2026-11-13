@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock, patch
+
 from homeassistant.components import cover as haec
 
 from custom_components.meross_lan import const as mlc
@@ -63,6 +65,8 @@ class EntityTest(EntityComponentTest):
         if isinstance(entity, GarageDoor):
             await self._async_test_cover_transition(entity)
             await self._async_test_cover_transition(entity)
+            if entity.parent.descriptor.type.startswith(mc.TYPE_MSG150):
+                await self._async_test_msg150_recheck(entity)
         elif isinstance(entity, RollerShutter):
             # RollerShutter could need at least a run to enable
             # support for SET_POSITION
@@ -102,6 +106,42 @@ class EntityTest(EntityComponentTest):
     async def async_test_disabled_callback(self, entity: Cover):
         pass
 
+    async def _async_test_msg150_recheck(self, entity: GarageDoor):
+        handler = entity.handler_ns
+        for error in (None, TimeoutError):
+            entity._transition_cancel()
+            entity.is_closed = False
+            entity.is_closing = True
+            start = entity._transition_start = entity.time()
+            with patch.object(
+                type(handler), "async_get", new=AsyncMock(side_effect=error)
+            ):
+                await entity._async_transition_end_callback()
+                assert entity._transition_start == start
+                assert entity._transition_timeout_retry is True
+                assert entity.is_closing is True
+                assert not entity.binary_sensor_timeout.is_on
+                timer = entity._timers[entity._async_transition_end_callback]
+                assert abs(timer.when() - self.hass.loop.time() - 5) < 1
+                entity.cancel_callback(entity._async_transition_end_callback)
+                await entity._async_transition_end_callback()
+                assert entity.binary_sensor_timeout.is_on
+                assert entity._async_transition_end_callback not in entity._timers
+            entity._transition_cancel()
+            await handler.async_get(entity.index)
+            entity.binary_sensor_timeout.update_ok(True)
+
+        # A final position arriving during the extra check cancels its timer.
+        entity.is_closed = False
+        entity.is_closing = True
+        entity._transition_start = entity.time()
+        with patch.object(type(handler), "async_get", new=AsyncMock()):
+            await entity._async_transition_end_callback()
+        await handler.async_get(entity.index)
+        assert entity.is_closed is True
+        assert not entity.binary_sensor_timeout.is_on
+        assert entity._async_transition_end_callback not in entity._timers
+
     async def _async_test_cover_transition(self, entity):
         """Start and follow the transition from open to close or
         close to open depending on current state."""
@@ -110,6 +150,12 @@ class EntityTest(EntityComponentTest):
         trans = self.COVER_TRANSITIONS[state.state]
         state = await self.async_service_call(trans[0])
         assert state.state == trans[1], trans[1]
+        if isinstance(entity, GarageDoor) and entity.parent.descriptor.type.startswith(
+            mc.TYPE_MSG150
+        ):
+            # MSG150 echoes the target in SETACK before movement finishes.
+            # The cover should still show movement until a state GET confirms it.
+            assert entity.is_closed == (trans[0] == haec.SERVICE_OPEN_COVER)
         # The GarageDoor/RollerShutter state machine has a timed callback mechanism
         # TODO: use and check that callback instead of the raw 60 seconds timeout
         # we're using async_warp over 40 seconds (which are enough on our emulators

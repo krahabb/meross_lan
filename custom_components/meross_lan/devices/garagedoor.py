@@ -87,6 +87,27 @@ class GarageConfigMixin(ValueParser if TYPE_CHECKING else object):
                 self,
             )
 
+    async def async_request_value(self, device_value, /):
+        device = self.parent
+        if self.ns is not mn.Appliance_GarageDoor_Config or not (
+            device.descriptor.type.startswith(mc.TYPE_MSG150)
+        ):
+            return await super().async_request_value(device_value)
+
+        # MSG150 config SET requests also carry signalDuration when changing
+        # another setting. The cached value may be missing after going offline.
+        handler = device.ns_handlers[self.ns]
+        signal_duration = handler.parsers.get(mc.KEY_SIGNALDURATION)
+        if signal_duration is None or signal_duration.ns_value is None:
+            await handler.async_get()
+            signal_duration = handler.parsers[mc.KEY_SIGNALDURATION]
+        if signal_duration.ns_value is None:
+            raise ValueError("MSG150 config is missing signalDuration")
+        payload = {mc.KEY_SIGNALDURATION: signal_duration.ns_value}
+        payload.update(self.key_value.payload(device_value))
+        await device.async_request(*self.ns.request_set(payload))
+        self.update_device_value(device_value)
+
 
 class GarageConfigSwitch(GarageConfigMixin, SwitchParser):
     """
@@ -288,6 +309,7 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         "_config",
         "_transition_duration",
         "_transition_start",
+        "_transition_timeout_retry",
         "binary_sensor_timeout",
         *GarageDoorMultipleConfig._INIT_parser_defs.keys(),
     )
@@ -297,6 +319,7 @@ class GarageDoor(Cover.RestoreEntity, Cover):
             self.PARAM_TRANSITION_MAXDURATION + self.PARAM_TRANSITION_MINDURATION
         ) / 2
         self._transition_start = 0.0
+        self._transition_timeout_retry = False
         self.extra_state_attributes = {
             self.ATTR_TRANSITION_DURATION: self._transition_duration
         }
@@ -338,7 +361,11 @@ class GarageDoor(Cover.RestoreEntity, Cover):
     # interface: self
     async def async_request_position(self, open_request: int, /):
         self._transition_cancel()
-        response = await self.async_request_payload({mc.KEY_OPEN: open_request})
+        is_msg150 = self.parent.descriptor.type.startswith(mc.TYPE_MSG150)
+        payload = {mc.KEY_OPEN: open_request}
+        if is_msg150:
+            payload[mc.KEY_UUID] = self.parent.id
+        response = await self.async_request_payload(payload)
         """
         example (historical) payload in SETACK:
         {"state": {"channel": 0, "open": 0, "lmTime": 0, "execute": 1}}
@@ -358,8 +385,13 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         if type(p_state) is list:
             # we eventually expect a 1 item list with our channel of course
             p_state = p_state[0]
-        _open = p_state[mc.KEY_OPEN]
-        self.is_closed = not _open
+        if is_msg150:
+            # MSG150 echoes the target in SETACK before movement finishes.
+            # The position is only confirmed by a GET, PUSH or digest update.
+            _open = None if self.is_closed is None else not self.is_closed
+        else:
+            _open = p_state[mc.KEY_OPEN]
+            self.is_closed = not _open
         if p_state.get(mc.KEY_EXECUTE) and open_request != _open:
             device = self.parent
             self._transition_start = device.last_rx_epoch
@@ -423,6 +455,7 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         self.is_closing = False
         self.is_opening = False
         self._transition_start = 0.0
+        self._transition_timeout_retry = False
         Cover._transition_cancel(self)
 
     @override
@@ -436,6 +469,7 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         checks the transition did finish as per the timeout(s)
         """
         was_closing = self.is_closing
+        transition_start = self._transition_start
         if was_closing:
             # When closing we expect this callback not to be called since
             # the transition should be terminated by our parser callback,
@@ -443,7 +477,9 @@ class GarageDoor(Cover.RestoreEntity, Cover):
             # If we're here, we still havent received a proper 'physical close'
             # because our configured closeduration is too short
             # or the garage didnt close at all
-            if self._transition_duration < (self.time() - self._transition_start):
+            if not self._transition_timeout_retry and self._transition_duration < (
+                self.time() - transition_start
+            ):
                 self._update_transition_duration(self._transition_duration + 1)
 
         self.is_closing = False
@@ -458,13 +494,31 @@ class GarageDoor(Cover.RestoreEntity, Cover):
                 if was_closing == self.is_closed:
                     self.binary_sensor_timeout.update_ok(was_closing)
                 else:
-                    self.binary_sensor_timeout.update_timeout(was_closing)
+                    self._transition_timeout(was_closing, transition_start)
             except Exception:
-                self.flush_state()
-                self.binary_sensor_timeout.update_timeout(was_closing)
+                self._transition_timeout(was_closing, transition_start, flush=True)
         else:
             self.flush_state()
             self.binary_sensor_timeout.update_ok(was_closing)
+
+    def _transition_timeout(
+        self, was_closing: bool, transition_start: float, /, *, flush: bool = False
+    ):
+        if (
+            self.parent.descriptor.type.startswith(mc.TYPE_MSG150)
+            and not self._transition_timeout_retry
+        ):
+            # MSG150 FW 7.1.8 can PUSH the final state after the configured
+            # timeout. One extra check allows for this reporting delay.
+            self._transition_timeout_retry = True
+            self._transition_start = transition_start
+            self.is_closing = was_closing
+            self.is_opening = not was_closing
+            self.schedule_callback(5, self._async_transition_end_callback)
+            return
+        if flush:
+            self.flush_state()
+        self.binary_sensor_timeout.update_timeout(was_closing)
 
     def _update_transition_duration(self, transition_duration, /):
         self._transition_duration = clamp(
