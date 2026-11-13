@@ -308,10 +308,6 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         # device does not report these configuration options at all.
         self.doorCloseDuration = _DurationHelper(self, mc.KEY_DOORCLOSEDURATION)
         self.doorOpenDuration = _DurationHelper(self, mc.KEY_DOOROPENDURATION)
-        # ToggleX behavior in cover (garage/rollershutter) is not very clear
-        # most devices expose the ns in abilities and maybe also channel indexes in digest
-        # but the effect of toggling is unknown. We just silence any incoming message here.
-        device.register_togglex_channel(self)
 
     async def async_added_to_hass(self):
         with self.exception_warning("restoring previous state"):

@@ -279,7 +279,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         False,
         {
             "config": NamespaceHandler.POLLING_CONFIG_NONE,
-            "handler": lambda message: None,
+            "handler": NamespaceHandler._handle_void,
         },
     )
     """NamespaceHandler that does 'nothing' i.e. no polling, no parsing, i.e. no mechanics or so, completely ignored.
@@ -1258,27 +1258,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             self.sensor_protocol.set_available()
 
     # interface: self
-    def register_togglex_channel(self, entity: "ParserEntity", /):
-        """
-        Checks if entity has an associated ToggleX behavior and eventually
-        registers it
-        """
-        try:
-            for togglex_digest in self.descriptor.digest[mc.KEY_TOGGLEX]:
-                if togglex_digest[mc.KEY_CHANNEL] == entity.index.value:
-                    if not hasattr(entity, "_parse_togglex"):
-                        # This means we're not actually interested in parsing
-                        # but our framework would like to have a sink anyway
-                        # just to shut down diagnostic warnings or so
-                        entity._parse_togglex = lambda payload: None
-                    ns_handler = self.get_handler(mn.Appliance_Control_ToggleX)
-                    ns_handler.register_parser(entity)
-                    return ns_handler
-        except KeyError:
-            # no "togglex" in digest ?
-            pass
-        return None
-
     def schedule_entry_update(self, query_abilities: bool, /):
         """
         Schedule the ConfigEntry update (in 5 sec) due to self.descriptor changing.

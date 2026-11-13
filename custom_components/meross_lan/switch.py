@@ -98,10 +98,20 @@ class ToggleX(SwitchParser):
         # and we shouldnt build a ToggleX.
         # BEWARE: this ns registration must be done before those others in order to properly
         # link the channels and/or setup the correct entities.
+        # Also, some device classes have unknown behavior for the ToggleX feature and having a
+        # somewhat standard handling is just useless and prone to 'unsolicited' warnings (for example
+        # some mrs100 reports namespace in abilities but the payload format is pretty 'out of standard'
+        # being reported as a plain {"channel": 0} without the 'togglex' root key).
+        ability = device.descriptor.ability
+        if (mn.Appliance_GarageDoor_State in ability) or (
+            mn.Appliance_RollerShutter_State in ability
+        ):
+            return device.FACTORY_IGNORE.build(ns, device)
+
         digest = device.descriptor.digest
         ns_digest = ns.get_digest(digest)
         channels = {togglex[mc.KEY_CHANNEL] for togglex in ns_digest}
-        for _key in (mc.KEY_FAN, mc.KEY_GARAGEDOOR, mc.KEY_LIGHT):
+        for _key in (mc.KEY_FAN, mc.KEY_LIGHT):
             if _key in digest:
                 for _key_digest in extract_dict_payloads(digest[_key]):
                     try:
@@ -109,9 +119,7 @@ class ToggleX(SwitchParser):
                     except KeyError:
                         pass
         # the fan controller 'map100' doesn't expose a fan in digest but it has one at channel 0
-        if (mn.Appliance_Control_Fan in device.descriptor.ability) and (
-            mc.KEY_FAN not in digest
-        ):
+        if (mn.Appliance_Control_Fan in ability) and (mc.KEY_FAN not in digest):
             try:
                 channels.remove(0)
             except KeyError:

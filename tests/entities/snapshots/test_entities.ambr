@@ -6502,16 +6502,6 @@
       'ns': Namespace(Appliance.System.Runtime, key=runtime, index=none),
       'unique_id': '0123456789012345678901234567891C_signal_strength',
     }),
-    0: dict({
-      'class': <class 'custom_components.meross_lan.switch.ToggleX'>,
-      'device_class': <SwitchDeviceClass.OUTLET: 'outlet'>,
-      'index': SimpleIndexValue({
-        'channel': 0,
-      }),
-      'key_value': ('onoff',),
-      'ns': Namespace(Appliance.Control.ToggleX, key=togglex, index=channel),
-      'unique_id': '0123456789012345678901234567891C_0',
-    }),
     1: dict({
       'class': <class 'custom_components.meross_lan.devices.garagedoor.GarageDoor'>,
       'device_class': <CoverDeviceClass.GARAGE: 'garage'>,
