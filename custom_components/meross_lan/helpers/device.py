@@ -921,6 +921,22 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 pass
 
     @override
+    def log(self, level: int, msg: str, *args, **kwargs):
+        if level >= self.WARNING and msg.startswith("HTTP: "):
+            entry = getattr(self, "device_entry", None)
+            entry_id = getattr(entry, "id", None)
+            lookup = getattr(getattr(self, "device_registry", None), "async_get", None)
+            if entry_id and lookup:
+                entry = lookup(entry_id)
+                if entry:
+                    name = (
+                        entry.name_by_user or entry.name or self.descriptor.productname
+                    )
+                    if name:
+                        kwargs["device_name"] = name
+        super().log(level, msg, *args, **kwargs)
+
+    @override
     def get_logger_name(self) -> str:
         return f"{self.descriptor.type}_{self.loggable_device_id(self.id)}"
 
