@@ -10245,3 +10245,118 @@
     }),
   })
 # ---
+# name: test_entities[0123456789012345678901234567892C]
+  dict({
+    '0_appliance_control_light': dict({
+      'class': <class 'custom_components.meross_lan.light.Light'>,
+      'device_class': None,
+      'index': SimpleIndexValue({
+        'channel': 0,
+      }),
+      'ns': Namespace(Appliance.Control.Light, key=light, index=channel),
+      'unique_id': '0123456789012345678901234567892C_0_appliance_control_light',
+    }),
+    '0_appliance_rollershutter_adjust__value': dict({
+      'class': <class 'custom_components.meross_lan.devices.rollershutter.RollerShutterAdjustSwitch'>,
+      'device_class': <SwitchDeviceClass.SWITCH: 'switch'>,
+      'index': SimpleIndexValue({
+        'channel': 0,
+      }),
+      'key_value': ('value',),
+      'ns': Namespace(Appliance.RollerShutter.Adjust, key=adjust, index=channel),
+      'unique_id': '0123456789012345678901234567892C_0_appliance_rollershutter_adjust__value',
+    }),
+    '0_config_signalClose': dict({
+      'class': <class 'custom_components.meross_lan.number.NumberParser'>,
+      'device_class': <NumberDeviceClass.DURATION: 'duration'>,
+      'device_scale': 1000,
+      'index': SimpleIndexValue({
+        'channel': 0,
+      }),
+      'key_value': ('signalClose',),
+      'native_unit_of_measurement': <UnitOfTime.SECONDS: 's'>,
+      'ns': Namespace(Appliance.RollerShutter.Config, key=config, index=channel),
+      'unique_id': '0123456789012345678901234567892C_0_config_signalClose',
+    }),
+    '0_config_signalOpen': dict({
+      'class': <class 'custom_components.meross_lan.number.NumberParser'>,
+      'device_class': <NumberDeviceClass.DURATION: 'duration'>,
+      'device_scale': 1000,
+      'index': SimpleIndexValue({
+        'channel': 0,
+      }),
+      'key_value': ('signalOpen',),
+      'native_unit_of_measurement': <UnitOfTime.SECONDS: 's'>,
+      'ns': Namespace(Appliance.RollerShutter.Config, key=config, index=channel),
+      'unique_id': '0123456789012345678901234567892C_0_config_signalOpen',
+    }),
+    '0_lock': dict({
+      'class': <class 'custom_components.meross_lan.switch.PhysicalLockSwitch'>,
+      'device_class': <SwitchDeviceClass.SWITCH: 'switch'>,
+      'index': SimpleIndexValue({
+        'channel': 0,
+      }),
+      'key_value': ('onoff',),
+      'ns': Namespace(Appliance.Control.PhysicalLock, key=lock, index=channel),
+      'unique_id': '0123456789012345678901234567892C_0_lock',
+    }),
+    'button_refresh': dict({
+      'class': <class 'custom_components.meross_lan.button.PersistentButton'>,
+      'device_class': <ButtonDeviceClass.UPDATE: 'update'>,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567892C_button_refresh',
+    }),
+    'button_reload': dict({
+      'class': <class 'custom_components.meross_lan.button.PersistentButton'>,
+      'device_class': <ButtonDeviceClass.RESTART: 'restart'>,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567892C_button_reload',
+    }),
+    'dnd': dict({
+      'class': <class 'custom_components.meross_lan.light.DNDLight'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'key_value': ('mode',),
+      'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
+      'unique_id': '0123456789012345678901234567892C_dnd',
+    }),
+    'firmware_update': dict({
+      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
+      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567892C_firmware_update',
+    }),
+    'sensor_protocol': dict({
+      'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '0123456789012345678901234567892C_sensor_protocol',
+    }),
+    'signal_strength': dict({
+      'class': <class 'custom_components.meross_lan.sensor.SignalStrengthSensor'>,
+      'device_class': None,
+      'device_scale': 1,
+      'index': NoneIndexValue({
+      }),
+      'key_value': ('signal',),
+      'native_unit_of_measurement': '%',
+      'ns': Namespace(Appliance.System.Runtime, key=runtime, index=none),
+      'unique_id': '0123456789012345678901234567892C_signal_strength',
+    }),
+    0: dict({
+      'class': <class 'custom_components.meross_lan.devices.rollershutter.RollerShutter'>,
+      'device_class': <CoverDeviceClass.SHUTTER: 'shutter'>,
+      'index': SimpleIndexValue({
+        'channel': 0,
+      }),
+      'ns': Namespace(Appliance.RollerShutter.Position, key=position, index=channel),
+      'unique_id': '0123456789012345678901234567892C_0',
+    }),
+  })
+# ---

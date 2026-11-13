@@ -1,0 +1,133 @@
+time	direction	transport	method	namespace	data
+2026/11/10 - 22:56:25		auto	HEADER		{"version":3,"config":{"device_id":"###############################7","host":"###########1","key":"###############################1","payload":{"ability":{"Appliance.Config.Info":{},"Appliance.Config.Key":{},"Appliance.Config.NtpSite":{},"Appliance.Config.Trace":{},"Appliance.Config.Wifi":{},"Appliance.Config.WifiList":{},"Appliance.Config.WifiX":{},"Appliance.Control.Bind":{},"Appliance.Control.ChangeWiFi":{},"Appliance.Control.Light":{"capacity":4},"Appliance.Control.Multiple":{"maxCmdNum":3},"Appliance.Control.PhysicalLock":{},"Appliance.Control.TimerX":{"sunOffsetSupport":1},"Appliance.Control.TriggerX":{},"Appliance.Control.Unbind":{},"Appliance.Control.Upgrade":{},"Appliance.Digest.TimerX":{},"Appliance.Digest.TriggerX":{},"Appliance.RollerShutter.Adjust":{},"Appliance.RollerShutter.Config":{},"Appliance.RollerShutter.Position":{},"Appliance.RollerShutter.State":{},"Appliance.System.Ability":{},"Appliance.System.All":{},"Appliance.System.Clock":{},"Appliance.System.DNDMode":{},"Appliance.System.Debug":{},"Appliance.System.Firmware":{},"Appliance.System.Hardware":{},"Appliance.System.Online":{},"Appliance.System.Position":{},"Appliance.System.Report":{},"Appliance.System.Runtime":{},"Appliance.System.Time":{}},"all":{"system":{"hardware":{"type":"mrs100","subType":"un","version":"8.0.0","chipType":"rtl8720cf","uuid":"###############################7","macAddress":"################1"},"firmware":{"version":"8.3.7","compileTime":"2025/12/08-16:33:26","encrypt":1,"wifiMac":"################1","innerIp":"###########1","server":"###################1","port":"#1","userId":"#1"},"time":{"timestamp":1794341433,"timezone":"Europe/Paris","timeRule":[[1729990800,3600,0],[1743296400,7200,1],[1761440400,3600,0],[1774746000,7200,1],[1792890000,3600,0],[1806195600,7200,1],[1824944400,3600,0],[1837645200,7200,1],[1856394000,3600,0],[1869094800,7200,1],[1887843600,3600,0],[1901149200,7200,1],[1919293200,3600,0],[1932598800,7200,1],[1950742800,3600,0],[1964048400,7200,1],[1982797200,3600,0],[1995498000,7200,1],[2014246800,3600,0],[2026947600,7200,1]]},"online":{"status":1,"bindId":"ZvBVOaMk7uMGO26r","who":1}},"digest":{}}},"timestamp":1793169068.3322134,"create_diagnostic_entities":false,"logging_level":0,"obfuscate":true,"trace_timeout":600},"state":{"class":"Device","configured_transport":"auto","preferred_transport":"http","transport":"http","polling_period":30,"device_response_size_min":1642,"device_response_size_max":2400,"BLUETOOTH":{"bluetooth":false,"bluetooth_active":null},"HTTP":{"http":true,"http_active":true},"MQTT":{"cloud_profile":true,"mqtt_connection":true,"mqtt_connected":true,"mqtt_publish":false,"mqtt_active":true},"namespace_handlers":{"Appliance.System.All":{"last_rx_epoch":1794341434.4153106,"last_poll_epoch":1794341434.4153106,"next_poll_epoch":1794341734.4153106,"polling_strategy":"async_polling_strategy_ns_all","lastpush":null,"digest":null},"Appliance.Control.Light":{"last_rx_epoch":1794341434.492759,"last_poll_epoch":1794341434.492759,"next_poll_epoch":1794341434.492759,"polling_strategy":"async_polling_strategy_default","lastpush":null,"digest":null},"Appliance.Control.PhysicalLock":{"last_rx_epoch":1794341434.5839455,"last_poll_epoch":1794341434.5839455,"next_poll_epoch":1794341734.5839455,"polling_strategy":"async_polling_strategy_default","lastpush":null,"digest":null},"Appliance.RollerShutter.Config":{"last_rx_epoch":1794341132.941357,"last_poll_epoch":1794341132.941357,"next_poll_epoch":1794341432.941357,"polling_strategy":"async_polling_strategy_default","lastpush":null,"digest":null},"Appliance.RollerShutter.State":{"last_rx_epoch":1794341404.2358217,"last_poll_epoch":1794341404.2358217,"next_poll_epoch":1794341404.2358217,"polling_strategy":"async_polling_strategy_default","lastpush":null,"digest":null},"Appliance.RollerShutter.Position":{"last_rx_epoch":1794341404.2358217,"last_poll_epoch":1794341404.2358217,"next_poll_epoch":1794341404.2358217,"polling_strategy":"async_polling_strategy_default","lastpush":null,"digest":null},"Appliance.RollerShutter.Adjust":{"last_rx_epoch":1794341133.3377507,"last_poll_epoch":1794341133.3377507,"next_poll_epoch":1794341433.3377507,"polling_strategy":"async_polling_strategy_default","lastpush":null,"digest":null},"Appliance.System.DNDMode":{"last_rx_epoch":1794341133.4144993,"last_poll_epoch":1794341133.4144993,"next_poll_epoch":1794341433.4144993,"polling_strategy":"async_polling_strategy_default","lastpush":null,"digest":null},"Appliance.System.Runtime":{"last_rx_epoch":1794347736.5051305,"last_poll_epoch":1794347736.5051305,"next_poll_epoch":1794348036.5051305,"polling_strategy":"async_polling_strategy_smart","lastpush":null,"digest":null}},"device_info":{"uuid":"###############################7","onlineStatus":1,"devName":"Ch3","devIconId":"device063_eu","bindTime":1754493679,"deviceType":"mrs100","subType":"eu","channels":[{}],"region":"eu","fmwareVersion":"8.3.7","hdwareVersion":"8.0.0","userDevIcon":"","iconType":1,"domain":"###################1","reservedDomain":"###################1","hardwareCapabilities":[]},"latest_version":null,"latest_versions":{}}}
+2026/11/10 - 22:56:25		auto	LOG	debug	platform_setup_entry { platform: switch }
+2026/11/10 - 22:56:25		auto	LOG	verbose	PhysicalLockSwitch(0_lock): Added to HomeAssistant
+2026/11/10 - 22:56:25		auto	LOG	verbose	RollerShutterAdjustSwitch(0_appliance_rollershutter_adjust__value): Added to HomeAssistant
+2026/11/10 - 22:56:25		auto	LOG	debug	platform_setup_entry { platform: cover }
+2026/11/10 - 22:56:25		auto	LOG	verbose	RollerShutter(0): Added to HomeAssistant
+2026/11/10 - 22:56:25		auto	LOG	debug	platform_setup_entry { platform: button }
+2026/11/10 - 22:56:25		auto	LOG	verbose	PersistentButton(button_refresh): Added to HomeAssistant
+2026/11/10 - 22:56:25		auto	LOG	verbose	PersistentButton(button_reload): Added to HomeAssistant
+2026/11/10 - 22:56:25		auto	LOG	debug	platform_setup_entry { platform: number }
+2026/11/10 - 22:56:25		auto	LOG	verbose	NumberParser(0_config_signalOpen): Added to HomeAssistant
+2026/11/10 - 22:56:25		auto	LOG	verbose	NumberParser(0_config_signalClose): Added to HomeAssistant
+2026/11/10 - 22:56:25		auto	LOG	debug	platform_setup_entry { platform: sensor }
+2026/11/10 - 22:56:25		auto	LOG	verbose	SignalStrengthSensor(signal_strength): Added to HomeAssistant
+2026/11/10 - 22:56:25		auto	LOG	debug	platform_setup_entry { platform: update }
+2026/11/10 - 22:56:25		auto	LOG	verbose	UpdateEntity(firmware_update): Added to HomeAssistant
+2026/11/10 - 22:56:25		auto	LOG	debug	platform_setup_entry { platform: light }
+2026/11/10 - 22:56:25		auto	LOG	verbose	DNDLight(dnd): Added to HomeAssistant
+2026/11/10 - 22:56:25		auto	LOG	debug	linked to profile:@0
+2026/11/10 - 22:56:25		auto	LOG	verbose	Client(mqtt-eu-4.meross.com:443): init
+2026/11/10 - 22:56:25		auto	LOG	debug	MQTT: Added client for @2
+2026/11/10 - 22:56:25		auto	LOG	debug	Switching transport to http
+2026/11/10 - 22:56:25		auto	LOG	debug	Polling begin
+2026/11/10 - 22:56:25	TX	http	GET	Appliance.System.All	{}
+2026/11/10 - 22:56:25	TX	mqtt	GET	Appliance.System.All	{}
+2026/11/10 - 22:56:25		auto	LOG	verbose	MQTT: MerossTransportError(MQTT publish is not allowed by configuration (GET Appliance.System.All)) in Task <Task finished name='MQTT.async_connect_mqtt_task' coro=<AbstractClient.async_request() done, defined at /config/custom_components/meross_lan/merossclient/client/__init__.py:295> exception=MerossTransportError()>
+2026/11/10 - 22:56:25		auto	LOG	warning	MQTT: ValueError(MQTT publish is not allowed by configuration) in async_connect (GET Appliance.System.All)
+2026/11/10 - 22:56:25		auto	LOG	debug	HTTP: Connected
+2026/11/10 - 22:56:25	RX	http	GETACK	Appliance.System.All	{"all":{"system":{"hardware":{"type":"mrs100","subType":"un","version":"8.0.0","chipType":"rtl8720cf","uuid":"###############################6","macAddress":"################0"},"firmware":{"version":"8.3.7","compileTime":"2025/12/08-16:33:26","encrypt":1,"wifiMac":"################0","innerIp":"###########0","server":"###################0","port":"@0","userId":"@0"},"time":{"timestamp":1794347785,"timezone":"Europe/Paris","timeRule":[[1729990800,3600,0],[1743296400,7200,1],[1761440400,3600,0],[1774746000,7200,1],[1792890000,3600,0],[1806195600,7200,1],[1824944400,3600,0],[1837645200,7200,1],[1856394000,3600,0],[1869094800,7200,1],[1887843600,3600,0],[1901149200,7200,1],[1919293200,3600,0],[1932598800,7200,1],[1950742800,3600,0],[1964048400,7200,1],[1982797200,3600,0],[1995498000,7200,1],[2014246800,3600,0],[2026947600,7200,1]]},"online":{"status":1,"bindId":"ZvBVOaMk7uMGO26r","who":1}},"digest":{}}}
+2026/11/10 - 22:56:25		auto	LOG	debug	Connected
+2026/11/10 - 22:56:25		auto	LOG	debug	MQTT: Connected
+2026/11/10 - 22:56:25	TX	http	SET	Appliance.Control.Multiple	{"multiple":[{"header":{"messageId":"f05e8e681d00834d432da1ffde24dfb0","method":"GET","namespace":"Appliance.Control.Light"},"payload":{}},{"header":{"messageId":"c6563d3b33efdf337583de430249dac2","method":"GET","namespace":"Appliance.Control.PhysicalLock"},"payload":{"lock":[{"channel":0}]}},{"header":{"messageId":"434763ae868d84840ab27979b64b461d","method":"GET","namespace":"Appliance.RollerShutter.Config"},"payload":{"config":[]}}]}
+2026/11/10 - 22:56:25	RX	http	SETACK	Appliance.Control.Multiple	{"multiple":[{"header":{"messageId":"f05e8e681d00834d432da1ffde24dfb0","namespace":"Appliance.Control.Light","triggerSrc":"Device","method":"GETACK","payloadVersion":1,"from":"/appliance/###############################6/publish","uuid":"###############################6","timestamp":1794347785,"timestampMs":160,"sign":"c1d8c726c666da431c0ab55d1b51d6c7"},"payload":{"light":{"capacity":4,"channel":0,"onoff":0,"luminance":100}}},{"header":{"messageId":"c6563d3b33efdf337583de430249dac2","namespace":"Appliance.Control.PhysicalLock","triggerSrc":"Device","method":"GETACK","payloadVersion":1,"from":"/appliance/###############################6/publish","uuid":"###############################6","timestamp":1794347785,"timestampMs":161,"sign":"66e59318c85b1d0bd45062c546aa20b1"},"payload":{"lock":[{"channel":0,"onoff":0}]}},{"header":{"messageId":"434763ae868d84840ab27979b64b461d","namespace":"Appliance.RollerShutter.Config","triggerSrc":"Device","method":"GETACK","payloadVersion":1,"from":"/appliance/###############################6/publish","uuid":"###############################6","timestamp":1794347785,"timestampMs":161,"sign":"aab7e450835d196f1da7660b124a8b8d"},"payload":{"config":[{"channel":0,"autoAdjust":1,"lmTime":1790081362,"signalOpen":23600,"signalClose":23300}]}}]}
+2026/11/10 - 22:56:25		auto	LOG	debug	NamespaceHandler(Appliance.Control.Light): Parser undefined (index: IndexValue(type=channel, value=0, slug='0'), payload: {'capacity': 4, 'channel': 0, 'onoff': 0, 'luminance': 100})
+2026/11/10 - 22:56:25	TX	http	SET	Appliance.Control.Multiple	{"multiple":[{"header":{"messageId":"d3a98bda7017b80f64ce161ac6f85c5b","method":"GET","namespace":"Appliance.RollerShutter.State"},"payload":{"state":[]}},{"header":{"messageId":"e3262da394e75536abe210483d6b5765","method":"GET","namespace":"Appliance.RollerShutter.Position"},"payload":{"position":[]}},{"header":{"messageId":"9332ef32752248e8f5fd4f0a08c84d10","method":"PUSH","namespace":"Appliance.RollerShutter.Adjust"},"payload":{}}]}
+2026/11/10 - 22:56:25	RX	http	SETACK	Appliance.Control.Multiple	{"multiple":[{"header":{"messageId":"d3a98bda7017b80f64ce161ac6f85c5b","namespace":"Appliance.RollerShutter.State","triggerSrc":"Device","method":"GETACK","payloadVersion":1,"from":"/appliance/###############################6/publish","uuid":"###############################6","timestamp":1794347785,"timestampMs":242,"sign":"bf3d4d8b50a716b746ea5bd40e3b2c9a"},"payload":{"state":[{"channel":0,"state":0,"stoppedBy":0,"timestamp":1794347785}]}},{"header":{"messageId":"e3262da394e75536abe210483d6b5765","namespace":"Appliance.RollerShutter.Position","triggerSrc":"Device","method":"GETACK","payloadVersion":1,"from":"/appliance/###############################6/publish","uuid":"###############################6","timestamp":1794347785,"timestampMs":242,"sign":"5825b47cad863cfa98ff0973e7aa3866"},"payload":{"position":[{"channel":0,"position":0}]}},{"header":{"messageId":"ec9883b6371641d07a28439f2119b4a8","namespace":"Appliance.RollerShutter.Adjust","triggerSrc":"Device","method":"PUSH","payloadVersion":1,"from":"/appliance/###############################6/publish","uuid":"###############################6","timestamp":1794347785,"timestampMs":243,"sign":"65476c3f3f5c7a65c00bc852d8300e36"},"payload":{"adjust":[{"channel":0,"status":0}]}}]}
+2026/11/10 - 22:56:25	TX	http	SET	Appliance.Control.Multiple	{"multiple":[{"header":{"messageId":"21c63d2edfddf65f182ffc97aa5c47c6","method":"GET","namespace":"Appliance.System.DNDMode"},"payload":{}},{"header":{"messageId":"5188efe6d0d1d003f0d57f8b5fd7c47a","method":"GET","namespace":"Appliance.System.Runtime"},"payload":{}}]}
+2026/11/10 - 22:56:25	RX	http	SETACK	Appliance.Control.Multiple	{"multiple":[{"header":{"messageId":"21c63d2edfddf65f182ffc97aa5c47c6","namespace":"Appliance.System.DNDMode","triggerSrc":"Device","method":"GETACK","payloadVersion":1,"from":"/appliance/###############################6/publish","uuid":"###############################6","timestamp":1794347785,"timestampMs":314,"sign":"26dea61951842b92973d2a18c7bfb7a3"},"payload":{"DNDMode":{"mode":1}}},{"header":{"messageId":"5188efe6d0d1d003f0d57f8b5fd7c47a","namespace":"Appliance.System.Runtime","triggerSrc":"Device","method":"GETACK","payloadVersion":1,"from":"/appliance/###############################6/publish","uuid":"###############################6","timestamp":1794347785,"timestampMs":315,"sign":"6c2c1d768e271623d3411a0480660950"},"payload":{"runtime":{"signal":83,"ssid":"#######0"}}}]}
+2026/11/10 - 22:56:25		auto	LOG	debug	Polling end
+2026/11/10 - 22:56:27		auto	LOG	verbose	NamespaceHandler(Appliance.Config.Info): init
+2026/11/10 - 22:56:27		auto	LOG	debug	NamespaceHandler(Appliance.Config.Info): Tracing
+2026/11/10 - 22:56:27	TX	http	GET	Appliance.Config.Info	{}
+2026/11/10 - 22:56:27	RX	http	GETACK	Appliance.Config.Info	{"info":{"homekit":{}}}
+2026/11/10 - 22:56:29		auto	LOG	debug	NamespaceHandler(Appliance.Control.Light): Tracing
+2026/11/10 - 22:56:29	TX	http	GET	Appliance.Control.Light	{}
+2026/11/10 - 22:56:29	RX	http	GETACK	Appliance.Control.Light	{"light":{"capacity":4,"channel":0,"onoff":0,"luminance":100}}
+2026/11/10 - 22:56:31		auto	LOG	verbose	PhysicalLockSwitch(0_lock): Removed from HomeAssistant
+2026/11/10 - 22:56:31		auto	LOG	verbose	RollerShutterAdjustSwitch(0_appliance_rollershutter_adjust__value): Removed from HomeAssistant
+2026/11/10 - 22:56:31		auto	LOG	verbose	RollerShutter(0): Removed from HomeAssistant
+2026/11/10 - 22:56:31		auto	LOG	verbose	PersistentButton(button_refresh): Removed from HomeAssistant
+2026/11/10 - 22:56:31		auto	LOG	verbose	PersistentButton(button_reload): Removed from HomeAssistant
+2026/11/10 - 22:56:31		auto	LOG	verbose	NumberParser(0_config_signalOpen): Removed from HomeAssistant
+2026/11/10 - 22:56:31		auto	LOG	verbose	NumberParser(0_config_signalClose): Removed from HomeAssistant
+2026/11/10 - 22:56:31		auto	LOG	verbose	SignalStrengthSensor(signal_strength): Removed from HomeAssistant
+2026/11/10 - 22:56:31		auto	LOG	verbose	UpdateEntity(firmware_update): Removed from HomeAssistant
+2026/11/10 - 22:56:31		auto	LOG	verbose	DNDLight(dnd): Removed from HomeAssistant
+2026/11/10 - 22:56:31		auto	LOG	verbose	UpdateEntity(firmware_update): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	UpdateEntity(firmware_update): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	ProtocolSensor(sensor_protocol): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	ProtocolSensor(sensor_protocol): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	PersistentButton(button_refresh): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	PersistentButton(button_refresh): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	PersistentButton(button_reload): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	PersistentButton(button_reload): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	PhysicalLockSwitch(0_lock): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	PhysicalLockSwitch(0_lock): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	RollerShutter(0): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	RollerShutter(0): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NumberParser(0_config_signalOpen): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NumberParser(0_config_signalOpen): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NumberParser(0_config_signalClose): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NumberParser(0_config_signalClose): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	RollerShutterAdjustSwitch(0_appliance_rollershutter_adjust__value): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	RollerShutterAdjustSwitch(0_appliance_rollershutter_adjust__value): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	DNDLight(dnd): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	DNDLight(dnd): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	SignalStrengthSensor(signal_strength): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	SignalStrengthSensor(signal_strength): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	PersistentButton(button_refresh): destroy
+2026/11/10 - 22:56:31		auto	LOG	verbose	PersistentButton(button_reload): destroy
+2026/11/10 - 22:56:31		auto	LOG	verbose	PhysicalLockSwitch(0_lock): destroy
+2026/11/10 - 22:56:31		auto	LOG	verbose	RollerShutter(0): destroy
+2026/11/10 - 22:56:31		auto	LOG	verbose	NumberParser(0_config_signalOpen): destroy
+2026/11/10 - 22:56:31		auto	LOG	verbose	NumberParser(0_config_signalClose): destroy
+2026/11/10 - 22:56:31		auto	LOG	verbose	RollerShutterAdjustSwitch(0_appliance_rollershutter_adjust__value): destroy
+2026/11/10 - 22:56:31		auto	LOG	verbose	DNDLight(dnd): destroy
+2026/11/10 - 22:56:31		auto	LOG	debug	HTTP: Removed client
+2026/11/10 - 22:56:31		auto	LOG	debug	Switching transport to mqtt
+2026/11/10 - 22:56:31		auto	LOG	debug	Http(192.168.1.47): Disconnected
+2026/11/10 - 22:56:31		auto	LOG	verbose	Http(192.168.1.47): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	Http(192.168.1.47): shutdown
+2026/11/10 - 22:56:31		auto	LOG	debug	MQTT: Removed client
+2026/11/10 - 22:56:31		auto	LOG	debug	Disconnected
+2026/11/10 - 22:56:31		auto	LOG	debug	Client(mqtt-eu-4.meross.com:443): Disconnected
+2026/11/10 - 22:56:31		auto	LOG	verbose	Client(mqtt-eu-4.meross.com:443): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	Client(mqtt-eu-4.meross.com:443): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	Http(192.168.1.47): destroy
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.System.All): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.System.All): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.Control.Light): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.Control.Light): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.Control.PhysicalLock): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.Control.PhysicalLock): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.RollerShutter.Config): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.RollerShutter.Config): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.RollerShutter.State): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.RollerShutter.State): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.RollerShutter.Position): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.RollerShutter.Position): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.RollerShutter.Adjust): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.RollerShutter.Adjust): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.System.DNDMode): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.System.DNDMode): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.System.Runtime): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.System.Runtime): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.Config.Info): async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.Config.Info): shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.Control.Light): destroy
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.Control.PhysicalLock): destroy
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.RollerShutter.Config): destroy
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.RollerShutter.State): destroy
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.RollerShutter.Position): destroy
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.RollerShutter.Adjust): destroy
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.System.DNDMode): destroy
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.System.Runtime): destroy
+2026/11/10 - 22:56:31		auto	LOG	verbose	async_shutdown
+2026/11/10 - 22:56:31		auto	LOG	debug	Cancelling pending timer <TimerHandle when=143405.747266524 Loggable._callback_wrapper()>
+2026/11/10 - 22:56:31		auto	LOG	debug	Cancelling pending timer <TimerHandle when=142811.88217988 Loggable._callback_wrapper()>
+2026/11/10 - 22:56:31		auto	LOG	verbose	shutdown
+2026/11/10 - 22:56:31		auto	LOG	verbose	UpdateEntity(firmware_update): destroy
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.System.All): destroy
+2026/11/10 - 22:56:31		auto	LOG	verbose	NamespaceHandler(Appliance.Config.Info): destroy

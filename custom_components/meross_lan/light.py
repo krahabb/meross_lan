@@ -595,13 +595,25 @@ class Light(LightBase):
         /,
         **kwargs: "Unpack[NamespaceHandler.Args]",
     ):
-        nh = NamespaceHandler(ns, device, **kwargs)
         descriptor = device.descriptor
-        channel = ns.get_digest(descriptor.digest)[mc.KEY_CHANNEL]
-        light_kwargs = {
+        try:
+            channel = ns.get_digest(descriptor.digest)[mc.KEY_CHANNEL]
+            entity_key = None
+        except KeyError:
+            # 2026-11-13: We're now having Appliance.Control.Light support
+            # with no "digest" info. This started appearing with mrs100
+            # as reported in #716 - #744.
+            # Right now we only default this to 0 since 'it just works' for the
+            # aforementioned mrs100.
+            channel = 0
+            entity_key = ns.slug
+
+        light_kwargs: "Light.Args" = {
             "ns": ns,
             "index": mn.IndexType.channel.get(channel),
+            "entity_key": entity_key,
         }
+
         if mn.Appliance_Control_Light_Effect in descriptor.ability:
             light_class = EffectLight
         elif mn.Appliance_Control_Mp3 in descriptor.ability:
@@ -609,6 +621,7 @@ class Light(LightBase):
             light_kwargs["effect_list"] = mc.HP110A_LIGHT_EFFECT_LIST
         else:
             light_class = Light
+        nh = NamespaceHandler(ns, device, **kwargs)
         nh.register_parser(light_class(channel, device, **light_kwargs))
         return nh
 
