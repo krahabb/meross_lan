@@ -174,7 +174,7 @@ class HttpClient(AbstractClient):
     async def _perform_request(
         self,
         request: MerossMessage,
-        timeout: aiohttp.ClientTimeout,
+        timeout: float,
         cipher: AESCipher | None = None,
         /,
     ):
@@ -189,9 +189,12 @@ class HttpClient(AbstractClient):
         # since device HTTP service sometimes timeouts with no apparent
         # reason we're using an increasing timeout loop to try recover
         # when this timeout is transient. This will lead to a total timeout
-        # (for the caller) exceeding the value(s) actually set in timeout
-        _connect_timeout_max = timeout.connect or timeout.total or 5
-        _connect_timeout = 1
+        # (for the caller) exceeding the value(s) actually set in timeout.
+        # The following implementation follows suggestions by @willdood as
+        # discussed in #681
+        retried_total_timeout = False
+        connect_timeout = 1
+        assert timeout > connect_timeout
         while True:
             try:
                 response = await self._session.post(
@@ -199,21 +202,30 @@ class HttpClient(AbstractClient):
                     data=data,
                     headers=headers,
                     timeout=aiohttp.ClientTimeout(
-                        total=timeout.total, connect=_connect_timeout
+                        total=timeout, sock_connect=connect_timeout
                     ),
                 )
                 break
-            except TimeoutError as e:
-                if _connect_timeout < _connect_timeout_max:
-                    _connect_timeout = _connect_timeout * 2
+            except aiohttp.ServerTimeoutError as e:
+                # connect (or socket read) stall: escalate like 5.8.0
+                if connect_timeout < timeout:
+                    connect_timeout = min(connect_timeout * 2, timeout)
                     self.log_exception(
                         self.DEBUG,
                         e,
-                        "_perform_request: retrying with %i sec timeout",
-                        _connect_timeout,
+                        "_perform_request: retrying with %s sec connect timeout",
+                        connect_timeout,
                     )
-                else:
-                    raise
+                    continue
+                raise
+            except TimeoutError as e:
+                if not retried_total_timeout:
+                    retried_total_timeout = True
+                    self.log_exception(
+                        self.DEBUG, e, "_perform_request: last chance retry"
+                    )
+                    continue
+                raise
 
         if cipher:
             return cipher.decrypt(await response.read())
@@ -232,9 +244,7 @@ class HttpClient(AbstractClient):
             # wrap the request so that it would be easily cancellable
             response = await self.create_task(
                 self._perform_request(
-                    request,
-                    aiohttp.ClientTimeout(total=kwargs.get("timeout", self.timeout)),
-                    self._cipher,
+                    request, kwargs.get("timeout", self.timeout), self._cipher
                 ),
                 "_perform_request",
             )
