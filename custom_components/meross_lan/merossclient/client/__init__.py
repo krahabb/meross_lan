@@ -138,16 +138,19 @@ class AbstractClient(logging.Loggable):
 
     TRANSPORT = Transport.AUTO
 
-    TIMEOUT = 10
-
+    _INIT_key = mc.EMPTY_KEY
+    _INIT_from_ = mc.HEADER_FROM_DEFAULT
+    _INIT_timeout = 10
+    _AUTO_INIT = (
+        "key",
+        "from_",
+        "descriptor",
+        "timeout",
+    )
     # Using a 'placeholder' definition to ease including in diamond pattern hierarchies:
     # just add a __slots__ = cls._calc_slots(...) in actual classes to actually implement.
     _SLOTS = (
-        "key",
-        "from_",
         "trigger_src",
-        "descriptor",
-        "timeout",
         "is_connected",
         "last_tx_message",
         "last_tx_epoch",
@@ -165,11 +168,7 @@ class AbstractClient(logging.Loggable):
     def __init__(
         self, id, parent: "LoggerType | None" = None, /, **kwargs: "Unpack[Args]"
     ):
-        self.key = kwargs.pop("key", mc.EMPTY_KEY)
-        self.from_ = kwargs.pop("from_", mc.HEADER_FROM_DEFAULT)
         self.trigger_src = kwargs.pop("trigger_src", self.__class__.__name__)
-        self.descriptor = kwargs.pop("descriptor", None)
-        self.timeout = kwargs.pop("timeout", self.TIMEOUT)
         super().__init__(id, parent, **kwargs)
         self.is_connected = False
         self.last_tx_message = None
