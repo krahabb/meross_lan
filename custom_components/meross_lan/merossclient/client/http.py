@@ -51,6 +51,10 @@ class HttpClient(AbstractClient):
         _cipher: Cipher | None
 
     TRANSPORT = AbstractClient.Transport.HTTP  # type: ignore[override]
+    # The default timeout for AbstractClient is 10 but in HttpClient we're introducing
+    # retry attempts with increasing timeouts and this would lead to a sort of 'explosion'
+    # where a polling loop might end up lasting minutes when multiple requests hit the timeout.
+    _INIT_timeout = 5
 
     SESSION_MAXIMUM_CONNECTIONS = 50
     SESSION_MAXIMUM_CONNECTIONS_PER_HOST = 1
