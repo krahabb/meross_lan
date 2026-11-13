@@ -17,7 +17,7 @@ from ..merossclient import (
 from ..merossclient.client import AbstractClient, Direction, Transport
 from ..merossclient.client.http import HttpClient
 from ..merossclient.device.handler import NamespaceHandler
-from ..merossclient.exceptions import MerossError
+from ..merossclient.exceptions import MerossError, MerossTransportError
 from ..merossclient.obfuscate import OBFUSCATE_DICT
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..merossclient.protocol.message import MerossMessage, MerossResponse
@@ -167,16 +167,23 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 # this could happen when the response carries a truncated payload
                 # and might be due to an 'hard' limit in the capacity of the
                 # device http output buffer (when the response is too long)
-                self.log_exception(
-                    self.WARNING,
-                    jsonerror,
-                    "response (message might be truncated)",
-                )
+                namespace = self.last_tx_message.namespace  # type: ignore
                 response_text = jsonerror.doc
+                if self.isEnabledFor(self.DEBUG):
+                    self.log(
+                        self.DEBUG,
+                        "JSONDecodeError (at %s) in reply to %s (rawmessage:%s)",
+                        jsonerror.pos,
+                        namespace,
+                        response_text,  # BEWARE: there's no easy way to obfuscate this
+                    )
+                else:
+                    self.log(
+                        self.WARNING,
+                        "Incomplete reply to %s: trying to recover...",
+                        namespace,
+                    )
                 response_text_len_safe = int(len(response_text) * 0.9)
-                if jsonerror.pos < response_text_len_safe:
-                    # if the error is too early in the payload...
-                    raise
                 # the error happened because of truncated json payload
                 device = self.device
                 device.device_response_size_max = response_text_len_safe
@@ -190,20 +197,25 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 )
                 # try to recover the message by truncating the payload
                 # with various heuristics
-                namespace = self.last_tx_message.namespace  # type: ignore
-                if not type(namespace) is mn.Namespace:
+
+                if type(namespace) is not mn.Namespace:
                     namespace = mn.NAMESPACES[namespace]
                 match namespace:
                     case mn.Appliance_Control_Multiple:
                         list_break_matcher = '},{"header":'
                     case _:
-                        if not namespace.index_type:
-                            raise
-                        list_break_matcher = f'}},{{"{namespace.index_type.key[0]}":'
+                        if namespace.index_type:
+                            list_break_matcher = (
+                                f'}},{{"{namespace.index_type.key[0]}":'
+                            )
+                        else:
+                            list_break_matcher = "}},{{"
 
                 trunc_pos = response_text.rfind(list_break_matcher)
                 if trunc_pos == -1:
-                    raise
+                    raise MerossTransportError(
+                        self, request=self.last_tx_message
+                    ) from jsonerror
                 response_text = response_text[0:trunc_pos] + "}]}}"
                 return self.on_rx_raw(response_text.encode())
 
