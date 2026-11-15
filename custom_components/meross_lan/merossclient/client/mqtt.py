@@ -672,8 +672,8 @@ class MQTTConnection(AbstractMQTTConnection):
 
     def start(self, /, **kwargs: "Unpack[ConnectArgs]"):
         if not self._mqtt_loop_task:
-            self._mqttc.connect_timeout = kwargs.get("timeout", self.timeout)
             self._mqttc.connect_async(self.id.host, self.id.port)
+            self._mqttc.connect_timeout = kwargs.get("timeout", self.timeout)
             # This is a 'long lived' background task with special handling.
             # We don't follow standard self.create_task semantics....
             # This is particularly needed to avoid our meross_lan create_task patching
