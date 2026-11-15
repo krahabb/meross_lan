@@ -675,7 +675,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         common properties caches, read from ConfigEntry on __init__ or when a configentry updates
         """
         config = self.config
-        # map CONF_PROTOCOL value to a const symbol in order to use 'is' in Device code checks
         self.configured_transport = Transport.from_str(config.get(mlc.CONF_PROTOCOL))
         self.polling_period = (
             config.get(mlc.CONF_POLLING_PERIOD) or mlc.CONF_POLLING_PERIOD_DEFAULT
@@ -767,6 +766,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                     self.config.get(mlc.CONF_HOST)
                     or (not self.mqtt)
                     or (self.mqtt.connection.is_cloud)
+                    or (not self.mqtt.connection.allow_publish)
                 ):
                     self.preferred_transport = Transport.HTTP
                 else:
@@ -775,24 +775,17 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 self.preferred_transport = conf_transport
 
         if self.transport is not self.preferred_transport:
-            if self.is_connected:
-                try:
-                    self._switch_client(
-                        self._clients_connected[self.preferred_transport]
-                    )
-                except KeyError:
-                    # preferred transport not connected: leave current transport whatever
-                    pass
-            else:
-                try:
-                    self._switch_client(self._clients[self.preferred_transport])
-                except KeyError:
-                    self.log(
-                        self.WARNING,
-                        "Preferred transport {%s} not available, current transport is {%s}",
-                        self.preferred_transport,
-                        self.transport,
-                    )
+            try:
+                preferred_client = self.clients[self.preferred_transport]
+                if preferred_client.can_request:
+                    self._switch_client(preferred_client)
+            except KeyError:
+                self.log(
+                    self.WARNING,
+                    "Preferred transport {%s} not available, current transport is {%s}",
+                    self.preferred_transport,
+                    self.transport,
+                )
 
     # interface: ConfigEntryManager
     @override
@@ -1075,7 +1068,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 "cloud_profile": profile and profile.is_cloud_profile,
                 "mqtt_connection": bool(self.mqtt),
                 "mqtt_connected": self.mqtt and self.mqtt.connection.is_connected,
-                "mqtt_publish": self.mqtt and self.mqtt.connection.can_publish,
+                "mqtt_publish": self.mqtt and self.mqtt.connection.can_request,
                 "mqtt_active": self.mqtt_active,
             },
             "namespace_handlers": {
@@ -1145,11 +1138,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         transport = client.TRANSPORT
         self.log_message(message, Direction.RX, transport, self.last_rx_epoch)
         message.check()
-        if self.transport is not transport:
-            if (self.preferred_transport is transport) or (
-                len(self._clients_connected) == 1
-            ):
-                self._switch_client(client)
 
         # we'll use the device timestamp to 'align' our time to the device one
         # this is useful for metered plugs reporting timestamped energy consumption
@@ -1544,7 +1532,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             # only apply the time-sync procedure when locally mqtt binded
             if (
                 (mqtt := self.mqtt)
-                and mqtt.connection.can_publish  # online and allow_publish
+                and mqtt.connection.can_request
                 and (not mqtt.connection.is_cloud)
                 and (mn.Appliance_System_Clock in self.descriptor.ability)
             ):
@@ -1577,7 +1565,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             # only apply the timezone rules check/fix procedure when locally mqtt binded
             if (
                 (mqtt := self.mqtt)
-                and mqtt.connection.can_publish  # online and allow_publish
+                and mqtt.connection.can_request
                 and (not mqtt.connection.is_cloud)
                 and (mn.Appliance_System_Time in self.descriptor.ability)
             ):

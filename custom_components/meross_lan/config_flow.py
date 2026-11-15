@@ -204,14 +204,8 @@ class BaseFlow(ce.ConfigEntryBaseFlow if TYPE_CHECKING else object):
         """
         api = self.api
         try:
-            device = api.devices[uuid]
-            if device:
-                if device._clients_connected:
-                    return next(iter(device._clients_connected.values()))
-                elif device._clients:
-                    return next(iter(device._clients.values()))
-                else:
-                    return None
+            if device := api.devices[uuid]:
+                return device.client
         except KeyError:
             pass
 

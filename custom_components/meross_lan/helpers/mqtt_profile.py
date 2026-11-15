@@ -444,19 +444,7 @@ class MQTTConnection(AbstractMQTTConnection):
         if self.sensor_connection:
             self.sensor_connection.configure_logger()
 
-        self.allow_publish = profile.allow_mqtt_publish  # type: ignore[assignment]
-        if self.allow_publish:
-            self.can_publish = self.is_connected  # type: ignore[assignment]
-            # restore class method
-            try:
-                del self.async_publish_raw
-            except AttributeError:
-                pass
-        else:
-            # install a method override to forcibly disable MQTT publish
-            self.can_publish = False  # type: ignore[assignment]
-            self.async_publish_raw = MQTTConnection._async_publish_raw_disabled
-
+        self.allow_publish = profile.allow_mqtt_publish
         self.rl_rate = profile.rl_rate  # type: ignore[assignment]
         self.rl_window_size = profile.rl_window_size  # type: ignore[assignment]
 

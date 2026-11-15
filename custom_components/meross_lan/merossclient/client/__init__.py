@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from bisect import bisect_right
 from enum import StrEnum
 from typing import TYPE_CHECKING
@@ -50,7 +51,7 @@ class Transport(StrEnum):
     BLUETOOTH = "bluetooth"
 
     @staticmethod
-    def from_str(label: str | None) -> "Transport":
+    def from_str(label: str | None):
         if label:
             label = label.lower()
             for transport in Transport:
@@ -191,14 +192,14 @@ class AbstractClient(logging.Loggable):
         await self.async_disconnect()
         await super().async_shutdown()
 
-    @logging.abc.abstractmethod
+    @abstractmethod
     async def async_connect(self, /, **kwargs: "Unpack[ConnectArgs]"): ...
-    @logging.abc.abstractmethod
+    @abstractmethod
     async def async_disconnect(self, /): ...
 
     def on_connect(self, /):
         """Signals client successful connection."""
-        self.is_connected = True  # type: ignore
+        self.is_connected = True  # type: ignore[assignment]
         self.log(logging.DEBUG, "Connected")
         self.connect_broadcast.broadcast(self)
 
@@ -280,10 +281,20 @@ class AbstractClient(logging.Loggable):
         self.configure_logger()
 
     @property
+    def can_request(self):
+        """This indicates if the client can accept transmitting a request in a specific context depending
+        generally on if it 'is_connected' and 'allow_publish' (for MQTT).
+        At the base implementation we cover behavior for the majority of clients like HTTP-BLUETOOTH
+        where the connection could be established 'on the fly' when attempting the request.
+        The MQTT hierarchy will need to check for connectivity and allow_publish.
+        """
+        return True
+
+    @property
     def host(self):
         return self.descriptor.innerIp if self.descriptor else None
 
-    @logging.abc.abstractmethod
+    @abstractmethod
     async def async_request_raw(
         self, request: MerossRequest, /, **kwargs: "Unpack[RequestRawArgs]"
     ) -> MerossResponse:

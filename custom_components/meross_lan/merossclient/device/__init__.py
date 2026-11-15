@@ -18,7 +18,7 @@ from .handler import NamespaceHandler, NamespaceParser
 
 if TYPE_CHECKING:
     from asyncio import Task
-    from typing import Any, Callable, ClassVar, Final, Self, Unpack
+    from typing import Callable, ClassVar, Final, Mapping, Unpack
 
     from .. import SubDeviceDescriptor
     from ..client.bluetooth import BluetoothClient
@@ -131,7 +131,9 @@ class Device(PhysicalDevice):
         This attribute is a proxy for the actual MQTT client state (is_connected) and
         need to be kept in sync (This is mostly accomplished in AbstractMQTTConnection.Client)."""
         _clients: Final[dict[Transport, AbstractClient]]
-        _clients_connected: Final[dict[Transport, AbstractClient]]
+        clients: Final[Mapping[Transport, AbstractClient]]
+        """clients can be useful for client classes to inspect the property without allowing any modification.
+        Protection is apparent only since it is not really a readonly dict...."""
         subdevices: dict[str, "SubDevice"]
         ns_handlers: Final[dict[mn.Namespace, NamespaceHandler]]
         handler_all: Final[NamespaceHandler]
@@ -166,7 +168,7 @@ class Device(PhysicalDevice):
         "mqtt",
         "mqtt_active",
         "_clients",
-        "_clients_connected",
+        "clients",
         "subdevices",
         "ns_handlers",
         "handler_all",
@@ -193,7 +195,7 @@ class Device(PhysicalDevice):
         self.mqtt = None
         self.mqtt_active = False
         self._clients = {}
-        self._clients_connected = {}
+        self.clients = self._clients
         self.subdevices = {}
         self.ns_handlers = {}
         self.handler_all = NamespaceHandler(
@@ -260,9 +262,6 @@ class Device(PhysicalDevice):
         assert self.is_connected is False, "Device shutdown failed: still connected"
         assert not self.client, "Device shutdown failed: client still set"
         assert not self._clients, "Device shutdown failed: clients still set"
-        assert (
-            not self._clients_connected
-        ), "Device shutdown failed: connected clients still set"
 
     # interface: AbstractClient
     @override
@@ -274,6 +273,7 @@ class Device(PhysicalDevice):
                 eager_start=False,
             )
             for _client in self._clients.values()
+            if _client.can_request
         ]
         if connect_tasks:
             try:
@@ -283,8 +283,6 @@ class Device(PhysicalDevice):
                 ):
                     try:
                         response = await earliest_connect
-                        if not self.is_connected:
-                            self.on_connect()
                         self.handler_all.handle(response)
                         self.handler_all.polling_response_size = len(response.json)
                         return response
@@ -304,7 +302,8 @@ class Device(PhysicalDevice):
         await asyncio.gather(
             *[
                 _client.async_disconnect()
-                for _client in self._clients_connected.values()
+                for _client in self._clients.values()
+                if _client.is_connected
             ],
             return_exceptions=True,
         )
@@ -365,36 +364,38 @@ class Device(PhysicalDevice):
                 tryed_clients = set()
 
         while True:
-            for _client in self._clients_connected.values():
-                if _client in tryed_clients:
+            for _client in self._clients.values():
+                if (_client in tryed_clients) or (not _client.can_request):
                     continue
                 try:
                     return await _client.async_request(*args, **kwargs)
                 except Exception as e:
                     tryed_clients.add(_client)
                     last_exception = e
-                    # We need to break here because _clients_connected might change
+                    # We need to break here because self._clients might change
                     # This is expensive but we could only have max 2 connected clients at a time
                     break  # to outer (infinite) loop
             else:
                 break
 
-        while True:
-            for _client in self._clients.values():
-                if _client in tryed_clients:
-                    continue
-                try:
-                    return await _client.async_request(*args, **kwargs)
-                except Exception as e:
-                    tryed_clients.add(_client)
-                    last_exception = e
-                    break  # to outer (infinite) loop
-            else:
-                break
+        # As last resort, since http connection state is optimistic and might have been excluded from trying
+        # we check if we should try it anyway
+        if (http_client := self._clients.get(Transport.HTTP)) and (
+            http_client not in tryed_clients
+        ):
+            return await http_client.async_request(*args, **kwargs)
 
         raise last_exception  # type: ignore[unbound-variable]
 
     # interface: self
+    @property
+    def clients_connected(self) -> Mapping[Transport, AbstractClient]:
+        return {
+            client.TRANSPORT: client
+            for client in self._clients.values()
+            if client.is_connected
+        }
+
     @property
     def meross_binded(self):
         """
@@ -418,7 +419,7 @@ class Device(PhysicalDevice):
         """
         return datetime_from_epoch(epoch, self.tz)
 
-    def add_client(self, client: "AbstractClient", /):
+    def add_client(self, client: AbstractClient, /):
         assert (
             getattr(self, client.TRANSPORT) is None
         ), f"{client.TRANSPORT} client already attached to {self}"
@@ -432,7 +433,7 @@ class Device(PhysicalDevice):
         if client.is_connected:
             self.on_client_connect(client)
 
-    def remove_client(self, client: "AbstractClient", /):
+    def remove_client(self, client: AbstractClient, /):
         assert (
             getattr(self, client.TRANSPORT) is client
         ), f"{client.TRANSPORT} client not attached to {self}"
@@ -446,24 +447,33 @@ class Device(PhysicalDevice):
         client.tx_broadcast.remove(self.on_tx)
         client.rx_broadcast.remove(self.on_rx)
         if self.client is client:
-            self.client = None  # type: ignore[assignment]
-            self.transport = self.TRANSPORT  # type: ignore[assignment]
-            self.log(self.DEBUG, "Switching transport to %s", self.transport)
+            for _client in self.clients_connected.values():
+                if _client.can_request:
+                    self._switch_client(_client)
+                    break
+            else:
+                self._switch_client(None)
 
-    def on_client_connect(self, client: "AbstractClient", /):
-        self._clients_connected[client.TRANSPORT] = client
+    def on_client_connect(self, client: AbstractClient, /):
+        if not self.is_connected:
+            self.on_connect()
+        if (self.client is not client) and client.can_request:
+            if (not self.client) or (client.TRANSPORT is self.preferred_transport):
+                self._switch_client(client)
 
-    def on_client_disconnect(self, client: "AbstractClient", /):
-        del self._clients_connected[client.TRANSPORT]
-        if self._clients_connected:
+    def on_client_disconnect(self, client: AbstractClient, /):
+        if clients_connected := self.clients_connected:
             if self.client is client:
-                self._switch_client(next(iter(self._clients_connected.values())))
+                for _client in clients_connected.values():
+                    if _client.can_request:
+                        self._switch_client(_client)
+                        break
         elif self.is_connected:
             self.on_disconnect()
 
-    def _switch_client(self, client: "AbstractClient"):
+    def _switch_client(self, client: AbstractClient | None):
         self.client = client  # type: ignore[assignment]
-        self.transport = client.TRANSPORT  # type: ignore[assignment]
+        self.transport = (client and client.TRANSPORT) or self.TRANSPORT  # type: ignore[assignment]
         self.log(self.DEBUG, "Switching transport to %s", self.transport)
 
     def build_handler(self, ns: "mn.Namespace", /) -> NamespaceHandler:
@@ -584,7 +594,7 @@ class Device(PhysicalDevice):
 
                     if (
                         (mqtt := self.mqtt)
-                        and mqtt.connection.can_publish
+                        and mqtt.connection.can_request
                         and ((epoch - mqtt.last_rx_epoch) > self.HEARTBEAT_TIMEOUT)
                         and ((epoch - mqtt.last_tx_epoch) > self.HEARTBEAT_TIMEOUT)
                     ):
@@ -813,8 +823,6 @@ class Device(PhysicalDevice):
                 # host name might have different labels but still refer to the same host
                 if connection.is_connected and (connection.id == descr.server):
                     mqtt.on_connect()
-                    if self.preferred_transport is Transport.MQTT:
-                        self._switch_client(mqtt)
 
         digest = descr.digest or descr.control
         for nh in self.ns_handlers.values():

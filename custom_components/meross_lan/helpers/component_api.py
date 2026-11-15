@@ -152,6 +152,18 @@ class HAMQTTConnection(MQTTConnection):
         /,
         **kwargs: "Unpack[HAMQTTConnection.RequestRawArgs]",
     ):
+        if not self.is_connected:
+            raise MerossTransportError(
+                self, "Disconnected", request=message, uuid=kwargs["uuid"]
+            )
+        if not self.allow_publish:
+            raise MerossTransportError(
+                self,
+                "Publishing not allowed in configuration",
+                request=message,
+                uuid=kwargs["uuid"],
+            )
+
         self.on_tx(message)
         try:
             await mqtt.async_publish(
@@ -591,7 +603,7 @@ class ComponentApi(MQTTProfile):
                 )
 
             async def _async_device_request(device: "Device"):
-                _client = device._clients.get(protocol) or device._clients.get(
+                _client = device.clients.get(protocol) or device.clients.get(
                     device.transport
                 )
                 if not _client:
