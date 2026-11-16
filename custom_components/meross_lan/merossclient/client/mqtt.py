@@ -572,7 +572,7 @@ class MQTTConnection(AbstractMQTTConnection):
                 if not future:
                     # not overlapped connect attempt, start a new one
                     if self._mqtt_loop_task:
-                        self._mqtt_loop_task.cancel()
+                        self._mqtt_loop_task.cancel("restart")
                         try:
                             await self._mqtt_loop_task
                         except (asyncio.CancelledError, Exception):
@@ -598,7 +598,7 @@ class MQTTConnection(AbstractMQTTConnection):
         if self._connect_future:
             self._connect_future.cancel()
         if self._mqtt_loop_task:
-            self._mqtt_loop_task.cancel()
+            self._mqtt_loop_task.cancel("disconnect")
             try:
                 await self._mqtt_loop_task
             except (asyncio.CancelledError, Exception):
@@ -672,8 +672,8 @@ class MQTTConnection(AbstractMQTTConnection):
 
     def start(self, /, **kwargs: "Unpack[ConnectArgs]"):
         if not self._mqtt_loop_task:
-            self._mqttc.connect_async(self.id.host, self.id.port)
             self._mqttc.connect_timeout = kwargs.get("timeout", self.timeout)
+            self._mqttc.connect_async(self.id.host, self.id.port)
             # This is a 'long lived' background task with special handling.
             # We don't follow standard self.create_task semantics....
             # This is particularly needed to avoid our meross_lan create_task patching
@@ -687,7 +687,7 @@ class MQTTConnection(AbstractMQTTConnection):
 
     def stop(self):
         if self._mqtt_loop_task:
-            self._mqtt_loop_task.cancel()
+            self._mqtt_loop_task.cancel("stop")
 
     def publish(self, topic: str, message: str, /):
         self._mqttc.publish(topic, message)
@@ -715,13 +715,24 @@ class MQTTConnection(AbstractMQTTConnection):
                                 client._reconnect_max_delay,
                             )
                         await asyncio.sleep(client._reconnect_delay)
-        except asyncio.CancelledError:
-            pass
         finally:
-            self._mqtt_loop_task = None
-            client.disconnect()
-            if self.is_connected:
-                self.on_disconnect()
+            # TODO: improve this mechanic since it seems fragile.
+            # We might be asked cancellation when we're already shutting down..so..who knows.
+            # The problem with the following code is to ensure the mqtt client is
+            # really shut down when leaving this coroutine because when this is
+            # cancelled in order to restart, we need a surely closed socket on the _mqttc
+            # else our _mqttc.connect_timeout = ... inside 'start' would fail (RuntimeError)
+            try:
+                if client.disconnect() != mqtt.MQTT_ERR_NO_CONN:
+                    async with asyncio.Timeout(self.loop.time() + 2):
+                        while not client._connection_closed():
+                            await asyncio.sleep(0.5)
+            except TimeoutError:
+                pass
+            finally:
+                self._mqtt_loop_task = None
+                if self.is_connected:
+                    self.on_disconnect()
 
     def _reconnect(self, client: mqtt.Client):
         try:
