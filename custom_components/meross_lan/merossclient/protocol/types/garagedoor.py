@@ -30,6 +30,7 @@ class MultipleConfig(mt.ChannelPayload):
 class StateRequest(mt.ChannelPayload):
 
     open: int  # 1: open, 0: closed
+    uuid: NotRequired[str]  # MSG150 requires the device UUID in SET requests
 
 
 class State(mt.ChannelPayload):
@@ -38,3 +39,6 @@ class State(mt.ChannelPayload):
     open: int  # 1: open, 0: closed
     lmTime: int
     doorEnable: NotRequired[int]  # appeared on msg200 fw:4.2.8
+    obstruction: NotRequired[int]  # MSG150: 1 detected, 2 cleared
+    obLmTime: NotRequired[int]
+    signalValid: NotRequired[int]

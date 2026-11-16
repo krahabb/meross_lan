@@ -98,6 +98,7 @@ This list might not be exhaustive since newer devices are being marketed every n
 - Covers
   - [MRS100](https://www.meross.com/product/91/article/): Smart WiFi Roller Shutter
   - [MSG100](https://www.meross.com/product/29/article/): Smart WiFi Garage Door Opener
+  - [MSG150](https://www.meross.com/en-gc/smart-garage-door-opener/msg150/207): Smart WiFi Garage Door Opener
   - [MSG200](https://www.meross.com/en-gc/smart-garage-door-opener/homekit-garage-door-opener/68): Smart WiFi Garage Door Opener (3 channels)
 - Humidifiers
   - [MSXH0](https://www.meross.com/Detail/47/Smart%20Wi-Fi%20Humidifier) [experimental]: Smart WiFi Humidifier
