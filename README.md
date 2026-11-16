@@ -118,6 +118,14 @@ If you have the MSH300 Hub working with this integration, every new subdevice (t
 
 In general, many device configuration options available in Meross app are not supported in meross_lan though some are. As an example, the thermostats preset temperatures (for heat, cool, eco/away) are accessible in HA/meross_lan exactly as if you were to set them manually on the device or via the app. These, and any other supported configuration options, are available as configuration entities (so they're not added to the default lovelace dashboard) and you can access them by going to the relevant device page in HA Configuration -> Devices
 
+## Thermostat schedules: linking a Home Assistant Schedule helper
+
+Thermostats with an on-board weekly schedule (MTS100/MTS150 via the MSH300 hub, MTS200, MTS960 and, provisionally, MTS300) can follow a Home Assistant [Schedule helper](https://www.home-assistant.io/integrations/schedule/) (HA 2025.3+). Give every helper block a `temperature` (MTS300: `heat` and `cool`) in its 'Additional data' (or with a card such as the [Heating Schedule Card](https://github.com/Pandetthe/heating-schedule-card)), in your HA unit, then pick the helper in the thermostat 'Schedule helper' select. The helper is converted and written to the device (which runs it on its own, in its schedule/auto preset) whenever it changes; changes made elsewhere (e.g. the Meross app) are reported as 'Device differs' by the 'Schedule sync' sensor, not overwritten. Its `reason` and `warnings` attributes tell why a sync failed and what was adjusted:
+- time not covered by any block is off (device minimum, maximum when cooling) and takes a slot like every block: at most 6 slots per day on MTS100/MTS150, 8 on MTS200, 12 on MTS960/MTS300
+- block boundaries are rounded to 15 minutes, temperatures to 0.5 °C (whole °F on thermostats displaying °F)
+
+'Sync schedule from device' (admin only, UI-created helpers only) copies the device schedule into the linked helper, or into a new one it links; 'Sync schedule to device' writes the helper now. The `meross_lan.get_schedule`, `set_schedule` and `sync_schedule` services (HA 2025.10+) do the same from automations. The former 'Schedule' calendar entity is gone: the helper replaces it.
+
 ## Service
 
 There is a service called `meross_lan.request` exposed to simplify communication with the device and play with it a bit. It basically requires the needed informations to setup a command request and send it over MQTT or HTTP without the hassle of signatures and timestamps computations. You can check it in the 'Developer Tools' of the HA instance, everything should be enough self-explanatory there.

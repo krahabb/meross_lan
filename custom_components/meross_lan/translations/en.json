@@ -1,5 +1,13 @@
 {
     "entity": {
+        "button": {
+            "schedule_pull": {
+                "name": "Sync schedule from device"
+            },
+            "schedule_push": {
+                "name": "Sync schedule to device"
+            }
+        },
         "climate": {
             "mts_climate": {
                 "state_attributes": {
@@ -77,6 +85,16 @@
             },
             "overheat_currenttemp": {
                 "name": "External temperature"
+            },
+            "schedule_sync": {
+                "name": "Schedule sync",
+                "state": {
+                    "off": "Off",
+                    "pending": "Pending",
+                    "synced": "Synced",
+                    "drift": "Device differs",
+                    "error": "Error"
+                }
             }
         },
         "number": {
@@ -169,6 +187,12 @@
                 "state": {
                     "alert": "Alert only",
                     "turn_off": "Alert and turn off"
+                }
+            },
+            "schedule_helper": {
+                "name": "Schedule helper",
+                "state": {
+                    "off": "Off"
                 }
             }
         }

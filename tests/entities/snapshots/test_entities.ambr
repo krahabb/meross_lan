@@ -1000,14 +1000,34 @@
       'ns': None,
       'unique_id': '0123456789012345678901234567890C_0_overheat_warning',
     }),
-    '0_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '0_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'channel': 0,
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Control.Thermostat.Schedule, key=schedule, index=channel),
-      'unique_id': '0123456789012345678901234567890C_0_schedule',
+      'unique_id': '0123456789012345678901234567890C_0_schedule_helper',
+    }),
+    '0_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567890C_0_schedule_pull',
+    }),
+    '0_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567890C_0_schedule_push',
+    }),
+    '0_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '0123456789012345678901234567890C_0_schedule_sync',
     }),
     '0_screenbrightness_operation': dict({
       'class': <class 'custom_components.meross_lan.devices.thermostat.ScreenBrightnessNumber'>,
@@ -1378,14 +1398,34 @@
       }),
       'unique_id': '0123456789012345678901234567890F_0100783A_patch_hvacaction',
     }),
-    '0100783A_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '0100783A_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '0100783A',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '0123456789012345678901234567890F_0100783A_schedule',
+      'unique_id': '0123456789012345678901234567890F_0100783A_schedule_helper',
+    }),
+    '0100783A_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567890F_0100783A_schedule_pull',
+    }),
+    '0100783A_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567890F_0100783A_schedule_push',
+    }),
+    '0100783A_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '0123456789012345678901234567890F_0100783A_schedule_sync',
     }),
     '0100783A_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -1496,14 +1536,34 @@
       }),
       'unique_id': '0123456789012345678901234567890F_01008C11_patch_hvacaction',
     }),
-    '01008C11_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '01008C11_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '01008C11',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '0123456789012345678901234567890F_01008C11_schedule',
+      'unique_id': '0123456789012345678901234567890F_01008C11_schedule_helper',
+    }),
+    '01008C11_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567890F_01008C11_schedule_pull',
+    }),
+    '01008C11_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567890F_01008C11_schedule_push',
+    }),
+    '01008C11_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '0123456789012345678901234567890F_01008C11_schedule_sync',
     }),
     '01008C11_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -1885,14 +1945,34 @@
       }),
       'unique_id': '01234567890123456789012345678911_0300DF01_patch_hvacaction',
     }),
-    '0300DF01_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '0300DF01_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '0300DF01',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678911_0300DF01_schedule',
+      'unique_id': '01234567890123456789012345678911_0300DF01_schedule_helper',
+    }),
+    '0300DF01_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678911_0300DF01_schedule_pull',
+    }),
+    '0300DF01_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678911_0300DF01_schedule_push',
+    }),
+    '0300DF01_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678911_0300DF01_schedule_sync',
     }),
     '0300DF01_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -2224,14 +2304,34 @@
       }),
       'unique_id': '01234567890123456789012345678912_03002B0E_patch_hvacaction',
     }),
-    '03002B0E_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '03002B0E_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '03002B0E',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678912_03002B0E_schedule',
+      'unique_id': '01234567890123456789012345678912_03002B0E_schedule_helper',
+    }),
+    '03002B0E_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678912_03002B0E_schedule_pull',
+    }),
+    '03002B0E_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678912_03002B0E_schedule_push',
+    }),
+    '03002B0E_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678912_03002B0E_schedule_sync',
     }),
     '03002B0E_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -2388,14 +2488,34 @@
       }),
       'unique_id': '01234567890123456789012345678912_03004B5A_patch_hvacaction',
     }),
-    '03004B5A_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '03004B5A_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '03004B5A',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678912_03004B5A_schedule',
+      'unique_id': '01234567890123456789012345678912_03004B5A_schedule_helper',
+    }),
+    '03004B5A_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678912_03004B5A_schedule_pull',
+    }),
+    '03004B5A_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678912_03004B5A_schedule_push',
+    }),
+    '03004B5A_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678912_03004B5A_schedule_sync',
     }),
     '03004B5A_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -2938,14 +3058,34 @@
       'ns': None,
       'unique_id': '01234567890123456789012345678914_0_overheat_warning',
     }),
-    '0_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '0_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'channel': 0,
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Control.Thermostat.Schedule, key=schedule, index=channel),
-      'unique_id': '01234567890123456789012345678914_0_schedule',
+      'unique_id': '01234567890123456789012345678914_0_schedule_helper',
+    }),
+    '0_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678914_0_schedule_pull',
+    }),
+    '0_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678914_0_schedule_push',
+    }),
+    '0_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678914_0_schedule_sync',
     }),
     '0_screenbrightness_operation': dict({
       'class': <class 'custom_components.meross_lan.devices.thermostat.ScreenBrightnessNumber'>,
@@ -3155,14 +3295,34 @@
       }),
       'unique_id': '01234567890123456789012345678915_0_plug_state',
     }),
-    '0_scheduleB': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '0_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'channel': 0,
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Control.Thermostat.ScheduleB, key=scheduleB, index=channel),
-      'unique_id': '01234567890123456789012345678915_0_scheduleB',
+      'unique_id': '01234567890123456789012345678915_0_schedule_helper',
+    }),
+    '0_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678915_0_schedule_pull',
+    }),
+    '0_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678915_0_schedule_push',
+    }),
+    '0_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678915_0_schedule_sync',
     }),
     '0_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -3398,14 +3558,34 @@
       }),
       'unique_id': '01234567890123456789012345678916_01000671_patch_hvacaction',
     }),
-    '01000671_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '01000671_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '01000671',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_01000671_schedule',
+      'unique_id': '01234567890123456789012345678916_01000671_schedule_helper',
+    }),
+    '01000671_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01000671_schedule_pull',
+    }),
+    '01000671_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01000671_schedule_push',
+    }),
+    '01000671_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_01000671_schedule_sync',
     }),
     '01000671_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -3516,14 +3696,34 @@
       }),
       'unique_id': '01234567890123456789012345678916_0100093F_patch_hvacaction',
     }),
-    '0100093F_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '0100093F_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '0100093F',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_0100093F_schedule',
+      'unique_id': '01234567890123456789012345678916_0100093F_schedule_helper',
+    }),
+    '0100093F_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100093F_schedule_pull',
+    }),
+    '0100093F_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100093F_schedule_push',
+    }),
+    '0100093F_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_0100093F_schedule_sync',
     }),
     '0100093F_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -3634,14 +3834,34 @@
       }),
       'unique_id': '01234567890123456789012345678916_01003166_patch_hvacaction',
     }),
-    '01003166_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '01003166_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '01003166',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_01003166_schedule',
+      'unique_id': '01234567890123456789012345678916_01003166_schedule_helper',
+    }),
+    '01003166_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01003166_schedule_pull',
+    }),
+    '01003166_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01003166_schedule_push',
+    }),
+    '01003166_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_01003166_schedule_sync',
     }),
     '01003166_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -3752,14 +3972,34 @@
       }),
       'unique_id': '01234567890123456789012345678916_01003524_patch_hvacaction',
     }),
-    '01003524_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '01003524_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '01003524',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_01003524_schedule',
+      'unique_id': '01234567890123456789012345678916_01003524_schedule_helper',
+    }),
+    '01003524_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01003524_schedule_pull',
+    }),
+    '01003524_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01003524_schedule_push',
+    }),
+    '01003524_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_01003524_schedule_sync',
     }),
     '01003524_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -3870,14 +4110,34 @@
       }),
       'unique_id': '01234567890123456789012345678916_01005C75_patch_hvacaction',
     }),
-    '01005C75_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '01005C75_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '01005C75',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_01005C75_schedule',
+      'unique_id': '01234567890123456789012345678916_01005C75_schedule_helper',
+    }),
+    '01005C75_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01005C75_schedule_pull',
+    }),
+    '01005C75_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_01005C75_schedule_push',
+    }),
+    '01005C75_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_01005C75_schedule_sync',
     }),
     '01005C75_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -3988,14 +4248,34 @@
       }),
       'unique_id': '01234567890123456789012345678916_0100813A_patch_hvacaction',
     }),
-    '0100813A_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '0100813A_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '0100813A',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_0100813A_schedule',
+      'unique_id': '01234567890123456789012345678916_0100813A_schedule_helper',
+    }),
+    '0100813A_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100813A_schedule_pull',
+    }),
+    '0100813A_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100813A_schedule_push',
+    }),
+    '0100813A_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_0100813A_schedule_sync',
     }),
     '0100813A_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -4106,14 +4386,34 @@
       }),
       'unique_id': '01234567890123456789012345678916_0100DEE3_patch_hvacaction',
     }),
-    '0100DEE3_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '0100DEE3_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '0100DEE3',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_0100DEE3_schedule',
+      'unique_id': '01234567890123456789012345678916_0100DEE3_schedule_helper',
+    }),
+    '0100DEE3_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100DEE3_schedule_pull',
+    }),
+    '0100DEE3_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100DEE3_schedule_push',
+    }),
+    '0100DEE3_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_0100DEE3_schedule_sync',
     }),
     '0100DEE3_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -4224,14 +4524,34 @@
       }),
       'unique_id': '01234567890123456789012345678916_0100FAC0_patch_hvacaction',
     }),
-    '0100FAC0_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '0100FAC0_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '0100FAC0',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_0100FAC0_schedule',
+      'unique_id': '01234567890123456789012345678916_0100FAC0_schedule_helper',
+    }),
+    '0100FAC0_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100FAC0_schedule_pull',
+    }),
+    '0100FAC0_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0100FAC0_schedule_push',
+    }),
+    '0100FAC0_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_0100FAC0_schedule_sync',
     }),
     '0100FAC0_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -4422,14 +4742,34 @@
       }),
       'unique_id': '01234567890123456789012345678916_030004B4_patch_hvacaction',
     }),
-    '030004B4_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '030004B4_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '030004B4',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_030004B4_schedule',
+      'unique_id': '01234567890123456789012345678916_030004B4_schedule_helper',
+    }),
+    '030004B4_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_030004B4_schedule_pull',
+    }),
+    '030004B4_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_030004B4_schedule_push',
+    }),
+    '030004B4_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_030004B4_schedule_sync',
     }),
     '030004B4_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -4620,14 +4960,34 @@
       }),
       'unique_id': '01234567890123456789012345678916_030011B6_patch_hvacaction',
     }),
-    '030011B6_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '030011B6_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '030011B6',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_030011B6_schedule',
+      'unique_id': '01234567890123456789012345678916_030011B6_schedule_helper',
+    }),
+    '030011B6_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_030011B6_schedule_pull',
+    }),
+    '030011B6_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_030011B6_schedule_push',
+    }),
+    '030011B6_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_030011B6_schedule_sync',
     }),
     '030011B6_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -4818,14 +5178,34 @@
       }),
       'unique_id': '01234567890123456789012345678916_03003F30_patch_hvacaction',
     }),
-    '03003F30_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '03003F30_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '03003F30',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_03003F30_schedule',
+      'unique_id': '01234567890123456789012345678916_03003F30_schedule_helper',
+    }),
+    '03003F30_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_03003F30_schedule_pull',
+    }),
+    '03003F30_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_03003F30_schedule_push',
+    }),
+    '03003F30_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_03003F30_schedule_sync',
     }),
     '03003F30_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -5016,14 +5396,34 @@
       }),
       'unique_id': '01234567890123456789012345678916_03004404_patch_hvacaction',
     }),
-    '03004404_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '03004404_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '03004404',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_03004404_schedule',
+      'unique_id': '01234567890123456789012345678916_03004404_schedule_helper',
+    }),
+    '03004404_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_03004404_schedule_pull',
+    }),
+    '03004404_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_03004404_schedule_push',
+    }),
+    '03004404_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_03004404_schedule_sync',
     }),
     '03004404_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -5214,14 +5614,34 @@
       }),
       'unique_id': '01234567890123456789012345678916_03004586_patch_hvacaction',
     }),
-    '03004586_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '03004586_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '03004586',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_03004586_schedule',
+      'unique_id': '01234567890123456789012345678916_03004586_schedule_helper',
+    }),
+    '03004586_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_03004586_schedule_pull',
+    }),
+    '03004586_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_03004586_schedule_push',
+    }),
+    '03004586_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_03004586_schedule_sync',
     }),
     '03004586_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -5412,14 +5832,34 @@
       }),
       'unique_id': '01234567890123456789012345678916_0300DAB1_patch_hvacaction',
     }),
-    '0300DAB1_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '0300DAB1_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '0300DAB1',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_0300DAB1_schedule',
+      'unique_id': '01234567890123456789012345678916_0300DAB1_schedule_helper',
+    }),
+    '0300DAB1_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0300DAB1_schedule_pull',
+    }),
+    '0300DAB1_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0300DAB1_schedule_push',
+    }),
+    '0300DAB1_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_0300DAB1_schedule_sync',
     }),
     '0300DAB1_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -5610,14 +6050,34 @@
       }),
       'unique_id': '01234567890123456789012345678916_0300F670_patch_hvacaction',
     }),
-    '0300F670_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '0300F670_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'id': '0300F670',
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Hub.Mts100.ScheduleB, key=schedule, index=id),
-      'unique_id': '01234567890123456789012345678916_0300F670_schedule',
+      'unique_id': '01234567890123456789012345678916_0300F670_schedule_helper',
+    }),
+    '0300F670_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0300F670_schedule_pull',
+    }),
+    '0300F670_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678916_0300F670_schedule_push',
+    }),
+    '0300F670_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678916_0300F670_schedule_sync',
     }),
     '0300F670_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -6798,14 +7258,34 @@
       'ns': Namespace(Appliance.Control.PhysicalLock, key=lock, index=channel),
       'unique_id': '0123456789012345678901234567891E_0_lock',
     }),
-    '0_schedule': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '0_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'channel': 0,
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Control.Thermostat.Schedule, key=schedule, index=channel),
-      'unique_id': '0123456789012345678901234567891E_0_schedule',
+      'unique_id': '0123456789012345678901234567891E_0_schedule_helper',
+    }),
+    '0_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567891E_0_schedule_pull',
+    }),
+    '0_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567891E_0_schedule_push',
+    }),
+    '0_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '0123456789012345678901234567891E_0_schedule_sync',
     }),
     '0_screenbrightness_operation': dict({
       'class': <class 'custom_components.meross_lan.devices.thermostat.ScreenBrightnessNumber'>,
@@ -7082,14 +7562,34 @@
       }),
       'unique_id': '0123456789012345678901234567891F_0_plug_state',
     }),
-    '0_scheduleB': dict({
-      'class': <class 'custom_components.meross_lan.calendar.MtsSchedule'>,
+    '0_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'channel': 0,
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Control.Thermostat.ScheduleB, key=scheduleB, index=channel),
-      'unique_id': '0123456789012345678901234567891F_0_scheduleB',
+      'unique_id': '0123456789012345678901234567891F_0_schedule_helper',
+    }),
+    '0_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567891F_0_schedule_pull',
+    }),
+    '0_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '0123456789012345678901234567891F_0_schedule_push',
+    }),
+    '0_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '0123456789012345678901234567891F_0_schedule_sync',
     }),
     '0_temperature': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -8613,14 +9113,34 @@
       'ns': Namespace(Appliance.Control.PhysicalLock, key=lock, index=channel),
       'unique_id': '01234567890123456789012345678925_0_lock',
     }),
-    '0_scheduleB': dict({
-      'class': <class 'custom_components.meross_lan.devices.thermostat.mts300.Mts300Climate.Schedule'>,
+    '0_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'channel': 0,
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Control.Thermostat.ScheduleB, key=scheduleB, index=channel),
-      'unique_id': '01234567890123456789012345678925_0_scheduleB',
+      'unique_id': '01234567890123456789012345678925_0_schedule_helper',
+    }),
+    '0_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678925_0_schedule_pull',
+    }),
+    '0_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678925_0_schedule_push',
+    }),
+    '0_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678925_0_schedule_sync',
     }),
     '0_screenbrightness_operation': dict({
       'class': <class 'custom_components.meross_lan.devices.thermostat.ScreenBrightnessNumber'>,
@@ -9158,14 +9678,34 @@
       'ns': Namespace(Appliance.Control.PhysicalLock, key=lock, index=channel),
       'unique_id': '01234567890123456789012345678928_0_lock',
     }),
-    '0_scheduleB': dict({
-      'class': <class 'custom_components.meross_lan.devices.thermostat.mts300.Mts300Climate.Schedule'>,
+    '0_schedule_helper': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleHelperSelect'>,
       'device_class': None,
-      'index': SimpleIndexValue({
-        'channel': 0,
+      'index': NoneIndexValue({
       }),
-      'ns': Namespace(Appliance.Control.Thermostat.ScheduleB, key=scheduleB, index=channel),
-      'unique_id': '01234567890123456789012345678928_0_scheduleB',
+      'unique_id': '01234567890123456789012345678928_0_schedule_helper',
+    }),
+    '0_schedule_pull': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePullButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678928_0_schedule_pull',
+    }),
+    '0_schedule_push': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.SchedulePushButton'>,
+      'device_class': None,
+      'index': NoneIndexValue({
+      }),
+      'unique_id': '01234567890123456789012345678928_0_schedule_push',
+    }),
+    '0_schedule_sync': dict({
+      'class': <class 'custom_components.meross_lan.schedule_sync.ScheduleSyncSensor'>,
+      'device_class': <SensorDeviceClass.ENUM: 'enum'>,
+      'index': NoneIndexValue({
+      }),
+      'native_unit_of_measurement': None,
+      'unique_id': '01234567890123456789012345678928_0_schedule_sync',
     }),
     '0_screenbrightness_operation': dict({
       'class': <class 'custom_components.meross_lan.devices.thermostat.ScreenBrightnessNumber'>,
