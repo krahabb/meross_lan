@@ -42,6 +42,7 @@ if TYPE_CHECKING:
         timeout: NotRequired[int]
         """The log message is cached and effectively logged only if timeout isnt expired since last logging with
         the same (msg, args)."""
+        device_name: NotRequired[str]
         obfuscate: NotRequired[bool]
         """Applies arguments (kwargs) obfuscation based off rules and maps in obfuscate.py."""
         uuid: NotRequired[str | None]
@@ -102,7 +103,7 @@ def getLogger(name) -> "_Logger":
     return logger  # type: ignore[return-value]
 
 
-_EXCLUDED_LOG_KWARGS = {"timeout", "obfuscate"}
+_EXCLUDED_LOG_KWARGS = {"timeout", "obfuscate", "device_name"}
 
 
 def extract_obfuscated_kwargs(obfuscate: bool, kwargs: "LoggerArgs") -> tuple:
@@ -159,6 +160,9 @@ class _Logger(logging.Logger if TYPE_CHECKING else object):
     def _log(self, level, msg, args, **kwargs: "Unpack[LoggerArgs]"):
 
         obfuscate = kwargs.pop("obfuscate", True)
+        device_name = kwargs.pop("device_name", None)
+        if obfuscate:
+            device_name = None
 
         try:
             timeout = kwargs.pop("timeout")
@@ -166,7 +170,7 @@ class _Logger(logging.Logger if TYPE_CHECKING else object):
             pass
         else:
             epoch = time()
-            trap_key = (msg, args)
+            trap_key = (self.name, msg, args) if device_name else (msg, args)
             try:
                 if (epoch - _Logger._LOGGER_TIMEOUTS[trap_key]) < timeout:
                     if self.isEnabledFor(VERBOSE):
@@ -180,11 +184,15 @@ class _Logger(logging.Logger if TYPE_CHECKING else object):
                 pass
             _Logger._LOGGER_TIMEOUTS[trap_key] = epoch
 
-        super()._log(
-            level,
-            msg,
-            args + extract_obfuscated_kwargs(obfuscate, kwargs),
-        )
+        output_args = args + extract_obfuscated_kwargs(obfuscate, kwargs)
+        if device_name:
+            name = device_name.replace("%", "%%") if output_args else device_name
+            head, separator, tail = msg.rpartition(" in ")
+            msg = (
+                f"{head} [{name}]{separator}{tail}" if separator else f"{msg} [{name}]"
+            )
+
+        super()._log(level, msg, output_args)
 
 
 class Loggable(metaclass=abc.ABCMeta):
