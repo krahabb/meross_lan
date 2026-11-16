@@ -193,7 +193,15 @@ KEY_DOORENABLE = "doorEnable"
 KEY_DOOROPENDURATION = "doorOpenDuration"
 KEY_DOORCLOSEDURATION = "doorCloseDuration"
 KEY_OPEN = "open"
+KEY_OBSTRUCTION = "obstruction"
+KEY_OBLM_TIME = "obLmTime"
+KEY_SIGNALVALID = "signalValid"
 KEY_EXECUTE = "execute"
+# Appliance.GarageDoor.State (msg150): obstruction 1=detected, 2=clear; not 0/1 like open
+GARAGE_OBSTRUCTION_DETECTED = 1
+GARAGE_OBSTRUCTION_CLEAR = 2
+GARAGE_SIGNAL_VALID = 1
+GARAGE_SIGNAL_INVALID = 2
 KEY_MODE = "mode"
 KEY_MODEB = "modeB"
 KEY_ROOM = "room"
@@ -495,6 +503,7 @@ TYPE_NAME_MAP["mod"] = "Humidifier"
 TYPE_NAME_MAP["mrs"] = "Roller Shutter"
 
 TYPE_MSG200 = "msg200"  # smart garage door (3 channels)
+TYPE_MSG150 = "msg150"  # smart garage door (Security+ / obstruction support)
 TYPE_NAME_MAP["msg"] = "Garage Door"
 
 TYPE_HUB = "msh"

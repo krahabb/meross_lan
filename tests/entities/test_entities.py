@@ -3,6 +3,9 @@ from typing import TYPE_CHECKING
 
 from homeassistant import const as hac
 
+from custom_components.meross_lan.devices.garagedoor import (
+    GarageSignalValidBinarySensor,
+)
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
@@ -152,6 +155,15 @@ async def test_entities(
                             if sub_digest_key in sub_digest:
                                 for channel_digest in sub_digest[sub_digest_key]:
                                     _add_func(sub_entity_types)
+
+            if descriptor.type.startswith(mc.TYPE_MSG150) and (
+                mc.KEY_GARAGEDOOR in digest
+            ):
+                garage_channels = digest[mc.KEY_GARAGEDOOR]
+                channel_count = (
+                    len(garage_channels) if type(garage_channels) is list else 1
+                )
+                expected.extend([GarageSignalValidBinarySensor] * channel_count)
 
             _ns_channels = len(descriptor.channels) or 1
             for ns in (_ns for _ns in NAMESPACES_ENTITIES if _ns in ability):

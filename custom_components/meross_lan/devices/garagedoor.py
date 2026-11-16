@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING, override
 
+from homeassistant.components import cover as ha_cover
 from homeassistant.helpers.entity_registry import RegistryEntryDisabler
 from homeassistant.util.dt import now
 
@@ -61,6 +62,17 @@ class GarageTimeoutBinarySensor(BinarySensorEntity):
         self.extra_state_attributes[self.ATTR_TRANSITION_TIMEOUT] = now().isoformat()
         self.is_on = True
         self.flush_state()
+
+
+class GarageSignalValidBinarySensor(BinarySensorEntity):
+    """msg150: Security+ (or similar) position signal usable for open/obstruction."""
+
+    _INIT_entity_key = "signal_valid"
+    _INIT_is_on = None
+    # HA core entity attributes:
+    _attr_device_class = BinarySensorEntity.DeviceClass.CONNECTIVITY
+    _attr_entity_category = BinarySensorEntity.EntityCategory.DIAGNOSTIC
+    _attr_name = "Garage door signal"
 
 
 class GarageConfigMixin(ValueParser if TYPE_CHECKING else object):
@@ -272,6 +284,7 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         ENTITY_DEFS: dict[str, type[GarageConfigMixin]]
 
         binary_sensor_timeout: GarageTimeoutBinarySensor
+        binary_sensor_signal: GarageSignalValidBinarySensor | None
         doorEnable: GarageEnableSwitch
         doorCloseDuration: NumberEntity | _DurationHelper
         doorOpenDuration: NumberEntity | _DurationHelper
@@ -279,6 +292,12 @@ class GarageDoor(Cover.RestoreEntity, Cover):
     PARAM_TRANSITION_MAXDURATION = 60
     PARAM_TRANSITION_MINDURATION = 10
     ATTR_TRANSITION_DURATION = "transition_duration"
+    ATTR_GARAGE_SIGNAL_VALID = "garage_signal_valid"
+
+    try:
+        ATTR_OBSTRUCTION_DETECTED = ha_cover.ATTR_OBSTRUCTION_DETECTED
+    except AttributeError:
+        ATTR_OBSTRUCTION_DETECTED = "obstruction-detected"
 
     # HA core entity attributes:
     _attr_device_class = Cover.DeviceClass.GARAGE
@@ -286,9 +305,11 @@ class GarageDoor(Cover.RestoreEntity, Cover):
 
     __slots__ = (
         "_config",
+        "_supports_obstruction",
         "_transition_duration",
         "_transition_start",
         "binary_sensor_timeout",
+        "binary_sensor_signal",
         *GarageDoorMultipleConfig._INIT_parser_defs.keys(),
     )
 
@@ -297,11 +318,15 @@ class GarageDoor(Cover.RestoreEntity, Cover):
             self.PARAM_TRANSITION_MAXDURATION + self.PARAM_TRANSITION_MINDURATION
         ) / 2
         self._transition_start = 0.0
+        self._supports_obstruction = device.descriptor.type.startswith(mc.TYPE_MSG150)
         self.extra_state_attributes = {
             self.ATTR_TRANSITION_DURATION: self._transition_duration
         }
         Cover.__init__(self, id, device, **kwargs)
         self.binary_sensor_timeout = GarageTimeoutBinarySensor(self)
+        self.binary_sensor_signal = (
+            GarageSignalValidBinarySensor(self) if self._supports_obstruction else None
+        )
         # garage run timeouts config availability is rather articulated across different fw.
         # This approach allows to have dynamic entities that adapt to the actual device capabilities
         # while still providing a fallback solution to cover the cases where the
@@ -358,6 +383,11 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         if type(p_state) is list:
             # we eventually expect a 1 item list with our channel of course
             p_state = p_state[0]
+        if self._supports_obstruction:
+            if self._update_msg150_extras(p_state):
+                self.flush_state()
+            if p_state.get(mc.KEY_SIGNALVALID) == mc.GARAGE_SIGNAL_INVALID:
+                return
         _open = p_state[mc.KEY_OPEN]
         self.is_closed = not _open
         if p_state.get(mc.KEY_EXECUTE) and open_request != _open:
@@ -389,13 +419,35 @@ class GarageDoor(Cover.RestoreEntity, Cover):
         except (AttributeError, KeyError):
             pass
 
-        is_closed = not payload[mc.KEY_OPEN]
-        if self.is_closed == is_closed:
-            if self._transition_start:
-                # keep monitoring the transition
+        if not self._supports_obstruction:
+            is_closed = not payload[mc.KEY_OPEN]
+            if self.is_closed == is_closed:
+                if self._transition_start:
+                    # keep monitoring the transition
+                    self.schedule_callback(0.9, self._transition_callback)
+                return
+            self._apply_open_state_change(is_closed)
+            return
+
+        obstruction_changed = self._update_msg150_extras(payload)
+        if payload.get(mc.KEY_SIGNALVALID) == mc.GARAGE_SIGNAL_INVALID:
+            if obstruction_changed:
+                self.flush_state()
+            elif self._transition_start:
                 self.schedule_callback(0.9, self._transition_callback)
             return
 
+        is_closed = not payload[mc.KEY_OPEN]
+        if self.is_closed == is_closed:
+            if obstruction_changed:
+                self.flush_state()
+            if self._transition_start:
+                self.schedule_callback(0.9, self._transition_callback)
+            return
+
+        self._apply_open_state_change(is_closed)
+
+    def _apply_open_state_change(self, is_closed: bool, /):
         # door open state changed
         if self._transition_start:
             # We're "in transition" and the physical contact has reached the target.
@@ -418,6 +470,51 @@ class GarageDoor(Cover.RestoreEntity, Cover):
 
         self.is_closed = is_closed
         self.flush_state()
+
+    def _msg150_clear_transition(self, /) -> bool:
+        if not (self._transition_start or self.is_opening or self.is_closing):
+            return False
+        self._transition_cancel()
+        return True
+
+    def _update_msg150_extras(self, payload: "mt.garagedoor.State", /) -> bool:
+        """Appliance.GarageDoor.State extras for msg150 only. Returns True if attributes changed."""
+        changed = False
+        extra = self.extra_state_attributes
+        signal_valid = payload.get(mc.KEY_SIGNALVALID)
+        if signal_valid == mc.GARAGE_SIGNAL_INVALID:
+            if extra.get(self.ATTR_GARAGE_SIGNAL_VALID) is not False:
+                extra[self.ATTR_GARAGE_SIGNAL_VALID] = False
+                changed = True
+            if extra.pop(self.ATTR_OBSTRUCTION_DETECTED, None) is not None:
+                changed = True
+            signal_entity = self.binary_sensor_signal
+            if signal_entity and signal_entity.update_boolean_value(False):
+                changed = True
+            if self._msg150_clear_transition():
+                changed = True
+            return changed
+        if signal_valid == mc.GARAGE_SIGNAL_VALID:
+            if extra.get(self.ATTR_GARAGE_SIGNAL_VALID) is not True:
+                extra[self.ATTR_GARAGE_SIGNAL_VALID] = True
+                changed = True
+            signal_entity = self.binary_sensor_signal
+            if signal_entity and signal_entity.update_boolean_value(True):
+                changed = True
+
+        obstruction = payload.get(mc.KEY_OBSTRUCTION)
+        if obstruction == mc.GARAGE_OBSTRUCTION_DETECTED:
+            detected = True
+        elif obstruction == mc.GARAGE_OBSTRUCTION_CLEAR:
+            detected = False
+        else:
+            return changed
+
+        attr_key = self.ATTR_OBSTRUCTION_DETECTED
+        if extra.get(attr_key) is not detected:
+            extra[attr_key] = detected
+            changed = True
+        return changed
 
     def _transition_cancel(self, /):
         self.is_closing = False
