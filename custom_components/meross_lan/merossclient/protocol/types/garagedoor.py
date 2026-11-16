@@ -38,3 +38,6 @@ class State(mt.ChannelPayload):
     open: int  # 1: open, 0: closed
     lmTime: int
     doorEnable: NotRequired[int]  # appeared on msg200 fw:4.2.8
+    signalValid: NotRequired[int]  # msg150: 1=valid, 2=invalid (open/obstruction meaningless)
+    obstruction: NotRequired[int]  # msg150: 1=detected, 2=not detected
+    obLmTime: NotRequired[int]
