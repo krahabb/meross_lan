@@ -92,7 +92,12 @@ if TYPE_CHECKING:
         MerossMessage,
         MerossResponse,
     )
-    from emulator import Emulator, EmulatorDescriptor, build_emulator_kwargs
+    from emulator import (
+        Emulator,
+        EmulatorDescriptor,
+        EmulatorBuildArgs,
+        build_emulator_kwargs,
+    )
 
 LOGGER = logging.getLogger("meross_lan.tests")
 
@@ -772,6 +777,15 @@ def build_emulator_config_entry(
     return data
 
 
+def scan_emulators(included_uuid: "Iterable[str] | None" = None):
+    return emulator.scan_emulators(
+        tc.EMULATOR_TRACES_PATH,
+        key=tc.MOCK_KEY,
+        uuid=tc.MOCK_DEVICE_UUID,
+        included_uuid=included_uuid,
+    )
+
+
 def build_emulators(included_uuid: "Iterable[str] | None" = None):
     return emulator.build_emulators(
         tc.EMULATOR_TRACES_PATH,
@@ -993,6 +1007,10 @@ class DeviceContext(ConfigEntryMocker):
             dt_now = self.time_mock()
 
     def dump_ns_handlers(self):
+        return
+        # TODO: Conditionally enable/disable this feature or develop a proper test (maybe using snapshots).
+        # This code is a nice tool to manually inspect the layout of ns handlers in a specific context
+        # but is useless and a waste of time while bulk testing and it pollutes the output
         if capsys := self.capsys:
 
             def _print_row(*values):

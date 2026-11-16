@@ -184,24 +184,26 @@ class Hub(mld.Device):
         super().update_device_info(device_info, profile)
         try:
             for subdevice_info in device_info.get("__subDeviceInfo", []):
+                # Play it safe. We might miss the subdevice if the hub cannot properly initialize it
+                # while the cloud info reports data for that
+                subdevice = self.subdevices.get(subdevice_info.get(mc.KEY_SUBDEVICEID))
+                if not subdevice:
+                    self.log(
+                        self.DEBUG,
+                        "Missing subdevice or malformed subDeviceInfo (%s)",
+                        subdevice_info,
+                    )
+                    continue
                 try:
-                    self.subdevices[
-                        subdevice_info[mc.KEY_SUBDEVICEID]
-                    ].update_subdevice_info(subdevice_info, profile)
+                    subdevice.update_subdevice_info(subdevice_info, profile)
                 except Exception as e:
-                    subdevice_id = subdevice_info.get(mc.KEY_SUBDEVICEID)
-                    subdevice = self.subdevices.get(subdevice_id)
-                    if subdevice:
-                        subdevice.log_exception(
-                            subdevice.DEBUG, e, "updating subdevice cloud info"
-                        )
-                    else:
-                        self.log_exception(
-                            self.DEBUG,
-                            e,
-                            "updating subdevice cloud info for subdevice (id:%s)",
-                            subdevice_id,
-                        )
+                    subdevice.log_exception(
+                        subdevice.WARNING,
+                        e,
+                        "updating subdevice cloud info",
+                        timeout=604800,
+                    )
+
         except Exception as e:
             self.log_exception(
                 self.WARNING,

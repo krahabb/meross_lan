@@ -17,7 +17,7 @@ from ..merossclient import (
 from ..merossclient.client import AbstractClient, Direction, Transport
 from ..merossclient.client.http import HttpClient
 from ..merossclient.device.handler import NamespaceHandler
-from ..merossclient.exceptions import MerossError
+from ..merossclient.exceptions import MerossError, MerossTransportError
 from ..merossclient.obfuscate import OBFUSCATE_DICT
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..merossclient.protocol.message import MerossMessage, MerossResponse
@@ -167,16 +167,23 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 # this could happen when the response carries a truncated payload
                 # and might be due to an 'hard' limit in the capacity of the
                 # device http output buffer (when the response is too long)
-                self.log_exception(
-                    self.WARNING,
-                    jsonerror,
-                    "response (message might be truncated)",
-                )
+                namespace = self.last_tx_message.namespace  # type: ignore
                 response_text = jsonerror.doc
+                if self.isEnabledFor(self.DEBUG):
+                    self.log(
+                        self.DEBUG,
+                        "JSONDecodeError (at %s) in reply to %s (rawmessage:%s)",
+                        jsonerror.pos,
+                        namespace,
+                        response_text,  # BEWARE: there's no easy way to obfuscate this
+                    )
+                else:
+                    self.log(
+                        self.WARNING,
+                        "Incomplete reply to %s: trying to recover...",
+                        namespace,
+                    )
                 response_text_len_safe = int(len(response_text) * 0.9)
-                if jsonerror.pos < response_text_len_safe:
-                    # if the error is too early in the payload...
-                    raise
                 # the error happened because of truncated json payload
                 device = self.device
                 device.device_response_size_max = response_text_len_safe
@@ -190,20 +197,25 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 )
                 # try to recover the message by truncating the payload
                 # with various heuristics
-                namespace = self.last_tx_message.namespace  # type: ignore
-                if not type(namespace) is mn.Namespace:
+
+                if type(namespace) is not mn.Namespace:
                     namespace = mn.NAMESPACES[namespace]
                 match namespace:
                     case mn.Appliance_Control_Multiple:
                         list_break_matcher = '},{"header":'
                     case _:
-                        if not namespace.index_type:
-                            raise
-                        list_break_matcher = f'}},{{"{namespace.index_type.key[0]}":'
+                        if namespace.index_type:
+                            list_break_matcher = (
+                                f'}},{{"{namespace.index_type.key[0]}":'
+                            )
+                        else:
+                            list_break_matcher = "}},{{"
 
                 trunc_pos = response_text.rfind(list_break_matcher)
                 if trunc_pos == -1:
-                    raise
+                    raise MerossTransportError(
+                        self, request=self.last_tx_message
+                    ) from jsonerror
                 response_text = response_text[0:trunc_pos] + "}]}}"
                 return self.on_rx_raw(response_text.encode())
 
@@ -279,7 +291,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         False,
         {
             "config": NamespaceHandler.POLLING_CONFIG_NONE,
-            "handler": lambda message: None,
+            "handler": NamespaceHandler._handle_void,
         },
     )
     """NamespaceHandler that does 'nothing' i.e. no polling, no parsing, i.e. no mechanics or so, completely ignored.
@@ -663,7 +675,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         common properties caches, read from ConfigEntry on __init__ or when a configentry updates
         """
         config = self.config
-        # map CONF_PROTOCOL value to a const symbol in order to use 'is' in Device code checks
         self.configured_transport = Transport.from_str(config.get(mlc.CONF_PROTOCOL))
         self.polling_period = (
             config.get(mlc.CONF_POLLING_PERIOD) or mlc.CONF_POLLING_PERIOD_DEFAULT
@@ -755,6 +766,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                     self.config.get(mlc.CONF_HOST)
                     or (not self.mqtt)
                     or (self.mqtt.connection.is_cloud)
+                    or (not self.mqtt.connection.allow_publish)
                 ):
                     self.preferred_transport = Transport.HTTP
                 else:
@@ -763,24 +775,17 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 self.preferred_transport = conf_transport
 
         if self.transport is not self.preferred_transport:
-            if self.is_connected:
-                try:
-                    self._switch_client(
-                        self._clients_connected[self.preferred_transport]
-                    )
-                except KeyError:
-                    # preferred transport not connected: leave current transport whatever
-                    pass
-            else:
-                try:
-                    self._switch_client(self._clients[self.preferred_transport])
-                except KeyError:
-                    self.log(
-                        self.WARNING,
-                        "Preferred transport {%s} not available, current transport is {%s}",
-                        self.preferred_transport,
-                        self.transport,
-                    )
+            try:
+                preferred_client = self.clients[self.preferred_transport]
+                if preferred_client.can_request:
+                    self._switch_client(preferred_client)
+            except KeyError:
+                self.log(
+                    self.WARNING,
+                    "Preferred transport {%s} not available, current transport is {%s}",
+                    self.preferred_transport,
+                    self.transport,
+                )
 
     # interface: ConfigEntryManager
     @override
@@ -1063,7 +1068,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                 "cloud_profile": profile and profile.is_cloud_profile,
                 "mqtt_connection": bool(self.mqtt),
                 "mqtt_connected": self.mqtt and self.mqtt.connection.is_connected,
-                "mqtt_publish": self.mqtt and self.mqtt.connection.can_publish,
+                "mqtt_publish": self.mqtt and self.mqtt.connection.can_request,
                 "mqtt_active": self.mqtt_active,
             },
             "namespace_handlers": {
@@ -1133,21 +1138,19 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         transport = client.TRANSPORT
         self.log_message(message, Direction.RX, transport, self.last_rx_epoch)
         message.check()
-        if self.transport is not transport:
-            if (self.preferred_transport is transport) or (
-                len(self._clients_connected) == 1
-            ):
-                self._switch_client(client)
 
         # we'll use the device timestamp to 'align' our time to the device one
         # this is useful for metered plugs reporting timestamped energy consumption
         # and we want to 'translate' this timings in our (local) time.
         # We ignore delays below PARAM_TIMESTAMP_TOLERANCE since
         # we'll always be a bit late in processing
-        self.device_timestamp = message.header[mc.KEY_TIMESTAMP]
-        self.device_timedelta = (
-            9 * self.device_timedelta + (self.last_rx_epoch - self.device_timestamp)
-        ) / 10
+        # Messages carrying a 0 (i.e. invalid) timestamp are skipped: a single one would
+        # otherwise add ~10% of the current epoch to the device_timedelta average.
+        if device_timestamp := message.header.get(mc.KEY_TIMESTAMP):
+            self.device_timestamp = device_timestamp
+            self.device_timedelta = (
+                9 * self.device_timedelta + (self.last_rx_epoch - device_timestamp)
+            ) / 10
 
         if self.isEnabledFor(self.DEBUG):
             # it appears sometimes the devices
@@ -1255,27 +1258,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             self.sensor_protocol.set_available()
 
     # interface: self
-    def register_togglex_channel(self, entity: "ParserEntity", /):
-        """
-        Checks if entity has an associated ToggleX behavior and eventually
-        registers it
-        """
-        try:
-            for togglex_digest in self.descriptor.digest[mc.KEY_TOGGLEX]:
-                if togglex_digest[mc.KEY_CHANNEL] == entity.index.value:
-                    if not hasattr(entity, "_parse_togglex"):
-                        # This means we're not actually interested in parsing
-                        # but our framework would like to have a sink anyway
-                        # just to shut down diagnostic warnings or so
-                        entity._parse_togglex = lambda payload: None
-                    ns_handler = self.get_handler(mn.Appliance_Control_ToggleX)
-                    ns_handler.register_parser(entity)
-                    return ns_handler
-        except KeyError:
-            # no "togglex" in digest ?
-            pass
-        return None
-
     def schedule_entry_update(self, query_abilities: bool, /):
         """
         Schedule the ConfigEntry update (in 5 sec) due to self.descriptor changing.
@@ -1550,7 +1532,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             # only apply the time-sync procedure when locally mqtt binded
             if (
                 (mqtt := self.mqtt)
-                and mqtt.connection.can_publish  # online and allow_publish
+                and mqtt.connection.can_request
                 and (not mqtt.connection.is_cloud)
                 and (mn.Appliance_System_Clock in self.descriptor.ability)
             ):
@@ -1583,7 +1565,7 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             # only apply the timezone rules check/fix procedure when locally mqtt binded
             if (
                 (mqtt := self.mqtt)
-                and mqtt.connection.can_publish  # online and allow_publish
+                and mqtt.connection.can_request
                 and (not mqtt.connection.is_cloud)
                 and (mn.Appliance_System_Time in self.descriptor.ability)
             ):

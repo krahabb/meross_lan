@@ -3,6 +3,7 @@ Meross client library - exceptions
 """
 
 from functools import cached_property
+from json import JSONDecodeError
 from typing import TYPE_CHECKING
 
 import aiohttp
@@ -81,8 +82,10 @@ class MerossTransportError(MerossError):
     def likely_remote_overflow(self):
         """This is an heuristic trying to detect if a transport error was originated
         because of a 'transient' buffer overflow in the device communication stack."""
-        return isinstance(self.cause, aiohttp.ServerDisconnectedError) or isinstance(
-            self.cause, TimeoutError
+        return (
+            (type(self.cause) is aiohttp.ServerDisconnectedError)
+            or isinstance(self.cause, TimeoutError)
+            or (type(self.cause) is JSONDecodeError)
         )
 
     def log(self, level: int, message: str, /, **kwargs: "Unpack[LoggerArgs]"):

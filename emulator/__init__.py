@@ -14,8 +14,10 @@ a mixin based class.
 set of emulators from all the traces stored in a path.
 """
 
+from dataclasses import dataclass
 import os
 from typing import TYPE_CHECKING
+
 
 from aiohttp import web
 
@@ -66,7 +68,6 @@ def build_emulator(tracefile, **kwargs: Unpack[build_emulator_kwargs]) -> Emulat
     this will also set the correct inferred mac address in the descriptor based on the uuid
     as this appears to be consistent with real devices config
     """
-    print(f"Initializing descriptor({kwargs.values()}):", end="")
     descriptor = EmulatorDescriptor(tracefile, **kwargs)
     ability = descriptor.ability
     digest = descriptor.digest
@@ -126,36 +127,36 @@ def build_emulator(tracefile, **kwargs: Unpack[build_emulator_kwargs]) -> Emulat
         mixin_classes.append(PhysicalLockMixin)
 
     mixin_classes.append(Emulator)
-    # build a label to cache the set
-    class_name = ""
-    for m in mixin_classes:
-        class_name = class_name + m.__name__
-    class_type = type(class_name, tuple(mixin_classes), {})
-
-    emulator = class_type(descriptor, **kwargs)
-    print(
-        f" {descriptor.type} (model:{descriptor.productmodel} uuid:{descriptor.uuid})"
+    return type("".join((m.__name__ for m in mixin_classes)), tuple(mixin_classes), {})(
+        descriptor, **kwargs
     )
-    return emulator
 
 
-def build_emulators(
+@dataclass(frozen=True, slots=True)
+class EmulatorBuildArgs:
+    """Provide an elegant typed way to return data from scan_emulators"""
+
+    uuid: str
+    trace_path: str
+    kwargs: "build_emulator_kwargs"
+
+
+def scan_emulators(
     tracespath: str,
     *,
     included_uuid: Iterable[str] | None = None,
     **kwargs: Unpack[build_emulator_kwargs],
 ):
     """
-    This function is a generator.
-    Scans the directory for supported files and build all the emulators
-    the filename, if correctly formatted, should contain the device uuid
+    Scans 'tracespath' directory for supported files and returns emulator build arguments ready to be used
+    in an actual 'build_emulator' call.
+    The filename, if correctly formatted, should contain the device uuid
     and key to use for the emulator. If not, we'll use the 'defaultuuid' and/or
     'defaultkey' when instantiating the emulator. This allows for supporting
     basic plain filenames which don't contain any info but also, will make
     it difficult to understand which device is which
     """
     uuid = kwargs.get("uuid") or Emulator.DEFAULT_UUID
-
     uuidsub = 0
     for f in os.listdir(tracespath):
         fullpath = os.path.join(tracespath, f)
@@ -187,7 +188,24 @@ def build_emulators(
             _uuidsub = str(uuidsub)
             _uuid = uuid[: -len(_uuidsub)] + _uuidsub
         _kwargs["uuid"] = _uuid
-        yield build_emulator(fullpath, **_kwargs)
+        yield EmulatorBuildArgs(_uuid, fullpath, _kwargs)
+
+
+def build_emulators(
+    tracespath: str,
+    *,
+    included_uuid: Iterable[str] | None = None,
+    **kwargs: Unpack[build_emulator_kwargs],
+):
+    """
+    Returns a generator for emulators as discovered by scan_emulators.
+    """
+    return (
+        build_emulator(build_args.trace_path, **build_args.kwargs)
+        for build_args in scan_emulators(
+            tracespath, included_uuid=included_uuid, **kwargs
+        )
+    )
 
 
 def run(argv):
@@ -240,6 +258,10 @@ def run(argv):
 
     async def _on_startup(app: web.Application):
         for emulator in emulators.values():
+            descriptor = emulator.descriptor
+            print(
+                f"Starting emulator for {descriptor.productmodel} (uuid:{descriptor.uuid})"
+            )
             await emulator.async_startup(
                 enable_scheduler=True, enable_mqtt="broker" in emulator_kwargs
             )

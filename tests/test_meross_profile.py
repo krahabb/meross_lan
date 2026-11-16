@@ -337,8 +337,8 @@ async def test_meross_profile_with_device(
             and device.mqtt.connection.is_connected
             and not device.mqtt.is_connected
         )
-        assert device.mqtt and device.mqtt.connection.can_publish
-        assert len(device._clients_connected) == 1
+        assert device.mqtt and device.mqtt.connection.can_request
+        assert len(device.clients_connected) == 1
         assert not device.mqtt_active
 
         # simulate async PUSH message from the device mqtt connection
@@ -354,7 +354,7 @@ async def test_meross_profile_with_device(
         mqtt_message.payload = message.json.encode()
         mqttconnection.on_message(mqtt_message)
         assert device.mqtt and device.mqtt.is_connected
-        assert len(device._clients_connected) == 2
+        assert len(device.clients_connected) == 2
         assert device.mqtt_active
 
         # both clients should be connected
@@ -364,5 +364,5 @@ async def test_meross_profile_with_device(
         assert api.profiles[tc.MOCK_PROFILE_ID] is None
         assert device.profile is None
         assert device.mqtt is None
-        assert len(device._clients_connected) == 1
+        assert len(device.clients_connected) == 1
         assert not device.mqtt_active

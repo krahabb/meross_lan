@@ -15,6 +15,7 @@ from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
 )
+from emulator.mixins.light import LightMixin
 
 from tests.entities import ToggleEntityComponentTest
 
@@ -153,10 +154,10 @@ class EntityTest(ToggleEntityComponentTest):
             # Lights which switch on by themselves when receiving a 'light' payload
             # (togglex_auto) must still publish 'on' when that payload is unchanged
             # from the previous one (#718).
-            emulator = self.device_context.emulator
-            saved_togglex_mode = emulator._togglex_mode
-            saved_togglex_auto = entity._togglex_auto
-            emulator._togglex_mode = False
+            emulator: LightMixin = self.device_context.emulator  # type: ignore
+            saved_emulator_auto = emulator._togglex_auto
+            saved_entity_auto = entity._togglex_auto
+            emulator._togglex_auto = True
             entity._togglex_auto = True
             try:
                 await self.async_service_call_check(
@@ -168,5 +169,5 @@ class EntityTest(ToggleEntityComponentTest):
                     {haec.ATTR_BRIGHTNESS: 255},  # same as the last call above
                 )
             finally:
-                emulator._togglex_mode = saved_togglex_mode
-                entity._togglex_auto = saved_togglex_auto
+                emulator._togglex_auto = saved_emulator_auto
+                entity._togglex_auto = saved_entity_auto

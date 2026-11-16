@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from bisect import bisect_right
 from enum import StrEnum
 from typing import TYPE_CHECKING
@@ -50,7 +51,7 @@ class Transport(StrEnum):
     BLUETOOTH = "bluetooth"
 
     @staticmethod
-    def from_str(label: str | None) -> "Transport":
+    def from_str(label: str | None):
         if label:
             label = label.lower()
             for transport in Transport:
@@ -138,16 +139,19 @@ class AbstractClient(logging.Loggable):
 
     TRANSPORT = Transport.AUTO
 
-    TIMEOUT = 10
-
+    _INIT_key = mc.EMPTY_KEY
+    _INIT_from_ = mc.HEADER_FROM_DEFAULT
+    _INIT_timeout = 10
+    _AUTO_INIT = (
+        "key",
+        "from_",
+        "descriptor",
+        "timeout",
+    )
     # Using a 'placeholder' definition to ease including in diamond pattern hierarchies:
     # just add a __slots__ = cls._calc_slots(...) in actual classes to actually implement.
     _SLOTS = (
-        "key",
-        "from_",
         "trigger_src",
-        "descriptor",
-        "timeout",
         "is_connected",
         "last_tx_message",
         "last_tx_epoch",
@@ -165,11 +169,7 @@ class AbstractClient(logging.Loggable):
     def __init__(
         self, id, parent: "LoggerType | None" = None, /, **kwargs: "Unpack[Args]"
     ):
-        self.key = kwargs.pop("key", mc.EMPTY_KEY)
-        self.from_ = kwargs.pop("from_", mc.HEADER_FROM_DEFAULT)
         self.trigger_src = kwargs.pop("trigger_src", self.__class__.__name__)
-        self.descriptor = kwargs.pop("descriptor", None)
-        self.timeout = kwargs.pop("timeout", self.TIMEOUT)
         super().__init__(id, parent, **kwargs)
         self.is_connected = False
         self.last_tx_message = None
@@ -192,14 +192,14 @@ class AbstractClient(logging.Loggable):
         await self.async_disconnect()
         await super().async_shutdown()
 
-    @logging.abc.abstractmethod
+    @abstractmethod
     async def async_connect(self, /, **kwargs: "Unpack[ConnectArgs]"): ...
-    @logging.abc.abstractmethod
+    @abstractmethod
     async def async_disconnect(self, /): ...
 
     def on_connect(self, /):
         """Signals client successful connection."""
-        self.is_connected = True  # type: ignore
+        self.is_connected = True  # type: ignore[assignment]
         self.log(logging.DEBUG, "Connected")
         self.connect_broadcast.broadcast(self)
 
@@ -281,10 +281,20 @@ class AbstractClient(logging.Loggable):
         self.configure_logger()
 
     @property
+    def can_request(self):
+        """This indicates if the client can accept transmitting a request in a specific context depending
+        generally on if it 'is_connected' and 'allow_publish' (for MQTT).
+        At the base implementation we cover behavior for the majority of clients like HTTP-BLUETOOTH
+        where the connection could be established 'on the fly' when attempting the request.
+        The MQTT hierarchy will need to check for connectivity and allow_publish.
+        """
+        return True
+
+    @property
     def host(self):
         return self.descriptor.innerIp if self.descriptor else None
 
-    @logging.abc.abstractmethod
+    @abstractmethod
     async def async_request_raw(
         self, request: MerossRequest, /, **kwargs: "Unpack[RequestRawArgs]"
     ) -> MerossResponse:

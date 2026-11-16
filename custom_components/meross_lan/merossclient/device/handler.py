@@ -473,6 +473,11 @@ class NamespaceHandler(logging.Loggable):
             timeout=14400,
         )
 
+    @staticmethod
+    def _handle_void(message: "MerossMessage", /):
+        """Utility handler to be used when we want to completely skip namespace handling/parsing."""
+        return
+
     def _handle_missing_parser(self, index: mn.IndexValue, payload: "JsonMapping", /):
         if self.parser_class:
             parser = self.parser_class(
@@ -1402,6 +1407,9 @@ class ValueParser(NamespaceParser):
 
         def __str__(self):
             return "_".join(self.key)
+
+        def __repr__(self):
+            return repr(self.key)
 
         def parse(self, payload: "JsonMapping") -> "JsonType":
             """Extracts the value from the payload using the key(s) defined in this descriptor."""

@@ -343,9 +343,23 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
 
 
 class ParserEntity(handler.NamespaceParser, Entity):
-    """Base class for entities directly linked to a device and not to a namespace.
-    This is actually not used that much since most of the entities are linked to namespaces but it can be useful
-    for some 'general' entities like 'DeviceInfo' or so."""
+    """Base class for entities where the state is a function of a specific Namespace i.e. these entities
+    represent state from a device 'data point' (or more data points when the entity is more complex
+    than representing a single value).
+    Plain 'Entity' and their child classes (not mixed-in with any Parser-like descendant)
+    are generally used to implement entities where the state is not directly sourced
+    from a Namespace. For example the 'ProtocolSensor' or other utility features of meross_lan.
+    The main difference between ParserEntity and plain Entity is the behavior at device disconnection:
+    Since the value of the 'ParserEntity' is strictly dependant on data from the device, on disconnection
+    the entity is set as 'unavailable' and internal state is 'fully' cleaned.
+    For 'Entity' instead, availability could be conditional (some entities are always available even
+    if device disconnected) but also, the state is not being cleared since in general, these entities
+    carry a state which is not stored in the device (might be an 'EmulatedNumber') and we don't want to
+    loose it on disconnection.
+    On re-connection 'ParserEntity' is internally marked as available but the effective HA state machine
+    flushing is done only when the relevant payload is received/parsed. 'Entity' only implementation will
+    instead flush the current (old) state as soon as the device reconnects (if they were disconnected)
+    """
 
     if TYPE_CHECKING:
         parent: Final[Device]  # type: ignore[override]
@@ -576,7 +590,19 @@ class ToggleXParser(BinaryEntity, ParserEntity):
 
     def __init__(self, *args: "*InitArgs", **kwargs: "Unpack[Args]"):
         super().__init__(*args, **kwargs)
-        self.handler_togglex = self.parent.register_togglex_channel(self)
+        try:
+            for togglex_digest in self.parent.descriptor.digest[mc.KEY_TOGGLEX]:
+                if togglex_digest[mc.KEY_CHANNEL] == self.index.value:
+                    self.handler_togglex = self.parent.get_handler(
+                        mn.Appliance_Control_ToggleX
+                    )
+                    self.handler_togglex.register_parser(self)
+                    break
+            else:
+                self.handler_togglex = None
+        except KeyError:
+            # no "togglex" in digest ?
+            self.handler_togglex = None
 
     def _parse_togglex(self, payload: dict, /):
         is_on = bool(payload[mc.KEY_ONOFF])

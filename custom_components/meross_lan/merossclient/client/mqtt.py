@@ -192,6 +192,11 @@ class AbstractMQTTConnection(AbstractClient):
             self.connection.async_shutdown_broadcast.remove(self.async_shutdown)
             super().shutdown()
 
+        @property
+        @override
+        def can_request(self):
+            return self.connection.can_request
+
         @override
         async def async_connect(self, /, **kwargs: "Unpack[ConnectArgs]"):
             if not self.connection.is_connected:
@@ -280,8 +285,7 @@ class AbstractMQTTConnection(AbstractClient):
     if TYPE_CHECKING:
         id: Final[HostAddress]  # type: ignore[override]
         is_cloud: Final[bool]  # type: ignore
-        allow_publish: Final[bool]  # type: ignore
-        can_publish: Final[bool]  # connected and allowed to publish
+        allow_publish: bool
         # Rate limiter configuration parameters
         rl_rate: float
         """Rate of messages allowed to be sent over the MQTT connection in messages per second. If 'falsy' rate-limiting is disabled."""
@@ -329,7 +333,6 @@ class AbstractMQTTConnection(AbstractClient):
     )
 
     _SLOTS = (
-        "can_publish",
         "rl_dropped",
         "_rl_queues",
         "_client_devices",
@@ -344,17 +347,18 @@ class AbstractMQTTConnection(AbstractClient):
         **kwargs: "Unpack[Args]",
     ):
         super().__init__(broker, parent, **kwargs)
-        self.can_publish = False
         self.rl_dropped = 0
         self._rl_queues = {}
         self._client_devices = {}
         self._transactions = {}
-        if not self.allow_publish:
-            # install a method override to forcibly disable MQTT publish
-            self.async_publish_raw = AbstractMQTTConnection._async_publish_raw_disabled
 
         if MEROSSDEBUG:
             self.schedule_callback(60, self._random_disconnect)
+
+    @property
+    @override
+    def can_request(self):
+        return self.is_connected and self.allow_publish
 
     @abstractmethod
     async def async_publish_raw(
@@ -365,6 +369,8 @@ class AbstractMQTTConnection(AbstractClient):
         send messages to the broker. This method doesn't perform application level transaction mgmt.
         To actually request a reply message use the async_request... path.
         As for exceptions behaviour check AbstractClient.async_request_raw docs.
+        When implementing, 'is_connected' and 'allow_publish' checks should be implemented to enforce code
+        compliancy.
         """
         raise NotImplementedError()
 
@@ -394,15 +400,9 @@ class AbstractMQTTConnection(AbstractClient):
             ) from e
 
     @override
-    def on_connect(self, /):
-        self.can_publish = self.allow_publish  # type: ignore[assignment]
-        super().on_connect()
-
-    @override
     def on_disconnect(self, /):
         for mqtt_transaction in self._transactions.values():
             mqtt_transaction.cancel()
-        self.can_publish = False  # type: ignore[assignment]
         super().on_disconnect()
 
     def on_message(self, mqtt_msg, /):
@@ -502,10 +502,6 @@ class AbstractMQTTConnection(AbstractClient):
                         self.async_connect(), ".random connect", eager_start=True
                     )
 
-    @staticmethod
-    async def _async_publish_raw_disabled(message: "MerossMessage", /, **kwargs):
-        raise ValueError("MQTT publish is not allowed by configuration")
-
 
 class MQTTConnection(AbstractMQTTConnection):
     """Implements an MQTT broker client through paho mqtt."""
@@ -576,7 +572,7 @@ class MQTTConnection(AbstractMQTTConnection):
                 if not future:
                     # not overlapped connect attempt, start a new one
                     if self._mqtt_loop_task:
-                        self._mqtt_loop_task.cancel()
+                        self._mqtt_loop_task.cancel("restart")
                         try:
                             await self._mqtt_loop_task
                         except (asyncio.CancelledError, Exception):
@@ -602,7 +598,7 @@ class MQTTConnection(AbstractMQTTConnection):
         if self._connect_future:
             self._connect_future.cancel()
         if self._mqtt_loop_task:
-            self._mqtt_loop_task.cancel()
+            self._mqtt_loop_task.cancel("disconnect")
             try:
                 await self._mqtt_loop_task
             except (asyncio.CancelledError, Exception):
@@ -616,9 +612,20 @@ class MQTTConnection(AbstractMQTTConnection):
         /,
         **kwargs: "Unpack[RequestRawArgs]",
     ):
+        if not self.is_connected:
+            raise MerossTransportError(
+                self, "Disconnected", request=message, uuid=kwargs["uuid"]
+            )
+        if not self.allow_publish:
+            raise MerossTransportError(
+                self,
+                "Publishing not allowed in configuration",
+                request=message,
+                uuid=kwargs["uuid"],
+            )
+
         uuid = kwargs["uuid"]
         self.on_tx(message)
-
         if self.rl_rate:
             try:
                 _rl = self._rl_queues[uuid]
@@ -680,7 +687,7 @@ class MQTTConnection(AbstractMQTTConnection):
 
     def stop(self):
         if self._mqtt_loop_task:
-            self._mqtt_loop_task.cancel()
+            self._mqtt_loop_task.cancel("stop")
 
     def publish(self, topic: str, message: str, /):
         self._mqttc.publish(topic, message)
@@ -708,13 +715,24 @@ class MQTTConnection(AbstractMQTTConnection):
                                 client._reconnect_max_delay,
                             )
                         await asyncio.sleep(client._reconnect_delay)
-        except asyncio.CancelledError:
-            pass
         finally:
-            self._mqtt_loop_task = None
-            client.disconnect()
-            if self.is_connected:
-                self.on_disconnect()
+            # TODO: improve this mechanic since it seems fragile.
+            # We might be asked cancellation when we're already shutting down..so..who knows.
+            # The problem with the following code is to ensure the mqtt client is
+            # really shut down when leaving this coroutine because when this is
+            # cancelled in order to restart, we need a surely closed socket on the _mqttc
+            # else our _mqttc.connect_timeout = ... inside 'start' would fail (RuntimeError)
+            try:
+                if client.disconnect() != mqtt.MQTT_ERR_NO_CONN:
+                    async with asyncio.Timeout(self.loop.time() + 2):
+                        while not client._connection_closed():
+                            await asyncio.sleep(0.5)
+            except TimeoutError:
+                pass
+            finally:
+                self._mqtt_loop_task = None
+                if self.is_connected:
+                    self.on_disconnect()
 
     def _reconnect(self, client: mqtt.Client):
         try:

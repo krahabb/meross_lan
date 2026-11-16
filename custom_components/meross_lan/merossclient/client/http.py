@@ -14,7 +14,7 @@ from yarl import URL
 from . import AbstractClient
 from .. import MEROSSDEBUG
 from ..exceptions import MerossKeyError, MerossTransportError
-from ..protocol import AESCipher, const as mc, md5hexdigest
+from ..protocol import AESCipher, const as mc, md5hexdigest, namespaces as mn
 from ..protocol.message import MerossMessage
 
 if TYPE_CHECKING:
@@ -51,6 +51,10 @@ class HttpClient(AbstractClient):
         _cipher: Cipher | None
 
     TRANSPORT = AbstractClient.Transport.HTTP  # type: ignore[override]
+    # The default timeout for AbstractClient is 10 but in HttpClient we're introducing
+    # retry attempts with increasing timeouts and this would lead to a sort of 'explosion'
+    # where a polling loop might end up lasting minutes when multiple requests hit the timeout.
+    _INIT_timeout = 5
 
     SESSION_MAXIMUM_CONNECTIONS = 50
     SESSION_MAXIMUM_CONNECTIONS_PER_HOST = 1
@@ -66,6 +70,14 @@ class HttpClient(AbstractClient):
     # Setting SESSION_MAXIMUM_CONNECTIONS_PER_HOST == 1 should prevent
     # concurrent http sessions to the same device.
     _SESSION = None
+
+    # In general, TimeoutError is better regarded as a sign of temporary unavailability since it happens here
+    # and there we hit the timeout but the device would nevertheless respond if queried again.
+    # A TimeoutError on these abilities instead would directly disconnect the device.
+    CRITICAL_TIMEOUT_NAMESPACES = (
+        mn.Appliance_System_All,
+        mn.Appliance_System_Ability,
+    )
 
     @staticmethod
     def _get_or_create_client_session():
@@ -166,27 +178,62 @@ class HttpClient(AbstractClient):
     async def _perform_request(
         self,
         request: MerossMessage,
-        timeout: aiohttp.ClientTimeout,
+        timeout: float,
         cipher: AESCipher | None = None,
         /,
     ):
         """Internal wrapper to perform the request."""
         if cipher:
-            response = await self._session.post(
-                url=self._url,
-                data=cipher.encrypt_text(request.json),
-                headers=HttpClient._HEADERS_ENCRYPTED,
-                timeout=timeout,
-            )
+            data = cipher.encrypt_text(request.json)
+            headers = HttpClient._HEADERS_ENCRYPTED
+        else:
+            data = request.json
+            headers = HttpClient._HEADERS_PLAINTEXT
+
+        # since device HTTP service sometimes timeouts with no apparent
+        # reason we're using an increasing timeout loop to try recover
+        # when this timeout is transient. This will lead to a total timeout
+        # (for the caller) exceeding the value(s) actually set in timeout.
+        # The following implementation follows suggestions by @willdood as
+        # discussed in #681
+        retried_total_timeout = False
+        connect_timeout = 1
+        assert timeout > connect_timeout
+        while True:
+            try:
+                response = await self._session.post(
+                    url=self._url,
+                    data=data,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(
+                        total=timeout, sock_connect=connect_timeout
+                    ),
+                )
+                break
+            except aiohttp.ServerTimeoutError as e:
+                # connect (or socket read) stall: escalate like 5.8.0
+                if connect_timeout < timeout:
+                    connect_timeout = min(connect_timeout * 2, timeout)
+                    self.log_exception(
+                        self.DEBUG,
+                        e,
+                        "_perform_request: retrying with %s sec connect timeout",
+                        connect_timeout,
+                    )
+                    continue
+                raise
+            except TimeoutError as e:
+                if not retried_total_timeout:
+                    retried_total_timeout = True
+                    self.log_exception(
+                        self.DEBUG, e, "_perform_request: last chance retry"
+                    )
+                    continue
+                raise
+
+        if cipher:
             return cipher.decrypt(await response.read())
         else:
-            # no encryption: session defaults to json
-            response = await self._session.post(
-                url=self._url,
-                data=request.json,
-                headers=HttpClient._HEADERS_PLAINTEXT,
-                timeout=timeout,
-            )
             return await response.read()
 
     @override
@@ -201,9 +248,7 @@ class HttpClient(AbstractClient):
             # wrap the request so that it would be easily cancellable
             response = await self.create_task(
                 self._perform_request(
-                    request,
-                    aiohttp.ClientTimeout(total=kwargs.get("timeout", self.timeout)),
-                    self._cipher,
+                    request, kwargs.get("timeout", self.timeout), self._cipher
                 ),
                 "_perform_request",
             )
@@ -215,10 +260,17 @@ class HttpClient(AbstractClient):
             # We consider this to not be a real cause of disconnection by itself since the device
             # could likely be recoverable.
             raise MerossTransportError(self, request=request) from e
-        except (aiohttp.ClientError, TimeoutError) as e:
+        except aiohttp.ClientError as e:
             # General sink for any aiohttp exception including the connector errors raised when
             # the address is unresolvable or host unreachable for any reason
             if self.is_connected:
+                self.on_disconnect()
+            raise MerossTransportError(self, request=request) from e
+        except TimeoutError as e:
+            # Likely the same as ServerDisconnectedError but this could be more generic
+            if self.is_connected and (
+                request.namespace in self.CRITICAL_TIMEOUT_NAMESPACES
+            ):
                 self.on_disconnect()
             raise MerossTransportError(self, request=request) from e
         except Exception as e:
