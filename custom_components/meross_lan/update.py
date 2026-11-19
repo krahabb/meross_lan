@@ -68,7 +68,9 @@ class UpdateEntity(Entity, update.UpdateEntity):
                 self.device.descriptor.get_upgrade_info(self.latest_version_info)
             )
         else:
-            self.installed_version = self.device.descriptor.fw_version
+            self.installed_version = self.latest_version = (
+                self.device.descriptor.fw_version
+            )
         if self.in_progress and (self.installed_version == self.latest_version):
             self.in_progress = False
         Entity.flush_state(self)
