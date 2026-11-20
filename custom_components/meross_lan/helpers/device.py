@@ -642,17 +642,16 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         # or after a config change. Here we'll register mqtt bindings,
         # fix transports according to the current configuration and profile
         # linking, and finally (re)start polling.
-        try:
-            profile = self.parent.profiles[self.descriptor.userId]
-            if profile and (profile.key != self.key):
-                profile = self.parent
-        except KeyError:
-            profile = self.parent
+        api = self.parent
+        # the logic here is to get a registered (Meross) profile if a match occurs
+        # eventually resolving to None if not loaded (yet). For any other unmatching userId
+        # we're fragilistically defaulting to our ComponentApi (linking to HA MQTT)
+        profile = api.profiles.get(self.descriptor.userId, api)
         if self.profile != profile:
+            if self.profile:
+                self.profile.unlink(self)
             if profile:
                 profile.link(self)
-            elif self.profile:
-                self.profile.unlink(self)
         self.check_protocol()
         self.polling_start()
 

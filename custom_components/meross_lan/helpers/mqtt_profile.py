@@ -373,9 +373,7 @@ class MQTTConnection(AbstractMQTTConnection):
                     )
                     return
 
-                if (device.key == profile.key) and (
-                    device.descriptor.userId == profile.id
-                ):
+                if device.descriptor.userId == profile.id:
                     if device.profile != profile:
                         profile.link(device)
                     client = device.mqtt
