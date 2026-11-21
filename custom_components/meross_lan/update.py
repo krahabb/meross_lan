@@ -22,7 +22,6 @@ class UpdateEntity(Entity, update.UpdateEntity):
             LatestVersionType | None
         )  # latest firmware version available for the device (if any).
         # HA core entity attributes:
-        in_progress: bool
         installed_version: str | None
         latest_version: str | None
         release_summary: str | None
@@ -34,14 +33,11 @@ class UpdateEntity(Entity, update.UpdateEntity):
 
     _attr_device_class = update.UpdateDeviceClass.FIRMWARE
     _attr_entity_category = Entity.EntityCategory.DIAGNOSTIC
-    _attr_supported_features = (
-        update.UpdateEntityFeature.INSTALL | update.UpdateEntityFeature.PROGRESS
-    )
+    _attr_supported_features = update.UpdateEntityFeature.INSTALL
 
     __slots__ = (
         "device",
         "latest_version_info",
-        "in_progress",
         "installed_version",
         "latest_version",
         "release_summary",
@@ -52,13 +48,12 @@ class UpdateEntity(Entity, update.UpdateEntity):
         self.device = device
         self.latest_version_info = None
         self.title = device.display_name
-        self.in_progress = False
         self.installed_version = device.descriptor.fw_version
         self.latest_version = None
         self.release_summary = None
         Entity.__init__(self, device.id if device is not parent else None, parent)
 
-    def update_latest_version(self, latest_version_info: "LatestVersionType"):
+    def update_latest_version(self, latest_version_info: "LatestVersionType | None"):
         self.latest_version_info = latest_version_info
         self.flush_state()
 
@@ -71,8 +66,6 @@ class UpdateEntity(Entity, update.UpdateEntity):
             self.installed_version = self.latest_version = (
                 self.device.descriptor.fw_version
             )
-        if self.in_progress and (self.installed_version == self.latest_version):
-            self.in_progress = False
         Entity.flush_state(self)
 
     async def async_install(self, *args, **kwargs):
@@ -89,7 +82,6 @@ class UpdateEntity(Entity, update.UpdateEntity):
         await device.async_request(
             *mn.Appliance_Control_Upgrade.request_set(upgrade_payload),
         )
-        self.in_progress = True
 
 
 async_setup_entry = UpdateEntity.platform_setup_entry
