@@ -1,6 +1,11 @@
 {
     "name": "ludeeus/integration_blueprint/meross_lan",
     "image": "mcr.microsoft.com/devcontainers/python:3.14-bookworm",
+    "workspaceMount": "source=meross_lan_volume,target=/workspaces/meross_lan,type=volume",
+    "workspaceFolder": "/workspaces/meross_lan",
+    "mounts": [
+        "source=${localWorkspaceFolder}/config,target=/workspaces/meross_lan/config,type=bind"
+    ],
     "runArgs": [
         "--network=host"
     ],
