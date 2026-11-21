@@ -51,7 +51,9 @@ class UpdateEntity(Entity, update.UpdateEntity):
         self.installed_version = device.descriptor.fw_version
         self.latest_version = None
         self.release_summary = None
-        Entity.__init__(self, device.id if device is not parent else None, parent)
+        Entity.__init__(
+            self, device.id if device is not parent else None, parent, device_info=None
+        )
 
     def update_latest_version(self, latest_version_info: "LatestVersionType | None"):
         self.latest_version_info = latest_version_info
