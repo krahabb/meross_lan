@@ -141,6 +141,7 @@ class Hub(mld.Device):
                         self.WARNING,
                         "Unable to detect subdevice model for %s. Likely offline.",
                         _payload=descriptor.digest,
+                        timeout=14400,
                     )
                     continue
                 descriptor.type = device_entry.model or mc.TYPE_UNKNOWN
@@ -240,8 +241,7 @@ class Hub(mld.Device):
                     except StopIteration:
                         self.log(
                             self.WARNING,
-                            "Unable to detect model for new subdevice (id:%s digest:%s). Likely offline.",
-                            subid,
+                            "Unable to detect subdevice model for %s. Likely offline.",
                             _payload=p_subdevice_digest,
                             timeout=14400,
                         )
