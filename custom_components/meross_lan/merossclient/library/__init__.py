@@ -21,7 +21,7 @@ class DeviceParameters(_json_dict):
     def __init__(self, data: _json_dict):
         _json_dict.__init__(self, data)
 
-    def __missing__(self, key: str) -> Any:
+    def __missing__(self, key: str) -> "Any":
         raise KeyError(
             f"Device parameter '{key}' not found in device parameters dictionary."
         )

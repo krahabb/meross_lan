@@ -215,13 +215,13 @@ class Digest_SubDevice(_Online, ToggleX, mt.IdPayload):
 
     doorWindow: NotRequired[mt.JsonDict]
     ms100: NotRequired[_ms100]
-    mst: NotRequired[_mst100 | _mst200]
-    mts100: NotRequired[_mts100v3]
-    mts100v3: NotRequired[_mts100v3]
-    mts150: NotRequired[_mts150]
+    mst: NotRequired["_mst100 | _mst200"]
+    mts100: NotRequired["_mts100v3"]
+    mts100v3: NotRequired["_mts100v3"]
+    mts150: NotRequired["_mts150"]
     smokeAlarm: NotRequired[_gs559]
     tempHum: NotRequired[mt.JsonDict]
-    tempHumi: NotRequired[_ms130]
+    tempHumi: NotRequired["_ms130"]
     waterLeak: NotRequired[mt.JsonDict]
 
 
@@ -292,7 +292,7 @@ class _mst200(TypedDict):
 class Digest_mst(Digest_SubDevice):
     """Digest payload for mst subdevices."""
 
-    mst: _mst100 | _mst200
+    mst: "_mst100 | _mst200"
 
 
 class Digest(TypedDict):

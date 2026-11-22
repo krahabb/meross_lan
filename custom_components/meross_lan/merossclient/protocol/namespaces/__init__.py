@@ -306,7 +306,7 @@ class SimpleIndexValue(IndexValue):
             def __init__(self, index_type: "SimpleIndexValue.Type"):
                 self.index_type = index_type
 
-            def __missing__(self, value: Any) -> "SimpleIndexValue":
+            def __missing__(self, value: "Any") -> "SimpleIndexValue":
                 return self.index_type.value_class(self.index_type, value)
 
         __slots__ = ("get", "index", "_cache")
@@ -880,30 +880,30 @@ ns = Namespace  # shortcut for declarations
 # When using ARGS_ symbols we're explicitly stating that the namespace
 # doesn't support the missing verbs.
 
-G_E: ns.Args = {"payload_get": PayloadType.EMPTY}
-G_D: ns.Args = {"payload_get": PayloadType.DICT}
-G_DI: ns.Args = {"payload_get": PayloadType.DICT_IDX}
-G_DIS: ns.Args = {"payload_get": PayloadType.DICT_IDX_STRICT}
-G_DI65535: ns.Args = {"payload_get": PayloadType.DICT_IDX_65535}
-G_LI: ns.Args = {"payload_get": PayloadType.LIST_IDX}
-G_LIS: ns.Args = {"payload_get": PayloadType.LIST_IDX_STRICT}
-G_LIDS: ns.Args = {"payload_get": PayloadType.LIST_IDX_DATA_STRICT}
+G_E: "ns.Args" = {"payload_get": PayloadType.EMPTY}
+G_D: "ns.Args" = {"payload_get": PayloadType.DICT}
+G_DI: "ns.Args" = {"payload_get": PayloadType.DICT_IDX}
+G_DIS: "ns.Args" = {"payload_get": PayloadType.DICT_IDX_STRICT}
+G_DI65535: "ns.Args" = {"payload_get": PayloadType.DICT_IDX_65535}
+G_LI: "ns.Args" = {"payload_get": PayloadType.LIST_IDX}
+G_LIS: "ns.Args" = {"payload_get": PayloadType.LIST_IDX_STRICT}
+G_LIDS: "ns.Args" = {"payload_get": PayloadType.LIST_IDX_DATA_STRICT}
 
-S_E: ns.Args = {"payload_set": PayloadType.EMPTY}
-S_D: ns.Args = {"payload_set": PayloadType.DICT}
-S_DI: ns.Args = {"payload_set": PayloadType.DICT_IDX}
-S_LI: ns.Args = {"payload_set": PayloadType.LIST_IDX}
+S_E: "ns.Args" = {"payload_set": PayloadType.EMPTY}
+S_D: "ns.Args" = {"payload_set": PayloadType.DICT}
+S_DI: "ns.Args" = {"payload_set": PayloadType.DICT_IDX}
+S_LI: "ns.Args" = {"payload_set": PayloadType.LIST_IDX}
 
-D_DI: ns.Args = {"payload_del": PayloadType.DICT_IDX}
-D_LI: ns.Args = {"payload_del": PayloadType.LIST_IDX}
+D_DI: "ns.Args" = {"payload_del": PayloadType.DICT_IDX}
+D_LI: "ns.Args" = {"payload_del": PayloadType.LIST_IDX}
 
-PSH: ns.Args = {"payload_psh": PayloadType.PUSH}
-PSQ: ns.Args = {"payload_psh": PayloadType.PUSH_QUERY}
+PSH: "ns.Args" = {"payload_psh": PayloadType.PUSH}
+PSQ: "ns.Args" = {"payload_psh": PayloadType.PUSH_QUERY}
 
-IDX_C: ns.Args = {"index_type": IndexType.channel}  # Channel index
-IDX_ID_: ns.Args = {"index_type": IndexType.Id}  # Item (effect) Id
-IDX_ID: ns.Args = {"index_type": IndexType.id}  # Hub subdevice id
-IDX_SUB: ns.Args = {"index_type": IndexType.subId}  # Hub subdevice id
+IDX_C: "ns.Args" = {"index_type": IndexType.channel}  # Channel index
+IDX_ID_: "ns.Args" = {"index_type": IndexType.Id}  # Item (effect) Id
+IDX_ID: "ns.Args" = {"index_type": IndexType.id}  # Hub subdevice id
+IDX_SUB: "ns.Args" = {"index_type": IndexType.subId}  # Hub subdevice id
 
 # 'composed' payload verbs configurations
 GS_LI = G_LI | S_LI  # GET and SET by LIST IDX
@@ -930,19 +930,19 @@ GS_LIS_SUB = GS_LIS | IDX_SUB
 GSP_LIS_SUB = GSP_LIS | IDX_SUB
 GSPQ_LIS_SUB = GSPQ_LIS | IDX_SUB
 
-DIG: ns.Args = {"key_digest": True}  # type: ignore[sentinel]
+DIG: "ns.Args" = {"key_digest": True}  # type: ignore[sentinel]
 
-C_UNK: ns.Args = {"content": Content.UNKNOWN}
-C_CON: ns.Args = {"content": Content.CONSTANT}
-C_INF: ns.Args = {"content": Content.INFO}
-C_CFG: ns.Args = {"content": Content.CONFIG}
-C_CTL: ns.Args = {"content": Content.CONTROL}
-C_STA: ns.Args = {"content": Content.STATE}
-C_SNS_F: ns.Args = {"content": Content.SENSOR_FAST}
-C_SNS_S: ns.Args = {"content": Content.SENSOR_SLOW}
-C_HST: ns.Args = {"content": Content.HISTORY}
+C_UNK: "ns.Args" = {"content": Content.UNKNOWN}
+C_CON: "ns.Args" = {"content": Content.CONSTANT}
+C_INF: "ns.Args" = {"content": Content.INFO}
+C_CFG: "ns.Args" = {"content": Content.CONFIG}
+C_CTL: "ns.Args" = {"content": Content.CONTROL}
+C_STA: "ns.Args" = {"content": Content.STATE}
+C_SNS_F: "ns.Args" = {"content": Content.SENSOR_FAST}
+C_SNS_S: "ns.Args" = {"content": Content.SENSOR_SLOW}
+C_HST: "ns.Args" = {"content": Content.HISTORY}
 
-EXP: ns.Args = {"grammar": Grammar.EXPERIMENTAL}
+EXP: "ns.Args" = {"grammar": Grammar.EXPERIMENTAL}
 
 
 # We predefine grammar for some widely used and well known namespaces either to skip 'euristics'
