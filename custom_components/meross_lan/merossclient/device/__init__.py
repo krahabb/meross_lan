@@ -340,6 +340,10 @@ class Device(PhysicalDevice):
         """
         # save a copy since any transport error might 'flip' self.client
         _client = self.client
+        # Track the most meaningful error to re-raise if every fall-back fails.
+        # This must be initialized here since the fall-back loop might skip every
+        # client (i.e. none 'can_request') leaving it otherwise unbound.
+        last_exception: Exception | None = None
         try:
             # We expect this to work most of the time, so we try it first without checking
             # for _client validity and catch any exception to trigger the fallback logic.
@@ -349,6 +353,7 @@ class Device(PhysicalDevice):
                 if len(self._clients) < 2:
                     raise
                 tryed_clients = {_client}
+                last_exception = e
                 self.log_exception(
                     self.DEBUG,
                     e,
@@ -385,7 +390,9 @@ class Device(PhysicalDevice):
         ):
             return await http_client.async_request(*args, **kwargs)
 
-        raise last_exception  # type: ignore[unbound-variable]
+        if last_exception:
+            raise last_exception
+        raise MerossTransportError(self, "No transport available to send the request")
 
     # interface: self
     @property

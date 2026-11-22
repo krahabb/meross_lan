@@ -99,8 +99,12 @@ class mst100(mst):
 
     @override
     def _parse_digest_(self, payload: "mt.hub._mst100", /):
-        # unknown payload semantic
-        self.sensor_wflow.update_device_value(payload[KEY_WFLOW])
+        try:
+            self.sensor_wflow.update_device_value(payload[KEY_WFLOW])
+        except KeyError:
+            # @elsurell in #644 reports KeyError('wflow') when parsing the digest
+            # KEY_WFLOW not always carried?
+            pass
 
 
 class mst200(mst):
@@ -138,5 +142,5 @@ class mst200(mst):
                 self.sensor_wflow[waDet[mc.KEY_CHANNEL] - 1].update_device_value(
                     waDet[KEY_WFLOW]
                 )
-            except Exception as e:
-                self.log_exception(self.WARNING, e, "_parse_digest")
+            except KeyError:
+                pass

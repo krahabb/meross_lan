@@ -25,13 +25,6 @@
       }),
       'unique_id': '01234567890123456789012345678902_button_reload',
     }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678902_firmware_update',
-    }),
     'humidity': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': <SensorDeviceClass.HUMIDITY: 'humidity'>,
@@ -100,13 +93,6 @@
       }),
       'unique_id': '01234567890123456789012345678903_button_reload',
     }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678903_firmware_update',
-    }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -162,13 +148,6 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678904_button_reload',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678904_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -248,13 +227,6 @@
       'key_value': ('mode',),
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '01234567890123456789012345678905_dnd',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678905_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -360,13 +332,6 @@
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '01234567890123456789012345678906_dnd',
     }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678906_firmware_update',
-    }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -431,13 +396,6 @@
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '01234567890123456789012345678907_dnd',
     }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678907_firmware_update',
-    }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -483,13 +441,6 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678908_button_reload',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678908_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -574,13 +525,6 @@
       }),
       'unique_id': '01234567890123456789012345678909_280000000A7F_error',
     }),
-    '280000000A7F_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678909_280000000A7F_firmware_update',
-    }),
     '280000000A7F_interConn': dict({
       'class': <class 'custom_components.meross_lan.sensor.EnumParser'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -628,13 +572,6 @@
       'key_value': ('mode',),
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '01234567890123456789012345678909_dnd',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678909_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -716,13 +653,6 @@
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '0123456789012345678901234567890A_dnd',
     }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567890A_firmware_update',
-    }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -768,13 +698,6 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '0123456789012345678901234567890B_button_reload',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567890B_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -1076,13 +999,6 @@
       }),
       'unique_id': '0123456789012345678901234567890C_button_reload',
     }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567890C_firmware_update',
-    }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -1137,13 +1053,6 @@
       'key_value': ('mode',),
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '0123456789012345678901234567890D_dnd',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567890D_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -1232,13 +1141,6 @@
       'native_unit_of_measurement': <UnitOfEnergy.WATT_HOUR: 'Wh'>,
       'ns': Namespace(Appliance.Control.Electricity, key=electricity, index=none),
       'unique_id': '0123456789012345678901234567890E_energy_estimate',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567890E_firmware_update',
     }),
     'power': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -1364,13 +1266,6 @@
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '0123456789012345678901234567890F_0100783A_config_temperature_economy',
     }),
-    '0100783A_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567890F_0100783A_firmware_update',
-    }),
     '0100783A_patch_hvacaction': dict({
       'class': <class 'custom_components.meross_lan.switch.EmulatedSwitch'>,
       'device_class': <SwitchDeviceClass.SWITCH: 'switch'>,
@@ -1482,13 +1377,6 @@
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '0123456789012345678901234567890F_01008C11_config_temperature_economy',
     }),
-    '01008C11_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567890F_01008C11_firmware_update',
-    }),
     '01008C11_patch_hvacaction': dict({
       'class': <class 'custom_components.meross_lan.switch.EmulatedSwitch'>,
       'device_class': <SwitchDeviceClass.SWITCH: 'switch'>,
@@ -1567,13 +1455,6 @@
       'ns': Namespace(Appliance.Hub.Sensor.Adjust, key=adjust, index=id),
       'unique_id': '0123456789012345678901234567890F_120027D21C19_config_adjust_temperature',
     }),
-    '120027D21C19_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567890F_120027D21C19_firmware_update',
-    }),
     '120027D21C19_humidity': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': <SensorDeviceClass.HUMIDITY: 'humidity'>,
@@ -1620,13 +1501,6 @@
       'key_value': ('mode',),
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '0123456789012345678901234567890F_dnd',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567890F_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -1716,13 +1590,6 @@
       'key_value': ('mode',),
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '01234567890123456789012345678910_dnd',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678910_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -1835,13 +1702,6 @@
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '01234567890123456789012345678911_0300DF01_config_temperature_economy',
     }),
-    '0300DF01_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678911_0300DF01_firmware_update',
-    }),
     '0300DF01_motorCurLocation': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': None,
@@ -1952,13 +1812,6 @@
       'ns': Namespace(Appliance.Hub.Battery, key=battery, index=id),
       'unique_id': '01234567890123456789012345678911_160020100486_battery',
     }),
-    '160020100486_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678911_160020100486_firmware_update',
-    }),
     '28004811B776': dict({
       'class': <class 'custom_components.meross_lan.devices.hub.ms.gs559'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -2010,13 +1863,6 @@
       }),
       'unique_id': '01234567890123456789012345678911_28004811B776_error',
     }),
-    '28004811B776_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678911_28004811B776_firmware_update',
-    }),
     '28004811B776_interConn': dict({
       'class': <class 'custom_components.meross_lan.sensor.EnumParser'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -2064,13 +1910,6 @@
       'key_value': ('mode',),
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '01234567890123456789012345678911_dnd',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678911_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -2173,13 +2012,6 @@
       'native_unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '01234567890123456789012345678912_03002B0E_config_temperature_economy',
-    }),
-    '03002B0E_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678912_03002B0E_firmware_update',
     }),
     '03002B0E_motorCurLocation': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -2338,13 +2170,6 @@
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '01234567890123456789012345678912_03004B5A_config_temperature_economy',
     }),
-    '03004B5A_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678912_03004B5A_firmware_update',
-    }),
     '03004B5A_motorCurLocation': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': None,
@@ -2452,13 +2277,6 @@
       'key_value': ('mode',),
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '01234567890123456789012345678912_dnd',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678912_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -2678,13 +2496,6 @@
       'key_value': ('mode',),
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '01234567890123456789012345678913_dnd',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678913_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -3032,13 +2843,6 @@
       'ns': Namespace(Appliance.Config.OverTemp, key=overTemp, index=none),
       'unique_id': '01234567890123456789012345678914_config_overtemp_type',
     }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678914_firmware_update',
-    }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -3254,13 +3058,6 @@
       'ns': Namespace(Appliance.Control.Electricity, key=electricity, index=none),
       'unique_id': '01234567890123456789012345678915_energy_estimate',
     }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678915_firmware_update',
-    }),
     'power': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': <SensorDeviceClass.POWER: 'power'>,
@@ -3384,13 +3181,6 @@
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '01234567890123456789012345678916_01000671_config_temperature_economy',
     }),
-    '01000671_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678916_01000671_firmware_update',
-    }),
     '01000671_patch_hvacaction': dict({
       'class': <class 'custom_components.meross_lan.switch.EmulatedSwitch'>,
       'device_class': <SwitchDeviceClass.SWITCH: 'switch'>,
@@ -3501,13 +3291,6 @@
       'native_unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '01234567890123456789012345678916_0100093F_config_temperature_economy',
-    }),
-    '0100093F_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678916_0100093F_firmware_update',
     }),
     '0100093F_patch_hvacaction': dict({
       'class': <class 'custom_components.meross_lan.switch.EmulatedSwitch'>,
@@ -3620,13 +3403,6 @@
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '01234567890123456789012345678916_01003166_config_temperature_economy',
     }),
-    '01003166_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678916_01003166_firmware_update',
-    }),
     '01003166_patch_hvacaction': dict({
       'class': <class 'custom_components.meross_lan.switch.EmulatedSwitch'>,
       'device_class': <SwitchDeviceClass.SWITCH: 'switch'>,
@@ -3737,13 +3513,6 @@
       'native_unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '01234567890123456789012345678916_01003524_config_temperature_economy',
-    }),
-    '01003524_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678916_01003524_firmware_update',
     }),
     '01003524_patch_hvacaction': dict({
       'class': <class 'custom_components.meross_lan.switch.EmulatedSwitch'>,
@@ -3856,13 +3625,6 @@
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '01234567890123456789012345678916_01005C75_config_temperature_economy',
     }),
-    '01005C75_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678916_01005C75_firmware_update',
-    }),
     '01005C75_patch_hvacaction': dict({
       'class': <class 'custom_components.meross_lan.switch.EmulatedSwitch'>,
       'device_class': <SwitchDeviceClass.SWITCH: 'switch'>,
@@ -3973,13 +3735,6 @@
       'native_unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '01234567890123456789012345678916_0100813A_config_temperature_economy',
-    }),
-    '0100813A_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678916_0100813A_firmware_update',
     }),
     '0100813A_patch_hvacaction': dict({
       'class': <class 'custom_components.meross_lan.switch.EmulatedSwitch'>,
@@ -4092,13 +3847,6 @@
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '01234567890123456789012345678916_0100DEE3_config_temperature_economy',
     }),
-    '0100DEE3_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678916_0100DEE3_firmware_update',
-    }),
     '0100DEE3_patch_hvacaction': dict({
       'class': <class 'custom_components.meross_lan.switch.EmulatedSwitch'>,
       'device_class': <SwitchDeviceClass.SWITCH: 'switch'>,
@@ -4209,13 +3957,6 @@
       'native_unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '01234567890123456789012345678916_0100FAC0_config_temperature_economy',
-    }),
-    '0100FAC0_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678916_0100FAC0_firmware_update',
     }),
     '0100FAC0_patch_hvacaction': dict({
       'class': <class 'custom_components.meross_lan.switch.EmulatedSwitch'>,
@@ -4371,13 +4112,6 @@
       'native_unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '01234567890123456789012345678916_030004B4_config_temperature_economy',
-    }),
-    '030004B4_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678916_030004B4_firmware_update',
     }),
     '030004B4_motorCurLocation': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -4570,13 +4304,6 @@
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '01234567890123456789012345678916_030011B6_config_temperature_economy',
     }),
-    '030011B6_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678916_030011B6_firmware_update',
-    }),
     '030011B6_motorCurLocation': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': None,
@@ -4767,13 +4494,6 @@
       'native_unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '01234567890123456789012345678916_03003F30_config_temperature_economy',
-    }),
-    '03003F30_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678916_03003F30_firmware_update',
     }),
     '03003F30_motorCurLocation': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -4966,13 +4686,6 @@
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '01234567890123456789012345678916_03004404_config_temperature_economy',
     }),
-    '03004404_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678916_03004404_firmware_update',
-    }),
     '03004404_motorCurLocation': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': None,
@@ -5163,13 +4876,6 @@
       'native_unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '01234567890123456789012345678916_03004586_config_temperature_economy',
-    }),
-    '03004586_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678916_03004586_firmware_update',
     }),
     '03004586_motorCurLocation': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -5362,13 +5068,6 @@
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '01234567890123456789012345678916_0300DAB1_config_temperature_economy',
     }),
-    '0300DAB1_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678916_0300DAB1_firmware_update',
-    }),
     '0300DAB1_motorCurLocation': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': None,
@@ -5560,13 +5259,6 @@
       'ns': Namespace(Appliance.Hub.Mts100.Temperature, key=temperature, index=id),
       'unique_id': '01234567890123456789012345678916_0300F670_config_temperature_economy',
     }),
-    '0300F670_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678916_0300F670_firmware_update',
-    }),
     '0300F670_motorCurLocation': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': None,
@@ -5675,13 +5367,6 @@
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '01234567890123456789012345678916_dnd',
     }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678916_firmware_update',
-    }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -5749,13 +5434,6 @@
       'key_value': ('mode',),
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '01234567890123456789012345678917_dnd',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678917_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -5829,13 +5507,6 @@
       'key_value': ('mode',),
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '01234567890123456789012345678918_dnd',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678918_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -5945,13 +5616,6 @@
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '01234567890123456789012345678919_dnd',
     }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678919_firmware_update',
-    }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -6048,13 +5712,6 @@
       'native_unit_of_measurement': <UnitOfEnergy.WATT_HOUR: 'Wh'>,
       'ns': Namespace(Appliance.Control.Electricity, key=electricity, index=none),
       'unique_id': '0123456789012345678901234567891A_energy_estimate',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567891A_firmware_update',
     }),
     'power': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -6175,13 +5832,6 @@
       'native_unit_of_measurement': <UnitOfEnergy.WATT_HOUR: 'Wh'>,
       'ns': Namespace(Appliance.Control.Electricity, key=electricity, index=none),
       'unique_id': '0123456789012345678901234567891B_energy_estimate',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567891B_firmware_update',
     }),
     'power': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -6476,13 +6126,6 @@
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '0123456789012345678901234567891C_dnd',
     }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567891C_firmware_update',
-    }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -6589,13 +6232,6 @@
       'key_value': ('mode',),
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '0123456789012345678901234567891D_dnd',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567891D_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -6937,13 +6573,6 @@
       'ns': Namespace(Appliance.Control.Electricity, key=electricity, index=none),
       'unique_id': '0123456789012345678901234567891E_energy_estimate',
     }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567891E_firmware_update',
-    }),
     'power': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': <SensorDeviceClass.POWER: 'power'>,
@@ -7181,13 +6810,6 @@
       'ns': Namespace(Appliance.Control.Electricity, key=electricity, index=none),
       'unique_id': '0123456789012345678901234567891F_energy_estimate',
     }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567891F_firmware_update',
-    }),
     'power': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': <SensorDeviceClass.POWER: 'power'>,
@@ -7282,13 +6904,6 @@
       'key_value': ('mode',),
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '01234567890123456789012345678920_dnd',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678920_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -7841,13 +7456,6 @@
       }),
       'unique_id': '01234567890123456789012345678921_button_reload',
     }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678921_firmware_update',
-    }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -7978,13 +7586,6 @@
       'ns': Namespace(Appliance.Hub.Battery, key=battery, index=id),
       'unique_id': '01234567890123456789012345678922_1A00694ACBC7_battery',
     }),
-    '1A00694ACBC7_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678922_1A00694ACBC7_firmware_update',
-    }),
     '1A00694ACBC7_humidity': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
       'device_class': <SensorDeviceClass.HUMIDITY: 'humidity'>,
@@ -8050,13 +7651,6 @@
       'key_value': ('mode',),
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '01234567890123456789012345678922_dnd',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678922_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -8249,13 +7843,6 @@
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '01234567890123456789012345678923_dnd',
     }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678923_firmware_update',
-    }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -8364,13 +7951,6 @@
       'native_unit_of_measurement': <UnitOfEnergy.WATT_HOUR: 'Wh'>,
       'ns': Namespace(Appliance.Control.Electricity, key=electricity, index=none),
       'unique_id': '01234567890123456789012345678924_energy_estimate',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678924_firmware_update',
     }),
     'power': dict({
       'class': <class 'custom_components.meross_lan.sensor.SensorParser'>,
@@ -8679,13 +8259,6 @@
       }),
       'unique_id': '01234567890123456789012345678925_button_reload',
     }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678925_firmware_update',
-    }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -8731,13 +8304,6 @@
       'index': NoneIndexValue({
       }),
       'unique_id': '01234567890123456789012345678926_button_reload',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678926_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -8905,13 +8471,6 @@
       'ns': Namespace(Appliance.Hub.Battery, key=battery, index=id),
       'unique_id': '01234567890123456789012345678927_1B00839E9A6D_battery',
     }),
-    '1B00839E9A6D_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678927_1B00839E9A6D_firmware_update',
-    }),
     'button_pair_subdevice': dict({
       'class': <class 'custom_components.meross_lan.button.Button'>,
       'device_class': <ButtonDeviceClass.IDENTIFY: 'identify'>,
@@ -8941,13 +8500,6 @@
       'key_value': ('mode',),
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '01234567890123456789012345678927_dnd',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678927_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -9224,13 +8776,6 @@
       }),
       'unique_id': '01234567890123456789012345678928_button_reload',
     }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678928_firmware_update',
-    }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -9399,13 +8944,6 @@
       }),
       'unique_id': '01234567890123456789012345678929_1800958E1582_error',
     }),
-    '1800958E1582_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678929_1800958E1582_firmware_update',
-    }),
     '1800958E1582_interConn': dict({
       'class': <class 'custom_components.meross_lan.sensor.EnumParser'>,
       'device_class': <SensorDeviceClass.ENUM: 'enum'>,
@@ -9453,13 +8991,6 @@
       'key_value': ('mode',),
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '01234567890123456789012345678929_dnd',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '01234567890123456789012345678929_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -9696,13 +9227,6 @@
       'ns': Namespace(Appliance.Hub.Battery, key=battery, index=id),
       'unique_id': '0123456789012345678901234567892A_1B1091AFCF10_battery',
     }),
-    '1B1091AFCF10_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567892A_1B1091AFCF10_firmware_update',
-    }),
     'button_pair_subdevice': dict({
       'class': <class 'custom_components.meross_lan.button.Button'>,
       'device_class': <ButtonDeviceClass.IDENTIFY: 'identify'>,
@@ -9732,13 +9256,6 @@
       'key_value': ('mode',),
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '0123456789012345678901234567892A_dnd',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567892A_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -9873,13 +9390,6 @@
       'ns': Namespace(Appliance.Hub.Battery, key=battery, index=id),
       'unique_id': '0123456789012345678901234567892B_1B00899EE1DB_battery',
     }),
-    '1B00899EE1DB_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567892B_1B00899EE1DB_firmware_update',
-    }),
     '1B00899F0934_0_appliance_config_devicecfg__mstCfg_dura': dict({
       'class': <class 'custom_components.meross_lan.number.NumberParser'>,
       'device_class': <NumberDeviceClass.DURATION: 'duration'>,
@@ -9938,13 +9448,6 @@
       'ns': Namespace(Appliance.Hub.Battery, key=battery, index=id),
       'unique_id': '0123456789012345678901234567892B_1B00899F0934_battery',
     }),
-    '1B00899F0934_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567892B_1B00899F0934_firmware_update',
-    }),
     '1B0094AFCB6F_0_appliance_config_devicecfg__mstCfg_dura': dict({
       'class': <class 'custom_components.meross_lan.number.NumberParser'>,
       'device_class': <NumberDeviceClass.DURATION: 'duration'>,
@@ -10002,13 +9505,6 @@
       'native_unit_of_measurement': '%',
       'ns': Namespace(Appliance.Hub.Battery, key=battery, index=id),
       'unique_id': '0123456789012345678901234567892B_1B0094AFCB6F_battery',
-    }),
-    '1B0094AFCB6F_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567892B_1B0094AFCB6F_firmware_update',
     }),
     '1B1091AFACDD_1_appliance_config_devicecfg__mstCfg_calibration_onoff': dict({
       'class': <class 'custom_components.meross_lan.switch.SwitchParser'>,
@@ -10170,13 +9666,6 @@
       'ns': Namespace(Appliance.Hub.Battery, key=battery, index=id),
       'unique_id': '0123456789012345678901234567892B_1B1091AFACDD_battery',
     }),
-    '1B1091AFACDD_firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567892B_1B1091AFACDD_firmware_update',
-    }),
     'button_pair_subdevice': dict({
       'class': <class 'custom_components.meross_lan.button.Button'>,
       'device_class': <ButtonDeviceClass.IDENTIFY: 'identify'>,
@@ -10206,13 +9695,6 @@
       'key_value': ('mode',),
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '0123456789012345678901234567892B_dnd',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567892B_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,
@@ -10312,13 +9794,6 @@
       'key_value': ('mode',),
       'ns': Namespace(Appliance.System.DNDMode, key=DNDMode, index=none),
       'unique_id': '0123456789012345678901234567892C_dnd',
-    }),
-    'firmware_update': dict({
-      'class': <class 'custom_components.meross_lan.update.UpdateEntity'>,
-      'device_class': <UpdateDeviceClass.FIRMWARE: 'firmware'>,
-      'index': NoneIndexValue({
-      }),
-      'unique_id': '0123456789012345678901234567892C_firmware_update',
     }),
     'sensor_protocol': dict({
       'class': <class 'custom_components.meross_lan.sensor.ProtocolSensor'>,

@@ -313,7 +313,7 @@ async def test_meross_profile_with_device(
         update_firmware = device.update_firmware
         assert update_firmware
         update_firmware_state = device_context.get_hass_state(update_firmware.entity_id)
-        assert update_firmware_state and update_firmware_state.state == "unknown"
+        assert update_firmware_state and update_firmware_state.state == "off"
 
         latest_version = tc.MOCK_CLOUDAPI_DEVICE_LATESTVERSION[0]
         latest_version[mc.KEY_TYPE] = device.descriptor.type

@@ -64,12 +64,13 @@ async def async_setup_entry(
                 await profile.async_setup_entry(hass, config_entry)
                 api.profiles[profile_id] = profile
                 # 'link' the devices already initialized
-                for device in api.active_devices():
-                    if (device.key == profile.key) and (
-                        device.descriptor.userId == profile_id
-                    ):
-                        profile.link(device)
-                        device.check_protocol()
+                for device in (
+                    _device
+                    for _device in api.devices.values()
+                    if _device and (_device.descriptor.userId == profile_id)
+                ):
+                    profile.link(device)
+                    device.check_protocol()
                 return True
             except Exception as error:
                 await profile.async_shutdown()

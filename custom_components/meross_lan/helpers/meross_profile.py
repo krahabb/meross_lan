@@ -330,6 +330,11 @@ class MerossProfile(MQTTProfile):
 
     @override
     def link(self, device: "Device"):
+        if device.key != self.key:
+            device.log(
+                device.WARNING,
+                "Configured device key is different than the Meross cloud profile provided: please check and fix",
+            )
         MQTTProfile.link(self, device)
         try:
             device.update_device_info(self._data[self.KEY_DEVICE_INFO][device.id], self)

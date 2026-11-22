@@ -141,6 +141,7 @@ class Hub(mld.Device):
                         self.WARNING,
                         "Unable to detect subdevice model for %s. Likely offline.",
                         _payload=descriptor.digest,
+                        timeout=14400,
                     )
                     continue
                 descriptor.type = device_entry.model or mc.TYPE_UNKNOWN
@@ -183,7 +184,10 @@ class Hub(mld.Device):
     ):
         super().update_device_info(device_info, profile)
         try:
-            for subdevice_info in device_info.get("__subDeviceInfo", []):
+            subdevices_info = device_info.get("__subDeviceInfo", [])
+            if isinstance(subdevices_info, dict):
+                subdevices_info = subdevices_info.values()
+            for subdevice_info in subdevices_info:
                 # Play it safe. We might miss the subdevice if the hub cannot properly initialize it
                 # while the cloud info reports data for that
                 subdevice = self.subdevices.get(subdevice_info.get(mc.KEY_SUBDEVICEID))
@@ -240,8 +244,7 @@ class Hub(mld.Device):
                     except StopIteration:
                         self.log(
                             self.WARNING,
-                            "Unable to detect model for new subdevice (id:%s digest:%s). Likely offline.",
-                            subid,
+                            "Unable to detect subdevice model for %s. Likely offline.",
                             _payload=p_subdevice_digest,
                             timeout=14400,
                         )
@@ -410,7 +413,6 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         kwargs["index"] = mn.IndexType.id.get(subid)
         kwargs["descriptor"] = descriptor
         super().__init__(subid, hub, **kwargs)
-        self.update_firmware = UpdateEntity(self, hub)
         _ns_hub = [self.ns] if self.ns else []
         for _cls in self.__class__.__mro__:
             try:
@@ -459,9 +461,11 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         self.update_device_registry_name(
             subdevice_info.get(mc.KEY_SUBDEVICENAME) or descriptor.productname,
         )
-
-        if latest_version := profile.get_latest_version(descriptor):
-            self.update_firmware.update_latest_version(latest_version)
+        if not self.update_firmware:
+            self.update_firmware = UpdateEntity(self, self.parent)
+        self.update_firmware.update_latest_version(
+            profile.get_latest_version(descriptor)
+        )
 
     def parse_digest(self, payload: "mt.hub.Digest_SubDevice", /):
         """
@@ -587,10 +591,8 @@ class SubDevice(mld.BaseDevice, device.SubDevice, device.NamespaceParser):
         self.update_device_registry(
             hw_version=descriptor.hw_version, sw_version=descriptor.fw_version
         )
-        if (profile := self.parent.profile) and (
-            latest_version := profile.get_latest_version(descriptor)
-        ):
-            self.update_firmware.update_latest_version(latest_version)
+        if self.update_firmware:
+            self.update_firmware.flush_state()
 
     def _hub_parse(self, key: str, payload: dict, /):
         """Heuristic subdevice parsing system. This will be eventually removed

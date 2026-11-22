@@ -67,7 +67,7 @@ class BaseDevice(device.PhysicalDevice):
         device_entry: dr.DeviceEntry
         device_info: dr.DeviceInfo
         entities_iterable: Iterable[Entity]
-        update_firmware: UpdateEntity
+        update_firmware: UpdateEntity | None
 
         class Args(device.PhysicalDevice.Args):
             pass
@@ -76,13 +76,13 @@ class BaseDevice(device.PhysicalDevice):
             self, id, parent: ConfigEntryManager, /, **kwargs: Unpack[Args]
         ): ...
 
+    _AUTO_INIT = ("update_firmware",)
+    _AUTO_DESTROY = _AUTO_INIT
     _SLOTS = (
         "device_registry",
         "device_entry",
         "device_info",
-        "update_firmware",
     )
-    _AUTO_DESTROY = ("update_firmware",)
 
     @property
     @override
@@ -617,7 +617,6 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         self.device_timedelta_log_epoch = 0
         self.device_timedelta_config_epoch = 0
         self.profile = None
-        self.update_firmware = UpdateEntity(self, self)
         self.sensor_protocol = ProtocolSensor(None, self)
         PersistentButton(
             None,
@@ -642,17 +641,16 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
         # or after a config change. Here we'll register mqtt bindings,
         # fix transports according to the current configuration and profile
         # linking, and finally (re)start polling.
-        try:
-            profile = self.parent.profiles[self.descriptor.userId]
-            if profile and (profile.key != self.key):
-                profile = self.parent
-        except KeyError:
-            profile = self.parent
+        api = self.parent
+        # the logic here is to get a registered (Meross) profile if a match occurs
+        # eventually resolving to None if not loaded (yet). For any other unmatching userId
+        # we're fragilistically defaulting to our ComponentApi (linking to HA MQTT)
+        profile = api.profiles.get(self.descriptor.userId, api)
         if self.profile != profile:
+            if self.profile:
+                self.profile.unlink(self)
             if profile:
                 profile.link(self)
-            elif self.profile:
-                self.profile.unlink(self)
         self.check_protocol()
         self.polling_start()
 
@@ -1390,7 +1388,8 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
 
     def _handle_Appliance_Mcu_Firmware(self, message: MerossMessage, /):
         self.descriptor.mcu = message.payload[mc.KEY_FIRMWARE]
-        self.update_firmware.flush_state()
+        if self.update_firmware:
+            self.update_firmware.flush_state()
 
     _handle_Appliance_Mcu_Hp110_Firmware = _handle_Appliance_Mcu_Firmware
 
@@ -1420,7 +1419,8 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
             self.schedule_entry_update(True)
             if oldfirmware.get("version") != descr.fw_version:
                 self.update_device_registry(sw_version=descr.fw_version)
-                self.update_firmware.flush_state()
+                if self.update_firmware:
+                    self.update_firmware.flush_state()
             if not self.config.get(mlc.CONF_HOST):
                 self._update_host(descr.innerIp)
         elif oldtimezone != descr.timezone:
@@ -1727,8 +1727,11 @@ class Device(ConfigEntryManager, BaseDevice, device.Device):
                                 device_entry.id, name=channel_name
                             )
             # check for firmware updates too
-            if latest_version := profile.get_latest_version(self.descriptor):
-                self.update_firmware.update_latest_version(latest_version)
+            if not self.update_firmware:
+                self.update_firmware = UpdateEntity(self, self)
+            self.update_firmware.update_latest_version(
+                profile.get_latest_version(self.descriptor)
+            )
 
         except Exception as e:
             self.log_exception(

@@ -4,7 +4,7 @@
     "runArgs": [
         "--network=host"
     ],
-    "postCreateCommand": "scripts/setup",
+    "postCreateCommand": "bash scripts/setup",
     "customizations": {
         "vscode": {
             "extensions": [
@@ -31,6 +31,5 @@
         }
     },
     "remoteUser": "root",
-    "features": {        
-    }
+    "features": {}
 }
