@@ -286,7 +286,7 @@ class Hub(mld.Device):
                     eager_start=True,
                 )
 
-    def _handle_Appliance_System_All(self, message: MerossMessage, /):
+    def _handle_Appliance_System_All(self, message: "MerossMessage", /):
         super()._handle_Appliance_System_All(message)
         self.parse_digest(self.descriptor.digest[mc.KEY_HUB])
 

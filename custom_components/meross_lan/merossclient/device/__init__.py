@@ -389,7 +389,7 @@ class Device(PhysicalDevice):
 
     # interface: self
     @property
-    def clients_connected(self) -> Mapping[Transport, AbstractClient]:
+    def clients_connected(self) -> "Mapping[Transport, AbstractClient]":
         return {
             client.TRANSPORT: client
             for client in self._clients.values()

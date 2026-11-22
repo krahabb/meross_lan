@@ -48,7 +48,7 @@ class MerossTransportError(MerossError):
         self,
         client: "AbstractClient",
         *args,
-        request: MerossMessage | None = None,
+        request: "MerossMessage | None" = None,
         uuid: str | None = None,
     ):
         self.client = client
@@ -74,7 +74,7 @@ class MerossTransportError(MerossError):
         return self.cause
 
     @cached_property
-    def inner_transport_error(self) -> MerossTransportError:
+    def inner_transport_error(self) -> "MerossTransportError":
         self._inspect_chaining()
         return self.inner_transport_error
 
