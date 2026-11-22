@@ -184,7 +184,10 @@ class Hub(mld.Device):
     ):
         super().update_device_info(device_info, profile)
         try:
-            for subdevice_info in device_info.get("__subDeviceInfo", []):
+            subdevices_info = device_info.get("__subDeviceInfo", [])
+            if isinstance(subdevices_info, dict):
+                subdevices_info = subdevices_info.values()
+            for subdevice_info in subdevices_info:
                 # Play it safe. We might miss the subdevice if the hub cannot properly initialize it
                 # while the cloud info reports data for that
                 subdevice = self.subdevices.get(subdevice_info.get(mc.KEY_SUBDEVICEID))
