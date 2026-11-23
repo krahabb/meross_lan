@@ -91,7 +91,7 @@ Appliance_Control_Thermostat_WindowOpened = mn.ns(
     "Appliance.Control.Thermostat.WindowOpened",
     mc.KEY_WINDOWOPENED,
     132,
-    mn.GP_LIS_C,
+    mn.GSP_LIS_C,  # SET supported for 'detect' (mts215b)
     mn.DIG,
     mn.C_SNS_S,
 )

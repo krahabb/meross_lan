@@ -283,6 +283,15 @@ class ThermostatMixin(Emulator if TYPE_CHECKING else object):
                                 _changed = True
                         except KeyError:
                             pass
+                    if mc.KEY_HUMIVALUE in p_channel_state:
+                        # humidity calibration (mts215b, mts300): no min/max in payload
+                        try:
+                            value = p_channel_request[mc.KEY_HUMIVALUE]
+                            if p_channel_state[mc.KEY_HUMIVALUE] != value:
+                                p_channel_state[mc.KEY_HUMIVALUE] = value
+                                _changed = True
+                        except KeyError:
+                            pass
                     if _changed and ns.has_psh and self.mqtt_connected:
                         self.mqtt_publish_push(namespace, {ns_key: [p_channel_state]})
 

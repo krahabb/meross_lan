@@ -1,0 +1,2647 @@
+{
+  "home_assistant": {
+    "installation_type": "Home Assistant OS",
+    "version": "2026.10.4",
+    "dev": false,
+    "hassio": true,
+    "virtualenv": false,
+    "python_version": "3.14.9",
+    "docker": true,
+    "arch": "x86_64",
+    "timezone": "Europe/Berlin"
+  },
+  "custom_components": {
+    "meross_lan": {
+      "documentation": "https://github.com/krahabb/meross_lan",
+      "version": "6.0.0",
+      "requirements": [
+        "bleak",
+        "paho-mqtt"
+      ]
+    }
+  },
+  "integration_manifest": {
+    "domain": "meross_lan",
+    "name": "Meross LAN",
+    "after_dependencies": [
+      "bluetooth",
+      "dhcp",
+      "mqtt",
+      "recorder",
+      "persistent_notification"
+    ],
+    "bluetooth": [
+      {
+        "service_uuid": "0000a00a-0000-1000-8000-00805f9b34fb"
+      }
+    ],
+    "codeowners": [
+      "krahabb"
+    ],
+    "config_flow": true,
+    "dhcp": [
+      {
+        "hostname": "*",
+        "macaddress": "48E1E9*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "C4E7AE*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "34298F1*"
+      },
+      {
+        "registered_devices": true
+      }
+    ],
+    "documentation": "https://github.com/krahabb/meross_lan",
+    "integration_type": "hub",
+    "iot_class": "local_polling",
+    "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
+    "loggers": [
+      "custom_components.meross_lan"
+    ],
+    "mqtt": [
+      "/appliance/+/publish"
+    ],
+    "requirements": [
+      "bleak",
+      "paho-mqtt"
+    ],
+    "version": "6.0.0",
+    "is_built_in": false,
+    "overwrites_built_in": false
+  },
+  "data": {
+    "version": 3,
+    "config": {
+      "device_id": "###############################6",
+      "host": "############0",
+      "key": "###############################0",
+      "payload": {
+        "all": {
+          "system": {
+            "hardware": {
+              "type": "mts215b",
+              "subType": "eu",
+              "version": "9.0.0",
+              "chipType": "rtl8720cm",
+              "uuid": "###############################6",
+              "macAddress": "################0"
+            },
+            "firmware": {
+              "version": "9.3.12",
+              "compileTime": "2026/07/07-15:15:08",
+              "encrypt": 1,
+              "wifiMac": "################0",
+              "innerIp": "############0",
+              "server": "###################0",
+              "port": "@0",
+              "userId": "@0"
+            },
+            "time": {
+              "timestamp": 1794078881,
+              "timezone": "Europe/Berlin",
+              "timeRule": [
+                [
+                  1792890000,
+                  3600,
+                  0
+                ],
+                [
+                  1806195600,
+                  7200,
+                  1
+                ],
+                [
+                  1824944400,
+                  3600,
+                  0
+                ],
+                [
+                  1837645200,
+                  7200,
+                  1
+                ],
+                [
+                  1856394000,
+                  3600,
+                  0
+                ],
+                [
+                  1869094800,
+                  7200,
+                  1
+                ],
+                [
+                  1887843600,
+                  3600,
+                  0
+                ],
+                [
+                  1901149200,
+                  7200,
+                  1
+                ],
+                [
+                  1919293200,
+                  3600,
+                  0
+                ],
+                [
+                  1932598800,
+                  7200,
+                  1
+                ],
+                [
+                  1950742800,
+                  3600,
+                  0
+                ],
+                [
+                  1964048400,
+                  7200,
+                  1
+                ],
+                [
+                  1982797200,
+                  3600,
+                  0
+                ],
+                [
+                  1995498000,
+                  7200,
+                  1
+                ],
+                [
+                  2014246800,
+                  3600,
+                  0
+                ],
+                [
+                  2026947600,
+                  7200,
+                  1
+                ],
+                [
+                  2045696400,
+                  3600,
+                  0
+                ],
+                [
+                  2058397200,
+                  7200,
+                  1
+                ],
+                [
+                  2077146000,
+                  3600,
+                  0
+                ],
+                [
+                  2090451600,
+                  7200,
+                  1
+                ]
+              ]
+            },
+            "online": {
+              "status": 1,
+              "bindId": "################",
+              "who": 1
+            },
+            "upgradeStatus": 1
+          },
+          "digest": {
+            "thermostat": {
+              "mode": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "mode": 4,
+                  "state": 0,
+                  "currentTemp": 223,
+                  "heatTemp": 260,
+                  "coolTemp": 180,
+                  "ecoTemp": 120,
+                  "manualTemp": 227,
+                  "warning": 0,
+                  "targetTemp": 227,
+                  "min": 50,
+                  "max": 350,
+                  "lmTime": 1794078881
+                }
+              ],
+              "summerMode": [
+                {
+                  "channel": 0,
+                  "mode": 1
+                }
+              ],
+              "windowOpened": [
+                {
+                  "channel": 0,
+                  "status": 0,
+                  "detect": 0,
+                  "lmTime": 1794078881
+                }
+              ]
+            }
+          }
+        },
+        "payloadVersion": 1,
+        "ability": {
+          "Appliance.Config.Key": {},
+          "Appliance.Config.WifiList": {},
+          "Appliance.Config.Wifi": {},
+          "Appliance.Config.WifiX": {},
+          "Appliance.Config.Trace": {},
+          "Appliance.Config.Info": {},
+          "Appliance.Config.NtpSite": {},
+          "Appliance.Config.Matter": {},
+          "Appliance.System.All": {},
+          "Appliance.System.Hardware": {},
+          "Appliance.System.Firmware": {},
+          "Appliance.System.Debug": {},
+          "Appliance.System.Online": {},
+          "Appliance.System.Time": {},
+          "Appliance.System.Clock": {},
+          "Appliance.System.Ability": {},
+          "Appliance.System.Runtime": {},
+          "Appliance.System.Report": {},
+          "Appliance.System.Position": {},
+          "Appliance.Mcu.Firmware": {},
+          "Appliance.Control.Multiple": {
+            "maxCmdNum": 3
+          },
+          "Appliance.Control.Bind": {},
+          "Appliance.Control.Unbind": {},
+          "Appliance.Control.Upgrade": {},
+          "Appliance.Control.ChangeWiFi": {},
+          "Appliance.Control.PhysicalLock": {},
+          "Appliance.Control.Thermostat.HoldAction": {},
+          "Appliance.Control.Thermostat.Mode": {},
+          "Appliance.Control.Thermostat.Calibration": {},
+          "Appliance.Control.Thermostat.DeadZone": {},
+          "Appliance.Control.Thermostat.Frost": {},
+          "Appliance.Control.Thermostat.Overheat": {},
+          "Appliance.Control.Thermostat.WindowOpened": {},
+          "Appliance.Control.Thermostat.Schedule": {},
+          "Appliance.Control.Screen.Brightness": {},
+          "Appliance.Control.Thermostat.Sensor": {},
+          "Appliance.Control.Thermostat.SummerMode": {},
+          "Appliance.Control.Sensor.History": {},
+          "Appliance.Control.Sensor.Latest": {}
+        }
+      },
+      "timestamp": 1794062519.8015966
+    },
+    "state": {
+      "class": "Device",
+      "configured_transport": "auto",
+      "preferred_transport": "http",
+      "transport": "http",
+      "polling_period": 30,
+      "device_response_size_min": 2412,
+      "device_response_size_max": 2412,
+      "BLUETOOTH": {
+        "bluetooth": false,
+        "bluetooth_active": null
+      },
+      "HTTP": {
+        "http": true,
+        "http_active": true
+      },
+      "MQTT": {
+        "cloud_profile": true,
+        "mqtt_connection": true,
+        "mqtt_connected": true,
+        "mqtt_publish": true,
+        "mqtt_active": true
+      },
+      "namespace_handlers": {
+        "Appliance.System.All": {
+          "last_rx_epoch": 1794078882.406446,
+          "last_poll_epoch": 1794078882.406446,
+          "next_poll_epoch": 1794079182.406446,
+          "polling_strategy": "async_polling_strategy_ns_all",
+          "lastpush": null,
+          "digest": null
+        },
+        "Appliance.Mcu.Firmware": {
+          "last_rx_epoch": 1794078759.7751703,
+          "last_poll_epoch": 1794078759.7751703,
+          "next_poll_epoch": 1794078759.7751703,
+          "polling_strategy": "async_polling_strategy_once",
+          "lastpush": null,
+          "digest": null
+        },
+        "Appliance.Control.Sensor.Latest": {
+          "last_rx_epoch": 1794079033.518783,
+          "last_poll_epoch": 1794079033.518783,
+          "next_poll_epoch": 1794079033.518783,
+          "polling_strategy": "async_polling_strategy_smart",
+          "lastpush": {
+            "latest": [
+              {
+                "value": [
+                  {
+                    "timestamp": 1794075460,
+                    "humi": 470
+                  }
+                ],
+                "channel": 0,
+                "capacity": 2
+              }
+            ]
+          },
+          "digest": null
+        },
+        "Appliance.Control.PhysicalLock": {
+          "last_rx_epoch": 1794078760.1499934,
+          "last_poll_epoch": 1794078760.1499934,
+          "next_poll_epoch": 1794079060.1499934,
+          "polling_strategy": "async_polling_strategy_default",
+          "lastpush": null,
+          "digest": null
+        },
+        "Appliance.Control.Screen.Brightness": {
+          "last_rx_epoch": 1794078760.1499934,
+          "last_poll_epoch": 1794078760.1499934,
+          "next_poll_epoch": 1794079060.1499934,
+          "polling_strategy": "async_polling_strategy_default",
+          "lastpush": null,
+          "digest": null
+        },
+        "Appliance.Control.Thermostat.Calibration": {
+          "last_rx_epoch": 1794078760.2731287,
+          "last_poll_epoch": 1794078760.2731287,
+          "next_poll_epoch": 1794079060.2731287,
+          "polling_strategy": "async_polling_strategy_default",
+          "lastpush": null,
+          "digest": null
+        },
+        "Appliance.Control.Thermostat.Schedule": {
+          "last_rx_epoch": 1794078760.2731287,
+          "last_poll_epoch": 1794078760.2731287,
+          "next_poll_epoch": 1794079060.2731287,
+          "polling_strategy": "async_polling_strategy_default",
+          "lastpush": null,
+          "digest": null
+        },
+        "Appliance.Control.Thermostat.Mode": {
+          "last_rx_epoch": 0.0,
+          "last_poll_epoch": 1794078882.406446,
+          "next_poll_epoch": 1794078882.406446,
+          "polling_strategy": "async_polling_strategy_default",
+          "lastpush": {
+            "mode": [
+              {
+                "ecoTemp": 120,
+                "targetTemp": 227,
+                "min": 50,
+                "lmTime": 1794076434,
+                "state": 0,
+                "currentTemp": 223,
+                "manualTemp": 227,
+                "max": 350,
+                "onoff": 1,
+                "warning": 0,
+                "channel": 0,
+                "mode": 4,
+                "heatTemp": 260,
+                "coolTemp": 180
+              }
+            ]
+          },
+          "digest": [
+            {
+              "channel": 0,
+              "onoff": 1,
+              "mode": 4,
+              "state": 0,
+              "currentTemp": 223,
+              "heatTemp": 260,
+              "coolTemp": 180,
+              "ecoTemp": 120,
+              "manualTemp": 227,
+              "warning": 0,
+              "targetTemp": 227,
+              "min": 50,
+              "max": 350,
+              "lmTime": 1794078881
+            }
+          ]
+        },
+        "Appliance.Control.Thermostat.DeadZone": {
+          "last_rx_epoch": 1794078760.2731287,
+          "last_poll_epoch": 1794078760.2731287,
+          "next_poll_epoch": 1794079060.2731287,
+          "polling_strategy": "async_polling_strategy_default",
+          "lastpush": null,
+          "digest": null
+        },
+        "Appliance.Control.Thermostat.Frost": {
+          "last_rx_epoch": 1794079033.518783,
+          "last_poll_epoch": 1794079033.518783,
+          "next_poll_epoch": 1794079333.518783,
+          "polling_strategy": "async_polling_strategy_smart",
+          "lastpush": null,
+          "digest": null
+        },
+        "Appliance.Control.Thermostat.HoldAction": {
+          "last_rx_epoch": 1794078760.6599212,
+          "last_poll_epoch": 1794078760.6599212,
+          "next_poll_epoch": 1794079060.6599212,
+          "polling_strategy": "async_polling_strategy_default",
+          "lastpush": null,
+          "digest": null
+        },
+        "Appliance.Control.Thermostat.Overheat": {
+          "last_rx_epoch": 1794079033.518783,
+          "last_poll_epoch": 1794079033.518783,
+          "next_poll_epoch": 1794079333.518783,
+          "polling_strategy": "async_polling_strategy_smart",
+          "lastpush": null,
+          "digest": null
+        },
+        "Appliance.Control.Thermostat.Sensor": {
+          "last_rx_epoch": 1794079003.3809402,
+          "last_poll_epoch": 1794079003.3809402,
+          "next_poll_epoch": 1794079303.3809402,
+          "polling_strategy": "async_polling_strategy_smart",
+          "lastpush": null,
+          "digest": null
+        },
+        "Appliance.Control.Thermostat.SummerMode": {
+          "last_rx_epoch": 0.0,
+          "last_poll_epoch": 1794078882.406446,
+          "next_poll_epoch": 1794079182.406446,
+          "polling_strategy": "async_polling_strategy_default",
+          "lastpush": null,
+          "digest": [
+            {
+              "channel": 0,
+              "mode": 1
+            }
+          ]
+        },
+        "Appliance.Control.Thermostat.WindowOpened": {
+          "last_rx_epoch": 0.0,
+          "last_poll_epoch": 1794078882.406446,
+          "next_poll_epoch": 1794079182.406446,
+          "polling_strategy": "async_polling_strategy_smart",
+          "lastpush": {
+            "windowOpened": [
+              {
+                "detect": 0,
+                "lmTime": 1794073664,
+                "channel": 0,
+                "status": 0
+              }
+            ]
+          },
+          "digest": [
+            {
+              "channel": 0,
+              "status": 0,
+              "detect": 0,
+              "lmTime": 1794078881
+            }
+          ]
+        },
+        "Appliance.System.Runtime": {
+          "last_rx_epoch": 1794079003.3809402,
+          "last_poll_epoch": 1794079003.3809402,
+          "next_poll_epoch": 1794079303.3809402,
+          "polling_strategy": "async_polling_strategy_smart",
+          "lastpush": null,
+          "digest": null
+        },
+        "Appliance.Config.Info": {
+          "last_rx_epoch": 0.0,
+          "last_poll_epoch": 0.0,
+          "next_poll_epoch": 0.0,
+          "polling_strategy": null,
+          "lastpush": null,
+          "digest": null
+        },
+        "Appliance.Config.Matter": {
+          "last_rx_epoch": 0.0,
+          "last_poll_epoch": 0.0,
+          "next_poll_epoch": 0.0,
+          "polling_strategy": null,
+          "lastpush": null,
+          "digest": null
+        },
+        "Appliance.System.Debug": {
+          "last_rx_epoch": 0.0,
+          "last_poll_epoch": 0.0,
+          "next_poll_epoch": 0.0,
+          "polling_strategy": null,
+          "lastpush": null,
+          "digest": null
+        },
+        "Appliance.Control.Sensor.History": {
+          "last_rx_epoch": 0.0,
+          "last_poll_epoch": 0.0,
+          "next_poll_epoch": 0.0,
+          "polling_strategy": null,
+          "lastpush": null,
+          "digest": null
+        }
+      },
+      "device_info": {
+        "uuid": "###############################6",
+        "onlineStatus": 1,
+        "devName": "Smart Thermostat",
+        "devIconId": "device_mts215b_eu",
+        "bindTime": 1794051090,
+        "deviceType": "mts215b",
+        "subType": "eu",
+        "channels": [
+          {}
+        ],
+        "region": "eu",
+        "fmwareVersion": "9.3.5",
+        "hdwareVersion": "9.0.0",
+        "userDevIcon": "",
+        "iconType": 1,
+        "domain": "###################0",
+        "reservedDomain": "###################0",
+        "hardwareCapabilities": []
+      },
+      "latest_version": {
+        "type": "mts215b",
+        "subType": "eu",
+        "version": "9.3.12",
+        "url": "http://bucket-meross-static.meross.com/staticfile/firmware/2026/07/07/3ac6a2ddcb508d3da92d6a8ea9c55a8f.bin",
+        "md5": "33fef2f7d6d12c131a7564f443db50ae",
+        "description": "1. Optimized wireless compatibility with some special wireless routers.\n2. Optimized online stability of third-party Matter platforms.\n3. Fixed other known issues.",
+        "alias": "",
+        "mcu": [
+          {
+            "type": "mts215b_mcu_v1",
+            "md5": "48dd2e2758217489112ab72bd4c26015",
+            "url": "http://bucket-meross-static.meross.com/staticfile/firmware/2025/10/31/589a15dc43797ac319ab7dac5ace43b4.bin",
+            "version": "1.0.9"
+          }
+        ],
+        "upgradeType": "02"
+      },
+      "latest_versions": {
+        "mts215b:eu": [
+          {
+            "2026-11-07T00:25:41+00:00": {
+              "type": "mts215b",
+              "subType": "eu",
+              "version": "9.3.12",
+              "url": "http://bucket-meross-static.meross.com/staticfile/firmware/2026/07/07/3ac6a2ddcb508d3da92d6a8ea9c55a8f.bin",
+              "md5": "33fef2f7d6d12c131a7564f443db50ae",
+              "description": "1. Optimized wireless compatibility with some special wireless routers.\n2. Optimized online stability of third-party Matter platforms.\n3. Fixed other known issues.",
+              "alias": "",
+              "mcu": [
+                {
+                  "type": "mts215b_mcu_v1",
+                  "md5": "48dd2e2758217489112ab72bd4c26015",
+                  "url": "http://bucket-meross-static.meross.com/staticfile/firmware/2025/10/31/589a15dc43797ac319ab7dac5ace43b4.bin",
+                  "version": "1.0.9"
+                }
+              ],
+              "upgradeType": "02"
+            }
+          }
+        ]
+      }
+    },
+    "trace": [
+      [
+        "time",
+        "direction",
+        "transport",
+        "method",
+        "namespace",
+        "data"
+      ],
+      [
+        "2026/11/07 - 20:17:20",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Polling begin"
+      ],
+      [
+        "2026/11/07 - 20:17:20",
+        "TX",
+        "http",
+        "SET",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "db280a24be402e75eb93b18952f5fde1",
+                "method": "GET",
+                "namespace": "Appliance.System.All"
+              },
+              "payload": {}
+            },
+            {
+              "header": {
+                "messageId": "10a29d8edac69a4d6ea1f37b03409a3b",
+                "method": "GET",
+                "namespace": "Appliance.Mcu.Firmware"
+              },
+              "payload": {}
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:20",
+        "RX",
+        "http",
+        "SETACK",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "db280a24be402e75eb93b18952f5fde1",
+                "namespace": "Appliance.System.All",
+                "triggerSrc": "Device",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################6/publish",
+                "uuid": "###############################6",
+                "timestamp": 1794079039,
+                "timestampMs": 64,
+                "sign": "10b9b1fbca89e15167960475de5044c4"
+              },
+              "payload": {
+                "all": {
+                  "system": {
+                    "hardware": {
+                      "type": "mts215b",
+                      "subType": "eu",
+                      "version": "9.0.0",
+                      "chipType": "rtl8720cm",
+                      "uuid": "###############################6",
+                      "macAddress": "################0"
+                    },
+                    "firmware": {
+                      "version": "9.3.12",
+                      "compileTime": "2026/07/07-15:15:08",
+                      "encrypt": 1,
+                      "wifiMac": "################0",
+                      "innerIp": "############0",
+                      "server": "###################0",
+                      "port": "@0",
+                      "userId": "@0"
+                    },
+                    "time": {
+                      "timestamp": 1794079039,
+                      "timezone": "Europe/Berlin",
+                      "timeRule": [
+                        [
+                          1792890000,
+                          3600,
+                          0
+                        ],
+                        [
+                          1806195600,
+                          7200,
+                          1
+                        ],
+                        [
+                          1824944400,
+                          3600,
+                          0
+                        ],
+                        [
+                          1837645200,
+                          7200,
+                          1
+                        ],
+                        [
+                          1856394000,
+                          3600,
+                          0
+                        ],
+                        [
+                          1869094800,
+                          7200,
+                          1
+                        ],
+                        [
+                          1887843600,
+                          3600,
+                          0
+                        ],
+                        [
+                          1901149200,
+                          7200,
+                          1
+                        ],
+                        [
+                          1919293200,
+                          3600,
+                          0
+                        ],
+                        [
+                          1932598800,
+                          7200,
+                          1
+                        ],
+                        [
+                          1950742800,
+                          3600,
+                          0
+                        ],
+                        [
+                          1964048400,
+                          7200,
+                          1
+                        ],
+                        [
+                          1982797200,
+                          3600,
+                          0
+                        ],
+                        [
+                          1995498000,
+                          7200,
+                          1
+                        ],
+                        [
+                          2014246800,
+                          3600,
+                          0
+                        ],
+                        [
+                          2026947600,
+                          7200,
+                          1
+                        ],
+                        [
+                          2045696400,
+                          3600,
+                          0
+                        ],
+                        [
+                          2058397200,
+                          7200,
+                          1
+                        ],
+                        [
+                          2077146000,
+                          3600,
+                          0
+                        ],
+                        [
+                          2090451600,
+                          7200,
+                          1
+                        ]
+                      ]
+                    },
+                    "online": {
+                      "status": 1,
+                      "bindId": "################",
+                      "who": 1
+                    },
+                    "upgradeStatus": 1
+                  },
+                  "digest": {
+                    "thermostat": {
+                      "mode": [
+                        {
+                          "channel": 0,
+                          "onoff": 1,
+                          "mode": 4,
+                          "state": 0,
+                          "currentTemp": 223,
+                          "heatTemp": 260,
+                          "coolTemp": 180,
+                          "ecoTemp": 120,
+                          "manualTemp": 227,
+                          "warning": 0,
+                          "targetTemp": 227,
+                          "min": 50,
+                          "max": 350,
+                          "lmTime": 1794079039
+                        }
+                      ],
+                      "summerMode": [
+                        {
+                          "channel": 0,
+                          "mode": 1
+                        }
+                      ],
+                      "windowOpened": [
+                        {
+                          "channel": 0,
+                          "status": 0,
+                          "detect": 0,
+                          "lmTime": 1794079039
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "header": {
+                "messageId": "10a29d8edac69a4d6ea1f37b03409a3b",
+                "namespace": "Appliance.Mcu.Firmware",
+                "triggerSrc": "Device",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################6/publish",
+                "uuid": "###############################6",
+                "timestamp": 1794079039,
+                "timestampMs": 86,
+                "sign": "731e3a7103393d5d90d5dedf3fc9f5c9"
+              },
+              "payload": {
+                "firmware": {
+                  "productId": "mts215",
+                  "version": "1.0.9",
+                  "type": "mts215b_mcu_v1"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:20",
+        "TX",
+        "http",
+        "SET",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "453582eeb123f95cc728d52f1ace60c2",
+                "method": "GET",
+                "namespace": "Appliance.Control.Sensor.Latest"
+              },
+              "payload": {
+                "latest": [
+                  {
+                    "channel": 0
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "9505eb5f83b495beae5c2bfd8b5d72e9",
+                "method": "GET",
+                "namespace": "Appliance.Control.PhysicalLock"
+              },
+              "payload": {
+                "lock": [
+                  {
+                    "channel": 0
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "19af65737bdfd279e1b73ae0b126df51",
+                "method": "GET",
+                "namespace": "Appliance.Control.Screen.Brightness"
+              },
+              "payload": {
+                "brightness": [
+                  {
+                    "channel": 0
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:20",
+        "RX",
+        "http",
+        "SETACK",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "453582eeb123f95cc728d52f1ace60c2",
+                "namespace": "Appliance.Control.Sensor.Latest",
+                "triggerSrc": "Device",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################6/publish",
+                "uuid": "###############################6",
+                "timestamp": 1794079039,
+                "timestampMs": 181,
+                "sign": "57ba789e4e1cd6b98a40c231d623f0ef"
+              },
+              "payload": {
+                "latest": [
+                  {
+                    "value": [
+                      {
+                        "timestamp": 1794079039,
+                        "humi": 470
+                      }
+                    ],
+                    "channel": 0,
+                    "capacity": 2
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "9505eb5f83b495beae5c2bfd8b5d72e9",
+                "namespace": "Appliance.Control.PhysicalLock",
+                "triggerSrc": "Device",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################6/publish",
+                "uuid": "###############################6",
+                "timestamp": 1794079039,
+                "timestampMs": 183,
+                "sign": "9925a9f9ed254294b3fdc4d819d49acc"
+              },
+              "payload": {
+                "lock": [
+                  {
+                    "channel": 0,
+                    "onoff": 0
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "19af65737bdfd279e1b73ae0b126df51",
+                "namespace": "Appliance.Control.Screen.Brightness",
+                "triggerSrc": "Device",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################6/publish",
+                "uuid": "###############################6",
+                "timestamp": 1794079039,
+                "timestampMs": 185,
+                "sign": "1e0ec7bb798548cec89f29b2e63d5c40"
+              },
+              "payload": {
+                "brightness": [
+                  {
+                    "channel": 0,
+                    "operation": 100,
+                    "standby": 12,
+                    "standbyView": 2
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:20",
+        "TX",
+        "http",
+        "SET",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "7a8994970e549225b915c932edaa7286",
+                "method": "GET",
+                "namespace": "Appliance.Control.Thermostat.Calibration"
+              },
+              "payload": {
+                "calibration": [
+                  {
+                    "channel": 0
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "b8abfd527a67be00fbf384f0b2692000",
+                "method": "GET",
+                "namespace": "Appliance.Control.Thermostat.Schedule"
+              },
+              "payload": {
+                "schedule": [
+                  {
+                    "channel": 0
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "3ceac131e45641d598240fe85097c094",
+                "method": "GET",
+                "namespace": "Appliance.Control.Thermostat.DeadZone"
+              },
+              "payload": {
+                "deadZone": [
+                  {
+                    "channel": 0
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:20",
+        "RX",
+        "http",
+        "SETACK",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "7a8994970e549225b915c932edaa7286",
+                "namespace": "Appliance.Control.Thermostat.Calibration",
+                "triggerSrc": "Device",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################6/publish",
+                "uuid": "###############################6",
+                "timestamp": 1794079039,
+                "timestampMs": 302,
+                "sign": "da2ee7ceca500d361dbb44f24fc71be6"
+              },
+              "payload": {
+                "calibration": [
+                  {
+                    "channel": 0,
+                    "humiValue": 0,
+                    "value": 0,
+                    "min": -100,
+                    "max": 100,
+                    "lmTime": 1794079039
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "b8abfd527a67be00fbf384f0b2692000",
+                "namespace": "Appliance.Control.Thermostat.Schedule",
+                "triggerSrc": "Device",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################6/publish",
+                "uuid": "###############################6",
+                "timestamp": 1794079039,
+                "timestampMs": 304,
+                "sign": "92f55c8799a330cb1dcdcb3cb28812d2"
+              },
+              "payload": {
+                "schedule": [
+                  {
+                    "channel": 0,
+                    "section": 8,
+                    "sun": [
+                      [
+                        390,
+                        200
+                      ],
+                      [
+                        90,
+                        250
+                      ],
+                      [
+                        300,
+                        250
+                      ],
+                      [
+                        300,
+                        100
+                      ],
+                      [
+                        240,
+                        250
+                      ],
+                      [
+                        120,
+                        200
+                      ]
+                    ],
+                    "mon": [
+                      [
+                        390,
+                        200
+                      ],
+                      [
+                        90,
+                        250
+                      ],
+                      [
+                        300,
+                        100
+                      ],
+                      [
+                        300,
+                        100
+                      ],
+                      [
+                        240,
+                        250
+                      ],
+                      [
+                        120,
+                        200
+                      ]
+                    ],
+                    "tue": [
+                      [
+                        390,
+                        200
+                      ],
+                      [
+                        90,
+                        250
+                      ],
+                      [
+                        300,
+                        100
+                      ],
+                      [
+                        300,
+                        100
+                      ],
+                      [
+                        240,
+                        250
+                      ],
+                      [
+                        120,
+                        200
+                      ]
+                    ],
+                    "wed": [
+                      [
+                        390,
+                        200
+                      ],
+                      [
+                        90,
+                        250
+                      ],
+                      [
+                        300,
+                        100
+                      ],
+                      [
+                        300,
+                        100
+                      ],
+                      [
+                        240,
+                        250
+                      ],
+                      [
+                        120,
+                        200
+                      ]
+                    ],
+                    "thu": [
+                      [
+                        390,
+                        200
+                      ],
+                      [
+                        90,
+                        250
+                      ],
+                      [
+                        300,
+                        100
+                      ],
+                      [
+                        300,
+                        100
+                      ],
+                      [
+                        240,
+                        250
+                      ],
+                      [
+                        120,
+                        200
+                      ]
+                    ],
+                    "fri": [
+                      [
+                        390,
+                        200
+                      ],
+                      [
+                        90,
+                        250
+                      ],
+                      [
+                        300,
+                        100
+                      ],
+                      [
+                        300,
+                        100
+                      ],
+                      [
+                        240,
+                        250
+                      ],
+                      [
+                        120,
+                        200
+                      ]
+                    ],
+                    "sat": [
+                      [
+                        390,
+                        200
+                      ],
+                      [
+                        90,
+                        250
+                      ],
+                      [
+                        300,
+                        250
+                      ],
+                      [
+                        300,
+                        100
+                      ],
+                      [
+                        240,
+                        250
+                      ],
+                      [
+                        120,
+                        200
+                      ]
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "3ceac131e45641d598240fe85097c094",
+                "namespace": "Appliance.Control.Thermostat.DeadZone",
+                "triggerSrc": "Device",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################6/publish",
+                "uuid": "###############################6",
+                "timestamp": 1794079039,
+                "timestampMs": 308,
+                "sign": "042ac373d98f83a72cd9df63577dc44a"
+              },
+              "payload": {
+                "deadZone": [
+                  {
+                    "channel": 0,
+                    "value": 5,
+                    "min": 3,
+                    "max": 50,
+                    "lmTime": 1794079039
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:20",
+        "TX",
+        "http",
+        "SET",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "f3d21e5426f5566f40c7e30d2b1b219c",
+                "method": "GET",
+                "namespace": "Appliance.Control.Thermostat.Frost"
+              },
+              "payload": {
+                "frost": [
+                  {
+                    "channel": 0
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "981bd17224ef20f0d233cd63f4c5f238",
+                "method": "GET",
+                "namespace": "Appliance.Control.Thermostat.HoldAction"
+              },
+              "payload": {
+                "holdAction": [
+                  {
+                    "channel": 0
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "2aab8ac7e7910ad757d41d0b956079f4",
+                "method": "GET",
+                "namespace": "Appliance.Control.Thermostat.Overheat"
+              },
+              "payload": {
+                "overheat": [
+                  {
+                    "channel": 0
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:20",
+        "RX",
+        "http",
+        "SETACK",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "f3d21e5426f5566f40c7e30d2b1b219c",
+                "namespace": "Appliance.Control.Thermostat.Frost",
+                "triggerSrc": "Device",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################6/publish",
+                "uuid": "###############################6",
+                "timestamp": 1794079040,
+                "timestampMs": 520,
+                "sign": "5bc38a41307d227016d0bd63659ffdc5"
+              },
+              "payload": {
+                "frost": [
+                  {
+                    "channel": 0,
+                    "onoff": 0,
+                    "value": 50,
+                    "min": 50,
+                    "max": 150,
+                    "warning": 0,
+                    "lmTime": 1794079040
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "981bd17224ef20f0d233cd63f4c5f238",
+                "namespace": "Appliance.Control.Thermostat.HoldAction",
+                "triggerSrc": "Device",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################6/publish",
+                "uuid": "###############################6",
+                "timestamp": 1794079040,
+                "timestampMs": 522,
+                "sign": "dccbc34446e968facf44b21bc980dd8f"
+              },
+              "payload": {
+                "holdAction": [
+                  {
+                    "channel": 0,
+                    "mode": 0
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "2aab8ac7e7910ad757d41d0b956079f4",
+                "namespace": "Appliance.Control.Thermostat.Overheat",
+                "triggerSrc": "Device",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################6/publish",
+                "uuid": "###############################6",
+                "timestamp": 1794079040,
+                "timestampMs": 524,
+                "sign": "39c0d567a3c2b2e8750f5143e3908a57"
+              },
+              "payload": {
+                "overheat": [
+                  {
+                    "channel": 0,
+                    "currentTemp": 0,
+                    "onoff": 0,
+                    "value": 320,
+                    "min": 200,
+                    "max": 700,
+                    "warning": 2,
+                    "lmTime": 1794079040
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:20",
+        "TX",
+        "http",
+        "SET",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "11ddc7014b32c05ee3fd3c3914828907",
+                "method": "GET",
+                "namespace": "Appliance.Control.Thermostat.Sensor"
+              },
+              "payload": {
+                "sensor": [
+                  {
+                    "channel": 0
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "dfc3cd29b3462f24cff96d9e73a0f51b",
+                "method": "GET",
+                "namespace": "Appliance.System.Runtime"
+              },
+              "payload": {}
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:20",
+        "RX",
+        "http",
+        "SETACK",
+        "Appliance.Control.Multiple",
+        {
+          "multiple": [
+            {
+              "header": {
+                "messageId": "11ddc7014b32c05ee3fd3c3914828907",
+                "namespace": "Appliance.Control.Thermostat.Sensor",
+                "triggerSrc": "Device",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################6/publish",
+                "uuid": "###############################6",
+                "timestamp": 1794079040,
+                "timestampMs": 643,
+                "sign": "0618296a74de440f98022a78f93d9076"
+              },
+              "payload": {
+                "sensor": [
+                  {
+                    "channel": 0,
+                    "mode": 0
+                  }
+                ]
+              }
+            },
+            {
+              "header": {
+                "messageId": "dfc3cd29b3462f24cff96d9e73a0f51b",
+                "namespace": "Appliance.System.Runtime",
+                "triggerSrc": "Device",
+                "method": "GETACK",
+                "payloadVersion": 1,
+                "from": "/appliance/###############################6/publish",
+                "uuid": "###############################6",
+                "timestamp": 1794079040,
+                "timestampMs": 645,
+                "sign": "26322247a89060f50f8b60375dadf53f"
+              },
+              "payload": {
+                "runtime": {
+                  "signal": 100,
+                  "ssid": "#########0"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:20",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Polling end"
+      ],
+      [
+        "2026/11/07 - 20:17:20",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "NamespaceHandler(Appliance.Config.Info): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:20",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Info",
+        {}
+      ],
+      [
+        "2026/11/07 - 20:17:21",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.Info",
+        {
+          "info": {
+            "matter": {}
+          }
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:21",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "NamespaceHandler(Appliance.Config.Matter): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:21",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Config.Matter",
+        {}
+      ],
+      [
+        "2026/11/07 - 20:17:21",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Config.Matter",
+        {
+          "config": {
+            "matterPlatform": [
+              4631
+            ]
+          }
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:21",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "NamespaceHandler(Appliance.System.Debug): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:21",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Debug",
+        {}
+      ],
+      [
+        "2026/11/07 - 20:17:21",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Debug",
+        {
+          "debug": {
+            "system": {
+              "version": "9.3.12",
+              "sysUpTime": "7h40m10s",
+              "UTC": 1794079041,
+              "localTimeOffset": 3600,
+              "localTime": "Sat Nov  7 20:17:21 2026",
+              "suncalc": "##:##;##:##",
+              "memTotal": 3958496,
+              "memFree": 3563008,
+              "memMini": 3548552
+            },
+            "network": {
+              "linkStatus": "connected",
+              "snr": 34,
+              "channel": 11,
+              "signal": 100,
+              "rssi": -24,
+              "ssid": "#########0",
+              "gatewayMac": "################0",
+              "innerIp": "############0",
+              "wifiDisconnectCount": 0,
+              "wifiDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            },
+            "cloud": {
+              "linkStatus": "connected",
+              "activeServer": "###################0",
+              "mainServer": "###################0",
+              "mainPort": "@0",
+              "secondServer": "#1",
+              "secondPort": "@1",
+              "userId": "@0",
+              "sysConnectTime": "Sat Nov  7 11:37:27 2026",
+              "sysOnlineTime": "7h39m54s",
+              "sysDisconnectCount": 0,
+              "iotDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:21",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "NamespaceHandler(Appliance.System.Runtime): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:21",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {}
+      ],
+      [
+        "2026/11/07 - 20:17:21",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 100,
+            "ssid": "#########0"
+          }
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:21",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "NamespaceHandler(Appliance.Mcu.Firmware): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:21",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Mcu.Firmware",
+        {}
+      ],
+      [
+        "2026/11/07 - 20:17:21",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Mcu.Firmware",
+        {
+          "firmware": {
+            "productId": "mts215",
+            "version": "1.0.9",
+            "type": "mts215b_mcu_v1"
+          }
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:21",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "NamespaceHandler(Appliance.Control.PhysicalLock): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:21",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.PhysicalLock",
+        {
+          "lock": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.PhysicalLock",
+        {
+          "lock": [
+            {
+              "channel": 0,
+              "onoff": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "NamespaceHandler(Appliance.Control.Thermostat.HoldAction): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Thermostat.HoldAction",
+        {
+          "holdAction": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Thermostat.HoldAction",
+        {
+          "holdAction": [
+            {
+              "channel": 0,
+              "mode": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "NamespaceHandler(Appliance.Control.Thermostat.Mode): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Thermostat.Mode",
+        {
+          "mode": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Thermostat.Mode",
+        {
+          "mode": [
+            {
+              "channel": 0,
+              "onoff": 1,
+              "mode": 4,
+              "state": 0,
+              "currentTemp": 223,
+              "heatTemp": 260,
+              "coolTemp": 180,
+              "ecoTemp": 120,
+              "manualTemp": 227,
+              "warning": 0,
+              "targetTemp": 227,
+              "min": 50,
+              "max": 350,
+              "lmTime": 1794079041
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "NamespaceHandler(Appliance.Control.Thermostat.Calibration): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Thermostat.Calibration",
+        {
+          "calibration": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Thermostat.Calibration",
+        {
+          "calibration": [
+            {
+              "channel": 0,
+              "humiValue": 0,
+              "value": 0,
+              "min": -100,
+              "max": 100,
+              "lmTime": 1794079041
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "NamespaceHandler(Appliance.Control.Thermostat.DeadZone): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Thermostat.DeadZone",
+        {
+          "deadZone": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Thermostat.DeadZone",
+        {
+          "deadZone": [
+            {
+              "channel": 0,
+              "value": 5,
+              "min": 3,
+              "max": 50,
+              "lmTime": 1794079041
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "NamespaceHandler(Appliance.Control.Thermostat.Frost): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Thermostat.Frost",
+        {
+          "frost": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Thermostat.Frost",
+        {
+          "frost": [
+            {
+              "channel": 0,
+              "onoff": 0,
+              "value": 50,
+              "min": 50,
+              "max": 150,
+              "warning": 0,
+              "lmTime": 1794079042
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "NamespaceHandler(Appliance.Control.Thermostat.Overheat): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Thermostat.Overheat",
+        {
+          "overheat": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Thermostat.Overheat",
+        {
+          "overheat": [
+            {
+              "channel": 0,
+              "currentTemp": 0,
+              "onoff": 0,
+              "value": 320,
+              "min": 200,
+              "max": 700,
+              "warning": 2,
+              "lmTime": 1794079042
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "NamespaceHandler(Appliance.Control.Thermostat.WindowOpened): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:22",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Thermostat.WindowOpened",
+        {
+          "windowOpened": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:23",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Thermostat.WindowOpened",
+        {
+          "windowOpened": [
+            {
+              "channel": 0,
+              "status": 0,
+              "detect": 0,
+              "lmTime": 1794079042
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:23",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "NamespaceHandler(Appliance.Control.Thermostat.Schedule): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:23",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Thermostat.Schedule",
+        {
+          "schedule": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:23",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Thermostat.Schedule",
+        {
+          "schedule": [
+            {
+              "channel": 0,
+              "section": 8,
+              "sun": [
+                [
+                  390,
+                  200
+                ],
+                [
+                  90,
+                  250
+                ],
+                [
+                  300,
+                  250
+                ],
+                [
+                  300,
+                  100
+                ],
+                [
+                  240,
+                  250
+                ],
+                [
+                  120,
+                  200
+                ]
+              ],
+              "mon": [
+                [
+                  390,
+                  200
+                ],
+                [
+                  90,
+                  250
+                ],
+                [
+                  300,
+                  100
+                ],
+                [
+                  300,
+                  100
+                ],
+                [
+                  240,
+                  250
+                ],
+                [
+                  120,
+                  200
+                ]
+              ],
+              "tue": [
+                [
+                  390,
+                  200
+                ],
+                [
+                  90,
+                  250
+                ],
+                [
+                  300,
+                  100
+                ],
+                [
+                  300,
+                  100
+                ],
+                [
+                  240,
+                  250
+                ],
+                [
+                  120,
+                  200
+                ]
+              ],
+              "wed": [
+                [
+                  390,
+                  200
+                ],
+                [
+                  90,
+                  250
+                ],
+                [
+                  300,
+                  100
+                ],
+                [
+                  300,
+                  100
+                ],
+                [
+                  240,
+                  250
+                ],
+                [
+                  120,
+                  200
+                ]
+              ],
+              "thu": [
+                [
+                  390,
+                  200
+                ],
+                [
+                  90,
+                  250
+                ],
+                [
+                  300,
+                  100
+                ],
+                [
+                  300,
+                  100
+                ],
+                [
+                  240,
+                  250
+                ],
+                [
+                  120,
+                  200
+                ]
+              ],
+              "fri": [
+                [
+                  390,
+                  200
+                ],
+                [
+                  90,
+                  250
+                ],
+                [
+                  300,
+                  100
+                ],
+                [
+                  300,
+                  100
+                ],
+                [
+                  240,
+                  250
+                ],
+                [
+                  120,
+                  200
+                ]
+              ],
+              "sat": [
+                [
+                  390,
+                  200
+                ],
+                [
+                  90,
+                  250
+                ],
+                [
+                  300,
+                  250
+                ],
+                [
+                  300,
+                  100
+                ],
+                [
+                  240,
+                  250
+                ],
+                [
+                  120,
+                  200
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:23",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "ScreenBrightnessNamespaceHandler(Appliance.Control.Screen.Brightness): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:23",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Screen.Brightness",
+        {
+          "brightness": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:23",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Screen.Brightness",
+        {
+          "brightness": [
+            {
+              "channel": 0,
+              "operation": 100,
+              "standby": 12,
+              "standbyView": 2
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:23",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "NamespaceHandler(Appliance.Control.Thermostat.Sensor): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:23",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Thermostat.Sensor",
+        {
+          "sensor": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:24",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Thermostat.Sensor",
+        {
+          "sensor": [
+            {
+              "channel": 0,
+              "mode": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:24",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "NamespaceHandler(Appliance.Control.Thermostat.SummerMode): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:24",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Thermostat.SummerMode",
+        {
+          "summerMode": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:24",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Thermostat.SummerMode",
+        {
+          "summerMode": [
+            {
+              "channel": 0,
+              "mode": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:24",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "NamespaceHandler(Appliance.Control.Sensor.History): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:24",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Sensor.History",
+        {
+          "history": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:24",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Sensor.History",
+        {
+          "history": [
+            {
+              "value": [
+                {
+                  "ignite": 1,
+                  "timestamp": 1794022626,
+                  "temp": 222,
+                  "humi": 490
+                },
+                {
+                  "ignite": 2,
+                  "timestamp": 1794024666,
+                  "temp": 228,
+                  "humi": 490
+                },
+                {
+                  "ignite": 1,
+                  "timestamp": 1794027356,
+                  "temp": 222,
+                  "humi": 490
+                },
+                {
+                  "ignite": 2,
+                  "timestamp": 1794029636,
+                  "temp": 228,
+                  "humi": 490
+                },
+                {
+                  "ignite": 1,
+                  "timestamp": 1794032017,
+                  "temp": 222,
+                  "humi": 460
+                },
+                {
+                  "ignite": 2,
+                  "timestamp": 1794034357,
+                  "temp": 228,
+                  "humi": 460
+                },
+                {
+                  "ignite": 1,
+                  "timestamp": 1794036557,
+                  "temp": 222,
+                  "humi": 460
+                },
+                {
+                  "ignite": 2,
+                  "timestamp": 1794039547,
+                  "temp": 228,
+                  "humi": 460
+                },
+                {
+                  "ignite": 1,
+                  "timestamp": 1794041767,
+                  "temp": 222,
+                  "humi": 460
+                },
+                {
+                  "ignite": 2,
+                  "timestamp": 1794043457,
+                  "temp": 228,
+                  "humi": 460
+                },
+                {
+                  "ignite": 1,
+                  "timestamp": 1794047077,
+                  "temp": 222,
+                  "humi": 460
+                },
+                {
+                  "ignite": 2,
+                  "timestamp": 1794048787,
+                  "temp": 228,
+                  "humi": 460
+                },
+                {
+                  "ignite": 1,
+                  "timestamp": 1794051450,
+                  "temp": 223,
+                  "humi": 470
+                },
+                {
+                  "ignite": 2,
+                  "timestamp": 1794052480,
+                  "temp": 226,
+                  "humi": 470
+                },
+                {
+                  "ignite": 1,
+                  "timestamp": 1794053010,
+                  "temp": 226,
+                  "humi": 470
+                },
+                {
+                  "ignite": 2,
+                  "timestamp": 1794053880,
+                  "temp": 229,
+                  "humi": 470
+                },
+                {
+                  "ignite": 1,
+                  "timestamp": 1794068260,
+                  "temp": 220,
+                  "humi": 470
+                },
+                {
+                  "ignite": 2,
+                  "timestamp": 1794073671,
+                  "temp": 229,
+                  "humi": 440
+                },
+                {
+                  "ignite": 1,
+                  "timestamp": 1793974184,
+                  "temp": 222,
+                  "humi": 490
+                },
+                {
+                  "ignite": 2,
+                  "timestamp": 1793976844,
+                  "temp": 228,
+                  "humi": 400
+                },
+                {
+                  "ignite": 1,
+                  "timestamp": 1794009396,
+                  "temp": 222,
+                  "humi": 520
+                },
+                {
+                  "ignite": 2,
+                  "timestamp": 1794010866,
+                  "temp": 228,
+                  "humi": 490
+                },
+                {
+                  "ignite": 1,
+                  "timestamp": 1794018246,
+                  "temp": 225,
+                  "humi": 490
+                },
+                {
+                  "ignite": 2,
+                  "timestamp": 1794019686,
+                  "temp": 228,
+                  "humi": 490
+                }
+              ],
+              "capacity": 11,
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:24",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "NamespaceHandler(Appliance.Control.Sensor.Latest): Tracing"
+      ],
+      [
+        "2026/11/07 - 20:17:24",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Sensor.Latest",
+        {
+          "latest": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2026/11/07 - 20:17:24",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Sensor.Latest",
+        {
+          "latest": [
+            {
+              "value": [
+                {
+                  "timestamp": 1794079044,
+                  "humi": 470
+                }
+              ],
+              "channel": 0,
+              "capacity": 2
+            }
+          ]
+        }
+      ]
+    ]
+  }
+}

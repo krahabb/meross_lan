@@ -32,7 +32,7 @@ class CommonTemperatureExt_C(CommonTemperature_C):
 class Calibration_C(CommonTemperature_C):
     """{"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}"""
 
-    humiValue: NotRequired[int]  # only mts300
+    humiValue: NotRequired[int]  # mts215b, mts300
 
 
 class CtlRange_C(mt.ChannelPayload):

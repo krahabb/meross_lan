@@ -31,6 +31,42 @@ class ScreenBrightnessNumber(NumberParser):
     _attr_native_step = 12.5
 
 
+class ScreenStandbyViewSwitch(SwitchParser):
+    """Streamlined (simplified) display view while in standby (mts215b).
+    {"brightness": [{"channel": 0, "operation": 100, "standby": 12, "standbyView": 2}]}
+    standbyView: 1 = on, 2 = off"""
+
+    _INIT_entity_key = "screenbrightness_standbyview"
+    _INIT_key_value = SwitchParser.KeyValue(mc.KEY_STANDBYVIEW)
+    _INIT_value_on = 1
+    _INIT_value_off = 2
+
+    _attr_icon = "mdi:monitor-dashboard"
+
+
+class ScreenBrightnessStandbyNumber(ScreenBrightnessNumber):
+    """Standby brightness number also managing the (optional) 'standbyView' key
+    carried in the same payload by some devices (mts215b)."""
+
+    if TYPE_CHECKING:
+        switch_standby_view: ScreenStandbyViewSwitch
+
+    __slots__ = ("switch_standby_view",)
+
+    @override
+    def __call__(self, payload: "mt.JsonMapping", /):
+        try:
+            standby_view = payload[mc.KEY_STANDBYVIEW]
+            self.switch_standby_view.update_device_value(standby_view)
+        except AttributeError:
+            self.switch_standby_view = ScreenStandbyViewSwitch(
+                self, ns=self.ns, ns_value=standby_view
+            )
+        except KeyError:  # device not supporting 'standbyView'
+            pass
+        ScreenBrightnessNumber.__call__(self, payload)
+
+
 class ScreenBrightnessNamespaceHandler(NamespaceHandler):
     """
     This ns only appears with thermostats so far.. so we put it here but it could
@@ -38,12 +74,15 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
     """
 
     ENTITY_DEFS = {
-        key: ScreenBrightnessNumber.DEF(
+        key: number_class.DEF(
             entity_key=f"screenbrightness_{key}",
             key_value=ScreenBrightnessNumber.KeyValue(key),
             name=f"Screen brightness ({key})",
         )
-        for key in (mc.KEY_OPERATION, mc.KEY_STANDBY)
+        for key, number_class in (
+            (mc.KEY_OPERATION, ScreenBrightnessNumber),
+            (mc.KEY_STANDBY, ScreenBrightnessStandbyNumber),
+        )
     }
 
     def __init__(
@@ -244,13 +283,42 @@ class MtsSummerMode(SwitchParser):
                 raise
 
 
+class MtsWindowOpenedDetectSwitch(SwitchParser):
+    """Enables/disables the open window detection.
+    {"windowOpened": [{"channel": 0, "status": 0, "detect": 1, "lmTime": 1794077090}]}
+    """
+
+    _INIT_entity_key = "windowopened_detect"
+    _INIT_key_value = SwitchParser.KeyValue(mc.KEY_DETECT)
+
+    _attr_icon = "mdi:window-open-variant"
+
+
 class MtsWindowOpened(BinarySensorParser):
     # Specialized binary sensor for Thermostat.WindowOpened entity used in Mts200-Mts960(maybe).
+
+    if TYPE_CHECKING:
+        switch_detect: MtsWindowOpenedDetectSwitch
 
     _INIT_entity_key = mc.KEY_WINDOWOPENED
     _INIT_key_value = BinarySensorParser.KeyValue(mc.KEY_STATUS)
 
     _attr_device_class = BinarySensorParser.DeviceClass.WINDOW
+
+    __slots__ = ("switch_detect",)
+
+    @override
+    def __call__(self, payload: "mt.JsonMapping", /):
+        try:
+            detect = payload[mc.KEY_DETECT]
+            self.switch_detect.update_device_value(detect)
+        except AttributeError:
+            self.switch_detect = MtsWindowOpenedDetectSwitch(
+                self, ns=self.ns, ns_value=detect
+            )
+        except KeyError:  # 'detect' not carried (i.e. in some PUSH) or not supported
+            pass
+        BinarySensorParser.__call__(self, payload)
 
 
 class MtsExternalSensorSwitch(SwitchParser):
@@ -363,11 +431,30 @@ class MtsThermostatClimate(MtsClimate):
 
     class AdjustNumber(MtsCommonTemperatureNumber):
         """
-        Adjust temperature readings for mts200 and mts960.
+        Adjust temperature (and humidity when available) readings for mts200, mts300 and mts960.
         Manages Appliance.Control.Thermostat.Calibration:
         {"channel":0,"value":0 "min":-80,"max":80,"lmTime":1697010767} - mts200
+        {"channel":0,"value":0,"humiValue":0,"min":-100,"max":100,"lmTime":1794077077} - mts215b
         {"channel":0,"value":-270,"min":-2000,"max":2000} - mts960
         """
+
+        class AdjustHumidityNumber(NumberParser):
+            """Humidity calibration ('humiValue', %×10). The payload doesn't carry
+            min/max for humidity: the default range (±20%, whole steps) is the one used
+            in the Meross app.
+            """
+
+            _INIT_entity_key = "calibration_humidity"
+            _INIT_key_value = NumberParser.KeyValue(mc.KEY_HUMIVALUE)
+            _INIT_device_scale = 10
+
+            _attr_device_class = NumberParser.DeviceClass.HUMIDITY
+            _attr_native_max_value = 20
+            _attr_native_min_value = -20
+            _attr_native_step = 1
+
+        if TYPE_CHECKING:
+            number_calibration_humi: AdjustHumidityNumber
 
         _INIT_ns = mn_t.Appliance_Control_Thermostat_Calibration
 
@@ -376,3 +463,18 @@ class MtsThermostatClimate(MtsClimate):
         _attr_native_max_value = 8
         _attr_native_min_value = -8
         _attr_native_step = 0.1
+
+        __slots__ = ("number_calibration_humi",)
+
+        @override
+        def __call__(self, payload: "mt.thermostat.Calibration_C", /):
+            try:
+                humidity = payload[mc.KEY_HUMIVALUE]  # type: ignore
+                self.number_calibration_humi.update_device_value(humidity)
+            except AttributeError:
+                self.number_calibration_humi = self.__class__.AdjustHumidityNumber(
+                    self, ns=self.ns, ns_value=humidity
+                )
+            except KeyError:  # device not supporting humidity calibration
+                pass
+            MtsCommonTemperatureNumber.__call__(self, payload)

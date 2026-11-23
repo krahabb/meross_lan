@@ -29,38 +29,20 @@ class Mts300Climate(MtsThermostatClimate):
     """Climate entity for MTS300 devices"""
 
     class AdjustNumber(MtsThermostatClimate.AdjustNumber):
+        """{"channel":0,"value":150,"min":-450,"max":450,"humiValue":-60}"""
 
-        class AdjustHumidityNumber(NumberParser):
-            _INIT_entity_key = "calibration_humidity"
-            _INIT_key_value = NumberParser.KeyValue(mc.KEY_HUMIVALUE)
-            _INIT_device_scale = 10
-
-            _attr_device_class = NumberParser.DeviceClass.HUMIDITY
+        class AdjustHumidityNumber(
+            MtsThermostatClimate.AdjustNumber.AdjustHumidityNumber
+        ):
             _attr_native_max_value = 5
             _attr_native_min_value = -5
             _attr_native_step = 0.1
-
-        if TYPE_CHECKING:
-            """{"channel":0,"value":150,"min":-450,"max":450,"humiValue":-60}"""
-            number_calibration_humi: AdjustHumidityNumber
 
         _attr_native_max_value = 4.5
         _attr_native_min_value = -4.5
         _attr_native_step = 0.1
 
-        __slots__ = ("number_calibration_humi",)
-
-        def __call__(self, payload: "mt.thermostat.Calibration_C", /):
-            try:
-                humidity = payload[mc.KEY_HUMIVALUE]  # type: ignore
-                self.number_calibration_humi.update_device_value(humidity)
-            except AttributeError:
-                self.number_calibration_humi = self.__class__.AdjustHumidityNumber(
-                    self, ns=self.ns, ns_value=humidity
-                )
-            except KeyError:  # missing humiValue
-                pass
-            MtsThermostatClimate.AdjustNumber.__call__(self, payload)
+        __slots__ = ()
 
     class SensorAssociationSelect(SelectParser):
         """
