@@ -10,6 +10,14 @@ from typing import TYPE_CHECKING, final, overload, override
 from homeassistant.helpers import entity, restore_state
 from homeassistant.helpers.entity_platform import async_get_current_platform
 
+try:
+    from homeassistant.helpers.typing import Undefined
+except ImportError:
+    from homeassistant.helpers.typing import UNDEFINED, UndefinedType
+else:
+    UNDEFINED = Undefined
+    UndefinedType = Undefined
+
 from .. import const as mlc
 from ..merossclient.device import handler
 from ..merossclient.logging import Loggable
@@ -254,9 +262,9 @@ class Entity(Loggable, entity.Entity if TYPE_CHECKING else object):
         self,
         device_class_name: str | None,
         platform_translations: dict[str, str],
-    ) -> str | entity.UndefinedType | None:
+    ) -> str | UndefinedType | None:
         name = super()._name_internal(device_class_name, platform_translations)
-        if (name is entity.UNDEFINED) and (entity_key := self.entity_key):
+        if (name is UNDEFINED) and (entity_key := self.entity_key):
             entity_key_split = entity_key.split("_")
             if len(entity_key_split) > 2:
                 # For 'new style' entity_key(s) in the order of 'ns_slug__key_value' we want to use
